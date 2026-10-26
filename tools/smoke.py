@@ -13,6 +13,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -21,7 +22,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from oversight_contracts.commands import GraphResponse
+from oversight_contracts.commands import GraphResponse, Health
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOST = "127.0.0.1"
@@ -55,9 +56,28 @@ def base_url(port: int) -> str:
     return f"http://{HOST}:{port}"
 
 
-def fetch_json(url: str) -> tuple[int | None, Any]:
-    """GET the url once: (status, parsed body), (status, None) on an HTTP error the server
-    answered with, and (None, None) when nothing could be read (refused, timed out, bad JSON)."""
+def fetch_json(url: str, deadline: float) -> tuple[int | None, Any]:
+    """GET the url once, giving up at `deadline` (a monotonic clock reading): (status, parsed
+    body), (status, None) on an HTTP error the server answered with, and (None, None) when the
+    deadline passed or nothing could be read (refused, timed out, bad JSON).
+
+    A socket timeout bounds idleness, not total time: a body dribbled out byte by byte, each
+    within REQUEST_TIMEOUT, would outlive every per-read timeout. So the request runs in a
+    thread that is joined only until the deadline; one still busy then is left to end on its
+    own (a daemon) and counts as no answer.
+    """
+    holder: list[tuple[int | None, Any]] = []
+
+    def attempt() -> None:
+        holder.append(_fetch_once(url))
+
+    worker = threading.Thread(target=attempt, daemon=True)
+    worker.start()
+    worker.join(timeout=max(deadline - time.monotonic(), 0.0))
+    return holder[0] if holder else (None, None)
+
+
+def _fetch_once(url: str) -> tuple[int | None, Any]:
     try:
         with urllib.request.urlopen(url, timeout=REQUEST_TIMEOUT) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
@@ -68,27 +88,22 @@ def fetch_json(url: str) -> tuple[int | None, Any]:
         return None, None
 
 
-def wait_for_health(
-    base: str, deadline_seconds: float, child: subprocess.Popen[Any] | None = None
-) -> Any:
-    """Poll GET /health until it answers within the deadline; the parsed body when it does.
+def _issue(error: ValidationError) -> str:
+    """The first problem, as one line: the field path and the message."""
+    issue = error.errors()[0]
+    field = ".".join(str(part) for part in issue["loc"])
+    return f"{field}: {issue['msg']}"
 
-    Nothing answering is retried until the deadline, because the backend may still be starting.
-    Any answer is final: uvicorn binds only after its startup, so 200 is ready and any other
-    status stays that way.
-    """
-    deadline = time.monotonic() + deadline_seconds
-    while True:
-        if child is not None and child.poll() is not None:
-            raise SmokeError(f"the backend exited with code {child.returncode} before answering")
-        status, body = fetch_json(f"{base}/health")
-        if status == 200:
-            return body
-        if status is not None:
-            raise SmokeError(f"/health answered {status}, not 200")
-        if time.monotonic() >= deadline:
-            raise SmokeError(f"nothing answered /health within {deadline_seconds:g} s")
-        time.sleep(POLL_INTERVAL)
+
+def check_health(body: Any) -> Health:
+    """Validate a /health body against the contract model; it must also say ok."""
+    try:
+        health = Health.model_validate(body)
+    except ValidationError as error:
+        raise SmokeError(f"/health does not validate: {_issue(error)}") from error
+    if not health.ok:
+        raise SmokeError("/health does not say ok")
+    return health
 
 
 def check_graph(body: Any) -> int:
@@ -96,12 +111,33 @@ def check_graph(body: Any) -> int:
     try:
         response = GraphResponse.model_validate(body)
     except ValidationError as error:
-        issue = error.errors()[0]
-        field = ".".join(str(part) for part in issue["loc"])
-        raise SmokeError(f"/graph does not validate: {field}: {issue['msg']}") from error
+        raise SmokeError(f"/graph does not validate: {_issue(error)}") from error
     if response.seq < MIN_SEQ:
         raise SmokeError(f"/graph reports seq {response.seq}, before the first event")
     return response.seq
+
+
+def wait_for_health(
+    base: str, deadline_seconds: float, child: subprocess.Popen[Any] | None = None
+) -> Health:
+    """Poll GET /health until it answers within the deadline; the validated Health when it does.
+
+    Nothing answering is retried until the deadline, because the backend may still be starting.
+    Any answer is final: uvicorn binds only after its startup, so 200 is ready and any other
+    status, or a body that is not the contract's Health, stays that way.
+    """
+    deadline = time.monotonic() + deadline_seconds
+    while True:
+        if child is not None and child.poll() is not None:
+            raise SmokeError(f"the backend exited with code {child.returncode} before answering")
+        status, body = fetch_json(f"{base}/health", deadline)
+        if status == 200:
+            return check_health(body)
+        if status is not None:
+            raise SmokeError(f"/health answered {status}, not 200")
+        if time.monotonic() >= deadline:
+            raise SmokeError(f"nothing answered /health within {deadline_seconds:g} s")
+        time.sleep(POLL_INTERVAL)
 
 
 def wait_for_graph(base: str, deadline_seconds: float) -> int:
@@ -112,14 +148,17 @@ def wait_for_graph(base: str, deadline_seconds: float) -> int:
     fail at once.
     """
     deadline = time.monotonic() + deadline_seconds
+    last: int | None = None  # the last status the server actually answered with
     while True:
-        status, body = fetch_json(f"{base}/graph")
+        status, body = fetch_json(f"{base}/graph", deadline)
+        if status is not None:
+            last = status
         if status == 200:
             return check_graph(body)
         if status is not None and status != 404:
             raise SmokeError(f"/graph answered {status}, not 200")
         if time.monotonic() >= deadline:
-            if status == 404:
+            if last == 404:
                 raise SmokeError(f"/graph still had no snapshot after {deadline_seconds:g} s")
             raise SmokeError(f"/graph was not answered within {deadline_seconds:g} s")
         time.sleep(POLL_INTERVAL)
@@ -160,9 +199,7 @@ def run_smoke() -> None:
             stderr=subprocess.DEVNULL,
         )
         try:
-            health = wait_for_health(base_url(port), START_DEADLINE, child)
-            if health.get("ok") is not True:
-                raise SmokeError("/health does not say ok")
+            wait_for_health(base_url(port), START_DEADLINE, child)
             seq = wait_for_graph(base_url(port), START_DEADLINE)
         finally:
             # Every exit path: success, failure and Ctrl+C (the finally runs on the way out).

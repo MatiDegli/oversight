@@ -94,10 +94,77 @@ def test_nothing_answering_fails_at_the_deadline(monkeypatch: pytest.MonkeyPatch
     assert time.monotonic() - started < 5
 
 
+def _health_body(ok: bool) -> bytes:
+    return json.dumps(
+        {
+            "ok": ok,
+            "run_id": "run-20261027-140312",
+            "contract_version": "1.0.0",
+            "mode": "replay",
+        }
+    ).encode("utf-8")
+
+
 def test_health_that_answers_is_returned() -> None:
-    body = b'{"ok": true, "run_id": "run-20261027-140312", "mode": "replay"}'
-    with _fake_server({"/health": (200, body)}) as base:
-        assert smoke.wait_for_health(base, deadline_seconds=2)["ok"] is True
+    with _fake_server({"/health": (200, _health_body(ok=True))}) as base:
+        assert smoke.wait_for_health(base, deadline_seconds=2).ok is True
+
+
+def test_a_health_body_that_is_not_the_contract_fails_with_one_line() -> None:
+    with (
+        _fake_server({"/health": (200, b"[]")}) as base,
+        pytest.raises(smoke.SmokeError, match="/health does not validate"),
+    ):
+        smoke.wait_for_health(base, deadline_seconds=2)
+
+
+def test_health_that_does_not_say_ok_fails() -> None:
+    with (
+        _fake_server({"/health": (200, _health_body(ok=False))}) as base,
+        pytest.raises(smoke.SmokeError, match="/health does not say ok"),
+    ):
+        smoke.wait_for_health(base, deadline_seconds=2)
+
+
+@contextlib.contextmanager
+def _dribbling_server() -> Iterator[str]:
+    """Serves /health as a body that arrives one byte at a time, each within the idle timeout."""
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "600")
+            self.end_headers()
+            for _ in range(600):
+                self.wfile.write(b"x")
+                self.wfile.flush()
+                time.sleep(0.05)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer((smoke.HOST, 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield smoke.base_url(server.server_address[1])
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+def test_a_body_sent_slowly_cannot_outlive_the_deadline() -> None:
+    # Every byte arrives well within REQUEST_TIMEOUT (2 s), so only an absolute deadline ends
+    # this; without one the smoke would read for 9999 * 0.05 s and never reach its cleanup.
+    started = time.monotonic()
+    with (
+        _dribbling_server() as base,
+        pytest.raises(smoke.SmokeError, match="nothing answered /health"),
+    ):
+        smoke.wait_for_health(base, deadline_seconds=0.6)
+    assert time.monotonic() - started < 5
 
 
 def test_a_health_error_status_fails_at_once() -> None:
