@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   instances: [] as Core[],
 }));
 vi.mock("react", () => ({
-  useRef: () => ({ current: {} }),
+  // The container ref (null) stands in as a host; other refs keep their initial value.
+  useRef: (...initial: unknown[]) => ({
+    current: initial.length > 0 && initial[0] !== null ? initial[0] : {},
+  }),
   useEffect: (effect: () => undefined | (() => void)) => mocks.effects.push(effect),
 }));
 vi.mock("cytoscape", async (importOriginal) => {
@@ -35,6 +38,7 @@ import { themes } from "../theme";
 const theme = themes.dark;
 
 import { GraphView } from "./GraphView";
+import type { GraphViewProps } from "./GraphView";
 
 let cleanup: undefined | (() => void);
 afterEach(() => {
@@ -76,7 +80,7 @@ function setLabel(name: string) {
   });
 }
 
-function mount() {
+function mount(props?: GraphViewProps) {
   let resolve!: (fonts: FontFace[]) => void;
   let reject!: (error: Error) => void;
   const pending = new Promise<FontFace[]>((onResolve, onReject) => {
@@ -93,7 +97,9 @@ function mount() {
       disconnect = observer.disconnect;
     },
   );
-  GraphView();
+  GraphView(props);
+  // The props effect runs first, as React runs effects in order; the last effect creates the graph.
+  if (props) mocks.effects.slice(0, -1).forEach((effect) => effect());
   cleanup = mocks.effects.at(-1)?.();
   const settle = async (result: "resolved" | "rejected") => {
     if (result === "resolved") resolve([]);
@@ -155,3 +161,18 @@ it.each(["resolved", "rejected"] as const)(
     expect(observer.disconnect).not.toHaveBeenCalled();
   },
 );
+
+it("reports node taps and keeps the app's selected ring through state updates", async () => {
+  setLabel("Selected");
+  const onNodeTap = vi.fn();
+  const { settle } = mount({ selectedId: "billing:fee", onNodeTap });
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Graph was not created");
+  const node = cy.getElementById("billing:fee");
+  expect(node.selected()).toBe(true);
+  setLabel("After an event");
+  expect(cy.getElementById("billing:fee").selected()).toBe(true);
+  node.emit("tap");
+  expect(onNodeTap).toHaveBeenCalledExactlyOnceWith("billing:fee");
+});

@@ -219,6 +219,12 @@ it("uses only token colors in rendered Monaco, at rest and while reading, findin
     await browserExpect(page.locator(".find-widget.visible")).toBeVisible();
     await browserExpect(page.locator(".findMatch").first()).toBeVisible();
     await collect("find");
+    // Regex on and an unclosed bracket: Monaco paints its validation message and input border.
+    await page.keyboard.press("Alt+r");
+    await browserExpect(page.locator(".find-widget .monaco-custom-toggle.checked")).toHaveCount(1);
+    await page.keyboard.type("[");
+    await browserExpect(page.locator(".monaco-inputbox-message.error")).toBeVisible();
+    await collect("find regex error");
     await page.keyboard.press("Escape");
     await page.evaluate(() => {
       window.panelTest.current()?.getModifiedEditor().setScrollTop(400);
