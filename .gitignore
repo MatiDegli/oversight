@@ -32,6 +32,13 @@ CLAUDE.local.md
 .claude/settings.local.json
 .claude/skills/
 
+# Screenshots of the UI from a recorded run (make shots)
+.shots/
+
+# Impeccable is installed locally (.claude/skills/impeccable); its working files stay out of git
+.agents/
+.impeccable/
+
 # Playwright
 playwright-report/
 test-results/

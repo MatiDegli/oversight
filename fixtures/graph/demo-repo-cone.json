@@ -1,0 +1,49 @@
+{
+  "seeds": [
+    "shop.pricing:compute_price"
+  ],
+  "entries": [
+    {
+      "node_id": "shop.cart:Cart.quote_add",
+      "distance": 1
+    },
+    {
+      "node_id": "shop.cart:Cart.subtotals",
+      "distance": 1
+    },
+    {
+      "node_id": "shop.models:Customer.quote",
+      "distance": 1
+    },
+    {
+      "node_id": "shop.models:Product.price_for",
+      "distance": 1
+    },
+    {
+      "node_id": "shop.orders:order_total",
+      "distance": 1
+    },
+    {
+      "node_id": "shop.orders:revenue_by_category",
+      "distance": 1
+    },
+    {
+      "node_id": "shop.pricing:price_breaks",
+      "distance": 1
+    },
+    {
+      "node_id": "shop.cart:Cart.total",
+      "distance": 2
+    },
+    {
+      "node_id": "shop.orders:place_order",
+      "distance": 2
+    }
+  ],
+  "edges_followed": "exact",
+  "max_depth": 3,
+  "max_nodes": 40,
+  "omitted_by_depth": 0,
+  "omitted_by_limit": 0,
+  "tests_reaching": 12
+}

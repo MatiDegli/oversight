@@ -8,6 +8,7 @@ assignment hides a module-level function of the same name.
 """
 
 import ast
+import bisect
 import hashlib
 import io
 import tokenize
@@ -101,7 +102,7 @@ def parse_file(path: str, data: bytes) -> FileParse | ParseError:
         module=module,
         is_package=is_package,
         nodes=tuple(nodes.nodes),
-        own_hashes=nodes.own_hashes(),
+        own_hashes=nodes.own_hashes(tree),
         bindings=facts.module_bindings(),
         star_imports=tuple(facts.star_imports),
         all_names=_all_names(tree),
@@ -207,18 +208,46 @@ class _Nodes:
         at = self.data.rfind(b"@", self.line_starts[first.lineno - 1], offset)
         return at if at >= 0 else offset
 
-    def own_hashes(self) -> dict[str, str]:
+    def own_hashes(self, tree: ast.Module) -> dict[str, str]:
+        """Per node, the hash of its source with the nested nodes cut out. Blank lines in the gaps
+        that the cuts leave are ignored, so adding, removing or moving a method does not mark its
+        class modified, nor a new function its module. A blank line inside a multi-line string is
+        part of the literal and counts."""
+        inside_string = _lines_inside_strings(tree)
         hashes: dict[str, str] = {}
         for node_id, (start, end) in self.spans.items():
-            digest = hashlib.sha256()
+            kept: list[bytes] = []
             cursor = start
-            for child in sorted(self.children[node_id], key=lambda c: self.spans[c][0]):
-                child_start, child_end = self.spans[child]
-                digest.update(self.data[cursor:child_start])
+            cuts = sorted((self.spans[c] for c in self.children[node_id]), key=lambda s: s[0])
+            for child_start, child_end in cuts:
+                self._keep_lines(cursor, child_start, inside_string, kept)
                 cursor = child_end
-            digest.update(self.data[cursor:end])
-            hashes[node_id] = digest.hexdigest()
+            self._keep_lines(cursor, end, inside_string, kept)
+            hashes[node_id] = hashlib.sha256(b"\n".join(kept)).hexdigest()
         return hashes
+
+    def _keep_lines(self, start: int, end: int, inside_string: set[int], kept: list[bytes]) -> None:
+        """Append the lines of `data[start:end]` that count: the non-blank ones, and every line
+        that begins inside a string literal."""
+        number = bisect.bisect_right(self.line_starts, start)
+        for line in self.data[start:end].splitlines():
+            if line.strip() or number in inside_string:
+                kept.append(line)
+            number += 1
+
+
+def _lines_inside_strings(tree: ast.Module) -> set[int]:
+    """The line numbers that begin inside a string or bytes literal, f-strings included."""
+    lines: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.JoinedStr) or (
+            isinstance(node, ast.Constant) and isinstance(node.value, str | bytes)
+        ):
+            first, last = node.lineno, node.end_lineno or node.lineno
+        else:
+            continue
+        lines.update(range(first + 1, last + 1))
+    return lines
 
 
 def _nested_bodies(stmt: ast.stmt) -> Iterator[list[ast.stmt]]:

@@ -1,24 +1,11 @@
 """Main's graph, read from a workspace directory and re-parsed only where a file's bytes changed."""
 
-import hashlib
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
-from oversight.graph._extract import module_name, parse_file
-from oversight.graph._facts import FileParse
-from oversight.graph._link import link
 from oversight.graph._spans import SpanIndex
-from oversight_contracts.graph import GraphSnapshot, ParseError
-
-
-@dataclass(frozen=True, slots=True)
-class _Entry:
-    digest: str
-    """The hash of the bytes last read."""
-    good: FileParse | None
-    """The last parse that succeeded, possibly of older bytes."""
-    error: ParseError | None
+from oversight.graph._version import FileEntry, assemble, parse_entries, select_python_paths
+from oversight_contracts.graph import GraphSnapshot
 
 
 def python_files(root: Path) -> list[str]:
@@ -38,11 +25,8 @@ def python_files(root: Path) -> list[str]:
             full = Path(directory) / name
             if not name.endswith(".py") or full.is_symlink() or not full.is_file():
                 continue
-            path = full.relative_to(root).as_posix()
-            if module_name(path) is not None:
-                found.append(path)
-    packages = {p.removesuffix("/__init__.py") for p in found if p.endswith("/__init__.py")}
-    return sorted(p for p in found if p.removesuffix(".py") not in packages)
+            found.append(full.relative_to(root).as_posix())
+    return select_python_paths(found)
 
 
 class WorkspaceGraph:
@@ -50,47 +34,18 @@ class WorkspaceGraph:
 
     def __init__(self, root: Path) -> None:
         self._root = root
-        self._entries: dict[str, _Entry] = {}
+        self._entries: dict[str, FileEntry] = {}
         self._spans = SpanIndex(())
         self._own: dict[str, str] = {}
         self.last_parsed: tuple[str, ...] = ()
         """The paths the last scan parsed, because they were new or their bytes changed."""
 
     def scan(self, commit: str) -> GraphSnapshot:
-        entries: dict[str, _Entry] = {}
-        parsed: list[str] = []
-        for path in python_files(self._root):
-            data = (self._root / path).read_bytes()
-            digest = hashlib.sha256(data).hexdigest()
-            old = self._entries.get(path)
-            if old is not None and old.digest == digest:
-                entries[path] = old
-                continue
-            parsed.append(path)
-            result = parse_file(path, data)
-            if isinstance(result, ParseError):
-                entries[path] = _Entry(digest, old.good if old else None, result)
-            else:
-                entries[path] = _Entry(digest, result, None)
-        self._entries = entries
-        self.last_parsed = tuple(parsed)
-
-        errors = [e.error for e in entries.values() if e.error is not None]
-        files = [e.good for _, e in sorted(entries.items()) if e.good is not None]
-        nodes, edges = link(files)
-        self._spans = SpanIndex(nodes)
-        self._own = {nid: h for f in files for nid, h in f.own_hashes.items()}
-        version = hashlib.sha256(
-            "".join(f"{path}\0{e.digest}\n" for path, e in sorted(entries.items())).encode()
-        ).hexdigest()
-        return GraphSnapshot(
-            version=version,
-            commit=commit,
-            nodes=nodes,
-            edges=edges,
-            parse_errors=sorted(errors, key=lambda e: (e.path, e.line or 0)),
-            positions={},
-        )
+        files = {path: (self._root / path).read_bytes() for path in python_files(self._root)}
+        self._entries, self.last_parsed = parse_entries(files, self._entries)
+        snapshot, self._own = assemble(self._entries, commit)
+        self._spans = SpanIndex(snapshot.nodes)
+        return snapshot
 
     def node_at(self, path: str, line: int) -> str | None:
         """The innermost node at a line of a file, as of the last scan."""
