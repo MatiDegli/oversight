@@ -20,6 +20,16 @@ from oversight.agents.client import (
     Usage,
 )
 from oversight.agents.fake import Script, ScriptedModel, load_script, parse_script
+from oversight.agents.loop import (
+    PROMPT_VERSION,
+    SYSTEM_PROMPT,
+    AgentRun,
+    AgentTask,
+    Publish,
+    RunEnd,
+)
+from oversight.agents.sink import ChangeSink
+from oversight.agents.tools import TOOL_NAMES, TOOL_SCHEMAS
 from oversight.agents.usage import Brake, Pricing, UsageLedger
 
 __all__ = [
@@ -28,14 +38,23 @@ __all__ = [
     "META_BASE_URL",
     "MUSE_SPARK",
     "MUSE_SPARK_OPEN",
+    "PROMPT_VERSION",
+    "SYSTEM_PROMPT",
+    "TOOL_NAMES",
+    "TOOL_SCHEMAS",
+    "AgentRun",
+    "AgentTask",
     "Brake",
+    "ChangeSink",
     "Message",
     "ModelAPIError",
     "ModelClient",
     "ModelReply",
     "OpenAIClient",
     "Pricing",
+    "Publish",
     "RetryPolicy",
+    "RunEnd",
     "Script",
     "ScriptedModel",
     "ToolCall",
