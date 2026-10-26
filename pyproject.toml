@@ -143,6 +143,8 @@ source_modules = [
     "oversight.workspace",
 ]
 forbidden_modules = ["openai"]
+# app -> agents -> openai is the legitimate path through the facade; a direct import still fails.
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 id = "web-at-the-edge"

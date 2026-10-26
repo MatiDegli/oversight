@@ -22,9 +22,11 @@ install: ## install the Python and Node dependencies from the lockfiles
 setup: install ## install the dependencies and the git hooks: pre-commit, commit-msg and pre-push
 	pre-commit install --install-hooks
 
+# On exit, dev stops only the backend it started, never the process group, which make shares with
+# whoever ran it. uv forwards SIGTERM to its child, and uvicorn stops its reload worker.
 dev: ## FastAPI with reload and the Vite dev server, one origin through Vite's proxy
-	@trap 'kill 0' EXIT; \
-	uv run --frozen python -m oversight serve --reload & \
+	@uv run --frozen python -m oversight serve --reload & backend=$$!; \
+	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
 
 check: check-python check-frontend check-secrets ## every gate; spends no credits
