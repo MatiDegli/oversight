@@ -27,7 +27,19 @@ export default defineConfig({
     strictPort: true,
     proxy: Object.fromEntries(apiPaths.map((path) => [path, { target: backend }])),
   },
+  // `pnpm test` runs the unit project, which needs no browser, so make check and CI stay runnable
+  // without one. `pnpm test:browser` runs the tests that drive Monaco in Playwright's Chromium.
   test: {
-    include: ["src/**/*.test.{ts,tsx}"],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["src/**/*.test.{ts,tsx}"],
+          exclude: ["src/**/*.browser.test.{ts,tsx}"],
+        },
+      },
+      { extends: true, test: { name: "browser", include: ["src/**/*.browser.test.{ts,tsx}"] } },
+    ],
   },
 });
