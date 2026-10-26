@@ -7,7 +7,9 @@ the decision is a fact, in `conflict`, back in `ready` when main is untouched, o
 main's state cannot be read. `closing` becomes `closed` once its resolution, delta and `done` are
 all sent; until then the change is pending, keeps its worktree until the resolution is out, and the
 next decision or `open` sends the rest. Every git call is `Workspace.git`, async with a timeout;
-approve and reject hold main's lock, then the agent's, throughout.
+approve and reject hold main's lock, then the agent's, throughout. Once a change enters `broken`,
+`main_suspect` stays true until the process restarts; `check_main` reads main's state, and `aclose`
+drains the close-outs before the store closes.
 """
 
 import asyncio
@@ -47,7 +49,9 @@ APPROVABLE: frozenset[State] = frozenset({"ready"})
 REJECTABLE: frozenset[State] = frozenset({"ready", "conflict", "unproposed", "broken"})
 """`broken`: the merge failed and main's state is unknown; Reject still closes the change."""
 CLOSE_OUT_ATTEMPTS = 2
-"""Tries per occasion (a decision, a retry before the next decision or `open`)."""
+"""Tries per occasion (a decision, a retry before the next decision or `open`, the drain)."""
+EVENT_TYPES = {"resolved": "change.resolved", "delta": "graph.delta", "done": "agent.status done"}
+"""Close-out events by their names in `_Change.sent`, as an `error` names them."""
 
 
 class ChangeNotFound(LookupError):
@@ -149,6 +153,13 @@ class ChangeManager:
         """Changes whose close-out or cleanup is unfinished; the next decision or `open` runs them
         again first."""
         self._tasks: set[asyncio.Task[None]] = set()
+        self._suspect = False
+
+    @property
+    def main_suspect(self) -> bool:
+        """True once a change has entered `broken`, so main's state is unknown, until the process
+        restarts and the next start's `reset` rebuilds main. Rejecting that change keeps it true."""
+        return self._suspect
 
     # --- Helpers ------------------------------------------------------------------------------
 
@@ -440,10 +451,17 @@ class ChangeManager:
         task.add_done_callback(lambda _: self._restore(rec, decision))
         return task
 
-    @staticmethod
-    def _restore(rec: _Change, decision: int) -> None:
+    def _restore(self, rec: _Change, decision: int) -> None:
         if rec.state == "deciding" and rec.decision == decision:
-            rec.state = rec.fallback
+            if rec.fallback == "broken":
+                self._break(rec)
+            else:
+                rec.state = rec.fallback
+
+    def _break(self, rec: _Change) -> None:
+        """Main's state is unknown: the change is `broken`, and main suspect until restart."""
+        rec.state = "broken"
+        self._suspect = True
 
     def approve(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
         rec = self._take(change_id, APPROVABLE, "approve")
@@ -453,10 +471,39 @@ class ChangeManager:
         rec = self._take(change_id, REJECTABLE, "reject")
         return self._decide(rec, self._reject(rec, comment))
 
+    async def check_main(self) -> bool | None:
+        """Under main's lock: True when main has no `MERGE_HEAD` and `status --porcelain` is empty,
+        False otherwise, None when git fails or times out."""
+        main = self._workspace.main
+        async with self._workspace.locks(main=True):
+            try:
+                merging = await self._yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+                dirty = bool((await self._git(main, "status", "--porcelain")).strip())
+            except (WorkspaceError, OSError):
+                return None
+        return not merging and not dirty
+
     async def aclose(self) -> None:
-        """Wait for the decisions in flight."""
+        """Drain before the store closes, which the caller does only once this returns: wait for
+        the decisions in flight, run the close-out retry once more for each change with unsent
+        events, then send one `error` per change naming each event still unsent. Cleanup is left
+        to the next start's `reset`."""
         while self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
+        for rec in list(self._pending.values()):
+            if rec.state != "closing":
+                continue  # all sent; only its cleanup is pending
+            async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+                failure = await self._try_close_out(rec)
+                if failure:
+                    unsent = ", ".join(EVENT_TYPES[name] for name, _ in self._unsent(rec))
+                    await self._error(
+                        "server",
+                        f"Shutting down with the close-out of {rec.change_id} incomplete "
+                        f"({failure}): {unsent} never sent.",
+                        rec,
+                        fatal=False,
+                    )
 
     async def _approve(self, rec: _Change, comment: str | None) -> None:
         await self._finish_pending()
@@ -586,7 +633,7 @@ class ChangeManager:
             rec.state = "ready"
             note = "main is unchanged; approve again or reject"
         else:
-            rec.state = "broken"
+            self._break(rec)
             note = "main's state is unknown; reject the change or restart"
         what = "was cancelled" if error is None else f"failed: {error}"
         await self._error("git", f"Approving {rec.change_id} {what}. {note}.", rec, fatal=False)
@@ -644,32 +691,41 @@ class ChangeManager:
         pending, and a later call sends only what is missing. Never raises, save a cancel."""
         rec.state = "closing"
         self._pending[rec.agent_id] = rec
+        failure = await self._try_close_out(rec)
+        if failure:
+            await self._error(
+                "server",
+                f"The close-out of {rec.change_id} is incomplete ({failure}). "
+                "The next decision or agent start sends the rest.",
+                rec,
+                fatal=False,
+            )
+
+    async def _try_close_out(self, rec: _Change) -> str:
+        """Send what is missing, up to `CLOSE_OUT_ATTEMPTS` times; `closed` once all is out, else
+        the last failure. The caller holds main's lock and the change's."""
         failure = ""
         for _ in range(CLOSE_OUT_ATTEMPTS):
             failure = await self._send_close_out(rec)
             if not failure:
                 rec.state = "closed"
-                return
-        await self._error(
-            "server",
-            f"The close-out of {rec.change_id} is incomplete ({failure}). "
-            "The next decision or agent start sends the rest.",
-            rec,
-            fatal=False,
-        )
+                return ""
+        return failure
 
-    async def _send_close_out(self, rec: _Change) -> str:
-        """Send what is missing, in order; the first failure, or "" once everything is out. A
-        publish that a cancelled close-out left running is waited for first, so it is not resent."""
-        await self._drain(rec)
+    def _unsent(self, rec: _Change) -> list[tuple[str, EventPayload]]:
+        """The close-out events not yet sent, in order: the resolution, the delta, `done`."""
         events: list[tuple[str, EventPayload | None]] = [
             ("resolved", rec.resolution),
             ("delta", rec.delta),
             ("done", self._done(rec)),
         ]
-        for name, payload in events:
-            if name in rec.sent or payload is None:
-                continue
+        return [(n, p) for n, p in events if p is not None and n not in rec.sent]
+
+    async def _send_close_out(self, rec: _Change) -> str:
+        """Send what is missing, in order; the first failure, or "" once everything is out. A
+        publish that a cancelled close-out left running is waited for first, so it is not resent."""
+        await self._drain(rec)
+        for name, payload in self._unsent(rec):
             # The publish runs in its own task, kept on the record, and a done-callback records its
             # outcome: the store may commit the event however many cancels the close-out gets, and
             # the next close-out must not send it again.

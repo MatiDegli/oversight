@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from changes_helpers import ADD_THRICE, Harness, bounded
+from changes_helpers import ADD_THRICE, Harness, bounded, cancel_twice
 
 from oversight.changes import WrongState
 from oversight.workspace import SuiteRun, Tree, WorkspaceError
@@ -51,25 +51,6 @@ async def test_cancel_during_a_publish_records_what_went_out(h: Harness) -> None
     [delta] = h.payloads(GraphDelta)
     assert h.manager.snapshot.version == delta.to_version
     assert not await h.has_branch("agent-1")
-
-
-async def queued_callbacks_ran() -> None:
-    """Return once the callbacks queued so far have run, in their order: a task that a cancel woke
-    has taken it and is waiting again. It waits on a loop callback, never on time."""
-    loop = asyncio.get_running_loop()
-    turn = loop.create_future()
-    loop.call_soon(turn.set_result, None)
-    await turn
-
-
-async def cancel_twice(decision: asyncio.Task[None]) -> None:
-    """Cancel a decision held in a close-out publish, again once it waits through the first cancel:
-    the second cancel ends its wait, while the publish stays held."""
-    decision.cancel()
-    await queued_callbacks_ran()
-    decision.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await decision
 
 
 @bounded
