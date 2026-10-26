@@ -25,6 +25,8 @@ def read_env_file(path: Path) -> dict[str, str]:
 class Settings:
     host: str = "127.0.0.1"
     port: int = 8710
+    runtime_dir: Path = REPO_ROOT / ".runtime"
+    """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
 
     @classmethod
     def load(cls, env_file: Path = REPO_ROOT / ".env") -> "Settings":
@@ -33,4 +35,5 @@ class Settings:
         return cls(
             host=merged.get("OVERSIGHT_HOST", cls.host),
             port=int(merged.get("OVERSIGHT_PORT", cls.port)),
+            runtime_dir=Path(merged.get("OVERSIGHT_RUNTIME_DIR", cls.runtime_dir)),
         )
