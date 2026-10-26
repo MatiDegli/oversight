@@ -10,7 +10,8 @@ NO_KEYS := env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u
 UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
-.PHONY: help install setup dev check check-python check-frontend check-secrets demo-repo-check
+.PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
+	contracts check-contracts check-secrets demo-repo-check
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -29,20 +30,32 @@ dev: ## FastAPI with reload and the Vite dev server, one origin through Vite's p
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
 
-check: check-python check-frontend check-secrets ## every gate; spends no credits
+check: check-python check-contracts check-frontend check-secrets ## every gate; spends no credits
 
-check-python:
+check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
+
+check-python: lint-python
+	$(UV) pytest
+
+lint-python:
 	$(UV) ruff check .
 	$(UV) ruff format --check .
 	$(UV) pyright
 	$(UV) lint-imports
-	$(UV) pytest
 
-check-frontend:
+check-frontend: lint-frontend
+	$(PNPM) test
+
+lint-frontend:
 	$(PNPM) typecheck
 	$(PNPM) lint
 	$(PNPM) format:check
-	$(PNPM) test
+
+contracts: ## regenerate contracts/generated: JSON Schema and TypeScript from the Pydantic models
+	$(UV) python contracts/generate.py
+
+check-contracts:
+	$(UV) python contracts/generate.py --check
 
 check-secrets:
 	gitleaks git --config .gitleaks.toml --redact --no-banner --log-level warn .
