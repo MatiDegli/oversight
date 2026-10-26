@@ -1,7 +1,8 @@
 # Proposal: structure, contracts v1, and build order
 
-Status: approved by the maintainer on 2026-10-26, with his answers to section 8 folded in. Times are
-in Argentina time (ART, UTC-3). [AGENTS.md](../AGENTS.md) stays the brief; this document adds what
+Status: approved by the maintainer on 2026-10-26, with his answers to section 8 folded in. The
+controls in section 7 were added the same day at his request. Times are in Argentina time (ART,
+UTC-3). [AGENTS.md](../AGENTS.md) stays the brief; this document adds what
 it does not settle and does not repeat it.
 
 ## 1. Summary
@@ -20,6 +21,8 @@ it does not settle and does not repeat it.
   reducer, and resumes from the last `seq` it applied.
 - Eighteen fronts to level 1, with one acceptance command each. The critical path to Thursday goes
   through contracts, the event bus, the agent runtime and the change manager.
+- Controls sized for nine days: hooks for commit messages, commit size and pre-push, hardened CI,
+  a 14-day release age and `make audit`. Section 7 lists them, and what was left out and why.
 - Section 8 lists where this proposal settles or departs from AGENTS.md and the plan, with the
   maintainer's answer to each row.
 
@@ -618,7 +621,7 @@ result. The days assume the build period starts on Tuesday at 01:00. The owners 
 
 | # | Front | Day | Needs | Owner | Done when |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Skeleton and tooling | Tue | approval | coordinator | `make setup && make check` passes on the empty skeleton, and `make dev` serves a blank page through the proxy |
+| 1 | Skeleton and tooling | Tue | approval | coordinator | `make setup && make check` passes on the empty skeleton, `make dev` serves a blank page through the proxy, and the commit-msg hook rejects a bad subject and an oversized commit |
 | 2 | Contracts v1 | Tue | 1 | coordinator; the maintainer approves | `make contracts && git diff --exit-code contracts/generated` and `uv run pytest contracts` |
 | 3 | Event store, SSE, fake player, hand-written log | Tue | 2 | coordinator | `uv run pytest backend/tests/events` (seq strictly increasing under two writers, resume after Last-Event-ID, every fixture valid), and `make replay` streams with `curl -N` |
 | 4 | Smoke test | Tue | 3 | support | `make smoke` exits 0 from a clean clone |
@@ -666,13 +669,16 @@ These cover what AGENTS.md leaves open.
 
 1. **Branches and commits.** Branches are `<module>/<topic>`, such as `graph/imports` or
    `frontend/review-mode`. Commits follow Conventional Commits with the module as scope:
-   `feat(graph): resolve relative imports`.
+   `feat(graph): resolve relative imports`. The scope may be left out for changes outside a module,
+   and the subject fits in 72 characters. A commit-msg hook checks both.
 2. **Pinned versions.** Python dependencies are pinned with `==` and `uv.lock` is committed. Node
    packages use exact versions and `pnpm-lock.yaml` is committed; Node 24 and pnpm are pinned in
-   `package.json`, and Python 3.12 in `.python-version`.
+   `package.json`, and Python 3.12 in `.python-version`. A release is adopted only once it is at
+   least 14 days old, enforced by uv's `exclude-newer` and pnpm's `minimumReleaseAge`; an exception
+   names the package and its reason in DECISIONS.md.
 3. **New dependencies.** A new dependency needs a license check (MIT, Apache-2.0, BSD or ISC; SIL OFL
-   1.1 for fonts) and a line in DECISIONS.md. Only the coordinator edits manifests and lockfiles, one
-   change at a time.
+   1.1 for fonts) and a line in DECISIONS.md; `make audit` checks every resolved package, transitive
+   ones included. Only the coordinator edits manifests and lockfiles, one change at a time.
 4. **Generated files.** Contract output lives only in `contracts/generated/` and only
    `make contracts` writes it.
 5. **Fixtures.** Event logs live in `fixtures/events/`, one envelope per line. Recorded runs are
@@ -693,7 +699,9 @@ These cover what AGENTS.md leaves open.
     them. Colors come only from theme tokens. Text is English, in sentence case.
 11. **Secrets.** Read once by `settings.py`, never logged. `.env.example` lists names only.
 12. **Size.** A PR is one front, up to about 400 changed lines without generated files, fixtures
-    and lockfiles.
+    and lockfiles. A commit has at most 1,000 changed lines, added plus removed, counted the same
+    way. A commit that cannot be split says why in a `Commit-Exception:` trailer; merge commits are
+    exempt.
 13. **New areas.** No new top-level directory or backend module without the maintainer's OK, so the
     import contracts keep their meaning.
 14. **Hand-backs.** Every worker reports in one fixed format, judged by its diff and a rerun, never by
@@ -708,6 +716,9 @@ Open: <questions, risks, follow-ups>
 Still running: <none, or the processes it could not stop>
 Details: <path, for anything longer than about 2,500 characters>
 ```
+
+15. **Claims.** README.md, ARCHITECTURE.md and the video state speed or size only as measured on the
+    demo repo, with the command that measured it.
 
 ## 7. Development flow
 
@@ -749,11 +760,40 @@ contract-scope check.
 
 - Development worktrees live in a sibling directory, `../oversight-worktrees/<branch>`, so the dev
   server and searches do not walk them.
+- Each front is a GitHub PR: the coordinator pushes its branch when it is ready for review.
 - A branch that falls behind merges main.
 - Before asking for approval: `make check`, plus `make e2e` for frontend fronts, on the merged
-  result.
+  result. The merge commit names what passed in a trailer, such as `Checked: make check, make e2e`;
+  if main moved after the check, the check runs again.
 - Merges into main are `--no-ff`, so each front shows in the history, and they are pushed after the
   maintainer approves.
+
+**Controls.** Each one is cheap and closes a gap that review alone leaves open. A hook can be
+skipped, and a skipped check is not a pass, so the record that counts is the coordinator's rerun on
+the merged result.
+
+| Control | Where | When |
+| --- | --- | --- |
+| Commit messages: Conventional Commits, subject up to 72 characters | a commit-msg hook; pre-push checks every commit being pushed again | front 1 |
+| Commit size: at most 1,000 changed lines, or a `Commit-Exception:` trailer (rule 12) | the same commit-msg hook, since it reads the trailer; pre-push checks again | front 1 |
+| `make check` before anything reaches GitHub | a pre-push hook: until GitHub Actions runs it, the only check before a push | front 1 |
+| Hardened CI: actions pinned by SHA, read-only permissions per job, `persist-credentials: false`, a timeout per job | `.github/workflows/ci.yml` | front 1 |
+| A release age of 14 days | uv and pnpm settings (rule 2) | front 1 |
+| Licenses of every resolved package, and known vulnerabilities | `make audit`; it needs the network, so it stays out of `make check` | by Sunday, then whenever a lockfile changes |
+| Each control fails when it should | the hand-back that adds a control shows it rejecting one deliberate violation: a bad commit message, a forbidden import, `subprocess` outside the runner, an edited generated file, a contract change on another branch | as each control lands |
+
+When the repository goes public, with the maintainer's confirmation for each GitHub step: first
+gitleaks over the whole history and `make audit`; then a ruleset on main that blocks force pushes
+and deletion, and a tag on the submitted commit.
+
+Left out, because they cost more than they return in nine days:
+
+- **Squash merges for a linear history.** `--no-ff` keeps every commit with its date, which shows
+  the judges what was built during the event, and `git log --first-parent main` reads as linear.
+- **SECURITY.md.** Nothing runs as a service on the internet: the product runs locally and the
+  public site is static.
+- **A reviewed plan before the hooks.** They delete nothing, and each is shown failing once.
+- **Required status checks.** Only once GitHub Actions runs.
 
 **Daily rhythm (ART).**
 
@@ -770,7 +810,7 @@ contract-scope check.
 
 | Target | Does |
 | --- | --- |
-| `make setup` | installs the Python and Node dependencies and the pre-commit hooks |
+| `make setup` | installs the Python and Node dependencies and the git hooks: pre-commit, commit-msg and pre-push |
 | `make dev` | FastAPI with reload and the Vite dev server, one origin through Vite's proxy |
 | `make check` | ruff, pyright, import-linter, pytest, the contract drift and scope checks, tsc, eslint, prettier, vitest, gitleaks; no credits |
 | `make contracts` | regenerates `contracts/generated/` |
@@ -782,6 +822,7 @@ contract-scope check.
 | `make e2e` | Playwright over replay |
 | `make site` | the static replay site with a bundled recorded run, labeled as one by its build mode |
 | `make probe` | the API probe; spends credits, never part of `make check` |
+| `make audit` | the licenses of every resolved package against the allowed list, then `pip-audit` and `pnpm audit`; needs the network |
 
 **Pins (from PyPI and npm on 2026-10-26).**
 
@@ -795,6 +836,11 @@ contract-scope check.
 
 TypeScript stays on 6.0: typescript-eslint 8.72 supports up to 6.0, not the native 7.0. The
 generator's latest release is 16.0.0, so the 16-or-17 question is settled.
+
+These are the latest releases. Rule 2's release age moves eleven of them back when front 1 locks,
+all published after 2026-10-13: fastapi, openai, ruff, react, vite, zustand, cytoscape,
+lucide-react, vitest, @playwright/test and eslint. FastAPI 0.143.0, the newest that qualifies,
+already has `fastapi.sse`, and typescript-eslint 8.71.2 accepts TypeScript 6.0.
 
 ## 8. Where this proposal settles or departs from AGENTS.md and the plan
 
