@@ -11,8 +11,11 @@ Merges are exempt, by state and not by text: commit-msg skips both checks only w
 progress (MERGE_HEAD exists), and the pre-push check skips commits with several parents.
 
 pre-commit runs a pre-push hook once per push, with one range: the first pushed ref that has new
-commits (see hook_impl.py in pre-commit). A push of several refs would publish the rest unchecked,
-so `pushed` checks that range and also every local branch commit that no remote has.
+commits (see hook_impl.py in pre-commit). `pushed` checks exactly that range, FROM..TO, or TO --not
+--remotes when FROM is empty or all zeros (a first push of a branch). It does not look at other
+branches. The project pushes one branch per command and never pushes tags without the maintainer,
+so a second ref in one push, which pre-commit does not report, is a limit we accept: the `Checked:`
+rerun of each merge is the real record.
 """
 
 import os
@@ -92,17 +95,16 @@ def check_message_file(path: str) -> list[str]:
 
 
 def pushed_commits(from_ref: str, to_ref: str) -> list[str]:
-    """Non-merge commits this push may publish: its range, and every one no remote has.
+    """Non-merge commits of the range pre-commit hands the hook, and no others.
 
     Without a usable FROM ref (a first push), the range is what `to_ref` has and no remote-tracking
-    ref does, so it needs no origin/main. The second part covers the refs of a multi-ref push that
-    pre-commit never reports; it also covers local branches that are not being pushed.
+    ref does, so it needs no origin/main.
     """
-    ranges = [[to_ref, "--branches", "--not", "--remotes"]]
     if from_ref and from_ref != ZERO:
-        ranges.append([f"{from_ref}..{to_ref}"])
-    shas = [sha for r in ranges for sha in git("rev-list", "--no-merges", *r).split()]
-    return list(dict.fromkeys(shas))
+        spec = [f"{from_ref}..{to_ref}"]
+    else:
+        spec = [to_ref, "--not", "--remotes"]
+    return git("rev-list", "--no-merges", *spec).split()
 
 
 def check_pushed(from_ref: str, to_ref: str) -> list[str]:

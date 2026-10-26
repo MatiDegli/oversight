@@ -25,8 +25,9 @@ repos:
         language: system
         stages: [commit-msg]
       # pre-commit runs a pre-push hook once per push, with one range: the first pushed ref that
-      # has new commits. So the script also checks every local branch commit that no remote has,
-      # which covers the other refs of a multi-ref push, and any local branch not being pushed.
+      # has new commits. The script checks exactly that range. The project pushes one branch per
+      # command and never pushes tags without the maintainer, so a second ref in one push goes
+      # unchecked here; the `Checked:` rerun of each merge is the real record.
       - id: commits-pushed
         name: commits being pushed
         entry: uv run --frozen python tools/check_commits.py pushed

@@ -141,9 +141,11 @@ def test_a_first_push_checks_exactly_its_new_commits_without_origin_main(
     root = commit(repo, "a.txt", "start")
     run(repo, "git", "checkout", "-q", "-b", "feature")
     tip = commit(repo, "b.txt", "wip")
+    run(repo, "git", "checkout", "-q", "-b", "scratch", root)
+    commit(repo, "c.txt", "wip elsewhere")  # a local branch nobody is pushing
     run(repo, "git", "checkout", "-q", "main")
     monkeypatch.chdir(repo)
-    # No remote at all: both the root and the feature commit are new, whatever HEAD is.
+    # No remote at all: the root and the feature commit are new, and nothing else is checked.
     for from_ref in ("", cc.ZERO):
         errors = cc.check_pushed(from_ref, "feature")
         assert sorted(error[:10] for error in errors) == sorted([root[:10], tip[:10]])
@@ -153,21 +155,35 @@ def test_a_first_push_checks_exactly_its_new_commits_without_origin_main(
     assert [error[:10] for error in errors] == [tip[:10]]
 
 
-def test_a_push_of_several_refs_checks_the_commits_of_all_of_them(
+def test_the_pushed_range_is_checked_and_nothing_before_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    init_repo(repo)
+    commit(repo, "a.txt", "chore: start")
+    old = commit(repo, "old.txt", "already published, badly worded")
+    bad = commit(repo, "bad.txt", "wip")
+    commit(repo, "good.txt", "feat: good")
+    monkeypatch.chdir(repo)
+    errors = cc.check_pushed(old, "HEAD")
+    assert [error[:10] for error in errors] == [bad[:10]]
+    assert "not a Conventional Commit" in errors[0]
+
+
+def test_a_bad_commit_on_a_branch_nobody_pushes_does_not_block_a_good_push(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo = tmp_path / "repo"
     init_repo(repo)
     base = commit(repo, "a.txt", "chore: start")
     run(repo, "git", "update-ref", "refs/remotes/origin/main", base)
-    run(repo, "git", "checkout", "-q", "-b", "one")
-    one = commit(repo, "one.txt", "wip one")
-    run(repo, "git", "checkout", "-q", "-b", "two", base)
-    two = commit(repo, "two.txt", "wip two")
+    run(repo, "git", "checkout", "-q", "-b", "wip")
+    commit(repo, "wip.txt", "wip, not for pushing")
+    run(repo, "git", "checkout", "-q", "-b", "good", base)
+    commit(repo, "good.txt", "feat: good")
     monkeypatch.chdir(repo)
-    # pre-commit reports one range, here the first ref's: the other ref's commit must still count.
-    errors = cc.check_pushed(base, "one")
-    assert sorted(error[:10] for error in errors) == sorted([one[:10], two[:10]])
+    assert cc.check_pushed(base, "good") == []
+    assert cc.check_pushed("", "good") == []
 
 
 def test_pushed_main_reads_the_pushed_ref_when_pre_commit_gives_no_range(
