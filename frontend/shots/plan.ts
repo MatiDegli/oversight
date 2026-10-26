@@ -5,7 +5,8 @@ import type { Scene, Theme } from "./scenes.ts";
 export interface Job {
   scene: string;
   theme: string;
-  /** The PNG's name inside .shots/: `<scene>-<theme>.png`. */
+  edgeShape?: "bezier" | "taxi";
+  /** The PNG's name inside .shots/: `<scene>-<theme>[-<edge-shape>].png`. */
   file: string;
   /** Why the job is skipped, or null when it runs. */
   skip: string | null;
@@ -13,17 +14,20 @@ export interface Job {
 
 export function planJobs(scenes: readonly Scene[], themes: readonly Theme[]): Job[] {
   return scenes.flatMap((scene) =>
-    themes.map((theme) => {
-      let skip: string | null = null;
-      if (!scene.enabled) skip = `scene ${scene.name}: ${scene.needs ?? "disabled"}`;
-      else if (!theme.enabled) skip = `theme ${theme.name}: ${theme.needs ?? "disabled"}`;
-      return {
-        scene: scene.name,
-        theme: theme.name,
-        file: `${scene.name}-${theme.name}.png`,
-        skip,
-      };
-    }),
+    themes.flatMap((theme) =>
+      (scene.edgeShapes ?? [undefined]).map((edgeShape) => {
+        let skip: string | null = null;
+        if (!scene.enabled) skip = `scene ${scene.name}: ${scene.needs ?? "disabled"}`;
+        else if (!theme.enabled) skip = `theme ${theme.name}: ${theme.needs ?? "disabled"}`;
+        return {
+          scene: scene.name,
+          theme: theme.name,
+          edgeShape,
+          file: `${scene.name}-${theme.name}${edgeShape ? `-${edgeShape}` : ""}.png`,
+          skip,
+        };
+      }),
+    ),
   );
 }
 
