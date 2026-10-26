@@ -1,0 +1,2 @@
+# A release is adopted only once it is 14 days old (docs/proposal.md, rule 2); the unit is minutes.
+minimumReleaseAge: 20160
