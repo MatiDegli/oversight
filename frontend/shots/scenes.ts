@@ -19,9 +19,38 @@ export interface Theme {
   needs?: string;
 }
 
+/**
+ * Clicks the center of the first node with a pending change, as the person would, and waits for the
+ * left panel's diff to show the inserted lines. Cytoscape draws on a canvas, so the node's place on
+ * screen comes from the instance Cytoscape registers on its container.
+ */
+async function clickChangedNode(page: Page): Promise<void> {
+  const point = await page.waitForFunction(() => {
+    type Graph = { $: (selector: string) => GraphNodes };
+    type GraphNodes = { empty: () => boolean; renderedPosition: () => { x: number; y: number } };
+    const host = document.querySelector<HTMLElement & { _cyreg?: { cy?: Graph } }>(
+      '[aria-label="Repository graph"]',
+    );
+    const node = host?._cyreg?.cy?.$("node.pending");
+    if (!host || !node || node.empty()) return null;
+    const box = host.getBoundingClientRect();
+    const { x, y } = node.renderedPosition();
+    return { x: box.left + x, y: box.top + y };
+  });
+  const { x, y } = (await point.jsonValue()) as { x: number; y: number };
+  await page.mouse.click(x, y);
+  await page.locator('[aria-label="Live diff panel"] .line-insert').first().waitFor();
+}
+
 export const scenes: readonly Scene[] = [
-  // Watch mode: the graph and the agents panel. Today main renders only the shell.
-  { name: "watch", enabled: true },
+  // Watch mode: the graph and the agents panel, captured once the replay has put a card in it.
+  {
+    name: "watch",
+    enabled: true,
+    prepare: async (page) => {
+      await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
+    },
+  },
   {
     name: "review",
     enabled: false,
@@ -32,10 +61,12 @@ export const scenes: readonly Scene[] = [
   },
   {
     name: "live-diff",
+    // Ready: `prepare` clicks a changed node and waits for Monaco's inline diff. It needs a log that
+    // ends while the change is pending; the default log approves it at seq 21, so no node is changed
+    // when the replay ends. Run it with LOG set to a log cut before the decision.
     enabled: false,
-    // Enabled by: the editor panel showing a read-only diff while an agent works. Then `prepare`
-    // clicks an edited node on the graph and waits for the DiffEditor to hold both versions.
-    needs: "the editor panel and the graph view (not on main yet)",
+    needs: "a log that ends with a pending change (handwritten-level1 approves it at seq 21)",
+    prepare: clickChangedNode,
   },
   {
     name: "file-view",
