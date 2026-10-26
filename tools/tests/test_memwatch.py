@@ -7,12 +7,15 @@ systemd scope around `make check`'s pytest, is in test_capped.py.
 """
 
 import os
+import signal
 import subprocess
 import sys
 import textwrap
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -25,7 +28,9 @@ MIB = 2**20
 INNER_CAP_GB = "0.3"  # the cap of the inner runs: 307 MB, above the ~80 MB of a bare pytest
 INNER_MIB = 600  # what an inner test, or its child, holds: twice the cap
 INNER_WAIT_S = 30  # how long an inner test waits for the cap to end it
-RUN_DEADLINE_S = 120  # how long this test waits for an inner pytest
+# How long this test waits for an inner pytest: twice an inner wait, and well below the 120 s of
+# pytest-timeout, so the wait ends, and cleans up, before that signal can.
+RUN_DEADLINE_S = 60
 
 
 # --- the pieces ---------------------------------------------------------------------------------
@@ -115,7 +120,9 @@ class InnerRun:
 
 def inner_pytest(directory: Path, source: str, *args: str, cap_gb: str = INNER_CAP_GB) -> InnerRun:
     """Run `source` as a test file in a fresh pytest with the memwatch plugin, outside this
-    repository's configuration. It is killed if it outlasts the deadline."""
+    repository's configuration. However this function ends, the inner process does not outlive it:
+    a deadline, an error, or the per-test timeout of this run (an exception raised from inside
+    `communicate`) all kill and reap it."""
     (directory / "test_inner.py").write_text(textwrap.dedent(source))
     env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTEST_", "GIT_"))}
     env |= {"PYTHONPATH": str(TOOLS), memwatch.ENV_CAP: cap_gb, "INNER_DIR": str(directory)}
@@ -129,10 +136,10 @@ def inner_pytest(directory: Path, source: str, *args: str, cap_gb: str = INNER_C
     )
     try:
         stdout, stderr = process.communicate(timeout=RUN_DEADLINE_S)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.communicate()
-        raise
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate()
     return InnerRun(process.pid, process.returncode, stdout, stderr)
 
 
@@ -224,3 +231,109 @@ def test_a_test_that_outlives_the_timeout_fails_alone_with_its_name(tmp_path: Pa
     assert "Failed: Timeout (>1.0s) from pytest-timeout." in run.stdout
     assert "FAILED test_inner.py::test_hangs" in run.stdout
     assert "1 failed, 1 passed" in run.stdout
+
+
+class Interrupted(Exception):
+    """Stands for what pytest-timeout raises inside a test body when its limit is reached."""
+
+
+def test_the_inner_process_is_killed_and_reaped_whatever_ends_the_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On a slow runner the per-test timeout of this run can fire while it waits for an inner
+    pytest, and that is an exception from `communicate`, not subprocess.TimeoutExpired. The inner
+    process, which waits for half a minute, must be dead and reaped when the exception leaves."""
+    started: list[subprocess.Popen[str]] = []
+
+    class Interrupting(subprocess.Popen[str]):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            started.append(self)
+
+        def communicate(self, input: str | None = None, timeout: float | None = None) -> Any:
+            if timeout is not None:  # the wait with a deadline; the cleanup waits without one
+                raise Interrupted
+            return super().communicate(input)
+
+    monkeypatch.setattr(subprocess, "Popen", Interrupting)
+    try:
+        with pytest.raises(Interrupted):
+            inner_pytest(
+                tmp_path,
+                f"""\
+                import threading
+
+                def test_waits():
+                    threading.Event().wait({INNER_WAIT_S})
+                """,
+            )
+        assert len(started) == 1
+        assert started[0].poll() == -signal.SIGKILL, "the inner pytest was left running"
+    finally:
+        for process in started:  # whatever the assertions found, leave nothing behind
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+
+
+def test_the_wait_for_an_inner_pytest_ends_before_the_per_test_timeout_with_room_to_clean_up(
+    request: pytest.FixtureRequest,
+) -> None:
+    seconds = float(request.config.getini("timeout"))
+    assert seconds >= 2 * RUN_DEADLINE_S, "the deadline must pass well before pytest-timeout fires"
+    assert RUN_DEADLINE_S >= 2 * INNER_WAIT_S, "an inner run may take as long as its own wait"
+
+
+def test_over_the_cap_the_watchdog_signals_no_process_and_only_ends_its_own(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The branch where the watchdog's own process is over the cap, with a live child: whatever
+    sends a signal is intercepted, and none may be called. A stop_descendants brought back here
+    would signal pids read from /proc, which may have been reused by someone else's process."""
+    signals: list[str] = []
+
+    def recorder(name: str) -> Callable[..., None]:
+        def record(*args: object, **kwargs: object) -> None:
+            signals.append(f"{name}{args}")
+
+        return record
+
+    exits: list[int] = []
+    for owner, name in [
+        (os, "kill"),
+        (os, "killpg"),
+        (signal, "pthread_kill"),
+        (signal, "raise_signal"),
+        (subprocess.Popen, "send_signal"),
+        (subprocess.Popen, "terminate"),
+        (subprocess.Popen, "kill"),
+    ]:
+        monkeypatch.setattr(owner, name, recorder(f"{owner.__name__}.{name}"))
+    monkeypatch.setattr(os, "_exit", exits.append)
+
+    reader, writer = os.pipe()
+    child = subprocess.Popen(
+        [sys.executable, "-c", "print('ready', flush=True); import sys; sys.stdin.read()"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert child.stdin is not None
+    assert child.stdout is not None
+    try:
+        assert child.stdout.readline().strip() == "ready"  # a live descendant exists now
+        watch = memwatch.MemoryWatch(1, writer)
+        watch.current = "tests/test_x.py::test_over"
+        assert watch.watchdog.check() is True  # this very process is far over a cap of 1 byte
+        os.close(writer)
+        written = os.read(reader, 4096).decode()
+    finally:
+        monkeypatch.undo()  # the signal senders are real again for the cleanup
+        child.stdin.close()
+        child.wait(timeout=30)
+        child.stdout.close()
+        os.close(reader)
+    assert exits == [memwatch.EXIT_CODE]
+    assert written.startswith("MEMORY CAP: tests/test_x.py::test_over used ")
+    assert signals == [], "the watchdog signalled a process"
+    assert child.returncode == 0, "the child did not end by itself, as its stdin closed"
