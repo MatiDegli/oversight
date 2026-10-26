@@ -57,6 +57,9 @@ def ok(body: Obj, seconds: float = 1.0) -> probe.Reply:
     return probe.Reply(200, body, seconds, {"x-ratelimit-remaining-requests": "2999"})
 
 
+SUPPORTED = "Supported values: [minimal, low, medium, high]"
+
+
 def failure(status: int) -> probe.Reply:
     return probe.Reply(status, {"error": {"code": "bad_request", "message": "no"}}, 0.1)
 
@@ -102,7 +105,7 @@ def native_table() -> dict[str, probe.Reply]:
         "edit_file", {"path": "src/pricing.py", "old_text": "= 0.0725", "new_text": "= 0.085"}
     )
     return {
-        "tools_call": ok(completion(None, [read])),
+        "tools_call": ok(completion("I'll read it first.", [read])),
         "tools_result": ok(completion(None, [edit])),
         "parallel": ok(
             completion(
@@ -110,7 +113,11 @@ def native_table() -> dict[str, probe.Reply]:
                 [call("read_file", {"path": "a"}, "c1"), call("read_file", {"path": "b"}, "c2")],
             )
         ),
-        "reasoning_none": failure(400),
+        "reasoning_none": probe.Reply(
+            400,
+            {"error": {"type": "invalid_request_error", "message": f"no. {SUPPORTED}"}},
+            0.1,
+        ),
         "limits": ok(truncated()),
         "stream": ok(
             {
@@ -139,6 +146,11 @@ def test_native_tools_decide_the_verdict_and_stay_inside_the_budget() -> None:
     assert result.model_reported == "muse-spark-1.3"
     assert found["reasoning_none"].answer == "rejected, HTTP 400"
     assert "limit is honored" in found["limits"].answer
+    assert "supported: minimal, low, medium, high." in result.verdict
+    assert (
+        "Low did not reduce reasoning" in result.verdict and "(5 tokens against 5" in result.verdict
+    )
+    assert "text next to a tool call" in result.verdict
 
 
 def test_the_tool_result_is_resent_with_the_assistant_turn_and_the_call_id() -> None:
@@ -214,6 +226,14 @@ def test_missing_usage_is_unknown_and_never_zero() -> None:
         "prompt_tokens_details.cached_tokens",
         0,
     )
+
+
+def test_usage_is_listed_per_call_with_a_question_mark_where_missing() -> None:
+    session = probe.Session(FakeTransport({}))
+    session.replies["chat"] = ok(completion())
+    session.replies["bare"] = ok({"model": "m"})
+    evidence = probe.check_usage(session).evidence
+    assert "chat: 20/9/0/5" in evidence and "bare: ?/?/?/?" in evidence
 
 
 def test_every_check_carries_the_field_names_of_usage() -> None:

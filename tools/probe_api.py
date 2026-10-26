@@ -84,6 +84,7 @@ DOCUMENTED_NOT_PROBED = (
     "`tool_choice` accepts only `auto`; `none`, `required` and a named function return HTTP 400.",
     "`stop` is not supported on reasoning models and returns HTTP 400; `top_p: 0` returns 400.",
     "A function name must match `^[a-zA-Z0-9_.-]+$` with at most one dot.",
+    "Reasoning tokens count toward `max_completion_tokens` and are billed as output.",
     "`reasoning_content` is redacted to empty for external keys, so there is nothing to send back.",
     "Rate limit for muse-spark-1.3: 3,000 requests and 4,000,000 tokens per minute, per team.",
     "A 429 should be retried with exponential backoff and jitter, honoring `Retry-After`.",
@@ -392,6 +393,7 @@ class Check:
     answer: str
     evidence: str
     passed: bool | None = None  # None: informative, not run, or not decisive
+    data: Obj = field(default_factory=dict[str, Any])  # facts the verdict reads; not rendered
 
 
 @dataclass
@@ -469,6 +471,7 @@ def check_tools_call(session: Session, model: str) -> tuple[Check, list[Obj] | N
     )
     answer = "returned in the standard format" if ok else "no usable tool call in the reply"
     check = Check("tools_call", question, answer, evidence, ok)
+    check.data = {"text_with_call": bool(message_of(reply.body).get("content"))}
     return check, [*messages, assistant_turn(reply.body)] if ok and name == "read_file" else None
 
 
@@ -535,16 +538,23 @@ def check_reasoning_set(session: Session, model: str, effort: str) -> Check:
     }
     reply = session.send(step, params)
     if reply.status != 200:
-        return rejected(step, question, reply)
+        failed = rejected(step, question, reply)
+        message = str(as_obj(reply.body.get("error")).get("message", ""))
+        listed = re.search(r"Supported values: \[([^\]]*)\]", message)
+        failed.data = {"supported": listed.group(1) if listed else None}
+        return failed
     default = session.replies.get("chat")
-    return Check(
+    tokens = reasoning_tokens(reply.body)
+    baseline = reasoning_tokens(default.body) if default else None
+    check = Check(
         step,
         question,
         "accepted",
-        f"{took(reply)}; reasoning_tokens={reasoning_tokens(reply.body)} "
-        f"(default call: {reasoning_tokens(default.body) if default else None}); "
+        f"{took(reply)}; reasoning_tokens={tokens} (default call: {baseline}); "
         f"completion_tokens={count(usage_of(reply.body), 'completion_tokens')}",
     )
+    check.data = {"reasoning_tokens": tokens, "default_reasoning_tokens": baseline}
+    return check
 
 
 def check_limits(session: Session, model: str) -> Check:
@@ -566,7 +576,9 @@ def check_limits(session: Session, model: str) -> Check:
         else "both accepted; the token limit did not stop the reply"
     )
     evidence = (
-        f"{took(reply)}; finish_reason={finish_of(reply.body)}; completion_tokens={used}; "
+        f"{took(reply)}; finish_reason={finish_of(reply.body)}; completion_tokens={used}, of which "
+        f"reasoning_tokens={reasoning_tokens(reply.body)}; reply length "
+        f"{len(str(message_of(reply.body).get('content') or ''))} characters; "
         "temperature 0.2 has no effect one call can show"
     )
     return Check("limits", question, answer, evidence, honored)
@@ -619,6 +631,19 @@ def check_json_fallback(session: Session, model: str) -> Check:
     return Check("json_fallback", question, answer, f"{took(first)}; {took(second)}", used)
 
 
+def usage_line(body: Obj) -> str:
+    """Input, output, cached and reasoning tokens of one response; ? where not reported."""
+    usage = usage_of(body)
+    cached = cached_tokens(usage)[1]
+    parts = (
+        count(usage, "prompt_tokens"),
+        count(usage, "completion_tokens"),
+        cached,
+        reasoning_tokens(body),
+    )
+    return "/".join("?" if n is None else str(n) for n in parts)
+
+
 def check_usage(session: Session) -> Check:
     question = "Token usage on every response, and as what"
     replies = {s: r for s, r in session.replies.items() if r.status == 200 and s != "stream"}
@@ -632,9 +657,12 @@ def check_usage(session: Session) -> Check:
         if not missing
         else f"missing on: {', '.join(missing)}. Record unknown, never zero"
     )
+    per_call = "; ".join(f"{step}: {usage_line(r.body)}" for step, r in replies.items())
     evidence = (
         f"fields: {', '.join(flatten(sample)) if sample else 'none'}; "
-        f"cached input tokens: {where}" + (f" ({cached})" if cached is not None else "")
+        f"cached input tokens: {where}"
+        + (f" ({cached})" if cached is not None else "")
+        + f"; per call, in/out/cached/reasoning: {per_call}"
     )
     return Check("usage", question, answer, evidence)
 
@@ -676,9 +704,11 @@ def build_verdict(provider: Provider, checks: dict[str, Check]) -> str:
     parallel_text = f" Parallel calls: {parallel.answer}." if parallel else ""
     if passed("tools_call") and passed("tools_result"):
         head = (
-            f"Native tools. Front 12 sends `tools` and reads `tool_calls` in Chat Completions on "
-            f"{provider.name}, then answers each call with one `tool` message.{parallel_text}"
+            "Native tools. Front 12 sends `tools` and reads `tool_calls` in Chat Completions, "
+            f"then answers each call with one `tool` message.{parallel_text}"
         )
+        if checks["tools_call"].data.get("text_with_call"):
+            head += " The reply can carry text next to a tool call, so `content` is not the end."
     elif passed("json_fallback"):
         head = "JSON fallback. Native tool calling failed here and the JSON-in-text format worked."
     elif "json_fallback" in checks:
@@ -693,6 +723,15 @@ def build_verdict(provider: Provider, checks: dict[str, Check]) -> str:
             f" Reasoning: with no parameter, {default.answer}; `reasoning_effort` low was "
             f"{low.answer}; none was {none.answer}."
         )
+        supported = none.data.get("supported")
+        if supported:
+            head += f" The API lists these values as supported: {supported}."
+        now, before = low.data.get("reasoning_tokens"), low.data.get("default_reasoning_tokens")
+        if isinstance(now, int) and isinstance(before, int) and now >= before:
+            head += (
+                f" Low did not reduce reasoning on the probe's prompt ({now} tokens against "
+                f"{before} by default), so how much each setting costs is still unmeasured."
+            )
     return head
 
 
