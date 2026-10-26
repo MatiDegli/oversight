@@ -15,12 +15,14 @@ through others. Nothing reaches main until you approve it.
 ## Built during the hackathon
 
 - The hackathon ran from 2026-10-26 at 12:00 ET to 2026-11-04 at 21:00 ET. All code in this repository
-  was written in that window, and the git history shows it.
+  was written in that window, and the git history shows it. The first commit came after the kickoff,
+  and [DEVLOG.md](DEVLOG.md) records what was built each day.
 - Before the kickoff there were planning notes and UI sketches, and no code. What the project takes
   from them is written again here, under `docs/`.
 - No code comes from other projects. Dependencies keep their own licenses: MIT, Apache-2.0, BSD, or
   ISC, and SIL OFL 1.1 for fonts. GPL projects were read for ideas only.
-- Agents inside the product use only Meta models, through the Meta Model API.
+- Agents inside the product use only Meta models: Muse Spark through the Meta Model API, and Muse
+  Spark Open through partner inference.
 
 ## License
 

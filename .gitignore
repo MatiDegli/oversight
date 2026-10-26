@@ -1,7 +1,7 @@
 # Secrets: API keys live only in .env
 .env
 .env.*
-!.env.example
+!*.example
 
 # Python
 __pycache__/
@@ -17,10 +17,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Local state: the event store and agents' worktrees
+# Local state: the runtime workspace, the product agents' worktrees, and the event store
+.runtime/
 *.sqlite
 *.sqlite3
-.worktrees/
 
 # OS and editors
 .DS_Store
