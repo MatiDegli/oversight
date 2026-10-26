@@ -6,6 +6,7 @@ import type { Page } from "@playwright/test";
 export interface Scene {
   name: string;
   enabled: boolean;
+  edgeShapes?: readonly ("bezier" | "taxi")[];
   /** What enables a disabled scene. Printed next to "skipped". */
   needs?: string;
   /** Puts the page in this scene's state, after the shell is ready. Nothing to do when omitted. */
@@ -20,8 +21,7 @@ export interface Theme {
 }
 
 export const scenes: readonly Scene[] = [
-  // Watch mode: the graph and the agents panel. Today main renders only the shell.
-  { name: "watch", enabled: true },
+  { name: "watch", enabled: true, edgeShapes: ["bezier", "taxi"] },
   {
     name: "review",
     enabled: false,

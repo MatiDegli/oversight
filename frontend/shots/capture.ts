@@ -1,15 +1,16 @@
 // Captures 1920x1080 PNGs of the served UI into .shots/, one per enabled scene and theme, named
-// `<scene>-<theme>.png`, replacing the previous set. Started by `make shots` (run.sh), which serves
+// `<scene>-<theme>[-<edge-shape>].png`, replacing the previous set. Started by make shots, which serves
 // the replay and Vite first:
 //
 //   node shots/capture.ts --url http://127.0.0.1:5711/ --log ../fixtures/events/x.jsonl --out ../.shots
-import { mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { exit, stdout } from "node:process";
 import { parseArgs } from "node:util";
 
 import { chromium } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import type { Core } from "cytoscape";
 
 import { lastSeq, planJobs } from "./plan.ts";
 import { scenes, themes } from "./scenes.ts";
@@ -33,26 +34,44 @@ const { url, log, out } = { url: values.url, log: values.log, out: resolve(value
 async function clearPreviousSet(): Promise<void> {
   await mkdir(out, { recursive: true });
   for (const name of await readdir(out)) {
-    if (name.endsWith(".png") || name === "detect.json") await rm(join(out, name));
+    if (name.endsWith(".png") || /^watch-.*\.json$/.test(name) || name === "detect.json")
+      await rm(join(out, name));
   }
 }
 
-// What "the replay applied everything" means for the page.
-// TODO(transport front): main has no event transport yet, so the app reads no /events and no seq
-// reaches the page. When it does, have the app set `data-seq` on the root element from the store's
-// last applied seq, and wait here for it to equal the fixture's last seq (`expectedSeq` in main(); a test in src/ covers the
-// attribute). Until then the shell rendering is the only readiness there is.
-async function waitUntilReady(page: Page): Promise<void> {
+// Cytoscape registers its instance on the host; inspect it only in this development capture tool.
+declare global {
+  interface HTMLElement {
+    _cyreg?: { cy?: Core };
+  }
+}
+
+async function waitUntilReady(page: Page, seq: number): Promise<void> {
   await page.locator("main").waitFor({ state: "visible" });
   await page.evaluate(() => document.fonts.ready);
+  await page.waitForFunction((expected) => {
+    const host = document.querySelector<HTMLElement>('[aria-label="Repository graph"]');
+    return (
+      document.getElementById("root")?.dataset.seq === String(expected) &&
+      (host?._cyreg?.cy?.nodes().length ?? 0) > 0
+    );
+  }, seq);
+  // Wait for a rendered frame, not a timed delay.
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            done();
+          }),
+        ),
+      ),
+  );
 }
 
 async function main(): Promise<number> {
   const expectedSeq = lastSeq(await readFile(resolve(log), "utf8"));
-  stdout.write(
-    `shots: fixture ${log} ends at seq ${String(expectedSeq)}; the UI reads no events yet, ` +
-      "so each scene waits for the shell to render\n",
-  );
+  stdout.write(`shots: waiting for fixture seq ${String(expectedSeq)} and the graph renderer\n`);
   await clearPreviousSet();
 
   const browser = await chromium.launch();
@@ -70,8 +89,10 @@ async function main(): Promise<number> {
       const pageErrors: string[] = [];
       page.on("pageerror", (error) => pageErrors.push(error.message));
       try {
-        await page.goto(url, { waitUntil: "load" });
-        await waitUntilReady(page);
+        const target = new URL(url);
+        if (job.edgeShape) target.searchParams.set("edge-shape", job.edgeShape);
+        await page.goto(target.href, { waitUntil: "load" });
+        await waitUntilReady(page, expectedSeq);
         await scene?.prepare?.(page);
         await page.evaluate((theme) => {
           document.documentElement.dataset.theme = theme;
@@ -79,6 +100,26 @@ async function main(): Promise<number> {
         if (pageErrors.length > 0) throw new Error(`page errors: ${pageErrors.join("; ")}`);
         const path = join(out, job.file);
         await page.screenshot({ path });
+        const metrics = await page.evaluate(() => {
+          const cy = document.querySelector<HTMLElement>('[aria-label="Repository graph"]')?._cyreg
+            ?.cy;
+          if (!cy) throw new Error("Graph renderer missing");
+          return {
+            viewport: { width: cy.width(), height: cy.height() },
+            zoom: cy.zoom(),
+            minLabelPx: Math.min(
+              ...cy.nodes().map((node) => node.numericStyle("font-size") * cy.zoom()),
+            ),
+            edgeShape: String(cy.edges().first().style("curve-style")),
+          };
+        });
+        await writeFile(
+          join(out, job.file.replace(/\.png$/, ".json")),
+          JSON.stringify(metrics, null, 2) + "\n",
+        );
+        stdout.write(
+          `shots: ${job.file} label minimum ${metrics.minLabelPx.toFixed(2)} CSS px, ${metrics.edgeShape}\n`,
+        );
         stdout.write(`shots: captured ${job.file} (${String((await stat(path)).size)} bytes)\n`);
       } catch (error) {
         failures += 1;
