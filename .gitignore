@@ -30,3 +30,4 @@ Thumbs.db
 # Local agent files
 CLAUDE.local.md
 .claude/settings.local.json
+.claude/skills/
