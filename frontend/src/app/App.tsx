@@ -1,4 +1,9 @@
-// The shell. Until the graph view lands, the page is the plain black background.
+import { GraphView } from "../graph";
+
 export function App() {
-  return <main className="h-full bg-background" />;
+  return (
+    <main className="h-full bg-background">
+      <GraphView />
+    </main>
+  );
 }
