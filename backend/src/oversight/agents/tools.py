@@ -6,8 +6,11 @@ summary, the focus, the test result) feeds events only.
 """
 
 import asyncio
+import contextlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import PurePosixPath
 from typing import Literal, cast
 
@@ -120,6 +123,21 @@ def _line(arguments: dict[str, object], key: str) -> int | None:
     return value
 
 
+async def _in_thread_to_the_end[T](fn: Callable[[], T]) -> T:
+    """Run `fn` in a thread. If the caller is cancelled, wait for the thread to end before the
+    cancellation goes on, so a lock taken around the call is held until the thread is done."""
+    future = asyncio.ensure_future(asyncio.to_thread(fn))
+    try:
+        return await asyncio.shield(future)
+    except asyncio.CancelledError:
+        while not future.done():
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await asyncio.shield(future)
+        if not future.cancelled():
+            future.exception()  # retrieved, so it is not logged: the cancellation wins
+        raise
+
+
 class Toolbox:
     """One agent's tools over its worktree, and the graph of its own copy."""
 
@@ -132,8 +150,12 @@ class Toolbox:
         """The hash of each file as the agent last saw it: read, or written by its own edit."""
 
     async def refresh_graph(self) -> None:
+        """Re-read the worktree's graph under the tree's lock, once its root is checked: a root
+        swapped for a link is refused. A cancelled caller still waits for the scan's thread, so a
+        discard after Stop cannot remove the files while the scan reads them."""
         commit = self._tree.base_commit or self._tree.branch
-        await asyncio.to_thread(self._graph.scan, commit)
+        async with self._tree.section(locked=True):
+            await _in_thread_to_the_end(partial(self._graph.scan, commit))
 
     def _nodes_over(self, path: str, start: int, end: int) -> list[str]:
         found: dict[str, None] = {}
@@ -209,10 +231,16 @@ class Toolbox:
         size = 0
         for number in range(first, last + 1):
             row = f"{number:>5}| {lines[number - 1]}"
-            size += len(row) + 1
-            if size > MAX_READ_CHARS:
-                last = number - 1
+            if size + len(row) + 1 > MAX_READ_CHARS:
+                if number == first:
+                    # One line over the cap: show its start, so no line is ever out of reach.
+                    note = f" [line {number} cut, {len(lines[number - 1])} characters in all]"
+                    shown.append(row[: MAX_READ_CHARS - len(note) - 1] + note)
+                    last = number
+                else:
+                    last = number - 1
                 break
+            size += len(row) + 1
             shown.append(row)
         self._read_hashes[path] = file.hash
         whole = first == 1 and last >= total
@@ -299,11 +327,15 @@ class Toolbox:
         current = await self._read(path)
         if current.hash != seen:
             raise ToolError(f"{path} changed since you last read it; read it again")
-        count = current.content.count(old)
-        if count != 1:
-            found = "does not appear" if count == 0 else f"appears {count} times"
-            raise ToolError(f"old_text {found} in {path}; it must appear exactly once")
-        index = current.content.index(old)
+        index = current.content.find(old)
+        if index == -1:
+            raise ToolError(f"old_text does not appear in {path}; it must appear exactly once")
+        # From index + 1, not past the match: "ana" appears twice in "banana".
+        if current.content.find(old, index + 1) != -1:
+            raise ToolError(
+                f"old_text appears more than once in {path}; it must appear exactly once, "
+                "so include more of the lines around it"
+            )
         content = current.content[:index] + new + current.content[index + len(old) :]
         self._read_hashes[path] = await self._tree.write_text(
             path, content, expected_hash=current.hash
@@ -341,6 +373,15 @@ class Toolbox:
         return ToolOutcome(
             content="Finished.", ok=True, summary="Finished the task", finish_summary=note
         )
+
+
+def interrupted(name: str, raw_arguments: str) -> ToolOutcome:
+    """The outcome of a call cut short by the time limit or a stop, for its step."""
+    return ToolOutcome(
+        content="Error: interrupted before it finished",
+        ok=False,
+        summary=_failed(name, raw_arguments),
+    )
 
 
 def _failed(name: str, raw_arguments: str) -> str:

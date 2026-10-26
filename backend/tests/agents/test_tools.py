@@ -4,12 +4,15 @@ paths that try to leave the worktree."""
 import asyncio
 import json
 import os
+import threading
 from pathlib import Path
 
 import pytest
+from agent_helpers import write_tree
 
-from oversight.agents.tools import MAX_READ_LINES, Toolbox, ToolOutcome
-from oversight.workspace import Tree, Workspace
+from oversight.agents.tools import MAX_READ_CHARS, MAX_READ_LINES, Toolbox, ToolOutcome
+from oversight.graph import WorkspaceGraph
+from oversight.workspace import Tree, Workspace, WorkspaceError
 
 pytestmark = pytest.mark.anyio
 
@@ -50,13 +53,24 @@ async def test_edit_old_text_must_appear_exactly_once(small_tree: Opened) -> Non
     missing = await call(tools, "edit_file", path="shop/mod.py", old_text="nope", new_text="x")
     assert not missing.ok and "does not appear" in missing.content
     many = await call(tools, "edit_file", path="shop/mod.py", old_text="value()", new_text="v()")
-    assert not many.ok and "appears 3 times" in many.content
+    assert not many.ok and "appears more than once" in many.content
     empty = await call(tools, "edit_file", path="shop/mod.py", old_text="", new_text="x")
     assert not empty.ok and "must not be empty" in empty.content
     assert disk(small_tree, "shop/mod.py").count("value()") == 3
     once = await call(tools, "edit_file", **EDIT)
     assert once.ok and once.edited_path == "shop/mod.py"
     assert "return 2" in disk(small_tree, "shop/mod.py")
+
+
+async def test_edit_counts_overlapping_matches(small_tree: Opened) -> None:
+    _, tree = small_tree
+    await tree.write_text("shop/fruit.py", "FRUIT = 'banana'\n", expected_hash=None)
+    tools = await toolbox(small_tree)
+    await call(tools, "read_file", path="shop/fruit.py")
+    # "ana" is in "banana" twice, overlapping: str.count sees it once.
+    twice = await call(tools, "edit_file", path="shop/fruit.py", old_text="ana", new_text="ANA")
+    assert not twice.ok and "appears more than once" in twice.content
+    assert disk(small_tree, "shop/fruit.py") == "FRUIT = 'banana'\n"
 
 
 async def test_edit_fails_if_the_file_changed_since_the_read(small_tree: Opened) -> None:
@@ -111,6 +125,28 @@ async def test_read_numbers_lines_caps_and_ranges(small_tree: Opened) -> None:
     assert not past.ok and past.content == "Error: shop/mod.py has 6 lines"
 
 
+async def test_a_line_over_the_cap_is_shown_cut_and_never_skipped(small_tree: Opened) -> None:
+    _, tree = small_tree
+    wide = "X = '" + "a" * MAX_READ_CHARS + "'"
+    await tree.write_text("shop/wide.py", f"A = 1\n{wide}\nB = 2\n", expected_hash=None)
+    tools = await toolbox(small_tree)
+    whole = await call(tools, "read_file", path="shop/wide.py")
+    assert whole.content.splitlines() == [
+        "    1| A = 1",
+        "[lines 1 to 1 of 3; read more with start_line]",
+    ]
+    # Line 2 alone is over the cap: every way to reach it shows its start, never range 2 to 1.
+    for arguments in ({"start_line": 2}, {"start_line": 2, "end_line": 2}):
+        cut = await call(tools, "read_file", path="shop/wide.py", **arguments)
+        assert cut.ok and (cut.ranges[0].start_line, cut.ranges[0].end_line) == (2, 2)
+        row, footer = cut.content.splitlines()
+        assert row.startswith("    2| X = 'aaa") and len(row) < MAX_READ_CHARS
+        assert row.endswith(f" [line 2 cut, {len(wide)} characters in all]")
+        assert footer == "[lines 2 to 2 of 3; read more with start_line]"
+    last = await call(tools, "read_file", path="shop/wide.py", start_line=3)
+    assert last.content.splitlines()[0] == "    3| B = 2"
+
+
 async def test_search_focuses_at_most_five_nodes(small_tree: Opened) -> None:
     _, tree = small_tree
     body = "".join(f"def f{n}() -> str:\n    return 'marker'\n\n\n" for n in range(8))
@@ -161,3 +197,61 @@ async def test_paths_outside_the_worktree_are_refused(
     whole = await call(tools, "search", query="outside-only")
     assert whole.content == "No matches."
     assert outside.read_text() == "SECRET = 'outside-only'\n"
+
+
+# --- the graph scan ----------------------------------------------------------------------------
+
+
+async def test_the_scan_refuses_a_root_swapped_for_a_link(
+    small_tree: Opened, tmp_path: Path
+) -> None:
+    _, tree = small_tree
+    tools = await toolbox(small_tree)
+    outside = write_tree(
+        tmp_path / "outside", {"shop/mod.py": "def secret() -> int:\n    return 7\n"}
+    )
+    await asyncio.to_thread(os.rename, tree.root, tmp_path / "moved-worktree")
+    await asyncio.to_thread(os.symlink, outside, tree.root)
+    with pytest.raises(WorkspaceError, match="invalid workspace root"):
+        await tools.refresh_graph()
+
+
+async def test_a_cancelled_scan_keeps_the_lock_until_its_thread_ends(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace, tree = small_tree
+    tools = Toolbox(workspace, tree, test_timeout_s=60)
+    entered, release, ended = threading.Event(), threading.Event(), threading.Event()
+    real_scan = WorkspaceGraph.scan
+
+    def held_scan(graph: WorkspaceGraph, commit: str) -> object:
+        entered.set()
+        release.wait(60)
+        try:
+            return real_scan(graph, commit)
+        finally:
+            ended.set()
+
+    monkeypatch.setattr(WorkspaceGraph, "scan", held_scan)
+    seen_ended: list[bool] = []
+
+    async def discard() -> None:
+        # What discard_worktree takes after Stop.
+        async with workspace.locks(main=True, agent_id=tree.agent_id):
+            seen_ended.append(ended.is_set())
+
+    scan = asyncio.create_task(tools.refresh_graph())
+    try:
+        assert await asyncio.to_thread(entered.wait, 60)
+        assert not workspace.operations.idle  # the tree's lock is held while the scan runs
+        scan.cancel()  # Stop
+        other = asyncio.create_task(discard())
+        for _ in range(10):  # loop turns, not time: the cancellation and the discard get to run
+            await asyncio.sleep(0)
+        assert not scan.done() and not other.done()
+    finally:
+        release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await scan
+    await other
+    assert seen_ended == [True]
