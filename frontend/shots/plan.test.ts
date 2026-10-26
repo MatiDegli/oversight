@@ -43,7 +43,7 @@ void test("a disabled scene or theme is skipped with the reason, never dropped",
 void test("the real list: watch in dark runs, every other entry is listed and skipped", () => {
   const jobs = planJobs(scenes, themes);
   const running = jobs.filter((job) => job.skip === null).map((job) => job.file);
-  assert.deepEqual(running, ["watch-dark.png"]);
+  assert.deepEqual(running, ["watch-dark-bezier.png", "watch-dark-taxi.png"]);
   assert.deepEqual(
     scenes.map((scene) => scene.name),
     ["watch", "review", "live-diff", "file-view"],

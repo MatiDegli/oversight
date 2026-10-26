@@ -6,6 +6,7 @@ import type { Page } from "@playwright/test";
 export interface Scene {
   name: string;
   enabled: boolean;
+  edgeShapes?: readonly ("bezier" | "taxi")[];
   /** What enables a disabled scene. Printed next to "skipped". */
   needs?: string;
   /** Puts the page in this scene's state, after the shell is ready. Nothing to do when omitted. */
@@ -68,6 +69,7 @@ export const scenes: readonly Scene[] = [
   {
     name: "watch",
     enabled: true,
+    edgeShapes: ["bezier", "taxi"],
     prepare: async (page) => {
       await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
     },

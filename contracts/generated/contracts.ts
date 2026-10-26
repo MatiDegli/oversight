@@ -25,7 +25,8 @@ export type ErrorCode =
   | "invalid_path"
   | "stale_file"
   | "not_implemented"
-  | "invalid_request";
+  | "invalid_request"
+  | "internal";
 export type RunId = string;
 export type ServerEvent =
   | RunStartedEvent
@@ -696,4 +697,4 @@ export interface StartAgent {
   model?: string | null;
 }
 
-export const CONTRACT_VERSION = "1.0.0";
+export const CONTRACT_VERSION = "1.1.0";

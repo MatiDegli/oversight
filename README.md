@@ -39,10 +39,11 @@ For a repository too large to read at once, the graph would switch between three
 Agents and the impact cone stay visible at every level, nothing moves when the level changes, and
 labels keep their size on screen. Not built yet; it comes after the core features, if time allows.
 
-![Design sketch of the zoom levels, made before the kickoff](docs/sketches/zoom-levels-sketch-pre-kickoff.png)
+![Design sketch of the zoom levels, not built](docs/sketches/mockup-zoom-signal-far.png)
 
-*Design sketch made before the kickoff, not built. It is a picture of the idea, not the product: its
-name, numbers and colors are placeholders, and agent B is blue in Oversight.*
+*Design sketch, not built. Its structure comes from a sketch made before the kickoff, redrawn in
+Oversight's look on 2026-10-26. It is a picture of the idea, not the product: its name and numbers
+are placeholders.*
 
 ## License
 

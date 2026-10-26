@@ -10,7 +10,7 @@ import { frameCamera, prefersReducedMotion } from "./camera";
 import { graphElements } from "./elements";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
-import { graphStyles } from "./styles";
+import { edgeShape, graphStyles } from "./styles";
 import { updateGraph } from "./updateGraph";
 
 cytoscape.use(fcose);
@@ -64,7 +64,14 @@ export function GraphView({
         layout: { name: "preset" },
         boxSelectionEnabled: false,
       });
-      cy.style(graphStyles(theme));
+      cy.style(
+        graphStyles(
+          theme,
+          edgeShape(
+            import.meta.env.DEV ? (typeof location === "undefined" ? "" : location.search) : "",
+          ),
+        ),
+      );
       const sync = () => {
         updateGraph(cy, graphElements(stateStore.getState().state));
         showSelection(cy, latest.current.selectedId ?? null);

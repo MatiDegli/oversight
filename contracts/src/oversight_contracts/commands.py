@@ -118,6 +118,7 @@ type ErrorCode = Literal[
     "stale_file",
     "not_implemented",
     "invalid_request",
+    "internal",
 ]
 
 ERROR_STATUS: dict[ErrorCode, int] = {
@@ -129,8 +130,10 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     "stale_file": 409,
     "not_implemented": 501,
     "invalid_request": 422,
+    "internal": 500,
 }
-"""The HTTP status of each error code. FastAPI's own validation error becomes invalid_request."""
+"""The HTTP status of each error code. FastAPI's own validation error becomes invalid_request; an
+unexpected server-side failure becomes internal (contract 1.1)."""
 
 
 class ErrorDetail(ContractModel):

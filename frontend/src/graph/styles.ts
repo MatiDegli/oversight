@@ -2,8 +2,14 @@ import type { StylesheetJson } from "cytoscape";
 
 import type { getActiveTheme } from "../theme";
 
-// Curves separate reciprocal calls. Compare taxi with the final demo layout on Tuesday.
-export const EDGE_CURVE_STYLE: "bezier" | "taxi" = "bezier";
+export type EdgeShape = "bezier" | "taxi";
+// The product default. The dev-only query override lets make shots compare identical presets.
+export const EDGE_CURVE_STYLE: EdgeShape = "bezier";
+
+export function edgeShape(search = ""): EdgeShape {
+  const requested = new URLSearchParams(search).get("edge-shape");
+  return requested === "taxi" || requested === "bezier" ? requested : EDGE_CURVE_STYLE;
+}
 
 type Widen<T> = T extends string
   ? string
@@ -12,7 +18,10 @@ type Widen<T> = T extends string
     : { [K in keyof T]: Widen<T[K]> };
 type GraphTheme = Widen<ReturnType<typeof getActiveTheme>>;
 
-export function graphStyles(theme: GraphTheme): StylesheetJson {
+export function graphStyles(
+  theme: GraphTheme,
+  shape: EdgeShape = EDGE_CURVE_STYLE,
+): StylesheetJson {
   const px = Number.parseFloat;
   const agents = { A: "agent-a", B: "agent-b" } as const;
   const pendingBorder = {
@@ -46,16 +55,20 @@ export function graphStyles(theme: GraphTheme): StylesheetJson {
       },
     },
     {
+      // A module or class keeps its frame colors with or without children, so it still reads as a
+      // container; only a parent gets the padding and the label above it.
       selector: "node.module, node.class",
       style: {
-        "text-valign": "top",
-        padding: `${String(px(theme["spacing-md"]) * 3)}px`,
         "background-color": theme.panel,
         "background-opacity": theme["module-opacity"],
         "border-color": theme["card-border"],
         "corner-radius": theme["radius-module"],
         color: theme["module-label"],
       },
+    },
+    {
+      selector: "node.module:parent, node.class:parent",
+      style: { "text-valign": "top", padding: `${String(px(theme["spacing-md"]) * 3)}px` },
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
       (["A", "B"] as const).map((slot) => {
@@ -117,7 +130,7 @@ export function graphStyles(theme: GraphTheme): StylesheetJson {
     {
       selector: "edge",
       style: {
-        "curve-style": EDGE_CURVE_STYLE,
+        "curve-style": shape,
         "taxi-direction": "downward",
         "line-style": "solid",
         "line-color": theme.edge,

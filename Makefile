@@ -11,7 +11,7 @@ UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
-	contracts check-contracts check-secrets demo-repo-check replay shots smoke test-browser
+	contracts check-contracts check-secrets demo-repo-check replay shots smoke layout test-browser
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -50,6 +50,9 @@ IMPECCABLE ?= .agents/skills/impeccable/scripts/impeccable
 
 shots: ## screenshots of the UI from LOG into .shots/ and the Impeccable scan, Chrome capped at 6G; not in check
 	@$(NO_KEYS) LOG="$(LOG)" IMPECCABLE="$(IMPECCABLE)" bash frontend/shots/run.sh
+
+layout: ## regenerate the demo preset and replay snapshot positions; not in check
+	$(NO_KEYS) node "$(CURDIR)/frontend/tools/layout.ts" --events "$(CURDIR)/fixtures/events/handwritten-level1.jsonl"
 
 # smoke: the backend on a free port with its own runtime directory, so a running dev or replay is
 # not disturbed; tools/smoke.py checks /health and /graph and stops it again.
