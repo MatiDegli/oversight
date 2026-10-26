@@ -628,7 +628,7 @@ result. The days assume the build period starts on Tuesday at 01:00. The owners 
 | 4 | Smoke test | Tue | 3 | support | `make smoke` exits 0 from a clean clone |
 | 5 | Docs | Tue | 2 | coordinator | ARCHITECTURE.md, DECISIONS.md, the README section and the DEVLOG line, reviewed by the maintainer |
 | 6 | API probe | Tue | key and credits | backend implementer, on the maintainer's OK | `uv run python tools/probe_api.py meta`, then `baseten`, writes `docs/api-probe.md`; it decides native tools or the JSON fallback, and agent B's route |
-| 7 | Demo repo | Tue | none | support | `make demo-repo-check`: its tests pass in its own environment |
+| 7 | Demo repo | Mon | none | backend implementer; merged in PR #1 | `make demo-repo-check`: its tests pass in its own environment |
 | 8 | Graph core | Tue to Wed | 2, 7 | strong-tier subagent | `uv run pytest backend/tests/graph`: one test per graph rule, a golden snapshot of the demo repo, deltas, change graphs, and the cone's limits and omitted counts |
 | 9 | Frontend foundation | Tue to Wed | 2, 3's log | frontend | `pnpm -C frontend test` (the reducer over the fixture logs) and `pnpm -C frontend build` |
 | 10 | Graph view | Wed | 9 | frontend | vitest on the state-to-elements mapping, and `make replay` shows the preset layout; taxi edges tried on Tuesday |
