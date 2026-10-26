@@ -830,10 +830,10 @@ def build_verdict(provider: Provider, checks: dict[str, Check]) -> str:
             head += " The reply can carry text next to a tool call, so `content` is not the end."
     elif passed("json_fallback"):
         head = "JSON fallback. Native tool calling failed here and the JSON-in-text format worked."
-    elif "json_fallback" in checks:
+    elif "json_fallback" in checks and checks["json_fallback"].passed is False:
         head = "Neither route passed: native tool calling failed and so did the JSON fallback."
-    else:
-        head = "Not decided: the native tool checks did not both pass and no fallback ran."
+    else:  # no fallback, or one the budget skipped: a route that was never tried has not failed
+        head = "Not decided: the native tool checks did not both pass and no fallback finished."
     default, low, none = (
         checks.get(k) for k in ("reasoning_default", "reasoning_low", "reasoning_none")
     )

@@ -235,6 +235,34 @@ def test_a_failed_tool_result_turn_still_tries_the_json_fallback(bad: probe.Repl
     assert len(fake.steps) == len(result.calls) <= probe.MAX_CALLS
 
 
+class Outage(FakeTransport):
+    """Like FakeTransport, but answers the first `times` calls of one step with a 503."""
+
+    def __init__(self, table: dict[str, probe.Reply], step: str, times: int) -> None:
+        super().__init__(table)
+        self.down = {step: times}
+
+    def answer(self, params: Obj, stream: bool) -> probe.Reply:
+        reply = super().answer(params, stream)
+        step = self.steps[-1]
+        if self.down.get(step, 0) > 0:
+            self.down[step] -= 1
+            return failure(503)
+        return reply
+
+
+def test_a_fallback_skipped_for_budget_leaves_the_verdict_not_decided() -> None:
+    # chat takes three calls (two 503s), tools_call one, tools_result four more: the cap is spent
+    table = native_table() | {"tools_result": failure(503)}
+    result = probe.run_probe(Outage(table, "chat", 2), META, "muse-spark-1.3", sleep=no_sleep)
+    found = checks(result)
+    assert found["tools_result"].passed is False
+    assert found["json_fallback"].answer == "skipped"
+    assert len(result.calls) == probe.MAX_CALLS
+    assert result.verdict.startswith("Not decided")
+    assert "Neither route" not in result.verdict
+
+
 def test_a_tool_result_turn_that_worked_does_not_run_the_fallback() -> None:
     fake = FakeTransport(native_table())
     probe.run_probe(fake, META, "muse-spark-1.3")
