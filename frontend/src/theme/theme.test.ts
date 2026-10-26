@@ -2,66 +2,130 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import * as exportedTokens from "./index";
+import { getActiveTheme, themes } from "./index";
 
 const css = readFileSync(new URL("./index.css", import.meta.url), "utf8");
+const design = readFileSync(new URL("../../../DESIGN.md", import.meta.url), "utf8");
+const tokens = themes.dark;
+// Monaco consumes these through TypeScript, so none may appear in CSS.
+const tsOnly = [
+  "syntax-plain",
+  "syntax-keyword",
+  "syntax-string",
+  "syntax-number",
+  "syntax-builtin",
+  "syntax-definition",
+  "code-dim",
+  "span-highlight",
+  "fold-tint",
+] as const;
+const themeBlock = /@theme inline\s*\{([^}]+)\}/;
+const darkBlock = /:root:not\(\[data-theme\]\),\s*:root\[data-theme="dark"\]\s*\{([^}]+)\}/;
 
-// Adding an export requires a naming rule; no export can silently escape parity checks.
-const tokenNames: Record<keyof typeof exportedTokens, (name: string) => string> = {
-  colors: (name) => name,
-  stateColors: (name) => name,
-  agentColors: (slot) => `agent-${slot.toLowerCase()}`,
-  fontFamilies: (name) => {
-    if (name === "sans") return "text-font";
-    if (name === "mono") return "code-font";
-    throw new Error(`Unknown font token: ${name}`);
-  },
-};
-
-function collectTokens(): Record<string, string> {
-  expect(Object.keys(tokenNames).sort()).toEqual(Object.keys(exportedTokens).sort());
-  const entries: [string, string][] = [];
-  for (const name of Object.keys(exportedTokens) as (keyof typeof exportedTokens)[]) {
-    for (const [key, value] of Object.entries(exportedTokens[name])) {
-      entries.push([tokenNames[name](key), value]);
-    }
-  }
-  const keys = entries.map(([key]) => key);
-  expect(new Set(keys).size, "Token names must be unique across exports").toBe(keys.length);
-  return Object.fromEntries(entries);
+function required(value: string | undefined): string {
+  if (value === undefined) throw new Error("Missing token value");
+  return value;
 }
 
 function declarations(block: string): Record<string, string> {
-  const entries: [string, string][] = [];
-  for (const match of block.matchAll(/--([\w*-]+)\s*:\s*([^;]+);/g)) {
-    const [, name, value] = match;
-    if (name === undefined || value === undefined) throw new Error("Invalid CSS declaration");
-    entries.push([name, value.trim()]);
-  }
+  const entries = [...block.matchAll(/--([\w*-]+)\s*:\s*([^;]+);/g)].map<[string, string]>(
+    (match) => [required(match[1]), required(match[2]).trim()],
+  );
+  expect(new Set(entries.map(([name]) => name)).size, "No duplicate declarations").toBe(
+    entries.length,
+  );
   return Object.fromEntries(entries);
 }
 
+const shared = declarations(darkBlock.exec(css)?.[1] ?? "");
+
+// Preserve alpha as a number instead of baking it into an eight-digit hex string.
+function rgba(red: string, green: string, blue: string, alpha: string) {
+  return {
+    color: `#${[red, green, blue].map((part) => Number(part).toString(16).padStart(2, "0")).join("")}`,
+    alpha: Number(alpha),
+  };
+}
+
+function cssValue(value: string): unknown {
+  const alias = /^var\(--([\w-]+)\)$/.exec(value);
+  if (alias) return cssValue(required(shared[required(alias[1])]));
+  const mix = /^color-mix\(in srgb, var\(--([\w-]+)\) ([\d.]+)%, transparent\)$/.exec(value);
+  if (mix)
+    return { color: cssValue(required(shared[required(mix[1])])), alpha: Number(mix[2]) / 100 };
+  const channels = /^rgba\((\d+), (\d+), (\d+), ([\d.]+)\)$/.exec(value);
+  if (channels)
+    return rgba(
+      required(channels[1]),
+      required(channels[2]),
+      required(channels[3]),
+      required(channels[4]),
+    );
+  return /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : value;
+}
+
 describe("theme", () => {
-  it("keeps every CSS token equal to its TypeScript constant", () => {
-    const root = /:root\s*\{([^}]+)\}/.exec(css)?.[1] ?? "";
-    expect(declarations(root)).toEqual(collectTokens());
+  it("keeps every shared CSS token equal to its TypeScript value, including tint alpha", () => {
+    expect(Object.keys(shared).length).toBeGreaterThan(0);
+    const expected = Object.fromEntries(
+      Object.entries(tokens).filter(([name]) => !tsOnly.some((token) => token === name)),
+    );
+    // Whole-object equality rejects missing counterparts in either direction.
+    expect(
+      Object.fromEntries(Object.entries(shared).map(([key, value]) => [key, cssValue(value)])),
+    ).toEqual(expected);
+    expect(declarations(css.replace(darkBlock, "").replace(themeBlock, ""))).toEqual({});
+    for (const name of tsOnly) expect(css).not.toContain(`--${name}:`);
   });
 
-  it("maps every token to a Tailwind utility", () => {
-    const theme = /@theme inline\s*\{([^}]+)\}/.exec(css)?.[1] ?? "";
-    const tokens = collectTokens();
-    const expected = Object.fromEntries(
-      Object.keys(tokens).map((token) => [`color-${token}`, `var(--${token})`]),
+  it("maps every shared color to a Tailwind utility and removes the default palette", () => {
+    const block = themeBlock.exec(css)?.[1] ?? "";
+    const colors = Object.entries(tokens).filter(
+      ([name, value]) =>
+        !tsOnly.some((token) => token === name) &&
+        (typeof value === "object" || (typeof value === "string" && value.startsWith("#"))),
     );
-    delete expected["color-text-font"];
-    delete expected["color-code-font"];
-
-    expect(declarations(theme)).toEqual({
-      ...expected,
+    expect(declarations(block)).toEqual({
       "color-*": "initial",
       "font-*": "initial",
+      ...Object.fromEntries(colors.map(([name]) => [`color-${name}`, `var(--${name})`])),
       "font-sans": "var(--text-font)",
       "font-mono": "var(--code-font)",
     });
+  });
+
+  it("includes the complete DESIGN.md dark color set with its specified values", () => {
+    const front = required(required(design.split("---")[1]).split("typography:")[0]);
+    const entries = [...front.matchAll(/^ {2}([\w-]+): "([^"\n]+)"$/gm)].filter(
+      (match) => !required(match[1]).startsWith("day-"),
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    for (const [, name, value] of entries) {
+      expect(tokens[name as keyof typeof tokens], name).toEqual(cssValue(required(value)));
+    }
+    expect(tokens["dim-node"]).toBe(0.16);
+    expect(tokens["dim-module"]).toBe(0.6);
+  });
+
+  it("loads the documented font weights from the installed packages", () => {
+    for (const weight of [400, 600, 700]) {
+      expect(css).toContain(
+        `@import "@fontsource/atkinson-hyperlegible-next/latin-${String(weight)}.css";`,
+      );
+    }
+    expect(css).toContain('@import "@fontsource/atkinson-hyperlegible-mono/latin-400.css";');
+  });
+
+  it("selects the root theme at call time and defaults to dark without a DOM", () => {
+    expect(Object.keys(themes)).toEqual(["dark"]);
+    expect(getActiveTheme()).toBe(themes.dark);
+    const root = { dataset: {} } as HTMLElement;
+    expect(getActiveTheme(root)).toBe(themes.dark);
+    root.dataset.theme = "dark";
+    expect(getActiveTheme(root)).toBe(themes.dark);
+    root.dataset.theme = "day";
+    expect(() => getActiveTheme(root)).toThrow("Unsupported theme: day");
+    root.dataset.theme = "dark";
+    expect(getActiveTheme(root)).toBe(themes.dark);
   });
 });
