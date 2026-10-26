@@ -1,0 +1,157 @@
+# The uv workspace: one lock and one virtual environment for contracts and backend, plus the
+# settings of every Python tool. The demo repo is not a member: it gets its own environment.
+[project]
+name = "oversight-workspace"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["oversight", "oversight-contracts"]
+
+[dependency-groups]
+dev = [
+    "httpx==0.28.1",
+    "import-linter==2.15",
+    "pyright==1.1.414",
+    "pytest==9.1.1",
+    "ruff==0.17.0",
+]
+
+[tool.uv]
+package = false
+# A release is adopted only once it is 14 days old (docs/proposal.md, rule 2).
+exclude-newer = "14 days"
+
+[tool.uv.workspace]
+members = ["contracts", "backend"]
+
+[tool.uv.sources]
+oversight = { workspace = true }
+oversight-contracts = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["contracts/src", "backend/src", "tools"]
+# The demo repo is the agents' workspace, and Markdown code blocks are sketches, not code.
+extend-exclude = ["demo-repo", "*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "TID"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"subprocess".msg = "Run processes through the workspace runner, async and with a timeout."
+"os.system".msg = "Run processes through the workspace runner, async and with a timeout."
+"asyncio.create_subprocess_exec".msg = "Only the workspace runner starts processes."
+"asyncio.create_subprocess_shell".msg = "Only the workspace runner starts processes."
+
+[tool.ruff.lint.per-file-ignores]
+# The one place in the product that starts processes, and the development scripts.
+"backend/src/oversight/workspace/runner.py" = ["TID251"]
+"tools/**" = ["TID251"]
+
+[tool.pyright]
+include = ["contracts", "backend", "tools"]
+exclude = ["**/node_modules", "**/__pycache__", "**/.venv"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+strict = ["contracts/src", "backend/src", "tools/*.py"]
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["contracts/tests", "backend/tests", "tools/tests"]
+addopts = ["-q", "--strict-markers", "--import-mode=importlib"]
+
+# docs/proposal.md, section 3: the five import contracts.
+[tool.importlinter]
+root_packages = ["oversight", "oversight_contracts"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+id = "layers"
+name = "1. Backend layers, with the bottom three independent of each other"
+type = "layers"
+layers = [
+    "oversight.app",
+    "oversight.api",
+    "oversight.changes",
+    "oversight.agents",
+    "oversight.graph | oversight.events | oversight.workspace",
+]
+
+[[tool.importlinter.contracts]]
+id = "private-api"
+name = "2. Only oversight.api imports its own internals; others use its facade"
+type = "protected"
+protected_modules = ["oversight.api.**"]
+allowed_importers = ["oversight.api"]
+
+[[tool.importlinter.contracts]]
+id = "private-events"
+name = "2. Only oversight.events imports its own internals; others use its facade"
+type = "protected"
+protected_modules = ["oversight.events.**"]
+allowed_importers = ["oversight.events"]
+
+[[tool.importlinter.contracts]]
+id = "private-graph"
+name = "2. Only oversight.graph imports its own internals; others use its facade"
+type = "protected"
+protected_modules = ["oversight.graph.**"]
+allowed_importers = ["oversight.graph"]
+
+[[tool.importlinter.contracts]]
+id = "private-workspace"
+name = "2. Only oversight.workspace imports its own internals; others use its facade"
+type = "protected"
+protected_modules = ["oversight.workspace.**"]
+allowed_importers = ["oversight.workspace"]
+
+[[tool.importlinter.contracts]]
+id = "private-agents"
+name = "2. Only oversight.agents imports its own internals; others use its facade"
+type = "protected"
+protected_modules = ["oversight.agents.**"]
+allowed_importers = ["oversight.agents"]
+
+[[tool.importlinter.contracts]]
+id = "private-changes"
+name = "2. Only oversight.changes imports its own internals; others use its facade"
+type = "protected"
+protected_modules = ["oversight.changes.**"]
+allowed_importers = ["oversight.changes"]
+
+[[tool.importlinter.contracts]]
+id = "pure-contracts"
+name = "3. Contracts import neither the backend nor a web or model framework"
+type = "forbidden"
+source_modules = ["oversight_contracts"]
+forbidden_modules = ["oversight", "fastapi", "starlette", "openai"]
+
+[[tool.importlinter.contracts]]
+id = "model-gate"
+name = "4. Only oversight.agents imports openai"
+type = "forbidden"
+source_modules = [
+    "oversight.app",
+    "oversight.settings",
+    "oversight.__main__",
+    "oversight.api",
+    "oversight.changes",
+    "oversight.graph",
+    "oversight.events",
+    "oversight.workspace",
+]
+forbidden_modules = ["openai"]
+
+[[tool.importlinter.contracts]]
+id = "web-at-the-edge"
+name = "5. Only api and app import the web framework"
+type = "forbidden"
+source_modules = [
+    "oversight.changes",
+    "oversight.agents",
+    "oversight.graph",
+    "oversight.events",
+    "oversight.workspace",
+]
+forbidden_modules = ["fastapi", "starlette"]
