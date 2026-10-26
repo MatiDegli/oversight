@@ -611,7 +611,7 @@ the single error format.
   2. The maintainer decides.
   3. The coordinator makes one PR on `contracts/<topic>`: the models, the version, `make contracts`,
      the fixtures, and a line in DECISIONS.md.
-  4. `make check` passes, and the maintainer merges.
+  4. `make check` passes, the maintainer approves the change, and the coordinator merges it.
   5. Open branches merge main.
 
 ## 5. Modules in order
@@ -627,7 +627,7 @@ result. The days assume the build period starts on Tuesday at 01:00. The owners 
 | 3 | Event store, SSE, fake player, hand-written log | Tue | 2 | strong-tier subagent | `uv run pytest backend/tests/events` (seq strictly increasing under two writers, resume after Last-Event-ID, every fixture valid), and `make replay` streams with `curl -N` |
 | 4 | Smoke test | Tue | 3 | support | `make smoke` exits 0 from a clean clone |
 | 5 | Docs | Tue | 2 | coordinator | ARCHITECTURE.md, DECISIONS.md, the README section and the DEVLOG line, reviewed by the maintainer |
-| 6 | API probe | Tue | key and credits | coordinator, on the maintainer's OK | `uv run python tools/probe_api.py meta`, then `baseten`, writes `docs/api-probe.md`; it decides native tools or the JSON fallback, and agent B's route |
+| 6 | API probe | Tue | key and credits | backend implementer, on the maintainer's OK | `uv run python tools/probe_api.py meta`, then `baseten`, writes `docs/api-probe.md`; it decides native tools or the JSON fallback, and agent B's route |
 | 7 | Demo repo | Tue | none | support | `make demo-repo-check`: its tests pass in its own environment |
 | 8 | Graph core | Tue to Wed | 2, 7 | strong-tier subagent | `uv run pytest backend/tests/graph`: one test per graph rule, a golden snapshot of the demo repo, deltas, change graphs, and the cone's limits and omitted counts |
 | 9 | Frontend foundation | Tue to Wed | 2, 3's log | frontend | `pnpm -C frontend test` (the reducer over the fixture logs) and `pnpm -C frontend build` |
@@ -729,17 +729,17 @@ details outside this repository.
 | Role | Who |
 | --- | --- |
 | Decides the critical questions and owns `contracts/` | the maintainer |
-| Coordinator: plans fronts, writes briefs, verifies hand-backs, approves and makes merges; builds the skeleton and the contracts | Claude Code (Opus) |
+| Coordinator: plans fronts, writes briefs, verifies hand-backs, approves and makes merges; builds the skeleton and the contracts, then writes no product code, only manifests, lockfiles, docs and merges | Claude Code (Opus) |
 | The critical path and the hard backend parts: the event bus, graph core, the agent runtime, the change manager | Claude Opus subagent |
 | Bounded backend tasks: endpoints, glue, tests | Claude Sonnet subagent |
 | Frontend: graph view, Monaco, panels | Codex |
-| Support and mechanical steps: tests, smoke scripts, surveys, formatting, reruns | GLM; Claude Haiku or Sonnet when GLM is out of quota |
+| Support and mechanical steps: test additions, smoke scripts, surveys, formatting, reruns; no design and no new module | GLM; Claude Haiku or Sonnet when GLM is out of quota |
 | Independent review | a model from another provider than the author's: Claude reviews Codex's changes, Codex reviews Claude's |
 
 - Muse is not used to build Oversight. The Meta API is called only from inside the product: its
   agents, the probe, and recorded demo runs.
-- Four writers run at once, one per lane: the critical path, the frontend, bounded backend work,
-  and support. Helpers are the first to stop when usage runs ahead of pace. Every headless run states its permission mode and turn limit.
+- At least four writers run at once, at least one per lane: the critical path, the frontend,
+  bounded backend work, and support. Helpers are the first to stop when usage runs ahead of pace. Every headless run states its permission mode and turn limit.
 - Every worker stays inside its own worktree and is launched confined where its tool allows. Review
   looks for code that reads as if it came from elsewhere.
 

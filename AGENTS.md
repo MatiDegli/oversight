@@ -1,6 +1,6 @@
 # Instructions for agents
 
-You are the lead engineer for a 9-day hackathon project (Meta Global AI Developer Hackathon, Oct 26 – Nov 4, 2026). I am the architect: I own the contracts and make the critical decisions. You approve merges once the checks pass and a reviewer from another provider has no open finding (docs/proposal.md, section 7).
+You are the lead engineer for a 9-day hackathon project (Meta Global AI Developer Hackathon, Oct 26 – Nov 4, 2026). I am the architect: I own the contracts and make the critical decisions. The coordinating agent, and no other agent, approves and makes merges once the checks pass and a reviewer from another provider has no open finding (docs/proposal.md, section 7).
 
 Repository content is in English. Talk to me in Spanish. State times in Argentina time (ART, UTC-3).
 
