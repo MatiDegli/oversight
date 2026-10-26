@@ -56,6 +56,7 @@ NO_TOOL_REMINDER = "Use a tool to continue, or call finish when the task is done
 SAME_RESULT_LIMIT = 4
 FAILURE_LIMIT = 6
 ERROR_CHARS = 200
+PROPOSAL_FAILED = "Its change could not be proposed."
 
 type Publish = Callable[[EventPayload], Awaitable[object]]
 
@@ -125,6 +126,7 @@ class AgentRun:
     ) -> None:
         require_verified(model.profile)
         self._task = task
+        self._workspace = workspace
         self._model = model
         self._sink = sink
         self._publish = publish
@@ -189,13 +191,37 @@ class AgentRun:
                     fatal=True,
                 )
             )
-        if not root_lost:  # the sink reads the worktree, and its root is not the agent's any more
-            await self._sink.proposed(self._task.agent_id, summary)
+        # The sink reads the worktree, and a lost root is not the agent's any more.
+        if not root_lost and not await self._propose(summary):
+            detail = detail or PROPOSAL_FAILED  # a halt's own reason is the better one
         if detail is None:
             await self._status("ready_for_review")
             return RunEnd("ready_for_review", None, self._step, summary)
         await self._status("halted", detail)
         return RunEnd("halted", detail, self._step, None)
+
+    def _describe(self, error: Exception) -> str:
+        """The error's type and its message on one line, without the runtime's location."""
+        message = " ".join(str(error).split())
+        text = f"{type(error).__name__}: {message}" if message else type(error).__name__
+        return self._workspace.redact(text)[:ERROR_CHARS]
+
+    async def _propose(self, summary: str | None) -> bool:
+        """Whether the sink proposed the change. A sink that returns `False` has sent its own
+        `error`; one that raises has not, so the runtime reports it."""
+        try:
+            return await self._sink.proposed(self._task.agent_id, summary)
+        except Exception as error:
+            await self._publish(
+                ErrorReport(
+                    source="server",
+                    message=f"The change could not be proposed: {self._describe(error)}",
+                    agent_id=self._task.agent_id,
+                    change_id=self._task.change_id,
+                    fatal=True,
+                )
+            )
+            return False
 
     async def _loop(self, messages: list[Message]) -> str:
         # Every reply with a tool call adds a step, so the step limit bounds those; the failure
