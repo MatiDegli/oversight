@@ -42,12 +42,45 @@ async def test_exit_code_and_both_streams(tmp_path: Path) -> None:
     assert not result.truncated
 
 
-async def test_output_is_capped_while_the_rest_is_drained(tmp_path: Path) -> None:
+async def test_output_keeps_a_head_and_a_tail_while_the_rest_is_drained(tmp_path: Path) -> None:
     result = await run_process(
         script("sys.stdout.write('x' * 10_000_000)"), cwd=tmp_path, timeout_s=60, output_cap=1000
     )
+    middle = 10_000_000 - 1000 - runner.TAIL_CAP
     assert result.returncode == 0
-    assert result.stdout == "x" * 1000
+    assert result.stdout == "x" * 1000 + runner.omitted_marker(middle) + "x" * runner.TAIL_CAP
+    assert result.truncated
+
+
+async def test_an_overflow_that_fits_in_the_tail_loses_nothing(tmp_path: Path) -> None:
+    result = await run_process(
+        script("sys.stdout.write('a' * 1000 + 'b' * 500)"),
+        cwd=tmp_path,
+        timeout_s=60,
+        output_cap=1000,
+    )
+    assert result.stdout == "a" * 1000 + "b" * 500
+    assert not result.truncated
+
+
+async def test_a_long_output_keeps_the_summary_at_its_end(tmp_path: Path) -> None:
+    summary = "\n== 3 passed in 0.1s ==\n"
+    size = runner.DEFAULT_OUTPUT_CAP + 50_000
+    body = "x" * size
+    result = await run_process(
+        script(
+            f"sys.stdout.write('x' * {size} + {summary!r})",
+            f"sys.stderr.write('x' * {size} + '\\nERR END\\n')",
+        ),
+        cwd=tmp_path,
+        timeout_s=60,
+    )
+    full = body + summary
+    cap, tail = runner.DEFAULT_OUTPUT_CAP, runner.TAIL_CAP
+    middle = runner.omitted_marker(len(full) - cap - tail)
+    assert result.stdout == full[:cap] + middle + full[-tail:]
+    assert result.stdout.endswith(summary)
+    assert result.stderr.endswith("\nERR END\n")
     assert result.truncated
 
 

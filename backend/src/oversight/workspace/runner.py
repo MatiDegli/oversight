@@ -2,7 +2,8 @@
 
 Never a shell, never a blocking call: the child runs in its own process group, has no stdin, gets an
 environment built from an allowlist, and is killed with its whole group on a timeout or a
-cancellation. Output is kept up to a cap per stream and the rest is drained.
+cancellation. Each stream keeps its first `cap` bytes and the last `TAIL_CAP` bytes; what lies
+between is counted, not kept, and the pipes are always drained.
 """
 
 import asyncio
@@ -22,6 +23,8 @@ KILL_WAIT_S = 5.0
 PIPE_DRAIN_S = 1.0
 """How long to wait for the pipes to reach EOF before closing them."""
 DEFAULT_OUTPUT_CAP = 262_144
+TAIL_CAP = 16_384
+"""How much of the end of a stream is kept once the head is full: a test run's summary is last."""
 
 
 @dataclass(frozen=True)
@@ -32,7 +35,7 @@ class ProcessResult:
     stderr: str
     timed_out: bool
     truncated: bool
-    """True when a stream passed the cap and the rest was dropped."""
+    """True when bytes from the middle of a stream were dropped; the text then names how many."""
     duration_ms: int
 
 
@@ -55,25 +58,54 @@ def _resolve(future: "asyncio.Future[None]") -> None:
         future.set_result(None)
 
 
+def omitted_marker(count: int) -> str:
+    return f"\n[... {count} bytes omitted ...]\n"
+
+
+class _Stream:
+    """The first `cap` bytes of a stream and the last `tail_cap` bytes of what came after."""
+
+    def __init__(self, cap: int, tail_cap: int) -> None:
+        self.cap = cap
+        self.tail_cap = tail_cap
+        self.head = bytearray()
+        self.tail = bytearray()
+        self.omitted = 0
+
+    def feed(self, data: bytes) -> None:
+        room = self.cap - len(self.head)
+        if room > 0:
+            self.head.extend(data[:room])
+            data = data[room:]
+        if not data:
+            return
+        self.tail.extend(data)
+        excess = len(self.tail) - self.tail_cap
+        if excess > 0:
+            del self.tail[:excess]
+            self.omitted += excess
+
+    def text(self) -> str:
+        gap = omitted_marker(self.omitted).encode() if self.omitted else b""
+        return (bytes(self.head) + gap + bytes(self.tail)).decode("utf-8", errors="replace")
+
+
 class _Collector(asyncio.SubprocessProtocol):
-    """Keeps the first `cap` bytes of each stream, drains the rest, and reports exit and EOF."""
+    """Keeps the head and the tail of each stream, drains the rest, and reports exit and EOF."""
 
     def __init__(self, cap: int) -> None:
         loop = asyncio.get_running_loop()
-        self.cap = cap
-        self.stdout = bytearray()
-        self.stderr = bytearray()
-        self.truncated = False
+        self.stdout = _Stream(cap, TAIL_CAP)
+        self.stderr = _Stream(cap, TAIL_CAP)
         self.exited: asyncio.Future[None] = loop.create_future()
         self.closed: asyncio.Future[None] = loop.create_future()
 
+    @property
+    def truncated(self) -> bool:
+        return bool(self.stdout.omitted or self.stderr.omitted)
+
     def pipe_data_received(self, fd: int, data: bytes) -> None:
-        buffer = self.stdout if fd == 1 else self.stderr
-        room = self.cap - len(buffer)
-        if room > 0:
-            buffer.extend(data[:room])
-        if len(data) > room:
-            self.truncated = True
+        (self.stdout if fd == 1 else self.stderr).feed(data)
 
     def process_exited(self) -> None:
         _resolve(self.exited)
@@ -150,8 +182,8 @@ async def _execute(
     await _reap(transport, collector, pgid, terminate=not exited)
     return ProcessResult(
         returncode=transport.get_returncode(),
-        stdout=collector.stdout.decode("utf-8", errors="replace"),
-        stderr=collector.stderr.decode("utf-8", errors="replace"),
+        stdout=collector.stdout.text(),
+        stderr=collector.stderr.text(),
         timed_out=not finished,
         truncated=collector.truncated,
         duration_ms=round((time.monotonic() - started) * 1000),

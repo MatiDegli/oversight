@@ -1,8 +1,11 @@
 import json
+import stat
+from pathlib import Path
 
 import pytest
 
-from oversight.workspace.suite import parse_report, summarize
+from oversight.workspace.runner import DEFAULT_OUTPUT_CAP, run_process
+from oversight.workspace.suite import OUTPUT_TAIL, parse_report, run_suite, summarize
 
 
 def line(kind: str, nodeid: str = "", when: str = "", outcome: str = "") -> str:
@@ -106,3 +109,26 @@ def test_garbage_lines_are_ignored() -> None:
         ["", "[]", "42", "not json", line("test", "t.py::a", "call", "passed")], returncode=0
     )
     assert (result.outcome, result.passed) == ("passed", 1)
+
+
+@pytest.mark.anyio
+async def test_a_long_run_still_ends_its_output_with_the_summary(tmp_path: Path) -> None:
+    """More than the runner's cap of output: the tail kept is the real end, not the 8 KB before
+    the cap. A script stands in for the interpreter and ignores the pytest arguments."""
+    fake_python = tmp_path / "fake-python"
+    size = DEFAULT_OUTPUT_CAP + 100_000
+    fake_python.write_text(
+        f"#!/bin/sh\nhead -c {size} /dev/zero | tr '\\0' 'x'\necho\necho '== 2 passed in 0.1s =='\n"
+    )
+    fake_python.chmod(fake_python.stat().st_mode | stat.S_IXUSR)
+    run = await run_suite(
+        python=fake_python,
+        plugin_dir=tmp_path,
+        runtime_root=tmp_path,
+        tree_root=tmp_path,
+        timeout_s=60,
+        redact=lambda text: text,
+        spawn=run_process,
+    )
+    assert len(run.output) == OUTPUT_TAIL
+    assert run.output.endswith("\n== 2 passed in 0.1s ==\n")
