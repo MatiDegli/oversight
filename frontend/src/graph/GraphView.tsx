@@ -17,30 +17,34 @@ export function GraphView() {
     const host = container.current;
     if (!host) return;
     let cancelled = false;
-    const cy = cytoscape({ container: host, layout: { name: "preset" } });
-    cy.style(graphStyles(theme));
-    const sync = () => {
-      updateGraph(cy, graphElements(stateStore.getState().state));
+    let dispose: (() => void) | undefined;
+    const create = () => {
+      const cy = cytoscape({ container: host, layout: { name: "preset" } });
+      cy.style(graphStyles(theme));
+      const sync = () => {
+        updateGraph(cy, graphElements(stateStore.getState().state));
+      };
+      const unsubscribe = stateStore.subscribe(sync);
+      sync();
+      const resize = new ResizeObserver(() => cy.resize());
+      resize.observe(host);
+      dispose = () => {
+        unsubscribe();
+        resize.disconnect();
+        cy.destroy();
+      };
     };
-    const unsubscribe = stateStore.subscribe(sync);
-    sync();
-    const resize = new ResizeObserver(() => cy.resize());
-    resize.observe(host);
-    void document.fonts.load(`14px ${theme.fontFamilies.sans}`).then(
-      () => {
-        if (cancelled) return;
-        cy.style(graphStyles(theme));
-        cy.resize();
-      },
-      () => {
-        // Keep the graph usable with the fallback font when the asset fails.
-      },
-    );
+    // Create labels only after the font settles: reapplying identical styles
+    // cannot invalidate Cytoscape's cached label measurements and textures.
+    void document.fonts
+      .load(`14px ${theme.fontFamilies.sans}`)
+      .catch(() => undefined)
+      .then(() => {
+        if (!cancelled) create();
+      });
     return () => {
       cancelled = true;
-      unsubscribe();
-      resize.disconnect();
-      cy.destroy();
+      dispose?.();
     };
   }, []);
   return (
