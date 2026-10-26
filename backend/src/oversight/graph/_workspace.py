@@ -1,11 +1,13 @@
 """Main's graph, read from a workspace directory and re-parsed only where a file's bytes changed."""
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 from oversight.graph._spans import SpanIndex
 from oversight.graph._version import FileEntry, assemble, parse_entries, select_python_paths
-from oversight_contracts.graph import GraphSnapshot
+from oversight_contracts.common import NodeId
+from oversight_contracts.graph import GraphSnapshot, Point
 
 
 def python_files(root: Path) -> list[str]:
@@ -30,10 +32,12 @@ def python_files(root: Path) -> list[str]:
 
 
 class WorkspaceGraph:
-    """The graph of one directory. `scan` is synchronous: callers run it in a thread."""
+    """The graph of one directory. `scan` is synchronous: callers run it in a thread. With a
+    `layout`, every snapshot carries the positions of its nodes."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, layout: Mapping[NodeId, Point] | None = None) -> None:
         self._root = root
+        self._layout = layout
         self._entries: dict[str, FileEntry] = {}
         self._spans = SpanIndex(())
         self._own: dict[str, str] = {}
@@ -43,7 +47,7 @@ class WorkspaceGraph:
     def scan(self, commit: str) -> GraphSnapshot:
         files = {path: (self._root / path).read_bytes() for path in python_files(self._root)}
         self._entries, self.last_parsed = parse_entries(files, self._entries)
-        snapshot, self._own = assemble(self._entries, commit)
+        snapshot, self._own = assemble(self._entries, commit, self._layout)
         self._spans = SpanIndex(snapshot.nodes)
         return snapshot
 

@@ -1,0 +1,49 @@
+"""The preset layout: where each node sits on the graph, read from a JSON file."""
+
+import logging
+import math
+from collections.abc import Mapping
+from pathlib import Path
+
+from pydantic import TypeAdapter, ValidationError
+
+from oversight_contracts.common import NodeId
+from oversight_contracts.graph import Point
+
+_log = logging.getLogger(__name__)
+_LAYOUT = TypeAdapter(dict[NodeId, Point])
+
+
+class LayoutError(ValueError):
+    """The layout file exists but cannot be used; the message starts with its path."""
+
+
+def read_layout(path: Path) -> dict[NodeId, Point]:
+    """Positions by node id, from a JSON object `{node_id: {"x": 1, "y": 2}}`. A missing file
+    means no positions, with one log line; a file that is unreadable or malformed raises
+    `LayoutError` naming it. Ids are not checked against a graph: `assemble` ignores the ones it
+    does not contain."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        _log.warning("no layout file at %s: the graph will place its own nodes", path)
+        return {}
+    except (OSError, UnicodeDecodeError) as exc:
+        raise LayoutError(f"{path}: cannot be read: {exc}") from exc
+    try:
+        # Strict: a coordinate that is a string is a mistake, not a number to coerce.
+        layout = _LAYOUT.validate_json(text, strict=True)
+    except ValidationError as exc:
+        first = exc.errors()[0]
+        where = ".".join(str(part) for part in first["loc"]) or "the file"
+        raise LayoutError(f"{path}: malformed at {where}: {first['msg']}") from exc
+    for node_id, point in layout.items():
+        if not (math.isfinite(point.x) and math.isfinite(point.y)):
+            raise LayoutError(f"{path}: the position of {node_id} is not a finite number")
+    return layout
+
+
+def positions_of(layout: Mapping[NodeId, Point], node_ids: list[NodeId]) -> dict[NodeId, Point]:
+    """The layout's entries for exactly these nodes: ids the layout does not know are left out, and
+    so are layout ids that are not among the nodes."""
+    return {nid: layout[nid] for nid in node_ids if nid in layout}

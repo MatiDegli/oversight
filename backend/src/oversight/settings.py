@@ -27,6 +27,8 @@ class Settings:
     port: int = 8710
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
+    layout: Path = REPO_ROOT / "fixtures" / "layout" / "demo-repo.json"
+    """The preset layout, `{node_id: {x, y}}`; a missing file means the graph has no positions."""
     # The provider keys. repr=False keeps them out of any log line or traceback that shows Settings.
     meta_api_key: str | None = field(default=None, repr=False)
     baseten_api_key: str | None = field(default=None, repr=False)
@@ -39,6 +41,7 @@ class Settings:
             host=merged.get("OVERSIGHT_HOST", cls.host),
             port=int(merged.get("OVERSIGHT_PORT", cls.port)),
             runtime_dir=Path(merged.get("OVERSIGHT_RUNTIME_DIR", cls.runtime_dir)),
+            layout=Path(merged.get("OVERSIGHT_LAYOUT") or cls.layout),
             # An empty value, as in .env.example, means the key is not set.
             meta_api_key=merged.get("META_API_KEY") or None,
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,

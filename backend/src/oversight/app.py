@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from oversight.api import create_router, install_error_handlers
 from oversight.events import EventStore, play, read_jsonl
+from oversight.graph import read_layout
 from oversight.settings import Settings
 from oversight_contracts.events import RunStartedEvent
 
@@ -22,10 +23,14 @@ class ReplayConfig:
 
 
 def create_app(settings: Settings | None = None, replay: ReplayConfig | None = None) -> FastAPI:
-    """Without `replay`, the live app; its run, store and agents are wired by a later front."""
+    """Without `replay`, the live app; its run, store and agents are wired by a later front. The
+    live app reads the preset layout here, so a malformed file stops the start and names itself;
+    the front that builds the workspace graph passes `app.state.layout` to it."""
     settings = settings or Settings.load()
     app = FastAPI(title="Oversight") if replay is None else _replay_app(settings, replay)
     app.state.settings = settings
+    if replay is None:
+        app.state.layout = read_layout(settings.layout)
     install_error_handlers(app)
     return app
 

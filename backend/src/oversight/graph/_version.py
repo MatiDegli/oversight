@@ -10,8 +10,10 @@ from dataclasses import dataclass, field
 
 from oversight.graph._extract import module_name, parse_file
 from oversight.graph._facts import FileParse
+from oversight.graph._layout import positions_of
 from oversight.graph._link import link
-from oversight_contracts.graph import GraphSnapshot, ParseError
+from oversight_contracts.common import NodeId
+from oversight_contracts.graph import GraphSnapshot, ParseError, Point
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,8 +63,13 @@ def parse_entries(
     return entries, tuple(parsed)
 
 
-def assemble(entries: Mapping[str, FileEntry], commit: str) -> tuple[GraphSnapshot, dict[str, str]]:
-    """The linked graph of the entries, and each node's own-source hash."""
+def assemble(
+    entries: Mapping[str, FileEntry],
+    commit: str,
+    layout: Mapping[NodeId, Point] | None = None,
+) -> tuple[GraphSnapshot, dict[str, str]]:
+    """The linked graph of the entries, and each node's own-source hash. The snapshot carries the
+    layout's position for each of its nodes that has one."""
     errors = [e.error for e in entries.values() if e.error is not None]
     files = [e.good for _, e in sorted(entries.items()) if e.good is not None]
     nodes, edges = link(files)
@@ -76,7 +83,7 @@ def assemble(entries: Mapping[str, FileEntry], commit: str) -> tuple[GraphSnapsh
         nodes=nodes,
         edges=edges,
         parse_errors=sorted(errors, key=lambda e: (e.path, e.line or 0)),
-        positions={},
+        positions=positions_of(layout or {}, [n.id for n in nodes]),
     )
     return snapshot, own
 
@@ -93,11 +100,15 @@ class CodeVersion:
 
 
 def parse_version(
-    files: Mapping[str, bytes], commit: str, previous: CodeVersion | None = None
+    files: Mapping[str, bytes],
+    commit: str,
+    previous: CodeVersion | None = None,
+    layout: Mapping[NodeId, Point] | None = None,
 ) -> CodeVersion:
     """Parse a set of files, given as workspace path to bytes; paths that are not importable
     Python files are ignored. With `previous`, files whose bytes did not change are not parsed
-    again, and a file that fails to parse keeps its parse from `previous`."""
+    again, and a file that fails to parse keeps its parse from `previous`. With `layout`, the graph
+    carries the positions of its nodes; `previous`'s layout is not inherited."""
     entries, _ = parse_entries(files, previous.entries if previous else {})
-    graph, own = assemble(entries, commit)
+    graph, own = assemble(entries, commit, layout)
     return CodeVersion(graph, own, entries)
