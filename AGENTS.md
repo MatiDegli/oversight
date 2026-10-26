@@ -46,7 +46,7 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 - The "no tests" badge (level 3) comes from coverage: run_tests runs with pytest-cov (MIT), and covered lines map to functions by their line ranges. If that is not ready, the badge reads "no test calls it" and is computed from the call graph.
 
 ## Look
-- Signal identity: the graph is the machines' surface, the panels are the person's. Panels are dark and plain; Monaco uses a dark theme with low-chroma syntax colors.
+- Signal identity: the graph is the machines' surface, the panels are the person's. Panels are dark and plain; Monaco uses a dark theme with low-chroma syntax colors. The review header is matte: flat dark with a still grain.
 - Color is an agent (A orange #ff5c1f, B blue #4f7dff) or a state (green passed or added, red failed, removed or destructive), nothing else, and never alone: letters A and B, + and - in diffs, icons on tests. No amber warnings; counters across agents are neutral.
 - Type: Atkinson Hyperlegible Next for text and graph labels, Atkinson Hyperlegible Mono for code, hashes and numbers, both from Fontsource packages; sentence case. Monaco is created after the fonts load, or calls monaco.editor.remeasureFonts().
 - The dot-field light behind the graph is its own canvas under a transparent Cytoscape canvas. It comes after level 1; until then the background is plain black.

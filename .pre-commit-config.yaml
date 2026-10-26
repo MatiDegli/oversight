@@ -1,4 +1,5 @@
-# Install the hooks once per clone: uvx pre-commit install
+# Install pre-commit once per machine (uv tool install pre-commit), then the hooks once per clone:
+# pre-commit install
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
