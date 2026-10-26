@@ -11,6 +11,7 @@ approve and reject hold main's lock, then the agent's, throughout.
 """
 
 import asyncio
+import functools
 import os
 from collections.abc import Coroutine
 from dataclasses import dataclass, field
@@ -82,6 +83,9 @@ class _Change:
     next_snapshot: GraphSnapshot | None = None
     sent: set[str] = field(default_factory=lambda: set[str]())
     """Close-out events already sent: "resolved", "delta", "done"."""
+    sending: asyncio.Task[None] | None = None
+    """The close-out publish in flight, kept until it ends, even when its close-out was cancelled;
+    the next close-out, and any merge, waits for it first."""
     cleaned: bool = False
     """The worktree and branch are gone."""
     fallback: State = "ready"
@@ -457,6 +461,10 @@ class ChangeManager:
     async def _approve(self, rec: _Change, comment: str | None) -> None:
         await self._finish_pending()
         async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+            # A close-out publish left running by a cancel may still move `snapshot`, which this
+            # merge's delta starts from, and must find its own delta still there: wait for it.
+            for other in list(self._pending.values()):
+                await self._drain(other)
             pre: str | None = None
             try:
                 pre = (await self._git(self._workspace.main, "rev-parse", "HEAD")).strip()
@@ -651,7 +659,9 @@ class ChangeManager:
         )
 
     async def _send_close_out(self, rec: _Change) -> str:
-        """Send what is missing, in order; the first failure, or "" once everything is out."""
+        """Send what is missing, in order; the first failure, or "" once everything is out. A
+        publish that a cancelled close-out left running is waited for first, so it is not resent."""
+        await self._drain(rec)
         events: list[tuple[str, EventPayload | None]] = [
             ("resolved", rec.resolution),
             ("delta", rec.delta),
@@ -660,19 +670,16 @@ class ChangeManager:
         for name, payload in events:
             if name in rec.sent or payload is None:
                 continue
-            # The publish runs in its own task, so a cancel cannot cut off the store's answer: the
-            # store may have committed the event, and the next close-out would send it again.
+            # The publish runs in its own task, kept on the record, and a done-callback records its
+            # outcome: the store may commit the event however many cancels the close-out gets, and
+            # the next close-out must not send it again.
             sending = self._spawn(self._deliver(payload))
+            sending.add_done_callback(functools.partial(self._receipt, rec, name))
+            rec.sending = sending
             cancelled = await self._settled(sending)
-            if sending.cancelled():
-                raise asyncio.CancelledError  # the publish itself was cancelled: nothing is known
-            failure = sending.exception()
-            if failure is None:
-                rec.sent.add(name)
-                if name == "delta" and rec.next_snapshot is not None:
-                    self.snapshot = rec.next_snapshot
-            if cancelled:
+            if cancelled or sending.cancelled():
                 raise asyncio.CancelledError
+            failure = sending.exception()
             if failure is not None:
                 return f"{name}: {failure}"
         return ""
@@ -681,11 +688,30 @@ class ChangeManager:
         """`_publish` as a tracked task's coroutine."""
         await self._publish(payload)
 
+    def _receipt(self, rec: _Change, name: str, sending: asyncio.Task[None]) -> None:
+        """A close-out publish ended: mark its event sent if the store took it, and move `snapshot`
+        after a delta. As a done-callback added first, it runs before anyone awaiting the publish
+        resumes, cancelled or not. A cancelled publish tells nothing: its event stays unsent."""
+        if rec.sending is sending:
+            rec.sending = None
+        if sending.cancelled() or sending.exception() is not None:
+            return
+        rec.sent.add(name)
+        if name == "delta" and rec.next_snapshot is not None:
+            self.snapshot = rec.next_snapshot
+
+    @staticmethod
+    async def _drain(rec: _Change) -> None:
+        """Wait for `rec`'s close-out publish in flight, if any; its outcome is recorded when this
+        returns. A cancel ends the wait and leaves the publish on the record."""
+        if rec.sending is not None:
+            await asyncio.wait([rec.sending])
+
     @staticmethod
     async def _settled(task: asyncio.Task[None]) -> bool:
         """Wait for `task` through one cancel of the caller: True if one came, for the caller to
-        re-raise once it has recorded the outcome. A second cancel ends the wait; `task` runs on,
-        tracked, and `aclose` waits for it."""
+        re-raise once the outcome is recorded. A second cancel ends the wait; `task` runs on, kept
+        on the record, records its own outcome, and the next close-out or merge waits for it."""
         try:
             await asyncio.wait([task])
         except asyncio.CancelledError:

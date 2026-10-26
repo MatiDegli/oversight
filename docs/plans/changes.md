@@ -1,6 +1,7 @@
 # Plan: the change manager, level 1 (front 15)
 
-Revision 5, after the re-review: only the latest decision's task may end `deciding`, and a
+Revision 6, after the second re-review: a close-out publish left running by a second cancel stays
+on the change, and the next close-out or merge waits for its outcome (section 4). Revision 5: only the latest decision's task may end `deciding`, and a
 cancel during a close-out publish waits for the store's answer (sections 1 and 4). Revision 4,
 after the implementation review: a close-out stays pending until every event is sent, and a
 cancelled decision settles its state (sections 4 and 5). Revision 3: Reject accepts
@@ -110,7 +111,10 @@ sends an `error` and keeps it, so the next delta starts from what the UI holds.
 `agent.status` `done` from `open`'s task and `RunEnd.steps`. Each is marked on the record when sent,
 so nothing goes twice. Each publish runs in its own tracked task: a cancel of the decision waits
 for the store's answer, marks what was committed (and moves `snapshot` after a delta), then goes
-on, since the store may commit an event whose caller was cancelled; a second cancel stops waiting. It runs as soon as the decision is a fact and before cleanup, so no cleanup
+on, since the store may commit an event whose caller was cancelled. A second cancel stops waiting,
+but the publish stays on the record and a done-callback records its outcome when it ends; the next
+close-out on that change, and every approval before it merges, waits for it, so the event is never
+sent twice and a later delta starts from the graph the UI holds. It runs as soon as the decision is a fact and before cleanup, so no cleanup
 failure can hold back or repeat a resolution. A decision tries the missing events twice, in order;
 if one still fails, an `error` says so and the change stays `closing` and pending, with its
 worktree and branch: cleanup runs only once `change.resolved` is out. The retry runs, under main's
@@ -227,7 +231,11 @@ failing with their change reverted.
   retry merges.
 - `test_close_out.py`: a delta cut short once goes on the second try;
   *`test_cancel_during_a_publish_records_what_went_out`: the approval is cancelled after the store
-  commits the delta and before its receipt; the next `open` sends only `done`, the chain holds; *`test_close_out_stays_pending_until_sent`:
+  commits the delta and before its receipt; the next `open` sends only `done`, the chain holds;
+  *`test_second_cancel_still_records_what_went_out`: the same, cancelled twice, so the approval ends
+  before the receipt; the next `open` still sends only `done`; *`test_merge_waits_for_a_publish_left_running`:
+  agent-2's approval, queued on main's lock behind agent-1's twice-cancelled close-out, merges after
+  agent-1's delta is recorded, so the deltas chain; *`test_close_out_stays_pending_until_sent`:
   both tries of a reject's resolution fail, so worktree and branch stay and nothing is sent; the
   next `open` sends the resolution and `done`, then cleans up; *`test_pending_delta_is_retried_or_superseded`:
   agent-1's delta fails twice, then agent-2's approval sends it first, or, failing there too,

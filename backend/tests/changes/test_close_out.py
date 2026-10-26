@@ -1,5 +1,6 @@
-"""Close-out and cleanup when one step fails: a publish cut short or failing until a later retry, a
-rescan that raises, tests that cannot start, and a worktree directory that is already gone."""
+"""Close-out and cleanup when one step fails: a publish cut short, failing until a later retry, or
+left running by cancels, a rescan that raises, tests that cannot start, and a worktree directory
+that is already gone."""
 
 import asyncio
 import shutil
@@ -49,6 +50,71 @@ async def test_cancel_during_a_publish_records_what_went_out(h: Harness) -> None
     assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
     [delta] = h.payloads(GraphDelta)
     assert h.manager.snapshot.version == delta.to_version
+    assert not await h.has_branch("agent-1")
+
+
+async def queued_callbacks_ran() -> None:
+    """Return once the callbacks queued so far have run, in their order: a task that a cancel woke
+    has taken it and is waiting again. It waits on a loop callback, never on time."""
+    loop = asyncio.get_running_loop()
+    turn = loop.create_future()
+    loop.call_soon(turn.set_result, None)
+    await turn
+
+
+async def cancel_twice(decision: asyncio.Task[None]) -> None:
+    """Cancel a decision held in a close-out publish, again once it waits through the first cancel:
+    the second cancel ends its wait, while the publish stays held."""
+    decision.cancel()
+    await queued_callbacks_ran()
+    decision.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await decision
+
+
+@bounded
+async def test_second_cancel_still_records_what_went_out(h: Harness) -> None:
+    """Cancelled twice while the store's receipt for the delta is on its way: the approval ends
+    first, the publish stays on the change and records its outcome, so the next close-out sends
+    only `done` and the chain holds."""
+    await h.run_agent(1, ADD_THRICE)
+    h.hold = GraphDelta
+    approval = h.manager.approve("change-1", None)
+    await h.held.wait()  # committed, its receipt not yet back
+    await cancel_twice(approval)  # returns before `release`: the second cancel ended the wait
+    h.release.set()
+
+    await h.open(2)
+
+    # `types` checks each delta's `from_version`: a resent delta would start from v0 at v1.
+    assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
+    [delta] = h.payloads(GraphDelta)
+    assert h.manager.snapshot.version == delta.to_version
+    assert not await h.has_branch("agent-1")
+
+
+@bounded
+async def test_merge_waits_for_a_publish_left_running(h: Harness) -> None:
+    """agent-2's approval passes its retries, then queues on main's lock behind agent-1's, whose
+    delta is held and which is cancelled twice: agent-2's merge waits for that receipt, so its
+    delta starts from agent-1's, and agent-1's `done` follows at the next `open`."""
+    first = h.manager.snapshot
+    await h.run_agent(1, ADD_THRICE)
+    await h.run_agent(2, ("shop/mod.py", "return 1", "return 4"))
+    h.hold = GraphDelta
+    approval = h.manager.approve("change-1", None)
+    second = h.manager.approve("change-2", None)
+    await h.held.wait()
+    await cancel_twice(approval)
+    h.release.set()
+
+    await second
+    await h.open(3)
+
+    one, two = h.payloads(GraphDelta)  # `events()` checks that they chain
+    assert (one.from_version, two.to_version) == (first.version, h.manager.snapshot.version)
+    assert [s.agent_id for s in h.payloads(AgentStatus)] == ["agent-2", "agent-1"]
+    assert [r.merge for r in h.payloads(ChangeResolved)] == ["merged", "merged"]
     assert not await h.has_branch("agent-1")
 
 
