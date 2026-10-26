@@ -7,6 +7,7 @@ TypeScript types validate nothing at run time, so this test is the check.
 import json
 import re
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
@@ -18,23 +19,32 @@ FIXTURES = REPO / "fixtures" / "events"
 LOGS = sorted(FIXTURES.glob("*.jsonl"))
 SERVER_EVENT: TypeAdapter[ServerEvent] = TypeAdapter(ServerEvent)
 
+# What counts as an absolute path, found anywhere inside a string:
+#  - a "/" that starts a word: not glued to a word, ".", "/", ")", "]", "}", "<" or "*" before it
+#    (so "a/b", "./a", "../a", "//", "</div>", "*/" and "(x)/y" are not), and followed by a name
+#    character (so "a / b" is not). A URL's "//" is followed by "/", and its path follows a host.
+#  - "~/", for the home directory, and "file:///", for a path written as a URL.
+#  - a Windows drive: a letter, ":" and a separator, not glued to a word ("https://" is not).
 _ABSOLUTE = re.compile(
-    r"^(/|~/)"  # a value that is itself an absolute path
-    r"|(?<![\w.])(/home|/Users|/root|/tmp|/mnt|/var|/private|/opt|/srv|/workspace)/"
-    r"|(?<![\w])[A-Za-z]:[\\/]"  # a Windows drive
-    r"|\\Users\\"
+    r"(?<![\w.~/\\)\]}<*])/(?=[\w.~@$%+-])"
+    r"|(?<![\w.~/\\])~/"
+    r"|\bfile:///"
+    r"|(?<!\w)[A-Za-z]:[\\/]"
 )
 
 
 def absolute_paths(value: object) -> list[str]:
-    """Every string in a decoded event that is, or holds, an absolute path."""
+    """Every string in a decoded event, keys included, that is or holds an absolute path."""
     if isinstance(value, str):
-        hit = _ABSOLUTE.search(value) or str(REPO) in value or str(Path.home()) in value
-        return [value[:80]] if hit else []
+        return [value[:80]] if _ABSOLUTE.search(value) else []
     if isinstance(value, dict):
-        return [found for key, item in value.items() for found in absolute_paths([key, item])]
+        return [
+            found
+            for key, item in cast(dict[object, object], value).items()
+            for found in absolute_paths(key) + absolute_paths(item)
+        ]
     if isinstance(value, list):
-        return [found for item in value for found in absolute_paths(item)]
+        return [found for item in cast(list[object], value) for found in absolute_paths(item)]
     return []
 
 
@@ -64,24 +74,80 @@ def test_every_line_is_a_valid_event_in_seq_order_with_no_absolute_path(log: Pat
     assert problems(log) == []
 
 
+def plant(tmp_path: Path, field: str, original: str, planted: str) -> Path:
+    """A copy of the level 1 log with one string of it replaced by `planted`."""
+    text = (FIXTURES / "handwritten-level1.jsonl").read_text(encoding="utf-8")
+    assert text.count(f'"{field}":"{original}"') > 0
+    log = tmp_path / "planted.jsonl"
+    log.write_text(
+        text.replace(f'"{field}":"{original}"', f'"{field}":{json.dumps(planted)}', 1),
+        encoding="utf-8",
+    )
+    return log
+
+
 @pytest.mark.parametrize(
     "planted",
     ["/home/someone/demo-repo/shop/pricing.py", "C:\\Users\\someone\\shop\\pricing.py"],
 )
 def test_a_planted_absolute_path_is_caught(tmp_path: Path, planted: str) -> None:
-    original = (FIXTURES / "handwritten-level1.jsonl").read_text(encoding="utf-8")
-    assert original.count('"path":"shop/pricing.py"') > 0
-    log = tmp_path / "planted.jsonl"
-    log.write_text(
-        original.replace('"path":"shop/pricing.py"', f'"path":{json.dumps(planted)}', 1),
-        encoding="utf-8",
-    )
+    log = plant(tmp_path, "path", "shop/pricing.py", planted)
     assert any("absolute path" in problem for problem in problems(log))
 
 
-def test_relative_paths_and_code_are_not_mistaken_for_absolute_ones() -> None:
-    assert absolute_paths({"path": "shop/pricing.py", "code": "base * percent // 100"}) == []
-    assert absolute_paths({"message": "failed in /tmp/x/test.py"}) != []
+def test_an_absolute_path_inside_a_message_is_caught_whatever_its_directory(
+    tmp_path: Path,
+) -> None:
+    summary = "Searched for compute_price(: 9 matches in 4 files"
+    log = plant(tmp_path, "summary", summary, "failed in /etc/private/demo.py")
+    assert any("absolute path" in problem for problem in problems(log))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "failed in /etc/private/demo.py",
+        "see /opt/demo/x.py:12",
+        "PATH=/usr/local/bin:/srv/app",
+        'open("/etc/passwd")',
+        "(/data/run/out.log)",
+        "config in ~/.config/tool",
+        "file:///etc/hosts",
+        "failed in D:\\work\\demo.py",
+        "failed in D:/work/demo.py",
+        "C:\\x",
+    ],
+)
+def test_absolute_paths_are_found_in_any_string(text: str) -> None:
+    assert absolute_paths({"message": text}) != [], text
+    assert absolute_paths([{"nested": [text]}]) != [], text
+    assert absolute_paths({text: 1}) != [], text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "shop/pricing.py",
+        "./shop/pricing.py",
+        "../shop/pricing.py",
+        "tests/test_pricing.py::test_total",
+        "base * percent // 100",
+        "total / count",
+        "total/count",
+        "a /* note */ b",
+        "// a comment",
+        "and/or",
+        "10/3",
+        "<div>x</div>",
+        "https://example.com/docs/page",
+        "http://localhost:8710/events",
+        "Fetched https://example.com:8443/a/b?x=1 in 30 ms",
+        "at 14:03:12",
+        "see key:value and a:b",
+    ],
+)
+def test_relative_paths_urls_and_code_are_not_mistaken_for_absolute_paths(text: str) -> None:
+    assert absolute_paths({"message": text}) == [], text
 
 
 def test_an_invalid_line_is_caught(tmp_path: Path) -> None:

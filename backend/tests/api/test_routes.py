@@ -4,7 +4,8 @@ import asyncio
 import contextlib
 import json
 import socket
-from collections.abc import AsyncIterator
+import threading
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 import httpx
@@ -16,7 +17,13 @@ from oversight.api import create_router, install_error_handlers
 from oversight.app import ReplayConfig, create_app
 from oversight.events import EventStore, read_jsonl
 from oversight.settings import Settings
-from oversight_contracts.commands import ErrorResponse, GraphResponse, Health
+from oversight_contracts.commands import (
+    ERROR_STATUS,
+    ErrorCode,
+    ErrorResponse,
+    GraphResponse,
+    Health,
+)
 from oversight_contracts.events import AgentStep, GraphDeltaEvent
 from oversight_contracts.graph import GraphSnapshot
 
@@ -171,6 +178,53 @@ async def test_bad_resume_points_answer_in_the_error_format(tmp_path: Path) -> N
         assert ErrorResponse.model_validate(response.json()).error.code == code
 
 
+async def test_only_the_resume_value_that_applies_is_checked(tmp_path: Path) -> None:
+    async with store_app(tmp_path) as (store, client):
+        for n in range(1, 4):
+            await store.publish(step(n))
+        # Last-Event-ID wins over `after`, so a bad `after` is not read.
+        _, by_header = await read_messages(
+            client, 1, params={"after": "-1"}, headers={"Last-Event-ID": "2"}
+        )
+        # Another run's `run` wins over both, so bad values are not read either.
+        _, other_run = await read_messages(
+            client, 3, params={"after": "-1", "run": "run-20990101-000000"}
+        )
+        _, other_run_header = await read_messages(
+            client,
+            3,
+            params={"run": "run-20990101-000000"},
+            headers={"Last-Event-ID": "abc"},
+        )
+        bad = [
+            await client.get("/events", params={"after": value}) for value in ("-1", "abc", "1.5")
+        ]
+        # "²" is a digit to `str.isdigit` but not to `int`.
+        bad.append(await client.get("/events", headers={b"Last-Event-ID": b"\xb2"}))
+        bad.append(await client.get("/events", headers={"Last-Event-ID": "9" * 5000}))
+    assert seqs(by_header) == [3]
+    assert seqs(other_run) == [1, 2, 3]
+    assert seqs(other_run_header) == [1, 2, 3]
+    for response in bad:
+        assert response.status_code == 422
+        assert ErrorResponse.model_validate(response.json()).error.code == "invalid_request"
+
+
+async def test_every_error_takes_its_status_from_the_contract_table(tmp_path: Path) -> None:
+    async with store_app(tmp_path) as (_, client):
+        responses = [
+            await client.get("/nope"),  # no such path
+            await client.post("/graph"),  # a path, but not this method: 405 in Starlette
+            await client.get("/graph"),  # no snapshot yet
+            await client.get("/events", params={"after": "-1"}),
+        ]
+    codes: list[ErrorCode] = [ErrorResponse.model_validate(r.json()).error.code for r in responses]
+    expected = [ERROR_STATUS[code] for code in codes]
+    assert [r.status_code for r in responses] == expected
+    assert codes == ["not_found", "invalid_request", "not_found", "invalid_request"]
+    assert responses[1].status_code == 422
+
+
 async def test_graph_is_not_found_before_a_snapshot_then_read_with_its_seq(
     tmp_path: Path,
 ) -> None:
@@ -205,3 +259,60 @@ async def test_replay_streams_the_whole_log_and_serves_its_final_graph(tmp_path:
     assert graph.graph.version == delta.payload.to_version
     assert graph.graph.commit == delta.payload.commit
     assert (tmp_path / "replays" / f"{RUN_ID}.sqlite").exists()
+
+
+class PlayerFailedError(RuntimeError):
+    pass
+
+
+async def test_the_replay_store_is_closed_even_when_the_player_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    failed = asyncio.Event()
+    closes: list[str] = []
+    close = EventStore.close
+
+    async def failing_player(*_: object) -> None:
+        failed.set()  # set and raise in one step: the task is done before the test resumes
+        raise PlayerFailedError("the player failed")
+
+    async def watched_close(self: EventStore) -> None:
+        await close(self)
+        closes.append(self.run_id)
+
+    monkeypatch.setattr("oversight.app.play", failing_player)
+    monkeypatch.setattr(EventStore, "close", watched_close)
+    app = create_app(Settings(runtime_dir=tmp_path), ReplayConfig(log=LOG, speed=0))
+    with pytest.raises(PlayerFailedError):
+        async with app.router.lifespan_context(app):
+            async with asyncio.timeout(DEADLINE_S):
+                await failed.wait()
+    assert closes == [RUN_ID]
+
+
+async def test_the_replay_lifespan_touches_the_disk_off_the_event_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    on_loop = spy_on_loop_thread_file_calls(monkeypatch, tmp_path)
+    app = create_app(Settings(runtime_dir=tmp_path), ReplayConfig(log=LOG, speed=0))
+    async with app.router.lifespan_context(app):
+        pass
+    assert on_loop == []
+
+
+def spy_on_loop_thread_file_calls(monkeypatch: pytest.MonkeyPatch, root: Path) -> list[str]:
+    """Record every `Path.exists`, `mkdir` and `unlink` under `root` made on this thread."""
+    loop_thread = threading.get_ident()
+    on_loop: list[str] = []
+
+    def watch(name: str, original: Callable[..., object]) -> Callable[..., object]:
+        def watched(self: Path, *args: object, **kwargs: object) -> object:
+            if threading.get_ident() == loop_thread and self.is_relative_to(root):
+                on_loop.append(f"{name} {self.name}")
+            return original(self, *args, **kwargs)
+
+        return watched
+
+    for name in ("exists", "mkdir", "unlink"):
+        monkeypatch.setattr(Path, name, watch(name, getattr(Path, name)))
+    return on_loop

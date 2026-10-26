@@ -30,6 +30,11 @@ def create_app(settings: Settings | None = None, replay: ReplayConfig | None = N
     return app
 
 
+def _remove_stale_files(path: Path) -> None:
+    for stale in (path, path.with_name(path.name + "-wal"), path.with_name(path.name + "-shm")):
+        stale.unlink(missing_ok=True)
+
+
 def _replay_app(settings: Settings, replay: ReplayConfig) -> FastAPI:
     events = read_jsonl(replay.log)
     if not events or not isinstance(events[0], RunStartedEvent):
@@ -41,17 +46,19 @@ def _replay_app(settings: Settings, replay: ReplayConfig) -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-        for stale in (path, path.with_name(path.name + "-wal"), path.with_name(path.name + "-shm")):
-            stale.unlink(missing_ok=True)
+        await asyncio.to_thread(_remove_stale_files, path)
         await store.start()
         player = asyncio.create_task(play(store, events, replay.speed), name="replay-player")
         try:
             yield
         finally:
             player.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await player
-            await store.close()
+            try:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await player
+            finally:
+                # Also when the player failed: its error surfaces, and the file still closes.
+                await store.close()
 
     app = FastAPI(title="Oversight (replay)", lifespan=lifespan)
     app.include_router(create_router(store, "replay"))

@@ -1,5 +1,6 @@
 """The read routes: the event stream, the graph and the health check (sections 4.6 and 4.7)."""
 
+import re
 from collections.abc import AsyncIterator
 from typing import Annotated, Literal
 
@@ -11,6 +12,8 @@ from oversight.events import EventStore
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import GraphResponse, Health
 
+_SEQ = re.compile(r"[0-9]{1,18}")
+
 
 def _no_transform(response: Response) -> None:
     # FastAPI's SSE response sets `Cache-Control: no-cache` and appends the headers set here, so
@@ -18,22 +21,33 @@ def _no_transform(response: Response) -> None:
     response.headers["Cache-Control"] = "no-transform"
 
 
+def _seq(value: str, name: str) -> int:
+    # ASCII digits only: `str.isdigit` also accepts characters `int` cannot read, such as "²".
+    if not _SEQ.fullmatch(value):
+        raise ApiError("invalid_request", f"{name} must be a seq: a whole number, not {value!r}")
+    return int(value)
+
+
 def create_router(store: EventStore, mode: Literal["live", "replay"]) -> APIRouter:
     router = APIRouter()
 
     def resume_point(
-        after: Annotated[int, Query(ge=0)] = 0,
+        after: Annotated[str | None, Query()] = None,
         run: str | None = None,
         last_event_id: Annotated[str | None, Header()] = None,
     ) -> int:
-        """`Last-Event-ID`, else `after`, else 0; from the start when `run` names another run."""
+        """Where to resume, by section 4.6's precedence, checking only the value that applies.
+
+        Another run's `run` wins over everything, so a bad `after` or `Last-Event-ID` is not an
+        error there; then `Last-Event-ID`, then `after`, then 0.
+        """
         if run is not None and run != store.run_id:
             return 0
-        if last_event_id is None:
-            return after
-        if not last_event_id.isdigit():
-            raise ApiError("invalid_request", "Last-Event-ID must be a seq: a whole number")
-        return int(last_event_id)
+        if last_event_id is not None:
+            return _seq(last_event_id, "Last-Event-ID")
+        if after is not None:
+            return _seq(after, "after")
+        return 0
 
     @router.get(
         "/events", response_class=EventSourceResponse, dependencies=[Depends(_no_transform)]

@@ -1,18 +1,29 @@
 """The event store: seq from the single writer, subscriptions, the graph fold, import and export."""
 
 import asyncio
+import contextlib
 import json
 import sqlite3
+import threading
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
-from oversight.events import EventStore, StoreClosedError, export_run, read_jsonl, read_store
+from oversight.events import (
+    EventStore,
+    StoreClosedError,
+    StoredEvent,
+    export_run,
+    read_jsonl,
+    read_store,
+)
 from oversight_contracts.events import AgentStep, RunStarted
 from oversight_contracts.graph import GraphDelta, GraphNode, GraphSnapshot
 
 pytestmark = pytest.mark.anyio
+DEADLINE_S = 10
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "events"
 RUN_ID = "run-20261027-140312"
 
@@ -214,3 +225,78 @@ async def test_a_log_round_trips_through_the_store_byte_for_byte(tmp_path: Path)
     out = tmp_path / "exported.jsonl"
     assert export_run(store.path, out) == len(read_jsonl(log))
     assert out.read_text(encoding="utf-8") == log.read_text(encoding="utf-8")
+
+
+async def test_close_can_be_repeated(tmp_path: Path) -> None:
+    store = open_store(tmp_path)
+    await store.start()
+    await store.publish(step(1, 1))
+    await store.close()
+    await store.close()
+    assert [row.seq for row in read_store(store.path)] == [1]
+
+
+async def test_a_cancelled_close_still_commits_what_is_queued_and_a_retry_finishes_it(
+    tmp_path: Path,
+) -> None:
+    store = open_store(tmp_path)
+    await store.start()
+    loop = asyncio.get_running_loop()
+    entered = asyncio.Event()
+    release = threading.Event()
+    insert = store._insert  # pyright: ignore[reportPrivateUsage]
+
+    def blocked_insert(rows: list[StoredEvent]) -> None:
+        # Runs in the writer's worker thread: tell the loop it is here, then wait to be let go.
+        loop.call_soon_threadsafe(entered.set)
+        assert release.wait(DEADLINE_S)
+        insert(rows)
+
+    store._insert = blocked_insert  # type: ignore[method-assign]  # pyright: ignore[reportPrivateUsage]
+    publisher = asyncio.create_task(store.publish(step(1, 1)))
+    try:
+        async with asyncio.timeout(DEADLINE_S):
+            await entered.wait()
+        closer = asyncio.create_task(store.close())
+        await asyncio.sleep(0)  # the closer's first step: it is now waiting for the writer
+        with pytest.raises(StoreClosedError):
+            await store.publish(step(1, 2))
+        closer.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await closer
+    finally:
+        release.set()
+    async with asyncio.timeout(DEADLINE_S):
+        await store.close()
+        committed = await publisher
+    assert committed.seq == 1
+    # SQLite removes the write-ahead log when its last connection closes: the file is closed.
+    assert not store.path.with_name(store.path.name + "-wal").exists()
+    assert [row.seq for row in read_store(store.path)] == [1]
+
+
+async def test_the_file_checks_and_creation_run_off_the_event_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    on_loop = spy_on_loop_thread_file_calls(monkeypatch, tmp_path)
+    async with open_store(tmp_path):
+        pass
+    assert on_loop == []
+
+
+def spy_on_loop_thread_file_calls(monkeypatch: pytest.MonkeyPatch, root: Path) -> list[str]:
+    """Record every `Path.exists`, `mkdir` and `unlink` under `root` made on this thread."""
+    loop_thread = threading.get_ident()
+    on_loop: list[str] = []
+
+    def watch(name: str, original: Callable[..., object]) -> Callable[..., object]:
+        def watched(self: Path, *args: object, **kwargs: object) -> object:
+            if threading.get_ident() == loop_thread and self.is_relative_to(root):
+                on_loop.append(f"{name} {self.name}")
+            return original(self, *args, **kwargs)
+
+        return watched
+
+    for name in ("exists", "mkdir", "unlink"):
+        monkeypatch.setattr(Path, name, watch(name, getattr(Path, name)))
+    return on_loop

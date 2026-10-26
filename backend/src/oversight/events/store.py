@@ -131,18 +131,20 @@ class EventStore:
         self._events: list[StoredEvent] = []
         self._graph: GraphSnapshot | None = None
         self._committed = asyncio.Event()
+        self._shutdown_task: asyncio.Task[None] | None = None
         self._closing = False
         self._closed = False
 
     async def start(self) -> None:
         """Create the run's file and start the writer; a run's file is never reopened to write."""
-        if self.path.exists():
-            raise FileExistsError(f"the event store of {self.run_id} already exists")
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = await asyncio.to_thread(self._create)
         self._writer = asyncio.create_task(self._write_loop(), name=f"event-writer-{self.run_id}")
 
     def _create(self) -> sqlite3.Connection:
+        # All of it runs in a worker thread: the event loop never waits on the disk.
+        if self.path.exists():
+            raise FileExistsError(f"the event store of {self.run_id} already exists")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         connection = _connect(self.path)
         with connection:
             connection.executescript(_SCHEMA)
@@ -150,17 +152,29 @@ class EventStore:
         return connection
 
     async def close(self) -> None:
-        """Commit what is queued, stop the writer, end every subscription and close the file."""
-        if self._closing:
-            return
+        """Commit what is queued, stop the writer, end every subscription and close the file.
+
+        The shutdown runs as a task of its own, so cancelling a caller does not stop it half way:
+        queued events still commit and the file still closes. Calling `close` again, also after a
+        cancelled call, waits for that same shutdown.
+        """
         self._closing = True
-        if self._writer is not None:
-            await self._queue.put(None)
-            await self._writer
-        if self._connection is not None:
-            await asyncio.to_thread(self._connection.close)
-        self._closed = True
-        self._notify()
+        if self._shutdown_task is None:
+            self._shutdown_task = asyncio.create_task(
+                self._shutdown(), name=f"event-store-close-{self.run_id}"
+            )
+        await asyncio.shield(self._shutdown_task)
+
+    async def _shutdown(self) -> None:
+        try:
+            if self._writer is not None:
+                await self._queue.put(None)
+                await self._writer
+        finally:
+            if self._connection is not None:
+                await asyncio.to_thread(self._connection.close)
+            self._closed = True
+            self._notify()
 
     async def __aenter__(self) -> "EventStore":
         await self.start()
