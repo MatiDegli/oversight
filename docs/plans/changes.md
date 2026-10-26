@@ -198,6 +198,7 @@ About 450 lines of code and 550 of tests, in two commits: live diff and propose,
 ## Open
 
 1. Section 5's runtime change, for front 12's next round; until then these tests call the sink
-   directly. Halting departs from 4.5's "proposed as it stands" only when no proposal can be built.
+   directly, and `ChangeManager`, whose sink methods return `bool`, matches `ChangeSink` only once
+   it lands. Halting departs from 4.5's "proposed as it stands" only when no proposal can be built.
 2. The Reject rule for a `halted` agent without a proposal, for fronts 13 and 17.
 3. No contract change: an empty `graph.delta`, with equal versions or not, is valid.
