@@ -447,6 +447,10 @@ class ChangeManager:
                 try:
                     pre = (await self._git(self._workspace.main, "rev-parse", "HEAD")).strip()
                     await self._merge(rec, comment, pre)
+                except asyncio.CancelledError:
+                    # Still under both locks: settle main from its facts, then cancel.
+                    await self._recover(rec, comment, pre, None)
+                    raise
                 except Exception as error:
                     await self._recover(rec, comment, pre, error)
                 if rec.state == "closed":
@@ -548,9 +552,12 @@ class ChangeManager:
         )
 
     async def _recover(
-        self, rec: _Change, comment: str | None, pre: str | None, error: Exception
+        self, rec: _Change, comment: str | None, pre: str | None, error: Exception | None
     ) -> None:
-        """Decide from git facts after a failed approval. No `reset --hard`, no lock removal."""
+        """Decide from git facts after a failed approval, or a cancelled one (`error` is `None`):
+        abort an unfinished merge, record a landed one. No `reset --hard`, no lock removal. A
+        cancelled approval always reports, and leaves a landed merge's cleanup to the next
+        `open`."""
         main = self._workspace.main
         facts: _Facts | None = None
         try:
@@ -561,16 +568,18 @@ class ChangeManager:
             facts = None
         if facts is not None and facts.merged:
             await self._close_merged(rec, comment, facts.head)
-            return
-        if facts is not None and facts.unchanged(pre):
+            if error is not None:
+                return
+            self._pending[rec.agent_id] = rec
+            note = "the merge landed and is recorded"
+        elif facts is not None and facts.unchanged(pre):
             rec.state = "ready"
             note = "main is unchanged; approve again or reject"
         else:
             rec.state = "broken"
             note = "main's state is unknown; reject the change or restart"
-        await self._error(
-            "git", f"Approving {rec.change_id} failed: {error}. {note}.", rec, fatal=False
-        )
+        what = "was cancelled" if error is None else f"failed: {error}"
+        await self._error("git", f"Approving {rec.change_id} {what}. {note}.", rec, fatal=False)
 
     async def _close_merged(self, rec: _Change, comment: str | None, post: str) -> None:
         try:

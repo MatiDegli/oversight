@@ -38,7 +38,7 @@ NOW = datetime(2026, 10, 26, 12, 0, tzinfo=UTC)
 GIT_TIMEOUT_S = 29.0
 SERVER_EVENT: TypeAdapter[Any] = TypeAdapter(ServerEvent)
 
-type Mode = Literal["fail", "timeout", "after"]
+type Mode = Literal["fail", "timeout", "after", "cancel"]
 
 
 @dataclass
@@ -59,7 +59,8 @@ class Call:
 
 class FaultyWorkspace(Workspace):
     """Records every git call, and fails or times out the armed ones: "fail" and "timeout" never
-    run git, "after" runs it and then reports a timeout."""
+    run git, "after" runs it and then reports a timeout, "cancel" runs it and then cancels the
+    calling task, which waits on an event that never comes."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -89,10 +90,15 @@ class FaultyWorkspace(Workspace):
                 fault.left -= 1
                 if not self.operations.holds(main=tree.agent_id is None, agent_id=tree.agent_id):
                     raise LockOrderError("an armed git call without the tree's lock")
-                if fault.mode == "after":
+                if fault.mode in ("after", "cancel"):
                     real = await super().git(
                         tree, *args, timeout_s=timeout_s, author=author, date=date
                     )
+                    if fault.mode == "cancel":
+                        current = asyncio.current_task()
+                        assert current is not None
+                        current.cancel()
+                        await asyncio.Event().wait()
                     return replace(real, returncode=None, timed_out=True)
                 if fault.mode == "timeout":
                     return ProcessResult(None, "", "", True, False, 0)

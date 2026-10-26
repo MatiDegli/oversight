@@ -186,3 +186,44 @@ async def test_decision_cancelled_before_it_starts(h: Harness, decision: str) ->
     [resolved] = h.payloads(ChangeResolved)
     assert (resolved.decision, resolved.comment) == ("rejected", "After the cancel.")
     assert h.types()[-1] == "agent.status"
+
+
+@bounded
+async def test_cancel_mid_merge_aborts_to_pre(h: Harness) -> None:
+    """Cancelled after `merge --no-commit`: main goes back to `pre`, an `error` says so, and the
+    change is ready again."""
+    await h.run_agent(1, EDIT)
+    pre = await h.main_head()
+    h.workspace.arm("merge", mode="cancel")
+
+    with pytest.raises(asyncio.CancelledError):
+        await h.manager.approve("change-1", None)
+
+    await assert_main_clean_at(h, pre)
+    [error] = h.payloads(ErrorReport)
+    assert "was cancelled. main is unchanged" in error.message
+    assert h.payloads(ChangeResolved) == []
+    await h.manager.approve("change-1", None)
+    assert [r.merge for r in h.payloads(ChangeResolved)] == ["merged"]
+
+
+@bounded
+async def test_cancel_after_the_merge_commit_records_it(h: Harness) -> None:
+    """Cancelled after the merge commit: the landed merge closes out, an `error` says so, and the
+    next `open` cleans up."""
+    await h.run_agent(1, EDIT)
+    h.workspace.arm("commit", mode="cancel")
+
+    with pytest.raises(asyncio.CancelledError):
+        await h.manager.approve("change-1", None)
+
+    [resolved] = h.payloads(ChangeResolved)
+    assert (resolved.merge, resolved.merge_commit) == ("merged", await h.main_head())
+    assert h.types()[-4:] == ["change.resolved", "graph.delta", "agent.status", "error"]
+    assert "was cancelled. the merge landed" in h.payloads(ErrorReport)[0].message
+    assert (await h.main_git("status", "--porcelain")).stdout == ""
+
+    await h.open(2)
+
+    assert not h.worktree_dir("agent-1").exists()
+    assert not await h.has_branch("agent-1")
