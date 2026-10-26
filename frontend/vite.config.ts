@@ -15,6 +15,7 @@ const apiPaths = ["/agents", "/changes", "/events", "/files", "/graph", "/health
 export default defineConfig({
   ...(cacheDir === undefined || cacheDir === "" ? {} : { cacheDir }),
   plugins: [react(), tailwindcss()],
+  worker: { format: "es" },
   resolve: {
     alias: {
       "@contracts": fileURLToPath(new URL("../contracts/generated/contracts.ts", import.meta.url)),
