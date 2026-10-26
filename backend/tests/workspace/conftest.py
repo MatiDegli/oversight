@@ -5,10 +5,15 @@ import ctypes
 import errno
 import os
 import select
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 
 import pytest
+
+from oversight.workspace import Workspace, run_process
+from oversight.workspace.core import UV_PASSTHROUGH
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture(scope="session")
@@ -89,3 +94,110 @@ def _wait_gone(pid: int, deadline_s: float = 10.0) -> None:
 @pytest.fixture
 def wait_gone() -> Callable[[int], None]:
     return _wait_gone
+
+
+TEMPLATE_FILES = {
+    "pyproject.toml": "[tool.pytest.ini_options]\ntestpaths = ['tests']\npythonpath = ['.']\n",
+    "shop/__init__.py": "",
+    "shop/mod.py": "def value() -> int:\n    return 1\n",
+    "tests/test_mod.py": (
+        "from shop.mod import value\n\n\ndef test_value() -> None:\n    assert value() == 1\n"
+    ),
+}
+
+
+def write_tree(root: Path, files: dict[str, str]) -> Path:
+    for name, text in files.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    return root
+
+
+@pytest.fixture
+def template(tmp_path: Path) -> Path:
+    """A small template, with junk the copy must skip."""
+    root = write_tree(tmp_path / "template", TEMPLATE_FILES)
+    write_tree(root, {"shop/__pycache__/mod.cpython-312.pyc": "x", ".venv/bin/python": "x"})
+    return root
+
+
+MakeWorkspace = Callable[..., Workspace]
+
+
+@pytest.fixture
+def make_workspace(tmp_path: Path, template: Path) -> Iterator[MakeWorkspace]:
+    """Build a Workspace on a fresh `.runtime`; the runtime locks are released at the end."""
+    created: list[Workspace] = []
+
+    def make(
+        name: str = "rt", *, source: Path | None = None, demo_python: Path | None = None
+    ) -> Workspace:
+        root = tmp_path / name / ".runtime"
+        root.parent.mkdir(exist_ok=True)
+        workspace = Workspace(root, source or template, pytest_pin="9.1.1", demo_python=demo_python)
+        created.append(workspace)
+        return workspace
+
+    yield make
+    for workspace in created:
+        workspace.release_runtime()
+
+
+@pytest.fixture
+async def workspace(anyio_backend: str, make_workspace: MakeWorkspace) -> Workspace:
+    """A workspace that is started: runtime lock taken, reset done."""
+    started = make_workspace()
+    await started.acquire_runtime()
+    await started.reset()
+    return started
+
+
+GitOut = Callable[..., Awaitable[str]]
+
+
+@pytest.fixture
+def git_out(tmp_path: Path) -> GitOut:
+    """Run git for inspection, outside the workspace's own runner, in a clean environment."""
+
+    async def run(cwd: Path, *args: str, check: bool = True) -> str:
+        env = {"HOME": str(tmp_path), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"}
+        result = await run_process(["git", *args], cwd=cwd, timeout_s=30, env=env)
+        if check:
+            assert result.returncode == 0, result.stderr
+        return result.stdout
+
+    return run
+
+
+@pytest.fixture(scope="session")
+def demo_python(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The demo repo's environment, built once per session from tools/demo-venv-requirements.txt."""
+    root = tmp_path_factory.mktemp("demo-venv-build")
+    venv = root / "venv"
+    python = venv / "bin" / "python"
+    env = {k: v for k, v in os.environ.items() if k in UV_PASSTHROUGH or k.startswith("UV_")}
+    requirements = REPO_ROOT / "tools" / "demo-venv-requirements.txt"
+
+    async def build() -> None:
+        uv = ["uv", "--no-config"]
+        steps = [
+            [*uv, "venv", "--quiet", "--python", "3.12", str(venv)],
+            [*uv, "pip", "install", "--quiet", "--python", str(python), "-r", str(requirements)],
+        ]
+        for argv in steps:
+            result = await run_process(argv, cwd=root, timeout_s=300, env=env)
+            assert result.returncode == 0, result.stderr
+
+    asyncio.run(build())
+    return python
+
+
+@pytest.fixture
+def repo_root() -> Path:
+    return REPO_ROOT
+
+
+@pytest.fixture
+def write_tree_files() -> Callable[[Path, dict[str, str]], Path]:
+    return write_tree
