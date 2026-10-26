@@ -8,8 +8,6 @@ import sys
 import textwrap
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[2]
 CAPPED = ROOT / "frontend" / "shots" / "capped.sh"
 BASH = shutil.which("bash") or "/usr/bin/bash"
@@ -131,8 +129,7 @@ def test_the_detector_runs_under_the_cap(tmp_path: Path) -> None:
     assert any(line.startswith(CAP_OPTIONS) and f"-- {detector} detect" in line for line in log)
 
 
-@pytest.mark.parametrize("script", ["run.sh"])
-def test_the_captures_run_under_the_cap(script: str) -> None:
+def test_the_captures_run_under_the_cap() -> None:
     """The capture's node process, which holds Chrome, starts through capped.sh."""
-    text = (ROOT / "frontend" / "shots" / script).read_text()
+    text = (ROOT / "frontend" / "shots" / "run.sh").read_text()
     assert "bash frontend/shots/capped.sh \\\n  node frontend/shots/capture.ts" in text

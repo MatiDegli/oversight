@@ -25,7 +25,7 @@ MIB = 2**20
 CHILD_MIB = 200  # what a child holds in the process-tree tests
 INNER_CAP_GB = "0.3"  # the cap of the inner runs: 307 MB, above the ~80 MB of a bare pytest
 INNER_MIB = 600  # what an inner test allocates, twice the cap
-INNER_WAIT_S = 30  # how long an inner test waits for the cap to end it; never reached when it works
+INNER_WAIT_S = 30  # how long an inner test, or its child, waits for the cap to end it
 RUN_DEADLINE_S = 120  # how long this test waits for an inner pytest
 
 # Starts a process that holds CHILD_MIB resident, says "ready <pid>" on stdout, and waits for its
@@ -193,7 +193,7 @@ def inner_pytest(
     )
 
 
-def wait_for_eof(descriptor: int, deadline_s: float = 20.0) -> bool:
+def wait_for_eof(descriptor: int, deadline_s: float = 15.0) -> bool:
     """Whether the read end of a pipe reaches end of file within the deadline: every process that
     held its write end is gone. The wait is on that event, so it does not depend on whose child
     the processes were."""
@@ -239,13 +239,14 @@ def test_a_child_that_outgrows_the_cap_ends_the_run_and_dies_with_it(tmp_path: P
             import os, subprocess, sys, threading
             from pathlib import Path
 
+            # The child does not end when its parent does: only the watchdog's kill ends it early.
             HOLDER = (
-                "import os, sys; blob = b'x' * ({INNER_MIB} * 2**20); "
-                "print(os.getpid(), flush=True); sys.stdin.read()"
+                "import os, threading; blob = b'x' * ({INNER_MIB} * 2**20); "
+                "print(os.getpid(), flush=True); threading.Event().wait({INNER_WAIT_S})"
             )
 
             def test_child_grows():
-                child = subprocess.Popen([sys.executable, "-c", HOLDER], stdin=subprocess.PIPE,
+                child = subprocess.Popen([sys.executable, "-c", HOLDER],
                                          stdout=subprocess.PIPE, text=True,
                                          pass_fds=({write_end},))
                 assert child.stdout is not None
