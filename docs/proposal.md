@@ -1,7 +1,8 @@
 # Proposal: structure, contracts v1, and build order
 
 Status: approved by the maintainer on 2026-10-26, with his answers to section 8 folded in. The
-controls in section 7 were added the same day at his request. Times are in Argentina time (ART,
+controls in section 7 were added the same day at his request, and merge approval moved to the
+coordinator, with the critical decisions kept by the maintainer (section 7). Times are in Argentina time (ART,
 UTC-3). [AGENTS.md](../AGENTS.md) stays the brief; this document adds what
 it does not settle and does not repeat it.
 
@@ -610,7 +611,7 @@ the single error format.
   2. The maintainer decides.
   3. The coordinator makes one PR on `contracts/<topic>`: the models, the version, `make contracts`,
      the fixtures, and a line in DECISIONS.md.
-  4. `make check` passes, and the maintainer merges.
+  4. `make check` passes, the maintainer approves the change, and the coordinator merges it.
   5. Open branches merge main.
 
 ## 5. Modules in order
@@ -623,16 +624,16 @@ result. The days assume the build period starts on Tuesday at 01:00. The owners 
 | --- | --- | --- | --- | --- | --- |
 | 1 | Skeleton and tooling | Tue | approval | coordinator | `make setup && make check` passes on the empty skeleton, `make dev` serves a blank page through the proxy, and the commit-msg hook rejects a bad subject and an oversized commit |
 | 2 | Contracts v1 | Tue | 1 | coordinator; the maintainer approves | `make contracts && git diff --exit-code contracts/generated` and `uv run pytest contracts` |
-| 3 | Event store, SSE, fake player, hand-written log | Tue | 2 | coordinator | `uv run pytest backend/tests/events` (seq strictly increasing under two writers, resume after Last-Event-ID, every fixture valid), and `make replay` streams with `curl -N` |
+| 3 | Event store, SSE, fake player, hand-written log | Tue | 2 | strong-tier subagent | `uv run pytest backend/tests/events` (seq strictly increasing under two writers, resume after Last-Event-ID, every fixture valid), and `make replay` streams with `curl -N` |
 | 4 | Smoke test | Tue | 3 | support | `make smoke` exits 0 from a clean clone |
 | 5 | Docs | Tue | 2 | coordinator | ARCHITECTURE.md, DECISIONS.md, the README section and the DEVLOG line, reviewed by the maintainer |
-| 6 | API probe | Tue | key and credits | coordinator, on the maintainer's OK | `uv run python tools/probe_api.py meta`, then `baseten`, writes `docs/api-probe.md`; it decides native tools or the JSON fallback, and agent B's route |
-| 7 | Demo repo | Tue | none | support | `make demo-repo-check`: its tests pass in its own environment |
-| 8 | Graph core | Tue to Wed | 2, 7 | coordinator; name resolution with a strong-tier subagent | `uv run pytest backend/tests/graph`: one test per graph rule, a golden snapshot of the demo repo, deltas, change graphs, and the cone's limits and omitted counts |
+| 6 | API probe | Tue | key and credits | backend implementer, on the maintainer's OK | `uv run python tools/probe_api.py meta`, then `baseten`, writes `docs/api-probe.md`; it decides native tools or the JSON fallback, and agent B's route |
+| 7 | Demo repo | Mon | none | backend implementer; merged in PR #1 | `make demo-repo-check`: its tests pass in its own environment |
+| 8 | Graph core | Tue to Wed | 2, 7 | strong-tier subagent | `uv run pytest backend/tests/graph`: one test per graph rule, a golden snapshot of the demo repo, deltas, change graphs, and the cone's limits and omitted counts |
 | 9 | Frontend foundation | Tue to Wed | 2, 3's log | frontend | `pnpm -C frontend test` (the reducer over the fixture logs) and `pnpm -C frontend build` |
 | 10 | Graph view | Wed | 9 | frontend | vitest on the state-to-elements mapping, and `make replay` shows the preset layout; taxi edges tried on Tuesday |
-| 11 | Workspace and git | Wed | 2 | backend implementer; plan reviewed first | `uv run pytest backend/tests/workspace`: worktree lifecycle, escaping paths and symlinks refused, timeouts kill the process group, pytest results parsed |
-| 12 | Agent runtime | Wed | 6, 8, 11 | coordinator for the loop, backend implementer for the tools | `uv run pytest backend/tests/agents`: a whole task through the fake model, the edit_file rules, the no-progress stop, the step limit |
+| 11 | Workspace and git | Wed | 2 | strong-tier subagent for the plan, reviewed first; backend implementer | `uv run pytest backend/tests/workspace`: worktree lifecycle, escaping paths and symlinks refused, timeouts kill the process group, pytest results parsed |
+| 12 | Agent runtime | Wed | 6, 8, 11 | strong-tier subagent for the loop, backend implementer for the tools | `uv run pytest backend/tests/agents`: a whole task through the fake model, the edit_file rules, the no-progress stop, the step limit |
 | 13 | Agent card and live diff | Wed | 10 | frontend | vitest on the card and diff states over the fixture logs |
 | 14 | Playwright over replay | Wed to Thu | 13 | frontend or support | `make e2e` checks level 1's definition of done on a log |
 | 15 | Change manager, level 1 | Thu | 8, 11, 12 | strong-tier subagent; plan reviewed first | `uv run pytest backend/tests/changes`: propose, approve as a merge, reject as a discard |
@@ -722,24 +723,23 @@ Details: <path, for anything longer than about 2,500 characters>
 
 ## 7. Development flow
 
-**Roles.** The maintainer approves the routing; the coordinator keeps it with machine details
-outside this repository.
+**Roles.** The coordinator sets the routing and the effort per task, and keeps them with machine
+details outside this repository.
 
 | Role | Who |
 | --- | --- |
-| Decides, owns `contracts/`, approves every merge | the maintainer |
-| Coordinator: plans fronts, writes briefs, verifies hand-backs, prepares merges; builds graph core, the event bus and integration | Claude Code (Opus) |
-| Hard backend parts: name resolution, the change manager, merges | Claude Opus subagent |
+| Decides the critical questions and owns `contracts/` | the maintainer |
+| Coordinator: plans fronts, writes briefs, verifies hand-backs, approves and makes merges; builds the skeleton and the contracts, then writes no product code, only manifests, lockfiles, docs and merges | Claude Code (Opus) |
+| The critical path and the hard backend parts: the event bus, graph core, the agent runtime, the change manager | Claude Opus subagent |
 | Bounded backend tasks: endpoints, glue, tests | Claude Sonnet subagent |
-| Mechanical steps: surveys, formatting, reruns | Claude Haiku |
 | Frontend: graph view, Monaco, panels | Codex |
-| Support: demo repo, tests, smoke scripts | GLM, once the maintainer approves it for this repository; until then, Sonnet |
+| Support and mechanical steps: test additions, smoke scripts, surveys, formatting, reruns; no design and no new module | GLM; Claude Haiku or Sonnet when GLM is out of quota |
 | Independent review | a model from another provider than the author's: Claude reviews Codex's changes, Codex reviews Claude's |
 
 - Muse is not used to build Oversight. The Meta API is called only from inside the product: its
   agents, the probe, and recorded demo runs.
-- Concurrency starts at one heavy writer per provider plus two helpers, and rises after a clean
-  run. Every headless run states its permission mode and turn limit.
+- At least four writers run at once, at least one per lane: the critical path, the frontend,
+  bounded backend work, and support. Helpers are the first to stop when usage runs ahead of pace. Every headless run states its permission mode and turn limit.
 - Every worker stays inside its own worktree and is launched confined where its tool allows. Review
   looks for code that reads as if it came from elsewhere.
 
@@ -750,7 +750,12 @@ outside this repository.
 3. A reviewer from the other provider checks correctness against the brief and the contracts.
 4. Each finding goes back to its front as a fix round, to a fresh agent; the coordinator never
    commits fixes on a worker's branch.
-5. The maintainer approves the merge.
+5. The coordinator approves the merge once the checks pass on the merged result and the review has
+   no open finding; its own changes always get Codex's review.
+
+The maintainer makes the critical decisions: contracts v1 and any later contract change, spending
+Meta credits, scope and level cuts, the demo script, a new top-level directory or backend module,
+and publication, tags and GitHub settings.
 
 Changes to lifecycle, deletion or gates start with a one-page plan reviewed before any code: the
 workspace reset, worktree removal, the change manager's merge and discard, path validation, and the
@@ -765,8 +770,8 @@ contract-scope check.
 - Before asking for approval: `make check`, plus `make e2e` for frontend fronts, on the merged
   result. The merge commit names what passed in a trailer, such as `Checked: make check, make e2e`;
   if main moved after the check, the check runs again.
-- Merges into main are `--no-ff`, so each front shows in the history, and they are pushed after the
-  maintainer approves.
+- Merges into main are `--no-ff`, so each front shows in the history, and the coordinator pushes
+  them once approved.
 
 **Controls.** Each one is cheap and closes a gap that review alone leaves open. A hook can be
 skipped, and a skipped check is not a pass, so the record that counts is the coordinator's rerun on
@@ -797,14 +802,13 @@ Left out, because they cost more than they return in nine days:
 
 **Daily rhythm (ART).**
 
-- **Morning, 15 minutes:** the maintainer reads the DEVLOG and the state record, and approves the
-  day's briefs.
-- **Day:** fronts run in parallel; the coordinator verifies hand-backs as they arrive and queues
-  merges for approval.
-- **Evening:** only long unattended work, such as test runs and bounded refactors; nothing merges
-  without the maintainer.
-- **Night:** integrate into main, run `make smoke` and the level's demo, add the DEVLOG line, and take
-  a screenshot or a clip.
+- **Morning, 15 minutes:** the maintainer reads the night's report and settles the critical
+  decisions it raises.
+- **Day:** fronts run in parallel; the coordinator verifies hand-backs as they arrive and merges
+  what passes.
+- **Evening:** only long unattended work, such as test runs and bounded refactors.
+- **Night:** run `make smoke` and the level's demo on main, add the DEVLOG line, and send the
+  maintainer a short report: what merged, its evidence, and a screenshot or a clip of the UI.
 
 **Makefile.**
 
