@@ -11,7 +11,12 @@ import type { GraphSnapshot, ServerEvent } from "@contracts";
 import cytoscape from "cytoscape";
 import { describe, expect, it } from "vitest";
 
-import { generateLayout, serializePositions, updateReplay } from "../../tools/layout.ts";
+import {
+  generateLayout,
+  serializePositions,
+  updateReplay,
+  watchViewport,
+} from "../../tools/layout.ts";
 import { applyEvent, createInitialState } from "../state";
 import { themes } from "../theme";
 
@@ -27,6 +32,17 @@ const generated = generateLayout(snapshot);
 function required<T>(value: T | undefined): T {
   assert.ok(value !== undefined);
   return value;
+}
+
+/** The demo's graph as Cytoscape renders it headless, with production nodes only. */
+function renderedDemo(positions: GraphSnapshot["positions"]) {
+  return cytoscape({
+    headless: true,
+    styleEnabled: true,
+    elements: graphElements({ ...createInitialState(), graph: { ...snapshot, positions } }),
+    style: graphStyles(themes.dark),
+    layout: { name: "preset" },
+  });
 }
 
 describe("demo preset", () => {
@@ -95,56 +111,156 @@ describe("demo preset", () => {
     }
   });
 
-  it("projects graph labels above the 15px design floor at 1920x1080 fit", () => {
-    const state = {
-      ...createInitialState(),
-      graph: { ...snapshot, positions: generated.positions },
-    };
-    const cy = cytoscape({
-      headless: true,
-      styleEnabled: true,
-      elements: graphElements(state),
-      style: graphStyles(themes.dark),
-      layout: { name: "preset" },
-    });
+  it("sizes the preset for the watch viewport that DESIGN.md gives the graph", () => {
+    // DESIGN.md, Layout: a 1920x1080 take has a 52px top bar, a 56px rail and a 400px agents panel
+    // in watch mode, so the graph gets 1464x1028; the camera fits it with 40px of padding.
+    expect(watchViewport).toEqual({ width: 1464 - 80, height: 1028 - 80 });
+  });
+
+  it("projects graph labels at design size at the watch viewport's fit", () => {
+    const cy = renderedDemo(generated.positions);
     try {
       const bounds = cy.elements().boundingBox();
-      const zoom = Math.min((1920 - 80) / bounds.w, (1080 - 80) / bounds.h);
-      expect(Number.parseFloat(themes.dark["body-size"]) * zoom).toBeGreaterThanOrEqual(15);
+      const zoom = Math.min((1464 - 80) / bounds.w, (1028 - 80) / bounds.h);
+      const label = Number.parseFloat(themes.dark["body-size"]) * zoom;
+      // DESIGN.md sets graph labels at 15px; at fit the preset must not shrink them below that.
+      expect(label).toBeGreaterThanOrEqual(15);
     } finally {
       cy.destroy();
     }
   });
 
-  it("produces byte-identical output in separate node processes and for reversed input", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "oversight-layout-"));
+  it("draws a module or class without children at leaf size, in the container's colors", () => {
+    const cy = renderedDemo(generated.positions);
     try {
-      const paths = [join(directory, "first.json"), join(directory, "second.json")];
-      for (const output of paths)
-        await promisify(execFile)(
-          process.execPath,
-          [fileURLToPath(new URL("frontend/tools/layout.ts", root)), "--output", output],
-          { timeout: 30_000 },
-        );
-      expect(readFileSync(required(paths[0]), "utf8")).toBe(
-        readFileSync(required(paths[1]), "utf8"),
+      const leaf = cy.nodes(".function").first();
+      const childless = cy.nodes(".module:childless, .class:childless").toArray();
+      expect(childless.map((n) => n.id())).toEqual(
+        expect.arrayContaining(["shop", "shop.models:OrderLine", "shop.inventory:OutOfStock"]),
       );
-      expect(readFileSync(required(paths[0]), "utf8")).toBe(
-        serializePositions(generated.positions),
-      );
-      expect(
-        serializePositions(
-          generateLayout({
-            ...snapshot,
-            nodes: [...snapshot.nodes].reverse(),
-            edges: [...snapshot.edges].reverse(),
-          }).positions,
-        ),
-      ).toBe(serializePositions(generated.positions));
+      for (const node of childless) {
+        expect([node.id(), node.outerWidth(), node.outerHeight()]).toEqual([
+          node.id(),
+          leaf.outerWidth(),
+          leaf.outerHeight(),
+        ]);
+        expect(node.style("text-valign")).toBe("center");
+        // Still a container to the eye: the module frame's fill, border and label color.
+        expect(node.style("border-color")).not.toBe(leaf.style("border-color"));
+        expect(node.style("color")).not.toBe(leaf.style("color"));
+      }
+      for (const node of cy.nodes(".module:parent, .class:parent").toArray())
+        expect(node.style("text-valign")).toBe("top");
     } finally {
-      rmSync(directory, { recursive: true, force: true });
+      cy.destroy();
     }
   });
+
+  it("reserves leaf size for a childless module or class, and every rendered box fits its block", () => {
+    const blocks = new Map(generated.blocks.map((b) => [b.id, b]));
+    const leaf = required(blocks.get("shop.cart:Cart.add"));
+    for (const id of ["shop", "shop.models:OrderLine", "shop.inventory:OutOfStock"])
+      expect(required(blocks.get(id)).height, id).toBe(leaf.height);
+    const cy = renderedDemo(generated.positions);
+    try {
+      for (const node of cy.nodes().toArray()) {
+        const box = node.boundingBox({ includeLabels: false, includeOverlays: false });
+        const block = required(blocks.get(node.id()));
+        // The positions are block centers; a rendered body must stay inside its reserved block,
+        // give or take the strokes Cytoscape adds to a compound's bounding box (under 2px).
+        expect(box.x1, node.id()).toBeGreaterThanOrEqual(block.x - 2);
+        expect(box.y1, node.id()).toBeGreaterThanOrEqual(block.y - 2);
+        expect(box.x2, node.id()).toBeLessThanOrEqual(block.x + block.width + 2);
+        expect(box.y2, node.id()).toBeLessThanOrEqual(block.y + block.height + 2);
+      }
+    } finally {
+      cy.destroy();
+    }
+  });
+
+  it("keeps siblings apart inside every module and class, below the label band", () => {
+    const font = Number.parseFloat(themes.dark["body-size"]);
+    const blocks = new Map(generated.blocks.map((b) => [b.id, b]));
+    const siblings = new Map<string, GraphSnapshot["nodes"]>();
+    for (const node of snapshot.nodes)
+      if (node.parent_id)
+        siblings.set(node.parent_id, [...(siblings.get(node.parent_id) ?? []), node]);
+    expect(siblings.size).toBeGreaterThan(10);
+    for (const [parentId, group] of siblings) {
+      const parent = required(blocks.get(parentId));
+      for (const [i, a] of group.entries()) {
+        const x = required(blocks.get(a.id));
+        // The label band: the parent's top `font` px, where the label above the frame is drawn
+        // (headless Cytoscape has no text metrics, so the label's own box is not measured).
+        expect(x.y, a.id).toBeGreaterThanOrEqual(parent.y + font);
+        for (const b of group.slice(i + 1)) {
+          const y = required(blocks.get(b.id));
+          expect(
+            x.x + x.width <= y.x ||
+              y.x + y.width <= x.x ||
+              x.y + x.height <= y.y ||
+              y.y + y.height <= x.y,
+            `${a.id} overlaps ${b.id}`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("orders siblings by code unit, not by the ICU collation of the build", () => {
+    // "Zeta" sorts before "alpha" by code unit and after it by locale: only the first is portable.
+    const parent = required(snapshot.nodes.find((n) => n.kind === "module" && !n.is_test));
+    const leaf = required(snapshot.nodes.find((n) => n.kind === "function" && !n.is_test));
+    const child = (name: string) => ({
+      ...leaf,
+      id: `${parent.id}.${name}`,
+      name,
+      qualname: name,
+      parent_id: parent.id,
+    });
+    const { positions } = generateLayout({
+      ...snapshot,
+      nodes: [parent, child("alpha"), child("Zeta")],
+      edges: [],
+    });
+    const zeta = required(positions[`${parent.id}.Zeta`]);
+    const alpha = required(positions[`${parent.id}.alpha`]);
+    expect(zeta.y < alpha.y || (zeta.y === alpha.y && zeta.x < alpha.x)).toBe(true);
+  });
+
+  it(
+    "produces byte-identical output in separate node processes and for reversed input",
+    { timeout: 60_000 },
+    async () => {
+      const directory = mkdtempSync(join(tmpdir(), "oversight-layout-"));
+      try {
+        const paths = [join(directory, "first.json"), join(directory, "second.json")];
+        for (const output of paths)
+          await promisify(execFile)(
+            process.execPath,
+            [fileURLToPath(new URL("frontend/tools/layout.ts", root)), "--output", output],
+            { timeout: 30_000 },
+          );
+        expect(readFileSync(required(paths[0]), "utf8")).toBe(
+          readFileSync(required(paths[1]), "utf8"),
+        );
+        expect(readFileSync(required(paths[0]), "utf8")).toBe(
+          serializePositions(generated.positions),
+        );
+        expect(
+          serializePositions(
+            generateLayout({
+              ...snapshot,
+              nodes: [...snapshot.nodes].reverse(),
+              edges: [...snapshot.edges].reverse(),
+            }).positions,
+          ),
+        ).toBe(serializePositions(generated.positions));
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("updates only snapshot positions, preserves other event bytes and is idempotent", () => {
     expect(updateReplay(fixture, generated.positions)).toBe(fixture);

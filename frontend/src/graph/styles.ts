@@ -55,16 +55,20 @@ export function graphStyles(
       },
     },
     {
+      // A module or class keeps its frame colors with or without children, so it still reads as a
+      // container; only a parent gets the padding and the label above it.
       selector: "node.module, node.class",
       style: {
-        "text-valign": "top",
-        padding: `${String(px(theme["spacing-md"]) * 3)}px`,
         "background-color": theme.panel,
         "background-opacity": theme["module-opacity"],
         "border-color": theme["card-border"],
         "corner-radius": theme["radius-module"],
         color: theme["module-label"],
       },
+    },
+    {
+      selector: "node.module:parent, node.class:parent",
+      style: { "text-valign": "top", padding: `${String(px(theme["spacing-md"]) * 3)}px` },
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
       (["A", "B"] as const).map((slot) => {
