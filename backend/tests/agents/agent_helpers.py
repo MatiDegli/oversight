@@ -37,19 +37,28 @@ SMALL_TEMPLATE = {
 
 
 class Recorder:
-    """Events and sink calls, in the order they happened."""
+    """Events and sink calls, in the order they happened. `edit_result` and `propose_result` are
+    what the sink answers: a bool, or an exception to raise."""
 
     def __init__(self) -> None:
         self.log: list[tuple[str, object]] = []
+        self.edit_result: bool | Exception = True
+        self.propose_result: bool | Exception = True
 
     async def publish(self, payload: EventPayload) -> None:
         self.log.append((type(payload).__name__, payload))
 
-    async def file_edited(self, agent_id: str, path: str) -> None:
+    async def file_edited(self, agent_id: str, path: str) -> bool:
         self.log.append(("sink.file_edited", (agent_id, path)))
+        if isinstance(self.edit_result, Exception):
+            raise self.edit_result
+        return self.edit_result
 
-    async def proposed(self, agent_id: str, summary: str | None) -> None:
+    async def proposed(self, agent_id: str, summary: str | None) -> bool:
         self.log.append(("sink.proposed", (agent_id, summary)))
+        if isinstance(self.propose_result, Exception):
+            raise self.propose_result
+        return self.propose_result
 
     def kinds(self) -> list[str]:
         return [kind for kind, _ in self.log]
