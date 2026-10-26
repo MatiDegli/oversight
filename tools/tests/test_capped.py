@@ -1,6 +1,7 @@
 """The hard layer of the test caps: tools/capped.sh, which puts a command in a systemd scope with a
 kernel memory limit when this machine can make one, and the Makefile line that runs pytest through
-it under an outer time bound. Each test runs the helper with a fake systemd-run on PATH, or none."""
+it under an outer time bound (tools/bounded.sh, in test_bounded.py). Each test runs the helper with
+a fake systemd-run on PATH, or none."""
 
 import os
 import re
@@ -135,12 +136,13 @@ def make_dry_run(*variables: str) -> list[str]:
 
 
 def test_make_runs_pytest_through_the_helper_under_the_outer_bound() -> None:
-    """The whole run, setup and teardown included, is bounded by `timeout`, which ends the process
-    group and kills it 30 s later, and runs in the scope: every line that runs pytest says so."""
+    """The whole run, setup and teardown included, goes through bounded.sh, which says so when its
+    bound ends it, and runs in the scope: every line that runs pytest says both. The bound is 900 s
+    because GitHub cancels the CI job at 20 minutes, with install and lint before the tests."""
     lines = [line for line in make_dry_run() if " pytest" in line]
     assert len(lines) == 1, lines
     assert re.fullmatch(
-        r"timeout --kill-after=30 1200 bash tools/capped\.sh 10G env .* uv run --frozen pytest",
+        r"bash tools/bounded\.sh 900 bash tools/capped\.sh 10G env .* uv run --frozen pytest",
         lines[0],
     ), lines[0]
 
@@ -148,4 +150,4 @@ def test_make_runs_pytest_through_the_helper_under_the_outer_bound() -> None:
 def test_the_outer_bound_can_be_set_for_one_run() -> None:
     lines = [line for line in make_dry_run("RUN_TIMEOUT=7") if " pytest" in line]
     assert len(lines) == 1, lines
-    assert lines[0].startswith("timeout --kill-after=30 7 bash tools/capped.sh 10G "), lines[0]
+    assert lines[0].startswith("bash tools/bounded.sh 7 bash tools/capped.sh 10G "), lines[0]

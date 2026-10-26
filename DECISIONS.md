@@ -72,9 +72,13 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
     since a cold run on a slow network may spend longer than that building the demo environment
     (its uv steps carry limits of their own, 300 s each, as does the ESLint run). A test that needs
     more says so with `@pytest.mark.timeout(seconds)`. That leaves setup and teardown unbounded (a
-    child that never opens a FIFO can block the executor's shutdown), so `make check` also wraps the
-    whole pytest run in `timeout --kill-after=30 1200`: after 20 minutes it ends the process group,
-    and 30 s later kills it. `RUN_TIMEOUT` overrides the 1200 for one run.
+    child that never opens a FIFO can block the executor's shutdown), so `make check` also runs the
+    whole pytest run through `tools/bounded.sh`, which wraps it in `timeout --kill-after=30 900`:
+    after 15 minutes it ends the process group, and 30 s later kills it, and one `TIME BOUND:` line
+    on stderr names the bound, so a CI log and a local run both say what happened instead of a bare
+    124 or 137 (a status of 124 or 137 from the command itself, before the bound, gets no line).
+    900 s and not 1200: GitHub cancels the CI job at 20 minutes, install and lint come first, and a
+    cancelled job prints nothing. `RUN_TIMEOUT` overrides the 900 for one run.
   - *Chrome:* `frontend/shots/capped.sh`, the one helper `make shots` uses for the capture and the
     detector, runs the command under the same helper with a limit of 6G, so the two caps share one
     piece of logic.

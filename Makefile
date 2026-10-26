@@ -62,13 +62,14 @@ smoke: ## start the backend and check /health and /graph
 # test, and pyproject.toml gives each test body 120 s (pytest-timeout). The hard one, here: pytest
 # runs through tools/capped.sh, in a systemd scope with a kernel limit of 10G and no swap when this
 # machine has a user manager (the kernel counts shared pages once and ends only what is in the
-# scope), and plain when it has none. `timeout` bounds the whole run, setup and teardown included,
-# which pytest-timeout leaves open: after RUN_TIMEOUT seconds it ends the process group, and 30 s
-# later kills it.
-RUN_TIMEOUT ?= 1200
-PYTEST_RUN := timeout --kill-after=30 $(RUN_TIMEOUT) bash tools/capped.sh 10G $(UV) pytest
+# scope), and plain when it has none. tools/bounded.sh bounds the whole run, setup and teardown
+# included, which pytest-timeout leaves open: after RUN_TIMEOUT seconds it ends the process group,
+# 30 s later kills it, and prints one TIME BOUND line naming the bound. 900 s, not more: GitHub
+# cancels the CI job at 20 minutes, install and lint come first, and a cancelled job says nothing.
+RUN_TIMEOUT ?= 900
+PYTEST_RUN := bash tools/bounded.sh $(RUN_TIMEOUT) bash tools/capped.sh 10G $(UV) pytest
 
-check: check-python check-contracts check-frontend check-secrets ## every gate; tests capped at 10G, 120 s each and 20 min in all; no credits
+check: check-python check-contracts check-frontend check-secrets ## every gate; tests capped at 10G, 120 s each and 15 min in all; no credits
 
 check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
 
