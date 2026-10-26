@@ -41,6 +41,7 @@ export const themes = {
     background: "#000000",
     added: "#6fd08a",
     removed: "#ff6464",
+    // Destructive text and icons (Reject, Stop) use failed-text.
     destructive: "#ff6464",
     "agent-a-tint": { color: "#ff5c1f", alpha: 0.14 },
     "agent-b-tint": { color: "#4f7dff", alpha: 0.16 },

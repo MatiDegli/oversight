@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 
+import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
 import { getActiveTheme, themes } from "./index";
 
 const css = readFileSync(new URL("./index.css", import.meta.url), "utf8");
+const ts = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const design = readFileSync(new URL("../../../DESIGN.md", import.meta.url), "utf8");
 const tokens = themes.dark;
 // Monaco consumes these through TypeScript, so none may appear in CSS.
@@ -19,6 +21,8 @@ const tsOnly = [
   "span-highlight",
   "fold-tint",
 ] as const;
+const radiusBlock = /@theme\s*\{([^}]+)\}/;
+const rootBlock = /:root\s*\{([^}]+)\}/;
 const themeBlock = /@theme inline\s*\{([^}]+)\}/;
 const darkBlock = /:root:not\(\[data-theme\]\),\s*:root\[data-theme="dark"\]\s*\{([^}]+)\}/;
 
@@ -37,7 +41,18 @@ function declarations(block: string): Record<string, string> {
   return Object.fromEntries(entries);
 }
 
-const shared = declarations(darkBlock.exec(css)?.[1] ?? "");
+const colors = Object.entries(tokens).filter(
+  ([name, value]) =>
+    !tsOnly.some((token) => token === name) &&
+    (typeof value === "object" || (typeof value === "string" && value.startsWith("#"))),
+);
+const radii = Object.fromEntries(
+  Object.entries(tokens).filter(([name]) => name.startsWith("radius-")),
+);
+const { "radius-*": radiusReset, ...cssRadii } = declarations(radiusBlock.exec(css)?.[1] ?? "");
+const dark = declarations(darkBlock.exec(css)?.[1] ?? "");
+const global = declarations(rootBlock.exec(css)?.[1] ?? "");
+const shared = { ...dark, ...global, ...cssRadii };
 
 // Preserve alpha as a number instead of baking it into an eight-digit hex string.
 function rgba(red: string, green: string, blue: string, alpha: string) {
@@ -74,17 +89,20 @@ describe("theme", () => {
     expect(
       Object.fromEntries(Object.entries(shared).map(([key, value]) => [key, cssValue(value)])),
     ).toEqual(expected);
-    expect(declarations(css.replace(darkBlock, "").replace(themeBlock, ""))).toEqual({});
+    expect(
+      declarations(
+        css
+          .replace(darkBlock, "")
+          .replace(rootBlock, "")
+          .replace(radiusBlock, "")
+          .replace(themeBlock, ""),
+      ),
+    ).toEqual({});
     for (const name of tsOnly) expect(css).not.toContain(`--${name}:`);
   });
 
   it("maps every shared color to a Tailwind utility and removes the default palette", () => {
     const block = themeBlock.exec(css)?.[1] ?? "";
-    const colors = Object.entries(tokens).filter(
-      ([name, value]) =>
-        !tsOnly.some((token) => token === name) &&
-        (typeof value === "object" || (typeof value === "string" && value.startsWith("#"))),
-    );
     expect(declarations(block)).toEqual({
       "color-*": "initial",
       "font-*": "initial",
@@ -92,6 +110,51 @@ describe("theme", () => {
       "font-sans": "var(--text-font)",
       "font-mono": "var(--code-font)",
     });
+  });
+
+  it("registers design radii with Tailwind and removes default radius utilities", async () => {
+    // Use the installed defaults so a missing namespace reset cannot pass unnoticed.
+    const defaults = readFileSync(new URL(import.meta.resolve("tailwindcss/theme.css")), "utf8");
+    const compiler = await compile(
+      `${defaults}\n${css.replace(/^@import .*;$/gm, "")}\n@tailwind utilities;`,
+    );
+    const output = compiler.build([
+      ...Object.keys(radii).map((name) => name.replace("radius-", "rounded-")),
+      "rounded-lg",
+    ]);
+    for (const name of Object.keys(radii)) {
+      const utility = name.replace("radius-", "rounded-");
+      expect(output).toContain(`.${utility} {\n  border-radius: var(--${name});\n}`);
+    }
+    expect(output).not.toContain(".rounded-lg {");
+    expect(radiusReset).toBe("initial");
+    expect(cssRadii).toEqual(radii);
+  });
+
+  it("scopes only colors to dark and keeps all theme-independent tokens global", () => {
+    expect(Object.keys(dark).sort()).toEqual(colors.map(([name]) => name).sort());
+    expect(global).toEqual(
+      Object.fromEntries(
+        Object.entries(tokens)
+          .filter(
+            ([name]) =>
+              !tsOnly.some((token) => token === name) &&
+              !colors.some(([color]) => color === name) &&
+              !name.startsWith("radius-"),
+          )
+          .map(([name, value]) => [name, typeof value === "number" ? String(value) : value]),
+      ),
+    );
+  });
+
+  it("documents failed-text for destructive labels and icons", () => {
+    for (const source of [css, ts]) {
+      expect(source.match(/Destructive text and icons.*failed-text\./)?.[0]).toBe(
+        "Destructive text and icons (Reject, Stop) use failed-text.",
+      );
+    }
+    expect(cssValue(required(dark["failed-text"]))).toBe(tokens["failed-text"]);
+    expect(tokens["failed-text"]).toBe("#ff7b7b");
   });
 
   it("includes the complete DESIGN.md dark color set with its specified values", () => {
