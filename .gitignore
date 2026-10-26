@@ -1,0 +1,28 @@
+# Secrets: API keys live only in .env
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local state: the event store and agents' worktrees
+*.sqlite
+*.sqlite3
+.worktrees/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
