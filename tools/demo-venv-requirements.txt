@@ -1,0 +1,3 @@
+# The demo repo's own environment (.runtime/demo-venv/ and make demo-repo-check): run_tests uses it,
+# never the backend's.
+pytest==9.1.1
