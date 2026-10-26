@@ -1,6 +1,7 @@
 # Plan: the change manager, level 1 (front 15)
 
-Revision 2, after review round 1, before any code. Sources: `contracts/`, docs/proposal.md (3, 4.4,
+Revision 3, after review round 2: Reject accepts `broken`, and a halt on a lost worktree root
+proposes nothing (section 5). Sources: `contracts/`, docs/proposal.md (3, 4.4,
 4.5, 4.7, 5), AGENTS.md. Builds on `workspace` and `graph` on main and on `agents/runtime` 64efac4
 (`ChangeSink`, `AgentTask`, `RunEnd`, `Publish`), with section 5's change. Settled in round 1: empty
 runs are proposed and approve as a merge of nothing; `change.resolved` precedes `graph.delta`;
@@ -36,7 +37,7 @@ class WrongState(Exception): ...          # route answers wrong_state
 - **Routes.** `approve` and `reject` check and flip the state with no `await` before the flip, so a
   second click fails at once; the work runs in a tracked task and the route answers 202.
 - **States.** `working` until `run_ended`, then `ready` (proposed) or `unproposed`. Approve needs
-  `ready`; reject needs `ready`, `conflict` or `unproposed`; both enter `deciding`, which always
+  `ready`; reject needs `ready`, `conflict`, `unproposed` or `broken`; both enter `deciding`, which always
   ends, through a `finally` that decides from git facts, in `closed` (resolution sent), `conflict`,
   `ready` (main untouched) or `broken` (main in an unknown state).
 
@@ -123,7 +124,9 @@ Every git call is `Workspace.git`: asyncio, with a timeout that kills the proces
   if `MERGE_HEAD` exists, then the facts. Step 3 holds: close out as merged. Main clean at `pre`:
   `error` ("main is unchanged; approve again or reject"), back to `ready`. Otherwise, or if the
   facts cannot be read: `error`, `broken`; approve answers `WrongState` until the next start,
-  reject still works. No `reset --hard`, no lock-file removal.
+  and Reject still works: `broken` is among the states it accepts, so it closes out as usual
+  (`rejected`, then `done`) and discards the worktree and branch, leaving main to the next start's
+  `reset`. No `reset --hard`, no lock-file removal.
 - **Propose fails** at step 1, 2, 3 or 5: an `error` with `fatal` true, no `change.proposed`,
   `False`; the runtime halts, `run_ended` makes the change `unproposed`, and Reject closes it with
   revision 0. Tests that cannot start give `outcome="error"` and an `error`; the proposal goes.
@@ -136,8 +139,12 @@ from `file_edited`, `_report` sends that edit's `agent.focus` with its ranges an
 since the edit's new nodes never reached the UI. On `False` from `proposed`, `run` publishes
 `halted` with detail "Its change could not be proposed." instead of `ready_for_review`, and returns
 `RunEnd("halted", detail, steps, None)`. Any other exception from the loop, save cancellation, is a
-halt with a fatal `error`, so every run that is not stopped calls `proposed` and sends a last
-status. The reducer needs no change: the agent card and review mode (fronts 13, 17) offer Reject
+halt with a fatal `error`, so every run that is not stopped sends a last status and calls
+`proposed`, with one exception: when the first scan finds the worktree's root lost (the runtime's
+`_RootLost`, a root swapped for a symlink), the run halts without calling `proposed`, since the
+sink would read a tree that is no longer the agent's. `run_ended` then makes the change
+`unproposed` and Reject closes it with revision 0; cleanup meets the workspace's guard, which
+refuses the swapped root, and reports it. The reducer needs no change: the agent card and review mode (fronts 13, 17) offer Reject
 when the agent is `halted` and its change has no proposal.
 
 ## 6. Level 2, kept out but not blocked
@@ -166,11 +173,15 @@ failing with their change reverted.
   *`test_failed_edit_republished`: invalid UTF-8 makes `file_edited` return `False`, the test then
   writes a valid edit with no call, and `proposed` sends that file in full before `change.proposed`.
 - `test_propose.py`: head's parent is base; tests pass, then fail after a breaking edit; `twice` at
-  distance 1; `change.proposed` precedes `ready_for_review`; a halt proposes too.
+  distance 1; `change.proposed` is committed before `proposed` returns, so it precedes the
+  runtime's `ready_for_review`; a halt proposes too.
 - `test_approve.py`: main's HEAD has parents `pre` and head; resolved, delta, `done`, in order;
   worktree and branch gone; early, repeated or unknown approves fail; *`test_body_only_edit_chains`:
   `return 2` to `return 3` sends one empty delta to the new version, and agent-2's approval chains.
-- `test_reject.py`: worktree and branch gone, main unchanged, resolved with the comment, no delta.
+- `test_reject.py`: worktree and branch gone, main unchanged, resolved with the comment, no delta;
+  *`test_reject_after_a_halt_with_no_proposal`: the root swapped for a symlink and `run_ended`
+  with a halt and no `proposed`; approve answers `WrongState`, Reject closes revision 0 with
+  `done`, and the guard's refusal is an `error`.
 - `test_failures.py`: a real conflict from a commit on main, main clean after; a faked merge
   timeout leaves main unchanged and a retry merges; a merge reported as a timeout counts as merged;
   *`test_commit_failure_aborts_to_pre`: `commit` fails after the no-commit merge, main is clean at
@@ -178,7 +189,9 @@ failing with their change reverted.
   fast-forwarded and it fails); *`test_cleanup_failure_still_closes`, for reject and approve:
   `branch` fails once, resolution and `done` go once with an `error`, a second decision answers
   `WrongState`, agent-2's `open` deletes the branch; *`test_failed_propose`: a failed commit
-  returns `False` with a fatal `error` and no `change.proposed`, and Reject closes with revision 0.
+  returns `False` with a fatal `error` and no `change.proposed`, and Reject closes with revision 0; *`test_reject_from_broken`: the merge times out and `status`
+  fails, so the facts cannot be read; approve answers `WrongState`, and Reject closes with the
+  comment, `done` last, worktree and branch gone, main clean at `pre`.
 
 About 450 lines of code and 550 of tests, in two commits: live diff and propose, then decisions.
 
