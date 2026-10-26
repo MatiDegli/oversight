@@ -569,9 +569,10 @@ the single error format.
 | `GET /health` | none | 200 `Health {ok, run_id, contract_version, mode}`; mode is `live` or `replay` | |
 
 - Every error is `ErrorResponse {error: {code, message}}`. The codes are `not_found`,
-  `wrong_state`, `slot_busy`, `spend_brake`, `invalid_path`, `stale_file`, `not_implemented` and
-  `invalid_request`. They map to 404, 409, 409, 403, 422, 409, 501 and 422. FastAPI's own
-  validation error is replaced by this format.
+  `wrong_state`, `slot_busy`, `spend_brake`, `invalid_path`, `stale_file`, `not_implemented`,
+  `invalid_request` and `internal`. They map to 404, 409, 409, 403, 422, 409, 501, 422 and 500.
+  FastAPI's own validation error is replaced by this format, and so is an unexpected server-side
+  failure, as `internal` (contract 1.1, approved by the maintainer on 2026-10-26).
 - `PUT /files` writes main, committed at once with the user as author, or the named agent's
   worktree, only while that agent is idle in review. `base_hash` is the SHA-256 of the content the
   user started from: if the file changed since, for example through a merge, the save fails with

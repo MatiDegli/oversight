@@ -101,6 +101,10 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   `graph`, `events` and `commands`, so each import says which part of the contract it uses.
 - **The contract-scope check** (docs/proposal.md, section 4.8) comes in its own small PR, with its
   plan reviewed first, since it guards the tree.
+- **Contract 1.1 adds the error code `internal` (500)** (the maintainer, 2026-10-26): without it an
+  unexpected server-side failure, such as the change manager failing to open, answered FastAPI's
+  plain 500, outside the single `ErrorResponse` format. A minor version, since it only adds a code;
+  recorded logs at 1.0.0 still validate.
 
 ## Design
 
