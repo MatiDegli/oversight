@@ -49,7 +49,7 @@ def test_the_layout_setting_defaults_to_the_demo_repo_preset(
 ) -> None:
     monkeypatch.delenv("OVERSIGHT_LAYOUT", raising=False)
     default = Settings.load(tmp_path / "no-env-file").layout
-    assert default.parts[-3:] == ("fixtures", "layout", "demo-repo.json")
+    assert default.parts[-3:] == ("fixtures", "layouts", "demo-repo.json")
     assert default == Settings().layout
     env = tmp_path / ".env"
     env.write_text("OVERSIGHT_LAYOUT=/somewhere/layout.json\n")

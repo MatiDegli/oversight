@@ -27,7 +27,7 @@ class Settings:
     port: int = 8710
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
-    layout: Path = REPO_ROOT / "fixtures" / "layout" / "demo-repo.json"
+    layout: Path = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
     """The preset layout, `{node_id: {x, y}}`; a missing file means the graph has no positions."""
     # The provider keys. repr=False keeps them out of any log line or traceback that shows Settings.
     meta_api_key: str | None = field(default=None, repr=False)
