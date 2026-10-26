@@ -145,7 +145,8 @@ class Harness:
     main_graph: WorkspaceGraph
     log: list[StoredEvent] = field(default_factory=lambda: list[StoredEvent]())
     fail_once: type[BaseModel] | None = None
-    """The next payload of this type fails to publish, as a closing store would."""
+    """The next `fail_times` payloads of this type fail to publish, as a closing store would."""
+    fail_times: int = 1
     _manager: ChangeManager | None = None
 
     @property
@@ -155,7 +156,9 @@ class Harness:
 
     async def publish(self, payload: EventPayload) -> StoredEvent:
         if self.fail_once is not None and isinstance(payload, self.fail_once):
-            self.fail_once = None
+            self.fail_times -= 1
+            if self.fail_times <= 0:
+                self.fail_once, self.fail_times = None, 1
             raise RuntimeError("an armed publish failure")
         event = await self.store.publish(payload)
         self.log.append(event)

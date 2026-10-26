@@ -227,3 +227,28 @@ async def test_cancel_after_the_merge_commit_records_it(h: Harness) -> None:
 
     assert not h.worktree_dir("agent-1").exists()
     assert not await h.has_branch("agent-1")
+
+
+@bounded
+async def test_reject_from_broken_after_an_unconfirmed_merge(h: Harness) -> None:
+    """The merge commit lands but reports a timeout, and the facts cannot be read: Reject leaves
+    main at that commit, as the next start's reset clears it, and closes the change."""
+    await h.run_agent(1, EDIT)
+    pre = await h.main_head()
+    h.workspace.arm("commit", mode="after")
+    h.workspace.arm("status")
+
+    await h.manager.approve("change-1", None)
+
+    assert "state is unknown" in h.payloads(ErrorReport)[0].message
+    landed = await h.main_head()
+    assert landed != pre
+    await h.manager.reject("change-1", None)
+
+    await assert_main_clean_at(h, landed)
+    [resolved] = h.payloads(ChangeResolved)
+    assert (resolved.decision, resolved.merge, resolved.merge_commit) == ("rejected", None, None)
+    assert "graph.delta" not in h.types()
+    assert h.types()[-1] == "agent.status"
+    assert not h.worktree_dir("agent-1").exists()
+    assert not await h.has_branch("agent-1")

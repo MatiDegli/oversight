@@ -1,7 +1,8 @@
 # Plan: the change manager, level 1 (front 15)
 
-Revision 3, after review round 2: Reject accepts `broken`, and a halt on a lost worktree root
-proposes nothing (section 5). Sources: `contracts/`, docs/proposal.md (3, 4.4,
+Revision 4, after the implementation review: a close-out stays pending until every event is
+sent, and a cancelled decision settles its state (sections 4 and 5). Revision 3: Reject accepts
+`broken`, and a halt on a lost worktree root proposes nothing (section 5). Sources: `contracts/`, docs/proposal.md (3, 4.4,
 4.5, 4.7, 5), AGENTS.md. Builds on `workspace` and `graph` on main and on `agents/runtime` 64efac4
 (`ChangeSink`, `AgentTask`, `RunEnd`, `Publish`), with section 5's change. Settled in round 1: empty
 runs are proposed and approve as a merge of nothing; `change.resolved` precedes `graph.delta`;
@@ -37,9 +38,12 @@ class WrongState(Exception): ...          # route answers wrong_state
 - **Routes.** `approve` and `reject` check and flip the state with no `await` before the flip, so a
   second click fails at once; the work runs in a tracked task and the route answers 202.
 - **States.** `working` until `run_ended`, then `ready` (proposed) or `unproposed`. Approve needs
-  `ready`; reject needs `ready`, `conflict`, `unproposed` or `broken`; both enter `deciding`, which always
-  ends, through a `finally` that decides from git facts, in `closed` (resolution sent), `conflict`,
-  `ready` (main untouched) or `broken` (main in an unknown state).
+  `ready`; reject needs `ready`, `conflict`, `unproposed` or `broken`; both enter `deciding`, which
+  always ends, decided from git facts, in `closing` (the decision is a fact), `conflict`, `ready`
+  (main untouched) or `broken` (main in an unknown state). `closing` becomes `closed` once the
+  close-out is all sent. A decision cancelled before its first step never runs its own code, so a
+  done-callback on the task, which runs before anyone awaiting it resumes, puts a change still
+  `deciding` back where the decision took it from, or in `broken` once the merge was issued.
 
 ## 2. Live diff
 
@@ -83,7 +87,8 @@ class WrongState(Exception): ...          # route answers wrong_state
 3. Merged means `merge-base --is-ancestor <head_commit> HEAD`, main clean, no `MERGE_HEAD`. An
    empty change is "Already up to date": merged, `merge_commit = pre`.
 4. `new = main_graph.scan(post)` in a thread re-parses only files whose content hash changed.
-5. Close-out (`approved`, `merged`, `merge_commit`, comment), then cleanup with `merged=True`.
+5. Close-out (`approved`, `merged`, `merge_commit`, comment), then cleanup with `merged=True`
+   once `change.resolved` is out.
 
 **Versions.** `version` hashes the path and bytes of every importable Python file (`assemble` in
 `graph/_version.py`): it moves exactly when a merge (at level 2 also a save on main or a rescan)
@@ -98,18 +103,26 @@ sends an `error` and keeps it, so the next delta starts from what the UI holds.
 
 **Close-out** is the only way into `closed`: `change.resolved`, the delta (approve only), then
 `agent.status` `done` from `open`'s task and `RunEnd.steps`. Each is marked on the record when sent,
-the `finally` sends what is missing, and nothing goes twice. It runs as soon as the decision is a
-fact and before cleanup, so no cleanup failure can hold back or repeat a resolution.
+so nothing goes twice. It runs as soon as the decision is a fact and before cleanup, so no cleanup
+failure can hold back or repeat a resolution. A decision tries the missing events twice, in order;
+if one still fails, an `error` says so and the change stays `closing` and pending, with its
+worktree and branch: cleanup runs only once `change.resolved` is out. The retry runs, under main's
+lock and the change's, before the next decision's work and in the next `open`, each trying twice
+again; approve and reject answer `WrongState` on a `closing` change. A pending delta that a later
+merge's delta overtakes is dropped, not sent: the later one starts from the graph the UI holds,
+`snapshot`, which the unsent delta never moved, so it covers both merges, and the older one would
+start from a graph the UI no longer holds.
 
 **Reject** holds both locks and closes out at once: `rejected`, the comment, `revision` 0 if never
-proposed; no rescan and no delta, as main did not change. Then cleanup with `merged=False`.
+proposed; no rescan and no delta, as main did not change. Then cleanup with `merged=False`, once
+`change.resolved` is out.
 
 **Cleanup** is idempotent by facts, each step skipped once done: (a) if `worktree list --porcelain
 -z` lists the agent's path and the directory exists, `discard_worktree`, or after a merge
 `cleanup_merged_worktree`, with `delete_branch=False`; listed but gone, `worktree prune`; (b) if
 `rev-parse --verify --quiet refs/heads/<agent>` finds the branch, `branch -D`, or `-d` after a
-merge so an unmerged branch is never deleted. A failure sends an `error` and sets
-`cleanup_pending`; the next `open` reruns cleanup first. A workspace guard's refusal is reported,
+merge so an unmerged branch is never deleted. A failure sends an `error` and keeps the change pending; the next decision or `open`
+reruns cleanup first. A workspace guard's refusal is reported,
 never forced, and the next start's `reset` clears what is left.
 
 ## 5. Failure paths
@@ -126,7 +139,11 @@ Every git call is `Workspace.git`: asyncio, with a timeout that kills the proces
   facts cannot be read: `error`, `broken`; approve answers `WrongState` until the next start,
   and Reject still works: `broken` is among the states it accepts, so it closes out as usual
   (`rejected`, then `done`) and discards the worktree and branch, leaving main to the next start's
-  `reset`. No `reset --hard`, no lock-file removal.
+  `reset`, even when an unconfirmed merge landed. No `reset --hard`, no lock-file removal.
+- **An approval cancelled** inside the locks recovers the same way before the cancellation goes
+  on: still under both locks, `merge --abort` if `MERGE_HEAD` exists, then the facts. A landed
+  merge closes out as merged and leaves its cleanup pending; main clean at `pre` is `ready`;
+  otherwise `broken`. Each sends an `error` saying the approval was cancelled.
 - **Propose fails** at step 1, 2, 3 or 5: an `error` with `fatal` true, no `change.proposed`,
   `False`; the runtime halts, `run_ended` makes the change `unproposed`, and Reject closes it with
   revision 0. Tests that cannot start give `outcome="error"` and an `error`; the proposal goes.
@@ -191,7 +208,21 @@ failing with their change reverted.
   `WrongState`, agent-2's `open` deletes the branch; *`test_failed_propose`: a failed commit
   returns `False` with a fatal `error` and no `change.proposed`, and Reject closes with revision 0; *`test_reject_from_broken`: the merge times out and `status`
   fails, so the facts cannot be read; approve answers `WrongState`, and Reject closes with the
-  comment, `done` last, worktree and branch gone, main clean at `pre`.
+  comment, `done` last, worktree and branch gone, main clean at `pre`;
+  `test_reject_from_broken_after_an_unconfirmed_merge`: the merge commit lands but reports a
+  timeout and `status` fails; Reject leaves main at that commit, sends no delta and closes;
+  *`test_decision_cancelled_before_it_starts`, for approve and reject: cancelled before its first
+  step, the change is back in `ready` and Reject closes it; *`test_cancel_mid_merge_aborts_to_pre`:
+  cancelled after `merge --no-commit`, main is clean at `pre`, an `error` says so, a retry merges;
+  *`test_cancel_after_the_merge_commit_records_it`: the landed merge closes out, then an `error`,
+  and the next `open` cleans up.
+- `test_close_out.py`: a delta cut short once goes on the second try; *`test_close_out_stays_pending_until_sent`:
+  both tries of a reject's resolution fail, so worktree and branch stay and nothing is sent; the
+  next `open` sends the resolution and `done`, then cleans up; *`test_pending_delta_is_retried_or_superseded`:
+  agent-1's delta fails twice, then agent-2's approval sends it first, or, failing there too,
+  agent-2's delta covers both merges and agent-1's is dropped, its `done` sent at the next `open`;
+  a rescan that raises keeps the snapshot; tests that cannot start still propose; cleanup prunes a
+  worktree directory already gone.
 
 About 450 lines of code and 550 of tests, in two commits: live diff and propose, then decisions.
 

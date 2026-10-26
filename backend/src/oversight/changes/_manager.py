@@ -2,10 +2,12 @@
 
 A change is `working` until its run ends, then `ready` (proposed) or `unproposed` (no proposal,
 such as after a halt whose worktree root was lost). Approve takes `ready`; Reject takes `ready`,
-`conflict`, `unproposed` or `broken`. Both enter `deciding`, which always ends: in `closed` once
-the decision is a fact and its resolution goes out, in `conflict`, back in `ready` when main is
-untouched, or in `broken` when main's state cannot be read. Every git call is `Workspace.git`,
-async with a timeout; approve and reject hold main's lock, then the agent's, throughout.
+`conflict`, `unproposed` or `broken`. Both enter `deciding`, which always ends: in `closing` once
+the decision is a fact, in `conflict`, back in `ready` when main is untouched, or in `broken` when
+main's state cannot be read. `closing` becomes `closed` once its resolution, delta and `done` are
+all sent; until then the change is pending, keeps its worktree until the resolution is out, and the
+next decision or `open` sends the rest. Every git call is `Workspace.git`, async with a timeout;
+approve and reject hold main's lock, then the agent's, throughout.
 """
 
 import asyncio
@@ -35,12 +37,16 @@ from oversight_contracts.events import (
 )
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot
 
-type State = Literal["working", "ready", "unproposed", "deciding", "conflict", "closed", "broken"]
+type State = Literal[
+    "working", "ready", "unproposed", "deciding", "conflict", "closing", "closed", "broken"
+]
 type Source = Literal["git", "tests", "graph", "server"]
 
 APPROVABLE: frozenset[State] = frozenset({"ready"})
 REJECTABLE: frozenset[State] = frozenset({"ready", "conflict", "unproposed", "broken"})
 """`broken`: the merge failed and main's state is unknown; Reject still closes the change."""
+CLOSE_OUT_ATTEMPTS = 2
+"""Tries per occasion (a decision, a retry before the next decision or `open`)."""
 
 
 class ChangeNotFound(LookupError):
@@ -76,6 +82,8 @@ class _Change:
     next_snapshot: GraphSnapshot | None = None
     sent: set[str] = field(default_factory=lambda: set[str]())
     """Close-out events already sent: "resolved", "delta", "done"."""
+    cleaned: bool = False
+    """The worktree and branch are gone."""
     fallback: State = "ready"
     """Where a decision that ends without settling leaves the change: the state it was taken from,
     or `broken` once the merge may have touched main."""
@@ -132,7 +140,8 @@ class ChangeManager:
         self._agents: dict[AgentId, _Change] = {}
         self._bases: dict[str, tuple[dict[str, str], CodeVersion]] = {}
         self._pending: dict[AgentId, _Change] = {}
-        """Changes whose cleanup failed; the next `open` runs it again first."""
+        """Changes whose close-out or cleanup is unfinished; the next decision or `open` runs them
+        again first."""
         self._tasks: set[asyncio.Task[None]] = set()
 
     # --- Helpers ------------------------------------------------------------------------------
@@ -189,8 +198,7 @@ class ChangeManager:
         """Create the agent's worktree from main's HEAD and record its base files and graph."""
         if task.change_id in self._changes or task.agent_id in self._agents:
             raise WrongState(f"{task.agent_id} or {task.change_id} was already opened")
-        for pending in list(self._pending.values()):
-            await self._cleanup(pending)
+        await self._finish_pending()
         tree = await self._workspace.create_worktree(task.agent_id)
         base_commit = tree.base_commit
         if base_commit is None:
@@ -415,9 +423,9 @@ class ChangeManager:
         return rec
 
     def _decide(self, rec: _Change, work: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
-        """Run a decision in a tracked task. A task cancelled before its first step never runs its
-        own `finally`, so a done-callback, which runs before anyone awaiting the task resumes,
-        ends `deciding` too."""
+        """Run a decision in a tracked task. A decision that ends still `deciding`, such as a task
+        cancelled before its first step, which runs none of its code, goes back to `fallback`
+        through a done-callback, which runs before anyone awaiting the task resumes."""
         task = self._spawn(work)
         task.add_done_callback(lambda _: self._restore(rec))
         return task
@@ -441,38 +449,26 @@ class ChangeManager:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
     async def _approve(self, rec: _Change, comment: str | None) -> None:
-        try:
-            async with self._workspace.locks(main=True, agent_id=rec.agent_id):
-                pre: str | None = None
-                try:
-                    pre = (await self._git(self._workspace.main, "rev-parse", "HEAD")).strip()
-                    await self._merge(rec, comment, pre)
-                except asyncio.CancelledError:
-                    # Still under both locks: settle main from its facts, then cancel.
-                    await self._recover(rec, comment, pre, None)
-                    raise
-                except Exception as error:
-                    await self._recover(rec, comment, pre, error)
-                if rec.state == "closed":
-                    await self._cleanup(rec)
-        finally:
-            await self._settle(rec)
+        await self._finish_pending()
+        async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+            pre: str | None = None
+            try:
+                pre = (await self._git(self._workspace.main, "rev-parse", "HEAD")).strip()
+                await self._merge(rec, comment, pre)
+            except asyncio.CancelledError:
+                # Still under both locks: settle main from its facts, then cancel.
+                await self._recover(rec, comment, pre, None)
+                raise
+            except Exception as error:
+                await self._recover(rec, comment, pre, error)
+            if rec.merged:
+                await self._finish(rec)
 
     async def _reject(self, rec: _Change, comment: str | None) -> None:
-        try:
-            async with self._workspace.locks(main=True, agent_id=rec.agent_id):
-                rec.resolution = self._resolution(rec, "rejected", comment)
-                await self._close_out(rec)  # main did not change: no rescan and no delta
-                await self._cleanup(rec)
-        finally:
-            await self._settle(rec)
-
-    async def _settle(self, rec: _Change) -> None:
-        """`deciding` always ends; a close-out cut short sends what it is missing."""
-        if rec.state == "deciding":
-            self._restore(rec)
-        elif rec.state == "closed":
-            await self._close_out(rec)
+        await self._finish_pending()
+        async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+            rec.resolution = self._resolution(rec, "rejected", comment)
+            await self._finish(rec)  # main did not change: no rescan and no delta
 
     def _resolution(
         self,
@@ -526,7 +522,7 @@ class ChangeManager:
         facts = await self._facts(head)
         if not facts.merged:
             raise WorkspaceError("the merge did not land on main")
-        await self._close_merged(rec, comment, facts.head)
+        await self._record_merge(rec, comment, facts.head)
 
     async def _conflict(self, rec: _Change, comment: str | None, pre: str) -> bool:
         main = self._workspace.main
@@ -556,8 +552,8 @@ class ChangeManager:
     ) -> None:
         """Decide from git facts after a failed approval, or a cancelled one (`error` is `None`):
         abort an unfinished merge, record a landed one. No `reset --hard`, no lock removal. A
-        cancelled approval always reports, and leaves a landed merge's cleanup to the next
-        `open`."""
+        cancelled approval always reports; a landed merge closes out first and leaves its cleanup
+        to the next decision or `open`."""
         main = self._workspace.main
         facts: _Facts | None = None
         try:
@@ -567,10 +563,10 @@ class ChangeManager:
         except Exception:
             facts = None
         if facts is not None and facts.merged:
-            await self._close_merged(rec, comment, facts.head)
+            await self._record_merge(rec, comment, facts.head)
             if error is not None:
-                return
-            self._pending[rec.agent_id] = rec
+                return  # the approval closes out and cleans up
+            await self._close_out(rec)
             note = "the merge landed and is recorded"
         elif facts is not None and facts.unchanged(pre):
             rec.state = "ready"
@@ -581,7 +577,8 @@ class ChangeManager:
         what = "was cancelled" if error is None else f"failed: {error}"
         await self._error("git", f"Approving {rec.change_id} {what}. {note}.", rec, fatal=False)
 
-    async def _close_merged(self, rec: _Change, comment: str | None, post: str) -> None:
+    async def _record_merge(self, rec: _Change, comment: str | None, post: str) -> None:
+        """The merge is a fact: rescan main and build the resolution and delta, sending nothing."""
         try:
             new = await asyncio.to_thread(self._main_graph.scan, post)
         except Exception as error:
@@ -590,9 +587,13 @@ class ChangeManager:
         else:
             rec.delta = main_delta(self.snapshot, new, post)
             rec.next_snapshot = with_positions(new, self.snapshot)
+            for other in self._pending.values():
+                if "delta" not in other.sent:
+                    # This delta starts from the graph the UI holds and covers that merge too;
+                    # sent later, the older one would start from a graph the UI no longer holds.
+                    other.delta = other.next_snapshot = None
         rec.merged = True
         rec.resolution = self._resolution(rec, "approved", comment, merge_commit=post)
-        await self._close_out(rec)
 
     def _done(self, rec: _Change) -> AgentStatus:
         task = rec.task
@@ -608,10 +609,43 @@ class ChangeManager:
             detail=None,
         )
 
+    async def _finish(self, rec: _Change) -> None:
+        """Close out, then clean up once `change.resolved` is out, so a worktree or branch is never
+        removed before its resolution is sent. The change stays pending until both are done."""
+        async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+            await self._close_out(rec)
+            if "resolved" in rec.sent and not rec.cleaned:
+                await self._cleanup(rec)
+            if rec.state == "closed" and rec.cleaned:
+                self._pending.pop(rec.agent_id, None)
+
+    async def _finish_pending(self) -> None:
+        """Before a decision or an `open`: retry every unfinished close-out and cleanup."""
+        for rec in list(self._pending.values()):
+            await self._finish(rec)
+
     async def _close_out(self, rec: _Change) -> None:
-        """The only way into `closed`: the resolution, the delta (approve only), then `done`.
-        Each is marked when sent; a later call sends only what is missing. Never raises."""
-        rec.state = "closed"
+        """The only way into `closed`: the resolution, the delta (approve only), then `done`, each
+        marked when sent, so nothing goes twice. Until all are out the change is `closing` and
+        pending, and a later call sends only what is missing. Never raises, save a cancel."""
+        rec.state = "closing"
+        self._pending[rec.agent_id] = rec
+        failure = ""
+        for _ in range(CLOSE_OUT_ATTEMPTS):
+            failure = await self._send_close_out(rec)
+            if not failure:
+                rec.state = "closed"
+                return
+        await self._error(
+            "server",
+            f"The close-out of {rec.change_id} is incomplete ({failure}). "
+            "The next decision or agent start sends the rest.",
+            rec,
+            fatal=False,
+        )
+
+    async def _send_close_out(self, rec: _Change) -> str:
+        """Send what is missing, in order; the first failure, or "" once everything is out."""
         events: list[tuple[str, EventPayload | None]] = [
             ("resolved", rec.resolution),
             ("delta", rec.delta),
@@ -622,17 +656,19 @@ class ChangeManager:
                 continue
             try:
                 await self._publish(payload)
-            except Exception:
-                return  # the decision's `finally` tries again
+            except Exception as error:
+                return f"{name}: {error}"
             rec.sent.add(name)
             if name == "delta" and rec.next_snapshot is not None:
                 self.snapshot = rec.next_snapshot
+        return ""
 
     # --- Cleanup ------------------------------------------------------------------------------
 
     async def _cleanup(self, rec: _Change) -> None:
         """Remove the worktree, then the branch, each step skipped once done, so a rerun after a
-        failure finishes the job. A failure is reported and retried by the next `open`."""
+        failure finishes the job. A failure is reported and retried by the next decision or
+        `open`, as the change is still pending."""
         workspace, agent = self._workspace, rec.agent_id
         main = workspace.main
         try:
@@ -654,13 +690,12 @@ class ChangeManager:
                     # -d after a merge, so a branch that is not in main is never deleted.
                     await self._git(main, "branch", "-d" if rec.merged else "-D", agent)
         except Exception as error:
-            self._pending[agent] = rec
             await self._error(
                 "git",
                 f"Cleaning up after {rec.change_id} failed: {error}. "
-                "The next agent start tries again.",
+                "The next decision or agent start tries again.",
                 rec,
                 fatal=False,
             )
             return
-        self._pending.pop(agent, None)
+        rec.cleaned = True
