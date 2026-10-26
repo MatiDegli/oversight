@@ -11,7 +11,7 @@ UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
-	contracts check-contracts check-secrets demo-repo-check replay
+	contracts check-contracts check-secrets demo-repo-check replay smoke
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -40,6 +40,11 @@ replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with
 	@uv run --frozen python -m oversight replay "$(LOG)" --speed "$(SPEED)" & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
+
+# smoke: the backend on a free port with its own runtime directory, so a running dev or replay is
+# not disturbed; tools/smoke.py checks /health and /graph and stops it again.
+smoke: ## start the backend and check /health and /graph
+	$(UV) python tools/smoke.py
 
 check: check-python check-contracts check-frontend check-secrets ## every gate; spends no credits
 
