@@ -3,8 +3,7 @@
 Revision 2, after the review of ee2ac14. Sources: AGENTS.md, docs/proposal.md (3, 4.5 to 4.7, 5,
 7), `contracts/`, main at 479b3ec, `changes/manager` f93d3e4 (`open`, `run_ended`, `approve`,
 `reject`, `aclose`, `ChangeNotFound`, `WrongState`) plus three additions asked of it (section 4).
-No contract change, no new dependency or module: starter in `app`, routes in `api`, ledger file in
-`agents/usage.py`.
+No contract change, no new dependency or module: starter in `app`, routes in `api`.
 
 ## 1. Startup and shutdown (`app.py`, `settings.py`, `__main__.py`, `tools/smoke.py`)
 
@@ -17,16 +16,14 @@ git 30 s, cone depth 4 and 40 nodes. The pytest pin is read from `tools/demo-ven
 (`pytest==9.1.1`), so the demo venv and `make demo-repo-check` never diverge.
 
 `create_app(settings, client_factory=None)` builds the `Workspace`, the run id
-(`run-YYYYMMDD-HHMMSS`, next second if taken) and its `EventStore`. The lifespan:
-
-1. `acquire_runtime()` (a second server fails with `WorkspaceBusy`); `reset()`; read the ledger.
-2. `store.start()`; `run.started` with `PROMPT_VERSION`, `base_commit`, the profile, slots `[A]`,
-   the limits, `Budget(budget_usd or 0, ledger spent_usd, [0.5, 0.8], 0.9)`.
-3. `scan(base)` in a thread with the layout; publish `graph.snapshot`.
-4. `ChangeManager(..., git_timeout_s=30)` as the sink; its `publish` wraps `store.publish` to watch
-   `change.resolved` (the slot) and `usage.tick` (the ledger).
-5. The demo venv build starts as a task; `POST /agents` awaits it. A failed build is an `error`
-   (source `tests`, not fatal); the run's `run_tests` then reports `error`.
+(`run-YYYYMMDD-HHMMSS`, next second if taken) and its `EventStore`. The lifespan: (1)
+`acquire_runtime()` (a second server fails with `WorkspaceBusy`), `reset()`, read the ledger; (2)
+`store.start()`, `run.started` with `PROMPT_VERSION`, `base_commit`, the profile, slots `[A]`, the
+limits, `Budget(budget_usd or 0, ledger spent_usd, [0.5, 0.8], 0.9)`; (3) `scan(base)` in a thread
+with the layout, `graph.snapshot`; (4) `ChangeManager(..., git_timeout_s=30)` as the sink, its
+`publish` wrapping `store.publish` to watch `change.resolved` (the slot) and `usage.tick` (the
+ledger); (5) the demo venv build as a task, awaited by `POST /agents`; a failed build is an `error`
+(source `tests`, not fatal) and the run's `run_tests` reports `error`.
 
 **Shutdown**, in the lifespan's `finally`, each step even if one before failed: (a) cancel the run
 task and await it (`run_process` kills its process group), its `finally` calling `run_ended(agent,
@@ -104,7 +101,7 @@ manager and a `Starter` protocol `api` defines and `app` implements. Errors: `Ap
 ## 5. Models, and credits in tests
 
 `muse-spark` builds `OpenAIClient(MUSE_SPARK, base_url=META_BASE_URL, ...)`:
-`muse-spark-1.3-contributor`, reasoning `low` on every call. `fake` builds `ScriptedModel`. Tests
+`muse-spark-1.3-contributor`, reasoning `low` on every call; `fake` builds `ScriptedModel`. Tests
 build `Settings(...)` or load a `tmp_path` file, and may pass `client_factory` (a scripted model
 under the Meta profile, for the brake). **Global guard**, root `conftest.py`, autouse for every
 test: strip `META_API_KEY` and `BASETEN_API_KEY`, and patch the real transports of `httpx2` and
@@ -115,11 +112,10 @@ servers keep working. `backend/tests/test_no_credits.py`, in `make check`: an `O
 
 ## 6. What the frontend may rely on (front 17)
 
-`change_id` comes from events (`agent.status`, `change.proposed`). 202 is accepted, not merged:
-`change.resolved`, `graph.delta` (cause `merge`), `agent.status` `done`; Reject sends no delta.
-Buttons stay disabled until `change.resolved`, a 4xx, or an `error` naming the change; show a 409's
-message. Do not assume a delta with nodes, `merge == "merged"`, slot `B`, a fixed agent id,
-Request changes or Stop. No key approves.
+`change_id` comes from events. 202 is accepted, not merged: `change.resolved`, `graph.delta`
+(cause `merge`), `agent.status` `done`; Reject sends no delta. Buttons stay disabled until
+`change.resolved`, a 4xx, or an `error` naming the change; show a 409's message. Do not assume a
+delta with nodes, `merge == "merged"`, slot `B`, a fixed agent id, Request changes or Stop.
 
 ## 7. Tests (`backend/tests/api`, `e2e`, `test_no_credits.py`; then `make smoke`, `make check`)
 
@@ -128,9 +124,8 @@ Real uvicorn on a free port, `asyncio.timeout(60)`, waits on events, envelopes v
 
 - `api/test_commands.py`: bad ids 404; approve before the proposal 409; a second decision 409 and
   one `change.resolved`; a racing start `slot_busy`; slot `B`, empty task, Muse Spark Open, no key
-  422; the 501s, live and replay.
-- `api/test_start.py`: a failed `open` answers the error body and the next start is 201; a start
-  cancelled while `open` waits on an event leaves the slot free.
+  422; the 501s. `api/test_start.py`: a failed `open` answers the error body and the next start is
+  201; a start cancelled while `open` waits on an event leaves the slot free.
 - `api/test_brake.py`: no budget, a missing price, a malformed ledger, an `unknown` entry, 135.01
   of 150: `spend_brake` before any client; 75 and 120 start with `warn_50`, `warn_80`; replies
   without usage write `unknown` and refuse the next start, also after a restart and `reset`;
@@ -149,8 +144,8 @@ About 450 lines of code and 600 of tests, four commits: startup, brake, routes, 
 
 ## Open
 
-1. **Stop** is level 2 in AGENTS.md and the manager has none: 501 now.
-2. **`internal` -> 500**: the maintainer's answer picks the branch in section 2.
-3. **Prices** US$0.10 / 0.20 per million: the coordinator's figures, to be confirmed.
-4. **Manager additions** (`main_suspect`, `check_main`, the drain): this front waits for them.
-5. **Unlisted files**: root `conftest.py`, `.env.example`, `agents/usage.py`. Limits: to confirm.
+1. **Stop** is level 2 in AGENTS.md and the manager has none: 501 now. **`internal` -> 500**: the
+   maintainer's answer picks the branch in section 2.
+2. **Prices** US$0.10 / 0.20 per million: the coordinator's figures, to be confirmed. Limits too.
+3. **Manager additions** (`main_suspect`, `check_main`, the drain): this front waits for them.
+4. **Files the first brief did not list**: root `conftest.py`, `.env.example`, `agents/usage.py`.
