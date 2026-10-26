@@ -8,19 +8,24 @@ times per run, and writes what it found to docs/api-probe.md. It spends credits,
 never runs it: the tests run the same code over a fake transport.
 
 The key comes from oversight.settings and goes only into the SDK client. It is never printed,
-logged or written: an error body is reduced to a code and a short message (nothing at all for 401
-and 403), no request header is kept, and the report is checked for the key before it is written.
+logged or written: every string that leaves the process (the terminal, the report, the details
+file) goes through one Redactor, which removes the key, any 8-character fragment of it and bearer
+or key-like tokens. An error body is reduced to a code, a type and a short message, all redacted
+(nothing at all for 401 and 403), and only the rate-limit headers are kept, redacted too.
+A 429 or 5xx is retried up to MAX_RETRIES times with exponential backoff and jitter, honoring
+Retry-After; every attempt counts against MAX_CALLS.
 Exit codes: 0 the report was written, 1 the run was aborted, 2 the provider's key is not set.
 """
 
 import argparse
 import json
+import random
 import re
 import statistics
 import sys
 import time
 from collections.abc import Callable, Iterable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields, is_dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -31,10 +36,15 @@ from openai import OpenAI
 from oversight.settings import Settings
 
 MAX_CALLS = 8
+MAX_RETRIES = 3  # per step, on 429 and 5xx; every retry is a call against MAX_CALLS
+BACKOFF_BASE = 1.0  # seconds before the first retry; it doubles each time, with jitter
+BACKOFF_MAX = 30.0
+FRAGMENT = 8  # a run of this many characters of the key is as good as the key
 ART = timezone(timedelta(hours=-3))
 DEFAULT_REPORT = Path(__file__).resolve().parents[1] / "docs" / "api-probe.md"
 ORDER = ("meta", "baseten")
 Obj = dict[str, Any]
+Redact = Callable[[str], str]
 
 
 @dataclass(frozen=True)
@@ -270,30 +280,92 @@ def parse_json_tool_call(text: str) -> tuple[str, Obj] | None:
     return None
 
 
+# The redactor ------------------------------------------------------------------------------------
+
+REDACTED = "[redacted]"
+# What looks like a credential whoever it belongs to: a bearer token, an sk-style key, or a long
+# run of letters and digits mixed (hyphens and underscores split words, so slugs and field names
+# are left alone).
+KEY_LIKE = re.compile(
+    r"Bearer\s+[A-Za-z0-9._~+/=-]{6,}"
+    r"|\b(?:sk|pk|rk)[-_][A-Za-z0-9_-]{8,}"
+    r"|\b(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{24,}\b",
+    re.IGNORECASE,
+)
+
+
+class Redactor:
+    """The one sanitizer: nothing leaves the process without passing through it.
+
+    It removes the key, every run of FRAGMENT or more characters that appears in the key (so a
+    reflected piece of it goes too, not only the whole), and anything shaped like a credential.
+    Calling it on its own output changes nothing.
+    """
+
+    def __init__(self, key: str | None) -> None:
+        text = key or ""
+        self._width = min(FRAGMENT, len(text))
+        self._windows: set[str] = {
+            text[i : i + self._width] for i in range(len(text) - self._width + 1) if text
+        }
+
+    def __call__(self, text: str) -> str:
+        width = self._width
+        spans: list[list[int]] = []
+        for start in range(len(text) - width + 1 if width else 0):
+            if text[start : start + width] in self._windows:
+                if spans and start <= spans[-1][1]:
+                    spans[-1][1] = start + width  # overlapping or touching: one redaction
+                else:
+                    spans.append([start, start + width])
+        pieces: list[str] = []
+        done = 0
+        for begin, end in spans:
+            pieces += [text[done:begin], REDACTED]
+            done = end
+        pieces.append(text[done:])
+        return KEY_LIKE.sub(REDACTED, "".join(pieces))
+
+
+def scrub(value: object, redact: Redact) -> Any:
+    """A copy of a value with every string in it redacted: dicts, lists and dataclasses included."""
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, dict):
+        return {redact(str(k)): scrub(v, redact) for k, v in cast(Obj, value).items()}
+    if isinstance(value, list):
+        return [scrub(v, redact) for v in cast(list[Any], value)]
+    if is_dataclass(value) and not isinstance(value, type):
+        return replace(
+            value, **{f.name: scrub(getattr(value, f.name), redact) for f in fields(value)}
+        )
+    return value
+
+
 # The transport -----------------------------------------------------------------------------------
 
 
-def rate_headers(headers: Any) -> dict[str, str]:
-    """Keep only the rate-limit headers and Retry-After; nothing that could carry a credential."""
+def rate_headers(headers: Any, redact: Redact) -> dict[str, str]:
+    """Keep only the rate-limit headers and Retry-After, redacted: a server can reflect a key."""
     return {
-        str(name).lower(): str(value)
+        redact(str(name).lower()): redact(str(value))
         for name, value in headers.items()
         if str(name).lower().startswith("x-ratelimit-") or str(name).lower() == "retry-after"
     }
 
 
-def error_body(status: int, body: object, message: str, key: str) -> Obj:
-    """Reduce an error to a code, a type and a short message, scrubbed of the key.
+def error_body(status: int, body: object, message: str, redact: Redact) -> Obj:
+    """Reduce an error to a code, a type and a short message, every one redacted.
 
     The SDK's own message repeats the whole body, so the body's message is used when it has one.
     """
     inner = as_obj(as_obj(body).get("error", body))
-    found: Obj = {k: inner[k] for k in ("code", "type") if isinstance(inner.get(k), str)}
+    found: Obj = {
+        k: redact(inner[k])[:200] for k in ("code", "type") if isinstance(inner.get(k), str)
+    }
     text = inner.get("message")
     if status not in (401, 403):
-        found["message"] = (text if isinstance(text, str) else message).replace(key, "[redacted]")[
-            :200
-        ]
+        found["message"] = redact(text if isinstance(text, str) else message)[:200]
     return {"error": found}
 
 
@@ -315,12 +387,12 @@ def summarize_stream(chunks: Iterable[tuple[float, Obj]]) -> Obj:
 
 
 class SdkTransport:
-    """The OpenAI SDK pointed at a provider. No SDK retries: every attempt is a counted call."""
+    """The OpenAI SDK pointed at a provider. No SDK retries: the Session retries and counts."""
 
     def __init__(
         self, base_url: str, api_key: str, http_client: openai.DefaultHttpxClient | None = None
     ) -> None:
-        self._key = api_key
+        self._redact = Redactor(api_key)
         client = OpenAI(
             base_url=base_url,
             api_key=api_key,
@@ -336,7 +408,8 @@ class SdkTransport:
         try:
             raw = self._create(**params)
             body = raw.parse().model_dump(mode="json", exclude_unset=True)
-            return Reply(raw.status_code, body, time.monotonic() - start, rate_headers(raw.headers))
+            seconds = time.monotonic() - start
+            return Reply(raw.status_code, body, seconds, rate_headers(raw.headers, self._redact))
         except openai.APIError as err:
             return self._failure(err, time.monotonic() - start)
 
@@ -350,27 +423,57 @@ class SdkTransport:
             )
             summary = summarize_stream(chunks)
             seconds = time.monotonic() - start
-            return Reply(raw.status_code, summary, seconds, rate_headers(raw.headers))
+            return Reply(raw.status_code, summary, seconds, rate_headers(raw.headers, self._redact))
         except openai.APIError as err:
             return self._failure(err, time.monotonic() - start)
 
     def _failure(self, err: openai.APIError, seconds: float) -> Reply:
         if isinstance(err, openai.APIStatusError):
-            body = error_body(err.status_code, err.body, err.message, self._key)
-            return Reply(err.status_code, body, seconds, rate_headers(err.response.headers))
-        return Reply(0, {"error": {"type": type(err).__name__}}, seconds)
+            body = error_body(err.status_code, err.body, err.message, self._redact)
+            headers = rate_headers(err.response.headers, self._redact)
+            return Reply(err.status_code, body, seconds, headers)
+        return Reply(0, {"error": {"type": self._redact(type(err).__name__)}}, seconds)
 
 
 class BudgetExhausted(Exception):
     """The run has made MAX_CALLS calls."""
 
 
-class Session:
-    """Counts every call, failed ones included, and refuses the call after the last."""
+def retryable(status: int) -> bool:
+    return status == 429 or 500 <= status < 600
 
-    def __init__(self, transport: Transport, limit: int = MAX_CALLS) -> None:
+
+def backoff(retry: int, reply: Reply, rand: Callable[[], float]) -> float:
+    """Seconds before retry number `retry` (from 0): doubling, jittered, at least Retry-After."""
+    delay = BACKOFF_BASE * 2**retry * (0.5 + rand())
+    try:
+        asked = float(reply.headers.get("retry-after", ""))
+    except ValueError:
+        asked = 0.0  # an HTTP date or nonsense: the backoff alone
+    return min(max(delay, asked), BACKOFF_MAX)
+
+
+class Session:
+    """Counts every call, failed ones and retries included, and refuses the call after the last.
+
+    A 429 or 5xx is retried up to `retries` times, waiting `backoff` between attempts. A retry that
+    would pass the cap is not made: the last reply is returned as it came. The sleep and the random
+    source are injected, so tests wait for nothing.
+    """
+
+    def __init__(
+        self,
+        transport: Transport,
+        limit: int = MAX_CALLS,
+        retries: int = MAX_RETRIES,
+        sleep: Callable[[float], None] = time.sleep,
+        rand: Callable[[], float] = random.random,
+    ) -> None:
         self._transport = transport
         self._limit = limit
+        self._retries = retries
+        self._sleep = sleep
+        self._rand = rand
         self.calls: list[Obj] = []
         self.replies: dict[str, Reply] = {}
 
@@ -378,10 +481,21 @@ class Session:
         if len(self.calls) >= self._limit:
             raise BudgetExhausted(step)
         send = self._transport.stream if stream else self._transport.complete
-        reply = send(params)
-        self.calls.append(
-            {"step": step, "status": reply.status, "seconds": round(reply.seconds, 2)}
-        )
+        retry = 0
+        while True:
+            reply = send(params)
+            name = step if retry == 0 else f"{step} (retry {retry})"
+            self.calls.append(
+                {"step": name, "status": reply.status, "seconds": round(reply.seconds, 2)}
+            )
+            if (
+                not retryable(reply.status)
+                or retry >= self._retries
+                or len(self.calls) >= self._limit
+            ):
+                break
+            self._sleep(backoff(retry, reply, self._rand))
+            retry += 1
         self.replies[step] = reply
         return reply
 
@@ -741,10 +855,15 @@ def build_verdict(provider: Provider, checks: dict[str, Check]) -> str:
 
 
 def run_probe(
-    transport: Transport, provider: Provider, model: str, now: datetime | None = None
+    transport: Transport,
+    provider: Provider,
+    model: str,
+    now: datetime | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    rand: Callable[[], float] = random.random,
 ) -> Result:
     """Run the checks in priority order. The session refuses the call after MAX_CALLS."""
-    session = Session(transport)
+    session = Session(transport, sleep=sleep, rand=rand)
     checks: dict[str, Check] = {}
     history: list[Obj] | None = None
 
@@ -767,6 +886,8 @@ def run_probe(
     if history is not None:
         conversation = history
         run("tools_result", lambda: check_tools_result(session, model, conversation))
+        if checks["tools_result"].passed is False:  # the route is not decided until JSON is tried
+            run("json_fallback", lambda: check_json_fallback(session, model))
         run("parallel", lambda: check_parallel(session, model))
     elif checks["tools_call"].passed is False:
         run("json_fallback", lambda: check_json_fallback(session, model))
@@ -865,9 +986,7 @@ def write_report(
     path: Path, name: str, section: str, key: str | None, overwrite: bool = True
 ) -> None:
     existing = path.read_text(encoding="utf-8") if path.is_file() else None
-    text = merge_report(existing, name, section, overwrite)
-    if key and key in text:
-        raise RuntimeError("the report would contain the key; nothing was written")
+    text = Redactor(key)(merge_report(existing, name, section, overwrite))
     path.write_text(text, encoding="utf-8")
 
 
@@ -881,9 +1000,14 @@ def main(argv: list[str] | None = None) -> int:
     provider = PROVIDERS[args.provider]
     settings = Settings.load()
     key = {"meta": settings.meta_api_key, "baseten": settings.baseten_api_key}[provider.name]
+    redact = Redactor(key or None)
+
+    def say(text: str) -> None:
+        print(redact(text))
+
     if not key:
         reason = f"{provider.key_name} is not set."
-        print(f"skipped: {reason}")
+        say(f"skipped: {reason}")
         write_report(args.report, provider.name, skipped_section(provider, reason), None, False)
         return 2
     try:
@@ -891,14 +1015,15 @@ def main(argv: list[str] | None = None) -> int:
             SdkTransport(provider.base_url, key), provider, args.model or provider.model
         )
     except Aborted as err:
-        print(f"aborted: {err}")
+        say(f"aborted: {err}")
         return 1
+    result = scrub(result, redact)
     for check in result.checks:
-        print(f"{check.key}: {check.answer}")
+        say(f"{check.key}: {check.answer}")
     write_report(args.report, provider.name, render_section(result), key)
     if args.details:
         args.details.write_text(json.dumps(asdict(result), indent=2) + "\n", encoding="utf-8")
-    print(f"calls made: {len(result.calls)}; report written")
+    say(f"calls made: {len(result.calls)}; report written")
     return 0
 
 

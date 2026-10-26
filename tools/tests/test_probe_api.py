@@ -2,6 +2,7 @@
 
 import json
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,10 @@ import probe_api as probe
 from oversight.settings import Settings
 
 KEY = "test-key"
+# A longer fake key and a fragment of it, for the sanitizer: low entropy, so that nothing but the
+# key logic (not the credential-shaped patterns) can be what removes them.
+LONG_KEY = "test-key-aaaabbbbccccdddd"
+FRAG = LONG_KEY[10:18]
 META = probe.PROVIDERS["meta"]
 Obj = dict[str, Any]
 
@@ -58,6 +63,12 @@ def ok(body: Obj, seconds: float = 1.0) -> probe.Reply:
 
 
 SUPPORTED = "Supported values: [minimal, low, medium, high]"
+JSON_READ = '```json\n{"tool": "read_file", "arguments": {"path": "src/pricing.py"}}\n```'
+JSON_EDIT = 'Done: {"tool": "edit_file", "arguments": {"old_text": "= 0.0725", "new_text": "x"}}'
+
+
+def no_sleep(seconds: float) -> None:
+    """Stands in for time.sleep: no test waits on the clock."""
 
 
 def failure(status: int) -> probe.Reply:
@@ -181,12 +192,10 @@ def test_an_edit_that_ignores_the_result_does_not_pass() -> None:
 
 
 def test_the_json_fallback_runs_only_when_native_tools_fail_and_fits_the_budget() -> None:
-    read = '```json\n{"tool": "read_file", "arguments": {"path": "src/pricing.py"}}\n```'
-    edit = 'Done: {"tool": "edit_file", "arguments": {"old_text": "= 0.0725", "new_text": "x"}}'
     table = {
         "tools_call": ok(completion("I would read the file.")),
-        "json_call": ok(completion(read)),
-        "json_result": ok(completion(edit)),
+        "json_call": ok(completion(JSON_READ)),
+        "json_result": ok(completion(JSON_EDIT)),
     }
     fake = FakeTransport(table)
     result = probe.run_probe(fake, META, "muse-spark-1.3")
@@ -204,6 +213,34 @@ def test_when_both_routes_fail_the_verdict_says_so() -> None:
     assert result.verdict.startswith("Neither route passed")
 
 
+GUESS = call("edit_file", {"path": "src/pricing.py", "old_text": "= 0.1", "new_text": "= 0.085"})
+
+
+@pytest.mark.parametrize(
+    "bad", [failure(400), ok(completion(None, [GUESS]))], ids=["rejected", "ignores the result"]
+)
+def test_a_failed_tool_result_turn_still_tries_the_json_fallback(bad: probe.Reply) -> None:
+    table = native_table() | {
+        "tools_result": bad,
+        "json_call": ok(completion(JSON_READ)),
+        "json_result": ok(completion(JSON_EDIT)),
+    }
+    fake = FakeTransport(table)
+    result = probe.run_probe(fake, META, "muse-spark-1.3")
+    found = checks(result)
+    assert found["tools_result"].passed is False
+    assert found["json_fallback"].passed is True
+    assert result.verdict.startswith("JSON fallback.")
+    assert fake.steps.index("json_call") > fake.steps.index("tools_result")
+    assert len(fake.steps) == len(result.calls) <= probe.MAX_CALLS
+
+
+def test_a_tool_result_turn_that_worked_does_not_run_the_fallback() -> None:
+    fake = FakeTransport(native_table())
+    probe.run_probe(fake, META, "muse-spark-1.3")
+    assert "json_call" not in fake.steps
+
+
 def test_a_failed_first_call_aborts_before_spending_more() -> None:
     fake = FakeTransport({"chat": failure(404)})
     with pytest.raises(probe.Aborted):
@@ -212,14 +249,97 @@ def test_a_failed_first_call_aborts_before_spending_more() -> None:
 
 
 def test_the_session_refuses_the_call_after_the_last_and_counts_failures() -> None:
-    fake = FakeTransport({"chat": failure(500)})
-    session = probe.Session(fake, limit=2)
+    fake = FakeTransport({"chat": failure(400)})
+    session = probe.Session(fake, limit=2, sleep=no_sleep)
     params = {"model": "m", "messages": [{"role": "user", "content": "x"}]}
     session.send("one", params)
     session.send("two", params)
     with pytest.raises(probe.BudgetExhausted):
         session.send("three", params)
     assert len(fake.steps) == 2
+
+
+class Scripted:
+    """Answers each call with the next reply, then with the last one for ever."""
+
+    def __init__(self, *replies: probe.Reply) -> None:
+        self.replies = list(replies)
+        self.sent = 0
+
+    def complete(self, params: Obj) -> probe.Reply:
+        self.sent += 1
+        return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+
+    def stream(self, params: Obj) -> probe.Reply:
+        return self.complete(params)
+
+
+def test_two_429s_then_a_200_make_three_counted_calls_with_growing_delays() -> None:
+    transport = Scripted(failure(429), failure(429), ok(completion()))
+    slept: list[float] = []
+    session = probe.Session(transport, sleep=slept.append, rand=lambda: 0.5)
+    reply = session.send("chat", PARAMS)
+    assert reply.status == 200 and transport.sent == 3
+    assert [c["status"] for c in session.calls] == [429, 429, 200]
+    assert [c["step"] for c in session.calls] == ["chat", "chat (retry 1)", "chat (retry 2)"]
+    assert slept == [1.0, 2.0]
+    assert session.replies["chat"] is reply
+
+
+def test_the_call_cap_stops_the_retries() -> None:
+    transport = Scripted(failure(503))
+    slept: list[float] = []
+    session = probe.Session(transport, limit=3, sleep=slept.append, rand=lambda: 0.5)
+    reply = session.send("chat", PARAMS)
+    assert reply.status == 503 and transport.sent == len(session.calls) == 3
+    assert len(slept) == 2  # no wait after the last call the cap allows
+    with pytest.raises(probe.BudgetExhausted):
+        session.send("next", PARAMS)
+    assert transport.sent == 3
+
+
+def test_retries_are_bounded_even_under_a_large_cap() -> None:
+    transport = Scripted(failure(429))
+    session = probe.Session(transport, limit=50, sleep=no_sleep)
+    session.send("chat", PARAMS)
+    assert transport.sent == probe.MAX_RETRIES + 1
+
+
+@pytest.mark.parametrize(("status", "attempts"), [(400, 1), (401, 1), (404, 1), (500, 4), (503, 4)])
+def test_only_429_and_5xx_are_retried(status: int, attempts: int) -> None:
+    transport = Scripted(failure(status))
+    slept: list[float] = []
+    probe.Session(transport, sleep=slept.append).send("chat", PARAMS)
+    assert transport.sent == attempts and len(slept) == attempts - 1
+
+
+def test_the_delay_doubles_is_jittered_capped_and_honors_retry_after() -> None:
+    reply = failure(429)
+    assert probe.backoff(0, reply, lambda: 0.0) == 0.5
+    assert probe.backoff(0, reply, lambda: 1.0) == 1.5
+    assert probe.backoff(2, reply, lambda: 0.5) == 4.0
+    assert probe.backoff(20, reply, lambda: 1.0) == probe.BACKOFF_MAX
+    asked = probe.Reply(429, {}, 0.1, {"retry-after": "7"})
+    assert probe.backoff(0, asked, lambda: 0.5) == 7.0
+    date = probe.Reply(429, {}, 0.1, {"retry-after": "Wed, 21 Oct 2026 07:28:00 GMT"})
+    assert probe.backoff(0, date, lambda: 0.5) == 1.0
+
+
+def test_a_rate_limited_first_call_is_retried_before_the_run_aborts() -> None:
+    fake = FakeTransport({"chat": failure(429)})
+    slept: list[float] = []
+    with pytest.raises(probe.Aborted):
+        probe.run_probe(fake, META, "m", sleep=slept.append, rand=lambda: 0.5)
+    assert fake.steps == ["chat"] * (probe.MAX_RETRIES + 1)
+    assert slept == [1.0, 2.0, 4.0]
+
+
+def test_retries_spend_the_budget_of_the_steps_after_them() -> None:
+    table = native_table() | {"tools_call": failure(503)}
+    fake = FakeTransport(table)
+    result = probe.run_probe(fake, META, "muse-spark-1.3", sleep=no_sleep)
+    assert len(fake.steps) == len(result.calls) <= probe.MAX_CALLS
+    assert fake.steps.count("tools_call") == probe.MAX_RETRIES + 1
 
 
 def test_missing_usage_is_unknown_and_never_zero() -> None:
@@ -358,6 +478,111 @@ def test_a_network_error_is_status_zero_with_the_error_type_only() -> None:
     assert reply.body == {"error": {"type": "APIConnectionError"}}
 
 
+# The sanitizer ---------------------------------------------------------------------------------
+
+
+def secret_error() -> Obj:
+    """An error that reflects the key, and a piece of it, in its code, type and message."""
+    return {
+        "error": {
+            "code": f"c-{LONG_KEY}",
+            "type": f"t-{FRAG}",
+            "message": f"bad {LONG_KEY}, and {FRAG}, and Bearer {LONG_KEY}",
+        }
+    }
+
+
+def test_the_redactor_removes_the_key_any_fragment_of_it_and_credential_shapes() -> None:
+    redact = probe.Redactor(LONG_KEY)
+    assert redact(f"a {LONG_KEY} b") == "a [redacted] b"
+    assert redact(f"x{FRAG}y") == "x[redacted]y"
+    assert redact(f"x{LONG_KEY[3:20]}y") == "x[redacted]y"  # a long fragment is one redaction
+    assert redact("short ey-fo") == "short ey-fo"  # under 8 characters says nothing about the key
+    for shaped in ("Bearer abcdef123456", "sk-proj-abcdefgh1234", "a1b2c3d4e5f6g7h8i9j0k1l2m3n4"):
+        assert shaped.split()[-1] not in probe.Redactor(None)(f"x {shaped} y")
+    assert redact(redact(f"{LONG_KEY} {FRAG}")) == redact(f"{LONG_KEY} {FRAG}")  # idempotent
+
+
+def test_the_redactor_leaves_the_committed_report_and_field_names_alone() -> None:
+    redact = probe.Redactor(None)
+    report = (Path(__file__).resolve().parents[2] / "docs" / "api-probe.md").read_text()
+    assert redact(report) == report
+    names = "completion_tokens_details.reasoning_tokens=258 meta-models/muse-spark-open-1026"
+    assert redact(names) == names
+
+
+def test_an_error_keeps_no_key_in_its_code_type_message_or_headers() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        headers = {"x-ratelimit-reset": f"r-{FRAG}", "retry-after": LONG_KEY, "x-other": LONG_KEY}
+        return httpx2.Response(400, json=secret_error(), headers=headers)
+
+    client = openai.DefaultHttpxClient(transport=httpx2.MockTransport(handler))
+    reply = probe.SdkTransport("https://example.test/v1", LONG_KEY, http_client=client).complete(
+        PARAMS
+    )
+    text = json.dumps([reply.body, reply.headers])
+    assert LONG_KEY not in text and FRAG not in text
+    assert reply.body["error"]["code"].startswith("c-") and "bad" in reply.body["error"]["message"]
+
+
+def test_an_error_on_the_first_call_prints_and_writes_no_key_or_fragment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(400, json=secret_error(), headers={"retry-after": FRAG})
+
+    real = probe.SdkTransport
+    client = openai.DefaultHttpxClient(transport=httpx2.MockTransport(handler))
+    monkeypatch.setattr(
+        probe.Settings, "load", classmethod(lambda cls: Settings(meta_api_key=LONG_KEY))
+    )
+    monkeypatch.setattr(
+        probe, "SdkTransport", lambda base_url, key: real(base_url, key, http_client=client)
+    )
+    report, details = tmp_path / "report.md", tmp_path / "details.json"
+    assert probe.main(["meta", "--report", str(report), "--details", str(details)]) == 1
+    seen = capsys.readouterr()
+    written = "".join(f.read_text() for f in tmp_path.rglob("*") if f.is_file())
+    assert seen.out.startswith("aborted: the first call failed")
+    for secret in (LONG_KEY, FRAG):
+        assert secret not in seen.out + seen.err + written
+
+
+def test_a_run_that_reflects_the_key_prints_and_writes_none_of_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    table = native_table() | {
+        "chat": probe.Reply(200, completion(f"541171 {FRAG}"), 1.0, {"retry-after": LONG_KEY}),
+        "reasoning_none": probe.Reply(400, secret_error(), 0.1),
+        "limits": probe.Reply(400, secret_error(), 0.1),
+    }
+    monkeypatch.setattr(
+        probe.Settings, "load", classmethod(lambda cls: Settings(meta_api_key=LONG_KEY))
+    )
+    monkeypatch.setattr(probe, "SdkTransport", lambda base_url, key: FakeTransport(table))
+    report, details = tmp_path / "report.md", tmp_path / "details.json"
+    assert probe.main(["meta", "--report", str(report), "--details", str(details)]) == 0
+    seen = capsys.readouterr()
+    written = report.read_text() + details.read_text()
+    for secret in (LONG_KEY, FRAG):
+        assert secret not in seen.out + seen.err + written
+    assert "[redacted]" in written and json.loads(details.read_text())["provider"] == "meta"
+
+
+# The declared dependencies --------------------------------------------------------------------
+
+
+def test_httpx2_is_declared_for_the_tests_and_locked_at_the_same_version() -> None:
+    root = Path(__file__).resolve().parents[2]
+    declared = tomllib.loads((root / "pyproject.toml").read_text())["dependency-groups"]["dev"]
+    assert "httpx2==2.13.1" in declared
+    packages = tomllib.loads((root / "uv.lock").read_text())["package"]
+    workspace = next(p for p in packages if p["name"] == "oversight-workspace")
+    assert {"name": "httpx2", "specifier": "==2.13.1"} in workspace["metadata"]["requires-dev"][
+        "dev"
+    ]
+
+
 # The report -----------------------------------------------------------------------------------
 
 
@@ -382,11 +607,13 @@ def test_a_section_is_replaced_and_the_other_provider_is_kept() -> None:
     assert probe.merge_report(first, "meta", "## new meta").count("<!-- probe:meta -->") == 1
 
 
-def test_a_report_that_would_hold_the_key_is_not_written(tmp_path: Path) -> None:
+def test_a_report_is_redacted_whole_before_it_is_written(tmp_path: Path) -> None:
     path = tmp_path / "report.md"
-    with pytest.raises(RuntimeError):
-        probe.write_report(path, "meta", f"## Meta\n\n{KEY}", KEY)
-    assert not path.exists()
+    probe.write_report(path, "meta", f"## Meta\n\n{LONG_KEY} {FRAG}", LONG_KEY)
+    written = path.read_text()
+    assert "## Meta" in written and LONG_KEY not in written and FRAG not in written
+    probe.write_report(path, "baseten", "## Baseten\n\nok", LONG_KEY)
+    assert "## Meta" in path.read_text() and LONG_KEY not in path.read_text()
 
 
 def test_main_without_a_key_writes_a_skipped_section_and_calls_nothing(
