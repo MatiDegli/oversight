@@ -24,6 +24,9 @@ repos:
         entry: uv run --frozen python tools/check_commits.py message
         language: system
         stages: [commit-msg]
+      # pre-commit runs a pre-push hook once per push, with one range: the first pushed ref that
+      # has new commits. So the script also checks every local branch commit that no remote has,
+      # which covers the other refs of a multi-ref push, and any local branch not being pushed.
       - id: commits-pushed
         name: commits being pushed
         entry: uv run --frozen python tools/check_commits.py pushed
