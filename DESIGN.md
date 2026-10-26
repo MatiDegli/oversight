@@ -11,6 +11,7 @@ colors:
   raised: "#121212"
   page-raised: "#131313"
   text: "#ededea"
+  text-hover: "#ffffff"
   muted: "#a3a39e"
   faint: "#85857f"
   code-dim: "#7d7d78"
@@ -24,7 +25,7 @@ colors:
   control-edge: "#62625e"
   node-hover: "#6b6e77"
   edge: "#6a6a65"
-  edge-possible: "#5c5c58"
+  edge-possible: "#5f5f5b"
   lit-edge: "#d6d3cb"
   work-light: "#8c8c88"
   agent-a: "#ff5c1f"
@@ -49,6 +50,12 @@ colors:
   syntax-number: "#cbbd9f"
   syntax-builtin: "#b6adc6"
   syntax-definition: "#f2f1ea"
+  span-highlight: "rgba(255, 255, 255, 0.04)"
+  fold-tint: "rgba(255, 255, 255, 0.035)"
+  matte-top: "#151515"
+  matte-bottom: "#0f0f0f"
+  lamp-off: "#050505"
+  guide-dot: "rgba(237, 237, 234, 0.10)"
   day-ground: "#f4f3ef"
   day-shell: "#e9e8e3"
   day-panel: "#eeede8"
@@ -58,6 +65,7 @@ colors:
   day-raised: "#e4e2dc"
   day-page-raised: "#efeee9"
   day-text: "#1c1c1a"
+  day-text-hover: "#000000"
   day-muted: "#56554f"
   day-faint: "#67665f"
   day-code-dim: "#67665f"
@@ -71,20 +79,23 @@ colors:
   day-control-edge: "#8a8983"
   day-node-hover: "#8d8c86"
   day-edge: "#6e6d67"
-  day-edge-possible: "#8a8983"
+  day-edge-possible: "#85847e"
   day-lit-edge: "#3a3936"
   day-work-light: "#6b6a64"
   day-agent-a: "#b23c0a"
+  day-agent-a-text: "#9a3308"
   day-agent-a-tint: "rgba(178, 60, 10, 0.12)"
   day-agent-a-node: "#f9e7dd"
   day-agent-a-node-new: "#fbefe8"
   day-agent-b: "#2a4fc9"
+  day-agent-b-text: "#2548b8"
   day-agent-b-tint: "rgba(42, 79, 201, 0.12)"
   day-agent-b-node: "#e6ebfa"
   day-agent-b-node-new: "#eff2fc"
   day-on-agent: "#ffffff"
   day-passed: "#1a6f36"
   day-failed: "#b8262b"
+  day-failed-text: "#b8262b"
   day-added-tint: "rgba(26, 111, 54, 0.12)"
   day-removed-tint: "rgba(184, 38, 43, 0.10)"
   day-syntax-plain: "#2b2a27"
@@ -93,6 +104,12 @@ colors:
   day-syntax-number: "#77602f"
   day-syntax-builtin: "#64577a"
   day-syntax-definition: "#1c1c1a"
+  day-span-highlight: "rgba(0, 0, 0, 0.04)"
+  day-fold-tint: "rgba(0, 0, 0, 0.03)"
+  day-matte-top: "#f3f2ee"
+  day-matte-bottom: "#ecebe6"
+  day-lamp-off: "#eae9e5"
+  day-guide-dot: "rgba(28, 28, 26, 0.10)"
 typography:
   headline:
     fontFamily: "Atkinson Hyperlegible Next, sans-serif"
@@ -155,6 +172,9 @@ components:
     rounded: "{rounded.control}"
     height: "40px"
     padding: "0 16px"
+  button-primary-hover:
+    backgroundColor: "{colors.text-hover}"
+    textColor: "{colors.page}"
   button-secondary:
     backgroundColor: "transparent"
     textColor: "{colors.text}"
@@ -216,7 +236,7 @@ components:
     size: "20px"
   letter-avatar:
     backgroundColor: "{colors.agent-a-tint}"
-    textColor: "{colors.agent-a}"
+    textColor: "{colors.agent-a-text}"
     rounded: "{rounded.card}"
     size: "36px"
 ---
@@ -262,11 +282,12 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Code-dim (line numbers, comments) | `#6d6d68`, 3.8:1 on page | `#7d7d78`, 4.7:1 | quality floor: text at 4.5:1 |
 | Text-box placeholder | `#6d6d68` | faint `#85857f`, 5.3:1 on field | same |
 | Exact call edge | `#4a4a46`, 2.4:1 on black | `#6a6a65`, 3.7:1 | quality floor: meaningful graphics at 3:1 |
-| Possible call edge | `#3a3a37`, 1.8:1 | `#5c5c58`, 3.0:1 | same; it stays thinner and grey |
+| Possible call edge | `#3a3a37`, 1.8:1 | `#5f5f5b`, 3.14:1 on a module frame at 90% over ground (3.28:1 on ground) | same, measured on its worst surface, unrounded; it stays thinner and grey |
 | Input border | `#222222` to `#262626` | control-edge `#62625e`, 3.2:1 on field | quality floor: a control's boundary at 3:1 |
 | Task box fill | `#070707` | field `#0b0b0b` | one fill for every input |
 | Pressed rail button | `#161616` | raised `#121212` | one color for hover and pressed |
 | New-node fill for agent B | not drawn | `rgba(4, 8, 20, 0.95)` | derived from A's pair, so both agents follow one rule |
+| Letter in a rail avatar | the agent's color | agent-a-text, agent-b-text | text at 4.5:1 in both modes; agent B's own color gives 4.41:1 on its tint over card |
 | Live diff hint | "Pause to edit by hand" | read-only; editing happens in review | AGENTS.md: the new side is editable only in review while the agent is idle; pause is level 3 |
 | Product name | "Graph IDE" | Oversight | the placeholder was replaced |
 
@@ -277,8 +298,9 @@ green and red only ever mean passed and failed.
 
 ### Primary
 
-- **Agent A orange** (agent-a): Agent A's node borders, letter badges, rings and light. As text it
-  uses agent-a-text, lighter so small text stays readable on near-black.
+- **Agent A orange** (agent-a): Agent A's node borders, letter badges, rings and light. As text (the
+  word on a node, a status pill, the letter in a rail avatar) it uses agent-a-text, lighter so
+  small text stays readable on near-black (darker in day mode, for the same reason).
 - **Agent B blue** (agent-b): the same roles for Agent B, with agent-b-text for text. Orange and
   blue are the pair that people with the common forms of color blindness tell apart best.
 - **Agent tints** (agent-a-tint, agent-b-tint): the fill behind a letter avatar or an agent's status
@@ -305,7 +327,7 @@ From darkest to lightest:
 - **Raised** (raised): hover on a control or row; a pressed rail button; the queue counter.
 - **Page raised** (page-raised): chips, facts and file rows inside the left panel.
 - **Text** (text): primary text everywhere; a slightly warm white, because pure white glares on
-  video against black.
+  video against black. **Text hover** (text-hover): the primary button's fill on hover.
 - **Muted** (muted): secondary text: model name, times, counts, hints.
 - **Faint** (faint): tertiary text: a module's function count, text-box placeholders.
 - **Code-dim** (code-dim): line numbers and code comments, on page and field only.
@@ -315,9 +337,12 @@ From darkest to lightest:
   for an agent card and a module frame; node-border for a node at rest; outline for a secondary
   button; control-edge for the boundary of an input. All borders are 1px unless a graph state says
   otherwise.
+- **Review header and highlights:** matte-top and matte-bottom are the two ends of the matte
+  header's gradient; span-highlight and fold-tint are the Monaco highlights described below.
 - **Graph neutrals:** edge for an exact call edge, edge-possible for a possible one, lit-edge for an
   edge inside the cone or the change, node-hover for a hovered node's border, work-light for the
-  light the cone casts.
+  light the cone casts; lamp-off for an unlit lamp of the dot field and guide-dot for its guide
+  dots.
 
 ### Code colors
 
@@ -325,7 +350,8 @@ Syntax colors are low in chroma, so code never looks like an agent or a state. M
 its built-in dark theme (`vs-dark`) with these overrides: plain code syntax-plain, keywords
 syntax-keyword, strings syntax-string, numbers syntax-number, built-ins syntax-builtin, a
 function's name at its definition syntax-definition, comments and line numbers code-dim. A
-highlighted span (the selected function) is white at 4%; a folded region is white at 3.5%.
+highlighted span (the selected function) is span-highlight (white at 4%); a folded region is
+fold-tint (white at 3.5%).
 
 ### Day mode
 
@@ -336,18 +362,26 @@ otherwise it is cut like level 3. The screenshots (`make shots`, once it exists)
 - **Every color comes from a token**, including the colors Cytoscape, Monaco and the dot-field
   canvas receive. The token sets hang off `data-theme` on the root element (`dark` or `day`); no
   component picks a color itself, and switching the attribute repaints everything.
-- **The light set** is the frontmatter's `day-` tokens: each `day-x` replaces `x`, and
-  `day-agent-a` and `day-agent-b` also replace the agents' text variants. Panels are light warm
-  greys of the same warm family as the dark set's text. White at 4% and 3.5% (span, fold) become
-  black at 4% and 3%.
+- **The light set** is the frontmatter's `day-` tokens, and each `day-x` replaces `x`, one to one:
+  `day-agent-a-text` and `day-agent-b-text` replace the agents' text variants, `day-failed-text`
+  replaces failed-text (so Reject is `#b8262b`, not the dark `#ff7b7b`, which is 2.34:1 on
+  day-page), and `day-span-highlight` and `day-fold-tint` (black at 4% and 3%) replace the white
+  highlights. Panels are light warm greys of the same warm family as the dark set's text.
+- **Hover moves away from the text color.** The primary button's fill is day-text, its label
+  day-page; on hover the fill goes to `day-text-hover`, black, never white (day-page on white is
+  1.07:1).
+- **The matte header** runs from `day-matte-top` to `day-matte-bottom` with the same grain.
 - **Monaco** uses its built-in light theme (`vs`) with the muted day syntax tokens.
-- **The graph grid** is ink on paper: the ground is day-ground, unlit lamps are the ground darkened
-  by about 4%, the guide dots are day-text at 10%, and light becomes ink density: a stronger light
-  draws denser, darker dots in the light's day color.
+- **The graph grid** is ink on paper: the ground is day-ground, unlit lamps are `day-lamp-off` (the
+  ground darkened by about 4%), the guide dots are `day-guide-dot` (day-text at 10%), and light
+  becomes ink density: a stronger light draws denser, darker dots in the light's day color.
 - **Agents** are darker variants of the same hues, still told apart with common color blindness.
   Simulated color difference between A and B (CIE76, full-severity simulation): 119 with normal
-  vision, 108 protanopia, 122 deuteranopia, 97 tritanopia (the dark pair: 137, 119, 140, 116). On a
-  filled badge the letter is white.
+  vision, 108 protanopia, 122 deuteranopia, 97 tritanopia (the dark pair: 137, 119, 140, 116), for
+  the colors themselves, which the text variants do not change. On a filled badge the letter is
+  day-on-agent (white). Text on an agent's tint, the avatar letter and the status pill included,
+  uses the text variant, a darker letter on the same tint: the plain colors give 4.08:1 for A on
+  its tint over day-shell and 4.25:1 over day-panel, under 4.5:1.
 
 Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1):
 
@@ -356,17 +390,22 @@ Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1
 | day-text | day-page / day-shell | 15.9 / 13.9 |
 | day-muted | day-page / day-raised (worst) | 7.0 / 5.8 |
 | day-faint, day-code-dim | day-page / day-shell (worst) | 5.4 / 4.7 |
-| day-agent-a as text | day-card / day-page / day-shell (worst) | 5.7 / 5.5 / 4.8 |
-| day-agent-a as text | its node fill day-agent-a-node | 4.9 |
-| day-agent-b as text | day-card / day-page / day-shell (worst) | 6.0 / 6.4 / 5.6 |
-| day-agent-b as text | its node fill day-agent-b-node | 5.8 |
+| day-agent-a-text as text | day-card / day-page / day-shell (worst) | 7.1 / 6.9 / 6.0 |
+| day-agent-a-text as text | its node fill day-agent-a-node / day-agent-a-node-new | 6.1 / 6.5 |
+| day-agent-a-text on agent-a tint | over day-card / day-page / day-panel / day-shell / day-matte-bottom (worst) | 5.9 / 5.8 / 5.3 / 5.1 / 5.2 |
+| day-agent-b-text as text | day-card / day-page / day-shell (worst) | 7.5 / 7.3 / 6.3 |
+| day-agent-b-text as text | its node fill day-agent-b-node / day-agent-b-node-new | 6.5 / 7.0 |
+| day-agent-b-text on agent-b tint | over day-card / day-page / day-panel / day-shell / day-matte-bottom (worst) | 6.3 / 6.1 / 5.6 / 5.3 / 5.5 |
 | day-agent-a, day-agent-b as graphics | day-ground | 5.3 / 6.2 |
-| white letter | day-agent-a / day-agent-b | 5.9 / 6.9 |
+| day-on-agent (white) | day-agent-a / day-agent-b | 5.9 / 6.9 |
 | day-passed | day-page / day-shell | 5.8 / 5.1 |
-| day-failed | day-page / day-shell | 5.9 / 5.1 |
-| day-edge / day-edge-possible | day-ground | 4.7 / 3.2 |
+| day-failed, day-failed-text (Reject) | day-page / day-card / day-shell / day-raised (worst) | 5.85 / 6.06 / 5.11 / 4.84 |
+| day-page (button label) | day-text fill / day-text-hover fill | 15.9 / 19.6 |
+| day-edge | day-ground / module frame at 90% | 4.7 / 4.45 |
+| day-edge-possible | day-ground / module frame at 90% | 3.38 / 3.22 |
 | day-control-edge | day-field / day-page | 3.4 / 3.3 |
 | day-lit-edge / day-work-light | day-ground | 10.4 / 4.9 |
+| day-text / day-muted / day-faint | day-matte-top (lightest) / day-matte-bottom (darkest) | 15.2 / 6.7 / 5.2 and 14.3 / 6.3 / 4.8 |
 | day syntax: plain, keyword, string, number, built-in | day-page | 13.4, 6.8, 6.0, 5.6, 6.2 |
 
 ### Named Rules
@@ -461,8 +500,10 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 ### Buttons
 
 - **Shape:** control radius (7px), 40px tall (small: 34px), label type.
-- **Primary (Approve and merge, Send, Start agent):** text-colored fill with page-colored text.
-  Hover lightens the fill to white.
+- **Primary (Approve and merge, Send, Start agent):** text-colored fill with page-colored text. On
+  hover the fill moves to text-hover, away from the label's color: white in the dark set (page
+  text on it 19.56:1, 16.68:1 at rest), black in day mode (day-page text on day-text-hover
+  19.59:1, 15.92:1 at rest). A day fill never goes to white, where its label would read 1.07:1.
 - **Secondary (Request changes, Message, Live diff):** transparent with an outline border.
 - **Destructive (Reject, Stop and discard):** failed-text label and icon, no fill.
 - **Focus:** every control shows a visible keyboard focus ring: 2px in text color, offset 2px,
@@ -503,7 +544,8 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
   agents, so it is neutral, never an agent's color.
 - **Left rail** (shell): icon buttons; the current view's button on raised.
 - **Agents rail** (review mode): one letter avatar per agent: a 36px square with card radius,
-  agent-tint fill, a 1.5px border and the letter in the agent's color at 15px, weight 700. A status
+  agent-tint fill, a 1.5px border in the agent's color and the letter in the agent's text color
+  (agent-a-text, agent-b-text) at 15px, weight 700. A status
   lamp sits on its top-right corner and a one-word caption under it ("Ready", "Editing").
 
 ### Graph nodes and their states (signature component)
@@ -574,12 +616,13 @@ Opened only by the person: from "Review change" on a card, the queue counter, or
 change is proposed.
 
 - **Header:** the change's title, the agent, its status pill, a close button, and the facts row.
-- **Matte background:** flat dark with a still grain: a gentle vertical gradient from about
-  `#151515` at the top to about `#0f0f0f` at the bottom, with a fixed per-pixel grain of roughly
-  plus or minus 2% brightness that also hides banding. It never animates. In day mode the gradient
-  runs from about `#f3f2ee` to `#ecebe6` with the same grain. It was chosen on the compressed demo
-  clip: at 720p and 1.2 Mbps the grain disappears and the header stays clean. It comes after level
-  1; until then, and as the fallback, the header is plain page.
+- **Matte background:** flat dark with a still grain: a gentle vertical gradient from matte-top
+  (`#151515`) at the top to matte-bottom (`#0f0f0f`) at the bottom, with a fixed per-pixel grain of
+  roughly plus or minus 2% brightness that also hides banding. It never animates. In day mode the
+  gradient runs from day-matte-top (`#f3f2ee`) to day-matte-bottom (`#ecebe6`) with the same grain.
+  The header's text keeps the floor on both ends (see the quality floor). It was chosen on the
+  compressed demo clip: at 720p and 1.2 Mbps the grain disappears and the header stays clean. It
+  comes after level 1; until then, and as the fallback, the header is plain page.
 - **Body:** the agent's note; Monaco's DiffEditor in inline mode, one block per file with its name,
   `+` and `-` counts and an inline or side-by-side switch; added lines on added-tint with `+`,
   removed lines on removed-tint with `-`; unchanged regions folded into a "6 hidden lines" row;
@@ -610,9 +653,9 @@ the graph's background is plain ground.
 - **Grid:** its own canvas under a transparent Cytoscape canvas, reading the rendered boxes of the
   lit nodes; it never draws nodes or edges. Cells are 7px, fixed to the screen (they do not pan or
   zoom). Each cell is a square lamp covering 72% of it, about 5px. Each lamp shows one of four
-  levels (off and three steps), chosen with an 8 by 8 ordered (Bayer) dither. An unlit lamp sits at
-  about 2% brightness, close to shell; a 2px guide dot every 28px marks the grid where nothing is
-  lit. The cells are large on purpose: they survive 720p compression.
+  levels (off and three steps), chosen with an 8 by 8 ordered (Bayer) dither. An unlit lamp is
+  lamp-off (about 2% brightness, close to shell); a 2px guide dot in guide-dot every 28px marks the
+  grid where nothing is lit. The cells are large on purpose: they survive 720p compression.
 - **Light:** each lit node is a source shaped like its box. Intensity falls off with distance from
   the box: about 72% a near term that decays quickly plus 28% a far term that spreads wider, times
   the mode's gain and the node's weight. Overlapping lights mix colors by intensity; at most 8 at
@@ -658,12 +701,16 @@ Each item is a target checked on the built result:
 - **Contrast:** text at 4.5:1 or more against its surface; graphics that carry meaning (agent
   borders, badges, dashes, state icons, call edges, the focus ring) and control boundaries at 3:1.
   Measured for the dark set: text 16.7:1 on page; muted 7.6:1 on card; faint 5.3:1 on field;
-  code-dim 4.7:1 on page; agent-a-text 7.5:1 and agent-b-text 8.0:1 on card, and 6.8:1 and 7.0:1
-  on their tints; agent-a and agent-b as graphics 6.8:1 and 5.7:1 on ground; on-agent letters
-  6.1:1 on A and 5.1:1 on B; passed 10.3:1 and failed-text 7.8:1 on page; edge 3.7:1 and
-  edge-possible 3.0:1 on a module frame; control-edge 3.2:1 on field; lit-edge 14.0:1 and
-  work-light 6.2:1 on ground; every syntax color 8.1:1 or more on page. Rest borders (divider,
-  border, node-border) are decorative: what they enclose is identified by its text.
+  code-dim 4.7:1 on page; agent-a-text 7.5:1 and agent-b-text 8.0:1 on card, and 6.4:1 and 6.7:1 on
+  their tints over card (6.9:1 and 7.2:1 over shell, where the rail sits); agent-a and agent-b as
+  graphics 6.8:1 and 5.7:1 on ground; on-agent letters 6.1:1 on A and 5.1:1 on B; passed 10.3:1 and
+  failed-text 7.8:1 on page; edge 3.70:1 and edge-possible 3.14:1 on a module frame at 90% over
+  ground (3.86:1 and 3.28:1 on ground); control-edge 3.2:1 on field; lit-edge 14.0:1 and work-light
+  6.2:1 on ground; every syntax color 8.1:1 or more on page; page-colored button label 19.56:1 on
+  text-hover; the matte header's text, muted and faint 15.6:1, 7.2:1 and 4.9:1 on matte-top (the
+  lightest end), and agent text on a tint over matte-top 6.0:1 and 6.3:1. The day set's numbers are
+  in its table. Rest borders (divider, border, node-border) are decorative: what they enclose is
+  identified by its text.
 - **Errors:** every error message says what happened and how to go on, in the product's words:
   "The merge conflicts with main in pricing.py. Ask Agent A to redo it on the new base, or reject
   it." Never a bare code or "Something went wrong". Errors use neutral colors with an icon;
@@ -682,7 +729,8 @@ Each item is a target checked on the built result:
 - **Do** leave the screen still when an agent finishes: only its card, its pill and the queue
   counter change.
 - **Do** take every color from a token under `data-theme`, Cytoscape, Monaco and the dot field
-  included.
+  included: hovers, highlights, gradient ends and the grid's lamps and dots too, never a raw hex or
+  `white` in a component.
 - **Do** check contrast against the quality floor in both modes.
 
 ### Don't:
