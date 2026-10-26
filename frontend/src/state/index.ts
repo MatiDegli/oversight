@@ -6,6 +6,7 @@ export {
   selectChangeForAgent,
   selectHasReadyForReview,
   selectLitNodes,
+  selectNodeMarks,
   selectPendingChanges,
 } from "./selectors";
 export type { AgentCardData, LiveDiffData } from "./selectors";

@@ -30,6 +30,9 @@ stop_group() {
 # 124 without escalating. So whatever the way out (finished, deadline, or a signal to this shell),
 # stop_group signals the whole group, TERM first and KILL after a short deadline, and checks that
 # nothing in it is alive. A process that leaves the group by itself (setsid, setpgid) is out of reach.
+#
+# The detector's Chrome is under a memory cap of 6 GiB where systemd can make one (capped.sh); it
+# execs in place, so `timeout` and the group see the same process as before.
 run_detect() {
   local impeccable=$1 url=$2 out=$3 seconds=$4 detect=0
   if [ ! -x "$impeccable" ]; then
@@ -50,7 +53,7 @@ run_detect() {
   saved_traps=$(trap -p INT TERM HUP)
   trap 'stop_group "$gid"; exit 130' INT
   trap 'stop_group "$gid"; exit 143' TERM HUP
-  setsid timeout --kill-after=10 "$seconds" \
+  setsid timeout --kill-after=10 "$seconds" bash frontend/shots/capped.sh \
     "$impeccable" detect --json --viewport 1920x1080 "$url" >"$out/detect.json" 2>"$out/detect.err" &
   gid=$!
   wait "$gid" || detect=$?
