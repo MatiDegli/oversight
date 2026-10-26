@@ -3,7 +3,7 @@ import fcose from "cytoscape-fcose";
 import { useEffect, useRef } from "react";
 
 import { stateStore } from "../state";
-import * as theme from "../theme";
+import { getActiveTheme } from "../theme";
 
 import { graphElements } from "./elements";
 import { graphStyles } from "./styles";
@@ -16,6 +16,7 @@ export function GraphView() {
   useEffect(() => {
     const host = container.current;
     if (!host) return;
+    const theme = getActiveTheme();
     let cancelled = false;
     let dispose: (() => void) | undefined;
     const create = () => {
@@ -37,7 +38,7 @@ export function GraphView() {
     // Create labels only after the font settles: reapplying identical styles
     // cannot invalidate Cytoscape's cached label measurements and textures.
     void document.fonts
-      .load(`14px ${theme.fontFamilies.sans}`)
+      .load(`${theme["body-size"]} ${theme["text-font"]}`)
       .catch(() => undefined)
       .then(() => {
         if (!cancelled) create();
@@ -50,7 +51,7 @@ export function GraphView() {
   return (
     <div
       ref={container}
-      className="h-full w-full bg-background"
+      className="h-full w-full bg-ground"
       role="img"
       aria-label="Repository graph"
     />

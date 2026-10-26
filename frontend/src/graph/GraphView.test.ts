@@ -30,7 +30,9 @@ vi.mock("cytoscape", async (importOriginal) => {
 });
 
 import { createInitialState, stateStore } from "../state";
-import { fontFamilies } from "../theme";
+import { themes } from "../theme";
+
+const theme = themes.dark;
 
 import { GraphView } from "./GraphView";
 
@@ -107,7 +109,7 @@ it.each(["resolved", "rejected"] as const)(
   async (result) => {
     setLabel("Before loading");
     const { load, observer, settle } = mount();
-    expect(load).toHaveBeenCalledExactlyOnceWith(`14px ${fontFamilies.sans}`);
+    expect(load).toHaveBeenCalledExactlyOnceWith(`${theme["body-size"]} ${theme["text-font"]}`);
     await Promise.resolve();
     expect(mocks.instances).toHaveLength(0);
     expect(observer.observe).not.toHaveBeenCalled();
@@ -120,7 +122,7 @@ it.each(["resolved", "rejected"] as const)(
     expect(cy.destroyed()).toBe(false);
     expect(cy.nodes()).toHaveLength(1);
     expect(cy.getElementById("billing:fee").data("label")).toBe("During loading");
-    expect(cy.getElementById("billing:fee").style("font-family")).toBe(fontFamilies.sans);
+    expect(cy.getElementById("billing:fee").style("font-family")).toBe(theme["text-font"]);
     expect(observer.observe).toHaveBeenCalledTimes(1);
 
     const style = vi.spyOn(cy, "style");

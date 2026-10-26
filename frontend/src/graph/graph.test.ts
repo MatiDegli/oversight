@@ -6,8 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applyEvent, createInitialState, stateStore } from "../state";
 import type { State } from "../state";
-import * as theme from "../theme";
-import { agentColors, colors, fontFamilies } from "../theme";
+import { themes } from "../theme";
 
 import { loadGraphEvents } from "./devLog";
 import { graphElements } from "./elements";
@@ -15,6 +14,9 @@ import { EDGE_CURVE_STYLE, graphStyles } from "./styles";
 import { updateGraph } from "./updateGraph";
 
 cytoscape.use(fcose);
+
+const theme = themes.dark;
+const agents = { A: "agent-a", B: "agent-b" } as const;
 
 const rgb = (hex: string) =>
   `rgb(${[1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16)).join(",")})`;
@@ -144,6 +146,53 @@ afterEach(() => {
 });
 
 describe("graph mapping", () => {
+  it("reads colors, type and alpha from the supplied theme", () => {
+    const custom = {
+      ...theme,
+      card: theme.raised,
+      "text-font": theme["code-font"],
+      "body-size": theme["title-size"],
+      "node-opacity": theme["module-opacity"],
+      "agent-b-node": { color: theme.field, alpha: theme["dim-module"] },
+    };
+    cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(custom) });
+    updateGraph(cy, graphElements(initial()));
+    const target = cy.getElementById("billing:fee");
+    expect(target.style("background-color")).toBe(rgb(custom.card));
+    expect(target.style("font-family")).toBe(custom["text-font"]);
+    expect(target.style("font-size")).toBe(custom["body-size"]);
+    expect(Number(target.style("background-opacity"))).toBe(custom["node-opacity"]);
+    target.classes("function focus-B-edit");
+    expect(target.style("background-color")).toBe(rgb(custom["agent-b-node"].color));
+    expect(Number(target.style("background-opacity"))).toBe(custom["agent-b-node"].alpha);
+  });
+
+  it("uses graph tokens for module surfaces, dimming and lit edges, preserving possible edges", () => {
+    const graph = render(initial());
+    const module = graph.getElementById("billing");
+    expect(module.style("background-color")).toBe(rgb(theme.panel));
+    expect(Number(module.style("background-opacity"))).toBe(theme["module-opacity"]);
+    expect(module.style("color")).toBe(rgb(theme["module-label"]));
+    expect(module.style("font-family")).toBe(theme["text-font"]);
+    module.addClass("dimmed");
+    expect(Number(module.style("opacity"))).toBe(theme["dim-module"]);
+    const target = graph.getElementById("billing:fee").addClass("dimmed");
+    expect(Number(target.style("opacity"))).toBe(theme["dim-node"]);
+    const exact = graph.getElementById("edge-imports").addClass("dimmed");
+    expect(Number(exact.style("opacity"))).toBe(theme["dim-node"]);
+    exact.removeClass("dimmed").addClass("lit");
+    expect(exact.style("line-color")).toBe(rgb(theme["lit-edge"]));
+    expect(exact.style("target-arrow-color")).toBe(rgb(theme["lit-edge"]));
+    expect(exact.style("width")).toBe(theme["lit-edge-width"]);
+    const possible = graph.getElementById("edge-calls").addClass("pending-B lit");
+    expect(possible.style("line-color")).toBe(rgb(theme["edge-possible"]));
+    expect(possible.style("target-arrow-color")).toBe(rgb(theme["edge-possible"]));
+    expect(possible.style("width")).toBe(theme["possible-edge-width"]);
+    expect(possible.style("line-style")).toBe("solid");
+    expect(possible.style("opacity")).toBe(exact.style("opacity"));
+    expect(Number(possible.style("opacity"))).toBeGreaterThan(theme["dim-node"]);
+  });
+
   it("nests modules, classes, functions and methods only through parent_id", () => {
     const graph = render(initial());
     expect(graph.getElementById("billing:Bill").parent().first().id()).toBe("billing");
@@ -161,7 +210,7 @@ describe("graph mapping", () => {
       ["imports", "exact"],
       ["inherits", "exact"],
     ]);
-    expect(graph.getElementById("billing:fee").style("font-family")).toBe(fontFamilies.sans);
+    expect(graph.getElementById("billing:fee").style("font-family")).toBe(theme["text-font"]);
   });
 
   it("draws possible edges thinner and grey, always solid, with a curve switch", () => {
@@ -179,11 +228,16 @@ describe("graph mapping", () => {
       const [red = 0, green = 0, blue = 0] = channels;
       return red * 0.2126 + green * 0.7152 + blue * 0.0722;
     };
-    const background = luminance(rgb(colors.background));
+    const background = luminance(rgb(theme.ground));
     const contrast = (color: string) => (luminance(color) + 0.05) / (background + 0.05);
     expect(contrast(String(exact.style("line-color")))).toBeGreaterThan(
       contrast(String(possible.style("line-color"))),
     );
+    expect(contrast(String(possible.style("line-color")))).toBeGreaterThanOrEqual(3);
+    expect(exact.style("line-color")).toBe(rgb(theme.edge));
+    expect(possible.style("line-color")).toBe(rgb(theme["edge-possible"]));
+    expect(possible.style("width")).toBe(theme["possible-edge-width"]);
+    expect(exact.style("width")).toBe(theme["exact-edge-width"]);
     expect(possible.style("target-arrow-color")).toBe(possible.style("line-color"));
     for (const edge of graph.edges()) {
       expect(edge.style("line-style")).toBe("solid");
@@ -212,37 +266,42 @@ describe("graph mapping", () => {
     expect(lit.hasClass("focus-B-edit")).toBe(true);
     expect(lit.data("label")).toBe("billing:fee\nA read · B edit");
     expect(lit.hasClass("focus-both")).toBe(true);
-    expect(lit.style("background-fill")).toBe("linear-gradient");
-    expect(lit.style("background-gradient-stop-colors")).toEqual(
-      [agentColors.A, agentColors.A, agentColors.B, agentColors.B].map(rgb).join(" "),
-    );
+    expect(lit.style("background-fill")).toBe("solid");
+    expect(lit.style("background-color")).toBe(rgb(theme["agent-b-node"].color));
+    expect(lit.style("border-color")).toBe(rgb(theme["agent-b"]));
     expect(Number.parseFloat(String(lit.style("pie-1-background-size")))).toBe(0);
-    expect(lit.style("border-style")).toBe("solid");
+    expect(lit.style("border-style")).toBe("dashed");
     updateGraph(
       graph,
       graphElements(applyEvent(state, event(7, "agent.status", { ...a, state: "done" }))),
     );
     expect(lit.hasClass("focus-A-read")).toBe(false);
     expect(lit.hasClass("focus-both")).toBe(false);
-    expect(lit.style("background-color")).toBe(rgb(agentColors.B));
+    expect(lit.style("background-color")).toBe(rgb(theme["agent-b-node"].color));
     expect(lit.style("background-fill")).toBe("solid");
   });
 
-  it("lights the node fill and border by class alone, with stronger edit than read", () => {
+  it("keeps read fills unchanged and uses the agent node fill and pending border for editing", () => {
     const graph = render(initial());
     const target = graph.getElementById("billing:fee");
     for (const slot of ["A", "B"] as const) {
+      const agent = agents[slot];
+      const fill = theme[`${agent}-node`];
       target.classes(`function focus-${slot}-read`);
-      expect(target.style("background-color")).toBe(rgb(agentColors[slot]));
-      expect(target.style("border-color")).toBe(rgb(agentColors[slot]));
+      expect(target.style("background-color")).toBe(rgb(theme.card));
+      expect(Number(target.style("background-opacity"))).toBe(theme["node-opacity"]);
+      expect(target.style("border-color")).toBe(rgb(theme[agent]));
+      expect(target.style("border-width")).toBe(theme["agent-border-width"]);
       expect(target.style("border-style")).toBe("solid");
-      const read = Number(target.style("background-opacity"));
-      const readBorder = Number(target.style("border-opacity"));
-      expect(read).toBeGreaterThan(0);
       target.classes(`function focus-${slot}-edit`);
-      expect(target.style("background-color")).toBe(rgb(agentColors[slot]));
-      expect(Number(target.style("background-opacity"))).toBeGreaterThan(read);
-      expect(Number(target.style("border-opacity"))).toBeGreaterThan(readBorder);
+      expect(target.style("background-color")).toBe(rgb(fill.color));
+      expect(Number(target.style("background-opacity"))).toBe(fill.alpha);
+      expect(target.style("border-color")).toBe(rgb(theme[agent]));
+      expect(target.style("border-width")).toBe(theme["agent-border-width"]);
+      expect(target.style("border-style")).toBe("dashed");
+      expect(target.style("border-dash-pattern")).toEqual(
+        [theme["pending-dash-length"], theme["pending-dash-gap"]].map(Number.parseFloat).join(" "),
+      );
       expect(Number.parseFloat(String(target.style("pie-1-background-size")))).toBe(0);
     }
   });
@@ -273,7 +332,7 @@ describe("graph mapping", () => {
     expect(added.style("border-style")).toBe("dashed");
   });
 
-  it("marks added, modified and removed pending nodes with only an agent-colored dashed border", () => {
+  it("marks added, modified and removed pending nodes with agent fills and dashed borders", () => {
     const state = updated();
     const before = JSON.stringify(state);
     const graph = render(state);
@@ -281,11 +340,16 @@ describe("graph mapping", () => {
       const pending = graph.getElementById(id);
       expect(pending.hasClass("pending-A")).toBe(true);
       expect(pending.style("border-style")).toBe("dashed");
-      expect(pending.style("border-color")).toBe(rgb(agentColors.A));
+      expect(pending.style("border-color")).toBe(rgb(theme["agent-a"]));
+      const fill = id === "billing:discount" ? theme["agent-a-node-new"] : theme["agent-a-node"];
+      expect(pending.style("background-color")).toBe(rgb(fill.color));
+      expect(Number(pending.style("background-opacity"))).toBe(fill.alpha);
       expect(pending.data("label")).toContain("A pending");
     }
     expect(graph.getElementById("billing").style("border-style")).toBe("solid");
     expect(graph.getElementById("added-call").nonempty()).toBe(true);
+    expect(graph.getElementById("added-call").style("line-style")).toBe("dashed");
+    expect(graph.getElementById("added-call").style("line-color")).toBe(rgb(theme["agent-a"]));
     expect(graph.getElementById("edge-imports").nonempty()).toBe(true); // Main is unchanged.
     expect(JSON.stringify(state)).toBe(before);
     const second = {
@@ -298,7 +362,7 @@ describe("graph mapping", () => {
       ),
     };
     updateGraph(graph, graphElements(second));
-    expect(graph.getElementById("billing:fee").style("border-color")).toBe(rgb(agentColors.B));
+    expect(graph.getElementById("billing:fee").style("border-color")).toBe(rgb(theme["agent-b"]));
     for (const status of ["approved", "rejected"] as const) {
       const closed = {
         ...state,
@@ -312,7 +376,7 @@ describe("graph mapping", () => {
     }
   });
 
-  it("keeps pending-both unlit with a dashed A-priority border and both agents named", () => {
+  it("keeps pending-both in A's node fill with a dashed A-priority border and both agents named", () => {
     const state = updated();
     const change = state.changes[a.change_id];
     if (!change) throw new Error("Missing pending change");
@@ -322,12 +386,10 @@ describe("graph mapping", () => {
     expect(target.hasClass("pending-both")).toBe(true);
     expect(target.hasClass("focus-both")).toBe(false);
     expect(target.style("background-fill")).toBe("solid");
-    expect(target.style("background-color")).toBe(rgb(colors.panel));
-    expect(target.style("background-opacity")).toBe(
-      graph.getElementById("billing").style("background-opacity"),
-    );
+    expect(target.style("background-color")).toBe(rgb(theme["agent-a-node"].color));
+    expect(Number(target.style("background-opacity"))).toBe(theme["agent-a-node"].alpha);
     expect(target.style("border-style")).toBe("dashed");
-    expect(target.style("border-color")).toBe(rgb(agentColors.A));
+    expect(target.style("border-color")).toBe(rgb(theme["agent-a"]));
     expect(target.data("label")).toContain("A+B pending");
   });
 
@@ -355,9 +417,9 @@ describe("graph mapping", () => {
     const other = slot === "A" ? "B" : "A";
     const target = render(initial()).getElementById("billing:fee");
     target.classes(`function focus-${slot}-edit focus-${other}-read focus-both`);
-    expect(target.style("border-color")).toBe(rgb(agentColors[slot]));
-    expect(Number(target.style("background-opacity"))).toBe(0.35);
-    expect(Number(target.style("border-opacity"))).toBe(1);
+    expect(target.style("border-color")).toBe(rgb(theme[agents[slot]]));
+    expect(Number(target.style("background-opacity"))).toBe(theme[`${agents[slot]}-node`].alpha);
+    expect(target.style("background-color")).toBe(rgb(theme[`${agents[slot]}-node`].color));
   });
 
   it("hides test nodes and incident edges by default, with an explicit opt-in", () => {

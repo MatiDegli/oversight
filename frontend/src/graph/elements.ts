@@ -22,18 +22,29 @@ export function graphElements(state: State, showTests = false): GraphElement[] {
   const nodes = new Map(state.graph?.nodes.map((node) => [node.id, node]));
   const edges = new Map(state.graph?.edges.map((edge) => [edge.id, edge]));
   const nodeMarks = selectNodeMarks(state);
+  const addedNodeSlots = new Map<string, string[]>();
+  const addedEdgeSlots = new Map<string, string[]>();
   for (const change of selectPendingChanges(state)) {
+    const slot = state.agents[change.agent_id]?.slot;
     for (const node of change.graph.nodes_added) {
-      if (!nodes.has(node.id)) nodes.set(node.id, node);
+      if (!nodes.has(node.id)) {
+        nodes.set(node.id, node);
+        if (slot) addedNodeSlots.set(node.id, [`pending-new-${slot}`]);
+      }
     }
     for (const edge of change.graph.edges_added) {
       if (!edges.has(edge.id)) edges.set(edge.id, edge);
+      if (slot) {
+        const classes = addedEdgeSlots.get(edge.id) ?? [];
+        classes.push(`pending-${slot}`);
+        addedEdgeSlots.set(edge.id, classes);
+      }
     }
   }
   const visible = new Map([...nodes].filter(([, node]) => showTests || !node.is_test));
   const elements: GraphElement[] = [];
   for (const node of visible.values()) {
-    const classes: string[] = [node.kind];
+    const classes: string[] = [node.kind, ...(addedNodeSlots.get(node.id) ?? [])];
     const marks = nodeMarks[node.id];
     const badges: string[] = [];
     for (const [slot, mode] of Object.entries(marks?.focus ?? {})) {
@@ -64,7 +75,7 @@ export function graphElements(state: State, showTests = false): GraphElement[] {
     elements.push({
       group: "edges",
       data: { id: edge.id, kind: edge.kind, source: edge.src, target: edge.dst },
-      classes: `${edge.kind} ${edge.confidence}`,
+      classes: [edge.kind, edge.confidence, ...(addedEdgeSlots.get(edge.id) ?? [])].join(" "),
     });
   }
   return elements;
