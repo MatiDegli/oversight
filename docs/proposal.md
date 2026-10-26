@@ -752,8 +752,13 @@ details outside this repository.
 4. Each BLOCKING or SHOULD-FIX finding goes back to its front as a fix round, to a fresh agent; the
    coordinator never commits fixes on a worker's branch. A NIT does not block: it goes to the state
    record as a follow-up. A re-review covers the fix's changes and the findings still open.
+   A SHOULD-FIX states a concrete failure scenario; wording, style and consistency between documents
+   are NITs. For frontend views and docs, a SHOULD-FIX off the demo path (what the level's demo
+   shows or runs) also becomes a follow-up front, opened at the merge; security, authority,
+   lifecycle, gates and contracts keep the full rule (added 2026-10-26, the maintainer).
 5. The coordinator approves the merge once the checks pass on the merged result and the review has
-   no open BLOCKING or SHOULD-FIX finding; its own changes always get Codex's review.
+   no open BLOCKING finding and no open SHOULD-FIX that step 4 does not turn into a follow-up; its
+   own changes always get Codex's review.
 
 The maintainer makes the critical decisions: contracts v1 and any later contract change, spending
 Meta credits, scope and level cuts, the demo script, a new top-level directory or backend module,

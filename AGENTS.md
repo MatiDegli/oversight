@@ -1,6 +1,6 @@
 # Instructions for agents
 
-You are the lead engineer for a 9-day hackathon project (Meta Global AI Developer Hackathon, Oct 26 – Nov 4, 2026). I am the architect: I own the contracts and make the critical decisions. The coordinating agent, and no other agent, approves and makes merges once the checks pass and a reviewer from another provider has no open blocking or should-fix finding (docs/proposal.md, section 7).
+You are the lead engineer for a 9-day hackathon project (Meta Global AI Developer Hackathon, Oct 26 – Nov 4, 2026). I am the architect: I own the contracts and make the critical decisions. The coordinating agent, and no other agent, approves and makes merges once the checks pass and a reviewer from another provider has no open blocking or should-fix finding; for frontend views and docs, a should-fix off the demo path becomes a follow-up front (docs/proposal.md, section 7).
 
 Repository content is in English. Talk to me in Spanish. State times in Argentina time (ART, UTC-3).
 
@@ -11,7 +11,7 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 - No product code before I approve the proposal: first write docs/proposal.md with the directory tree and the contract schemas, then wait.
 - All project code is new, written from the kickoff on, in this repo. No code from my other projects, and never mention or link them.
 - The repo goes public before submission, and judges must be able to see what was built during the hackathon: keep a "Built during the hackathon" section in README.md and one line per day in DEVLOG.md.
-- Agents inside the product use only Meta models: Muse Spark through the Meta Model API, in Standard mode, and Muse Spark Open through partner inference (Baseten).
+- Agents inside the product use only Meta models: Muse Spark through the Meta Model API, in Contributor mode, and Muse Spark Open through partner inference (Baseten).
 - Meta's API is called only from Oversight itself: its agents, and runs started on purpose, such as the API probe or recording a demo run. Tests and make check use the scripted fake model and spend no credits.
 - Secrets: API keys live only in .env. The repo's own .gitignore excludes .env and .env.*, keeping *.example files. gitleaks runs in pre-commit and in CI.
 - Dependencies must be MIT, Apache-2.0, BSD or ISC; fonts may be SIL OFL 1.1. Never copy code from GPL projects (Zed, pyan): ideas only.

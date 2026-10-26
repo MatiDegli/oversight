@@ -109,3 +109,18 @@ Ours wins in every case below.
   writes a sidecar (`.impeccable/design.json`). Ours: DESIGN.md is written by hand from the agreed
   design, document is forbidden, and no sidecar is committed.
 - **init's interview.** Ours: PRODUCT.md answers its gaps from AGENTS.md, as recorded above.
+
+## Process
+
+- **Review tiers:** a SHOULD-FIX must state a concrete failure scenario, and wording, style or
+  consistency between documents is a NIT. For frontend views and docs, a SHOULD-FIX off the demo
+  path becomes a follow-up front opened at the merge instead of another review round; security,
+  authority, lifecycle, gates and contracts keep the full rule. Reason: on day one the design
+  document took four review rounds over consistency details while the critical path waited, and a
+  finished graph view waited on styles it could adopt later. Recorded in docs/proposal.md, section 7.
+
+## Model API
+
+- **Muse Spark in Contributor mode, not Standard:** it costs less, and the code the agents see is
+  the demo repository or this repository, both public and shown to Meta anyway. The API probe ran in
+  Standard mode (docs/api-probe.md); its findings on tools, reasoning and usage still hold.
