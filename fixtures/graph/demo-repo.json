@@ -1,0 +1,2333 @@
+{
+  "version": "e5f7d67030e7e7a39b83390e4359099d9774b2c07b8c23e5ff0093b3bfe1fae3",
+  "commit": "0000000000000000000000000000000000000000",
+  "nodes": [
+    {
+      "id": "shop",
+      "kind": "module",
+      "name": "shop",
+      "qualname": "shop",
+      "path": "shop/__init__.py",
+      "start_line": 1,
+      "end_line": 18,
+      "parent_id": null,
+      "is_test": false
+    },
+    {
+      "id": "shop.cart",
+      "kind": "module",
+      "name": "cart",
+      "qualname": "shop.cart",
+      "path": "shop/cart.py",
+      "start_line": 1,
+      "end_line": 50,
+      "parent_id": null,
+      "is_test": false
+    },
+    {
+      "id": "shop.cart:Cart",
+      "kind": "class",
+      "name": "Cart",
+      "qualname": "Cart",
+      "path": "shop/cart.py",
+      "start_line": 7,
+      "end_line": 50,
+      "parent_id": "shop.cart",
+      "is_test": false
+    },
+    {
+      "id": "shop.cart:Cart.__init__",
+      "kind": "method",
+      "name": "__init__",
+      "qualname": "Cart.__init__",
+      "path": "shop/cart.py",
+      "start_line": 8,
+      "end_line": 9,
+      "parent_id": "shop.cart:Cart",
+      "is_test": false
+    },
+    {
+      "id": "shop.cart:Cart.add",
+      "kind": "method",
+      "name": "add",
+      "qualname": "Cart.add",
+      "path": "shop/cart.py",
+      "start_line": 11,
+      "end_line": 19,
+      "parent_id": "shop.cart:Cart",
+      "is_test": false
+    },
+    {
+      "id": "shop.cart:Cart.describe",
+      "kind": "method",
+      "name": "describe",
+      "qualname": "Cart.describe",
+      "path": "shop/cart.py",
+      "start_line": 45,
+      "end_line": 50,
+      "parent_id": "shop.cart:Cart",
+      "is_test": false
+    },
+    {
+      "id": "shop.cart:Cart.lines",
+      "kind": "method",
+      "name": "lines",
+      "qualname": "Cart.lines",
+      "path": "shop/cart.py",
+      "start_line": 24,
+      "end_line": 26,
+      "parent_id": "shop.cart:Cart",
+      "is_test": false
+    },
+    {
+      "id": "shop.cart:Cart.quote_add",
+      "kind": "method",
+      "name": "quote_add",
+      "qualname": "Cart.quote_add",
+      "path": "shop/cart.py",
+      "start_line": 37,
+      "end_line": 43,
+      "parent_id": "shop.cart:Cart",
+      "is_test": false
+    },
+    {
+      "id": "shop.cart:Cart.remove",
+      "kind": "method",
+      "name": "remove",
+      "qualname": "Cart.remove",
+      "path": "shop/cart.py",
+      "start_line": 21,
+      "end_line": 22,
+      "parent_id": "shop.cart:Cart",
+      "is_test": false
+    },
+    {
+      "id": "shop.cart:Cart.subtotals",
+      "kind": "method",
+      "name": "subtotals",
+      "qualname": "Cart.subtotals",
+      "path": "shop/cart.py",
+      "start_line": 28,
+      "end_line": 32,
+      "parent_id": "shop.cart:Cart",
+      "is_test": false
+    },
+    {
+      "id": "shop.cart:Cart.total",
+      "kind": "method",
+      "name": "total",
+      "qualname": "Cart.total",
+      "path": "shop/cart.py",
+      "start_line": 34,
+      "end_line": 35,
+      "parent_id": "shop.cart:Cart",
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory",
+      "kind": "module",
+      "name": "inventory",
+      "qualname": "shop.inventory",
+      "path": "shop/inventory.py",
+      "start_line": 1,
+      "end_line": 40,
+      "parent_id": null,
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory:Inventory",
+      "kind": "class",
+      "name": "Inventory",
+      "qualname": "Inventory",
+      "path": "shop/inventory.py",
+      "start_line": 13,
+      "end_line": 40,
+      "parent_id": "shop.inventory",
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory:Inventory.__init__",
+      "kind": "method",
+      "name": "__init__",
+      "qualname": "Inventory.__init__",
+      "path": "shop/inventory.py",
+      "start_line": 14,
+      "end_line": 16,
+      "parent_id": "shop.inventory:Inventory",
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory:Inventory.available",
+      "kind": "method",
+      "name": "available",
+      "qualname": "Inventory.available",
+      "path": "shop/inventory.py",
+      "start_line": 18,
+      "end_line": 20,
+      "parent_id": "shop.inventory:Inventory",
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory:Inventory.low_stock",
+      "kind": "method",
+      "name": "low_stock",
+      "qualname": "Inventory.low_stock",
+      "path": "shop/inventory.py",
+      "start_line": 38,
+      "end_line": 40,
+      "parent_id": "shop.inventory:Inventory",
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory:Inventory.release",
+      "kind": "method",
+      "name": "release",
+      "qualname": "Inventory.release",
+      "path": "shop/inventory.py",
+      "start_line": 32,
+      "end_line": 36,
+      "parent_id": "shop.inventory:Inventory",
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory:Inventory.reserve",
+      "kind": "method",
+      "name": "reserve",
+      "qualname": "Inventory.reserve",
+      "path": "shop/inventory.py",
+      "start_line": 26,
+      "end_line": 30,
+      "parent_id": "shop.inventory:Inventory",
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory:Inventory.restock",
+      "kind": "method",
+      "name": "restock",
+      "qualname": "Inventory.restock",
+      "path": "shop/inventory.py",
+      "start_line": 22,
+      "end_line": 24,
+      "parent_id": "shop.inventory:Inventory",
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory:OutOfStock",
+      "kind": "class",
+      "name": "OutOfStock",
+      "qualname": "OutOfStock",
+      "path": "shop/inventory.py",
+      "start_line": 4,
+      "end_line": 5,
+      "parent_id": "shop.inventory",
+      "is_test": false
+    },
+    {
+      "id": "shop.inventory:_check_quantity",
+      "kind": "function",
+      "name": "_check_quantity",
+      "qualname": "_check_quantity",
+      "path": "shop/inventory.py",
+      "start_line": 8,
+      "end_line": 10,
+      "parent_id": "shop.inventory",
+      "is_test": false
+    },
+    {
+      "id": "shop.models",
+      "kind": "module",
+      "name": "models",
+      "qualname": "shop.models",
+      "path": "shop/models.py",
+      "start_line": 1,
+      "end_line": 63,
+      "parent_id": null,
+      "is_test": false
+    },
+    {
+      "id": "shop.models:Customer",
+      "kind": "class",
+      "name": "Customer",
+      "qualname": "Customer",
+      "path": "shop/models.py",
+      "start_line": 36,
+      "end_line": 58,
+      "parent_id": "shop.models",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:Customer.__init__",
+      "kind": "method",
+      "name": "__init__",
+      "qualname": "Customer.__init__",
+      "path": "shop/models.py",
+      "start_line": 37,
+      "end_line": 40,
+      "parent_id": "shop.models:Customer",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:Customer.discount_percent",
+      "kind": "method",
+      "name": "discount_percent",
+      "qualname": "Customer.discount_percent",
+      "path": "shop/models.py",
+      "start_line": 52,
+      "end_line": 54,
+      "parent_id": "shop.models:Customer",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:Customer.email",
+      "kind": "method",
+      "name": "email",
+      "qualname": "Customer.email",
+      "path": "shop/models.py",
+      "start_line": 42,
+      "end_line": 44,
+      "parent_id": "shop.models:Customer",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:Customer.email#2",
+      "kind": "method",
+      "name": "email",
+      "qualname": "Customer.email",
+      "path": "shop/models.py",
+      "start_line": 46,
+      "end_line": 50,
+      "parent_id": "shop.models:Customer",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:Customer.quote",
+      "kind": "method",
+      "name": "quote",
+      "qualname": "Customer.quote",
+      "path": "shop/models.py",
+      "start_line": 56,
+      "end_line": 58,
+      "parent_id": "shop.models:Customer",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:OrderLine",
+      "kind": "class",
+      "name": "OrderLine",
+      "qualname": "OrderLine",
+      "path": "shop/models.py",
+      "start_line": 30,
+      "end_line": 33,
+      "parent_id": "shop.models",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:PremiumCustomer",
+      "kind": "class",
+      "name": "PremiumCustomer",
+      "qualname": "PremiumCustomer",
+      "path": "shop/models.py",
+      "start_line": 61,
+      "end_line": 63,
+      "parent_id": "shop.models",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:PremiumCustomer.discount_percent",
+      "kind": "method",
+      "name": "discount_percent",
+      "qualname": "PremiumCustomer.discount_percent",
+      "path": "shop/models.py",
+      "start_line": 62,
+      "end_line": 63,
+      "parent_id": "shop.models:PremiumCustomer",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:Product",
+      "kind": "class",
+      "name": "Product",
+      "qualname": "Product",
+      "path": "shop/models.py",
+      "start_line": 15,
+      "end_line": 27,
+      "parent_id": "shop.models",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:Product.label",
+      "kind": "method",
+      "name": "label",
+      "qualname": "Product.label",
+      "path": "shop/models.py",
+      "start_line": 22,
+      "end_line": 23,
+      "parent_id": "shop.models:Product",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:Product.price_for",
+      "kind": "method",
+      "name": "price_for",
+      "qualname": "Product.price_for",
+      "path": "shop/models.py",
+      "start_line": 25,
+      "end_line": 27,
+      "parent_id": "shop.models:Product",
+      "is_test": false
+    },
+    {
+      "id": "shop.models:format_cents",
+      "kind": "function",
+      "name": "format_cents",
+      "qualname": "format_cents",
+      "path": "shop/models.py",
+      "start_line": 8,
+      "end_line": 12,
+      "parent_id": "shop.models",
+      "is_test": false
+    },
+    {
+      "id": "shop.orders",
+      "kind": "module",
+      "name": "orders",
+      "qualname": "shop.orders",
+      "path": "shop/orders.py",
+      "start_line": 1,
+      "end_line": 84,
+      "parent_id": null,
+      "is_test": false
+    },
+    {
+      "id": "shop.orders:Order",
+      "kind": "class",
+      "name": "Order",
+      "qualname": "Order",
+      "path": "shop/orders.py",
+      "start_line": 11,
+      "end_line": 18,
+      "parent_id": "shop.orders",
+      "is_test": false
+    },
+    {
+      "id": "shop.orders:_release_lines",
+      "kind": "function",
+      "name": "_release_lines",
+      "qualname": "_release_lines",
+      "path": "shop/orders.py",
+      "start_line": 30,
+      "end_line": 32,
+      "parent_id": "shop.orders",
+      "is_test": false
+    },
+    {
+      "id": "shop.orders:cancel_order",
+      "kind": "function",
+      "name": "cancel_order",
+      "qualname": "cancel_order",
+      "path": "shop/orders.py",
+      "start_line": 58,
+      "end_line": 63,
+      "parent_id": "shop.orders",
+      "is_test": false
+    },
+    {
+      "id": "shop.orders:order_total",
+      "kind": "function",
+      "name": "order_total",
+      "qualname": "order_total",
+      "path": "shop/orders.py",
+      "start_line": 21,
+      "end_line": 27,
+      "parent_id": "shop.orders",
+      "is_test": false
+    },
+    {
+      "id": "shop.orders:place_order",
+      "kind": "function",
+      "name": "place_order",
+      "qualname": "place_order",
+      "path": "shop/orders.py",
+      "start_line": 35,
+      "end_line": 55,
+      "parent_id": "shop.orders",
+      "is_test": false
+    },
+    {
+      "id": "shop.orders:reorder_quote",
+      "kind": "function",
+      "name": "reorder_quote",
+      "qualname": "reorder_quote",
+      "path": "shop/orders.py",
+      "start_line": 66,
+      "end_line": 70,
+      "parent_id": "shop.orders",
+      "is_test": false
+    },
+    {
+      "id": "shop.orders:revenue_by_category",
+      "kind": "function",
+      "name": "revenue_by_category",
+      "qualname": "revenue_by_category",
+      "path": "shop/orders.py",
+      "start_line": 73,
+      "end_line": 84,
+      "parent_id": "shop.orders",
+      "is_test": false
+    },
+    {
+      "id": "shop.pricing",
+      "kind": "module",
+      "name": "pricing",
+      "qualname": "shop.pricing",
+      "path": "shop/pricing.py",
+      "start_line": 1,
+      "end_line": 49,
+      "parent_id": null,
+      "is_test": false
+    },
+    {
+      "id": "shop.pricing:add_tax",
+      "kind": "function",
+      "name": "add_tax",
+      "qualname": "add_tax",
+      "path": "shop/pricing.py",
+      "start_line": 43,
+      "end_line": 44,
+      "parent_id": "shop.pricing",
+      "is_test": false
+    },
+    {
+      "id": "shop.pricing:apply_coupon",
+      "kind": "function",
+      "name": "apply_coupon",
+      "qualname": "apply_coupon",
+      "path": "shop/pricing.py",
+      "start_line": 38,
+      "end_line": 40,
+      "parent_id": "shop.pricing",
+      "is_test": false
+    },
+    {
+      "id": "shop.pricing:compute_price",
+      "kind": "function",
+      "name": "compute_price",
+      "qualname": "compute_price",
+      "path": "shop/pricing.py",
+      "start_line": 14,
+      "end_line": 22,
+      "parent_id": "shop.pricing",
+      "is_test": false
+    },
+    {
+      "id": "shop.pricing:coupon_percent",
+      "kind": "function",
+      "name": "coupon_percent",
+      "qualname": "coupon_percent",
+      "path": "shop/pricing.py",
+      "start_line": 32,
+      "end_line": 35,
+      "parent_id": "shop.pricing",
+      "is_test": false
+    },
+    {
+      "id": "shop.pricing:price_breaks",
+      "kind": "function",
+      "name": "price_breaks",
+      "qualname": "price_breaks",
+      "path": "shop/pricing.py",
+      "start_line": 25,
+      "end_line": 29,
+      "parent_id": "shop.pricing",
+      "is_test": false
+    },
+    {
+      "id": "shop.pricing:shipping_cost",
+      "kind": "function",
+      "name": "shipping_cost",
+      "qualname": "shipping_cost",
+      "path": "shop/pricing.py",
+      "start_line": 47,
+      "end_line": 49,
+      "parent_id": "shop.pricing",
+      "is_test": false
+    },
+    {
+      "id": "tests.conftest",
+      "kind": "module",
+      "name": "conftest",
+      "qualname": "tests.conftest",
+      "path": "tests/conftest.py",
+      "start_line": 1,
+      "end_line": 29,
+      "parent_id": null,
+      "is_test": true
+    },
+    {
+      "id": "tests.conftest:customer",
+      "kind": "function",
+      "name": "customer",
+      "qualname": "customer",
+      "path": "tests/conftest.py",
+      "start_line": 17,
+      "end_line": 19,
+      "parent_id": "tests.conftest",
+      "is_test": true
+    },
+    {
+      "id": "tests.conftest:gadget",
+      "kind": "function",
+      "name": "gadget",
+      "qualname": "gadget",
+      "path": "tests/conftest.py",
+      "start_line": 12,
+      "end_line": 14,
+      "parent_id": "tests.conftest",
+      "is_test": true
+    },
+    {
+      "id": "tests.conftest:premium",
+      "kind": "function",
+      "name": "premium",
+      "qualname": "premium",
+      "path": "tests/conftest.py",
+      "start_line": 22,
+      "end_line": 24,
+      "parent_id": "tests.conftest",
+      "is_test": true
+    },
+    {
+      "id": "tests.conftest:stocked",
+      "kind": "function",
+      "name": "stocked",
+      "qualname": "stocked",
+      "path": "tests/conftest.py",
+      "start_line": 27,
+      "end_line": 29,
+      "parent_id": "tests.conftest",
+      "is_test": true
+    },
+    {
+      "id": "tests.conftest:widget",
+      "kind": "function",
+      "name": "widget",
+      "qualname": "widget",
+      "path": "tests/conftest.py",
+      "start_line": 7,
+      "end_line": 9,
+      "parent_id": "tests.conftest",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_cart",
+      "kind": "module",
+      "name": "test_cart",
+      "qualname": "tests.test_cart",
+      "path": "tests/test_cart.py",
+      "start_line": 1,
+      "end_line": 38,
+      "parent_id": null,
+      "is_test": true
+    },
+    {
+      "id": "tests.test_cart:test_add_merges_lines_with_the_same_sku",
+      "kind": "function",
+      "name": "test_add_merges_lines_with_the_same_sku",
+      "qualname": "test_add_merges_lines_with_the_same_sku",
+      "path": "tests/test_cart.py",
+      "start_line": 6,
+      "end_line": 10,
+      "parent_id": "tests.test_cart",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_cart:test_add_rejects_quantities_below_one",
+      "kind": "function",
+      "name": "test_add_rejects_quantities_below_one",
+      "qualname": "test_add_rejects_quantities_below_one",
+      "path": "tests/test_cart.py",
+      "start_line": 13,
+      "end_line": 15,
+      "parent_id": "tests.test_cart",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier",
+      "kind": "function",
+      "name": "test_quote_add_prices_the_extra_units_across_a_tier",
+      "qualname": "test_quote_add_prices_the_extra_units_across_a_tier",
+      "path": "tests/test_cart.py",
+      "start_line": 35,
+      "end_line": 38,
+      "parent_id": "tests.test_cart",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest",
+      "kind": "function",
+      "name": "test_remove_drops_the_line_and_describe_lists_the_rest",
+      "qualname": "test_remove_drops_the_line_and_describe_lists_the_rest",
+      "path": "tests/test_cart.py",
+      "start_line": 18,
+      "end_line": 24,
+      "parent_id": "tests.test_cart",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_cart:test_total_applies_the_bulk_discount",
+      "kind": "function",
+      "name": "test_total_applies_the_bulk_discount",
+      "qualname": "test_total_applies_the_bulk_discount",
+      "path": "tests/test_cart.py",
+      "start_line": 27,
+      "end_line": 32,
+      "parent_id": "tests.test_cart",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_inventory",
+      "kind": "module",
+      "name": "test_inventory",
+      "qualname": "tests.test_inventory",
+      "path": "tests/test_inventory.py",
+      "start_line": 1,
+      "end_line": 39,
+      "parent_id": null,
+      "is_test": true
+    },
+    {
+      "id": "tests.test_inventory:test_low_stock_lists_skus_at_or_below_the_threshold",
+      "kind": "function",
+      "name": "test_low_stock_lists_skus_at_or_below_the_threshold",
+      "qualname": "test_low_stock_lists_skus_at_or_below_the_threshold",
+      "path": "tests/test_inventory.py",
+      "start_line": 36,
+      "end_line": 39,
+      "parent_id": "tests.test_inventory",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_inventory:test_release_returns_units_but_never_more_than_held",
+      "kind": "function",
+      "name": "test_release_returns_units_but_never_more_than_held",
+      "qualname": "test_release_returns_units_but_never_more_than_held",
+      "path": "tests/test_inventory.py",
+      "start_line": 17,
+      "end_line": 22,
+      "parent_id": "tests.test_inventory",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_inventory:test_reserve_more_than_available_raises",
+      "kind": "function",
+      "name": "test_reserve_more_than_available_raises",
+      "qualname": "test_reserve_more_than_available_raises",
+      "path": "tests/test_inventory.py",
+      "start_line": 11,
+      "end_line": 14,
+      "parent_id": "tests.test_inventory",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_inventory:test_reserve_reduces_available",
+      "kind": "function",
+      "name": "test_reserve_reduces_available",
+      "qualname": "test_reserve_reduces_available",
+      "path": "tests/test_inventory.py",
+      "start_line": 6,
+      "end_line": 8,
+      "parent_id": "tests.test_inventory",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities",
+      "kind": "function",
+      "name": "test_restock_adds_units_and_rejects_non_positive_quantities",
+      "qualname": "test_restock_adds_units_and_rejects_non_positive_quantities",
+      "path": "tests/test_inventory.py",
+      "start_line": 25,
+      "end_line": 33,
+      "parent_id": "tests.test_inventory",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_models",
+      "kind": "module",
+      "name": "test_models",
+      "qualname": "tests.test_models",
+      "path": "tests/test_models.py",
+      "start_line": 1,
+      "end_line": 26,
+      "parent_id": null,
+      "is_test": true
+    },
+    {
+      "id": "tests.test_models:test_email_is_lowercased_and_the_setter_rejects_bad_addresses",
+      "kind": "function",
+      "name": "test_email_is_lowercased_and_the_setter_rejects_bad_addresses",
+      "qualname": "test_email_is_lowercased_and_the_setter_rejects_bad_addresses",
+      "path": "tests/test_models.py",
+      "start_line": 17,
+      "end_line": 21,
+      "parent_id": "tests.test_models",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_models:test_format_cents",
+      "kind": "function",
+      "name": "test_format_cents",
+      "qualname": "test_format_cents",
+      "path": "tests/test_models.py",
+      "start_line": 6,
+      "end_line": 9,
+      "parent_id": "tests.test_models",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_models:test_premium_customers_get_an_extra_discount",
+      "kind": "function",
+      "name": "test_premium_customers_get_an_extra_discount",
+      "qualname": "test_premium_customers_get_an_extra_discount",
+      "path": "tests/test_models.py",
+      "start_line": 24,
+      "end_line": 26,
+      "parent_id": "tests.test_models",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_models:test_product_label_and_price",
+      "kind": "function",
+      "name": "test_product_label_and_price",
+      "qualname": "test_product_label_and_price",
+      "path": "tests/test_models.py",
+      "start_line": 12,
+      "end_line": 14,
+      "parent_id": "tests.test_models",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_orders",
+      "kind": "module",
+      "name": "test_orders",
+      "qualname": "tests.test_orders",
+      "path": "tests/test_orders.py",
+      "start_line": 1,
+      "end_line": 70,
+      "parent_id": null,
+      "is_test": true
+    },
+    {
+      "id": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "kind": "function",
+      "name": "test_cancel_order_returns_the_stock",
+      "qualname": "test_cancel_order_returns_the_stock",
+      "path": "tests/test_orders.py",
+      "start_line": 40,
+      "end_line": 47,
+      "parent_id": "tests.test_orders",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "kind": "function",
+      "name": "test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "qualname": "test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "path": "tests/test_orders.py",
+      "start_line": 50,
+      "end_line": 61,
+      "parent_id": "tests.test_orders",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_orders:test_place_order_prices_and_reserves",
+      "kind": "function",
+      "name": "test_place_order_prices_and_reserves",
+      "qualname": "test_place_order_prices_and_reserves",
+      "path": "tests/test_orders.py",
+      "start_line": 8,
+      "end_line": 16,
+      "parent_id": "tests.test_orders",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "kind": "function",
+      "name": "test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "qualname": "test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "path": "tests/test_orders.py",
+      "start_line": 27,
+      "end_line": 37,
+      "parent_id": "tests.test_orders",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_orders:test_place_order_with_premium_discount_and_coupon",
+      "kind": "function",
+      "name": "test_place_order_with_premium_discount_and_coupon",
+      "qualname": "test_place_order_with_premium_discount_and_coupon",
+      "path": "tests/test_orders.py",
+      "start_line": 19,
+      "end_line": 24,
+      "parent_id": "tests.test_orders",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "kind": "function",
+      "name": "test_reorder_quote_and_revenue_by_category",
+      "qualname": "test_reorder_quote_and_revenue_by_category",
+      "path": "tests/test_orders.py",
+      "start_line": 64,
+      "end_line": 70,
+      "parent_id": "tests.test_orders",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_pricing",
+      "kind": "module",
+      "name": "test_pricing",
+      "qualname": "tests.test_pricing",
+      "path": "tests/test_pricing.py",
+      "start_line": 1,
+      "end_line": 46,
+      "parent_id": null,
+      "is_test": true
+    },
+    {
+      "id": "tests.test_pricing:test_coupons_ignore_case_and_unknown_codes",
+      "kind": "function",
+      "name": "test_coupons_ignore_case_and_unknown_codes",
+      "qualname": "test_coupons_ignore_case_and_unknown_codes",
+      "path": "tests/test_pricing.py",
+      "start_line": 36,
+      "end_line": 40,
+      "parent_id": "tests.test_pricing",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_pricing:test_extra_percent_stacks_with_the_tier",
+      "kind": "function",
+      "name": "test_extra_percent_stacks_with_the_tier",
+      "qualname": "test_extra_percent_stacks_with_the_tier",
+      "path": "tests/test_pricing.py",
+      "start_line": 28,
+      "end_line": 29,
+      "parent_id": "tests.test_pricing",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_pricing:test_forty_nine_units_still_get_the_first_tier",
+      "kind": "function",
+      "name": "test_forty_nine_units_still_get_the_first_tier",
+      "qualname": "test_forty_nine_units_still_get_the_first_tier",
+      "path": "tests/test_pricing.py",
+      "start_line": 20,
+      "end_line": 21,
+      "parent_id": "tests.test_pricing",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_pricing:test_price_breaks_lists_sample_quantities",
+      "kind": "function",
+      "name": "test_price_breaks_lists_sample_quantities",
+      "qualname": "test_price_breaks_lists_sample_quantities",
+      "path": "tests/test_pricing.py",
+      "start_line": 32,
+      "end_line": 33,
+      "parent_id": "tests.test_pricing",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_pricing:test_sixty_units_get_the_second_tier",
+      "kind": "function",
+      "name": "test_sixty_units_get_the_second_tier",
+      "qualname": "test_sixty_units_get_the_second_tier",
+      "path": "tests/test_pricing.py",
+      "start_line": 24,
+      "end_line": 25,
+      "parent_id": "tests.test_pricing",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_pricing:test_small_quantities_have_no_discount",
+      "kind": "function",
+      "name": "test_small_quantities_have_no_discount",
+      "qualname": "test_small_quantities_have_no_discount",
+      "path": "tests/test_pricing.py",
+      "start_line": 11,
+      "end_line": 13,
+      "parent_id": "tests.test_pricing",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_pricing:test_tax_is_added_and_shipping_is_free_from_the_threshold",
+      "kind": "function",
+      "name": "test_tax_is_added_and_shipping_is_free_from_the_threshold",
+      "qualname": "test_tax_is_added_and_shipping_is_free_from_the_threshold",
+      "path": "tests/test_pricing.py",
+      "start_line": 43,
+      "end_line": 46,
+      "parent_id": "tests.test_pricing",
+      "is_test": true
+    },
+    {
+      "id": "tests.test_pricing:test_twenty_units_get_the_first_tier",
+      "kind": "function",
+      "name": "test_twenty_units_get_the_first_tier",
+      "qualname": "test_twenty_units_get_the_first_tier",
+      "path": "tests/test_pricing.py",
+      "start_line": 16,
+      "end_line": 17,
+      "parent_id": "tests.test_pricing",
+      "is_test": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "calls:shop.cart:Cart.add->shop.models:OrderLine",
+      "kind": "calls",
+      "src": "shop.cart:Cart.add",
+      "dst": "shop.models:OrderLine",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.cart:Cart.describe->shop.models:Product.label",
+      "kind": "calls",
+      "src": "shop.cart:Cart.describe",
+      "dst": "shop.models:Product.label",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.cart:Cart.describe->shop.models:Product.price_for",
+      "kind": "calls",
+      "src": "shop.cart:Cart.describe",
+      "dst": "shop.models:Product.price_for",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.cart:Cart.describe->shop.models:format_cents",
+      "kind": "calls",
+      "src": "shop.cart:Cart.describe",
+      "dst": "shop.models:format_cents",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.cart:Cart.lines->shop.models:OrderLine",
+      "kind": "calls",
+      "src": "shop.cart:Cart.lines",
+      "dst": "shop.models:OrderLine",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.cart:Cart.quote_add->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "shop.cart:Cart.quote_add",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.cart:Cart.subtotals->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "shop.cart:Cart.subtotals",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.cart:Cart.total->shop.cart:Cart.subtotals",
+      "kind": "calls",
+      "src": "shop.cart:Cart.total",
+      "dst": "shop.cart:Cart.subtotals",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.inventory:Inventory.low_stock->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "shop.inventory:Inventory.low_stock",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.inventory:Inventory.release->shop.inventory:_check_quantity",
+      "kind": "calls",
+      "src": "shop.inventory:Inventory.release",
+      "dst": "shop.inventory:_check_quantity",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.inventory:Inventory.reserve->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "shop.inventory:Inventory.reserve",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.inventory:Inventory.reserve->shop.inventory:OutOfStock",
+      "kind": "calls",
+      "src": "shop.inventory:Inventory.reserve",
+      "dst": "shop.inventory:OutOfStock",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.inventory:Inventory.restock->shop.inventory:_check_quantity",
+      "kind": "calls",
+      "src": "shop.inventory:Inventory.restock",
+      "dst": "shop.inventory:_check_quantity",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.models:Customer.quote->shop.models:Customer.discount_percent",
+      "kind": "calls",
+      "src": "shop.models:Customer.quote",
+      "dst": "shop.models:Customer.discount_percent",
+      "confidence": "possible",
+      "reason": "several_candidates"
+    },
+    {
+      "id": "calls:shop.models:Customer.quote->shop.models:PremiumCustomer.discount_percent",
+      "kind": "calls",
+      "src": "shop.models:Customer.quote",
+      "dst": "shop.models:PremiumCustomer.discount_percent",
+      "confidence": "possible",
+      "reason": "several_candidates"
+    },
+    {
+      "id": "calls:shop.models:Customer.quote->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "shop.models:Customer.quote",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.models:Product.price_for->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "shop.models:Product.price_for",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.orders:_release_lines->shop.inventory:Inventory.release",
+      "kind": "calls",
+      "src": "shop.orders:_release_lines",
+      "dst": "shop.inventory:Inventory.release",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.orders:cancel_order->shop.orders:_release_lines",
+      "kind": "calls",
+      "src": "shop.orders:cancel_order",
+      "dst": "shop.orders:_release_lines",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.orders:order_total->shop.models:Customer.discount_percent",
+      "kind": "calls",
+      "src": "shop.orders:order_total",
+      "dst": "shop.models:Customer.discount_percent",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.orders:order_total->shop.models:PremiumCustomer.discount_percent",
+      "kind": "calls",
+      "src": "shop.orders:order_total",
+      "dst": "shop.models:PremiumCustomer.discount_percent",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.orders:order_total->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "shop.orders:order_total",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.orders:place_order->shop.cart:Cart.lines",
+      "kind": "calls",
+      "src": "shop.orders:place_order",
+      "dst": "shop.cart:Cart.lines",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.orders:place_order->shop.inventory:Inventory.reserve",
+      "kind": "calls",
+      "src": "shop.orders:place_order",
+      "dst": "shop.inventory:Inventory.reserve",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.orders:place_order->shop.orders:Order",
+      "kind": "calls",
+      "src": "shop.orders:place_order",
+      "dst": "shop.orders:Order",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.orders:place_order->shop.orders:_release_lines",
+      "kind": "calls",
+      "src": "shop.orders:place_order",
+      "dst": "shop.orders:_release_lines",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.orders:place_order->shop.orders:order_total",
+      "kind": "calls",
+      "src": "shop.orders:place_order",
+      "dst": "shop.orders:order_total",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.orders:place_order->shop.pricing:add_tax",
+      "kind": "calls",
+      "src": "shop.orders:place_order",
+      "dst": "shop.pricing:add_tax",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.orders:place_order->shop.pricing:apply_coupon",
+      "kind": "calls",
+      "src": "shop.orders:place_order",
+      "dst": "shop.pricing:apply_coupon",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.orders:place_order->shop.pricing:shipping_cost",
+      "kind": "calls",
+      "src": "shop.orders:place_order",
+      "dst": "shop.pricing:shipping_cost",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.orders:reorder_quote->shop.models:Customer.quote",
+      "kind": "calls",
+      "src": "shop.orders:reorder_quote",
+      "dst": "shop.models:Customer.quote",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.orders:revenue_by_category->shop.models:Customer.discount_percent",
+      "kind": "calls",
+      "src": "shop.orders:revenue_by_category",
+      "dst": "shop.models:Customer.discount_percent",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.orders:revenue_by_category->shop.models:PremiumCustomer.discount_percent",
+      "kind": "calls",
+      "src": "shop.orders:revenue_by_category",
+      "dst": "shop.models:PremiumCustomer.discount_percent",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:shop.orders:revenue_by_category->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "shop.orders:revenue_by_category",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.pricing:apply_coupon->shop.pricing:coupon_percent",
+      "kind": "calls",
+      "src": "shop.pricing:apply_coupon",
+      "dst": "shop.pricing:coupon_percent",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:shop.pricing:price_breaks->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "shop.pricing:price_breaks",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.conftest:customer->shop.models:Customer",
+      "kind": "calls",
+      "src": "tests.conftest:customer",
+      "dst": "shop.models:Customer",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.conftest:gadget->shop.models:Product",
+      "kind": "calls",
+      "src": "tests.conftest:gadget",
+      "dst": "shop.models:Product",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.conftest:premium->shop.models:PremiumCustomer",
+      "kind": "calls",
+      "src": "tests.conftest:premium",
+      "dst": "shop.models:PremiumCustomer",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.conftest:stocked->shop.inventory:Inventory",
+      "kind": "calls",
+      "src": "tests.conftest:stocked",
+      "dst": "shop.inventory:Inventory",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.conftest:widget->shop.models:Product",
+      "kind": "calls",
+      "src": "tests.conftest:widget",
+      "dst": "shop.models:Product",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_cart:test_add_merges_lines_with_the_same_sku->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_cart:test_add_merges_lines_with_the_same_sku",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_cart:test_add_merges_lines_with_the_same_sku->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_cart:test_add_merges_lines_with_the_same_sku",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_add_merges_lines_with_the_same_sku->shop.cart:Cart.lines",
+      "kind": "calls",
+      "src": "tests.test_cart:test_add_merges_lines_with_the_same_sku",
+      "dst": "shop.cart:Cart.lines",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_add_merges_lines_with_the_same_sku->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_cart:test_add_merges_lines_with_the_same_sku",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_cart:test_add_rejects_quantities_below_one->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_cart:test_add_rejects_quantities_below_one",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_cart:test_add_rejects_quantities_below_one->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_cart:test_add_rejects_quantities_below_one",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_add_rejects_quantities_below_one->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_cart:test_add_rejects_quantities_below_one",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier->shop.cart:Cart.quote_add",
+      "kind": "calls",
+      "src": "tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier",
+      "dst": "shop.cart:Cart.quote_add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest->shop.cart:Cart.describe",
+      "kind": "calls",
+      "src": "tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest",
+      "dst": "shop.cart:Cart.describe",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest->shop.cart:Cart.remove",
+      "kind": "calls",
+      "src": "tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest",
+      "dst": "shop.cart:Cart.remove",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest->tests.conftest:gadget",
+      "kind": "calls",
+      "src": "tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest",
+      "dst": "tests.conftest:gadget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_cart:test_total_applies_the_bulk_discount->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_cart:test_total_applies_the_bulk_discount",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_cart:test_total_applies_the_bulk_discount->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_cart:test_total_applies_the_bulk_discount",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_total_applies_the_bulk_discount->shop.cart:Cart.subtotals",
+      "kind": "calls",
+      "src": "tests.test_cart:test_total_applies_the_bulk_discount",
+      "dst": "shop.cart:Cart.subtotals",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_total_applies_the_bulk_discount->shop.cart:Cart.total",
+      "kind": "calls",
+      "src": "tests.test_cart:test_total_applies_the_bulk_discount",
+      "dst": "shop.cart:Cart.total",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_cart:test_total_applies_the_bulk_discount->tests.conftest:gadget",
+      "kind": "calls",
+      "src": "tests.test_cart:test_total_applies_the_bulk_discount",
+      "dst": "tests.conftest:gadget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_cart:test_total_applies_the_bulk_discount->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_cart:test_total_applies_the_bulk_discount",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_low_stock_lists_skus_at_or_below_the_threshold->shop.inventory:Inventory.low_stock",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_low_stock_lists_skus_at_or_below_the_threshold",
+      "dst": "shop.inventory:Inventory.low_stock",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_low_stock_lists_skus_at_or_below_the_threshold->shop.inventory:Inventory.reserve",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_low_stock_lists_skus_at_or_below_the_threshold",
+      "dst": "shop.inventory:Inventory.reserve",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_low_stock_lists_skus_at_or_below_the_threshold->tests.conftest:stocked",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_low_stock_lists_skus_at_or_below_the_threshold",
+      "dst": "tests.conftest:stocked",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_release_returns_units_but_never_more_than_held->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_release_returns_units_but_never_more_than_held",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_release_returns_units_but_never_more_than_held->shop.inventory:Inventory.release",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_release_returns_units_but_never_more_than_held",
+      "dst": "shop.inventory:Inventory.release",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_release_returns_units_but_never_more_than_held->shop.inventory:Inventory.reserve",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_release_returns_units_but_never_more_than_held",
+      "dst": "shop.inventory:Inventory.reserve",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_release_returns_units_but_never_more_than_held->tests.conftest:stocked",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_release_returns_units_but_never_more_than_held",
+      "dst": "tests.conftest:stocked",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_reserve_more_than_available_raises->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_reserve_more_than_available_raises",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_reserve_more_than_available_raises->shop.inventory:Inventory.reserve",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_reserve_more_than_available_raises",
+      "dst": "shop.inventory:Inventory.reserve",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_reserve_more_than_available_raises->tests.conftest:stocked",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_reserve_more_than_available_raises",
+      "dst": "tests.conftest:stocked",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_reserve_reduces_available->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_reserve_reduces_available",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_reserve_reduces_available->shop.inventory:Inventory.reserve",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_reserve_reduces_available",
+      "dst": "shop.inventory:Inventory.reserve",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_reserve_reduces_available->tests.conftest:stocked",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_reserve_reduces_available",
+      "dst": "tests.conftest:stocked",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities->shop.inventory:Inventory.release",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities",
+      "dst": "shop.inventory:Inventory.release",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities->shop.inventory:Inventory.restock",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities",
+      "dst": "shop.inventory:Inventory.restock",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities->tests.conftest:stocked",
+      "kind": "calls",
+      "src": "tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities",
+      "dst": "tests.conftest:stocked",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_models:test_email_is_lowercased_and_the_setter_rejects_bad_addresses->tests.conftest:customer",
+      "kind": "calls",
+      "src": "tests.test_models:test_email_is_lowercased_and_the_setter_rejects_bad_addresses",
+      "dst": "tests.conftest:customer",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_models:test_format_cents->shop.models:format_cents",
+      "kind": "calls",
+      "src": "tests.test_models:test_format_cents",
+      "dst": "shop.models:format_cents",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_models:test_premium_customers_get_an_extra_discount->shop.models:Customer.quote",
+      "kind": "calls",
+      "src": "tests.test_models:test_premium_customers_get_an_extra_discount",
+      "dst": "shop.models:Customer.quote",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_models:test_premium_customers_get_an_extra_discount->tests.conftest:customer",
+      "kind": "calls",
+      "src": "tests.test_models:test_premium_customers_get_an_extra_discount",
+      "dst": "tests.conftest:customer",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_models:test_premium_customers_get_an_extra_discount->tests.conftest:premium",
+      "kind": "calls",
+      "src": "tests.test_models:test_premium_customers_get_an_extra_discount",
+      "dst": "tests.conftest:premium",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_models:test_premium_customers_get_an_extra_discount->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_models:test_premium_customers_get_an_extra_discount",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_models:test_product_label_and_price->shop.models:Product.label",
+      "kind": "calls",
+      "src": "tests.test_models:test_product_label_and_price",
+      "dst": "shop.models:Product.label",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_models:test_product_label_and_price->shop.models:Product.price_for",
+      "kind": "calls",
+      "src": "tests.test_models:test_product_label_and_price",
+      "dst": "shop.models:Product.price_for",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_models:test_product_label_and_price->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_models:test_product_label_and_price",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancel_order_returns_the_stock->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancel_order_returns_the_stock->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancel_order_returns_the_stock->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancel_order_returns_the_stock->shop.orders:cancel_order",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "dst": "shop.orders:cancel_order",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancel_order_returns_the_stock->shop.orders:place_order",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "dst": "shop.orders:place_order",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancel_order_returns_the_stock->tests.conftest:customer",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "dst": "tests.conftest:customer",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancel_order_returns_the_stock->tests.conftest:gadget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "dst": "tests.conftest:gadget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancel_order_returns_the_stock->tests.conftest:stocked",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "dst": "tests.conftest:stocked",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancel_order_returns_the_stock->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancel_order_returns_the_stock",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved->shop.inventory:Inventory",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "dst": "shop.inventory:Inventory",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved->shop.orders:cancel_order",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "dst": "shop.orders:cancel_order",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved->shop.orders:place_order",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "dst": "shop.orders:place_order",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved->tests.conftest:customer",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "dst": "tests.conftest:customer",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_prices_and_reserves->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_prices_and_reserves",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_prices_and_reserves->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_prices_and_reserves",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_prices_and_reserves->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_prices_and_reserves",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_prices_and_reserves->shop.orders:place_order",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_prices_and_reserves",
+      "dst": "shop.orders:place_order",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_prices_and_reserves->tests.conftest:customer",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_prices_and_reserves",
+      "dst": "tests.conftest:customer",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_prices_and_reserves->tests.conftest:gadget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_prices_and_reserves",
+      "dst": "tests.conftest:gadget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_prices_and_reserves->tests.conftest:stocked",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_prices_and_reserves",
+      "dst": "tests.conftest:stocked",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_prices_and_reserves->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_prices_and_reserves",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out->shop.inventory:Inventory",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "dst": "shop.inventory:Inventory",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out->shop.inventory:Inventory.available",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "dst": "shop.inventory:Inventory.available",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out->shop.orders:place_order",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "dst": "shop.orders:place_order",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out->tests.conftest:customer",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "dst": "tests.conftest:customer",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out->tests.conftest:gadget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "dst": "tests.conftest:gadget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_with_premium_discount_and_coupon->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_with_premium_discount_and_coupon",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_with_premium_discount_and_coupon->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_with_premium_discount_and_coupon",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_with_premium_discount_and_coupon->shop.orders:place_order",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_with_premium_discount_and_coupon",
+      "dst": "shop.orders:place_order",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_with_premium_discount_and_coupon->tests.conftest:premium",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_with_premium_discount_and_coupon",
+      "dst": "tests.conftest:premium",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_with_premium_discount_and_coupon->tests.conftest:stocked",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_with_premium_discount_and_coupon",
+      "dst": "tests.conftest:stocked",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_place_order_with_premium_discount_and_coupon->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_place_order_with_premium_discount_and_coupon",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_reorder_quote_and_revenue_by_category->shop.cart:Cart",
+      "kind": "calls",
+      "src": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "dst": "shop.cart:Cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_reorder_quote_and_revenue_by_category->shop.cart:Cart.add",
+      "kind": "calls",
+      "src": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "dst": "shop.cart:Cart.add",
+      "confidence": "possible",
+      "reason": "unknown_receiver"
+    },
+    {
+      "id": "calls:tests.test_orders:test_reorder_quote_and_revenue_by_category->shop.orders:place_order",
+      "kind": "calls",
+      "src": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "dst": "shop.orders:place_order",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_reorder_quote_and_revenue_by_category->shop.orders:reorder_quote",
+      "kind": "calls",
+      "src": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "dst": "shop.orders:reorder_quote",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_reorder_quote_and_revenue_by_category->shop.orders:revenue_by_category",
+      "kind": "calls",
+      "src": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "dst": "shop.orders:revenue_by_category",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_orders:test_reorder_quote_and_revenue_by_category->tests.conftest:customer",
+      "kind": "calls",
+      "src": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "dst": "tests.conftest:customer",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_reorder_quote_and_revenue_by_category->tests.conftest:gadget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "dst": "tests.conftest:gadget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_reorder_quote_and_revenue_by_category->tests.conftest:stocked",
+      "kind": "calls",
+      "src": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "dst": "tests.conftest:stocked",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_orders:test_reorder_quote_and_revenue_by_category->tests.conftest:widget",
+      "kind": "calls",
+      "src": "tests.test_orders:test_reorder_quote_and_revenue_by_category",
+      "dst": "tests.conftest:widget",
+      "confidence": "possible",
+      "reason": "dynamic_dispatch"
+    },
+    {
+      "id": "calls:tests.test_pricing:test_coupons_ignore_case_and_unknown_codes->shop.pricing:apply_coupon",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_coupons_ignore_case_and_unknown_codes",
+      "dst": "shop.pricing:apply_coupon",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_pricing:test_coupons_ignore_case_and_unknown_codes->shop.pricing:coupon_percent",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_coupons_ignore_case_and_unknown_codes",
+      "dst": "shop.pricing:coupon_percent",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_pricing:test_extra_percent_stacks_with_the_tier->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_extra_percent_stacks_with_the_tier",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_pricing:test_forty_nine_units_still_get_the_first_tier->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_forty_nine_units_still_get_the_first_tier",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_pricing:test_price_breaks_lists_sample_quantities->shop.pricing:price_breaks",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_price_breaks_lists_sample_quantities",
+      "dst": "shop.pricing:price_breaks",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_pricing:test_sixty_units_get_the_second_tier->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_sixty_units_get_the_second_tier",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_pricing:test_small_quantities_have_no_discount->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_small_quantities_have_no_discount",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_pricing:test_tax_is_added_and_shipping_is_free_from_the_threshold->shop.pricing:add_tax",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_tax_is_added_and_shipping_is_free_from_the_threshold",
+      "dst": "shop.pricing:add_tax",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_pricing:test_tax_is_added_and_shipping_is_free_from_the_threshold->shop.pricing:shipping_cost",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_tax_is_added_and_shipping_is_free_from_the_threshold",
+      "dst": "shop.pricing:shipping_cost",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "calls:tests.test_pricing:test_twenty_units_get_the_first_tier->shop.pricing:compute_price",
+      "kind": "calls",
+      "src": "tests.test_pricing:test_twenty_units_get_the_first_tier",
+      "dst": "shop.pricing:compute_price",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop->shop.cart",
+      "kind": "imports",
+      "src": "shop",
+      "dst": "shop.cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop->shop.inventory",
+      "kind": "imports",
+      "src": "shop",
+      "dst": "shop.inventory",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop->shop.models",
+      "kind": "imports",
+      "src": "shop",
+      "dst": "shop.models",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop->shop.orders",
+      "kind": "imports",
+      "src": "shop",
+      "dst": "shop.orders",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop.cart->shop.models",
+      "kind": "imports",
+      "src": "shop.cart",
+      "dst": "shop.models",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop.cart->shop.pricing",
+      "kind": "imports",
+      "src": "shop.cart",
+      "dst": "shop.pricing",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop.models->shop.pricing",
+      "kind": "imports",
+      "src": "shop.models",
+      "dst": "shop.pricing",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop.orders->shop.cart",
+      "kind": "imports",
+      "src": "shop.orders",
+      "dst": "shop.cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop.orders->shop.inventory",
+      "kind": "imports",
+      "src": "shop.orders",
+      "dst": "shop.inventory",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop.orders->shop.models",
+      "kind": "imports",
+      "src": "shop.orders",
+      "dst": "shop.models",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:shop.orders->shop.pricing",
+      "kind": "imports",
+      "src": "shop.orders",
+      "dst": "shop.pricing",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:tests.conftest->shop.inventory",
+      "kind": "imports",
+      "src": "tests.conftest",
+      "dst": "shop.inventory",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:tests.conftest->shop.models",
+      "kind": "imports",
+      "src": "tests.conftest",
+      "dst": "shop.models",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:tests.test_cart->shop.cart",
+      "kind": "imports",
+      "src": "tests.test_cart",
+      "dst": "shop.cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:tests.test_inventory->shop.inventory",
+      "kind": "imports",
+      "src": "tests.test_inventory",
+      "dst": "shop.inventory",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:tests.test_models->shop.models",
+      "kind": "imports",
+      "src": "tests.test_models",
+      "dst": "shop.models",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:tests.test_orders->shop.cart",
+      "kind": "imports",
+      "src": "tests.test_orders",
+      "dst": "shop.cart",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:tests.test_orders->shop.inventory",
+      "kind": "imports",
+      "src": "tests.test_orders",
+      "dst": "shop.inventory",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:tests.test_orders->shop.orders",
+      "kind": "imports",
+      "src": "tests.test_orders",
+      "dst": "shop.orders",
+      "confidence": "exact",
+      "reason": null
+    },
+    {
+      "id": "imports:tests.test_pricing->shop.pricing",
+      "kind": "imports",
+      "src": "tests.test_pricing",
+      "dst": "shop.pricing",
+      "confidence": "exact",
+      "reason": null
+    }
+  ],
+  "parse_errors": [],
+  "positions": {}
+}
