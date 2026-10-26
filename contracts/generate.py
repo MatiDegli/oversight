@@ -62,11 +62,14 @@ class Schema(GenerateJsonSchema):
 
 
 def without_ref_siblings(node: Any) -> Any:
-    """Drop the keys beside each `$ref`, such as a field's description: json2ts would declare a
-    second type for every such reference (`ChangeGraph1`)."""
+    """Drop the description beside each `$ref`: json2ts would declare a second type for every such
+    reference (`ChangeGraph1`). Any other key beside a `$ref` is a constraint: refuse to drop it."""
     if isinstance(node, dict):
         mapping = cast(dict[str, Any], node)
         if "$ref" in mapping:
+            others = set(mapping) - {"$ref", "description"}
+            if others:
+                raise ValueError(f"keys beside {mapping['$ref']}: {sorted(others)}")
             return {"$ref": mapping["$ref"]}
         return {key: without_ref_siblings(value) for key, value in mapping.items()}
     if isinstance(node, list):

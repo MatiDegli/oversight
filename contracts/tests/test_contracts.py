@@ -1,5 +1,6 @@
 """Contracts v1: one valid example of every event, the rules the models enforce, and the schema."""
 
+import copy
 import json
 from pathlib import Path
 from typing import Any, get_args
@@ -60,7 +61,7 @@ CONE = {
     "omitted_by_limit": 0,
     "tests_reaching": 6,
 }
-IDS = {"agent_id": "agent-1", "change_id": "change-1"}
+CHANGE_IDS = {"change_id": "change-1", "agent_id": "agent-1"}
 
 PAYLOADS: dict[str, dict[str, Any]] = {
     "run.started": {
@@ -111,8 +112,9 @@ PAYLOADS: dict[str, dict[str, Any]] = {
         "parse_errors": [{"path": "shop/cart.py", "line": 3, "message": "invalid syntax"}],
     },
     "agent.status": {
-        **IDS,
+        "agent_id": "agent-1",
         "slot": "A",
+        "change_id": "change-1",
         "task": "Cap the combined discount at 30%",
         "model": "fake",
         "state": "working",
@@ -137,7 +139,7 @@ PAYLOADS: dict[str, dict[str, Any]] = {
         "node_ids": [NODE["id"]],
     },
     "change.updated": {
-        **IDS,
+        **CHANGE_IDS,
         "author": "agent",
         "file": {
             "path": "shop/pricing.py",
@@ -154,7 +156,7 @@ PAYLOADS: dict[str, dict[str, Any]] = {
         "lines_removed": 1,
     },
     "change.proposed": {
-        **IDS,
+        **CHANGE_IDS,
         "revision": 1,
         "task": "Cap the combined discount at 30%",
         "summary": "Capped the discount and added tests.",
@@ -170,7 +172,7 @@ PAYLOADS: dict[str, dict[str, Any]] = {
         "impact": CONE,
     },
     "change.resolved": {
-        **IDS,
+        **CHANGE_IDS,
         "revision": 1,
         "decision": "approved",
         "reason": None,
@@ -201,12 +203,10 @@ PAYLOADS: dict[str, dict[str, Any]] = {
 
 
 def event(event_type: str, seq: int = 1, **payload_changes: Any) -> dict[str, Any]:
-    return {
-        "seq": seq,
-        "ts": TS,
-        "type": event_type,
-        "payload": {**PAYLOADS[event_type], **payload_changes},
-    }
+    """A fresh copy of the example, so a test that changes it cannot change another test's."""
+    payload = copy.deepcopy(PAYLOADS[event_type])
+    payload.update(payload_changes)
+    return {"seq": seq, "ts": TS, "type": event_type, "payload": payload}
 
 
 def test_the_eleven_event_types_are_agents_md_list() -> None:
@@ -217,12 +217,14 @@ def test_the_eleven_event_types_are_agents_md_list() -> None:
 
 
 @pytest.mark.parametrize("event_type", sorted(PAYLOADS))
-def test_every_event_round_trips_with_every_key_present(event_type: str) -> None:
+def test_every_event_round_trips_with_every_key_present_in_order(event_type: str) -> None:
+    # The examples list every field in docs/proposal.md's order, so comparing the serialized text
+    # also checks the order of the keys.
     original = event(event_type)
     parsed = EVENTS.validate_python(original)
-    dumped = json.loads(EVENTS.dump_json(parsed))
-    assert dumped == original
-    assert EVENTS.validate_json(json.dumps(dumped)) == parsed
+    dumped = EVENTS.dump_json(parsed).decode()
+    assert dumped == json.dumps(original, separators=(",", ":"))
+    assert EVENTS.validate_json(dumped) == parsed
 
 
 def test_an_event_missing_a_nullable_key_is_rejected() -> None:
@@ -291,16 +293,16 @@ def test_an_edge_has_a_reason_exactly_when_possible(
 
 
 @pytest.mark.parametrize(
-    "changes",
+    ("changes", "rule"),
     [
-        {"decision": "rejected"},  # a rejection carries no merge
-        {"merge": None},  # an approval says how the merge went
-        {"merge_commit": None},  # a merge names main's new HEAD
-        {"merge": "conflict"},  # a conflict carries its details, and no merge commit
+        ({"decision": "rejected"}, "merge is set exactly"),  # a rejection carries no merge
+        ({"merge": None}, "merge is set exactly"),  # an approval says how the merge went
+        ({"merge_commit": None}, "merge_commit is set exactly"),  # a merge names main's HEAD
+        ({"merge": "conflict", "merge_commit": None}, "conflict is set exactly"),  # and its details
     ],
 )
-def test_a_resolution_states_its_merge_consistently(changes: dict[str, Any]) -> None:
-    with pytest.raises(ValidationError):
+def test_a_resolution_states_its_merge_consistently(changes: dict[str, Any], rule: str) -> None:
+    with pytest.raises(ValidationError, match=rule):
         EVENTS.validate_python(event("change.resolved", **changes))
 
 
@@ -319,7 +321,17 @@ def test_request_bodies_may_omit_optional_keys_but_not_required_text() -> None:
         RequestChanges.model_validate({"comment": ""})
 
 
-def test_every_error_code_has_its_status() -> None:
+def test_every_error_code_has_the_status_of_section_4_7() -> None:
+    assert ERROR_STATUS == {
+        "not_found": 404,
+        "wrong_state": 409,
+        "slot_busy": 409,
+        "spend_brake": 403,
+        "invalid_path": 422,
+        "stale_file": 409,
+        "not_implemented": 501,
+        "invalid_request": 422,
+    }
     assert set(ERROR_STATUS) == set(get_args(ErrorCode.__value__))
 
 
