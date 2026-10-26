@@ -147,10 +147,18 @@ def test_native_tools_decide_the_verdict_and_stay_inside_the_budget() -> None:
     assert found["reasoning_none"].answer == "rejected, HTTP 400"
     assert "limit is honored" in found["limits"].answer
     assert "supported: minimal, low, medium, high." in result.verdict
-    assert (
-        "Low did not reduce reasoning" in result.verdict and "(5 tokens against 5" in result.verdict
-    )
+    assert "low gave 5 reasoning tokens and the default 5" in result.verdict
+    assert "reasoning used the budget" not in found["limits"].answer  # the fake reply has text
     assert "text next to a tool call" in result.verdict
+
+
+def test_an_empty_reply_under_a_small_budget_is_reported_as_reasoning_ate_it() -> None:
+    body = truncated()
+    body["choices"][0]["message"]["content"] = ""
+    body["usage"]["completion_tokens_details"] = {"reasoning_tokens": 30}
+    session = probe.Session(FakeTransport({"limits": ok(body)}))
+    answer = probe.check_limits(session, "m").answer
+    assert answer.endswith("reasoning used the budget and left the reply empty")
 
 
 def test_the_tool_result_is_resent_with_the_assistant_turn_and_the_call_id() -> None:
@@ -234,6 +242,10 @@ def test_usage_is_listed_per_call_with_a_question_mark_where_missing() -> None:
     session.replies["bare"] = ok({"model": "m"})
     evidence = probe.check_usage(session).evidence
     assert "chat: 20/9/0/5" in evidence and "bare: ?/?/?/?" in evidence
+    cached = completion()
+    cached["usage"]["prompt_tokens_details"]["cached_tokens"] = 12
+    session.replies["hit"] = ok(cached)
+    assert "non-zero on 1 of 3" in probe.check_usage(session).answer
 
 
 def test_every_check_carries_the_field_names_of_usage() -> None:

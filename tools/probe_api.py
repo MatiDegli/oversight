@@ -575,10 +575,13 @@ def check_limits(session: Session, model: str) -> Check:
         if honored
         else "both accepted; the token limit did not stop the reply"
     )
+    spent = reasoning_tokens(reply.body)
+    length = len(str(message_of(reply.body).get("content") or ""))
+    if honored and length == 0 and spent:
+        answer += "; reasoning used the budget and left the reply empty"
     evidence = (
         f"{took(reply)}; finish_reason={finish_of(reply.body)}; completion_tokens={used}, of which "
-        f"reasoning_tokens={reasoning_tokens(reply.body)}; reply length "
-        f"{len(str(message_of(reply.body).get('content') or ''))} characters; "
+        f"reasoning_tokens={spent}; reply length {length} characters; "
         "temperature 0.2 has no effect one call can show"
     )
     return Check("limits", question, answer, evidence, honored)
@@ -649,20 +652,22 @@ def check_usage(session: Session) -> Check:
     replies = {s: r for s, r in session.replies.items() if r.status == 200 and s != "stream"}
     if not replies:
         return Check("usage", question, "not run", "no successful response")
-    missing = [s for s, r in replies.items() if usage_of(r.body) is None]
-    sample = next((u for u in (usage_of(r.body) for r in replies.values()) if u), None)
-    where, cached = cached_tokens(sample)
+    usages = {step: usage_of(r.body) for step, r in replies.items()}
+    missing = [step for step, usage in usages.items() if usage is None]
+    sample = next((u for u in usages.values() if u), None)
+    cached = {step: cached_tokens(usage) for step, usage in usages.items()}
+    where = next((path for path, n in cached.values() if n is not None), "not reported")
+    hits = [n for _, n in cached.values() if n]
     answer = (
         f"yes, on all {len(replies)} responses"
         if not missing
         else f"missing on: {', '.join(missing)}. Record unknown, never zero"
     )
+    answer += f"; cached input tokens non-zero on {len(hits)} of {len(replies)}"
     per_call = "; ".join(f"{step}: {usage_line(r.body)}" for step, r in replies.items())
     evidence = (
         f"fields: {', '.join(flatten(sample)) if sample else 'none'}; "
-        f"cached input tokens: {where}"
-        + (f" ({cached})" if cached is not None else "")
-        + f"; per call, in/out/cached/reasoning: {per_call}"
+        f"cached input tokens at {where}; per call, in/out/cached/reasoning: {per_call}"
     )
     return Check("usage", question, answer, evidence)
 
@@ -727,10 +732,10 @@ def build_verdict(provider: Provider, checks: dict[str, Check]) -> str:
         if supported:
             head += f" The API lists these values as supported: {supported}."
         now, before = low.data.get("reasoning_tokens"), low.data.get("default_reasoning_tokens")
-        if isinstance(now, int) and isinstance(before, int) and now >= before:
+        if isinstance(now, int) and isinstance(before, int):
             head += (
-                f" Low did not reduce reasoning on the probe's prompt ({now} tokens against "
-                f"{before} by default), so how much each setting costs is still unmeasured."
+                f" One sample each, on a trivial prompt: low gave {now} reasoning tokens and the "
+                f"default {before}, so what each setting costs is still unmeasured."
             )
     return head
 
