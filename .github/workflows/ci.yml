@@ -47,4 +47,4 @@ jobs:
         with:
           node-version: 24
       - run: make install
-      - run: make check-python check-frontend
+      - run: make check-python check-contracts check-frontend
