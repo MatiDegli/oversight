@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   generateLayout,
+  jsonFloat,
   serializePositions,
   updateReplay,
   watchViewport,
@@ -261,6 +262,51 @@ describe("demo preset", () => {
       }
     },
   );
+
+  it("writes a coordinate the way the backend's JSON writes the contract's float", () => {
+    // Pydantic dumps Point(x=1092, y=611.5) as {"x":1092.0,"y":611.5}; the event store must
+    // reproduce the replay log byte for byte, so integral values keep their ".0".
+    expect(jsonFloat(1092)).toBe("1092.0");
+    expect(jsonFloat(611.5)).toBe("611.5");
+    expect(jsonFloat(1137.3000000000002)).toBe("1137.3000000000002");
+    expect(jsonFloat(0)).toBe("0.0");
+    expect(jsonFloat(-0)).toBe("-0.0");
+    expect(jsonFloat(-5)).toBe("-5.0");
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1e15, 1e-7])
+      expect(() => jsonFloat(value)).toThrow("Coordinate out of range");
+    const points = { "a.b": { x: 1092, y: 611.5 }, c: { x: 0, y: -3 } };
+    expect(serializePositions(points)).toBe(
+      '{\n  "a.b": {\n    "x": 1092.0,\n    "y": 611.5\n  },\n  "c": {\n    "x": 0.0,\n    "y": -3.0\n  }\n}\n',
+    );
+    expect(serializePositions({})).toBe("{}\n");
+    const line = JSON.stringify({
+      type: "graph.snapshot",
+      payload: { ...snapshot, nodes: [], positions: {} },
+    });
+    expect(updateReplay(line, {})).toBe(line);
+    const log = JSON.stringify({
+      seq: 1,
+      type: "graph.snapshot",
+      payload: { nodes: [{ id: "a.b" }, { id: "c" }], positions: {} },
+    });
+    expect(updateReplay(log, points)).toBe(
+      '{"seq":1,"type":"graph.snapshot","payload":{"nodes":[{"id":"a.b"},{"id":"c"}],' +
+        '"positions":{"a.b":{"x":1092.0,"y":611.5},"c":{"x":0.0,"y":-3.0}}}}',
+    );
+  });
+
+  it("keeps no integral coordinate in the preset file or the replay snapshot", () => {
+    const integral = /"[xy]": ?-?\d+(?![\d.])/;
+    const preset = readFileSync(new URL("fixtures/layouts/demo-repo.json", root), "utf8");
+    expect(preset).not.toMatch(integral);
+    expect(preset).toMatch(/"x": \d+\.0,/);
+    const snapshotLines = fixture.split("\n").filter((line) => line.includes('"graph.snapshot"'));
+    expect(snapshotLines.length).toBeGreaterThan(0);
+    for (const line of snapshotLines) {
+      expect(line).not.toMatch(integral);
+      expect(line).toMatch(/"x":\d+\.0,/);
+    }
+  });
 
   it("updates only snapshot positions, preserves other event bytes and is idempotent", () => {
     expect(updateReplay(fixture, generated.positions)).toBe(fixture);

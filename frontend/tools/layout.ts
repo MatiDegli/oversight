@@ -265,8 +265,38 @@ export function generateLayout(snapshot: GraphSnapshot): Layout {
   return { positions, blocks };
 }
 
+/**
+ * A coordinate as the backend's JSON writes the contract's float: an integral value keeps its
+ * ".0" (`1092.0`), a fractional one is its shortest round-trip digits. JSON.stringify writes
+ * `1092`, and the replay log must round-trip through the event store byte for byte. The two
+ * writers agree on decimal digits between 1e-6 and 1e15, which is all a position can be.
+ */
+export function jsonFloat(value: number): string {
+  const size = Math.abs(value);
+  if (!Number.isFinite(value) || size >= 1e15 || (size !== 0 && size < 1e-6))
+    throw new Error(`Coordinate out of range: ${String(value)}`);
+  if (Object.is(value, -0)) return "-0.0";
+  return Number.isInteger(value) ? value.toFixed(1) : String(value);
+}
+
+const pointJson = ({ x, y }: Point, pretty: boolean) =>
+  pretty
+    ? `{\n    "x": ${jsonFloat(x)},\n    "y": ${jsonFloat(y)}\n  }`
+    : `{"x":${jsonFloat(x)},"y":${jsonFloat(y)}}`;
+
+const positionsJson = (positions: GraphSnapshot["positions"], pretty: boolean): string => {
+  const entries = Object.entries(positions).map(
+    ([id, point]) =>
+      `${pretty ? "  " : ""}${JSON.stringify(id)}:${pretty ? " " : ""}${pointJson(point, pretty)}`,
+  );
+  if (entries.length === 0) return "{}";
+  return pretty ? `{\n${entries.join(",\n")}\n}` : `{${entries.join(",")}}`;
+};
+
 export const serializePositions = (positions: GraphSnapshot["positions"]): string =>
-  JSON.stringify(positions, null, 2) + "\n";
+  positionsJson(positions, true) + "\n";
+
+const positionsMarker = "\u0000positions";
 
 /** Keep every non-snapshot byte, including CRLFs and the final newline, exactly as supplied. */
 export function updateReplay(jsonl: string, positions: GraphSnapshot["positions"]): string {
@@ -275,10 +305,12 @@ export function updateReplay(jsonl: string, positions: GraphSnapshot["positions"
     if (event.type !== "graph.snapshot") return line;
     const ids = event.payload.nodes.map((n) => n.id);
     for (const id of ids) if (!positions[id]) throw new Error(`Missing preset position: ${id}`);
-    event.payload.positions = Object.fromEntries(
-      ids.sort().map((id) => [id, required(positions[id])]),
+    // JSON.stringify cannot write 1092.0, so the positions go in as a marker that is replaced.
+    const sorted = Object.fromEntries(ids.sort().map((id) => [id, required(positions[id])]));
+    event.payload.positions = positionsMarker as unknown as GraphSnapshot["positions"];
+    return JSON.stringify(event).replace(JSON.stringify(positionsMarker), () =>
+      positionsJson(sorted, false),
     );
-    return JSON.stringify(event);
   });
 }
 
