@@ -1,4 +1,5 @@
 import cytoscape from "cytoscape";
+import type { Core, NodeSingular } from "cytoscape";
 import fcose from "cytoscape-fcose";
 import { useEffect, useRef } from "react";
 
@@ -6,13 +7,26 @@ import { stateStore } from "../state";
 import { getActiveTheme } from "../theme";
 
 import { graphElements } from "./elements";
+import { showSelection } from "./selection";
 import { graphStyles } from "./styles";
 import { updateGraph } from "./updateGraph";
 
 cytoscape.use(fcose);
 
-export function GraphView() {
+export interface GraphViewProps {
+  /** The node with the selected ring. The app owns it; taps only report. */
+  selectedId?: string | null;
+  onNodeTap?: (nodeId: string) => void;
+}
+
+export function GraphView({ selectedId = null, onNodeTap }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
+  const graph = useRef<Core | undefined>(undefined);
+  const latest = useRef<GraphViewProps>({});
+  useEffect(() => {
+    latest.current = { selectedId, onNodeTap };
+    if (graph.current) showSelection(graph.current, selectedId);
+  }, [selectedId, onNodeTap]);
   useEffect(() => {
     const host = container.current;
     if (!host) return;
@@ -20,11 +34,20 @@ export function GraphView() {
     let cancelled = false;
     let dispose: (() => void) | undefined;
     const create = () => {
-      const cy = cytoscape({ container: host, layout: { name: "preset" } });
+      const cy = cytoscape({
+        container: host,
+        layout: { name: "preset" },
+        boxSelectionEnabled: false,
+      });
       cy.style(graphStyles(theme));
       const sync = () => {
         updateGraph(cy, graphElements(stateStore.getState().state));
+        showSelection(cy, latest.current.selectedId ?? null);
       };
+      cy.on("tap", "node", (event) => {
+        latest.current.onNodeTap?.((event.target as NodeSingular).id());
+      });
+      graph.current = cy;
       const unsubscribe = stateStore.subscribe(sync);
       sync();
       const resize = new ResizeObserver(() => cy.resize());
@@ -32,6 +55,7 @@ export function GraphView() {
       dispose = () => {
         unsubscribe();
         resize.disconnect();
+        graph.current = undefined;
         cy.destroy();
       };
     };
