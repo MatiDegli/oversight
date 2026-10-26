@@ -456,3 +456,256 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 - Status pill, distance badge, status lamp: fully round.
 - The dash, 6px with a 4px gap, belongs to pending changes only.
 
+## Components
+
+### Buttons
+
+- **Shape:** control radius (7px), 40px tall (small: 34px), label type.
+- **Primary (Approve and merge, Send, Start agent):** text-colored fill with page-colored text.
+  Hover lightens the fill to white.
+- **Secondary (Request changes, Message, Live diff):** transparent with an outline border.
+- **Destructive (Reject, Stop and discard):** failed-text label and icon, no fill.
+- **Focus:** every control shows a visible keyboard focus ring: 2px in text color, offset 2px,
+  never removed. The app never moves focus by itself.
+
+### Chips and facts
+
+- **Style:** page-raised fill, page-border border, control radius, 14px text, an icon in muted.
+- **Use:** the facts row of review and live diff (tests, lines, base commit, worktree, steps and
+  cost), and the cone list's entries with their distance badge.
+
+### Cards / Containers
+
+- **Agent card:** card fill, card-border border, card radius. First row: status lamp, agent name,
+  model, and the status pill on the right. Then the task in one line, what the agent is doing now
+  ("Editing restock in inventory.py"), a step progress bar with "Step 7 of 25" and the cost, and the
+  last steps from `agent.step`, each with an icon, a short summary and its age. Buttons: Live diff,
+  and from level 2 Stop and discard.
+- **Ready for review:** the card's pill changes to "Ready for review", its border turns the agent's
+  color, and a "Review change" button appears. Nothing else on the screen changes.
+- **Status pill:** the agent's state in words ("Editing", "Revising", "Ready for review") on the
+  agent's tint in its text color. It belongs to one agent, so it may carry that agent's color.
+- **Status lamp:** a 10px circle in the agent's color, filled when the agent needs the person,
+  outlined otherwise.
+
+### Inputs / Fields
+
+- **Style:** field fill, control-edge border, card radius, body text, faint placeholder.
+- **Focus:** the focus ring above.
+- **The comment box** serves Approve and Request changes alike, so no key in it triggers a
+  decision: Approve has no shortcut, not even Ctrl+Enter.
+
+### Navigation
+
+- **Top bar** (shell): product name, repository, branch and short commit hash (Mono), the search
+  box, the review queue counter, the spend total (level 2), history and settings icons.
+- **Review queue counter:** "1 change ready for review" with a lamp, on raised. It counts across
+  agents, so it is neutral, never an agent's color.
+- **Left rail** (shell): icon buttons; the current view's button on raised.
+- **Agents rail** (review mode): one letter avatar per agent: a 36px square with card radius,
+  agent-tint fill, a 1.5px border and the letter in the agent's color at 15px, weight 700. A status
+  lamp sits on its top-right corner and a one-word caption under it ("Ready", "Editing").
+
+### Graph nodes and their states (signature component)
+
+A node's look answers two questions, each on its own channel, and says its state in a word on the
+node ("read", "editing", "changed", "new"):
+
+1. **Is there a change here that is not in main yet?** The border: dashed in the agent's color, or
+   not. This channel always wins.
+2. **What is the agent doing with it now?** The letter badge: outlined for read, filled for a
+   change.
+
+- **Rest:** card fill at 94%, 1px node-border, node radius, label in text at 15px. Hover turns the
+  border node-hover. A module frame: panel fill at 90%, 1px card-border, module radius, its name in
+  module-label, its function count in faint. An exact call edge: 1.4px in edge, with a small filled
+  arrowhead of the same color.
+- **Read:** the agent read the node in its current run, and the node has no pending change. Solid
+  1.5px border in the agent's color, an outlined letter badge, the word "read" in the agent's text
+  color. Fill unchanged.
+- **Editing:** the node is in the agent's current focus: the `node_ids` of its latest `agent.focus`
+  event, when that event's mode is edit and the agent is working or revising. Only that latest
+  focus counts; when the agent moves on, the previous nodes become "changed". Dashed 1.5px border
+  in the agent's color, the agent's node fill, a filled letter badge, the word "editing". After
+  level 1, rings spread from it.
+- **Pending (changed or new):** the node carries the agent's change and is not its current edit
+  focus. Dashed 1.5px border, dash 6px and gap 4px, in the agent's color; the agent's node fill
+  (`-new` for a node the agent added); a filled badge; the word "changed" or "new". An edge the
+  change adds is dashed in the agent's color, 2px, with an arrowhead in that color.
+- **Precedence:** editing over changed or new over read. A pending node the agent reads again stays
+  dashed and keeps the word "changed".
+- **Selected:** the node whose diff or file the left panel shows gets a 2px ring in text.
+- **Possible call edge (level 3):** 0.9px in edge-possible, never dashed. "Thin, grey, never
+  dashed" wins over every other edge rule: inside the cone it keeps its width and color at full
+  opacity, and a possible call that a change adds is not dashed (its node already is).
+
+**Letter badges.** Agents are a letter and a color, nothing more: no avatars, beads or mascots. On
+a node: a small rounded square at the node's right end with A or B in badge type. Filled for
+editing and pending: the agent's color with the letter in on-agent. Outlined for read: a 1.5px
+border in the agent's color, no fill, the letter in that color. On the agent card and in panel
+headings: a small square swatch in the agent's color followed by "Agent A" or "Agent B".
+
+**Distance badges.** A 20px circle filled with text, the distance as a page-colored number, 12px,
+weight 700. Neutral: the cone is about the code, not an agent.
+
+### Impact cone (signature component)
+
+The cone is level 2. In review and in the live diff, the graph shows the change and its cone, and
+everything else steps back.
+
+- The change's nodes keep their agent's look; the agent's color stays on the change and nowhere
+  else.
+- Nodes in the cone keep full opacity and show a distance badge: 1 for a direct caller, 2 for a
+  caller of a caller, and so on.
+- Exact edges inside the cone and the change draw in lit-edge, 2px, with a matching arrowhead.
+- Everything else dims: nodes and edges to 16% opacity, module frames to 60%. In review, nodes the
+  agent only read dim too. In the live diff, nodes the agent read in this run keep their read look
+  at full opacity, because the agent is still working and its reads are live information.
+- The cone card on the graph lists the possibly affected functions by distance, with counts, and
+  says what the bounds cut, for example "+12 omitted by depth". It is "possibly affected", never a
+  complete list. The review panel keeps a one-line summary.
+- In level 1, before the cone exists, review dims everything except the change's nodes.
+- Once both the cone (level 2) and the dot field (after level 1) exist, the cone also casts the
+  neutral work light.
+
+### Review panel with the matte header (signature component)
+
+Opened only by the person: from "Review change" on a card, the queue counter, or a node whose
+change is proposed.
+
+- **Header:** the change's title, the agent, its status pill, a close button, and the facts row.
+- **Matte background:** flat dark with a still grain: a gentle vertical gradient from about
+  `#151515` at the top to about `#0f0f0f` at the bottom, with a fixed per-pixel grain of roughly
+  plus or minus 2% brightness that also hides banding. It never animates. In day mode the gradient
+  runs from about `#f3f2ee` to `#ecebe6` with the same grain. It was chosen on the compressed demo
+  clip: at 720p and 1.2 Mbps the grain disappears and the header stays clean. It comes after level
+  1; until then, and as the fallback, the header is plain page.
+- **Body:** the agent's note; Monaco's DiffEditor in inline mode, one block per file with its name,
+  `+` and `-` counts and an inline or side-by-side switch; added lines on added-tint with `+`,
+  removed lines on removed-tint with `-`; unchanged regions folded into a "6 hidden lines" row;
+  further files collapsed to a row. From level 2 the new side is editable while the agent is idle,
+  and a hint on the diff bar says edits go to the agent's worktree.
+- **Decisions:** a comment box, then Approve and merge (primary, no shortcut, with a note that the
+  tests rerun first if main moved), Request changes (level 2, secondary, with a line saying it keeps
+  the worktree and sends the comment back), and Reject (destructive).
+
+### Live diff and file view
+
+- **Which panel a node opens:** a node whose change is proposed opens review; a node with a change
+  not yet proposed (the agent is working or revising) opens the live diff; a node with no pending
+  change opens the file view.
+- **Live diff:** the task, the agent and its "Editing" pill, the facts row; a banner saying the
+  diff updates with each edit and the decisions open when the agent proposes; the diff, read-only,
+  with a lock and a line saying so; the agent's last steps; from level 2, Stop and discard. The
+  graph shows the cone of the edit so far.
+- **File view:** the file in main with the function's lines marked as a highlighted span; from level
+  2 it is editable and edits go to main. On the graph the selected node and its direct callers and
+  callees stay lit; the rest dims.
+
+### Dot field and rings (signature component, after level 1)
+
+They come after level 1 and never block a level. Until they ship, and whenever WebGL is missing,
+the graph's background is plain ground.
+
+- **Grid:** its own canvas under a transparent Cytoscape canvas, reading the rendered boxes of the
+  lit nodes; it never draws nodes or edges. Cells are 7px, fixed to the screen (they do not pan or
+  zoom). Each cell is a square lamp covering 72% of it, about 5px. Each lamp shows one of four
+  levels (off and three steps), chosen with an 8 by 8 ordered (Bayer) dither. An unlit lamp sits at
+  about 2% brightness, close to shell; a 2px guide dot every 28px marks the grid where nothing is
+  lit. The cells are large on purpose: they survive 720p compression.
+- **Light:** each lit node is a source shaped like its box. Intensity falls off with distance from
+  the box: about 72% a near term that decays quickly plus 28% a far term that spreads wider, times
+  the mode's gain and the node's weight. Overlapping lights mix colors by intensity; at most 8 at
+  once.
+
+| Mode | Near | Far | Gain | Why |
+| --- | --- | --- | --- | --- |
+| Watch and live diff | 34px | 90px | 0.92 | the agents are the subject; their light spreads |
+| File view | 22px | 50px | 0.80 | one function and its neighbors |
+| Review | 16px | 34px | 0.70 | the cone carries the meaning, so the light is held in |
+
+| Mode | Lit nodes and weights |
+| --- | --- |
+| Watch | per agent, in its color: the editing node (or, once the agent is done, its main changed node) 1.0, other changed nodes 0.72, read nodes 0.36 |
+| Review | the change in the agent's color: changed nodes 1.0, new nodes 0.8; the cone in work-light: distance 1 at 0.52, farther at 0.38. Read nodes are not lit. |
+| Live diff | in the agent's color: the editing node 1.0, read nodes 0.4; the cone so far in work-light at 0.48 |
+| File view | in work-light: the selected node 0.8, its direct callers and callees 0.32 |
+
+- **Breathing:** in watch and live diff, the editing node's light swings between 72% and 100% of
+  its weight, a full cycle about every 2.9 seconds. In review it holds still.
+- **Rings:** in watch and live diff, rings spread from the editing node in its agent's color: one at
+  a time, growing at 55px per second from the node's center to 340px, then starting again; a soft
+  band about 10px wide at 90% strength, fading out between 60px and 340px. No rings in review or
+  file view.
+
+### Motion
+
+- Mode changes, dimming and highlights ease over 240ms (`cubic-bezier(0.2, 0.7, 0.2, 1)`).
+- **One exception on the person's surface:** a working agent's status lamp pulses (1.6s period),
+  because it reports that work is going on. Nothing else in a panel animates on its own.
+- On the graph: the rings and the breathing light.
+- **Reduced motion** (`prefers-reduced-motion: reduce`): the rings, the breathing, the lamp pulse
+  and the camera's eased moves stop; the camera jumps. What stays: the dot field's still light,
+  every state change (it switches at once instead of easing), and the lamp as a static fill. No
+  information is carried only by motion.
+
+### Quality floor
+
+Each item is a target checked on the built result:
+
+- **Focus:** every control, node and row that takes input has a visible focus ring (2px text color,
+  offset 2px). Keyboard order follows the screen; nothing steals focus.
+- **Contrast:** text at 4.5:1 or more against its surface; graphics that carry meaning (agent
+  borders, badges, dashes, state icons, call edges, the focus ring) and control boundaries at 3:1.
+  Measured for the dark set: text 16.7:1 on page; muted 7.6:1 on card; faint 5.3:1 on field;
+  code-dim 4.7:1 on page; agent-a-text 7.5:1 and agent-b-text 8.0:1 on card, and 6.8:1 and 7.0:1
+  on their tints; agent-a and agent-b as graphics 6.8:1 and 5.7:1 on ground; on-agent letters
+  6.1:1 on A and 5.1:1 on B; passed 10.3:1 and failed-text 7.8:1 on page; edge 3.7:1 and
+  edge-possible 3.0:1 on a module frame; control-edge 3.2:1 on field; lit-edge 14.0:1 and
+  work-light 6.2:1 on ground; every syntax color 8.1:1 or more on page. Rest borders (divider,
+  border, node-border) are decorative: what they enclose is identified by its text.
+- **Errors:** every error message says what happened and how to go on, in the product's words:
+  "The merge conflicts with main in pricing.py. Ask Agent A to redo it on the new base, or reject
+  it." Never a bare code or "Something went wrong". Errors use neutral colors with an icon;
+  failed red is for failing tests and destructive actions, not for chrome.
+- **Browser surfaces:** text selection, caret, scrollbars and focus rings take theme tokens.
+
+## Do's and Don'ts
+
+### Do:
+
+- **Do** keep every agent color next to its letter, and every state color next to a word, a sign
+  or an icon.
+- **Do** keep the review queue counter and any count across agents neutral.
+- **Do** show a pending change with a dashed 1.5px border in its agent's color, changed and new
+  alike.
+- **Do** leave the screen still when an agent finishes: only its card, its pill and the queue
+  counter change.
+- **Do** take every color from a token under `data-theme`, Cytoscape, Monaco and the dot field
+  included.
+- **Do** check contrast against the quality floor in both modes.
+
+### Don't:
+
+- **Don't** use amber or yellow, for warnings or anything else.
+- **Don't** use color alone to say anything.
+- **Don't** give any hue a meaning other than Agent A, Agent B, passed or failed.
+- **Don't** steal focus: nothing opens, moves or scrolls by itself.
+- **Don't** dash anything but a pending change: not possible calls, selection, hover or empty
+  states.
+- **Don't** put blur, glass, glow or shadow on a panel; the matte header's still grain is the only
+  texture.
+- **Don't** move nodes between modes.
+- **Don't** give Approve a keyboard shortcut, Ctrl+Enter included.
+- **Don't** use small uppercase labels or Mono as decoration.
+- **Don't** let the sketches' code or images into the repository.
+
+## By level
+
+| Level | Design elements |
+| --- | --- |
+| 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the queue counter; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain black graph and plain review header |
+| 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
+| 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
+| After level 1, never blocking | the dot field with its light, the rings, the matte header's grain |
+| Mon Nov 2, only with level 2 closed | day mode |
