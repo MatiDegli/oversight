@@ -1,7 +1,7 @@
-"""Configuration from the environment and the repository's .env file. Only app.py reads it."""
+"""Configuration from the environment and the .env file. Read by app.py and the API probe."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -25,6 +25,9 @@ def read_env_file(path: Path) -> dict[str, str]:
 class Settings:
     host: str = "127.0.0.1"
     port: int = 8710
+    # The provider keys. repr=False keeps them out of any log line or traceback that shows Settings.
+    meta_api_key: str | None = field(default=None, repr=False)
+    baseten_api_key: str | None = field(default=None, repr=False)
 
     @classmethod
     def load(cls, env_file: Path = REPO_ROOT / ".env") -> "Settings":
@@ -33,4 +36,7 @@ class Settings:
         return cls(
             host=merged.get("OVERSIGHT_HOST", cls.host),
             port=int(merged.get("OVERSIGHT_PORT", cls.port)),
+            # An empty value, as in .env.example, means the key is not set.
+            meta_api_key=merged.get("META_API_KEY") or None,
+            baseten_api_key=merged.get("BASETEN_API_KEY") or None,
         )
