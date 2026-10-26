@@ -1,8 +1,8 @@
 // run_detect (detect.sh) against fake detectors, with no servers and no browser: the scan is
 // optional, so whatever the detector does, the function returns 0 and the run goes on.
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { existsSync, watch } from "node:fs";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -62,6 +62,89 @@ void test("a detector that hangs is stopped at the deadline, leaves no detect.js
   });
   assert.match(outcome.stderr, /did not finish within 1 s/);
   assert.ok(Date.now() - started < 15_000, "returned long before the detector would have");
+});
+
+// A fake detector like a Chrome that outlives it: it starts a child that ignores SIGTERM, records
+// both PIDs (written to a temp name and renamed, so a watcher sees them whole), exits on SIGTERM, and
+// otherwise waits. The child never ends by itself.
+const stubborn = `
+record() { echo "$2" > "$1.tmp"; mv "$1.tmp" "$1"; }
+dir=$(dirname "$0")
+( trap '' TERM; exec sleep 30 ) &
+record "$dir/child" $!
+trap 'exit 0' TERM
+record "$dir/pid" $$
+wait
+`;
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function pidIn(dir: string, name: string): Promise<number> {
+  return Number((await readFile(join(dir, name), "utf8")).trim());
+}
+
+// Resolves when every named file exists in dir. Start it before the process that writes them.
+function appear(dir: string, names: string[]): Promise<void> {
+  return new Promise((done) => {
+    const watcher = watch(dir, () => {
+      if (names.every((name) => existsSync(join(dir, name)))) {
+        watcher.close();
+        done();
+      }
+    });
+  });
+}
+
+void test("a child that ignores SIGTERM dies with the detector at the deadline", async () => {
+  let child = 0;
+  try {
+    const outcome = await detect(stubborn, 1, async (dir) => {
+      child = await pidIn(dir, "child");
+      assert.equal(alive(await pidIn(dir, "pid")), false, "the detector is dead");
+      assert.equal(alive(child), false, "its child, which ignores SIGTERM, is dead too");
+    });
+    assert.match(outcome.stderr, /did not finish within 1 s/);
+  } finally {
+    if (child > 0 && alive(child)) process.kill(child, "SIGKILL");
+  }
+});
+
+void test("a signal to the shell during the scan stops the whole group before the shell goes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oversight-detect-"));
+  let child = 0;
+  try {
+    const detector = join(dir, "impeccable");
+    await writeFile(detector, `#!/bin/sh\n${stubborn}\n`);
+    await chmod(detector, 0o755);
+    const recorded = appear(dir, ["child", "pid"]);
+    // As run.sh does: a TERM trap that exits.
+    const command =
+      "set -eu -o pipefail; source frontend/shots/detect.sh; trap 'exit 143' TERM; " +
+      'run_detect "$1" http://x/ "$2" 30; echo continued';
+    const shell = spawn("bash", ["-c", command, "bash", detector, dir], {
+      cwd: root,
+      env: { ...process.env, IMPECCABLE_BROWSER: "unused" },
+      stdio: "ignore",
+    });
+    const closed = new Promise<number | null>((done) => shell.on("close", done));
+    await recorded;
+    child = await pidIn(dir, "child");
+    const detectorPid = await pidIn(dir, "pid");
+    shell.kill("SIGTERM");
+    assert.equal(await closed, 143);
+    assert.equal(alive(detectorPid), false, "the detector is dead");
+    assert.equal(alive(child), false, "its child is dead");
+  } finally {
+    if (child > 0 && alive(child)) process.kill(child, "SIGKILL");
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 void test("exit 2 is a completed scan with findings: detect.json is kept", async () => {
