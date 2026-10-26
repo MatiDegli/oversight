@@ -1,458 +1,458 @@
-# Oversight design
+---
+name: Oversight
+description: A web IDE where one person supervises coding agents on a live graph of a Python repository.
+colors:
+  ground: "#000000"
+  shell: "#060606"
+  panel: "#080808"
+  field: "#0b0b0b"
+  page: "#0c0c0c"
+  card: "#0e0e0e"
+  raised: "#121212"
+  page-raised: "#131313"
+  text: "#ededea"
+  muted: "#a3a39e"
+  faint: "#85857f"
+  code-dim: "#7d7d78"
+  module-label: "#d2d2cd"
+  divider: "#1c1c1c"
+  border: "#2a2a2a"
+  page-border: "#262626"
+  card-border: "#242424"
+  node-border: "#2e2e2e"
+  outline: "#3a3a3a"
+  control-edge: "#62625e"
+  node-hover: "#6b6e77"
+  edge: "#6a6a65"
+  edge-possible: "#5c5c58"
+  lit-edge: "#d6d3cb"
+  work-light: "#8c8c88"
+  agent-a: "#ff5c1f"
+  agent-a-text: "#ff7a45"
+  agent-a-tint: "rgba(255, 92, 31, 0.14)"
+  agent-a-node: "rgba(30, 12, 4, 0.95)"
+  agent-a-node-new: "rgba(20, 10, 4, 0.95)"
+  agent-b: "#4f7dff"
+  agent-b-text: "#86a3ff"
+  agent-b-tint: "rgba(79, 125, 255, 0.16)"
+  agent-b-node: "rgba(6, 12, 30, 0.95)"
+  agent-b-node-new: "rgba(4, 8, 20, 0.95)"
+  on-agent: "#17110b"
+  passed: "#6fd08a"
+  failed: "#ff6464"
+  failed-text: "#ff7b7b"
+  added-tint: "rgba(111, 208, 138, 0.11)"
+  removed-tint: "rgba(255, 100, 100, 0.12)"
+  syntax-plain: "#d8d7d0"
+  syntax-keyword: "#9fa8b6"
+  syntax-string: "#a9bea2"
+  syntax-number: "#cbbd9f"
+  syntax-builtin: "#b6adc6"
+  syntax-definition: "#f2f1ea"
+  day-ground: "#f4f3ef"
+  day-shell: "#e9e8e3"
+  day-panel: "#eeede8"
+  day-field: "#fbfaf7"
+  day-page: "#f8f7f3"
+  day-card: "#fcfbf8"
+  day-raised: "#e4e2dc"
+  day-page-raised: "#efeee9"
+  day-text: "#1c1c1a"
+  day-muted: "#56554f"
+  day-faint: "#67665f"
+  day-code-dim: "#67665f"
+  day-module-label: "#2b2a27"
+  day-divider: "#dddbd4"
+  day-border: "#d2d0c9"
+  day-page-border: "#dcdad3"
+  day-card-border: "#dad8d1"
+  day-node-border: "#cfcdc6"
+  day-outline: "#b9b7b0"
+  day-control-edge: "#8a8983"
+  day-node-hover: "#8d8c86"
+  day-edge: "#6e6d67"
+  day-edge-possible: "#8a8983"
+  day-lit-edge: "#3a3936"
+  day-work-light: "#6b6a64"
+  day-agent-a: "#b23c0a"
+  day-agent-a-tint: "rgba(178, 60, 10, 0.12)"
+  day-agent-a-node: "#f9e7dd"
+  day-agent-a-node-new: "#fbefe8"
+  day-agent-b: "#2a4fc9"
+  day-agent-b-tint: "rgba(42, 79, 201, 0.12)"
+  day-agent-b-node: "#e6ebfa"
+  day-agent-b-node-new: "#eff2fc"
+  day-on-agent: "#ffffff"
+  day-passed: "#1a6f36"
+  day-failed: "#b8262b"
+  day-added-tint: "rgba(26, 111, 54, 0.12)"
+  day-removed-tint: "rgba(184, 38, 43, 0.10)"
+  day-syntax-plain: "#2b2a27"
+  day-syntax-keyword: "#4c5768"
+  day-syntax-string: "#4a6644"
+  day-syntax-number: "#77602f"
+  day-syntax-builtin: "#64577a"
+  day-syntax-definition: "#1c1c1a"
+typography:
+  headline:
+    fontFamily: "Atkinson Hyperlegible Next, sans-serif"
+    fontSize: "20px"
+    fontWeight: 700
+    lineHeight: 1.3
+  brand:
+    fontFamily: "Atkinson Hyperlegible Next, sans-serif"
+    fontSize: "17px"
+    fontWeight: 700
+  title:
+    fontFamily: "Atkinson Hyperlegible Next, sans-serif"
+    fontSize: "16px"
+    fontWeight: 700
+  body:
+    fontFamily: "Atkinson Hyperlegible Next, sans-serif"
+    fontSize: "15px"
+    fontWeight: 400
+    lineHeight: 1.5
+  label:
+    fontFamily: "Atkinson Hyperlegible Next, sans-serif"
+    fontSize: "14px"
+    fontWeight: 600
+  caption:
+    fontFamily: "Atkinson Hyperlegible Next, sans-serif"
+    fontSize: "13px"
+    fontWeight: 400
+  badge:
+    fontFamily: "Atkinson Hyperlegible Next, sans-serif"
+    fontSize: "13px"
+    fontWeight: 700
+  code:
+    fontFamily: "Atkinson Hyperlegible Mono, monospace"
+    fontSize: "15px"
+    fontWeight: 400
+    lineHeight: "21px"
+  data:
+    fontFamily: "Atkinson Hyperlegible Mono, monospace"
+    fontSize: "14px"
+    fontWeight: 400
+rounded:
+  label: "4px"
+  node: "5px"
+  control: "7px"
+  module: "8px"
+  card: "10px"
+  full: "999px"
+spacing:
+  xs: "6px"
+  sm: "8px"
+  md: "10px"
+  lg: "14px"
+  xl: "18px"
+  overlay: "24px"
+components:
+  button-primary:
+    backgroundColor: "{colors.text}"
+    textColor: "{colors.page}"
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    height: "40px"
+    padding: "0 16px"
+  button-secondary:
+    backgroundColor: "transparent"
+    textColor: "{colors.text}"
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    height: "40px"
+    padding: "0 16px"
+  button-destructive:
+    backgroundColor: "transparent"
+    textColor: "{colors.failed-text}"
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    height: "40px"
+    padding: "0 16px"
+  button-small:
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    height: "34px"
+    padding: "0 12px"
+  input:
+    backgroundColor: "{colors.field}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.card}"
+    padding: "10px 12px"
+  chip:
+    backgroundColor: "{colors.page-raised}"
+    textColor: "{colors.text}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.control}"
+    height: "30px"
+  agent-card:
+    backgroundColor: "{colors.card}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.card}"
+  status-pill:
+    typography: "{typography.label}"
+    rounded: "{rounded.full}"
+    padding: "3px 10px"
+  queue-counter:
+    backgroundColor: "{colors.raised}"
+    textColor: "{colors.text}"
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    height: "34px"
+  graph-node:
+    backgroundColor: "{colors.card}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.node}"
+  module-frame:
+    backgroundColor: "{colors.panel}"
+    textColor: "{colors.module-label}"
+    rounded: "{rounded.module}"
+  distance-badge:
+    backgroundColor: "{colors.text}"
+    textColor: "{colors.page}"
+    rounded: "{rounded.full}"
+    size: "20px"
+  letter-avatar:
+    backgroundColor: "{colors.agent-a-tint}"
+    textColor: "{colors.agent-a}"
+    rounded: "{rounded.card}"
+    size: "36px"
+---
 
-This is the reference for how Oversight looks. It turns the visual direction the maintainer agreed
-before the kickoff, "Signal" with a matte review header, into rules and values the frontend can
-build from. AGENTS.md ("UI" and "Look") states the principles; this document gives the detail.
+# Design System: Oversight
 
-**Precedence.** AGENTS.md wins over this document. Where the agreed sketches disagree with
-AGENTS.md, this document follows AGENTS.md and says so in a "Rule from AGENTS.md" note. The
-sketches were made before the kickoff and only lent their values: no sketch code or image belongs
-in this repository.
+## Overview
 
-Sizes are CSS pixels on a 1920 by 1080 frame, the size the demo is recorded at. Panels scale with
-the window; type sizes and radii do not.
+**Creative North Star: "Signal"**
 
-## 1. Two surfaces
+Oversight has two surfaces with different jobs, and they never borrow each other's materials. The
+graph is the machines' surface: it shows what the agents are doing, with nodes that light up, a
+change in its agent's color, and, after level 1, rings and a field of dots that glow like an LED
+panel. It is the only place where light moves. The panels are the person's surface: the agents
+panel, review, live diff and file view are dark, flat and still. They hold text, decisions and code.
 
-The screen has two surfaces with different jobs, and they never borrow each other's materials.
+The product is a tool someone operates for long stretches while agents work, and the demo is
+recorded on video. So the screen is dense but calm, every color means something, and nothing moves
+or opens unless the person asked for it. Everything is dark by default, the review panel included,
+with a dark Monaco theme. A day mode exists for the submission gallery only (see Colors).
 
-- **The graph is the machines' surface.** It shows what the agents are doing: nodes light up, a
-  change carries its agent's color, rings spread from the node being edited. Later it gets a field
-  of dots that light up like an LED panel (section 8). It is the only place where light moves.
-- **The panels are the person's surface.** Agents panel, review panel, live diff and file view are
-  dark, flat and still. They hold text, decisions and code. No glow, no gradient, no shadow, with
-  one exception: the review header's matte grain (section 6.2), which never moves.
+**Precedence.** AGENTS.md wins over this file. The direction was agreed on the final Signal sketches
+with the matte review header, made before the kickoff; this file takes values and rules from them,
+never code or images. Where a sketch disagrees with AGENTS.md or with the quality floor below, this
+file departs from it and says so in the table of departures. Sizes are CSS pixels on a 1920 by 1080
+frame, the size the demo is recorded at. Panels scale with the window; type sizes and radii do not.
 
-Everything is dark, the review panel included. Monaco uses a dark theme.
+**Key Characteristics:**
 
-## 2. Tokens
+- Black ground, warm white text, two agent colors and two state colors, nothing else.
+- One family, Atkinson Hyperlegible, in sentence case.
+- Flat panels with hairline borders; light lives only on the graph.
+- Every state is told in words or signs as well as color.
+- The layout never moves between modes; only the camera and the lights change.
 
-The theme in `frontend/src/theme` owns these values. Components take colors only from the theme,
-never as literals; Cytoscape and Monaco read the same values through the theme's TypeScript
-exports.
+### Departures from the sketches
 
-### 2.1 Surfaces
+| What | Sketch | Here | Why |
+| --- | --- | --- | --- |
+| Border of a changed node | solid | dashed | AGENTS.md: a dashed border means a pending change, changed and new alike |
+| Module names on the graph | Mono | Next | AGENTS.md: graph labels use Next |
+| Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
+| Code-dim (line numbers, comments) | `#6d6d68`, 3.8:1 on page | `#7d7d78`, 4.7:1 | quality floor: text at 4.5:1 |
+| Text-box placeholder | `#6d6d68` | faint `#85857f`, 5.3:1 on field | same |
+| Exact call edge | `#4a4a46`, 2.4:1 on black | `#6a6a65`, 3.7:1 | quality floor: meaningful graphics at 3:1 |
+| Possible call edge | `#3a3a37`, 1.8:1 | `#5c5c58`, 3.0:1 | same; it stays thinner and grey |
+| Input border | `#222222` to `#262626` | control-edge `#62625e`, 3.2:1 on field | quality floor: a control's boundary at 3:1 |
+| Task box fill | `#070707` | field `#0b0b0b` | one fill for every input |
+| Pressed rail button | `#161616` | raised `#121212` | one color for hover and pressed |
+| New-node fill for agent B | not drawn | `rgba(4, 8, 20, 0.95)` | derived from A's pair, so both agents follow one rule |
+| Live diff hint | "Pause to edit by hand" | read-only; editing happens in review | AGENTS.md: the new side is editable only in review while the agent is idle; pause is level 3 |
+| Product name | "Graph IDE" | Oversight | the placeholder was replaced |
+
+## Colors
+
+A black field with warm near-whites, where orange and blue only ever mean Agent A and Agent B, and
+green and red only ever mean passed and failed.
+
+### Primary
+
+- **Agent A orange** (agent-a): Agent A's node borders, letter badges, rings and light. As text it
+  uses agent-a-text, lighter so small text stays readable on near-black.
+- **Agent B blue** (agent-b): the same roles for Agent B, with agent-b-text for text. Orange and
+  blue are the pair that people with the common forms of color blindness tell apart best.
+- **Agent tints** (agent-a-tint, agent-b-tint): the fill behind a letter avatar or an agent's status
+  pill. **Agent node fills** (agent-a-node, agent-b-node, and the slightly darker `-new` pair): the
+  fill of a node with that agent's pending change.
+
+### Secondary
+
+- **Passed green** (passed): passing tests, added lines, the `+` count. Its tint (added-tint) is the
+  background of an added line.
+- **Failed red** (failed): failing tests, removed lines, the `-` count, Reject, Stop and discard.
+  As text it uses failed-text. Its tint (removed-tint) is the background of a removed line.
+
+### Neutral
 
 From darkest to lightest:
 
-| Token | Value | Where |
+- **Ground** (ground): behind the graph, and the page itself.
+- **Shell** (shell): the app frame: top bar, left rail; graph overlays (legend, zoom) at 90%.
+- **Panel** (panel): the agents panel; the cone card on the graph at 94%; module frames at 90%.
+- **Field** (field): every input: search, task box, comment box.
+- **Page** (page): the left panel: review, live diff, file view; Monaco's background.
+- **Card** (card): an agent card; a graph node at rest, at 94%.
+- **Raised** (raised): hover on a control or row; a pressed rail button; the queue counter.
+- **Page raised** (page-raised): chips, facts and file rows inside the left panel.
+- **Text** (text): primary text everywhere; a slightly warm white, because pure white glares on
+  video against black.
+- **Muted** (muted): secondary text: model name, times, counts, hints.
+- **Faint** (faint): tertiary text: a module's function count, text-box placeholders.
+- **Code-dim** (code-dim): line numbers and code comments, on page and field only.
+- **Module label** (module-label): a module's name on the graph.
+- **Borders:** divider between regions (under the top bar, beside the rail and panels); border for
+  controls; page-border for chips, facts, file rows and text boxes in the left panel; card-border
+  for an agent card and a module frame; node-border for a node at rest; outline for a secondary
+  button; control-edge for the boundary of an input. All borders are 1px unless a graph state says
+  otherwise.
+- **Graph neutrals:** edge for an exact call edge, edge-possible for a possible one, lit-edge for an
+  edge inside the cone or the change, node-hover for a hovered node's border, work-light for the
+  light the cone casts.
+
+### Code colors
+
+Syntax colors are low in chroma, so code never looks like an agent or a state. Monaco starts from
+its built-in dark theme (`vs-dark`) with these overrides: plain code syntax-plain, keywords
+syntax-keyword, strings syntax-string, numbers syntax-number, built-ins syntax-builtin, a
+function's name at its definition syntax-definition, comments and line numbers code-dim. A
+highlighted span (the selected function) is white at 4%; a folded region is white at 3.5%.
+
+### Day mode
+
+Day mode exists for the submission gallery, which shows both modes. **The video and the demo are
+dark.** Building day mode is a bounded front for Mon Nov 2, started only once level 2 is closed;
+otherwise it is cut like level 3. The screenshots (`make shots`, once it exists) cover both modes.
+
+- **Every color comes from a token**, including the colors Cytoscape, Monaco and the dot-field
+  canvas receive. The token sets hang off `data-theme` on the root element (`dark` or `day`); no
+  component picks a color itself, and switching the attribute repaints everything.
+- **The light set** is the frontmatter's `day-` tokens: each `day-x` replaces `x`, and
+  `day-agent-a` and `day-agent-b` also replace the agents' text variants. Panels are light warm
+  greys of the same warm family as the dark set's text. White at 4% and 3.5% (span, fold) become
+  black at 4% and 3%.
+- **Monaco** uses its built-in light theme (`vs`) with the muted day syntax tokens.
+- **The graph grid** is ink on paper: the ground is day-ground, unlit lamps are the ground darkened
+  by about 4%, the guide dots are day-text at 10%, and light becomes ink density: a stronger light
+  draws denser, darker dots in the light's day color.
+- **Agents** are darker variants of the same hues, still told apart with common color blindness.
+  Simulated color difference between A and B (CIE76, full-severity simulation): 119 with normal
+  vision, 108 protanopia, 122 deuteranopia, 97 tritanopia (the dark pair: 137, 119, 140, 116). On a
+  filled badge the letter is white.
+
+Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1):
+
+| Foreground | On | Ratio |
 | --- | --- | --- |
-| ground | `#000000` | behind the graph, and the page itself |
-| shell | `#060606` | the app frame: top bar, left rail |
-| panel | `#080808` | the agents panel |
-| field | `#0b0b0b` | inputs (search, task box, comment box), graph overlays (legend, zoom) |
-| page | `#0c0c0c` | the left panel: review, live diff, file view |
-| card | `#0e0e0e` | an agent card |
-| raised | `#121212` | hover on a control or a row; the pressed rail button |
-| page-raised | `#131313` | chips and facts inside the left panel |
-
-Graph overlays (legend, zoom controls, the cone card) sit on the field color at about 90% opacity,
-so the graph shows faintly through them.
-
-### 2.2 Text
-
-| Token | Value | Use |
-| --- | --- | --- |
-| text | `#ededea` | primary text on every surface |
-| muted | `#a3a39e` | secondary text: model name, times, counts, hints |
-| faint | `#85857f` | tertiary text: placeholders, a module's function count |
-| code-dim | `#6d6d68` | line numbers, comments, placeholder text in text boxes |
-
-The text color is a slightly warm white, not pure white: on a black ground, pure white glares on
-video.
-
-### 2.3 Borders
-
-| Token | Value | Use |
-| --- | --- | --- |
-| divider | `#1c1c1c` | lines between regions: under the top bar, beside the rail and the panels |
-| border | `#2a2a2a` | controls and inputs |
-| page-border | `#262626` | chips, facts, file rows and text boxes inside the left panel |
-| card-border | `#242424` | an agent card; a module frame on the graph |
-| node-border | `#2e2e2e` | a function, method or class node at rest |
-| outline | `#3a3a3a` | a secondary button (outline style) |
-
-All borders are 1 px unless a graph state below says otherwise.
-
-### 2.4 Agent colors
-
-Each agent is a letter and a color. Orange and blue are the pair that people with the common forms
-of color blindness tell apart best.
-
-| Token | A | B | Use |
-| --- | --- | --- | --- |
-| agent | `#ff5c1f` | `#4f7dff` | node borders, letter badges, rings, the agent's light |
-| agent-text | `#ff7a45` | `#86a3ff` | the agent's color as text on a dark surface |
-| agent-tint | `#ff5c1f` at 14% | `#4f7dff` at 16% | the fill behind a letter avatar or an agent status pill |
-
-The base agent colors are fixed by AGENTS.md. The text variants are lighter so small text in the
-agent's color stays readable on near-black.
-
-### 2.5 State colors
-
-| Token | Value | Use |
-| --- | --- | --- |
-| passed, added | `#6fd08a` | passing tests, added lines, the `+` count |
-| failed, removed, destructive | `#ff6464` | failing tests, removed lines, the `-` count, Reject, Stop and discard |
-| failed-text | `#ff7b7b` | red as text on a dark surface |
-| added-tint | `#6fd08a` at 11% | background of an added line in a diff |
-| removed-tint | `#ff6464` at 12% | background of a removed line in a diff |
-
-### 2.6 Neutral light and dimming
-
-| Token | Value | Use |
-| --- | --- | --- |
-| work-light | `#8c8c88` | the light the impact cone casts (section 3.5) |
-| lit-edge | `#d6d3cb` | an edge inside the cone or the change, 2 px wide |
-| dim-node | 16% opacity | nodes and edges outside the cone, in review and live diff |
-| dim-module | 60% opacity | module frames, in review and live diff |
-
-### 2.7 Code colors
-
-Syntax colors are low in chroma, so code never looks like an agent or a state.
-
-| Role | Value |
-| --- | --- |
-| plain code | `#d8d7d0` |
-| keywords | `#9fa8b6` |
-| strings | `#a9bea2` |
-| numbers | `#cbbd9f` |
-| built-ins | `#b6adc6` |
-| function names at their definition | `#f2f1ea` |
-| comments, line numbers | `#6d6d68` |
-| a highlighted span (the selected function) | white at 4% |
-| a folded region ("6 hidden lines") | white at 3.5% |
-
-### 2.8 Type
-
-- **Families.** Atkinson Hyperlegible Next for text and graph labels; Atkinson Hyperlegible Mono
-  for code, hashes, money, counts of steps and lines, and any number shown as data. Both come from
-  Fontsource packages.
-- **Case.** Sentence case everywhere. No small uppercase labels.
-- **Weights.** 400 for running text, 600 for buttons, pills and labels that name something, 700 for
-  headings and the agent's name on its card.
-- **Sizes.**
-
-| Use | Size |
-| --- | --- |
-| panel heading (the change's title) | 20 px |
-| brand | 17 px |
-| agent name, section heading | 16 px |
-| body, buttons, node labels, code | 15 px; code lines are 21 px tall |
-| secondary text, pills, chips, small buttons | 14 px |
-| captions, line numbers, keyboard hints | 13 px |
-| letter badges on nodes, cursor names | 12 to 13 px |
-
-**Rule from AGENTS.md.** The sketches set module names (`pricing.py`) in Mono. AGENTS.md puts graph
-labels in Next, so module names on the graph use Next. A file path shown as code inside a panel
-stays Mono.
-
-### 2.9 Radii
-
-| Element | Radius |
-| --- | --- |
-| card, file row, banner, text box | 10 px |
-| control: button, input, chip, fact | 7 px |
-| module frame | 8 px |
-| node | 5 px |
-| keyboard hint, cursor name label | 4 to 5 px |
-| status pill, distance badge, status lamp | fully round |
-
-### 2.10 Sizes
-
-| Element | Size |
-| --- | --- |
-| top bar | 52 px tall |
-| left rail | 56 px wide |
-| agents panel (watch mode) | 400 px wide |
-| agents rail (folded, review mode) | 56 px wide |
-| left panel (review, live diff, file view) | 880 px on a 1920 px frame, about half the width |
-| button | 40 px tall; small button 34 px |
-| search box, queue counter | 34 px tall |
-| chip | 30 px tall |
-| letter avatar in the folded rail | 36 px square |
-| status lamp | 10 px |
-| distance badge | 20 px |
+| day-text | day-page / day-shell | 15.9 / 13.9 |
+| day-muted | day-page / day-raised (worst) | 7.0 / 5.8 |
+| day-faint, day-code-dim | day-page / day-shell (worst) | 5.4 / 4.7 |
+| day-agent-a as text | day-card / day-page / day-shell (worst) | 5.7 / 5.5 / 4.8 |
+| day-agent-a as text | its node fill day-agent-a-node | 4.9 |
+| day-agent-b as text | day-card / day-page / day-shell (worst) | 6.0 / 6.4 / 5.6 |
+| day-agent-b as text | its node fill day-agent-b-node | 5.8 |
+| day-agent-a, day-agent-b as graphics | day-ground | 5.3 / 6.2 |
+| white letter | day-agent-a / day-agent-b | 5.9 / 6.9 |
+| day-passed | day-page / day-shell | 5.8 / 5.1 |
+| day-failed | day-page / day-shell | 5.9 / 5.1 |
+| day-edge / day-edge-possible | day-ground | 4.7 / 3.2 |
+| day-control-edge | day-field / day-page | 3.4 / 3.3 |
+| day-lit-edge / day-work-light | day-ground | 10.4 / 4.9 |
+| day syntax: plain, keyword, string, number, built-in | day-page | 13.4, 6.8, 6.0, 5.6, 6.2 |
+
+### Named Rules
+
+**The Agent or State Rule.** A color is an agent (orange A, blue B) or a state (green passed or
+added, red failed, removed or destructive). Nothing else gets a hue: no brand color, no accent, no
+decorative gradient. Counters across agents are neutral.
+
+**The Never Alone Rule.** Every agent color comes with its letter; every state color comes with a
+word, a sign (`+`, `-`) or an icon. No state depends on color alone.
+
+**The No Amber Rule.** There are no yellow or amber warnings. A warning is said in words with an
+icon, in neutral colors.
+
+## Typography
+
+**Body Font:** Atkinson Hyperlegible Next (with sans-serif)
+**Label/Mono Font:** Atkinson Hyperlegible Mono (with monospace)
+
+**Character:** One family built for legibility: Next for text and graph labels, Mono for code,
+hashes, money, step and line counts, and any number shown as data. Both come from Fontsource
+packages; Monaco is created after the fonts load, or calls `monaco.editor.remeasureFonts()`.
+
+### Hierarchy
+
+- **Headline** (700, 20px, 1.3): the change's title at the top of the left panel.
+- **Brand** (700, 17px): the product name in the top bar.
+- **Title** (700, 16px): the agent's name on its card, section headings.
+- **Body** (400, 15px, 1.5): running text, buttons, node labels. Prose such as the agent's note
+  stays within about 75 characters a line.
+- **Label** (600, 14px): buttons, pills, chips and labels that name something.
+- **Caption** (400, 13px): captions, keyboard hints, a module's function count.
+- **Badge** (700, 13px): the letter on a node badge; cursor names use 12px.
+- **Code** (Mono 400, 15px, 21px lines): code in Monaco; line numbers at 13px.
+- **Data** (Mono 400, 14px): hashes, money, counts shown as data.
+
+The fonts need weights 400, 600 and 700 loaded.
+
+### Named Rules
+
+**The Sentence Case Rule.** Sentence case everywhere. No small uppercase labels, no letter-spaced
+eyebrows.
+
+**The Next on the Graph Rule.** Graph labels, module names included, use Next. A file path shown as
+code inside a panel stays Mono.
+
+## Layout
+
+One screen, two modes, no tabs. The graph is always visible; a side panel changes with what the
+person is doing.
+
+- **Frame:** a top bar (52px) across the width; a left rail (56px) with the view icons.
+- **Watch mode:** the graph fills the center; the agents panel (400px) sits on the right.
+- **Review mode:** a left panel opens at about half the width (880px of 1920); the same graph stays
+  on the right; the agents panel folds into the agents rail (56px).
+- **Live diff and file view** use the same left panel. There is no third screen.
+- **Graph overlays** sit 24px from the graph's edges: heading top left, cone card top left in
+  review, legend bottom left, zoom controls bottom right.
+- **Sizes:** buttons 40px tall, small buttons 34px; search box and queue counter 34px; chips 30px;
+  letter avatar 36px; status lamp 10px; distance badge 20px.
+- **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
+- **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
+  every take. Switching modes changes the camera, never node positions. Orthogonal ("taxi") edges
+  are tried on Tue Oct 27 and kept if they read better than curves.
+
+## Elevation & Depth
+
+Flat. There are no shadows on the person's surface; depth is tonal: ground, shell, panel, field,
+page, card and raised step up in small increments of lightness, and hairline borders separate them.
+Graph overlays sit on their surface color at 90 to 94% opacity, so the graph shows faintly through.
+The one texture on the person's surface is the matte review header's still grain. The only light is
+on the graph: node highlights, the dot field and the rings.
+
+### Named Rules
+
+**The Flat Panel Rule.** No blur, glass, glow or shadow on panels. If a panel needs separation, it
+gets a divider.
+
+## Shapes
+
+Gently rounded rectangles throughout; nothing pill-shaped except status pills, badges and lamps.
+
+- Card, file row, banner, text box: card radius (10px).
+- Button, input, chip, fact: control radius (7px).
+- Module frame: module radius (8px). Node: node radius (5px).
+- Cursor name label: label radius (4px); keyboard hint: 5px.
+- Status pill, distance badge, status lamp: fully round.
+- The dash, 6px with a 4px gap, belongs to pending changes only.
 
-### 2.11 Motion
-
-- Mode changes, dimming and highlights ease over 240 ms (`cubic-bezier(0.2, 0.7, 0.2, 1)`). The
-  graph never moves its nodes between modes; only the camera and the lights change.
-- A running agent's status lamp pulses with a 1.6 s period.
-- Nothing on the person's surface animates on its own. The rings and the dot field (section 8) are
-  the only continuous motion, and both live on the graph.
-
-## 3. Graph states
-
-A node's look answers two separate questions, each with its own visual channel:
-
-1. **Is there a change here that is not in main yet?** The border style: dashed in the agent's
-   color, or not dashed.
-2. **What is the agent doing with it now?** The letter badge and the fill: an outlined letter for
-   read, a filled letter and a tinted fill for an edit.
-
-Each state is also said in words on the node ("read", "editing", "changed", "new"), so no state
-depends on color alone.
-
-### 3.1 Rest
-
-- Node: fill `#0e0e0e` at 94% opacity, 1 px border `node-border`, radius 5 px, label in `text` at
-  15 px.
-- Module frame: fill `#080808` at 90% opacity, 1 px border `card-border`, radius 8 px; the module's
-  name in `text`, its function count in `faint`.
-- Call edge: 1.4 px, `#4a4a46`, with a small filled arrowhead of the same color.
-- Hover: the node's border lightens to `#6b6e77`.
-
-### 3.2 Read
-
-The agent read the node in its current run.
-
-- Border: solid, 1.5 px, in the agent's color.
-- Letter badge: outlined (section 4).
-- The word "read" in the agent's text color, beside the badge.
-- Fill unchanged.
-
-### 3.3 Edit
-
-The agent is editing the node now (its last `agent.focus` on it was in edit mode, and the agent is
-working).
-
-- Border: dashed in the agent's color, 1.5 px (the change exists in its worktree: section 3.4).
-- Fill: a dark tint of the agent's color: `rgba(30, 12, 4, 0.95)` for A, `rgba(6, 12, 30, 0.95)`
-  for B.
-- Letter badge: filled (section 4).
-- The word "editing" in the agent's text color.
-- After level 1, rings spread from this node (section 8.3).
-
-### 3.4 Pending
-
-The node carries a change from an agent that is not in main yet: the agent edited it and the
-change is not approved, rejected or discarded.
-
-- Border: **dashed**, 1.5 px, in the agent's color. The dash is 6 px with a 4 px gap.
-- Fill: the agent's dark tint, as in edit. A node the agent added uses a slightly darker tint
-  (`rgba(20, 10, 4, 0.95)` for A) than one it changed.
-- Letter badge: filled.
-- The word "changed" for an existing node, "new" for one the agent added.
-- An edge the change adds is dashed in the agent's color, 2 px, with an arrowhead in that color.
-
-**Rule from AGENTS.md.** The sketches drew a changed node with a solid border and kept the dash for
-added nodes and edges. AGENTS.md says a dashed border means a pending change, in the agent's
-color, so every node with an unapproved change is dashed, changed and new alike, and so is a node
-being edited.
-
-### 3.5 Impact cone
-
-In review and in the live diff, the graph shows the change and its impact cone; everything else
-steps back.
-
-- The changed nodes keep their agent color (sections 3.3 and 3.4). The agent's color stays on the
-  change and nowhere else.
-- Nodes in the cone keep full opacity and show a distance badge (section 4.2) with their distance
-  from the change: 1 for a direct caller, 2 for a caller of a caller, and so on.
-- After level 1, the cone casts the neutral work light (`#8c8c88`), stronger for distance 1 than
-  for farther nodes (section 8.2). Before that, the cone is told by opacity, badges and edges.
-- Edges inside the cone and the change draw in `lit-edge`, 2 px, with a matching arrowhead.
-- Everything else dims: nodes and edges to 16% opacity, module frames to 60%.
-- The cone is "possibly affected", never a complete list. The cone card on the graph says what the
-  bounds cut, for example "+12 omitted by depth".
-
-### 3.6 Possible call edges
-
-A "possible" call edge is thinner and grey: 0.9 px, `#3a3a37`, never dashed. It is drawn from
-level 3; until then possible edges are not drawn.
-
-### 3.7 Selected node
-
-The node whose diff or file the left panel shows gets a 2 px ring in `text` around it.
-
-## 4. Letter badges
-
-### 4.1 Agent letters
-
-Agents are a letter and a color, nothing more: no avatars, beads or mascots.
-
-- **On a node.** A small rounded square at the node's right end with the letter A or B, 13 px,
-  weight 700. For edit and pending, the square is filled with the agent's color and the letter is
-  near-black (`#17110b`). For read, the square has a 1.5 px outline in the agent's color, no fill,
-  and the letter in the agent's color.
-- **In the folded agents rail.** A 36 px square with a 10 px radius: agent tint fill, 1.5 px border
-  in the agent's color, the letter in the agent's color at 15 px, weight 700. A status lamp sits on
-  its top-right corner, and a one-word caption under it ("Ready", "Editing").
-- **On the agent card and in panel headings.** A small square swatch in the agent's color followed
-  by the words "Agent A" or "Agent B".
-
-### 4.2 Distance badges
-
-A 20 px circle filled with `text`, the distance as a near-black number, 12 px, weight 700. They are
-neutral: the cone is about the code, not about an agent.
-
-## 5. Watch mode
-
-The default mode: the graph fills the center, the agents panel sits on the right.
-
-- **Top bar.** Product name, repository, branch and short commit hash (Mono), the search box, the
-  review queue counter, the spend total (level 2), history and settings icons.
-- **Review queue counter.** "1 change ready for review" with a lamp. It counts across agents, so it
-  is neutral: `text` on `raised`, never an agent's color.
-- **Graph overlays.** A heading with the repository name and counts ("7 modules, 19 functions, 2
-  agents working"), a legend at the bottom left (Agent A, Agent B, read, editing or changed, not in
-  main yet, possible call), zoom controls at the bottom right.
-- **Agents panel.** A heading ("Agents", "2 of 2 slots", New task), one card per agent, the
-  "Earlier today" history (level 3) and the task box at the bottom.
-- **Agent card.** On `card` with a `card-border` border and a 10 px radius. First row: status lamp,
-  agent name, model, and the status pill on the right. Then the task in one line, what the agent is
-  doing now ("Editing restock in inventory.py"), a step progress bar with "Step 7 of 25" and the
-  cost, and the last steps from `agent.step`, each with an icon, a short summary and its age.
-  Buttons at the bottom: Live diff, and from level 2 Stop and discard.
-- **Status pill.** The agent's state in words, on the agent's tint, with the agent's text color:
-  "Editing", "Revising", "Ready for review". The pill belongs to one agent, so it may carry that
-  agent's color.
-- **Ready for review.** When an agent proposes its change, nothing on the screen moves or opens.
-  The card's pill changes to "Ready for review", its border turns the agent's color, a "Review
-  change" button appears on it, and the queue counter goes up.
-
-## 6. Review mode
-
-Opened only by the person: from "Review change" on a card, the queue counter, or a pending node.
-
-### 6.1 Layout
-
-- The left panel opens at about half the width (880 px of 1920), on `page`, with a `divider` on
-  its edge.
-- The same graph stays on the right, with the impact cone lit and the rest dimmed (section 3.5).
-  The cone card at its top left lists the possibly affected functions by distance, with counts,
-  and says what the bounds cut.
-- The agents panel folds into the 56 px agents rail (section 4.1).
-
-### 6.2 The matte header
-
-The top of the review panel holds the change's title, the agent, its status pill, a close button,
-and a row of facts: tests, lines added and removed, base commit, worktree, steps and cost.
-
-Its background is matte: flat dark with a still grain.
-
-- A gentle vertical gradient from about `#151515` at the top to about `#0f0f0f` at the bottom.
-- A per-pixel grain of roughly plus or minus 2% brightness, fixed: it never animates. The grain
-  also hides banding in the gradient.
-- Agreed on the compressed demo clip: at 720p and 1.2 Mbps the grain disappears and the header
-  stays clean. The rejected alternative, a dark pearl fabric, turned to grey smoke at that bitrate.
-- It comes after level 1. Until then, and as the fallback, the header is plain `page`.
-
-### 6.3 Body
-
-- **Agent's note.** The agent's summary of the change, under the facts.
-- **Diff.** Monaco's DiffEditor in inline mode, one block per file, with the file name, its `+`
-  and `-` counts, and an inline or side-by-side switch. Added lines on `added-tint` with a `+`;
-  removed lines on `removed-tint` with a `-`. Unchanged regions fold into a "6 hidden lines" row.
-  Further files collapse to a row with their name and counts.
-- **Editable new side (level 2).** A hint on the diff bar says the new side is editable and that
-  edits go to the agent's worktree. It is editable only while the agent is idle.
-- **Cone summary.** One line: how many functions are possibly affected. The full list lives on
-  the graph's cone card.
-
-### 6.4 Decisions
-
-At the bottom: a comment box, then the three decisions.
-
-- **Approve and merge.** The primary button: `text` fill with near-black text. It has no keyboard
-  shortcut, not even Ctrl+Enter, because it merges into main and must never fire while the person
-  types a comment. A note beside it says the tests rerun first if main moved.
-- **Request changes** (level 2). An outline button. A line under the buttons says it keeps the
-  agent's worktree and sends the comment back to the agent.
-- **Reject.** Text and icon in `destructive`, no fill.
-
-## 7. Live diff and file view
-
-Both use the same left panel as review. There is no third screen.
-
-- **Live diff.** Opened by clicking a node an agent is editing, or Live diff on its card. The
-  header shows the task, the agent and its "Editing" pill, and the same facts row as review. A
-  banner says the diff updates with each edit and that the decisions open when the agent proposes
-  the change. The diff is read-only, with a lock and a line saying so on the diff bar. Below it,
-  the agent's last steps. From level 2, Stop and discard in `destructive` text at the bottom. The
-  graph shows the cone of the edit so far, with the same neutral light and dimming as review.
-- **File view.** Opened by clicking a node with no pending change. It shows the file in main with
-  the function's lines marked as a highlighted span. From level 2 it is editable, and edits go to
-  main. On the graph, the selected node and its direct callers and callees stay lit in the neutral
-  light; the rest dims.
-
-## 8. Dot field and rings (after level 1)
-
-The dot field and the rings come after level 1 and never block a level. Until they ship, and
-whenever WebGL is missing, the graph's background is plain black.
-
-### 8.1 The grid
-
-- Its own canvas under a transparent Cytoscape canvas. It reads the rendered boxes of the lit
-  nodes and draws their light; it never draws nodes or edges.
-- A grid of 7 px cells, fixed to the screen: it does not pan or zoom with the graph. Each cell is a
-  square lamp covering 72% of the cell (about 5 px), leaving a dark gap.
-- Each lamp shows one of four levels (off and three steps of brightness), chosen with an 8 by 8
-  ordered (Bayer) dither, so the light reads as a soft gradient made of discrete dots.
-- An unlit lamp is not pure black: it sits at about 2% brightness (close to `shell`). A faint guide
-  dot, 2 px, every 28 px, marks the grid where nothing is lit.
-- The cells are large on purpose: they survive video compression at 720p.
-
-### 8.2 Light
-
-- Each lit node is a light source shaped like the node's box. Its intensity falls off with the
-  distance from that box: a near term that decays quickly plus a far term that spreads wider
-  (roughly 72% near and 28% far), times a gain for the mode and the node's weight.
-- Where lights overlap, their colors mix by their intensity. At most 8 lights at once.
-- The spread per mode (near falloff, far falloff, gain):
-
-| Mode | Near | Far | Gain | Why |
-| --- | --- | --- | --- | --- |
-| Watch and live diff | 34 px | 90 px | 0.92 | the agents are the subject; their light spreads |
-| File view | 22 px | 50 px | 0.80 | one function and its neighbors |
-| Review | 16 px | 34 px | 0.70 | the cone carries the meaning, so the light is held in |
-
-- What lights up, and with what weight:
-
-| Mode | Lit nodes |
-| --- | --- |
-| Watch | per agent, in its color: the node being edited (or, once the agent is done, its main changed node) 1.0, other changed nodes 0.72, read nodes 0.36 |
-| Review | the change in the agent's color: changed nodes 1.0, added nodes 0.8, read nodes 0.34; the cone in the work light: distance 1 at 0.52, distance 2 and beyond at 0.38 |
-| Live diff | the node being edited 1.0 and read nodes 0.4, in the agent's color; the cone so far in the work light at 0.48 |
-| File view | the selected node 0.8 and its direct callers and callees 0.32, all in the work light |
-
-- In watch and live diff, the light of the node being edited breathes between 86% and 100% of its
-  weight, about once every three seconds. In review it holds still.
-
-### 8.3 Rings
-
-- In watch and live diff, rings spread from the node an agent is editing, in that agent's color:
-  one ring at a time, growing at 55 px per second from the node's center to 340 px, then starting
-  again.
-- A ring is a soft band about 10 px wide, at 90% strength, fading out between 60 px and 340 px of
-  radius.
-- No rings in review or file view: there, the cone and the selection carry the meaning.
-
-## 9. Never
-
-- **No amber.** No yellow or amber warnings. A warning is said in words with an icon, in neutral
-  colors. A fact like "no test calls it" (level 3) is neutral, with an icon.
-- **No color alone.** Every agent color comes with its letter; every state color comes with a word,
-  a sign (`+`, `-`) or an icon (tests).
-- **No color outside agents and states.** No brand colors, no decorative gradients, no accent hue.
-  Counters across agents are neutral. The background never takes an agent's color unless that
-  agent is working there.
-- **Never steal focus.** Nothing opens, moves or scrolls by itself. When an agent finishes, the
-  screen does not change; only its card, its pill and the queue counter do.
-- **Dashes mean one thing.** A dashed border or edge means a change that is not in main yet, in its
-  agent's color. Nothing else is dashed: not possible calls, not selection, not hover, not empty
-  states.
-- **No decoration on the person's surface.** No blur, glass, glow or shadow on panels. The only
-  texture is the matte header's still grain.
-- **No moving nodes.** Switching modes changes the camera and the lights, never the layout.
-- **No shortcut approves.**
-
-## 10. By level
-
-| Level | Design elements |
-| --- | --- |
-| 1 | tokens and type; graph rest, read and edit states with letter badges; watch mode with agent cards and the queue counter; the "Ready for review" pill; read-only live diff; review with Approve and Reject; plain black graph background and plain review header |
-| 2 | agent B's color; pending nodes and edges on the graph; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
-| 3 | possible call edges; "no test calls it" badges; agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
-| After level 1, never blocking | the dot field with its light, the rings, the matte header's grain |
