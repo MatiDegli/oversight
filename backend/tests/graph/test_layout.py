@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 from graph_helpers import COMMIT, node, version, write
 
-from oversight.graph import WorkspaceGraph, parse_version, read_layout
+from oversight.events import EventStore
+from oversight.graph import WorkspaceGraph, graph_delta, parse_version, read_layout
 from oversight_contracts.graph import Point
 
 SMALL = Path(__file__).parent / "layout_small.json"
@@ -146,3 +147,36 @@ def test_a_file_that_cannot_be_read_by_permission_means_no_positions_and_one_log
     [record] = caplog.records
     assert str(layout) in record.getMessage()
     assert "cannot be read" in record.getMessage()
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    """The one async test below runs on asyncio, the loop the server uses."""
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_positions_survive_a_delta_through_the_servers_fold(tmp_path: Path) -> None:
+    """The store folds each `graph.snapshot` and `graph.delta` into the graph `GET /graph` serves;
+    a fold that dropped the positions would send the UI back to placing every node itself."""
+    write(tmp_path / "workspace", FILES)
+    graph = WorkspaceGraph(tmp_path / "workspace", read_layout(SMALL))
+    first = graph.scan(COMMIT)
+    assert first.positions == EXPECTED
+    # b.g goes, b.other arrives; a.f and a.h change nothing, a keeps growing.
+    write(tmp_path / "workspace", {"b.py": "def other(): ...\n", "a.py": FILES["a.py"] + "x = 1\n"})
+    second = graph.scan(COMMIT)
+    change = graph_delta(first, second, "user_edit", COMMIT)
+    assert change is not None
+    assert change.nodes_removed == ["b:g"] and [n.id for n in change.nodes_added] == ["b:other"]
+    async with EventStore(tmp_path / "run.sqlite", "run-1") as store:
+        await store.publish(first)
+        await store.publish(change)
+        seq, folded = store.graph()
+    assert seq == 2 and folded is not None
+    assert {n.id for n in folded.nodes} == {n.id for n in second.nodes}
+    assert folded.positions == {
+        "a": EXPECTED["a"],
+        "a:f": EXPECTED["a:f"],
+        "b": EXPECTED["b"],
+    }
