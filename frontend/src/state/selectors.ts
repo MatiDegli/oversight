@@ -2,6 +2,46 @@ import type { AgentFocus, Slot } from "@contracts";
 
 import type { State } from "./types";
 
+/**
+ * Derived selectors below allocate on every call (including selectAgents and
+ * selectPendingChanges). Zustand callers select the source state/slices first,
+ * then memoize these projections with useMemo; do not use them as getSnapshot.
+ * Card data only: selection and navigation belong to the app.
+ */
+export function selectAgentCard(state: State, agentId: string) {
+  const agent = state.agents[agentId];
+  if (!agent) return undefined;
+  const steps = state.steps[agentId] ?? [];
+  return {
+    agent,
+    steps: [...steps].reverse(),
+    step: Math.max(agent.step, ...steps.map((step) => step.step)),
+    readyForReview: agent.state === "ready_for_review",
+  };
+}
+
+export type AgentCardData = NonNullable<ReturnType<typeof selectAgentCard>>;
+
+/** Select by change as well as path: parallel agents may edit the same file. */
+export function selectLiveDiff(state: State, changeId: string, path: string) {
+  const change = state.changes[changeId];
+  const entry = change?.files[path];
+  if (!change || !entry) return undefined;
+  return {
+    changeId,
+    agentId: change.agent_id,
+    path: entry.file.path,
+    original: entry.file.original ?? "",
+    modified: entry.file.modified ?? "",
+    status: entry.file.status,
+    author: entry.author,
+    linesAdded: entry.file.lines_added,
+    linesRemoved: entry.file.lines_removed,
+  };
+}
+
+export type LiveDiffData = NonNullable<ReturnType<typeof selectLiveDiff>>;
+
 export const selectAgents = (state: State) =>
   Object.values(state.agents).sort((a, b) => a.slot.localeCompare(b.slot));
 

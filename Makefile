@@ -11,7 +11,7 @@ UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
-	contracts check-contracts check-secrets demo-repo-check replay shots smoke
+	contracts check-contracts check-secrets demo-repo-check replay shots smoke test-browser
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -55,6 +55,11 @@ shots: ## screenshots of the UI from LOG into .shots/ and the Impeccable scan, C
 # not disturbed; tools/smoke.py checks /health and /graph and stops it again.
 smoke: ## start the backend and check /health and /graph
 	$(UV) python tools/smoke.py
+
+# test-browser: the frontend tests that drive Monaco in Playwright's Chromium (pnpm test:browser).
+# make check and CI run without a browser, so pnpm test leaves these out.
+test-browser: ## the frontend's browser tests in Playwright's Chromium; not in check
+	$(PNPM) test:browser
 
 # Two layers keep a runaway test from taking the machine. The soft one, for every pytest run
 # including a bare `uv run pytest` and CI: conftest.py loads tools/memwatch.py, which ends a run
