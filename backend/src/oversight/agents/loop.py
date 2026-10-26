@@ -57,6 +57,7 @@ SAME_RESULT_LIMIT = 4
 FAILURE_LIMIT = 6
 ERROR_CHARS = 200
 PROPOSAL_FAILED = "Its change could not be proposed."
+EDIT_NOT_RECORDED = "The edit was saved but could not be recorded for review."
 
 type Publish = Callable[[EventPayload], Awaitable[object]]
 
@@ -282,27 +283,50 @@ class AgentRun:
         if self._step >= self._task.limits.max_steps:
             raise _Halt(f"Reached the step limit of {self._task.limits.max_steps}.")
 
+    async def _record(self, path: str) -> bool:
+        """Whether the sink recorded the edit. A sink that returns `False` has sent its own
+        `error`; one that raises has not, so the runtime reports it."""
+        agent_id = self._task.agent_id
+        try:
+            return await self._sink.file_edited(agent_id, path)
+        except Exception as error:
+            await self._publish(
+                ErrorReport(
+                    source="server",
+                    message=f"The edit to {path} could not be recorded: {self._describe(error)}",
+                    agent_id=agent_id,
+                    change_id=self._task.change_id,
+                    fatal=False,
+                )
+            )
+            return False
+
     async def _report(self, tool: str, outcome: ToolOutcome, duration_ms: int) -> None:
         agent_id = self._task.agent_id
-        if outcome.edited_path is not None:
-            await self._sink.file_edited(agent_id, outcome.edited_path)
+        # The edit is on disk either way. A lost record only changes what the UI is told: the
+        # model's result, the failure count and the stop rules still follow `outcome`.
+        recorded = outcome.edited_path is None or await self._record(outcome.edited_path)
         if outcome.focus is not None:
             await self._publish(
                 AgentFocus(
                     agent_id=agent_id,
                     mode=outcome.focus,
                     ranges=outcome.ranges,
-                    node_ids=outcome.node_ids,
+                    node_ids=outcome.node_ids if recorded else [],  # unknown: the sink never saw it
                 )
             )
-        error = None if outcome.ok else outcome.content.removeprefix("Error: ")[:ERROR_CHARS]
+        error = None
+        if not outcome.ok:
+            error = outcome.content.removeprefix("Error: ")[:ERROR_CHARS]
+        elif not recorded:
+            error = EDIT_NOT_RECORDED
         await self._publish(
             AgentStep(
                 agent_id=agent_id,
                 step=self._step,
                 tool=tool[:80],
                 summary=outcome.summary,
-                result="ok" if outcome.ok else "error",
+                result="ok" if outcome.ok and recorded else "error",
                 error=error,
                 duration_ms=duration_ms,
                 tests=outcome.tests,
