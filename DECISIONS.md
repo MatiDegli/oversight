@@ -38,32 +38,46 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   loop. The ban stays on the product, apart from the workspace runner.
 - **Ruff skips Markdown:** its formatter rewrote the Python sketches in `docs/proposal.md`, which are
   not code.
-- **Every test run has a memory cap and a time cap, and `make shots` a memory cap on Chrome.**
-  Incident, 2026-10-26, 22:04 UTC: a mutation check on the agent runtime turned off the six-failure
-  rule, the tool loop then spun on model replies without tool calls and kept growing its history,
-  and a pytest reached 30 GB, all of the WSL VM's memory, until the kernel's OOM killer ended it.
-  Earlier that day a headless Chrome had reached 13.7 GB and a python 28.8 GB. A runaway test must
-  fail alone, quickly, with its name, and never take the VM to its limit.
-  - *Memory:* `tools/memwatch.py`, loaded by the root `conftest.py`, runs a daemon thread that reads
-    the resident memory of the test process and of all its descendants (`/proc`, every 0.5 s). Past
-    `OVERSIGHT_TEST_MEM_GB` GiB (8 by default; fractions allowed, so tests can use a small cap) it
-    writes one line naming the running test to the terminal's stderr, SIGSTOPs and then SIGKILLs
-    the descendants, so a runaway Node or child cannot outlive the run, and exits with code 70. No
+- **Every test run has a soft and a hard cap on memory and a bound on time, and `make shots` a
+  memory cap on Chrome.** Incident, 2026-10-26, 22:04 UTC: a mutation check on the agent runtime
+  turned off the six-failure rule, the tool loop then spun on model replies without tool calls and
+  kept growing its history, and a pytest reached 30 GB, all of the WSL VM's memory, until the
+  kernel's OOM killer ended it. Earlier that day a headless Chrome had reached 13.7 GB and a python
+  28.8 GB. A runaway test must fail alone, quickly, with its name, and never take the VM to its
+  limit.
+  - *Memory, soft layer:* `tools/memwatch.py`, loaded by the root `conftest.py`, runs a daemon
+    thread that reads the VmRSS of its own process, and of no other (`/proc/self`, every 0.5 s).
+    Past `OVERSIGHT_TEST_MEM_GB` GiB (8 by default; fractions allowed, so tests can use a small
+    cap) it writes one line naming the running test to the terminal's stderr and exits with code
+    70. It signals no other process and sums nothing over children: an earlier version stopped and
+    killed descendants by pid, which could hit a process that had reused the pid of a descendant
+    that was gone, and summing the RSS of processes counted shared pages once per process (451 MiB
+    counted for 150 MiB of real use), so the cap fired falsely. It is portable, for a worker's bare
+    `uv run pytest` and for CI, but a thread needs the GIL: one allocation in C that holds it can
+    fill the VM before the thread looks, and a child that outgrows the cap is not seen. No
     `RLIMIT_AS`: it caps address space, which Node/V8 (the ESLint test) and thread arenas reserve
-    far beyond what they use, so it would fail for the wrong reason. A pages-shared-by-two-processes
-    sum counts them twice, which can only stop early. It sees only what stays in the process tree: a
-    daemon that double-forks is out of reach.
+    far beyond what they use, so it would fail for the wrong reason.
+  - *Memory, hard layer:* `make check` runs pytest through `tools/capped.sh`, in `systemd-run --user
+    --scope -q -p MemoryMax=10G -p MemorySwapMax=0` when that works here, and as it is when it does
+    not (CI, sandboxes, no user manager). The kernel accounts memory per cgroup, a shared page once,
+    for pytest and everything it starts, and ends the biggest process of the scope alone, whatever
+    holds the GIL. 10G sits above the 8 GiB of the soft cap, so a runaway Python test is normally
+    ended by the soft one, with its name, and the scope is the net under it. The probe carries the
+    same properties as the real call, so a manager that refuses them gets the fallback. A bare
+    `uv run pytest` has only the soft layer.
   - *Time:* pytest-timeout, `timeout = 120` in `pyproject.toml`, signal method, so only that test
     fails. Measured on 2026-10-26: the slowest test takes 8 s warm and the demo environment builds
     in under 1 s cold from an empty uv cache on this machine; 120 s leaves room for a slow CI runner
     and still ends a hang within two minutes. `timeout_func_only` keeps fixture setup outside it,
     since a cold run on a slow network may spend longer than that building the demo environment
     (its uv steps carry limits of their own, 300 s each, as does the ESLint run). A test that needs
-    more says so with `@pytest.mark.timeout(seconds)`.
+    more says so with `@pytest.mark.timeout(seconds)`. That leaves setup and teardown unbounded (a
+    child that never opens a FIFO can block the executor's shutdown), so `make check` also wraps the
+    whole pytest run in `timeout --kill-after=30 1200`: after 20 minutes it ends the process group,
+    and 30 s later kills it. `RUN_TIMEOUT` overrides the 1200 for one run.
   - *Chrome:* `frontend/shots/capped.sh`, the one helper `make shots` uses for the capture and the
-    detector, runs the command under `systemd-run --user --scope -q -p MemoryMax=6G -p
-    MemorySwapMax=0` when that works here and as it is when it does not (CI, sandboxes). The probe
-    carries the same properties as the real call, so a manager that refuses them gets the fallback.
+    detector, runs the command under the same helper with a limit of 6G, so the two caps share one
+    piece of logic.
 - **The frontend's lint is type-aware** (`strictTypeChecked`), with the exhaustive-switch rule on,
   so a new event type fails the build until every switch handles it.
 
