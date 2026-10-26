@@ -3,15 +3,19 @@
 # scenes into .shots/ with capture.ts, then runs Impeccable's detector on the served URL. It stops
 # both servers by PID on every exit path, and every wait has a deadline.
 #
-# Environment: LOG (the event log, relative to the repo root), IMPECCABLE (the detector's path).
+# Environment: LOG (the event log, relative to the repo root), IMPECCABLE (the detector's path),
+# DETECT_TIMEOUT (seconds the detector may take, 120 by default).
 set -eu -o pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
 log=${LOG:-fixtures/events/handwritten-level1.jsonl}
 impeccable=${IMPECCABLE:-.agents/skills/impeccable/scripts/impeccable}
+detect_timeout=${DETECT_TIMEOUT:-120}
 out=.shots
 mkdir -p "$out"
+# shellcheck source=frontend/shots/detect.sh
+source frontend/shots/detect.sh
 # The player's event store goes under .shots/, not .runtime/: the player deletes its file for this
 # run id when it starts, which would pull the file from under a `make replay` of the same log.
 rm -rf "$out/runtime"
@@ -71,8 +75,11 @@ OVERSIGHT_PORT=$backend_port OVERSIGHT_RUNTIME_DIR="$out/runtime" \
   uv run --frozen python -m oversight replay "$log" --speed 0 \
   >"$out/backend.log" 2>&1 &
 pids+=("$!")
-OVERSIGHT_PORT=$backend_port bash -c \
-  'cd frontend && exec ./node_modules/.bin/vite --host 127.0.0.1 --port "$0" --strictPort' \
+# Vite keeps all its state under .shots/, so `make dev` shares none of it: its cache through
+# OVERSIGHT_VITE_CACHE_DIR (read by vite.config.ts), and no temp file for the config, which the
+# default loader writes to node_modules/.vite-temp, through --configLoader runner.
+OVERSIGHT_PORT=$backend_port OVERSIGHT_VITE_CACHE_DIR="$root/$out/vite-cache" bash -c \
+  'cd frontend && exec ./node_modules/.bin/vite --host 127.0.0.1 --port "$0" --strictPort --configLoader runner' \
   "$vite_port" >"$out/vite.log" 2>&1 &
 pids+=("$!")
 
@@ -83,25 +90,4 @@ echo "shots: replay of $log on :$backend_port, UI on $url"
 # Node, not pnpm, so the deadline reaches the process that holds the browser.
 timeout --kill-after=10 300 node frontend/shots/capture.ts --url "$url" --log "$log" --out "$out"
 
-# The detector lives outside git. Exit 0 and 2 both mean the scan completed (2: it has findings).
-# A URL scan needs a Chromium-based browser: unless the caller names one, use the one Playwright
-# installed for the captures. A failed scan leaves no detect.json, which would read as "no findings".
-if [ -x "$impeccable" ]; then
-  if [ -z "${IMPECCABLE_BROWSER:-}" ]; then
-    IMPECCABLE_BROWSER=$(cd frontend && node --input-type=module -e \
-      'import { chromium } from "@playwright/test"; console.log(chromium.executablePath());')
-    export IMPECCABLE_BROWSER
-  fi
-  detect=0
-  "$impeccable" detect --json --viewport 1920x1080 "$url" >"$out/detect.json" 2>"$out/detect.err" ||
-    detect=$?
-  case $detect in
-    0 | 2) echo "shots: detect scanned $url (exit $detect), saved $out/detect.json" ;;
-    *)
-      rm -f "$out/detect.json"
-      echo "shots: detect could not scan $url (exit $detect), see $out/detect.err" >&2
-      ;;
-  esac
-else
-  echo "shots: $impeccable is missing or not executable, detect skipped"
-fi
+run_detect "$impeccable" "$url" "$out" "$detect_timeout"
