@@ -107,6 +107,36 @@ def test_seeds_and_tests_stay_out_of_the_entries_and_tests_reaching_counts_them(
     assert (found.omitted_by_depth, found.omitted_by_limit) == (0, 0)
 
 
+def test_the_search_walks_through_test_nodes_but_lists_none() -> None:
+    files = {
+        "m.py": "def core(): ...\n",
+        "tests/helpers.py": """
+            from m import core
+            def helper():
+                core()
+        """,
+        "app.py": """
+            from tests.helpers import helper
+            def caller():
+                helper()
+        """,
+        "tests/test_m.py": """
+            from tests.helpers import helper
+            def test_it():
+                helper()
+        """,
+    }
+    found = cone(files, ["m:core"])
+    assert entries(found) == [("app:caller", 2)]
+    assert found.tests_reaching == 1
+    assert (found.omitted_by_depth, found.omitted_by_limit) == (0, 0)
+    # Past the depth, the production caller counts as omitted; the test helper does not.
+    shallow = cone(files, ["m:core"], max_depth=1)
+    assert entries(shallow) == []
+    assert (shallow.omitted_by_depth, shallow.omitted_by_limit) == (1, 0)
+    assert shallow.tests_reaching == 1
+
+
 @pytest.mark.parametrize("constructor", ["__init__", "__new__", "__post_init__"])
 def test_a_changed_constructor_also_seeds_its_class(constructor: str) -> None:
     files = {

@@ -4,8 +4,9 @@ A bounded reverse breadth-first search over exact call edges. Every node kind ca
 a module whose top-level code calls into the cone, a class whose body does, or a class whose
 constructor is in the cone. Calling a class runs its `__init__`, `__new__` or `__post_init__`, so
 when one of those enters the cone (or is a seed), its class enters at the same distance and the
-class's callers follow. Test nodes are never entries and the search does not pass through them;
-`tests_reaching` counts the test functions that reach a seed instead.
+class's callers follow. Test nodes are never entries, but the search passes through them: a
+production caller of a test helper still reaches the seed. `tests_reaching` counts the test
+functions that reach a seed instead.
 """
 
 from collections import defaultdict
@@ -40,9 +41,9 @@ class _Calls:
         parent = self.nodes.get(node.parent_id)
         return parent.id if parent is not None and parent.kind == "class" else None
 
-    def distances(self, seeds: Iterable[str], through_tests: bool) -> dict[str, int]:
-        """Each node that reaches a seed through exact calls, with its distance; seeds are 0.
-        Layer by layer, so a cycle ends when it meets a node already placed."""
+    def distances(self, seeds: Iterable[str]) -> dict[str, int]:
+        """Each node that reaches a seed through exact calls, tests included, with its distance;
+        seeds are 0. Layer by layer, so a cycle ends when it meets a node already placed."""
         distance: dict[str, int] = {}
         layer: list[str] = []
         for seed in seeds:
@@ -55,8 +56,6 @@ class _Calls:
             for callee in layer:
                 for caller in sorted(self.callers[callee]):
                     if caller in distance:
-                        continue
-                    if not through_tests and self.nodes[caller].is_test:
                         continue
                     distance[caller] = depth
                     found.append(caller)
@@ -90,19 +89,21 @@ def impact_cone(
             seed_set.add(cls)
     ordered_seeds = sorted(seed_set)
 
-    distance = calls.distances(ordered_seeds, through_tests=False)
-    reached = sorted((d, n) for n, d in distance.items() if n not in seed_set)
+    # Tests are walked through but never listed, nor counted in the omitted totals.
+    distance = calls.distances(ordered_seeds)
+    reached = sorted(
+        (d, n) for n, d in distance.items() if n not in seed_set and not calls.nodes[n].is_test
+    )
     within = [(d, n) for d, n in reached if d <= max_depth]
     kept = within[:max_nodes]
 
-    reaching = calls.distances(ordered_seeds, through_tests=True)
     tests = sum(
         1
         for node in calls.nodes.values()
         if node.is_test
         and node.kind in ("function", "method")
         and node.name.startswith("test")
-        and any(callee in reaching for callee in calls.callees[node.id])
+        and any(callee in distance for callee in calls.callees[node.id])
     )
     return ImpactCone(
         seeds=ordered_seeds,

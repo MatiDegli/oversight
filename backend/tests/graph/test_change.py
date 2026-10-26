@@ -64,6 +64,21 @@ def test_adding_or_removing_a_definition_does_not_mark_its_parent() -> None:
     assert found.nodes_modified == []
 
 
+def test_a_blank_line_inside_a_multi_line_string_counts_as_a_change() -> None:
+    base = {"m.py": 'def f():\n    return """first\n\nlast"""\n\n\ndef g(): ...\n'}
+    head = {"m.py": 'def f():\n    return """first\nlast"""\n\n\ndef g(): ...\n'}
+    assert change(base, head).nodes_modified == ["m:f"]
+
+
+def test_a_nested_definition_beside_a_multi_line_string_marks_no_parent() -> None:
+    text = 'class A:\n    DOC = """a\n\nb"""\n\n    def one(self): ...\n'
+    nested = text + '\n    def two(self):\n        return """x\n\ny"""\n'
+    found = change({"m.py": text}, {"m.py": nested})
+    assert [n.id for n in found.nodes_added] == ["m:A.two"]
+    assert found.nodes_modified == []
+    assert change({"m.py": nested}, {"m.py": text}).nodes_modified == []
+
+
 def test_a_version_ignores_files_that_are_not_importable_modules() -> None:
     files = {
         "pkg/__init__.py": b"",
