@@ -29,8 +29,10 @@ MUSE_SPARK = ModelProfile(
     id="muse-spark",
     label="Muse Spark",
     provider="meta",
-    model="muse-spark-1.3",
-    # docs/api-probe.md: reasoning is on by default and `none` is rejected; low was accepted.
+    model="muse-spark-1.3-contributor",
+    # Contributor mode (DECISIONS.md, "Model API"): the maintainer chose it; Meta may train on the
+    # prompts and replies, and the code the agents see is public. docs/api-probe.md: reasoning is
+    # on by default and `none` is rejected; low was accepted, also on this id.
     reasoning="low",
 )
 MUSE_SPARK_OPEN = ModelProfile(

@@ -26,7 +26,7 @@ COMPLETION: dict[str, object] = {
     "id": "cmpl-test",
     "object": "chat.completion",
     "created": 0,
-    "model": "muse-spark-1.3",
+    "model": "muse-spark-1.3-contributor",
     "choices": [
         {
             "index": 0,
@@ -103,7 +103,7 @@ async def test_retries_429_and_5xx_with_exponential_backoff() -> None:
     assert len(api.bodies) == 3
     assert reply.tool_calls[0].name == "read_file"
     assert reply.tool_calls[0].arguments == '{"path": "a.py"}'
-    assert reply.text == "Reading it first." and reply.model == "muse-spark-1.3"
+    assert reply.text == "Reading it first." and reply.model == "muse-spark-1.3-contributor"
 
 
 async def test_jitter_scales_the_delay_and_retry_after_is_a_floor() -> None:
@@ -135,7 +135,7 @@ async def test_every_call_sets_the_model_reasoning_and_limits() -> None:
     sleeps: list[float] = []
     await client(api, sleeps).complete(USER, TOOLS)
     body = api.bodies[0]
-    assert body["model"] == "muse-spark-1.3" and body["reasoning_effort"] == "low"
+    assert body["model"] == "muse-spark-1.3-contributor" and body["reasoning_effort"] == "low"
     assert body["max_completion_tokens"] == 2048 and body["tool_choice"] == "auto"
     assert body["tools"] == TOOLS
     # A profile with no known reasoning parameter sends none.
