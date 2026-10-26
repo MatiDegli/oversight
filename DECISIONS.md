@@ -39,3 +39,20 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   not code.
 - **The frontend's lint is type-aware** (`strictTypeChecked`), with the exhaustive-switch rule on,
   so a new event type fails the build until every switch handles it.
+
+## Contracts v1
+
+- **Named types:** ids, paths, timestamps and every shared literal are Python 3.12 `type` aliases,
+  so the JSON Schema gives each a definition and the TypeScript types keep its name (`NodeId`,
+  `AgentState`). Run, agent and change ids and `ts` carry a pattern; node and edge ids do not, since
+  the graph core's tests own their format.
+- **Rules a schema cannot state are validators:** an edge's `reason` is set exactly when it is
+  possible, and a resolution's `merge`, `merge_commit` and `conflict` agree with its decision.
+- **What json2ts receives:** fields keep no title, and a `$ref` keeps no description beside it;
+  otherwise json2ts declares a type per titled field and a second type per described reference
+  (`ChangeGraph1`). Those field descriptions stay in the Python source. The generator also drops
+  the schema's empty root type and json2ts's per-definition note.
+- **`oversight_contracts` re-exports only `CONTRACT_VERSION`:** the names live in `common`,
+  `graph`, `events` and `commands`, so each import says which part of the contract it uses.
+- **The contract-scope check** (docs/proposal.md, section 4.8) comes in its own small PR, with its
+  plan reviewed first, since it guards the tree.
