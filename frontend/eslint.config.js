@@ -30,14 +30,20 @@ function restrictedPackages(feature) {
   return restricted;
 }
 
-// no-restricted-imports does not see import("..."), so a syntax selector covers it. esquery's regex
-// literal cannot hold a slash, hence \x2f. A template literal without expressions counts as well.
-function dynamicImportSelectors({ packages, message }) {
-  const names = packages.map((name) => name.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&")).join("|");
-  const source = `^(?:${names.replaceAll("\\/", "\\x2f")})(?:\\x2f.*)?$`;
+// The source of a regex matching a package or any of its subpaths.
+function packagesSource(packages) {
+  const names = packages.map((name) => name.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")).join("|");
+  return `^(?:${names})(?:/.*)?$`;
+}
+
+// no-restricted-imports does not see import("..."), so a syntax selector covers it, for every
+// restriction the static rule has. esquery's regex literal cannot hold a slash, hence \x2f. A
+// template literal without expressions counts as well.
+function dynamicImportSelectors({ source, message }) {
+  const regex = source.replaceAll("/", "\\x2f");
   return [
-    `ImportExpression[source.value=/${source}/]`,
-    `ImportExpression[source.quasis.0.value.cooked=/${source}/]`,
+    `ImportExpression[source.value=/${regex}/]`,
+    `ImportExpression[source.quasis.0.value.cooked=/${regex}/]`,
   ].map((selector) => ({ selector, message }));
 }
 
@@ -56,10 +62,17 @@ function internalsPattern(feature, prefix) {
 // whole list here. A null feature is the files directly in src/, such as main.tsx.
 function boundaries(feature) {
   const restricted = restrictedPackages(feature);
+  const internals = internalsPattern(feature, feature === null ? "\\./" : "(?:\\.\\./)+");
   const patterns = [
-    internalsPattern(feature, feature === null ? "\\./" : "(?:\\.\\./)+"),
+    internals,
     ...restricted.map(({ packages, message }) => ({ group: packages, message })),
   ];
+  const dynamicImports = [
+    dynamicImportSelectors({ source: internals.regex, message: internals.message }),
+    ...restricted.map(({ packages, message }) =>
+      dynamicImportSelectors({ source: packagesSource(packages), message }),
+    ),
+  ].flat();
   const globalsRule =
     feature === "transport"
       ? ["off"]
@@ -77,7 +90,7 @@ function boundaries(feature) {
     files: [feature === null ? "src/*.{ts,tsx}" : `src/${feature}/**/*.{ts,tsx}`],
     rules: {
       "no-restricted-imports": ["error", { patterns }],
-      "no-restricted-syntax": ["error", ...restricted.flatMap(dynamicImportSelectors)],
+      "no-restricted-syntax": ["error", ...dynamicImports],
       "no-restricted-globals": globalsRule,
     },
   };
