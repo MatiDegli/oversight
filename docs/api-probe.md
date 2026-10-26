@@ -66,3 +66,11 @@ Still unknown for agent B: which slug is right (`meta-models/muse-spark-open-102
 - https://www.baseten.co/resources/changelog/muse-spark-open-and-nemotron-35-super-vl-available-on-baseten/ (base URL; its example slug is meta-models/muse-spark-open, without -1026)
 - https://docs.baseten.co/reference/inference-api/chat-completions.md (parameters)
 <!-- /probe:baseten -->
+
+## Contributor model (2026-10-26)
+
+A minimal probe approved by the maintainer made two calls on `https://api.meta.ai/v1`.
+
+- `GET /models` lists muse-spark-1.1, muse-spark-1.2, muse-spark-1.2-contributor, muse-spark-1.3 and muse-spark-1.3-contributor, plus muse-image-1.0, muse-voice-transcribe-1.0 and muse-wonder-1.0.
+- One native tool call on `muse-spark-1.3-contributor` with `reasoning_effort` "low" returned finish_reason=tool_calls with one read_file call and its path argument, in 2.54 s. Usage reported: 544 prompt tokens and 133 completion tokens, of which 65 were reasoning, and 0 cached. The response echoes the model id.
+- Contributor mode shares prompts and completions with Meta for training, which is why it costs less. The code the agents see is public.
