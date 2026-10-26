@@ -1,8 +1,24 @@
 """Parsing, name resolution, deltas, the span index, change graphs and the impact cone.
 
-Other modules import only what this file exports; everything else here is internal.
+Other modules import only what this file exports; everything else here is internal. Every function
+is synchronous and runs no process: callers run the slow ones in a thread.
 """
 
+from oversight.graph._change import change_graph
+from oversight.graph._delta import DeltaCause, graph_delta
+from oversight.graph._impact import NodeNotFoundError, change_cone, impact_cone, node_cone
+from oversight.graph._version import CodeVersion, parse_version
 from oversight.graph._workspace import WorkspaceGraph
 
-__all__ = ["WorkspaceGraph"]
+__all__ = [
+    "CodeVersion",
+    "DeltaCause",
+    "NodeNotFoundError",
+    "WorkspaceGraph",
+    "change_cone",
+    "change_graph",
+    "graph_delta",
+    "impact_cone",
+    "node_cone",
+    "parse_version",
+]
