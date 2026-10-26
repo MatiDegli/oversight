@@ -11,7 +11,7 @@ UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
-	contracts check-contracts check-secrets demo-repo-check replay
+	contracts check-contracts check-secrets demo-repo-check replay shots
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -40,6 +40,14 @@ replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with
 	@uv run --frozen python -m oversight replay "$(LOG)" --speed "$(SPEED)" & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
+
+# shots: screenshots of the UI from the recorded run LOG, 1920x1080, into .shots/ (gitignored), then
+# IMPECCABLE's detector on the served URL. It serves the player and Vite on free ports, so a running
+# `make dev` is undisturbed, and is not part of `make check`. Run it before handing back UI work.
+IMPECCABLE ?= .agents/skills/impeccable/scripts/impeccable
+
+shots: ## screenshots of the UI from LOG into .shots/, plus the Impeccable scan; not in check
+	@$(NO_KEYS) LOG="$(LOG)" IMPECCABLE="$(IMPECCABLE)" bash frontend/shots/run.sh
 
 check: check-python check-contracts check-frontend check-secrets ## every gate; spends no credits
 
