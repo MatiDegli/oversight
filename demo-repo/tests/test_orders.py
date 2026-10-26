@@ -47,6 +47,20 @@ def test_cancel_order_returns_the_stock(widget, gadget, customer, stocked):
     assert stocked.available("G-1") == 5
 
 
+def test_cancelling_an_order_twice_keeps_other_orders_reserved(widget, customer):
+    inventory = Inventory({"W-1": 5})
+    first_cart = Cart()
+    first_cart.add(widget, 2)
+    first = place_order(first_cart, inventory, customer, 6)
+    second_cart = Cart()
+    second_cart.add(widget, 2)
+    place_order(second_cart, inventory, customer, 7)
+    assert inventory.available("W-1") == 1
+    cancel_order(first, inventory)
+    cancel_order(first, inventory)
+    assert inventory.available("W-1") == 3
+
+
 def test_reorder_quote_and_revenue_by_category(widget, gadget, customer, stocked):
     cart = Cart()
     cart.add(widget, 3)

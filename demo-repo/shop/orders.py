@@ -15,6 +15,7 @@ class Order:
     lines: list[OrderLine]
     total: int
     shipping: int = 0
+    cancelled: bool = False
 
 
 def order_total(lines: list[OrderLine], customer: Customer) -> int:
@@ -55,6 +56,10 @@ def place_order(
 
 
 def cancel_order(order: Order, inventory: Inventory) -> None:
+    """Return an order's stock. Cancelling an already cancelled order does nothing."""
+    if order.cancelled:
+        return
+    order.cancelled = True
     _release_lines(order.lines, inventory)
 
 
