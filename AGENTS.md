@@ -51,7 +51,10 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 - Color is an agent (A orange #ff5c1f, B blue #4f7dff) or a state (green passed or added, red failed, removed or destructive), nothing else, and never alone: letters A and B, + and - in diffs, icons on tests. No amber warnings; counters across agents are neutral.
 - Type: Atkinson Hyperlegible Next for text and graph labels, Atkinson Hyperlegible Mono for code, hashes and numbers, both from Fontsource packages; sentence case. Monaco is created after the fonts load, or calls monaco.editor.remeasureFonts().
 - The dot-field light behind the graph is its own canvas under a transparent Cytoscape canvas. It comes after level 1; until then the background is plain black.
-- docs/design.md is the design reference: tokens with their values, graph states, panels, and what is never done.
+- DESIGN.md, with PRODUCT.md, is the design reference; Impeccable 4.5.2 is the design skill. Its allowed commands: shape, harden, onboard, audit, critique, polish, clarify, typeset, layout. Forbidden: bolder, colorize, delight, overdrive, animate, live, generate and document.
+- shape plans a screen inside DESIGN.md and never opens a new visual world.
+- Where Impeccable clashes with DESIGN.md or AGENTS.md, ours wins, and DECISIONS.md records the clash.
+- Every color comes from a theme token, including what Cytoscape, Monaco and the dot-field canvas receive; the token sets hang off `data-theme` on the root element, and no component picks a color itself.
 
 ## Runtime workspace
 - On start, the backend copies demo-repo/ to .runtime/workspace/ and runs git init there, so every demo starts clean.
