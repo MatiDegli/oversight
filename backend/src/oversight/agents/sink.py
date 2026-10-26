@@ -7,12 +7,19 @@ from oversight_contracts.common import AgentId
 
 
 class ChangeSink(Protocol):
-    async def file_edited(self, agent_id: AgentId, path: str) -> None:
+    async def file_edited(self, agent_id: AgentId, path: str) -> bool:
         """An edit by the agent is on disk in its worktree. The change manager sends
-        `change.updated` before this returns, so it precedes the edit's focus and step."""
+        `change.updated` before this returns, so it precedes the edit's focus and step.
+
+        `True` when the edit was recorded. `False` when it was not: the change manager has sent
+        an `error`, and the edit's nodes never reached the UI, so the runtime sends its focus
+        with no nodes."""
         ...
 
-    async def proposed(self, agent_id: AgentId, summary: str | None) -> None:
+    async def proposed(self, agent_id: AgentId, summary: str | None) -> bool:
         """The run ended: `finish` was called with `summary`, or the run halted (`None`). The
-        change manager sends `change.proposed` before this returns."""
+        change manager sends `change.proposed` before this returns.
+
+        `True` when the change was proposed. `False` when it was not: the change manager has sent
+        an `error`, and the runtime ends the run halted, never ready for review."""
         ...

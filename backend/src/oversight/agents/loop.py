@@ -56,6 +56,9 @@ NO_TOOL_REMINDER = "Use a tool to continue, or call finish when the task is done
 SAME_RESULT_LIMIT = 4
 FAILURE_LIMIT = 6
 ERROR_CHARS = 200
+PROPOSAL_FAILED = "Its change could not be proposed."
+EDIT_NOT_RECORDED = " (saved, but not recorded for review)"
+"""Added to the summary of an edit step whose record the sink did not take."""
 
 type Publish = Callable[[EventPayload], Awaitable[object]]
 
@@ -125,6 +128,7 @@ class AgentRun:
     ) -> None:
         require_verified(model.profile)
         self._task = task
+        self._workspace = workspace
         self._model = model
         self._sink = sink
         self._publish = publish
@@ -189,13 +193,48 @@ class AgentRun:
                     fatal=True,
                 )
             )
-        if not root_lost:  # the sink reads the worktree, and its root is not the agent's any more
-            await self._sink.proposed(self._task.agent_id, summary)
+        except Exception as error:  # not BaseException: cancellation (Stop) must propagate
+            detail = f"Stopped by an unexpected error: {self._describe(error)}"
+            await self._publish(
+                ErrorReport(
+                    source="agent",
+                    message=detail,
+                    agent_id=self._task.agent_id,
+                    change_id=self._task.change_id,
+                    fatal=True,
+                )
+            )
+        # The sink reads the worktree, and a lost root is not the agent's any more.
+        if not root_lost and not await self._propose(summary):
+            detail = detail or PROPOSAL_FAILED  # a halt's own reason is the better one
         if detail is None:
             await self._status("ready_for_review")
             return RunEnd("ready_for_review", None, self._step, summary)
         await self._status("halted", detail)
         return RunEnd("halted", detail, self._step, None)
+
+    def _describe(self, error: Exception) -> str:
+        """The error's type and its message on one line, without the runtime's location."""
+        message = " ".join(str(error).split())
+        text = f"{type(error).__name__}: {message}" if message else type(error).__name__
+        return self._workspace.redact(text)[:ERROR_CHARS]
+
+    async def _propose(self, summary: str | None) -> bool:
+        """Whether the sink proposed the change. A sink that returns `False` has sent its own
+        `error`; one that raises has not, so the runtime reports it."""
+        try:
+            return await self._sink.proposed(self._task.agent_id, summary)
+        except Exception as error:
+            await self._publish(
+                ErrorReport(
+                    source="server",
+                    message=f"The change could not be proposed: {self._describe(error)}",
+                    agent_id=self._task.agent_id,
+                    change_id=self._task.change_id,
+                    fatal=True,
+                )
+            )
+            return False
 
     async def _loop(self, messages: list[Message]) -> str:
         # Every reply with a tool call adds a step, so the step limit bounds those; the failure
@@ -256,32 +295,66 @@ class AgentRun:
         if self._step >= self._task.limits.max_steps:
             raise _Halt(f"Reached the step limit of {self._task.limits.max_steps}.")
 
+    async def _record(self, path: str) -> bool:
+        """Whether the sink recorded the edit. A sink that returns `False` has sent its own
+        `error`; one that raises has not, so the runtime reports it."""
+        agent_id = self._task.agent_id
+        try:
+            return await self._sink.file_edited(agent_id, path)
+        except Exception as error:
+            await self._publish(
+                ErrorReport(
+                    source="server",
+                    message=f"The edit to {path} could not be recorded: {self._describe(error)}",
+                    agent_id=agent_id,
+                    change_id=self._task.change_id,
+                    fatal=False,
+                )
+            )
+            return False
+
     async def _report(self, tool: str, outcome: ToolOutcome, duration_ms: int) -> None:
         agent_id = self._task.agent_id
+        # The edit is on disk either way. A lost record only changes what the UI is told: the
+        # model's result, the failure count and the stop rules still follow `outcome`.
+        recorded = outcome.edited_path is None
+        cut_short: asyncio.CancelledError | None = None
         if outcome.edited_path is not None:
-            await self._sink.file_edited(agent_id, outcome.edited_path)
+            try:
+                recorded = await self._record(outcome.edited_path)
+            except asyncio.CancelledError as cancelled:
+                # Stop or the time limit hit while the sink worked: it is unknown whether it
+                # recorded. The edit is on disk, so the UI still gets its focus and its step.
+                cut_short = cancelled
         if outcome.focus is not None:
             await self._publish(
                 AgentFocus(
                     agent_id=agent_id,
                     mode=outcome.focus,
                     ranges=outcome.ranges,
-                    node_ids=outcome.node_ids,
+                    node_ids=outcome.node_ids if recorded else [],  # unknown: the sink never saw it
                 )
             )
-        error = None if outcome.ok else outcome.content.removeprefix("Error: ")[:ERROR_CHARS]
+        error = None
+        if not outcome.ok:
+            error = outcome.content.removeprefix("Error: ")[:ERROR_CHARS]
+        # The step's `error` is what the model was told, and the model is told nothing of a lost
+        # record: the step stays "ok" and its summary says so.
+        note = "" if recorded else EDIT_NOT_RECORDED
         await self._publish(
             AgentStep(
                 agent_id=agent_id,
                 step=self._step,
                 tool=tool[:80],
-                summary=outcome.summary,
+                summary=outcome.summary + note,
                 result="ok" if outcome.ok else "error",
                 error=error,
                 duration_ms=duration_ms,
                 tests=outcome.tests,
             )
         )
+        if cut_short is not None:
+            raise cut_short
 
     async def _usage(self, reply: ModelReply) -> None:
         cost = self._pricing.cost(reply.usage) if self._pricing is not None else None
