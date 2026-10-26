@@ -2,12 +2,16 @@
 
 Each case is a throwaway file under frontend/src/, linted with the real configuration and deleted
 afterwards. Only the two boundary rules are read: an unresolved module also trips type-aware rules
-that say nothing about boundaries.
+that say nothing about boundaries. A probe is created exclusively under a name no existing file can
+have, and only what the test created is removed.
 """
 
+import contextlib
 import json
+import os
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -59,6 +63,14 @@ def lint(files: list[Path]) -> list[dict[str, object]]:
     return report
 
 
+def make_directories(directory: Path, root: Path, created: list[Path]) -> None:
+    """Create `directory` and its missing parents inside `root`, recording each one made."""
+    inside = [d for d in [directory, *directory.parents] if d.is_relative_to(root)]
+    for folder in reversed([d for d in inside if not d.exists()]):
+        folder.mkdir()
+        created.append(folder)
+
+
 @pytest.fixture(scope="module")
 def boundary_reports() -> Iterator[dict[int, bool]]:
     """Lint every case once; map each case's index to whether a boundary rule reported it."""
@@ -68,12 +80,14 @@ def boundary_reports() -> Iterator[dict[int, bool]]:
     try:
         for index, (folder, source, _) in enumerate(CASES):
             directory = src / folder
-            missing = [d for d in [directory, *directory.parents] if d.is_relative_to(src)]
-            created += [d for d in missing if not d.exists() and d not in created]
-            directory.mkdir(parents=True, exist_ok=True)
-            probe = directory / f"boundary_probe_{index}.ts"
-            probe.write_text(source + "\n")
-            files[index] = probe
+            make_directories(directory, src, created)
+            # mkstemp creates the file exclusively, under a name that is not taken
+            descriptor, name = tempfile.mkstemp(
+                dir=directory, prefix="boundary_probe_", suffix=".ts"
+            )
+            files[index] = Path(name)  # recorded before the write: a failed write is still removed
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(source + "\n")
         by_file = {Path(str(entry["filePath"])): entry for entry in lint(list(files.values()))}
         reported: dict[int, bool] = {}
         for index, probe in files.items():
@@ -85,7 +99,8 @@ def boundary_reports() -> Iterator[dict[int, bool]]:
         for probe in files.values():
             probe.unlink(missing_ok=True)
         for directory in sorted(created, key=lambda path: len(path.parts), reverse=True):
-            directory.rmdir()
+            with contextlib.suppress(OSError):  # rmdir removes only an empty directory
+                directory.rmdir()
 
 
 @pytest.mark.parametrize("index", range(len(CASES)), ids=[case_id(case) for case in CASES])
