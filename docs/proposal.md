@@ -747,11 +747,13 @@ details outside this repository.
 
 1. The worker hands back in the fixed format.
 2. The coordinator reruns the decisive claims (`make check`, the front's command) on the branch.
-3. A reviewer from the other provider checks correctness against the brief and the contracts.
-4. Each finding goes back to its front as a fix round, to a fresh agent; the coordinator never
-   commits fixes on a worker's branch.
+3. A reviewer from the other provider checks correctness against the brief and the contracts, and
+   ranks each finding BLOCKING, SHOULD-FIX or NIT, with its file and line.
+4. Each BLOCKING or SHOULD-FIX finding goes back to its front as a fix round, to a fresh agent; the
+   coordinator never commits fixes on a worker's branch. A NIT does not block: it goes to the state
+   record as a follow-up. A re-review covers the fix's changes and the findings still open.
 5. The coordinator approves the merge once the checks pass on the merged result and the review has
-   no open finding; its own changes always get Codex's review.
+   no open BLOCKING or SHOULD-FIX finding; its own changes always get Codex's review.
 
 The maintainer makes the critical decisions: contracts v1 and any later contract change, spending
 Meta credits, scope and level cuts, the demo script, a new top-level directory or backend module,
