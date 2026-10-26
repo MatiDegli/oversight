@@ -13,6 +13,7 @@ dev = [
     "import-linter==2.15",
     "pyright==1.1.414",
     "pytest==9.1.1",
+    "pytest-timeout==2.4.0",
     "ruff==0.17.0",
 ]
 
@@ -62,8 +63,17 @@ venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["contracts/tests", "backend/tests", "tools/tests"]
-# conftest.py at the root strips the GIT_* variables from every test.
+# conftest.py at the root strips the GIT_* variables from every test, and loads tools/memwatch.py,
+# which caps the memory of the run (OVERSIGHT_TEST_MEM_GB, 8 GiB by default).
 addopts = ["-q", "--strict-markers", "--import-mode=importlib"]
+# pytest-timeout: a test body that runs past 120 s fails alone, with its name. The slowest test takes
+# 8 s warm; 120 s leaves room for a slow CI runner and still ends a hang within two minutes. Fixture
+# setup is not under it (func_only): the session fixtures that can be slow cold, the demo
+# environment's uv steps and the ESLint run, carry limits of their own of 300 s each. A longer test
+# says so with @pytest.mark.timeout(seconds). The signal method fails only that test.
+timeout = 120
+timeout_func_only = true
+timeout_method = "signal"
 
 # docs/proposal.md, section 3: the five import contracts.
 [tool.importlinter]
