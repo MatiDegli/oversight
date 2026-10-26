@@ -24,6 +24,26 @@ through others. Nothing reaches main until you approve it.
 - Agents inside the product use only Meta models: Muse Spark through the Meta Model API, and Muse
   Spark Open through partner inference.
 
+## Next
+
+### Zoom levels
+
+For a repository too large to read at once, the graph would switch between three levels as you zoom:
+
+- **Modules:** each module is a circle sized by its function count, with one line per pair of
+  modules, thicker with more calls.
+- **Functions:** modules become frames and functions become dots, named only where an agent works or
+  the impact cone reaches.
+- **Details:** the labeled boxes of the current view, with every call.
+
+Agents and the impact cone stay visible at every level, nothing moves when the level changes, and
+labels keep their size on screen. Not built yet; it comes after the core features, if time allows.
+
+![Design sketch of the zoom levels, made before the kickoff](docs/sketches/zoom-levels-sketch-pre-kickoff.png)
+
+*Design sketch made before the kickoff, not built. It is a picture of the idea, not the product: its
+name, numbers and colors are placeholders, and agent B is blue in Oversight.*
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
