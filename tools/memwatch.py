@@ -1,19 +1,24 @@
-"""A memory cap for a pytest run, as a pytest plugin: `pytest_plugins = ["memwatch"]` in the root
-conftest.py.
+"""A soft memory cap for a pytest run, as a pytest plugin: `pytest_plugins = ["memwatch"]` in the
+root conftest.py.
 
 On 2026-10-26 a test that looped without a stop rule grew its pytest to 30 GB, all of the WSL
 VM's memory, until the kernel's OOM killer ended it. A runaway test must fail alone, quickly and
-with its name, so a daemon thread reads the resident memory of the test process and of everything
-it started every 0.5 s. Past OVERSIGHT_TEST_MEM_GB GiB (default 8) it writes one line naming the
-running test to the terminal's own stderr, stops the processes the run started, and ends the run
-with a non-zero exit.
+with its name, so a daemon thread reads the resident memory (VmRSS) of this process, and of this
+process only, every 0.5 s. Past OVERSIGHT_TEST_MEM_GB GiB (default 8) it writes one line naming
+the running test to the terminal's own stderr and ends the process with exit code 70.
+
+It signals no other process and counts no children, so it cannot hit a process that reused a
+pid, and it cannot count a page two processes share twice. What it cannot do is promise to run
+in time: a thread needs the GIL, and one allocation in C that holds it can fill the machine
+before the next look. That is the hard layer's job, the Makefile's: `make check` runs pytest in a
+systemd scope with a kernel memory limit (tools/capped.sh). This plugin is the soft layer, for a
+worker's bare `uv run pytest` and for CI, where no scope may exist.
 
 No RLIMIT_AS: it caps virtual address space, which Node and thread arenas reserve far beyond what
 they use, so it would fail for the wrong reason. Stdlib only, and Linux only (/proc).
 """
 
 import os
-import signal
 import threading
 from collections.abc import Callable
 from contextlib import suppress
@@ -26,9 +31,6 @@ POLL_INTERVAL_S = 0.5
 EXIT_CODE = 70  # pytest uses 0 to 5; 70 is sysexits' EX_SOFTWARE
 PLUGIN_NAME = "oversight-memwatch"
 GIB = 2**30
-# Rounds of "freeze what is found, look again" before the kill: a stopped process starts no new
-# children, so the set stops growing after a round or two. The bound only guards a loop.
-FREEZE_ROUNDS = 20
 
 
 def parse_cap(raw: str | None) -> int:
@@ -45,11 +47,11 @@ def parse_cap(raw: str | None) -> int:
     return max(1, int(gib * GIB))
 
 
-def rss_bytes(pid: int) -> int:
-    """The resident set of one process from /proc/<pid>/status, 0 if it is gone or has none."""
+def self_rss_bytes() -> int:
+    """The resident set of this process from /proc/self/status, 0 if it cannot be read."""
     with (
         suppress(OSError, ValueError, IndexError),
-        open(f"/proc/{pid}/status", encoding="ascii", errors="replace") as status,
+        open("/proc/self/status", encoding="ascii", errors="replace") as status,
     ):
         for line in status:
             if line.startswith("VmRSS:"):
@@ -57,60 +59,8 @@ def rss_bytes(pid: int) -> int:
     return 0
 
 
-def children(pid: int) -> list[int]:
-    """The direct children of a process: /proc/<pid>/task/*/children, one file per thread."""
-    found: list[int] = []
-    try:
-        tasks = os.listdir(f"/proc/{pid}/task")
-    except OSError:
-        return found
-    for task in tasks:
-        with (
-            suppress(OSError, ValueError),
-            open(f"/proc/{pid}/task/{task}/children", encoding="ascii") as handle,
-        ):
-            found.extend(int(word) for word in handle.read().split())
-    return found
-
-
-def descendants(pid: int) -> list[int]:
-    """Children, their children and so on, each pid once, the process itself left out."""
-    seen: dict[int, None] = {}
-    pending = children(pid)
-    while pending:
-        child = pending.pop()
-        if child in seen or child == pid:
-            continue
-        seen[child] = None
-        pending.extend(children(child))
-    return list(seen)
-
-
-def tree_rss_bytes(pid: int) -> int:
-    """The resident set of a process plus all its descendants. Pages two of them share count
-    twice, so the sum can only err toward stopping early."""
-    return rss_bytes(pid) + sum(rss_bytes(child) for child in descendants(pid))
-
-
-def stop_descendants(pid: int) -> None:
-    """Kill every descendant of `pid`. They are frozen first, round after round until no new one
-    appears, so a process that is forking cannot slip out; SIGKILL then works on stopped ones."""
-    frozen: set[int] = set()
-    for _ in range(FREEZE_ROUNDS):
-        fresh = set(descendants(pid)) - frozen
-        if not fresh:
-            break
-        for child in fresh:
-            with suppress(OSError):
-                os.kill(child, signal.SIGSTOP)
-        frozen |= fresh
-    for child in frozen:
-        with suppress(OSError):
-            os.kill(child, signal.SIGKILL)
-
-
 class Watchdog:
-    """The thread that compares `tree_rss_bytes(pid)` with the cap every `interval` seconds and
+    """The thread that compares `self_rss_bytes()` with the cap every `interval` seconds and
     calls `on_exceed(used_bytes)` once, on the thread, the first time it is above."""
 
     def __init__(
@@ -119,18 +69,16 @@ class Watchdog:
         on_exceed: Callable[[int], None],
         *,
         interval: float = POLL_INTERVAL_S,
-        pid: int | None = None,
     ) -> None:
         self.cap_bytes = cap_bytes
         self._on_exceed = on_exceed
         self._interval = interval
-        self._pid = os.getpid() if pid is None else pid
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name=PLUGIN_NAME, daemon=True)
 
     def check(self) -> bool:
-        """One look: call `on_exceed` and return True if the tree is above the cap."""
-        used = tree_rss_bytes(self._pid)
+        """One look: call `on_exceed` and return True if this process is above the cap."""
+        used = self_rss_bytes()
         if used <= self.cap_bytes:
             return False
         self._on_exceed(used)
@@ -167,8 +115,8 @@ class MemoryWatch:
     def line(self, used_bytes: int) -> str:
         cap = self.watchdog.cap_bytes
         return (
-            f"MEMORY CAP: {self.current} used {used_bytes / GIB:.2f} GiB resident with its "
-            f"children, over the cap of {cap / GIB:.2f} GiB ({ENV_CAP}); stopping the run"
+            f"MEMORY CAP: {self.current} used {used_bytes / GIB:.2f} GiB resident, over the "
+            f"cap of {cap / GIB:.2f} GiB ({ENV_CAP}); ending the run"
         )
 
     def _report_and_exit(self, used_bytes: int) -> None:
@@ -176,7 +124,6 @@ class MemoryWatch:
         # exit would throw away with the test's output.
         with suppress(OSError):
             os.write(self._stderr_fd, (self.line(used_bytes) + "\n").encode("utf-8", "replace"))
-        stop_descendants(os.getpid())
         os._exit(EXIT_CODE)
 
     def pytest_runtest_logstart(self, nodeid: str, location: tuple[str, int | None, str]) -> None:
