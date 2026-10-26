@@ -22,26 +22,30 @@ export interface AgentCardProps {
 
 export function AgentCard({ data, onOpenDiff, onReview }: AgentCardProps) {
   const { agent, steps, step, readyForReview } = data;
-  const accent = agent.slot === "A" ? "text-agent-a" : "text-agent-b";
+  const accent =
+    agent.slot === "A" ? "bg-agent-a-tint text-agent-a-text" : "bg-agent-b-tint text-agent-b-text";
   const border = readyForReview
     ? agent.slot === "A"
       ? "border-agent-a"
       : "border-agent-b"
-    : "border-border";
+    : "border-card-border";
   const buttonClass =
-    "inline-flex h-10 items-center gap-2 rounded-[7px] border border-border px-3 text-sm text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
+    "inline-flex h-10 items-center gap-2 rounded-[7px] border border-control-edge px-3 text-sm text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
   return (
     <article
       aria-label={`Agent ${agent.slot}`}
-      className={`min-w-0 rounded-[10px] border bg-panel p-4 text-text ${border}`}
+      className={`min-w-0 rounded-[10px] border bg-card p-4 text-text ${border}`}
     >
       <header className="flex flex-wrap items-center gap-2">
         <h2 className="text-base font-bold">
           Agent <span className={accent}>{agent.slot}</span>
         </h2>
         <span className="text-sm text-muted">{agent.model}</span>
-        <span role="status" className={`ml-auto rounded-[7px] border px-2 py-1 text-sm ${accent}`}>
+        <span
+          role={readyForReview ? "status" : undefined}
+          className={`ml-auto rounded-full px-2 py-1 text-sm ${accent}`}
+        >
           {labels[agent.state]}
         </span>
       </header>
@@ -59,7 +63,7 @@ export function AgentCard({ data, onOpenDiff, onReview }: AgentCardProps) {
         aria-label={`Agent ${agent.slot} steps`}
         aria-valuenow={Math.min(step, agent.max_steps)}
         aria-valuemax={agent.max_steps}
-        className="mt-2 h-1 overflow-hidden rounded-full bg-border"
+        className="mt-2 h-1 overflow-hidden rounded-full bg-raised"
       >
         <div
           className={`h-full ${agent.slot === "A" ? "bg-agent-a" : "bg-agent-b"}`}
@@ -76,19 +80,19 @@ export function AgentCard({ data, onOpenDiff, onReview }: AgentCardProps) {
         tabIndex={0}
       >
         {steps.map((entry) => (
-          <li key={entry.step} className="border-t border-border py-2 text-sm">
+          <li key={entry.step} className="border-t border-card-border py-2 text-sm">
             <div className="flex items-center gap-2">
               {entry.result === "ok" ? (
                 <Check aria-hidden="true" className="size-4 shrink-0 text-passed" />
               ) : (
-                <X aria-hidden="true" className="size-4 shrink-0 text-failed" />
+                <X aria-hidden="true" className="size-4 shrink-0 text-failed-text" />
               )}
               <span className="font-mono text-muted">Step {entry.step}</span>
               <span className="min-w-0 break-all font-mono">{entry.tool}</span>
               <span className="ml-auto shrink-0 font-mono text-muted">{entry.duration_ms} ms</span>
             </div>
             <p className="mt-1 break-words">{entry.summary}</p>
-            <p className={entry.result === "ok" ? "text-passed" : "text-failed"}>
+            <p className={entry.result === "ok" ? "text-passed" : "text-failed-text"}>
               {entry.result === "ok" ? "Ok" : "Error"}
               {entry.error ? `: ${entry.error}` : ""}
             </p>

@@ -30,7 +30,7 @@ describe("AgentCard over the level 1 fixture", () => {
     expect(running).toContain("Working");
     expect(running).toContain("Cap the combined discount at 30% in compute_price");
     expect(running).toContain('aria-label="Agent A"');
-    expect(running).toContain("text-agent-a");
+    expect(running).toContain("text-agent-a-text");
     expect(running).toContain("No steps yet.");
     for (const event of events) {
       if (event.type !== "agent.step") continue;
@@ -44,7 +44,14 @@ describe("AgentCard over the level 1 fixture", () => {
   });
 
   it("adds Ready for review only on agent.status, and keeps steps newest first", () => {
-    expect(render(through(19))).not.toContain("Ready for review");
+    const working = render(through(19));
+    expect(working).not.toContain("Ready for review");
+    expect(working).not.toContain('role="status"');
+    expect(working).not.toContain("border-agent-a");
+    expect(working).toContain("bg-card");
+    expect(working).toContain("border-card-border");
+    expect(working).toContain("bg-raised");
+    expect(working).toContain("bg-agent-a-tint text-agent-a-text");
     const ready = render(through(20));
     expect(ready).toContain('role="status"');
     expect(ready).toContain("Ready for review");
@@ -74,9 +81,9 @@ describe("AgentCard over the level 1 fixture", () => {
     expect(html).toContain("Halted");
     expect(html).toContain("Step limit reached");
     expect(html).toContain("Error: File changed; read it again");
-    expect(html).toContain("text-failed");
+    expect(html).toContain("text-failed-text");
     expect(html).toContain('aria-label="Agent B"');
-    expect(html).toContain("text-agent-b");
+    expect(html).toContain("text-agent-b-text");
     expect(html).not.toContain("Ready for review");
   });
 });

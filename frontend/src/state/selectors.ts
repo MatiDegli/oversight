@@ -1,6 +1,11 @@
 import type { State } from "./types";
 
-/** Card data only: selection and navigation belong to the app. */
+/**
+ * Derived selectors below allocate on every call (including selectAgents and
+ * selectPendingChanges). Zustand callers select the source state/slices first,
+ * then memoize these projections with useMemo; do not use them as getSnapshot.
+ * Card data only: selection and navigation belong to the app.
+ */
 export function selectAgentCard(state: State, agentId: string) {
   const agent = state.agents[agentId];
   if (!agent) return undefined;
