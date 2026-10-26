@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.0.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.1.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AgentCreated": {
@@ -771,7 +771,8 @@
         "invalid_path",
         "stale_file",
         "not_implemented",
-        "invalid_request"
+        "invalid_request",
+        "internal"
       ],
       "type": "string"
     },

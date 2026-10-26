@@ -24,6 +24,7 @@ const errorCodes: Record<ErrorCode, true> = {
   stale_file: true,
   not_implemented: true,
   invalid_request: true,
+  internal: true,
 };
 
 export class CommandError extends Error {
