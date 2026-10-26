@@ -3,7 +3,6 @@ import type {
   AgentMessage,
   ApproveChange,
   ErrorCode,
-  ErrorResponse,
   FileContent,
   FileSaved,
   GraphResponse,
@@ -15,10 +14,22 @@ import type {
   StartAgent,
 } from "@contracts";
 
+// Keep unknown HTTP failures separate from the contract's application error codes.
+const errorCodes: Record<ErrorCode, true> = {
+  not_found: true,
+  wrong_state: true,
+  slot_busy: true,
+  spend_brake: true,
+  invalid_path: true,
+  stale_file: true,
+  not_implemented: true,
+  invalid_request: true,
+};
+
 export class CommandError extends Error {
   constructor(
     public readonly status: number,
-    public readonly code: ErrorCode,
+    public readonly code: ErrorCode | undefined,
     message: string,
   ) {
     super(message);
@@ -44,8 +55,29 @@ export function createCommandClient(request: typeof fetch = fetch) {
         : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
     });
     if (!response.ok) {
-      const failure = (await response.json()) as ErrorResponse;
-      throw new CommandError(response.status, failure.error.code, failure.error.message);
+      let code: ErrorCode | undefined;
+      let message = `HTTP ${String(response.status)} ${response.statusText}`.trim();
+      try {
+        const body: unknown = await response.json();
+        if (typeof body === "object" && body !== null && "error" in body) {
+          const error = body.error;
+          if (
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            typeof error.code === "string" &&
+            "message" in error &&
+            typeof error.message === "string" &&
+            Object.hasOwn(errorCodes, error.code)
+          ) {
+            code = error.code as ErrorCode;
+            message = error.message;
+          }
+        }
+      } catch {
+        // Proxies and servers may answer with HTML, plain text, or an empty body.
+      }
+      throw new CommandError(response.status, code, message);
     }
     // Accepted commands have no result body; their results arrive through SSE.
     if (response.status === 202 || response.status === 204) return undefined as T;

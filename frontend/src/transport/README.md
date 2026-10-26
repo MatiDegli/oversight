@@ -7,20 +7,18 @@ owning shell unmounts, including during React StrictMode's development cleanup.
 
 ## Live synchronization
 
-`GET /graph` supplies an authoritative graph checkpoint and its run id. The checkpoint's `seq`
-does **not** mean that the client has applied the agent and change events before it. Proposal 4.6
-takes precedence over the transport brief: a fresh tab opens `/events?after=0&run=...` and rebuilds
-the complete event state from `run.started`. An existing session resumes after its last applied
-event. `lastSeq` and the shell's `data-seq` always describe applied events, not a fetched checkpoint.
+Live connects directly to `/events?after=0`, applying the run from `seq` 1 through the same
+pure reducer as replay. An existing session resumes with `after=<last applied>&run=<run id>`.
+`GET /graph` remains available for debugging and graph-only clients; connecting never calls it.
+Graph, agent and change state come exclusively from applied events, including a new run's reset.
 
-A sequence gap or graph-version mismatch closes the damaged connection, fetches a checkpoint,
-and resumes after the last applied event. Graph events covered by the checkpoint apply that graph
-as a snapshot through the reducer, while agent/change events still replay in full. This repairs a
-version mismatch without skipping missing agent state or applying old deltas to a newer graph.
-Events beyond the checkpoint use the normal reducer. A different run resets all old state.
-
-Normal network reconnection stays with the browser's EventSource and its `Last-Event-ID` header.
-The transport replaces the source only when recovering inconsistent state or changing runs.
+A parse failure, reducer exception, sequence gap or graph-version mismatch closes the source and
+retries from the last applied cursor. All network errors also close and retry, including a CLOSED
+EventSource after a non-200 proxy response. The retry window doubles from 500 ms to 30 seconds,
+with equal jitter (50–100% of the window). The first applied event resets the window. One visible
+error is reported per failure streak; the shell clears it on the next applied event. Persistent
+bad events remain visible and retry with bounded waits instead of skipping or rewriting history.
+Disposal cancels pending retries and ignores late callbacks.
 
 ## Replay and commands
 
@@ -34,4 +32,6 @@ with a real recorded run and update the label before publishing the judges' demo
 
 `createCommandClient` exposes every JSON command in proposal 4.7. Accepted commands return no
 result; SSE provides their results. HTTP errors use `CommandError` with `status`, contract `code`
-and server `message`. Network errors keep their original browser error.
+and server `message`. Non-JSON or malformed error bodies fall back to an HTTP status message
+and `code: undefined`, without inventing a contract ErrorCode. Network errors keep their original
+browser error.

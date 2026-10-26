@@ -1,4 +1,4 @@
-import type { GraphResponse, GraphSnapshotEvent, ServerEvent } from "@contracts";
+import type { GraphSnapshotEvent, ServerEvent } from "@contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import fixture from "../../../fixtures/events/handwritten-level1.jsonl?raw";
@@ -15,182 +15,211 @@ if (first?.type !== "run.started" || second?.type !== "graph.snapshot") {
 }
 const run = first;
 const graph = second;
-const snapshot: GraphResponse = { run_id: run.payload.run_id, seq: 2, graph: graph.payload };
-
 class FakeSource implements EventStream {
   onmessage: EventStream["onmessage"] = null;
+  onerror: EventStream["onerror"] = null;
+  readyState = 1;
   close = vi.fn();
   constructor(readonly url: string) {}
   emit(event: ServerEvent) {
-    this.onmessage?.(new MessageEvent("message", { data: JSON.stringify(event) }));
+    this.raw(JSON.stringify(event));
+  }
+  raw(data: string) {
+    this.onmessage?.(new MessageEvent("message", { data }));
+  }
+  fail(state = 2) {
+    this.readyState = state;
+    this.onerror?.(new Event("error"));
   }
 }
 
-function setup(responses: GraphResponse[] = [snapshot]) {
+const stops: (() => void)[] = [];
+function setup(graphStatus = 200) {
   const sources: FakeSource[] = [];
   const store = createStateStore();
-  let calls = 0;
-  const request = vi.fn<typeof fetch>(() => {
-    const body = responses[Math.min(calls++, responses.length - 1)];
-    return Promise.resolve(Response.json(body));
-  });
+  const onError = vi.fn();
+  // A valid graph response also lets reversion checks reach the original event handlers.
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(
+      graphStatus === 200
+        ? Response.json({ run_id: run.payload.run_id, seq: 2, graph: graph.payload })
+        : new Response(null, { status: graphStatus }),
+    );
   const transport = startLive({
     store,
     request,
+    onError,
     openStream: (url) => {
       const source = new FakeSource(url);
       sources.push(source);
       return source;
     },
   });
+  stops.push(transport.stop);
   const source = () => {
     const latest = sources.at(-1);
     if (!latest) throw new Error("Stream not connected");
     return latest;
   };
-  return { store, request, transport, sources, source };
+  return { store, request, transport, sources, source, onError };
 }
 
 afterEach(() => {
+  for (const stop of stops.splice(0)) stop();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
 describe("live transport", () => {
-  it("loads the snapshot then reconstructs history and applies events in order", async () => {
-    const { transport, store, request, source } = setup();
+  it.each([404, 502])(
+    "connects directly without GET /graph (HTTP %s) and matches replay at every event",
+    async (status) => {
+      const { transport, store, request, source } = setup(status);
+      await transport.ready;
+      expect(request).not.toHaveBeenCalled();
+      expect(source().url).toBe("/events?after=0");
+      expect(store.getState().state).toEqual(createInitialState());
+      let expected = createInitialState();
+      for (const event of log) {
+        source().emit(event);
+        expected = applyEvent(expected, event);
+        expect(store.getState().state).toEqual(expected);
+      }
+    },
+  );
+
+  it.each(["malformed JSON", "reducer exception", "sequence gap", "graph version"])(
+    "backs off with jitter on repeated %s, reports once and resets on an applied event",
+    async (failure) => {
+      vi.useFakeTimers();
+      vi.spyOn(Math, "random").mockReturnValue(0.5);
+      const { store, request, transport, source, sources, onError } = setup();
+      await transport.ready;
+      source().emit(run);
+      source().emit(graph);
+      const delta: ServerEvent = {
+        seq: 3,
+        ts: graph.ts,
+        type: "graph.delta",
+        payload: {
+          from_version: "wrong",
+          to_version: "next",
+          commit: "commit",
+          cause: "rescan",
+          nodes_added: [],
+          nodes_changed: [],
+          nodes_removed: [],
+          edges_added: [],
+          edges_changed: [],
+          edges_removed: [],
+          parse_errors: [],
+        },
+      };
+      const fail = () => {
+        if (failure === "malformed JSON") source().raw("{");
+        else if (failure === "reducer exception")
+          source().raw(
+            JSON.stringify({ ...delta, payload: { from_version: graph.payload.version } }),
+          );
+        else if (failure === "sequence gap")
+          source().emit({ ...graph, seq: store.getState().state.lastSeq + 2 });
+        else source().emit(delta);
+      };
+      // The window doubles until capped; equal jitter at random=.5 uses 75% of it.
+      const delays = [375, 750, 1500, 3000, 6000, 12000, 22500, 22500];
+      for (const [index, delay] of delays.entries()) {
+        const old = source();
+        fail();
+        expect(old.close).toHaveBeenCalledOnce();
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(store.getState().state.lastSeq).toBe(2);
+        await vi.advanceTimersByTimeAsync(delay - 1);
+        expect(sources).toHaveLength(index + 1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(sources).toHaveLength(index + 2);
+        expect(source().url).toBe(`/events?after=2&run=${run.payload.run_id}`);
+        // Late messages/errors from a closed source cannot retry or change state.
+        old.emit({ ...graph, seq: 99 });
+        old.fail();
+      }
+      source().emit({ ...graph, seq: 3 });
+      expect(store.getState().state.lastSeq).toBe(3);
+      expect(store.getState().state.gap).toBe(false);
+      fail();
+      expect(onError).toHaveBeenCalledTimes(2);
+      const count = sources.length;
+      await vi.advanceTimersByTimeAsync(374);
+      expect(sources).toHaveLength(count);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sources).toHaveLength(count + 1);
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([0, 2])(
+    "reopens EventSource after an error in readyState %s using the applied cursor",
+    async (state) => {
+      vi.useFakeTimers();
+      vi.spyOn(Math, "random").mockReturnValue(0);
+      const { source, sources, store, transport, onError } = setup();
+      await transport.ready;
+      source().emit(run);
+      source().emit(graph);
+      source().fail(state);
+      await vi.advanceTimersByTimeAsync(249);
+      expect(sources).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sources).toHaveLength(2);
+      expect(source().url).toBe(`/events?after=2&run=${run.payload.run_id}`);
+      for (const event of log.slice(2)) source().emit(event);
+      expect(store.getState().state).toEqual(log.reduce(applyEvent, createInitialState()));
+      expect(onError).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("backs off if opening EventSource throws and cancels the pending retry on stop", async () => {
+    vi.useFakeTimers();
+    const openStream = vi.fn<(url: string) => EventStream>(() => {
+      throw new Error("Unavailable");
+    });
+    const onError = vi.fn();
+    const transport = startLive({ store: createStateStore(), openStream, onError });
     await transport.ready;
-    expect(request).toHaveBeenCalledWith("/graph", expect.objectContaining({ method: "GET" }));
-    expect(store.getState().state.graph).toEqual(snapshot.graph);
-    // Proposal 4.6: the graph response cannot hydrate agents and changes, so replay from 1.
-    expect(source().url).toBe(`/events?after=0&run=${run.payload.run_id}`);
-    for (const event of log) source().emit(event);
-    expect(store.getState().state).toEqual(log.reduce(applyEvent, createInitialState()));
+    expect(onError).toHaveBeenCalledOnce();
     transport.stop();
-    expect(source().close).toHaveBeenCalledOnce();
+    await vi.runAllTimersAsync();
+    expect(openStream).toHaveBeenCalledOnce();
   });
 
-  it("refetches on a gap and resumes from the last applied seq without losing agent events", async () => {
-    const { transport, store, request, source, sources } = setup([
-      snapshot,
-      { ...snapshot, seq: 4 },
-    ]);
-    await transport.ready;
-    source().emit(run);
-    source().emit(graph);
+  it("cancels retries on disposal and ignores late callbacks", async () => {
+    vi.useFakeTimers();
+    const { transport, source, sources, store } = setup();
     const old = source();
-    old.emit({ ...graph, seq: 4 });
-    await vi.waitFor(() => {
-      expect(sources).toHaveLength(2);
-    });
-    expect(request).toHaveBeenCalledTimes(2);
-    expect(old.close).toHaveBeenCalledOnce();
-    expect(source().url).toContain("after=2&run=");
-    const third = log[2];
-    const fourth = log[3];
-    if (!third || !fourth) throw new Error("Missing fixture events");
-    source().emit(third);
-    source().emit(fourth);
-    expect(store.getState().state.lastSeq).toBe(4);
-    expect(store.getState().state.agents).not.toEqual({});
-    old.emit({ ...graph, seq: 99 });
-    expect(request).toHaveBeenCalledTimes(2);
+    old.fail();
     transport.stop();
-  });
-
-  it("refetches on a graph from_version mismatch and heals that event with the checkpoint", async () => {
-    const healed = { ...snapshot, seq: 3, graph: { ...snapshot.graph, version: "healed" } };
-    const { transport, store, source, sources } = setup([snapshot, healed]);
-    await transport.ready;
-    source().emit(run);
-    source().emit(graph);
-    const delta: ServerEvent = {
-      seq: 3,
-      ts: graph.ts,
-      type: "graph.delta",
-      payload: {
-        from_version: "wrong",
-        to_version: "healed",
-        commit: "commit",
-        cause: "rescan",
-        nodes_added: [],
-        nodes_changed: [],
-        nodes_removed: [],
-        edges_added: [],
-        edges_changed: [],
-        edges_removed: [],
-        parse_errors: [],
-      },
-    };
-    source().emit(delta);
-    await vi.waitFor(() => {
-      expect(sources).toHaveLength(2);
-    });
-    expect(source().url).toContain("after=2&run=");
-    source().emit(delta);
-    expect(store.getState().state).toMatchObject({ lastSeq: 3, gap: false, graph: healed.graph });
-    transport.stop();
-  });
-
-  it("leaves native reconnection alone and recovers if its next event is beyond a gap", async () => {
-    const { transport, source, sources } = setup();
-    await transport.ready;
-    source().emit(run);
-    source().emit(graph);
-    // A browser reconnect reuses this instance and its Last-Event-ID. An in-order event
-    // requires no replacement; a missed event on that connection does.
-    source().emit({ ...graph, seq: 3 });
+    old.emit(run);
+    old.fail();
+    await vi.runAllTimersAsync();
     expect(sources).toHaveLength(1);
-    source().emit({ ...graph, seq: 5 });
-    await vi.waitFor(() => {
-      expect(sources).toHaveLength(2);
-    });
-    expect(source().url).toContain("after=3&run=");
-    transport.stop();
+    expect(store.getState().state).toEqual(createInitialState());
   });
 
-  it("resets all old state when a reconnect announces another run", async () => {
-    const newRun = { ...run, payload: { ...run.payload, run_id: "run-20261028-000000" } };
-    const { transport, store, source, sources } = setup([
-      snapshot,
-      { ...snapshot, run_id: newRun.payload.run_id },
-    ]);
-    await transport.ready;
+  it("resets all old state through run.started without fetching or replacing the stream", () => {
+    const { store, source, sources, request } = setup();
     for (const event of log) source().emit(event);
     expect(store.getState().state.changes).not.toEqual({});
+    const newRun = { ...run, payload: { ...run.payload, run_id: "run-20261028-000000" } };
     source().emit(newRun);
     expect(store.getState().state).toEqual({
       ...createInitialState(),
       run: newRun.payload,
       lastSeq: 1,
     });
-    await vi.waitFor(() => {
-      expect(sources).toHaveLength(2);
-    });
-    expect(source().url).toBe(`/events?after=1&run=${newRun.payload.run_id}`);
     source().emit(graph);
     expect(store.getState().state.lastSeq).toBe(2);
-    transport.stop();
-  });
-
-  it("does not connect or mutate after disposal while GET /graph is pending", async () => {
-    let resolve: (response: Response) => void = () => {
-      throw new Error("Not pending");
-    };
-    const request = vi.fn<typeof fetch>(
-      () =>
-        new Promise<Response>((done) => {
-          resolve = done;
-        }),
-    );
-    const store = createStateStore();
-    const openStream = vi.fn<(url: string) => EventStream>();
-    const transport = startLive({ store, request, openStream });
-    transport.stop();
-    resolve(Response.json(snapshot));
-    await transport.ready;
-    expect(openStream).not.toHaveBeenCalled();
-    expect(store.getState().state).toEqual(createInitialState());
-    expect(request.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    expect(sources).toHaveLength(1);
+    expect(request).not.toHaveBeenCalled();
   });
 });
 
@@ -265,6 +294,24 @@ describe("browser replay", () => {
 });
 
 describe("command client", () => {
+  it.each([
+    [502, "<html>Bad gateway</html>"],
+    [500, "Internal server error"],
+    [500, ""],
+    [502, "null"],
+    [500, "{}"],
+    [500, '{"error":null}'],
+    [500, '{"error":{"code":"invented","message":"No"}}'],
+    [500, '{"error":{"code":"wrong_state","message":42}}'],
+  ])("keeps HTTP %s with a non-contract body as CommandError (%s)", async (status, body) => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status }));
+    const failure: unknown = await createCommandClient(request)
+      .getGraph()
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(CommandError);
+    expect(failure).toMatchObject({ status, code: undefined, message: `HTTP ${String(status)}` });
+  });
+
   it("maps the single error body to a typed error including status and code", async () => {
     const request = vi
       .fn<typeof fetch>()

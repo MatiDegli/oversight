@@ -7,11 +7,15 @@ export function startAppSession(
   onError: (error: unknown) => void,
 ) {
   let active = true;
-  const updateSeq = () => {
-    if (root) root.dataset.seq = String(stateStore.getState().state.lastSeq);
-  };
-  updateSeq();
-  const unsubscribe = stateStore.subscribe(updateSeq);
+  if (root) root.dataset.seq = String(stateStore.getState().state.lastSeq);
+  const unsubscribe = stateStore.subscribe(({ state }, previous) => {
+    if (root) root.dataset.seq = String(state.lastSeq);
+    if (
+      !state.gap &&
+      (state.lastSeq !== previous.state.lastSeq || state.run !== previous.state.run)
+    )
+      onError(null);
+  });
   const report = (error: unknown) => {
     if (active) onError(error);
   };

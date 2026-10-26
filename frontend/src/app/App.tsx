@@ -1,21 +1,20 @@
 import { useEffect, useState } from "react";
-import { useStore } from "zustand";
 
-import { stateStore } from "../state";
-import { replayBuild } from "../transport";
+import { replayBuild, replaySource } from "../transport";
 import { startAppSession } from "./session";
 
 export function App() {
-  const seq = useStore(stateStore, ({ state }) => state.lastSeq);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     return startAppSession(document.getElementById("root"), (failure) => {
-      setError(failure instanceof Error ? failure.message : "Transport failed");
+      setError(
+        failure === null ? null : failure instanceof Error ? failure.message : "Transport failed",
+      );
     });
   }, []);
   return (
-    <main className="h-full bg-background" data-seq={seq}>
-      {replayBuild && <p>Replay · hand-written demo fixture</p>}
+    <main className="h-full bg-background">
+      {replayBuild && <p>{replaySource.label}</p>}
       {error && <p role="alert">{error}</p>}
     </main>
   );
