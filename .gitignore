@@ -26,3 +26,7 @@ dist/
 .DS_Store
 Thumbs.db
 .idea/
+
+# Local agent files
+CLAUDE.local.md
+.claude/settings.local.json
