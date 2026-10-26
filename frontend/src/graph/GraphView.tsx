@@ -6,7 +6,7 @@ import { stateStore } from "../state";
 import { getActiveTheme } from "../theme";
 
 import { graphElements } from "./elements";
-import { graphStyles } from "./styles";
+import { edgeShape, graphStyles } from "./styles";
 import { updateGraph } from "./updateGraph";
 
 cytoscape.use(fcose);
@@ -21,7 +21,14 @@ export function GraphView() {
     let dispose: (() => void) | undefined;
     const create = () => {
       const cy = cytoscape({ container: host, layout: { name: "preset" } });
-      cy.style(graphStyles(theme));
+      cy.style(
+        graphStyles(
+          theme,
+          edgeShape(
+            import.meta.env.DEV ? (typeof location === "undefined" ? "" : location.search) : "",
+          ),
+        ),
+      );
       const sync = () => {
         updateGraph(cy, graphElements(stateStore.getState().state));
       };
