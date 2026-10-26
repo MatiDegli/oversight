@@ -6,6 +6,9 @@ import { createInitialState, stateStore } from "../state";
 import type { EventStream } from "../transport";
 import { App, startAppSession } from "./index";
 
+// The app mounts the live diff, and Monaco needs a browser (pnpm test:browser).
+vi.mock("../editor/monaco", () => ({ monaco: { editor: {} } }));
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
