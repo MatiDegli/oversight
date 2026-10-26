@@ -660,14 +660,38 @@ class ChangeManager:
         for name, payload in events:
             if name in rec.sent or payload is None:
                 continue
-            try:
-                await self._publish(payload)
-            except Exception as error:
-                return f"{name}: {error}"
-            rec.sent.add(name)
-            if name == "delta" and rec.next_snapshot is not None:
-                self.snapshot = rec.next_snapshot
+            # The publish runs in its own task, so a cancel cannot cut off the store's answer: the
+            # store may have committed the event, and the next close-out would send it again.
+            sending = self._spawn(self._deliver(payload))
+            cancelled = await self._settled(sending)
+            if sending.cancelled():
+                raise asyncio.CancelledError  # the publish itself was cancelled: nothing is known
+            failure = sending.exception()
+            if failure is None:
+                rec.sent.add(name)
+                if name == "delta" and rec.next_snapshot is not None:
+                    self.snapshot = rec.next_snapshot
+            if cancelled:
+                raise asyncio.CancelledError
+            if failure is not None:
+                return f"{name}: {failure}"
         return ""
+
+    async def _deliver(self, payload: EventPayload) -> None:
+        """`_publish` as a tracked task's coroutine."""
+        await self._publish(payload)
+
+    @staticmethod
+    async def _settled(task: asyncio.Task[None]) -> bool:
+        """Wait for `task` through one cancel of the caller: True if one came, for the caller to
+        re-raise once it has recorded the outcome. A second cancel ends the wait; `task` runs on,
+        tracked, and `aclose` waits for it."""
+        try:
+            await asyncio.wait([task])
+        except asyncio.CancelledError:
+            await asyncio.wait([task])
+            return True
+        return False
 
     # --- Cleanup ------------------------------------------------------------------------------
 

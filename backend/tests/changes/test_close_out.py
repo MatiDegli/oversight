@@ -30,6 +30,29 @@ async def test_publish_cut_short_sends_the_rest_once(h: Harness) -> None:
 
 
 @bounded
+async def test_cancel_during_a_publish_records_what_went_out(h: Harness) -> None:
+    """Cancelled while the store's receipt for the delta is on its way: the delta counts as sent
+    and the snapshot moves, so the next close-out sends only `done` and the chain holds."""
+    await h.run_agent(1, ADD_THRICE)
+    h.hold = GraphDelta
+    approval = h.manager.approve("change-1", None)
+    await h.held.wait()  # committed, its receipt not yet back
+    approval.cancel()
+    h.release.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await approval
+
+    assert h.types()[-2:] == ["change.resolved", "graph.delta"]
+    await h.open(2)
+    # `types` checks each delta's `from_version`: a resent delta would start from v0 at v1.
+    assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
+    [delta] = h.payloads(GraphDelta)
+    assert h.manager.snapshot.version == delta.to_version
+    assert not await h.has_branch("agent-1")
+
+
+@bounded
 async def test_rescan_failure_keeps_the_snapshot(
     h: Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
