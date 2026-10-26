@@ -58,6 +58,26 @@ def test_the_layout_setting_defaults_to_the_demo_repo_preset(
     assert Settings.load(env).layout == default
 
 
+def test_a_relative_layout_starts_at_the_repo_root_and_an_absolute_one_is_taken_as_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.setenv("OVERSIGHT_LAYOUT", "my/layout.json")
+    assert Settings.load(tmp_path / "no-env-file").layout == REPO_ROOT / "my" / "layout.json"
+    # The same from the .env file, which the process environment would override.
+    monkeypatch.delenv("OVERSIGHT_LAYOUT")
+    env = tmp_path / ".env"
+    env.write_text("OVERSIGHT_LAYOUT=my/layout.json\n")
+    assert Settings.load(env).layout == REPO_ROOT / "my" / "layout.json"
+    # A default that is already absolute stays as it is, whatever the working directory.
+    assert Settings.load(tmp_path / "no-env-file").layout == Settings().layout
+    outside = tmp_path / "outside" / "layout.json"
+    monkeypatch.setenv("OVERSIGHT_LAYOUT", str(outside))
+    assert Settings.load(env).layout == outside
+
+
 def test_the_live_app_reads_the_layout_at_start(tmp_path: Path) -> None:
     layout = tmp_path / "layout.json"
     layout.write_text('{"a": {"x": 1, "y": 2}}')
