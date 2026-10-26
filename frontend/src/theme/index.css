@@ -1,9 +1,55 @@
 @import "tailwindcss";
+@import "@fontsource/atkinson-hyperlegible-next/latin-400.css";
+@import "@fontsource/atkinson-hyperlegible-mono/latin-400.css";
+
+:root {
+  color-scheme: dark;
+  --background: #000000;
+  --panel: #161616;
+  --text: #eeeeee;
+  --muted: #a3a3a3;
+  --border: #404040;
+  --agent-a: #ff5c1f;
+  --agent-b: #4f7dff;
+  --passed: #66bb88;
+  --added: #66bb88;
+  --failed: #ee7777;
+  --removed: #ee7777;
+  --destructive: #ee7777;
+  --text-font: "Atkinson Hyperlegible Next", sans-serif;
+  --code-font: "Atkinson Hyperlegible Mono", monospace;
+}
+
+/* Remove Tailwind's default palette: color always identifies an agent or a state. */
+@theme inline {
+  --color-*: initial;
+  --font-*: initial;
+  --color-background: var(--background);
+  --color-panel: var(--panel);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-agent-a: var(--agent-a);
+  --color-agent-b: var(--agent-b);
+  --color-passed: var(--passed);
+  --color-added: var(--added);
+  --color-failed: var(--failed);
+  --color-removed: var(--removed);
+  --color-destructive: var(--destructive);
+  --font-sans: var(--text-font);
+  --font-mono: var(--code-font);
+}
 
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
-  background: #000;
+  background: var(--background);
+}
+
+body {
+  color: var(--text);
+  font-family: var(--text-font);
+  font-weight: 400;
 }
