@@ -465,15 +465,18 @@ class _Facts:
                 if isinstance(head, ast.ExceptHandler):
                     self._visit_all([head.type] if head.type else [])
                 elif isinstance(head, ast.match_case):
-                    self._visit_all([head.pattern, *([head.guard] if head.guard else [])])
+                    self._visit(head.pattern)
                 else:
                     self._visit(head)
             for head in heads:
                 if isinstance(head, ast.ExceptHandler):
                     if head.name:
                         self._store(scope, head.name, OtherBinding())
-                elif isinstance(head, ast.match_case):
-                    self._collect(scope, [head.pattern, *([head.guard] if head.guard else [])])
+                elif isinstance(head, ast.match_case):  # the guard runs once the pattern binds
+                    self._bind(scope, head.pattern)
+                    if head.guard:
+                        self._visit(head.guard)
+                        self._bind(scope, head.guard)
                 else:
                     self._bind(scope, head)
             for nested_body in bodies:

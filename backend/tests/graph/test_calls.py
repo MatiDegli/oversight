@@ -654,3 +654,136 @@ def test_a_walrus_in_a_keyword_only_default_binds_in_the_enclosing_scope(tmp_pat
         },
     )
     assert summary(snap, "m:outer") == {}
+
+
+def test_a_self_call_takes_the_lookup_from_every_subclass(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "m.py": """
+                class A:
+                    def f(self): ...
+
+                class B(A):
+                    def go(self):
+                        return self.f()
+
+                    @classmethod
+                    def make(cls):
+                        return cls.f()
+
+                class C(A):
+                    def f(self): ...
+
+                class D(B, C): ...
+            """
+        },
+    )
+    # The receiver may be a D, whose order (D, B, C, A) finds C.f before A.f.
+    both = {"m:A.f": "several_candidates", "m:C.f": "several_candidates"}
+    assert summary(snap, "m:B.go") == both
+    assert summary(snap, "m:B.make") == both
+
+
+def test_alternative_bases_drop_no_definition(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "m.py": """
+                class A:
+                    def f(self): ...
+
+                if flag:
+                    class Base(A): ...
+                else:
+                    class Base(A):
+                        def f(self): ...
+
+                class D(Base):
+                    def run(self):
+                        return self.f()
+
+                    def again(self):
+                        return super().f()
+            """
+        },
+    )
+    # The first Base reaches A.f, so the second Base's override cannot drop it.
+    both = {"m:A.f": "several_candidates", "m:Base.f": "several_candidates"}
+    assert summary(snap, "m:D.run") == both
+    assert summary(snap, "m:D.again") == both
+
+
+def test_a_receiver_with_several_values_is_followed_on_each(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "a.py": "def load(): ...\n",
+            "b.py": "def load(): ...\n",
+            "c.py": "def save(): ...\n",
+            "d.py": "class Box:\n    def load(self): ...\n",
+            "app.py": """
+                if fast:
+                    import a as engine
+                    import a as tool
+                else:
+                    import c as engine
+                    from b import load as tool
+
+                def run(flag):
+                    if flag:
+                        import a as lib
+                    else:
+                        import b as lib
+                    return lib.load()
+
+                def store():
+                    return engine.save()
+
+                def pick():
+                    return tool.load()
+
+                class Holder:
+                    if fast:
+                        import a as lib
+                    else:
+                        import b as lib
+
+                    def go(self):
+                        return self.lib.load()
+            """,
+        },
+    )
+    both = {"a:load": "several_candidates", "b:load": "several_candidates"}
+    assert summary(snap, "app:run") == both
+    assert summary(snap, "app:Holder.go") == both
+    # Only one of the two modules defines save, but the receiver may be the other one.
+    assert summary(snap, "app:store") == {"c:save": "several_candidates"}
+    # One value is a function: an attribute on it has a receiver of unknown type.
+    assert summary(snap, "app:pick") == {
+        "a:load": "several_candidates",
+        "d:Box.load": "unknown_receiver",
+    }
+
+
+def test_a_match_guard_sees_the_names_its_pattern_binds(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "m.py": """
+                def f(): ...
+
+                class A:
+                    match value:
+                        case f if f():
+                            pass
+
+                def use(value):
+                    match value:
+                        case f if f():
+                            pass
+            """
+        },
+    )
+    assert summary(snap, "m:A") == {}
+    assert summary(snap, "m:use") == {}

@@ -7,10 +7,14 @@ re-exports, so `from shop import Cart` reaches `shop.cart:Cart` through `shop/__
 Attribute lookup on a class does not emulate the C3 order. It takes every class among the bases
 that defines the name and drops those a subclass among them overrides, which holds in any valid
 order since a class always precedes its bases. One definition left is exact; several are all
-candidates. A base name with several definitions, or one rebound, makes the lookup possible.
-Calls through `self` or `cls` also take every subclass's lookup, and become "rebound_name" when a
-method assigns that attribute on `self`. `super()` looks the name up after the class; a subclass
+candidates. A base name with several definitions, or one rebound, makes the lookup possible, and
+then no definition is dropped: the overrider may be on a branch the class does not take.
+Calls through `self` or `cls` take the union of the lookups from the class and from every
+subclass, since the receiver may be any of them, and become "rebound_name" when a method assigns
+that attribute on `self`. `super()` looks the name up after the class; a subclass
 that adds other bases can put more classes after it, so their definitions are candidates too.
+An attribute of a receiver with several values, such as a module imported under one name in two
+branches, is looked up on each value; the results are all candidates.
 """
 
 from collections.abc import Iterable, Mapping
@@ -63,14 +67,25 @@ class _Res:
     values: frozenset[_Value] = field(default_factory=frozenset[_Value])
     rebound: bool = False
     star: bool = False
+    unknown: bool = False
+    """One of the values had an attribute looked up on it whose type is unknown."""
 
     def __or__(self, other: "_Res") -> "_Res":
         return _Res(
-            self.values | other.values, self.rebound or other.rebound, self.star or other.star
+            self.values | other.values,
+            self.rebound or other.rebound,
+            self.star or other.star,
+            self.unknown or other.unknown,
         )
 
-    def flagged(self, rebound: bool = False, star: bool = False) -> "_Res":
-        return _Res(self.values, self.rebound or rebound, self.star or star)
+    def flagged(self, rebound: bool = False, star: bool = False, unknown: bool = False) -> "_Res":
+        return _Res(
+            self.values, self.rebound or rebound, self.star or star, self.unknown or unknown
+        )
+
+    @property
+    def doubtful(self) -> bool:
+        return bool(self.values) or self.rebound or self.star or self.unknown
 
 
 def link(files: Iterable[FileParse]) -> tuple[list[GraphNode], list[GraphEdge]]:
@@ -250,20 +265,23 @@ class _Linker:
         facts = self.classes.get(class_id)
         return facts is not None and bool(facts.bindings.get(name))
 
-    def _pick(self, classes: Iterable[str], name: str) -> _Res:
+    def _pick(self, classes: Iterable[str], name: str, doubt: _Res) -> _Res:
         """What `name` may hold when looked up along `classes`, all the bases of one class: each
-        definition no subclass among them overrides."""
+        definition no subclass among them overrides, or every definition when the bases are in
+        doubt, since the overrider may be an alternative the class does not inherit from."""
         definers = [c for c in sorted(classes) if self._defines(c, name)]
         res = _Res()
         for cid in definers:
-            if not any(other != cid and cid in self._ancestors(other)[0] for other in definers):
+            overridden = not doubt.doubtful and any(
+                other != cid and cid in self._ancestors(other)[0] for other in definers
+            )
+            if not overridden:
                 res = res | self._bindings(self.classes[cid].bindings[name], frozenset())
-        return res
+        return res | doubt if res.values else res
 
     def _class_attr(self, class_id: str, name: str) -> _Res:
         classes, doubt = self._ancestors(class_id)
-        res = self._pick(classes, name)
-        return res | doubt if res.values else res
+        return self._pick(classes, name, doubt)
 
     # Calls ---------------------------------------------------------------------------------
 
@@ -274,10 +292,13 @@ class _Linker:
             fixture = self._fixture(file, ref.name)
             return [(fixture, "possible", "dynamic_dispatch")] if fixture else []
         res = self._navigate(file, ref)
+        name = ref.attrs[-1] if ref.attrs else ""
+        unknown: list[_Target] = [
+            (m, "possible", "unknown_receiver") for m in self.methods_by_name.get(name, ())
+        ]
         if res is None:
-            name = ref.attrs[-1] if ref.attrs else ""
-            return [(m, "possible", "unknown_receiver") for m in self.methods_by_name.get(name, ())]
-        return _classify(res, self.nodes)
+            return unknown
+        return _classify(res, self.nodes) + (unknown if res.unknown else [])
 
     def _navigate(self, file: FileParse, ref: CallRef) -> _Res | None:
         """What the reference holds; None when an attribute's receiver is of unknown type."""
@@ -301,20 +322,28 @@ class _Linker:
             assert isinstance(base, UnknownBase)
             res = None
         for attr in attrs:
-            if res is None or len(res.values) != 1:
+            if res is None or not res.values:
                 return None
-            (value,) = res.values
-            if value.kind == "external":
-                return _Res()
-            if value.kind == "module":
-                res = self._name_in_module(value.ref, attr, frozenset()).flagged(
-                    res.rebound, res.star
-                )
-            elif self.nodes[value.ref].kind == "class":
-                res = self._class_attr(value.ref, attr).flagged(res.rebound, res.star)
-            else:
+            # A receiver with several values may be any of them: a marker keeps the call possible.
+            several = frozenset({_EXTERNAL}) if len(res.values) > 1 else frozenset[_Value]()
+            found = _Res(several, res.rebound, res.star, res.unknown)
+            steps = [self._attr_of(v, attr) for v in sorted(res.values, key=lambda v: v.ref)]
+            if all(step is None for step in steps):
                 return None
+            for step in steps:
+                found = found.flagged(unknown=True) if step is None else found | step
+            res = found
         return res
+
+    def _attr_of(self, value: _Value, attr: str) -> _Res | None:
+        """What `attr` holds on one value; None when that value is of a type we do not follow."""
+        if value.kind == "external":
+            return _Res(frozenset({_EXTERNAL}))
+        if value.kind == "module":
+            return self._name_in_module(value.ref, attr, frozenset())
+        if self.nodes[value.ref].kind == "class":
+            return self._class_attr(value.ref, attr)
+        return None
 
     def _self_attr(self, base: SelfBase, name: str) -> _Res:
         if base.via_super:
@@ -329,9 +358,7 @@ class _Linker:
 
     def _super_attr(self, class_id: str, name: str) -> _Res:
         classes, doubt = self._ancestors(class_id)
-        res = self._pick(classes - {class_id}, name)
-        if res.values:
-            res = res | doubt
+        res = self._pick(classes - {class_id}, name, doubt)
         subclasses = self._subclasses_of(class_id)
         others: set[str] = set()
         for sub in subclasses:  # `class D(B, C)` may put C between B and B's own bases
