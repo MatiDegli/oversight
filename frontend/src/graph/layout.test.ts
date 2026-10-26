@@ -37,7 +37,7 @@ describe("demo preset", () => {
       expect(Number.isFinite(point.y)).toBe(true);
     }
     expect(
-      JSON.parse(readFileSync(new URL("fixtures/layout/demo-repo.json", root), "utf8")),
+      JSON.parse(readFileSync(new URL("fixtures/layouts/demo-repo.json", root), "utf8")),
     ).toEqual(generated.positions);
   });
 

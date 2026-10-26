@@ -204,7 +204,7 @@ if (import.meta.main) {
   const { values } = parseArgs({
     options: {
       input: { type: "string", default: resolve(root, "fixtures/graph/demo-repo.json") },
-      output: { type: "string", default: resolve(root, "fixtures/layout/demo-repo.json") },
+      output: { type: "string", default: resolve(root, "fixtures/layouts/demo-repo.json") },
       events: { type: "string" },
     },
   });
