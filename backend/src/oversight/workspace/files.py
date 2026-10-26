@@ -177,7 +177,11 @@ def list_files(root: Path) -> list[str]:
                 if entry.is_dir(follow_symlinks=False):
                     if entry.name not in CACHE_DIRS:
                         pending.append(Path(entry.path))
-                elif entry.is_file(follow_symlinks=False) and not entry.name.endswith(".pyc"):
+                elif (
+                    entry.is_file(follow_symlinks=False)
+                    and entry.name != ".git"  # a worktree's .git is a file
+                    and not entry.name.endswith(".pyc")
+                ):
                     found.append(Path(entry.path).relative_to(root).as_posix())
     return sorted(found)
 

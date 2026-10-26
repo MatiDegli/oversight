@@ -13,6 +13,7 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 TERM_GRACE_S = 2.0
 """How long a group gets after SIGTERM before SIGKILL."""
@@ -33,6 +34,20 @@ class ProcessResult:
     truncated: bool
     """True when a stream passed the cap and the rest was dropped."""
     duration_ms: int
+
+
+class Spawn(Protocol):
+    """The shape of `run_process`, so a caller can be handed a stand-in in tests."""
+
+    async def __call__(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: Mapping[str, str] | None = None,
+        output_cap: int = ...,
+    ) -> ProcessResult: ...
 
 
 def _resolve(future: "asyncio.Future[None]") -> None:

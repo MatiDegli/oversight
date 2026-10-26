@@ -140,6 +140,12 @@ def test_list_files_is_sorted_and_skips_git_caches_and_symlinks(tree: Path, tmp_
     assert list_files(tree) == ["a.py", "b.py", "pkg/z.py"]
 
 
+def test_list_files_skips_the_git_file_of_a_worktree(tree: Path) -> None:
+    (tree / ".git").write_text("gitdir: /elsewhere/.git/worktrees/agent-1\n")
+    (tree / "a.py").write_text("x")
+    assert list_files(tree) == ["a.py"]
+
+
 def test_copy_template_skips_caches_and_writes_plain_modes(tmp_path: Path) -> None:
     template = tmp_path / "template"
     for name in ["m.py", "pkg/n.py", "pkg/__pycache__/n.pyc", ".venv/bin/x", ".git/HEAD", "k.pyc"]:
