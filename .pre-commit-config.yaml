@@ -1,7 +1,44 @@
-# Install pre-commit once per machine (uv tool install pre-commit), then the hooks once per clone:
-# pre-commit install
+# Install pre-commit once per machine (uv tool install pre-commit), then the hooks once per clone
+# with `make setup`. A hook can be skipped, so the coordinator reruns `make check` before each merge.
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
     hooks:
       - id: gitleaks
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --frozen ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --frozen ruff format --check --force-exclude
+        language: system
+        types_or: [python, pyi]
+      - id: commit-message
+        name: commit message and size
+        entry: uv run --frozen python tools/check_commits.py message
+        language: system
+        stages: [commit-msg]
+      # pre-commit runs a pre-push hook once per push, with one range: the first pushed ref that
+      # has new commits. The script checks exactly that range. The project pushes one branch per
+      # command and never pushes tags without the maintainer, so a second ref in one push goes
+      # unchecked here; the `Checked:` rerun of each merge is the real record.
+      - id: commits-pushed
+        name: commits being pushed
+        entry: uv run --frozen python tools/check_commits.py pushed
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+      - id: make-check
+        name: make check
+        entry: make check
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
