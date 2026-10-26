@@ -57,7 +57,8 @@ SAME_RESULT_LIMIT = 4
 FAILURE_LIMIT = 6
 ERROR_CHARS = 200
 PROPOSAL_FAILED = "Its change could not be proposed."
-EDIT_NOT_RECORDED = "The edit was saved but could not be recorded for review."
+EDIT_NOT_RECORDED = " (saved, but not recorded for review)"
+"""Added to the summary of an edit step whose record the sink did not take."""
 
 type Publish = Callable[[EventPayload], Awaitable[object]]
 
@@ -316,7 +317,15 @@ class AgentRun:
         agent_id = self._task.agent_id
         # The edit is on disk either way. A lost record only changes what the UI is told: the
         # model's result, the failure count and the stop rules still follow `outcome`.
-        recorded = outcome.edited_path is None or await self._record(outcome.edited_path)
+        recorded = outcome.edited_path is None
+        cut_short: asyncio.CancelledError | None = None
+        if outcome.edited_path is not None:
+            try:
+                recorded = await self._record(outcome.edited_path)
+            except asyncio.CancelledError as cancelled:
+                # Stop or the time limit hit while the sink worked: it is unknown whether it
+                # recorded. The edit is on disk, so the UI still gets its focus and its step.
+                cut_short = cancelled
         if outcome.focus is not None:
             await self._publish(
                 AgentFocus(
@@ -329,20 +338,23 @@ class AgentRun:
         error = None
         if not outcome.ok:
             error = outcome.content.removeprefix("Error: ")[:ERROR_CHARS]
-        elif not recorded:
-            error = EDIT_NOT_RECORDED
+        # The step's `error` is what the model was told, and the model is told nothing of a lost
+        # record: the step stays "ok" and its summary says so.
+        note = "" if recorded else EDIT_NOT_RECORDED
         await self._publish(
             AgentStep(
                 agent_id=agent_id,
                 step=self._step,
                 tool=tool[:80],
-                summary=outcome.summary,
-                result="ok" if outcome.ok and recorded else "error",
+                summary=outcome.summary + note,
+                result="ok" if outcome.ok else "error",
                 error=error,
                 duration_ms=duration_ms,
                 tests=outcome.tests,
             )
         )
+        if cut_short is not None:
+            raise cut_short
 
     async def _usage(self, reply: ModelReply) -> None:
         cost = self._pricing.cost(reply.usage) if self._pricing is not None else None

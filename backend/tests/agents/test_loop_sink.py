@@ -110,10 +110,11 @@ async def test_an_edit_the_sink_failed_to_record_still_emits_focus_without_nodes
         "AgentStep",
     ]
 
+    # The step's error is what the model was told, and it was told nothing: ok, with a note.
     edit_step = steps(recorder)[1]
-    assert (edit_step.tool, edit_step.result) == ("edit_file", "error")
-    assert edit_step.error == "The edit was saved but could not be recorded for review."
-    assert edit_step.summary.startswith("Edited value in mod.py")  # the summary is unchanged
+    assert (edit_step.tool, edit_step.result, edit_step.error) == ("edit_file", "ok", None)
+    assert edit_step.summary.startswith("Edited value in mod.py")
+    assert edit_step.summary.endswith(" (saved, but not recorded for review)")
     # The model is told nothing of it: the edit worked, and the file shows it.
     tool_results = [m["content"] for m in model.requests[-1] if m["role"] == "tool"]
     assert tool_results[1] == "Edited shop/mod.py."
@@ -127,7 +128,7 @@ async def test_edits_the_sink_failed_to_record_do_not_count_as_failures(small_tr
     model = script([READ], *([edit(n, n + 1)] for n in range(1, 8)), FINISH)
     end = await make_run(small_tree, model, recorder).run()
     assert end.state == "ready_for_review" and end.steps == 9
-    assert [s.result for s in steps(recorder)[1:8]] == ["error"] * 7
+    assert [s.result for s in steps(recorder)[1:8]] == ["ok"] * 7
 
 
 async def test_a_sink_that_raises_on_file_edited_loses_the_record_and_the_error_is_sent(
@@ -139,7 +140,8 @@ async def test_a_sink_that_raises_on_file_edited_loses_the_record_and_the_error_
     end = await make_run(small_tree, script([READ], [edit(1, 2)], FINISH), recorder).run()
     assert end.state == "ready_for_review"
     assert focuses(recorder)[-1].node_ids == []
-    assert steps(recorder)[1].result == "error"
+    lost = steps(recorder)[1]
+    assert (lost.result, lost.error) == ("ok", None) and "not recorded" in lost.summary
     (error,) = errors(recorder)
     assert error.source == "server" and not error.fatal and error.agent_id == "agent-1"
     assert error.message == (
@@ -238,3 +240,26 @@ async def test_stop_during_a_sink_call_still_propagates(
         await run
     assert errors(recorder) == []  # a cancellation is not an error
     assert "halted" not in [s.state for s in statuses(recorder)]
+
+
+async def test_stop_during_file_edited_still_reports_the_edit(small_tree: Opened) -> None:
+    recorder = Held("file_edited")
+    model = script([READ], [edit(1, 2)], FINISH)
+    run = asyncio.create_task(make_run(small_tree, model, recorder).run())
+    async with asyncio.timeout(60):
+        await recorder.entered.wait()
+    run.cancel()  # Stop, while the sink is still recording the edit
+    with pytest.raises(asyncio.CancelledError):
+        await run
+    # The edit is on disk: the UI gets its focus, with no nodes since the record is unknown, and
+    # its step, before the cancellation goes on.
+    assert [f.mode for f in focuses(recorder)] == ["read", "edit"]
+    assert focuses(recorder)[-1].node_ids == []
+    assert [(s.step, s.tool, s.result, s.error) for s in steps(recorder)] == [
+        (1, "read_file", "ok", None),
+        (2, "edit_file", "ok", None),
+    ]
+    assert steps(recorder)[-1].summary.endswith(" (saved, but not recorded for review)")
+    assert recorder.kinds()[-2:] == ["AgentFocus", "AgentStep"]
+    assert errors(recorder) == [] and "halted" not in [s.state for s in statuses(recorder)]
+    assert "return 2" in (small_tree[1].root / "shop" / "mod.py").read_text()
