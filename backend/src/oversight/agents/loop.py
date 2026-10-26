@@ -192,6 +192,17 @@ class AgentRun:
                     fatal=True,
                 )
             )
+        except Exception as error:  # not BaseException: cancellation (Stop) must propagate
+            detail = f"Stopped by an unexpected error: {self._describe(error)}"
+            await self._publish(
+                ErrorReport(
+                    source="agent",
+                    message=detail,
+                    agent_id=self._task.agent_id,
+                    change_id=self._task.change_id,
+                    fatal=True,
+                )
+            )
         # The sink reads the worktree, and a lost root is not the agent's any more.
         if not root_lost and not await self._propose(summary):
             detail = detail or PROPOSAL_FAILED  # a halt's own reason is the better one

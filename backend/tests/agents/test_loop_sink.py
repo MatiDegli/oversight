@@ -1,12 +1,14 @@
 """The loop against a change sink that cannot record: a refused proposal, a lost edit, and a
 failure nobody planned for."""
 
-from typing import cast
+import asyncio
+from typing import Literal, cast
 
 import pytest
 from agent_helpers import Recorder, make_run, script
 
-from oversight.agents import RunEnd
+from oversight.agents import ModelReply, RunEnd, ScriptedModel, parse_script
+from oversight.agents.tools import Toolbox, ToolOutcome
 from oversight.workspace import Tree, Workspace
 from oversight_contracts.events import AgentFocus, AgentStatus, AgentStep, ErrorReport
 
@@ -143,3 +145,96 @@ async def test_a_sink_that_raises_on_file_edited_loses_the_record_and_the_error_
     assert error.message == (
         "The edit to shop/mod.py could not be recorded: OSError: disk full at shop/mod.py"
     )
+
+
+async def test_an_unexpected_error_in_the_model_call_halts_the_run(small_tree: Opened) -> None:
+    class Broken(ScriptedModel):
+        async def complete(self, messages: object, tools: object) -> ModelReply:  # type: ignore[override]
+            raise KeyError("secret-slot")
+
+    recorder = Recorder()
+    model = Broken(parse_script('{"task": "t", "turns": []}'))
+    end = await make_run(small_tree, model, recorder).run()
+    detail = "Stopped by an unexpected error: KeyError: 'secret-slot'"
+    assert end == RunEnd("halted", detail, 0, None)
+    assert [s.state for s in statuses(recorder)] == ["starting", "working", "halted"]
+    assert statuses(recorder)[-1].detail == detail
+    (error,) = errors(recorder)
+    assert error.source == "agent" and error.fatal and error.message == detail
+    assert error.agent_id == "agent-1" and error.change_id == "change-1"
+    # The change manager still hears of the end, as for any halt, and proposes what is on disk.
+    assert recorder.of("sink.proposed") == [("agent-1", None)]
+    assert recorder.kinds()[-3:] == ["ErrorReport", "sink.proposed", "AgentStatus"]
+
+
+async def test_an_unexpected_error_in_a_tool_halts_the_run_after_the_steps_it_sent(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, worktree = small_tree
+    real = Toolbox.call
+
+    async def search_breaks(self: Toolbox, name: str, raw_arguments: str) -> ToolOutcome:
+        if name == "search":
+            raise RuntimeError(f"cannot scan {worktree.root}/shop\nat depth 3")
+        return await real(self, name, raw_arguments)
+
+    monkeypatch.setattr(Toolbox, "call", search_breaks)
+    recorder = Recorder()
+    model = script([READ], [("search", {"query": "value"})], FINISH)
+    end = await make_run(small_tree, model, recorder).run()
+    assert end.state == "halted" and end.steps == 1 and end.summary is None
+    assert end.detail == "Stopped by an unexpected error: RuntimeError: cannot scan shop at depth 3"
+    assert [s.tool for s in steps(recorder)] == ["read_file"]
+    assert "ready_for_review" not in [s.state for s in statuses(recorder)]
+    (error,) = errors(recorder)
+    assert error.fatal and str(worktree.root) not in error.message
+    assert recorder.of("sink.proposed") == [("agent-1", None)]
+
+
+async def test_a_long_error_message_is_cut_to_one_short_line(small_tree: Opened) -> None:
+    class Broken(ScriptedModel):
+        async def complete(self, messages: object, tools: object) -> ModelReply:  # type: ignore[override]
+            raise ValueError("line one\n" + "x" * 1000)
+
+    model = Broken(parse_script('{"task": "t", "turns": []}'))
+    end = await make_run(small_tree, model, Recorder()).run()
+    assert end.detail is not None and "\n" not in end.detail
+    assert end.detail.startswith("Stopped by an unexpected error: ValueError: line one xxx")
+    assert len(end.detail) < 260
+
+
+class Held(Recorder):
+    """A sink whose call never returns, so only a cancellation can end the run."""
+
+    def __init__(self, hold: Literal["file_edited", "proposed"]) -> None:
+        super().__init__()
+        self.hold = hold
+        self.entered = asyncio.Event()
+
+    async def file_edited(self, agent_id: str, path: str) -> bool:
+        if self.hold == "file_edited":
+            self.entered.set()
+            await asyncio.Event().wait()
+        return await super().file_edited(agent_id, path)
+
+    async def proposed(self, agent_id: str, summary: str | None) -> bool:
+        if self.hold == "proposed":
+            self.entered.set()
+            await asyncio.Event().wait()
+        return await super().proposed(agent_id, summary)
+
+
+@pytest.mark.parametrize("hold", ["file_edited", "proposed"])
+async def test_stop_during_a_sink_call_still_propagates(
+    small_tree: Opened, hold: Literal["file_edited", "proposed"]
+) -> None:
+    recorder = Held(hold)
+    model = script([READ], [edit(1, 2)], FINISH)
+    run = asyncio.create_task(make_run(small_tree, model, recorder).run())
+    async with asyncio.timeout(60):
+        await recorder.entered.wait()
+    run.cancel()  # Stop
+    with pytest.raises(asyncio.CancelledError):
+        await run
+    assert errors(recorder) == []  # a cancellation is not an error
+    assert "halted" not in [s.state for s in statuses(recorder)]
