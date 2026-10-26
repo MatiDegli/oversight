@@ -23,7 +23,8 @@ class _Entry:
 
 def python_files(root: Path) -> list[str]:
     """Workspace paths of the importable `.py` files, skipping hidden directories, `__pycache__`
-    and symbolic links."""
+    and symbolic links. A `pkg.py` beside `pkg/__init__.py` is skipped too: Python imports the
+    package, so each module has one path."""
     found: list[str] = []
     for directory, dirs, files in os.walk(root):
         dirs[:] = [
@@ -40,7 +41,8 @@ def python_files(root: Path) -> list[str]:
             path = full.relative_to(root).as_posix()
             if module_name(path) is not None:
                 found.append(path)
-    return sorted(found)
+    packages = {p.removesuffix("/__init__.py") for p in found if p.endswith("/__init__.py")}
+    return sorted(p for p in found if p.removesuffix(".py") not in packages)
 
 
 class WorkspaceGraph:
@@ -74,20 +76,10 @@ class WorkspaceGraph:
         self.last_parsed = tuple(parsed)
 
         errors = [e.error for e in entries.values() if e.error is not None]
-        files: dict[str, FileParse] = {}
-        for path, entry in sorted(entries.items()):
-            good = entry.good
-            if good is None:
-                continue
-            taken = files.get(good.module)
-            if taken is not None:  # `pkg.py` beside `pkg/__init__.py`: the first path keeps it
-                message = f"module {good.module} is already defined by {taken.path}"
-                errors.append(ParseError(path=path, line=None, message=message))
-                continue
-            files[good.module] = good
-        nodes, edges = link(files.values())
+        files = [e.good for _, e in sorted(entries.items()) if e.good is not None]
+        nodes, edges = link(files)
         self._spans = SpanIndex(nodes)
-        self._own = {nid: h for f in files.values() for nid, h in f.own_hashes.items()}
+        self._own = {nid: h for f in files for nid, h in f.own_hashes.items()}
         version = hashlib.sha256(
             "".join(f"{path}\0{e.digest}\n" for path, e in sorted(entries.items())).encode()
         ).hexdigest()

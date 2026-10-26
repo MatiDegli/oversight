@@ -58,12 +58,15 @@ def test_a_file_that_never_parsed_is_listed_without_nodes(tmp_path: Path) -> Non
     assert [e.path for e in snap.parse_errors] == ["bad.py"]
 
 
-def test_a_module_defined_twice_keeps_the_first_path(tmp_path: Path) -> None:
-    _, snap = scan(tmp_path, {"pkg/__init__.py": "def a(): ...\n", "pkg.py": "def b(): ...\n"})
-    assert [n.id for n in snap.nodes] == ["pkg", "pkg:b"]
-    assert [(e.path, e.message) for e in snap.parse_errors] == [
-        ("pkg/__init__.py", "module pkg is already defined by pkg.py")
-    ]
+def test_a_package_wins_over_a_module_of_the_same_name_beside_it(tmp_path: Path) -> None:
+    graph, snap = scan(
+        tmp_path,
+        {"pkg/__init__.py": "def a(): ...\n", "pkg.py": "def b(:\n", "app.py": "import pkg\n"},
+    )
+    assert [n.id for n in snap.nodes] == ["app", "pkg", "pkg:a"]
+    assert {n.path for n in snap.nodes if n.id.startswith("pkg")} == {"pkg/__init__.py"}
+    assert snap.parse_errors == []
+    assert graph.last_parsed == ("app.py", "pkg/__init__.py")
 
 
 def test_output_is_sorted_by_id_and_independent_of_scan_history(tmp_path: Path) -> None:

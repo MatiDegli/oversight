@@ -9,6 +9,8 @@ assignment hides a module-level function of the same name.
 
 import ast
 import hashlib
+import io
+import tokenize
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Literal
@@ -90,7 +92,7 @@ def parse_file(path: str, data: bytes) -> FileParse | ParseError:
     except ValueError as error:
         return ParseError(path=path, line=None, message=str(error))
     module, is_package = named
-    nodes = _Nodes(module, path, is_test_path(path), data)
+    nodes = _Nodes(module, path, is_test_path(path), _utf8_source(data))
     nodes.visit_body(tree.body, module, "module", "")
     facts = _Facts(module, is_package, nodes)
     facts.visit_module(tree)
@@ -110,8 +112,16 @@ def parse_file(path: str, data: bytes) -> FileParse | ParseError:
     )
 
 
+def _utf8_source(data: bytes) -> bytes:
+    """The source as UTF-8, which is what the AST's column offsets count, whatever the file's
+    declared encoding. A byte-order mark is dropped, as the parser drops it."""
+    encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
+    return data.decode(encoding).encode("utf-8")
+
+
 class _Nodes:
-    """The first pass: nodes, their ids and ranges, and the byte spans for own-source hashes."""
+    """The first pass: nodes, their ids and ranges, and the byte spans for own-source hashes.
+    `data` is the source re-encoded as UTF-8, so the AST's offsets index it."""
 
     def __init__(self, module: str, path: str, is_test: bool, data: bytes) -> None:
         self.module = module
@@ -240,6 +250,8 @@ class _Scope:
     bindings: dict[str, list[Binding]] = field(default_factory=dict[str, list[Binding]])
     globals_: set[str] = field(default_factory=set[str])
     nonlocals: set[str] = field(default_factory=set[str])
+    rebound_inside: set[str] = field(default_factory=set[str])
+    """Names that a function nested in this one declares `nonlocal`, so it may rebind them."""
 
     def bind(self, name: str, binding: Binding) -> None:
         self.bindings.setdefault(name, []).append(binding)
@@ -259,6 +271,8 @@ class _Facts:
         self.star_imports: list[str] = []
         self.classes: dict[str, ClassFacts] = {}
         self.fixtures: dict[str, str] = {}
+        self.assigned: dict[str, set[str]] = {}
+        """Per class: the attributes its methods set or delete on `self` or `cls`."""
 
     def module_bindings(self) -> dict[str, tuple[Binding, ...]]:
         return {name: tuple(b) for name, b in self.stack[0].bindings.items()}
@@ -293,9 +307,13 @@ class _Facts:
             if isinstance(node, ast.ClassDef):
                 self._collect(scope, node.bases)
             else:
-                self._collect(scope, node.args.defaults)
+                self._collect(scope, _defaults(node.args))
+            if scope.kind == "function":
+                for sub in ast.walk(node):
+                    if isinstance(sub, ast.Nonlocal):
+                        scope.rebound_inside.update(sub.names)
         elif isinstance(node, ast.Lambda):
-            self._collect(scope, node.args.defaults)
+            self._collect(scope, _defaults(node.args))
         elif isinstance(node, _COMPS):
             for sub in ast.walk(node):  # a walrus in a comprehension binds in the enclosing scope
                 if isinstance(sub, ast.NamedExpr):
@@ -364,6 +382,13 @@ class _Facts:
         else:
             if isinstance(node, ast.Call):
                 self._record_call(node)
+            elif (
+                isinstance(node, ast.Attribute)
+                and not isinstance(node.ctx, ast.Load)
+                and isinstance(node.value, ast.Name)
+                and isinstance(base := self._lookup(node.value.id), SelfBase)
+            ):
+                self.assigned.setdefault(base.class_id, set()).add(node.attr)
             self._visit_all(ast.iter_child_nodes(node))
 
     def _visit_decorators(self, decorators: list[ast.expr]) -> None:
@@ -402,6 +427,9 @@ class _Facts:
             [func.body] if isinstance(func, ast.Lambda) else func.body
         )
         self._collect(scope, body)
+        for name in scope.rebound_inside:  # a nested function may assign it through `nonlocal`
+            if name in scope.bindings and name not in scope.nonlocals | scope.globals_:
+                scope.bind(name, OtherBinding())
         self.stack.append(scope)
         self.owners.append(node_id or self.owners[-1])
         self._visit_all(body)
@@ -412,15 +440,44 @@ class _Facts:
         node_id = self.nodes.ids.get(id(cls))
         bases = tuple(ref for b in cls.bases if (ref := self._ref(b)) is not None)
         scope = _Scope("class", class_id=node_id)
-        self._collect(scope, cls.body)
         self.stack.append(scope)
         self.owners.append(node_id or self.owners[-1])
-        self._visit_all(cls.body)
+        self._class_body(scope, cls.body)
         self.owners.pop()
         self.stack.pop()
         if node_id is not None:
             bindings = {name: tuple(b) for name, b in scope.bindings.items()}
-            self.classes[node_id] = ClassFacts(bindings=bindings, bases=bases)
+            assigned = frozenset(self.assigned.get(node_id, ()))
+            self.classes[node_id] = ClassFacts(bindings=bindings, bases=bases, assigned=assigned)
+
+    def _class_body(self, scope: _Scope, body: list[ast.stmt]) -> None:
+        """Visit a class body in order, binding each statement's names after it runs: unlike a
+        function's, a class body sees only the names bound so far."""
+        for stmt in body:
+            bodies = list(_nested_bodies(stmt))
+            if not bodies:
+                self._visit(stmt)
+                self._bind(scope, stmt)
+                continue
+            nested = {id(s) for b in bodies for s in b}
+            heads = [c for c in ast.iter_child_nodes(stmt) if id(c) not in nested]
+            for head in heads:
+                if isinstance(head, ast.ExceptHandler):
+                    self._visit_all([head.type] if head.type else [])
+                elif isinstance(head, ast.match_case):
+                    self._visit_all([head.pattern, *([head.guard] if head.guard else [])])
+                else:
+                    self._visit(head)
+            for head in heads:
+                if isinstance(head, ast.ExceptHandler):
+                    if head.name:
+                        self._store(scope, head.name, OtherBinding())
+                elif isinstance(head, ast.match_case):
+                    self._collect(scope, [head.pattern, *([head.guard] if head.guard else [])])
+                else:
+                    self._bind(scope, head)
+            for nested_body in bodies:
+                self._class_body(scope, nested_body)
 
     def _enter_comprehension(self, comp: _Comp) -> None:
         first, *rest = comp.generators
@@ -520,11 +577,17 @@ class _Facts:
                 and all(isinstance(b, ParamBinding) for b in bindings)
             ):
                 return SelfBase(scope.self_class, via_super=False)
-            imports = [b for b in bindings if isinstance(b, ImportBinding)]
+            imports = tuple(b for b in bindings if isinstance(b, ImportBinding))
             if imports:
-                return LocalImport(imports[0], rebound=len(bindings) > 1)
+                return LocalImport(imports, rebound=len(imports) < len(bindings))
             return UnknownBase()
         return GlobalName(name)
+
+
+def _defaults(args: ast.arguments) -> list[ast.expr]:
+    """The default values of a signature, positional and keyword-only: they run in the enclosing
+    scope, so a walrus in one binds there."""
+    return [*args.defaults, *(d for d in args.kw_defaults if d is not None)]
 
 
 def _decorator_name(decorator: ast.expr) -> str | None:

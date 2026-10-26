@@ -455,3 +455,202 @@ def test_edges_are_only_imports_and_calls_and_merge_by_strength(tmp_path: Path) 
     )
     assert {e.kind for e in snap.edges} == {"imports", "calls"}
     assert summary(snap, "b:Child.go") == {"a:Base.run": "exact"}
+
+
+def test_a_diamond_takes_every_definition_no_subclass_overrides(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "m.py": """
+                class A:
+                    def f(self): ...
+
+                class B(A):
+                    def go(self):
+                        return self.f()
+
+                class C(A):
+                    def f(self): ...
+
+                class D(B, C):
+                    def run(self):
+                        return self.f()
+            """
+        },
+    )
+    # For a D, B.go reaches C.f: D's order is D, B, C, A.
+    assert summary(snap, "m:B.go") == {"m:A.f": "several_candidates", "m:C.f": "several_candidates"}
+    assert summary(snap, "m:D.run") == {"m:C.f": "exact"}
+
+
+def test_super_takes_the_classes_a_subclass_puts_after_the_class(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "m.py": """
+                class A:
+                    def f(self): ...
+
+                class B(A):
+                    def go(self):
+                        return super().f()
+
+                class C(A):
+                    def f(self): ...
+
+                class D(B, C): ...
+            """
+        },
+    )
+    assert summary(snap, "m:B.go") == {"m:A.f": "several_candidates", "m:C.f": "several_candidates"}
+
+
+def test_a_base_with_several_definitions_or_rebound_is_possible(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "m.py": """
+                import sys
+
+                if sys.platform == "win32":
+                    class Base:
+                        def f(self): ...
+                else:
+                    class Base:
+                        def g(self): ...
+
+                class Plain:
+                    def f(self): ...
+
+                Plain = sys.intern(Plain)
+
+                class D(Base):
+                    def run(self):
+                        return self.f()
+
+                class E(Plain):
+                    def run(self):
+                        return self.f()
+            """
+        },
+    )
+    assert summary(snap, "m:D.run") == {"m:Base.f": "several_candidates"}
+    assert summary(snap, "m:E.run") == {"m:Plain.f": "rebound_name"}
+
+
+def test_a_local_import_keeps_every_target(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "fast.py": "def load(): ...\n",
+            "slow.py": "def load(): ...\n",
+            "app.py": """
+                def run(quick):
+                    if quick:
+                        from fast import load
+                    else:
+                        from slow import load
+                    return load()
+            """,
+        },
+    )
+    assert summary(snap, "app:run") == {
+        "fast:load": "several_candidates",
+        "slow:load": "several_candidates",
+    }
+
+
+def test_a_star_import_may_replace_an_earlier_definition(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "lib.py": "def f(): ...\n",
+            "app.py": """
+                def f(): ...
+
+                from lib import *
+
+                def use():
+                    return f()
+            """,
+        },
+    )
+    assert summary(snap, "app:use") == {"app:f": "star_import", "lib:f": "star_import"}
+
+
+def test_a_nonlocal_assignment_rebinds_the_outer_name(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "lib.py": "def f(): ...\n",
+            "app.py": """
+                def outer(other):
+                    from lib import f
+
+                    def swap():
+                        nonlocal f
+                        f = other
+
+                    swap()
+                    return f()
+            """,
+        },
+    )
+    assert summary(snap, "app:outer") == {"lib:f": "rebound_name"}
+
+
+def test_a_class_body_sees_only_the_names_bound_before(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "m.py": """
+                def f(): ...
+
+                class A:
+                    early = f()
+
+                    def f(self): ...
+
+                    late = f(None)
+            """
+        },
+    )
+    assert summary(snap, "m:A") == {"m:f": "exact", "m:A.f": "exact"}
+
+
+def test_an_attribute_assigned_on_self_may_replace_the_method(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "m.py": """
+                def replacement(): ...
+
+                class A:
+                    def f(self): ...
+                    def g(self): ...
+
+                    def setup(self):
+                        self.f = replacement
+
+                    def run(self):
+                        return self.f(), self.g()
+            """
+        },
+    )
+    assert summary(snap, "m:A.run") == {"m:A.f": "rebound_name", "m:A.g": "exact"}
+
+
+def test_a_walrus_in_a_keyword_only_default_binds_in_the_enclosing_scope(tmp_path: Path) -> None:
+    _, snap = scan(
+        tmp_path,
+        {
+            "m.py": """
+                def helper(): ...
+
+                def outer():
+                    def inner(*, key=(helper := print)): ...
+                    return helper()
+            """
+        },
+    )
+    assert summary(snap, "m:outer") == {}

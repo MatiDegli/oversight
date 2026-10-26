@@ -1,11 +1,16 @@
 """Resolve every file's call sites and imports against the whole workspace into edges.
 
 A call is "exact" only when its name resolves to a single function or class; otherwise it is
-"possible", with the reason. Calling a class is a call to the class node. Calls through `self` or
-`cls` look the method up along the class's bases: exact when that finds one definition and no
-subclass in the workspace overrides it, possible with "several_candidates" otherwise. `super()`
-looks it up after the class. Imports follow re-exports, so `from shop import Cart` reaches
-`shop.cart:Cart` through `shop/__init__.py`.
+"possible", with the reason. Calling a class is a call to the class node. Imports follow
+re-exports, so `from shop import Cart` reaches `shop.cart:Cart` through `shop/__init__.py`.
+
+Attribute lookup on a class does not emulate the C3 order. It takes every class among the bases
+that defines the name and drops those a subclass among them overrides, which holds in any valid
+order since a class always precedes its bases. One definition left is exact; several are all
+candidates. A base name with several definitions, or one rebound, makes the lookup possible.
+Calls through `self` or `cls` also take every subclass's lookup, and become "rebound_name" when a
+method assigns that attribute on `self`. `super()` looks the name up after the class; a subclass
+that adds other bases can put more classes after it, so their definitions are candidates too.
 """
 
 from collections.abc import Iterable, Mapping
@@ -91,7 +96,7 @@ class _Linker:
                 self.by_name.setdefault(node.name, []).append(node.id)
             if node.kind == "method":
                 self.methods_by_name.setdefault(node.name, []).append(node.id)
-        self._mro: dict[str, list[str]] = {}
+        self._ancestry: dict[str, tuple[frozenset[str], _Res]] = {}
         self._subclasses: dict[str, set[str]] | None = None
 
     def run(self) -> tuple[list[GraphNode], list[GraphEdge]]:
@@ -154,16 +159,17 @@ class _Linker:
             if sub.kind == "module":
                 return _Res(frozenset({sub}))
             return _Res(frozenset({_EXTERNAL})) if module not in self.prefixes else _Res()
-        bindings = file.bindings.get(name)
-        if bindings:
-            return self._bindings(bindings, seen)
-        if sub.kind == "module":
-            return _Res(frozenset({sub}))
-        res = _Res()
+        starred = _Res()
         for source in file.star_imports:
             if self._exports(source, name):
-                res = res | self._name_in_module(source, name, seen).flagged(star=True)
-        return res
+                starred = starred | self._name_in_module(source, name, seen).flagged(star=True)
+        bindings = file.bindings.get(name)
+        if bindings:  # a star import may come later and replace the binding
+            res = self._bindings(bindings, seen)
+            return res | starred if starred.values else res
+        if sub.kind == "module":
+            return _Res(frozenset({sub}))
+        return starred
 
     def _exports(self, module: str, name: str) -> bool:
         file = self.by_module.get(module)
@@ -190,34 +196,45 @@ class _Linker:
 
     # Classes -------------------------------------------------------------------------------
 
-    def _bases(self, class_id: str) -> list[str]:
+    def _bases(self, class_id: str) -> tuple[list[str], _Res]:
+        """The classes a class's bases may name, and the doubt about them: a marker value when a
+        base may hold more than one thing, and the flags of a rebound or star-imported base."""
         facts = self.classes.get(class_id)
         if facts is None:
-            return []
+            return [], _Res()
         file = self.class_file[class_id]
         found: list[str] = []
+        doubt = _Res()
         for ref in facts.bases:
             res = self._navigate(file, ref)
-            for value in sorted(res.values, key=lambda v: v.ref) if res is not None else ():
+            if res is None:
+                continue
+            for value in sorted(res.values, key=lambda v: v.ref):
                 if value.kind == "node" and self.nodes[value.ref].kind == "class":
                     found.append(value.ref)
-        return found
+            marker = frozenset({_EXTERNAL}) if len(res.values) > 1 else frozenset[_Value]()
+            doubt = doubt | _Res(marker, res.rebound, res.star)
+        return found, doubt
 
-    def _mro_of(self, class_id: str) -> list[str]:
-        if class_id in self._mro:
-            return self._mro[class_id]
-        self._mro[class_id] = [class_id]  # guards against cycles while it is computed
-        order = [class_id]
-        for base in self._bases(class_id):
-            order.extend(c for c in self._mro_of(base) if c not in order)
-        self._mro[class_id] = order
-        return order
+    def _ancestors(self, class_id: str) -> tuple[frozenset[str], _Res]:
+        """The class and every class among its bases, with the doubt gathered on the way."""
+        if class_id in self._ancestry:
+            return self._ancestry[class_id]
+        self._ancestry[class_id] = (frozenset({class_id}), _Res())  # guards against cycles
+        bases, doubt = self._bases(class_id)
+        found = {class_id}
+        for base in bases:
+            classes, base_doubt = self._ancestors(base)
+            found |= classes
+            doubt = doubt | base_doubt
+        self._ancestry[class_id] = (frozenset(found), doubt)
+        return self._ancestry[class_id]
 
     def _subclasses_of(self, class_id: str) -> set[str]:
         if self._subclasses is None:
             direct: dict[str, set[str]] = {}
             for cid in self.classes:
-                for base in self._bases(cid):
+                for base in self._bases(cid)[0]:
                     direct.setdefault(base, set()).add(cid)
             self._subclasses = direct
         found: set[str] = set()
@@ -229,13 +246,24 @@ class _Linker:
                     pending.append(sub)
         return found
 
-    def _class_attr(self, mro: list[str], name: str) -> _Res:
-        for cid in mro:
-            facts = self.classes.get(cid)
-            bindings = facts.bindings.get(name) if facts else None
-            if bindings:
-                return self._bindings(bindings, frozenset())
-        return _Res()
+    def _defines(self, class_id: str, name: str) -> bool:
+        facts = self.classes.get(class_id)
+        return facts is not None and bool(facts.bindings.get(name))
+
+    def _pick(self, classes: Iterable[str], name: str) -> _Res:
+        """What `name` may hold when looked up along `classes`, all the bases of one class: each
+        definition no subclass among them overrides."""
+        definers = [c for c in sorted(classes) if self._defines(c, name)]
+        res = _Res()
+        for cid in definers:
+            if not any(other != cid and cid in self._ancestors(other)[0] for other in definers):
+                res = res | self._bindings(self.classes[cid].bindings[name], frozenset())
+        return res
+
+    def _class_attr(self, class_id: str, name: str) -> _Res:
+        classes, doubt = self._ancestors(class_id)
+        res = self._pick(classes, name)
+        return res | doubt if res.values else res
 
     # Calls ---------------------------------------------------------------------------------
 
@@ -264,7 +292,7 @@ class _Linker:
         elif isinstance(base, GlobalName):
             res = self._name_in_module(file.module, base.name, frozenset())
         elif isinstance(base, LocalImport):
-            res = self._binding(base.binding, frozenset()).flagged(rebound=base.rebound)
+            res = self._bindings(base.bindings, frozenset()).flagged(rebound=base.rebound)
         elif isinstance(base, ClassName):
             facts = self.classes.get(base.class_id)
             bindings = facts.bindings.get(base.name, ()) if facts else ()
@@ -283,20 +311,35 @@ class _Linker:
                     res.rebound, res.star
                 )
             elif self.nodes[value.ref].kind == "class":
-                res = self._class_attr(self._mro_of(value.ref), attr).flagged(res.rebound, res.star)
+                res = self._class_attr(value.ref, attr).flagged(res.rebound, res.star)
             else:
                 return None
         return res
 
     def _self_attr(self, base: SelfBase, name: str) -> _Res:
-        mro = self._mro_of(base.class_id)
         if base.via_super:
-            return self._class_attr(mro[1:], name)
-        res = self._class_attr(mro, name)
-        for sub in sorted(self._subclasses_of(base.class_id)):
-            facts = self.classes[sub]
-            res = res | self._bindings(facts.bindings.get(name, ()), frozenset())
-        return res
+            return self._super_attr(base.class_id, name)
+        res = _Res()
+        seen: set[str] = set()
+        for cid in [base.class_id, *sorted(self._subclasses_of(base.class_id))]:
+            res = res | self._class_attr(cid, name)
+            seen |= self._ancestors(cid)[0]
+        assigned = any(name in self.classes[c].assigned for c in seen if c in self.classes)
+        return res.flagged(rebound=assigned)
+
+    def _super_attr(self, class_id: str, name: str) -> _Res:
+        classes, doubt = self._ancestors(class_id)
+        res = self._pick(classes - {class_id}, name)
+        if res.values:
+            res = res | doubt
+        subclasses = self._subclasses_of(class_id)
+        others: set[str] = set()
+        for sub in subclasses:  # `class D(B, C)` may put C between B and B's own bases
+            others |= self._ancestors(sub)[0] - classes - subclasses
+        extra = [c for c in sorted(others) if self._defines(c, name)]
+        for cid in extra:
+            res = res | self._bindings(self.classes[cid].bindings[name], frozenset())
+        return res | _Res(frozenset({_EXTERNAL})) if extra else res
 
     def _fixture(self, file: FileParse, name: str) -> str | None:
         if name in file.fixtures:

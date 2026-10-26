@@ -52,9 +52,10 @@ class GlobalName:
 
 @dataclass(frozen=True, slots=True)
 class LocalImport:
-    """A name a function imports for itself."""
+    """A name a function imports for itself: every import of it in that scope, and whether the
+    scope also binds it some other way."""
 
-    binding: ImportBinding
+    bindings: tuple[ImportBinding, ...]
     rebound: bool
 
 
@@ -129,6 +130,8 @@ class ImportFact:
 class ClassFacts:
     bindings: Mapping[str, tuple[Binding, ...]]
     bases: tuple[CallRef, ...]
+    assigned: frozenset[str]
+    """Attributes its methods set or delete on `self` or `cls`, which may replace a method."""
 
 
 @dataclass(frozen=True, slots=True)

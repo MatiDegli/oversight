@@ -2,7 +2,9 @@
 
 from pathlib import Path
 
-from graph_helpers import node, scan
+from graph_helpers import COMMIT, node, scan
+
+from oversight.graph import WorkspaceGraph
 
 
 def test_modules_classes_functions_and_methods_are_nodes(tmp_path: Path) -> None:
@@ -193,6 +195,22 @@ def test_a_node_own_source_excludes_the_bodies_of_nested_nodes(tmp_path: Path) -
     assert changed(source.replace("    def total", "    @staticmethod\n            def total")) == {
         "m:Cart.total"
     }
+
+
+def test_own_source_hashes_follow_the_ast_offsets_in_a_latin_1_file(tmp_path: Path) -> None:
+    def latin_1(text: str) -> bytes:
+        header = "# -*- coding: latin-1 -*-\n"
+        body = f"class Cart:\n    def total(self):\n        return '{text}'\n    size = 0\n"
+        return (header + body).encode("latin-1")
+
+    (tmp_path / "m.py").write_bytes(latin_1("\u00e9"))
+    graph = WorkspaceGraph(tmp_path)
+    graph.scan(COMMIT)
+    ids = ["m", "m:Cart", "m:Cart.total"]
+    before = {i: graph.own_hash(i) for i in ids}
+    (tmp_path / "m.py").write_bytes(latin_1("ee"))
+    graph.scan(COMMIT)
+    assert {i for i in ids if graph.own_hash(i) != before[i]} == {"m:Cart.total"}
 
 
 def test_the_span_index_finds_the_innermost_node(tmp_path: Path) -> None:
