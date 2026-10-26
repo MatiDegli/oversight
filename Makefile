@@ -56,15 +56,24 @@ shots: ## screenshots of the UI from LOG into .shots/ and the Impeccable scan, C
 smoke: ## start the backend and check /health and /graph
 	$(UV) python tools/smoke.py
 
-# Every pytest run is capped: conftest.py loads tools/memwatch.py, which ends a run whose tests and
-# their children pass OVERSIGHT_TEST_MEM_GB GiB resident (8 by default) with a line naming the test,
-# and pyproject.toml gives each test 120 s (pytest-timeout).
-check: check-python check-contracts check-frontend check-secrets ## every gate, tests capped at 8G and 120s each; spends no credits
+# Two layers keep a runaway test from taking the machine. The soft one, for every pytest run
+# including a bare `uv run pytest` and CI: conftest.py loads tools/memwatch.py, which ends a run
+# whose own process passes OVERSIGHT_TEST_MEM_GB GiB resident (8 by default) with a line naming the
+# test, and pyproject.toml gives each test body 120 s (pytest-timeout). The hard one, here: pytest
+# runs through tools/capped.sh, in a systemd scope with a kernel limit of 10G and no swap when this
+# machine has a user manager (the kernel counts shared pages once and ends only what is in the
+# scope), and plain when it has none. `timeout` bounds the whole run, setup and teardown included,
+# which pytest-timeout leaves open: after RUN_TIMEOUT seconds it ends the process group, and 30 s
+# later kills it.
+RUN_TIMEOUT ?= 1200
+PYTEST_RUN := timeout --kill-after=30 $(RUN_TIMEOUT) bash tools/capped.sh 10G $(UV) pytest
+
+check: check-python check-contracts check-frontend check-secrets ## every gate; tests capped at 10G, 120 s each and 20 min in all; no credits
 
 check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
 
 check-python: lint-python
-	$(UV) pytest
+	$(PYTEST_RUN)
 
 lint-python:
 	$(UV) ruff check .
