@@ -87,7 +87,9 @@ wait_for "http://127.0.0.1:$backend_port/health" "${pids[0]}" backend 60
 wait_for "$url" "${pids[1]}" vite 60
 echo "shots: replay of $log on :$backend_port, UI on $url"
 
-# Node, not pnpm, so the deadline reaches the process that holds the browser.
-timeout --kill-after=10 300 node frontend/shots/capture.ts --url "$url" --log "$log" --out "$out"
+# Node, not pnpm, so the deadline reaches the process that holds the browser. capped.sh puts it, and
+# the Chrome it starts, under a memory cap of 6 GiB where systemd can make one.
+timeout --kill-after=10 300 bash frontend/shots/capped.sh \
+  node frontend/shots/capture.ts --url "$url" --log "$log" --out "$out"
 
 run_detect "$impeccable" "$url" "$out" "$detect_timeout"

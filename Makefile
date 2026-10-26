@@ -11,7 +11,7 @@ UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
-	contracts check-contracts check-secrets demo-repo-check replay shots smoke layout
+	contracts check-contracts check-secrets demo-repo-check replay shots smoke layout test-browser
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -44,9 +44,11 @@ replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with
 # shots: screenshots of the UI from the recorded run LOG, 1920x1080, into .shots/ (gitignored), then
 # IMPECCABLE's detector on the served URL. It serves the player and Vite on free ports, so a running
 # `make dev` is undisturbed, and is not part of `make check`. Run it before handing back UI work.
+# Chrome and the detector run under frontend/shots/capped.sh: 6 GiB of memory and no swap, through
+# systemd-run when this machine has a user manager, and uncapped when it does not.
 IMPECCABLE ?= .agents/skills/impeccable/scripts/impeccable
 
-shots: ## screenshots of the UI from LOG into .shots/, plus the Impeccable scan; not in check
+shots: ## screenshots of the UI from LOG into .shots/ and the Impeccable scan, Chrome capped at 6G; not in check
 	@$(NO_KEYS) LOG="$(LOG)" IMPECCABLE="$(IMPECCABLE)" bash frontend/shots/run.sh
 
 layout: ## regenerate the demo preset and replay snapshot positions; not in check
@@ -57,12 +59,30 @@ layout: ## regenerate the demo preset and replay snapshot positions; not in chec
 smoke: ## start the backend and check /health and /graph
 	$(UV) python tools/smoke.py
 
-check: check-python check-contracts check-frontend check-secrets ## every gate; spends no credits
+# test-browser: the frontend tests that drive Monaco in Playwright's Chromium (pnpm test:browser).
+# make check and CI run without a browser, so pnpm test leaves these out.
+test-browser: ## the frontend's browser tests in Playwright's Chromium; not in check
+	$(PNPM) test:browser
+
+# Two layers keep a runaway test from taking the machine. The soft one, for every pytest run
+# including a bare `uv run pytest` and CI: conftest.py loads tools/memwatch.py, which ends a run
+# whose own process passes OVERSIGHT_TEST_MEM_GB GiB resident (8 by default) with a line naming the
+# test, and pyproject.toml gives each test body 120 s (pytest-timeout). The hard one, here: pytest
+# runs through tools/capped.sh, in a systemd scope with a kernel limit of 10G and no swap when this
+# machine has a user manager (the kernel counts shared pages once and ends only what is in the
+# scope), and plain when it has none. tools/bounded.sh bounds the whole run, setup and teardown
+# included, which pytest-timeout leaves open: after RUN_TIMEOUT seconds it ends the process group,
+# 30 s later kills it, and prints one TIME BOUND line naming the bound. 900 s, not more: GitHub
+# cancels the CI job at 20 minutes, install and lint come first, and a cancelled job says nothing.
+RUN_TIMEOUT ?= 900
+PYTEST_RUN := bash tools/bounded.sh $(RUN_TIMEOUT) bash tools/capped.sh 10G $(UV) pytest
+
+check: check-python check-contracts check-frontend check-secrets ## every gate; tests capped at 10G, 120 s each and 15 min in all; no credits
 
 check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
 
 check-python: lint-python
-	$(UV) pytest
+	$(PYTEST_RUN)
 
 lint-python:
 	$(UV) ruff check .

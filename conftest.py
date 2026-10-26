@@ -1,8 +1,14 @@
 """Repository-wide test fixtures."""
 
 import os
+import sys
+from pathlib import Path
 
 import pytest
+
+# The memory cap (tools/memwatch.py) is a plugin of every run: make check, CI and a bare `pytest`.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "tools"))
+pytest_plugins = ["memwatch"]
 
 
 @pytest.fixture(autouse=True)

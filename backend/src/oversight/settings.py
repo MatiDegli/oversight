@@ -27,6 +27,10 @@ class Settings:
     port: int = 8710
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
+    layout: Path = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
+    """The preset layout, `{node_id: {x, y}}`; a missing or unusable file means the graph has no
+    positions. OVERSIGHT_LAYOUT may be relative, and then starts at the repository root, not at the
+    working directory; an absolute path is taken as set."""
     # The provider keys. repr=False keeps them out of any log line or traceback that shows Settings.
     meta_api_key: str | None = field(default=None, repr=False)
     baseten_api_key: str | None = field(default=None, repr=False)
@@ -39,6 +43,8 @@ class Settings:
             host=merged.get("OVERSIGHT_HOST", cls.host),
             port=int(merged.get("OVERSIGHT_PORT", cls.port)),
             runtime_dir=Path(merged.get("OVERSIGHT_RUNTIME_DIR", cls.runtime_dir)),
+            # Joining an absolute path onto REPO_ROOT gives that path, so only a relative one moves.
+            layout=REPO_ROOT / (merged.get("OVERSIGHT_LAYOUT") or cls.layout),
             # An empty value, as in .env.example, means the key is not set.
             meta_api_key=merged.get("META_API_KEY") or None,
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,

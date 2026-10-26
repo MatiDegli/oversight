@@ -644,6 +644,52 @@ def test_a_report_is_redacted_whole_before_it_is_written(tmp_path: Path) -> None
     assert "## Meta" in path.read_text() and LONG_KEY not in path.read_text()
 
 
+def test_meta_probes_the_contributor_model_by_default_and_model_still_overrides_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(probe.Settings, "load", classmethod(lambda cls: Settings(meta_api_key=KEY)))
+    fake = FakeTransport(native_table())
+    monkeypatch.setattr(probe, "SdkTransport", lambda base_url, key: fake)
+    report = tmp_path / "report.md"
+    assert probe.main(["meta", "--report", str(report)]) == 0
+    assert fake.params and {p["model"] for p in fake.params} == {"muse-spark-1.3-contributor"}
+    assert "Model requested: `muse-spark-1.3-contributor`" in report.read_text()
+    first = len(fake.params)
+    assert probe.main(["meta", "--model", "muse-spark-1.3", "--report", str(report)]) == 0
+    assert {p["model"] for p in fake.params[first:]} == {"muse-spark-1.3"}
+    assert "- Model requested: `muse-spark-1.3`; reported by the API" in report.read_text()
+
+
+def test_a_rerun_keeps_hand_written_sections_before_and_after_the_blocks(tmp_path: Path) -> None:
+    path = tmp_path / "report.md"
+    probe.write_report(path, "meta", "## Meta\n\nfirst run", None)
+    before = "## A note added by hand\n\nThe probe did not write this.\n"
+    after = "## Contributor model (2026-10-26)\n\nNor this one.\n"
+    path.write_text(before + "\n" + path.read_text() + "\n" + after)
+    probe.write_report(path, "meta", "## Meta\n\nsecond run", None)
+    text = path.read_text()
+    assert text.startswith(before) and text.endswith(after)  # unchanged and in place
+    assert text.index(before) < text.index("<!-- probe:meta -->") < text.index(after)
+    assert "second run" in text and "first run" not in text  # only the block was rewritten
+    assert text.count("<!-- probe:meta -->") == 1 and "<!-- probe:baseten -->" in text
+
+
+def test_text_without_blocks_survives_and_a_missing_provider_block_is_added() -> None:
+    notes = "# Someone's notes\n\nKeep them.\n"
+    fresh = probe.merge_report(notes, "meta", "## Meta\n\nrun")
+    assert fresh.startswith("# API probe") and fresh.endswith(notes)  # nothing of the file is lost
+    only_meta = "<!-- probe:meta -->\n## Meta\n\nrun\n<!-- /probe:meta -->\n" + notes
+    again = probe.merge_report(only_meta, "meta", "## Meta\n\nagain")
+    assert "## Meta\n\nagain" in again and notes in again
+    # the notes stay in place, after the meta block and before the block the file never had
+    assert (
+        again.index("<!-- /probe:meta -->")
+        < again.index(notes)
+        < again.index("<!-- probe:baseten -->")
+    )
+    assert "Skipped: BASETEN_API_KEY is not set." in again
+
+
 def test_main_without_a_key_writes_a_skipped_section_and_calls_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

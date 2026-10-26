@@ -62,7 +62,7 @@ PROVIDERS = {
         name="meta",
         title="Meta Model API: Muse Spark, Standard mode",
         base_url="https://api.meta.ai/v1",
-        model="muse-spark-1.3",
+        model="muse-spark-1.3-contributor",
         key_name="META_API_KEY",
         sources=(
             "https://dev.meta.ai/docs/ (base URL, bearer auth, model ids; "
@@ -970,16 +970,49 @@ def skipped_section(provider: Provider, reason: str) -> str:
     )
 
 
+def block(name: str, body: str) -> str:
+    return f"<!-- probe:{name} -->\n{body}\n<!-- /probe:{name} -->"
+
+
 def merge_report(existing: str | None, name: str, section: str, overwrite: bool = True) -> str:
-    """Put one provider's section in the report, keeping the others; a missing one is 'skipped'."""
-    sections = {m.group(1): m.group(2) for m in SECTION.finditer(existing or "")}
+    """Put one provider's section in the report, keeping the others; a missing one is 'skipped'.
+
+    The probe owns only its marked blocks: everything else in the file — a header touched by hand,
+    a section someone appended — stays unchanged and in place, so the next run does not lose it.
+    """
+    text = existing or ""
+    found = {m.group(1) for m in SECTION.finditer(text)}
+    sections = {m.group(1): m.group(2) for m in SECTION.finditer(text)}
     if overwrite or name not in sections:
         sections[name] = section
     for other in ORDER:
         reason = f"{PROVIDERS[other].key_name} is not set."
         sections.setdefault(other, skipped_section(PROVIDERS[other], reason))
-    body = "\n\n".join(f"<!-- probe:{n} -->\n{sections[n]}\n<!-- /probe:{n} -->" for n in ORDER)
-    return HEADER.format(max_calls=MAX_CALLS) + "\n" + body + "\n"
+
+    def put(match: re.Match[str]) -> str:
+        if match.group(1) not in sections:
+            return match.group(0)  # a block the probe does not know is not its own to rewrite
+        return block(match.group(1), sections[match.group(1)])
+
+    if not found:
+        # no block to put the sections in: the report starts over, over nothing of its own
+        head = (
+            HEADER.format(max_calls=MAX_CALLS)
+            + "\n"
+            + "\n\n".join(block(n, sections[n]) for n in ORDER)
+            + "\n"
+        )
+        return head if not text.strip() else head + "\n" + text
+    merged = SECTION.sub(put, text)
+    missing = [n for n in ORDER if n not in found]
+    if missing:  # a provider the file never had: its block goes after everything already there
+        merged = (
+            merged.rstrip("\n")
+            + "\n\n"
+            + "\n\n".join(block(n, sections[n]) for n in missing)
+            + "\n"
+        )
+    return merged
 
 
 def write_report(
