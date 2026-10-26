@@ -210,8 +210,7 @@ describe("graph mapping", () => {
     const lit = graph.getElementById("billing:fee");
     expect(lit.hasClass("focus-A-read")).toBe(true);
     expect(lit.hasClass("focus-B-edit")).toBe(true);
-    expect(lit.data("label")).toContain("A read, B edit");
-    expect(lit.data("label")).not.toContain("\n");
+    expect(lit.data("label")).toBe("billing:fee\nA read · B edit");
     expect(lit.hasClass("focus-both")).toBe(true);
     expect(lit.style("background-fill")).toBe("linear-gradient");
     expect(lit.style("background-gradient-stop-colors")).toEqual(
@@ -248,7 +247,7 @@ describe("graph mapping", () => {
     }
   });
 
-  it("maps semantic marks to classes without visual data or extra label lines", () => {
+  it("maps semantic marks to classes with one marks line below the name", () => {
     const state = updated();
     state.focus = {
       [a.agent_id]: { agent_id: a.agent_id, mode: "edit", node_ids: ["billing:fee"], ranges: [] },
@@ -266,7 +265,7 @@ describe("graph mapping", () => {
         "focus-both",
       ]),
     );
-    expect(target.data.label).not.toContain("\n");
+    expect(target.data.label).toBe("billing:fee\nA edit · B read · A pending");
     const unknown = { ...state, agents: {} };
     const graph = render(unknown);
     const added = graph.getElementById("billing:discount");
@@ -311,6 +310,54 @@ describe("graph mapping", () => {
       expect(graph.nodes(".pending").empty()).toBe(true);
       expect(graph.getElementById("billing:discount").empty()).toBe(true);
     }
+  });
+
+  it("keeps pending-both unlit with a dashed A-priority border and both agents named", () => {
+    const state = updated();
+    const change = state.changes[a.change_id];
+    if (!change) throw new Error("Missing pending change");
+    state.changes[b.change_id] = { ...change, change_id: b.change_id, agent_id: b.agent_id };
+    const graph = render(state);
+    const target = graph.getElementById("billing:fee");
+    expect(target.hasClass("pending-both")).toBe(true);
+    expect(target.hasClass("focus-both")).toBe(false);
+    expect(target.style("background-fill")).toBe("solid");
+    expect(target.style("background-color")).toBe(rgb(colors.panel));
+    expect(target.style("background-opacity")).toBe(
+      graph.getElementById("billing").style("background-opacity"),
+    );
+    expect(target.style("border-style")).toBe("dashed");
+    expect(target.style("border-color")).toBe(rgb(agentColors.A));
+    expect(target.data("label")).toContain("A+B pending");
+  });
+
+  it("keeps the whole node name first and marks on one second line without ellipsis", () => {
+    const state = initial();
+    const original = state.graph?.nodes.find((n) => n.id === "billing:fee");
+    if (!original || !state.graph) throw new Error("Missing fee");
+    const source = { ...original, name: "compute_price_with_discounts_and_taxes" };
+    state.graph = {
+      ...state.graph,
+      nodes: state.graph.nodes.map((n) => (n.id === source.id ? source : n)),
+    };
+    state.focus = {
+      [a.agent_id]: { agent_id: a.agent_id, mode: "read", node_ids: [source.id], ranges: [] },
+      [b.agent_id]: { agent_id: b.agent_id, mode: "edit", node_ids: [source.id], ranges: [] },
+    };
+    const target = render(state).getElementById(source.id);
+    expect(String(target.data("label")).startsWith(source.name)).toBe(true);
+    expect(String(target.data("label")).split("\n")).toEqual([source.name, "A read · B edit"]);
+    expect(target.style("text-wrap")).toBe("wrap");
+    expect(Number.parseFloat(String(target.style("text-max-width")))).toBeGreaterThan(1000);
+  });
+
+  it.each(["A", "B"] as const)("prioritizes %s editing over the other agent reading", (slot) => {
+    const other = slot === "A" ? "B" : "A";
+    const target = render(initial()).getElementById("billing:fee");
+    target.classes(`function focus-${slot}-edit focus-${other}-read focus-both`);
+    expect(target.style("border-color")).toBe(rgb(agentColors[slot]));
+    expect(Number(target.style("background-opacity"))).toBe(0.35);
+    expect(Number(target.style("border-opacity"))).toBe(1);
   });
 
   it("hides test nodes and incident edges by default, with an explicit opt-in", () => {
@@ -441,6 +488,40 @@ describe("graph updates and log entry point", () => {
       expect(bounds("a")).toEqual(aBox);
     },
   );
+
+  it("avoids sibling compound boxes including labels when placing a new node", () => {
+    const state = initial();
+    if (!state.graph) throw new Error("Missing graph");
+    state.graph = {
+      ...state.graph,
+      nodes: [
+        node("m", "module"),
+        node("c", "class", "m"),
+        node("left", "method", "c"),
+        node("right", "method", "c"),
+      ],
+      edges: [],
+      positions: { left: { x: 0, y: 0 }, right: { x: 500, y: 0 } },
+    };
+    const graph = render(state);
+    const sibling = graph.getElementById("c");
+    const measure = vi.spyOn(sibling, "boundingBox");
+    const before = sibling.boundingBox({ includeLabels: true, includeOverlays: false });
+    measure.mockClear();
+    state.graph.nodes.push(node("new", "function", "m"));
+    updateGraph(graph, graphElements(state));
+    const added = graph
+      .getElementById("new")
+      .boundingBox({ includeLabels: true, includeOverlays: false });
+    expect(
+      added.x1 >= before.x2 ||
+        added.x2 <= before.x1 ||
+        added.y1 >= before.y2 ||
+        added.y2 <= before.y1,
+    ).toBe(true);
+    expect(measure).toHaveBeenCalledWith({ includeLabels: true, includeOverlays: false });
+    expect(sibling.boundingBox({ includeLabels: true, includeOverlays: false })).toEqual(before);
+  });
 
   it("runs fcose once when there is no preset and retains those positions on updates", () => {
     const state = initial();

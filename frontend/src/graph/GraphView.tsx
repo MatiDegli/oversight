@@ -17,27 +17,30 @@ export function GraphView() {
     const host = container.current;
     if (!host) return;
     let cancelled = false;
-    let dispose = () => {};
-    void document.fonts.load('14px "Atkinson Hyperlegible Next"').then(() => {
-      if (cancelled) return;
-      const cy = cytoscape({ container: host, layout: { name: "preset" } });
-      cy.style(graphStyles(theme));
-      const sync = () => {
-        updateGraph(cy, graphElements(stateStore.getState().state));
-      };
-      const unsubscribe = stateStore.subscribe(sync);
-      sync();
-      const resize = new ResizeObserver(() => cy.resize());
-      resize.observe(host);
-      dispose = () => {
-        unsubscribe();
-        resize.disconnect();
-        cy.destroy();
-      };
-    });
+    const cy = cytoscape({ container: host, layout: { name: "preset" } });
+    cy.style(graphStyles(theme));
+    const sync = () => {
+      updateGraph(cy, graphElements(stateStore.getState().state));
+    };
+    const unsubscribe = stateStore.subscribe(sync);
+    sync();
+    const resize = new ResizeObserver(() => cy.resize());
+    resize.observe(host);
+    void document.fonts.load(`14px ${theme.fontFamilies.sans}`).then(
+      () => {
+        if (cancelled) return;
+        cy.style(graphStyles(theme));
+        cy.resize();
+      },
+      () => {
+        // Keep the graph usable with the fallback font when the asset fails.
+      },
+    );
     return () => {
       cancelled = true;
-      dispose();
+      unsubscribe();
+      resize.disconnect();
+      cy.destroy();
     };
   }, []);
   return (

@@ -30,9 +30,9 @@ function placeAdditions(cy: Core, elements: GraphElement[]): GraphElement[] {
   const occupied = new Map<string, Box>();
   for (const node of cy.nodes()) {
     if (!nodes.has(node.id())) continue;
-    const box = node.boundingBox({ includeLabels: false, includeOverlays: false });
+    const box = node.boundingBox({ includeLabels: true, includeOverlays: false });
     boxes.set(node.id(), box);
-    if (node.isChildless()) occupied.set(node.id(), box);
+    occupied.set(node.id(), box);
   }
   const ancestors = (element: GraphElement): string[] => {
     const ids: string[] = [];

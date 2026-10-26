@@ -52,7 +52,7 @@ export function graphElements(state: State, showTests = false): GraphElement[] {
       data: {
         id: node.id,
         kind: node.kind,
-        label: badges.length ? `[${badges.join(", ")}] ${node.name}` : node.name,
+        label: badges.length ? `${node.name}\n${badges.join(" · ")}` : node.name,
         ...(node.parent_id && visible.has(node.parent_id) ? { parent: node.parent_id } : {}),
       },
       classes: classes.join(" "),

@@ -20,8 +20,9 @@ export function graphStyles({ agentColors, colors, fontFamilies }: GraphTheme): 
         "font-family": fontFamilies.sans,
         "font-size": 14,
         color: colors.text,
-        "text-wrap": "ellipsis",
-        "text-max-width": "140px",
+        // Only the explicit newline separates the name from the marks.
+        "text-wrap": "wrap",
+        "text-max-width": "10000px",
         "text-valign": "center",
         "background-color": colors.panel,
         "border-color": colors.border,
@@ -34,22 +35,20 @@ export function graphStyles({ agentColors, colors, fontFamilies }: GraphTheme): 
     },
     { selector: "node.module, node.class", style: { "text-valign": "top", padding: "30px" } },
     { selector: "node.method", style: { shape: "ellipse" } },
-    ...(["A", "B"] as const).flatMap((slot): StylesheetJson => [
-      {
-        selector: `node.focus-${slot}-read, node.focus-${slot}-edit`,
-        style: { "background-color": agentColors[slot], "border-color": agentColors[slot] },
-      },
-      {
-        selector: `node.focus-${slot}-read`,
-        style: { "background-opacity": 0.16, "border-opacity": 0.65, "border-width": 2 },
-      },
-      {
-        selector: `node.focus-${slot}-edit`,
-        style: { "background-opacity": 0.35, "border-opacity": 1, "border-width": 3 },
-      },
-    ]),
+    ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
+      (["A", "B"] as const).map((slot) => ({
+        selector: `node.focus-${slot}-${mode}`,
+        style: {
+          "background-color": agentColors[slot],
+          "border-color": agentColors[slot],
+          "background-opacity": mode === "edit" ? 0.35 : 0.16,
+          "border-opacity": mode === "edit" ? 1 : 0.65,
+          "border-width": mode === "edit" ? 3 : 2,
+        },
+      })),
+    ),
     {
-      selector: "node.focus-both, node.pending-both",
+      selector: "node.focus-both",
       style: {
         "background-fill": "linear-gradient",
         "background-gradient-direction": "to-right",
@@ -75,6 +74,11 @@ export function graphStyles({ agentColors, colors, fontFamilies }: GraphTheme): 
       selector: `node.pending-${slot}`,
       style: { "border-color": agentColors[slot] },
     })),
+    {
+      // Cytoscape has one border color: A takes priority; the label names A+B.
+      selector: "node.pending-both",
+      style: { "border-color": agentColors.A },
+    },
     {
       selector: "edge",
       style: {
