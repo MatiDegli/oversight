@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applyEvent, createInitialState, stateStore } from "../state";
 import type { State } from "../state";
+import * as theme from "../theme";
 import { agentColors, colors, fontFamilies } from "../theme";
 
 import { loadGraphEvents } from "./devLog";
@@ -133,7 +134,7 @@ function updated(state = initial()): State {
 }
 let cy: Core | undefined;
 function render(state: State) {
-  cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles });
+  cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(theme) });
   updateGraph(cy, graphElements(state));
   return cy;
 }
@@ -170,7 +171,20 @@ describe("graph mapping", () => {
     expect(Number.parseFloat(String(possible.style("width")))).toBeLessThan(
       Number.parseFloat(String(exact.style("width"))),
     );
-    expect(possible.style("line-color")).toBe(rgb(colors.muted));
+    const luminance = (color: string) => {
+      const channels = (color.match(/\d+/g) ?? []).map((v) => {
+        const c = Number(v) / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      const [red = 0, green = 0, blue = 0] = channels;
+      return red * 0.2126 + green * 0.7152 + blue * 0.0722;
+    };
+    const background = luminance(rgb(colors.background));
+    const contrast = (color: string) => (luminance(color) + 0.05) / (background + 0.05);
+    expect(contrast(String(exact.style("line-color")))).toBeGreaterThan(
+      contrast(String(possible.style("line-color"))),
+    );
+    expect(possible.style("target-arrow-color")).toBe(possible.style("line-color"));
     for (const edge of graph.edges()) {
       expect(edge.style("line-style")).toBe("solid");
       expect(edge.style("curve-style")).toBe(EDGE_CURVE_STYLE);
@@ -196,21 +210,68 @@ describe("graph mapping", () => {
     const lit = graph.getElementById("billing:fee");
     expect(lit.hasClass("focus-A-read")).toBe(true);
     expect(lit.hasClass("focus-B-edit")).toBe(true);
-    expect(lit.data("label")).toContain("A read\nB edit");
-    expect(lit.style("pie-1-background-color")).toBe(rgb(agentColors.A));
-    expect(lit.style("pie-2-background-color")).toBe(rgb(agentColors.B));
-    expect(lit.data("aSize")).toBe(50);
-    expect(lit.data("bSize")).toBe(50);
-    expect(Number(lit.style("pie-1-background-opacity"))).toBeLessThan(
-      Number(lit.style("pie-2-background-opacity")),
+    expect(lit.data("label")).toContain("A read, B edit");
+    expect(lit.data("label")).not.toContain("\n");
+    expect(lit.hasClass("focus-both")).toBe(true);
+    expect(lit.style("background-fill")).toBe("linear-gradient");
+    expect(lit.style("background-gradient-stop-colors")).toEqual(
+      [agentColors.A, agentColors.A, agentColors.B, agentColors.B].map(rgb).join(" "),
     );
+    expect(Number.parseFloat(String(lit.style("pie-1-background-size")))).toBe(0);
     expect(lit.style("border-style")).toBe("solid");
     updateGraph(
       graph,
       graphElements(applyEvent(state, event(7, "agent.status", { ...a, state: "done" }))),
     );
     expect(lit.hasClass("focus-A-read")).toBe(false);
-    expect(lit.data("bSize")).toBe(100);
+    expect(lit.hasClass("focus-both")).toBe(false);
+    expect(lit.style("background-color")).toBe(rgb(agentColors.B));
+    expect(lit.style("background-fill")).toBe("solid");
+  });
+
+  it("lights the node fill and border by class alone, with stronger edit than read", () => {
+    const graph = render(initial());
+    const target = graph.getElementById("billing:fee");
+    for (const slot of ["A", "B"] as const) {
+      target.classes(`function focus-${slot}-read`);
+      expect(target.style("background-color")).toBe(rgb(agentColors[slot]));
+      expect(target.style("border-color")).toBe(rgb(agentColors[slot]));
+      expect(target.style("border-style")).toBe("solid");
+      const read = Number(target.style("background-opacity"));
+      const readBorder = Number(target.style("border-opacity"));
+      expect(read).toBeGreaterThan(0);
+      target.classes(`function focus-${slot}-edit`);
+      expect(target.style("background-color")).toBe(rgb(agentColors[slot]));
+      expect(Number(target.style("background-opacity"))).toBeGreaterThan(read);
+      expect(Number(target.style("border-opacity"))).toBeGreaterThan(readBorder);
+      expect(Number.parseFloat(String(target.style("pie-1-background-size")))).toBe(0);
+    }
+  });
+
+  it("maps semantic marks to classes without visual data or extra label lines", () => {
+    const state = updated();
+    state.focus = {
+      [a.agent_id]: { agent_id: a.agent_id, mode: "edit", node_ids: ["billing:fee"], ranges: [] },
+      [b.agent_id]: { agent_id: b.agent_id, mode: "read", node_ids: ["billing:fee"], ranges: [] },
+    };
+    const target = graphElements(state).find((e) => e.data.id === "billing:fee");
+    if (!target) throw new Error("Missing fee");
+    expect(Object.keys(target.data).sort()).toEqual(["id", "kind", "label", "parent"]);
+    expect(target.classes.split(" ")).toEqual(
+      expect.arrayContaining([
+        "pending",
+        "pending-A",
+        "focus-A-edit",
+        "focus-B-read",
+        "focus-both",
+      ]),
+    );
+    expect(target.data.label).not.toContain("\n");
+    const unknown = { ...state, agents: {} };
+    const graph = render(unknown);
+    const added = graph.getElementById("billing:discount");
+    expect(added.hasClass("pending")).toBe(true);
+    expect(added.style("border-style")).toBe("dashed");
   });
 
   it("marks added, modified and removed pending nodes with only an agent-colored dashed border", () => {
@@ -220,7 +281,6 @@ describe("graph mapping", () => {
     for (const id of ["billing:discount", "billing:fee", "billing:Bill.total"]) {
       const pending = graph.getElementById(id);
       expect(pending.hasClass("pending-A")).toBe(true);
-      expect(pending.data("pendingColor")).toBe(agentColors.A);
       expect(pending.style("border-style")).toBe("dashed");
       expect(pending.style("border-color")).toBe(rgb(agentColors.A));
       expect(pending.data("label")).toContain("A pending");
@@ -239,7 +299,7 @@ describe("graph mapping", () => {
       ),
     };
     updateGraph(graph, graphElements(second));
-    expect(graph.getElementById("billing:fee").data("pendingColor")).toBe(agentColors.B);
+    expect(graph.getElementById("billing:fee").style("border-color")).toBe(rgb(agentColors.B));
     for (const status of ["approved", "rejected"] as const) {
       const closed = {
         ...state,
@@ -344,11 +404,49 @@ describe("graph updates and log entry point", () => {
     expect(graph.pan()).toEqual({ x: 20, y: 40 });
   });
 
+  it.each([0, 1200])(
+    "places additions at b's box without growing b across another module at %s",
+    (aX) => {
+      const state = initial();
+      if (!state.graph) throw new Error("Missing test graph");
+      state.graph = {
+        ...state.graph,
+        nodes: [
+          node("a", "module"),
+          node("a:f", "function", "a"),
+          node("b", "module"),
+          node("b:f", "function", "b"),
+        ],
+        edges: [],
+        positions: { "a:f": { x: aX, y: 300 }, "b:f": { x: 900, y: 300 } },
+      };
+      const graph = render(state);
+      const bounds = (id: string) => graph.getElementById(id).boundingBox({ includeLabels: false });
+      const aBox = bounds("a");
+      const bBox = bounds("b");
+      const before = graph.getElementById("b:f").position();
+      state.graph.nodes.push(node("b:new", "function", "b"));
+      updateGraph(graph, graphElements(state));
+      const added = graph.getElementById("b:new");
+      const point = added.position();
+      const dx = Math.max(bBox.x1 - point.x, 0, point.x - bBox.x2);
+      const dy = Math.max(bBox.y1 - point.y, 0, point.y - bBox.y2);
+      expect(Math.hypot(dx, dy)).toBeLessThanOrEqual(140);
+      const grown = bounds("b");
+      expect(
+        grown.x1 >= aBox.x2 || grown.x2 <= aBox.x1 || grown.y1 >= aBox.y2 || grown.y2 <= aBox.y1,
+      ).toBe(true);
+      expect(graph.getElementById("b:f").position()).toEqual(before);
+      expect(Math.abs(point.x - before.x) >= 150 || Math.abs(point.y - before.y) >= 60).toBe(true);
+      expect(bounds("a")).toEqual(aBox);
+    },
+  );
+
   it("runs fcose once when there is no preset and retains those positions on updates", () => {
     const state = initial();
     if (!state.graph) throw new Error("Missing test graph");
     state.graph = { ...state.graph, positions: {} };
-    cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles });
+    cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(theme) });
     const layout = vi.spyOn(cy, "layout");
     updateGraph(cy, graphElements(state));
     expect(layout).toHaveBeenCalledWith(expect.objectContaining({ name: "fcose", animate: false }));

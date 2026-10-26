@@ -4,6 +4,7 @@ export {
   selectChangeForAgent,
   selectHasReadyForReview,
   selectLitNodes,
+  selectNodeMarks,
   selectPendingChanges,
 } from "./selectors";
 export { createStateStore, stateStore } from "./store";

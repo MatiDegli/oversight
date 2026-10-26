@@ -3,6 +3,7 @@ import fcose from "cytoscape-fcose";
 import { useEffect, useRef } from "react";
 
 import { stateStore } from "../state";
+import * as theme from "../theme";
 
 import { graphElements } from "./elements";
 import { graphStyles } from "./styles";
@@ -17,9 +18,10 @@ export function GraphView() {
     if (!host) return;
     let cancelled = false;
     let dispose = () => {};
-    void document.fonts.ready.then(() => {
+    void document.fonts.load('14px "Atkinson Hyperlegible Next"').then(() => {
       if (cancelled) return;
-      const cy = cytoscape({ container: host, style: graphStyles, layout: { name: "preset" } });
+      const cy = cytoscape({ container: host, layout: { name: "preset" } });
+      cy.style(graphStyles(theme));
       const sync = () => {
         updateGraph(cy, graphElements(stateStore.getState().state));
       };
