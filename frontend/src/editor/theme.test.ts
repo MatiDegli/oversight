@@ -12,6 +12,8 @@ describe("Monaco theme", () => {
     expect(theme.colors["editor.foreground"]).toBe(palette["syntax-plain"]);
     expect(theme.colors["diffEditor.insertedLineBackground"]).toBe(tint(palette["added-tint"]));
     expect(theme.colors["diffEditor.removedLineBackground"]).toBe(tint(palette["removed-tint"]));
+    expect(theme.colors["inputValidation.errorBackground"]).toBe(palette.field);
+    expect(theme.colors["inputValidation.errorBorder"]).toBe(palette.text);
     // Only the tokens Monaco receives, so an agent color can never reach the editor.
     const allowed = editorTokens.flatMap((name) => {
       const value = palette[name];
