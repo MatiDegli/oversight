@@ -76,6 +76,9 @@ class _Change:
     next_snapshot: GraphSnapshot | None = None
     sent: set[str] = field(default_factory=lambda: set[str]())
     """Close-out events already sent: "resolved", "delta", "done"."""
+    fallback: State = "ready"
+    """Where a decision that ends without settling leaves the change: the state it was taken from,
+    or `broken` once the merge may have touched main."""
 
     @property
     def agent_id(self) -> AgentId:
@@ -408,18 +411,29 @@ class ChangeManager:
             raise WrongState(
                 f"{change_id} is {rec.state}; {verb} needs {' or '.join(sorted(allowed))}"
             )
-        rec.state = "deciding"
+        rec.fallback, rec.state = rec.state, "deciding"
         return rec
 
+    def _decide(self, rec: _Change, work: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+        """Run a decision in a tracked task. A task cancelled before its first step never runs its
+        own `finally`, so a done-callback, which runs before anyone awaiting the task resumes,
+        ends `deciding` too."""
+        task = self._spawn(work)
+        task.add_done_callback(lambda _: self._restore(rec))
+        return task
+
+    @staticmethod
+    def _restore(rec: _Change) -> None:
+        if rec.state == "deciding":
+            rec.state = rec.fallback
+
     def approve(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
-        return self._spawn(self._approve(self._take(change_id, APPROVABLE, "approve"), comment))
+        rec = self._take(change_id, APPROVABLE, "approve")
+        return self._decide(rec, self._approve(rec, comment))
 
     def reject(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
-        rec = self._changes.get(change_id)
-        previous: State = rec.state if rec else "closed"
-        return self._spawn(
-            self._reject(self._take(change_id, REJECTABLE, "reject"), comment, previous)
-        )
+        rec = self._take(change_id, REJECTABLE, "reject")
+        return self._decide(rec, self._reject(rec, comment))
 
     async def aclose(self) -> None:
         """Wait for the decisions in flight."""
@@ -438,21 +452,21 @@ class ChangeManager:
                 if rec.state == "closed":
                     await self._cleanup(rec)
         finally:
-            await self._settle(rec, "broken")
+            await self._settle(rec)
 
-    async def _reject(self, rec: _Change, comment: str | None, previous: State) -> None:
+    async def _reject(self, rec: _Change, comment: str | None) -> None:
         try:
             async with self._workspace.locks(main=True, agent_id=rec.agent_id):
                 rec.resolution = self._resolution(rec, "rejected", comment)
                 await self._close_out(rec)  # main did not change: no rescan and no delta
                 await self._cleanup(rec)
         finally:
-            await self._settle(rec, previous)
+            await self._settle(rec)
 
-    async def _settle(self, rec: _Change, fallback: State) -> None:
+    async def _settle(self, rec: _Change) -> None:
         """`deciding` always ends; a close-out cut short sends what it is missing."""
         if rec.state == "deciding":
-            rec.state = fallback
+            self._restore(rec)
         elif rec.state == "closed":
             await self._close_out(rec)
 
@@ -483,6 +497,7 @@ class ChangeManager:
     async def _merge(self, rec: _Change, comment: str | None, pre: str) -> None:
         main = self._workspace.main
         head = rec.head_commit or rec.base_commit
+        rec.fallback = "broken"  # from here on, main may change
         # --no-ff on every merge: --no-commit alone fast-forwards a head that descends from main,
         # leaving HEAD moved and nothing for `merge --abort` to undo.
         result = await self._run(main, "merge", "--no-ff", "--no-commit", head)

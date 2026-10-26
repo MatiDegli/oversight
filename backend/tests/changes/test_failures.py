@@ -1,6 +1,8 @@
 """Failure paths: a conflict, a timeout, a commit that fails after the merge, a failed cleanup, a
 failed proposal and a broken main. Faults come from the armed workspace's `git`."""
 
+import asyncio
+
 import pytest
 from changes_helpers import ADD_THRICE, Harness, bounded
 
@@ -163,3 +165,24 @@ async def test_reject_from_broken(h: Harness) -> None:
     assert not h.worktree_dir("agent-1").exists()
     assert not await h.has_branch("agent-1")
     await assert_main_clean_at(h, pre)
+
+
+@pytest.mark.parametrize("decision", ["approve", "reject"])
+@bounded
+async def test_decision_cancelled_before_it_starts(h: Harness, decision: str) -> None:
+    """The task never runs a step, so its own `finally` never runs: the state still goes back."""
+    await h.run_agent(1, EDIT)
+    pre = await h.main_head()
+    decide = h.manager.approve if decision == "approve" else h.manager.reject
+    task = decide("change-1", None)
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert task.cancelled()
+    await assert_main_clean_at(h, pre)
+    await h.manager.reject("change-1", "After the cancel.")  # ready again, so Reject works
+    [resolved] = h.payloads(ChangeResolved)
+    assert (resolved.decision, resolved.comment) == ("rejected", "After the cancel.")
+    assert h.types()[-1] == "agent.status"
