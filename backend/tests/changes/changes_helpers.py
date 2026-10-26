@@ -136,7 +136,10 @@ class Harness:
     workspace: FaultyWorkspace
     store: EventStore
     base_commit: str
+    main_graph: WorkspaceGraph
     log: list[StoredEvent] = field(default_factory=lambda: list[StoredEvent]())
+    fail_once: type[BaseModel] | None = None
+    """The next payload of this type fails to publish, as a closing store would."""
     _manager: ChangeManager | None = None
 
     @property
@@ -145,6 +148,9 @@ class Harness:
         return self._manager
 
     async def publish(self, payload: EventPayload) -> StoredEvent:
+        if self.fail_once is not None and isinstance(payload, self.fail_once):
+            self.fail_once = None
+            raise RuntimeError("an armed publish failure")
         event = await self.store.publish(payload)
         self.log.append(event)
         return event
@@ -246,8 +252,8 @@ async def start_harness(tmp_path: Path) -> Harness:
     base = await workspace.reset()
     store = EventStore(tmp_path / "run.sqlite", "run-20261026-120000", clock=lambda: NOW)
     await store.start()
-    harness = Harness(tmp_path, workspace, store, base)
     main_graph = WorkspaceGraph(workspace.main.root)
+    harness = Harness(tmp_path, workspace, store, base, main_graph)
     snapshot: GraphSnapshot = await asyncio.to_thread(main_graph.scan, base)
     await harness.publish(snapshot)
     harness._manager = ChangeManager(
