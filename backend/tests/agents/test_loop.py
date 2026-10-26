@@ -1,11 +1,23 @@
 """The tool loop through the scripted fake model: a whole task, the limits and the stops."""
 
+import asyncio
 from typing import cast
 
 import pytest
 from agent_helpers import FAKE_MODEL_DIR, Recorder, make_run, script
 
-from oversight.agents import ModelAPIError, ModelReply, ScriptedModel, load_script, parse_script
+from oversight.agents import (
+    MUSE_SPARK,
+    MUSE_SPARK_OPEN,
+    UNVERIFIED_PROFILES,
+    ModelAPIError,
+    ModelReply,
+    ScriptedModel,
+    UnverifiedProfile,
+    load_script,
+    parse_script,
+)
+from oversight.agents.tools import Toolbox, ToolOutcome
 from oversight.workspace import Tree, Workspace
 from oversight_contracts.events import (
     AgentFocus,
@@ -181,3 +193,78 @@ async def test_model_api_failure_reports_an_error_and_halts(small_tree: Opened) 
     assert end.state == "halted" and end.detail == "The model API failed."
     (error,) = cast(list[ErrorReport], recorder.of("ErrorReport"))
     assert error.source == "model_api" and error.fatal and error.agent_id == "agent-1"
+
+
+async def test_model_calls_are_bounded_on_their_own(small_tree: Opened) -> None:
+    # No stop rule fires: each search succeeds and resets the failure count, and none repeats.
+    turns: list[list[tuple[str, object]]] = []
+    for n in range(20):
+        turns += [[], [("search", {"query": f"value{n}"})]]
+    model = script(*turns)
+    end = await make_run(small_tree, model, Recorder(), max_steps=10).run()
+    # max_steps plus the failure limit: 10 + 6 model calls, though only 8 steps were taken.
+    assert end.state == "halted" and end.detail == "Reached the limit of 16 model calls."
+    assert len(model.requests) == 16 and end.steps == 8
+
+
+async def test_the_time_limit_covers_the_first_scan(small_tree: Opened) -> None:
+    model = script([("finish", {"summary": "ok"})])
+    recorder = Recorder()
+    # A budget of 0 s is spent before anything runs: the scan is inside it, so no model call.
+    end = await make_run(small_tree, model, recorder, max_wall_clock_s=0).run()
+    assert end.state == "halted" and end.detail == "Ran past the time limit of 0 s."
+    assert model.requests == []
+    assert states(recorder) == ["starting", "halted"]
+
+
+async def test_a_tool_cut_short_by_the_time_limit_still_gets_its_step(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def no_scan(self: Toolbox) -> None:
+        return None  # nothing to wait on, so the 0 s limit first fires inside the read
+
+    monkeypatch.setattr(Toolbox, "refresh_graph", no_scan)
+    recorder = Recorder()
+    model = script([("read_file", {"path": "shop/mod.py"})])
+    end = await make_run(small_tree, model, recorder, max_wall_clock_s=0).run()
+    assert end.state == "halted" and end.detail == "Ran past the time limit of 0 s."
+    (step,) = steps(recorder)
+    assert (step.step, step.tool, step.result) == (1, "read_file", "error")
+    assert step.error == "interrupted before it finished"
+    assert step.summary == "Could not read mod.py"
+    assert recorder.kinds()[-3:] == ["AgentStep", "sink.proposed", "AgentStatus"]
+
+
+async def test_a_tool_cut_short_by_stop_still_gets_its_step(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered = asyncio.Event()
+
+    async def held_call(self: Toolbox, name: str, raw_arguments: str) -> ToolOutcome:
+        entered.set()
+        await asyncio.Event().wait()  # never set: only the cancellation ends the call
+        raise AssertionError("not reached")
+
+    monkeypatch.setattr(Toolbox, "call", held_call)
+    recorder = Recorder()
+    run = asyncio.create_task(make_run(small_tree, script([("run_tests", {})]), recorder).run())
+    async with asyncio.timeout(60):
+        await entered.wait()
+    run.cancel()  # Stop
+    with pytest.raises(asyncio.CancelledError):
+        await run
+    (step,) = steps(recorder)
+    assert (step.step, step.tool, step.result) == (1, "run_tests", "error")
+    assert step.error == "interrupted before it finished"
+    # Stop is not a proposal: the change manager sends the stop events.
+    assert "sink.proposed" not in recorder.kinds()
+
+
+async def test_a_run_on_an_unverified_profile_is_refused(small_tree: Opened) -> None:
+    empty = parse_script('{"task": "t", "turns": []}')
+    model = ScriptedModel(empty, profile=MUSE_SPARK_OPEN)
+    with pytest.raises(UnverifiedProfile, match="reasoning setting is unverified") as refused:
+        make_run(small_tree, model, Recorder())
+    assert "Baseten probe" in str(refused.value)
+    assert MUSE_SPARK.id not in UNVERIFIED_PROFILES
+    make_run(small_tree, ScriptedModel(empty, profile=MUSE_SPARK), Recorder())

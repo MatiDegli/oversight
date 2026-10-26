@@ -38,12 +38,31 @@ MUSE_SPARK_OPEN = ModelProfile(
     label="Muse Spark Open",
     provider="baseten",
     model="meta-models/muse-spark-open-1026",
-    # Not probed yet (docs/api-probe.md): no reasoning parameter is known for Baseten.
+    # Not probed yet (docs/api-probe.md): which parameter sets reasoning on Baseten is unknown, so
+    # none is sent and the profile is in UNVERIFIED_PROFILES.
     reasoning=None,
 )
 FAKE_MODEL = ModelProfile(
     id="fake", label="Scripted fake model", provider="fake", model="fake-scripted", reasoning=None
 )
+
+UNVERIFIED_PROFILES = frozenset({MUSE_SPARK_OPEN.id})
+"""Profiles whose reasoning setting no probe has confirmed. A run on one is refused, since the agent
+would ride the provider's default. The Baseten probe sets the mode and takes the id out. The client
+itself still accepts them, for the probe."""
+
+
+class UnverifiedProfile(Exception):
+    """A run was asked for on a profile in `UNVERIFIED_PROFILES`."""
+
+
+def require_verified(profile: ModelProfile) -> None:
+    """`UnverifiedProfile`, with a message for the person, if no run may use `profile` yet."""
+    if profile.id in UNVERIFIED_PROFILES:
+        raise UnverifiedProfile(
+            f"{profile.label} ({profile.model}) cannot run agents yet: its reasoning setting is "
+            "unverified. Run the Baseten probe and set the profile's reasoning mode first."
+        )
 
 
 @dataclass(frozen=True)

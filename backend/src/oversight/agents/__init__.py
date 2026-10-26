@@ -9,6 +9,7 @@ from oversight.agents.client import (
     META_BASE_URL,
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
+    UNVERIFIED_PROFILES,
     Message,
     ModelAPIError,
     ModelClient,
@@ -17,6 +18,7 @@ from oversight.agents.client import (
     RetryPolicy,
     ToolCall,
     ToolSchema,
+    UnverifiedProfile,
     Usage,
 )
 from oversight.agents.fake import Script, ScriptedModel, load_script, parse_script
@@ -42,6 +44,7 @@ __all__ = [
     "SYSTEM_PROMPT",
     "TOOL_NAMES",
     "TOOL_SCHEMAS",
+    "UNVERIFIED_PROFILES",
     "AgentRun",
     "AgentTask",
     "Brake",
@@ -59,6 +62,7 @@ __all__ = [
     "ScriptedModel",
     "ToolCall",
     "ToolSchema",
+    "UnverifiedProfile",
     "Usage",
     "UsageLedger",
     "load_script",

@@ -15,9 +15,15 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from oversight.agents.client import Message, ModelAPIError, ModelClient, ModelReply
+from oversight.agents.client import (
+    Message,
+    ModelAPIError,
+    ModelClient,
+    ModelReply,
+    require_verified,
+)
 from oversight.agents.sink import ChangeSink
-from oversight.agents.tools import TOOL_SCHEMAS, Toolbox, ToolOutcome
+from oversight.agents.tools import TOOL_SCHEMAS, Toolbox, ToolOutcome, interrupted
 from oversight.agents.usage import Pricing, UsageLedger
 from oversight.events import EventPayload
 from oversight.workspace import Tree, Workspace
@@ -96,7 +102,9 @@ def _assistant(reply: ModelReply) -> Message:
 
 
 class AgentRun:
-    """Runs one task in one worktree. Cancel the task that awaits `run` to stop it."""
+    """Runs one task in one worktree. Cancel the task that awaits `run` to stop it.
+
+    `UnverifiedProfile` at construction if the model's profile may not run agents yet."""
 
     def __init__(
         self,
@@ -111,6 +119,7 @@ class AgentRun:
         pricing: Pricing | None = None,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
+        require_verified(model.profile)
         self._task = task
         self._model = model
         self._sink = sink
@@ -120,6 +129,8 @@ class AgentRun:
         self._monotonic = monotonic
         self._tools = Toolbox(workspace, tree, test_timeout_s=task.limits.test_timeout_s)
         self._step = 0
+        self._turns = 0
+        """Model calls so far. Bounded on their own, so the run ends even if a stop rule fails."""
         self._failures = 0
         self._seen: Counter[tuple[str, str, str]] = Counter()
 
@@ -141,8 +152,6 @@ class AgentRun:
 
     async def run(self) -> RunEnd:
         await self._status("starting")
-        await self._tools.refresh_graph()
-        await self._status("working")
         messages: list[Message] = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": self._task.task},
@@ -150,7 +159,10 @@ class AgentRun:
         summary: str | None = None
         detail: str | None = None
         try:
+            # The clock starts before the scan, so a slow scan cannot spend the budget unseen.
             async with asyncio.timeout(self._task.limits.max_wall_clock_s):
+                await self._tools.refresh_graph()
+                await self._status("working")
                 summary = await self._loop(messages)
         except _Halt as halt:
             detail = halt.detail
@@ -175,7 +187,13 @@ class AgentRun:
         return RunEnd("halted", detail, self._step, None)
 
     async def _loop(self, messages: list[Message]) -> str:
+        # Every reply with a tool call adds a step, so the step limit bounds those; the failure
+        # allowance covers replies without one. The bound holds even if a stop rule is broken.
+        max_turns = self._task.limits.max_steps + FAILURE_LIMIT
         while True:
+            if self._turns >= max_turns:
+                raise _Halt(f"Reached the limit of {max_turns} model calls.")
+            self._turns += 1
             reply = await self._model.complete(messages, TOOL_SCHEMAS)
             await self._usage(reply)
             messages.append(_assistant(reply))
@@ -185,8 +203,15 @@ class AgentRun:
                 continue
             for index, call in enumerate(reply.tool_calls):
                 started = self._monotonic()
-                outcome = await self._tools.call(call.name, call.arguments)
-                duration_ms = round((self._monotonic() - started) * 1000)
+                try:
+                    outcome = await self._tools.call(call.name, call.arguments)
+                except asyncio.CancelledError:
+                    # The time limit or Stop cut the call short: it is still a step, an error.
+                    self._step += 1
+                    stopped = interrupted(call.name, call.arguments)
+                    await self._report(call.name, stopped, self._since(started))
+                    raise
+                duration_ms = self._since(started)
                 self._step += 1
                 messages.append(
                     {"role": "tool", "tool_call_id": call.id, "content": outcome.content}
@@ -202,6 +227,9 @@ class AgentRun:
                             {"role": "tool", "tool_call_id": skipped.id, "content": "Not run."}
                         )
                     raise
+
+    def _since(self, started: float) -> int:
+        return round((self._monotonic() - started) * 1000)
 
     def _fail_or_halt(self, *, ok: bool) -> None:
         self._failures = 0 if ok else self._failures + 1

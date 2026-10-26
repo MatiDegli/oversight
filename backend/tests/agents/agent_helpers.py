@@ -78,11 +78,11 @@ async def open_tree(made: list[Workspace], root: Path, template: Path) -> tuple[
     return workspace, await workspace.create_worktree("agent-1")
 
 
-def limits(max_steps: int = 20) -> Limits:
+def limits(max_steps: int = 20, max_wall_clock_s: int = 120) -> Limits:
     return Limits(
         max_steps=max_steps,
         max_output_tokens=4096,
-        max_wall_clock_s=120,
+        max_wall_clock_s=max_wall_clock_s,
         test_timeout_s=60,
         cone_max_depth=4,
         cone_max_nodes=40,
@@ -108,11 +108,12 @@ def make_run(
     *,
     task: str = "Do the task.",
     max_steps: int = 20,
+    max_wall_clock_s: int = 120,
     ledger: UsageLedger | None = None,
 ) -> AgentRun:
     workspace, worktree = tree
     return AgentRun(
-        AgentTask("agent-1", "change-1", "A", task, limits(max_steps)),
+        AgentTask("agent-1", "change-1", "A", task, limits(max_steps, max_wall_clock_s)),
         model=model,
         workspace=workspace,
         tree=worktree,
