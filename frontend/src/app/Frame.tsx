@@ -235,7 +235,11 @@ export function Frame(props: FrameProps) {
         <LeftRail watching={view.diff === null} onWatch={onClosePanel} />
         {view.diff && <LeftPanel state={state} view={view} onClose={onClosePanel} />}
         <main className="relative min-w-0 flex-1 bg-ground">
-          <GraphView selectedId={view.selected} onNodeTap={onNodeTap} />
+          <GraphView
+            selectedId={view.selected}
+            onNodeTap={onNodeTap}
+            panelOpen={view.diff !== null}
+          />
           {notice && <div className="absolute top-6 left-6 text-muted">{notice}</div>}
         </main>
         {view.diff ? (
