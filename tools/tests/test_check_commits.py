@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -61,6 +62,10 @@ def test_size_limit_and_its_exception_trailer() -> None:
 
 def run(repo: Path, *args: str) -> str:
     return subprocess.run(args, cwd=repo, check=True, capture_output=True, text=True).stdout
+
+
+def test_git_variables_from_a_hook_do_not_reach_tests() -> None:
+    assert not [name for name in os.environ if name.startswith("GIT_")]
 
 
 def test_pushed_checks_every_new_commit_but_not_merges(

@@ -59,6 +59,7 @@ venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["contracts/tests", "backend/tests", "tools/tests"]
+# conftest.py at the root strips the GIT_* variables from every test.
 addopts = ["-q", "--strict-markers", "--import-mode=importlib"]
 
 # docs/proposal.md, section 3: the five import contracts.

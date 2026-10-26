@@ -3,8 +3,10 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-# make check never reaches a real model: the key variables are removed from its environment.
-NO_KEYS := env -u META_API_KEY -u BASETEN_API_KEY
+# make check never reaches a real model: the key variables are removed from its environment. It
+# also drops the variables git exports to hooks, so tests that run git cannot reach this repository.
+NO_KEYS := env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+	-u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX
 UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
