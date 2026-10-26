@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from oversight.workspace import Workspace, run_process
-from oversight.workspace.core import UV_PASSTHROUGH
+from oversight.workspace.core import EXCLUDE_NEWER, UV_PASSTHROUGH
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -176,14 +176,15 @@ def demo_python(tmp_path_factory: pytest.TempPathFactory) -> Path:
     root = tmp_path_factory.mktemp("demo-venv-build")
     venv = root / "venv"
     python = venv / "bin" / "python"
-    env = {k: v for k, v in os.environ.items() if k in UV_PASSTHROUGH or k.startswith("UV_")}
+    env = {k: v for k, v in os.environ.items() if k in UV_PASSTHROUGH}
     requirements = REPO_ROOT / "tools" / "demo-venv-requirements.txt"
 
     async def build() -> None:
         uv = ["uv", "--no-config"]
+        install = [*uv, "pip", "install", "--quiet", "--exclude-newer", EXCLUDE_NEWER]
         steps = [
             [*uv, "venv", "--quiet", "--python", "3.12", str(venv)],
-            [*uv, "pip", "install", "--quiet", "--python", str(python), "-r", str(requirements)],
+            [*install, "--python", str(python), "-r", str(requirements)],
         ]
         for argv in steps:
             result = await run_process(argv, cwd=root, timeout_s=300, env=env)

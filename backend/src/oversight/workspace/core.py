@@ -63,6 +63,12 @@ UV_PASSTHROUGH = frozenset(
     {
         # Only what uv needs to find its cache and Pythons and to reach the network, by name. A
         # prefix would also let UV_OVERRIDE, UV_EXCLUDE or UV_CONSTRAINT change what gets installed.
+        # The index variables say where packages come from, which a machine behind a mirror needs;
+        # they choose a source and never a version, a constraint or an exclusion. Not allowed:
+        # UV_EXTRA_INDEX_URL, UV_INDEX_STRATEGY, UV_FIND_LINKS and UV_NO_INDEX.
+        "UV_INDEX_URL",
+        "UV_DEFAULT_INDEX",
+        "UV_INDEX",
         "UV_CACHE_DIR",
         "UV_PYTHON_INSTALL_DIR",
         "UV_PYTHON_CACHE_DIR",

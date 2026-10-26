@@ -665,8 +665,10 @@ async def test_ensure_demo_venv_builds_with_absolute_targets_and_stamps_last(
     fake = FakeUv(root)
     monkeypatch.setattr(workspace_core, "run_process", fake)
     monkeypatch.setenv("META_API_KEY", "test-key")
+    for name in [key for key in os.environ if key.startswith("UV_")]:
+        monkeypatch.delenv(name)  # a developer's own settings must not reach the assertions
     monkeypatch.setenv("UV_CACHE_DIR", str(root / "uv-cache"))
-    for name in ("UV_OVERRIDE", "UV_EXCLUDE", "UV_CONSTRAINT", "UV_INDEX_URL", "UV_NO_SOURCES"):
+    for name in ("UV_OVERRIDE", "UV_EXCLUDE", "UV_CONSTRAINT", "UV_NO_SOURCES"):
         monkeypatch.setenv(name, "test-value")
     await workspace.ensure_demo_venv()
     venv, python = root / "demo-venv", root / "demo-venv" / "bin" / "python"
@@ -755,6 +757,28 @@ async def test_ensure_demo_venv_rebuilds_when_the_python_is_missing_or_a_broken_
     assert [argv[0] for argv in fake.commands] == [python, "uv", "uv"]
     assert [argv[2] for argv in fake.commands[1:]] == ["venv", "pip"]
     assert (root / "demo-venv" / "oversight-stamp").read_text().strip() == "pytest==9.1.1"
+
+
+@pytest.mark.parametrize("name", ["UV_INDEX_URL", "UV_DEFAULT_INDEX", "UV_INDEX"])
+async def test_a_mirror_chosen_through_the_environment_reaches_uv_and_overrides_do_not(
+    make_workspace: MakeWorkspace, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    workspace = make_workspace("mirror")
+    root = workspace.main.root.parent
+    root.mkdir()
+    fake = FakeUv(root)
+    monkeypatch.setattr(workspace_core, "run_process", fake)
+    for key in [key for key in os.environ if key.startswith("UV_")]:
+        monkeypatch.delenv(key)
+    monkeypatch.setenv(name, "https://mirror.invalid/simple")
+    for denied in ("UV_OVERRIDE", "UV_EXCLUDE", "UV_CONSTRAINT", "UV_EXTRA_INDEX_URL"):
+        monkeypatch.setenv(denied, "test-value")
+    await workspace.ensure_demo_venv()
+    assert len(fake.calls) == 2
+    for _, env in fake.calls:
+        assert {key: value for key, value in env.items() if key.startswith("UV_")} == {
+            name: "https://mirror.invalid/simple"
+        }
 
 
 def test_the_install_passes_the_repositorys_release_age_rule(repo_root: Path) -> None:
