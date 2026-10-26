@@ -14,32 +14,44 @@ _log = logging.getLogger(__name__)
 _LAYOUT = TypeAdapter(dict[NodeId, Point])
 
 
-class LayoutError(ValueError):
-    """The layout file exists but cannot be used; the message starts with its path."""
+class _Unusable(Exception):
+    """The layout file exists but cannot be used; the message says why."""
 
 
 def read_layout(path: Path) -> dict[NodeId, Point]:
-    """Positions by node id, from a JSON object `{node_id: {"x": 1, "y": 2}}`. A missing file
-    means no positions, with one log line; a file that is unreadable or malformed raises
-    `LayoutError` naming it. Ids are not checked against a graph: `assemble` ignores the ones it
-    does not contain."""
+    """Positions by node id, from a JSON object `{node_id: {"x": 1, "y": 2}}`. A missing file, an
+    unreadable one and a malformed one all mean no positions: one log line names the file and the
+    reason, and the graph places its own nodes. A preset layout is a nicety, so a bad file never
+    stops the server. Ids are not checked against a graph: `assemble` ignores the ones it does not
+    contain."""
+    try:
+        return _parse(path)
+    except FileNotFoundError:
+        _log.warning("no layout file at %s: the graph will place its own nodes", path)
+    except _Unusable as exc:
+        _log.warning(
+            "layout file %s is unusable, %s: the graph will place its own nodes", path, exc
+        )
+    return {}
+
+
+def _parse(path: Path) -> dict[NodeId, Point]:
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        _log.warning("no layout file at %s: the graph will place its own nodes", path)
-        return {}
+        raise
     except (OSError, UnicodeDecodeError) as exc:
-        raise LayoutError(f"{path}: cannot be read: {exc}") from exc
+        raise _Unusable(f"it cannot be read: {exc}") from exc
     try:
         # Strict: a coordinate that is a string is a mistake, not a number to coerce.
         layout = _LAYOUT.validate_json(text, strict=True)
     except ValidationError as exc:
         first = exc.errors()[0]
         where = ".".join(str(part) for part in first["loc"]) or "the file"
-        raise LayoutError(f"{path}: malformed at {where}: {first['msg']}") from exc
+        raise _Unusable(f"it is malformed at {where}: {first['msg']}") from exc
     for node_id, point in layout.items():
         if not (math.isfinite(point.x) and math.isfinite(point.y)):
-            raise LayoutError(f"{path}: the position of {node_id} is not a finite number")
+            raise _Unusable(f"the position of {node_id} is not a finite number")
     return layout
 
 

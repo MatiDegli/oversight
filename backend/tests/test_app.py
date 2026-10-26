@@ -1,10 +1,10 @@
+import logging
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from oversight.app import ReplayConfig, create_app
-from oversight.graph import LayoutError
 from oversight.settings import REPO_ROOT, Settings, read_env_file
 from oversight_contracts.graph import Point
 
@@ -66,11 +66,21 @@ def test_the_live_app_reads_the_layout_at_start(tmp_path: Path) -> None:
     assert create_app(Settings(layout=tmp_path / "missing.json")).state.layout == {}
 
 
-def test_a_malformed_layout_stops_the_live_app_at_start(tmp_path: Path) -> None:
+def test_an_unusable_layout_does_not_stop_the_live_app(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     layout = tmp_path / "layout.json"
     layout.write_text("not json")
-    with pytest.raises(LayoutError, match=str(layout)):
-        create_app(Settings(layout=layout))
+    with caplog.at_level(logging.DEBUG):
+        app = create_app(Settings(layout=layout))
+    assert app.state.layout == {}
+    [record] = caplog.records
+    assert str(layout) in record.getMessage()
     # A replay's positions are in its recorded snapshot, so it does not read the file.
-    replay = ReplayConfig(log=REPLAY_LOG)
-    create_app(Settings(layout=layout, runtime_dir=tmp_path), replay)
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG):
+        replay = create_app(
+            Settings(layout=layout, runtime_dir=tmp_path), ReplayConfig(log=REPLAY_LOG)
+        )
+    assert not hasattr(replay.state, "layout")
+    assert caplog.records == []

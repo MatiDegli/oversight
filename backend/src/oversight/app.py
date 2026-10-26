@@ -24,8 +24,8 @@ class ReplayConfig:
 
 def create_app(settings: Settings | None = None, replay: ReplayConfig | None = None) -> FastAPI:
     """Without `replay`, the live app; its run, store and agents are wired by a later front. The
-    live app reads the preset layout here, so a malformed file stops the start and names itself;
-    the front that builds the workspace graph passes `app.state.layout` to it."""
+    live app reads the preset layout here, where a missing or unusable file logs one line and gives
+    no positions; the front that builds the workspace graph passes `app.state.layout` to it."""
     settings = settings or Settings.load()
     app = FastAPI(title="Oversight") if replay is None else _replay_app(settings, replay)
     app.state.settings = settings

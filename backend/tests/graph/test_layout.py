@@ -1,12 +1,13 @@
 """The preset layout: read from a file, and carried by every snapshot for the nodes it contains."""
 
 import logging
+import os
 from pathlib import Path
 
 import pytest
 from graph_helpers import COMMIT, node, version, write
 
-from oversight.graph import LayoutError, WorkspaceGraph, parse_version, read_layout
+from oversight.graph import WorkspaceGraph, parse_version, read_layout
 from oversight_contracts.graph import Point
 
 SMALL = Path(__file__).parent / "layout_small.json"
@@ -81,37 +82,67 @@ def test_a_valid_file_logs_nothing(caplog: pytest.LogCaptureFixture) -> None:
 
 
 @pytest.mark.parametrize(
-    "text",
+    ("text", "reason"),
     [
-        "",
-        "{",
-        "[]",
-        '"a"',
-        '{"a": 1}',
-        '{"a": {"x": 1}}',
-        '{"a": {"x": 1, "y": "2"}}',
-        '{"a": {"x": 1, "y": 2, "z": 3}}',
-        '{"a": {"x": NaN, "y": 2}}',
-        '{"a": {"x": 1, "y": Infinity}}',
+        ("", "malformed at the file"),
+        ("{", "malformed at the file"),
+        ("[]", "malformed at the file"),
+        ('"a"', "malformed at the file"),
+        ('{"a": 1}', "malformed at a"),
+        ('{"a": {"x": 1}}', "malformed at a.y"),
+        ('{"a": {"x": 1, "y": "2"}}', "malformed at a.y"),
+        ('{"a": {"x": 1, "y": 2, "z": 3}}', "malformed at a.z"),
+        ('{"a": {"x": NaN, "y": 2}}', "not a finite number"),
+        ('{"a": {"x": 1, "y": Infinity}}', "not a finite number"),
     ],
 )
-def test_a_malformed_file_fails_naming_the_path(tmp_path: Path, text: str) -> None:
+def test_a_malformed_file_means_no_positions_and_one_log_line_with_the_reason(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, text: str, reason: str
+) -> None:
     layout = tmp_path / "bad-layout.json"
     layout.write_text(text)
-    with pytest.raises(LayoutError) as caught:
-        read_layout(layout)
-    assert str(layout) in str(caught.value)
+    with caplog.at_level(logging.DEBUG):
+        assert read_layout(layout) == {}
+    [record] = caplog.records
+    assert str(layout) in record.getMessage()
+    assert reason in record.getMessage()
 
 
-def test_a_file_that_is_not_utf8_fails_naming_the_path(tmp_path: Path) -> None:
+def test_a_file_that_is_not_utf8_means_no_positions_and_one_log_line(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     layout = tmp_path / "bad-layout.json"
     layout.write_bytes(b"\xff\xfe")
-    with pytest.raises(LayoutError) as caught:
-        read_layout(layout)
-    assert str(layout) in str(caught.value)
+    with caplog.at_level(logging.DEBUG):
+        assert read_layout(layout) == {}
+    [record] = caplog.records
+    assert str(layout) in record.getMessage()
+    assert "cannot be read" in record.getMessage()
 
 
-def test_a_path_that_is_not_a_file_fails_naming_the_path(tmp_path: Path) -> None:
-    with pytest.raises(LayoutError) as caught:
-        read_layout(tmp_path)
-    assert str(tmp_path) in str(caught.value)
+def test_a_path_that_is_not_a_file_means_no_positions_and_one_log_line(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.DEBUG):
+        assert read_layout(tmp_path) == {}
+    [record] = caplog.records
+    assert str(tmp_path) in record.getMessage()
+    assert "cannot be read" in record.getMessage()
+
+
+def test_a_file_that_cannot_be_read_by_permission_means_no_positions_and_one_log_line(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    layout = tmp_path / "locked-layout.json"
+    layout.write_text('{"a": {"x": 1, "y": 2}}')
+    layout.chmod(0o000)
+    try:
+        if os.access(layout, os.R_OK):
+            pytest.skip("this user can read a file with no permissions, as root does")
+        with caplog.at_level(logging.DEBUG):
+            assert read_layout(layout) == {}
+    finally:
+        layout.chmod(0o600)
+    [record] = caplog.records
+    assert str(layout) in record.getMessage()
+    assert "cannot be read" in record.getMessage()
