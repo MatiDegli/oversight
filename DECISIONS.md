@@ -16,6 +16,7 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 | openai | 3.29.0 | Apache-2.0 | the official SDK, pointed at Meta's and Baseten's endpoints (AGENTS.md) |
 | pydantic | 2.14.1 | MIT | the contracts' source of truth |
 | ruff, pyright, pytest, import-linter, httpx | 0.17.0, 1.1.414, 9.1.1, 2.15, 0.28.1 | MIT, MIT, MIT, BSD-2-Clause, BSD-3-Clause | lint and format, types, tests, import contracts, the test client |
+| pytest-timeout | 2.4.0 | MIT | a time limit per test: a hang fails alone, with its name |
 | react, react-dom | 19.3.0 | MIT | the UI |
 | zustand | 5.0.15 | MIT | the store around the pure reducer |
 | cytoscape, cytoscape-fcose | 3.34.3, 2.2.0 | MIT | the graph view and its layout |
@@ -37,6 +38,32 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   loop. The ban stays on the product, apart from the workspace runner.
 - **Ruff skips Markdown:** its formatter rewrote the Python sketches in `docs/proposal.md`, which are
   not code.
+- **Every test run has a memory cap and a time cap, and `make shots` a memory cap on Chrome.**
+  Incident, 2026-10-26, 22:04 UTC: a mutation check on the agent runtime turned off the six-failure
+  rule, the tool loop then spun on model replies without tool calls and kept growing its history,
+  and a pytest reached 30 GB, all of the WSL VM's memory, until the kernel's OOM killer ended it.
+  Earlier that day a headless Chrome had reached 13.7 GB and a python 28.8 GB. A runaway test must
+  fail alone, quickly, with its name, and never take the VM to its limit.
+  - *Memory:* `tools/memwatch.py`, loaded by the root `conftest.py`, runs a daemon thread that reads
+    the resident memory of the test process and of all its descendants (`/proc`, every 0.5 s). Past
+    `OVERSIGHT_TEST_MEM_GB` GiB (8 by default; fractions allowed, so tests can use a small cap) it
+    writes one line naming the running test to the terminal's stderr, SIGSTOPs and then SIGKILLs
+    the descendants, so a runaway Node or child cannot outlive the run, and exits with code 70. No
+    `RLIMIT_AS`: it caps address space, which Node/V8 (the ESLint test) and thread arenas reserve
+    far beyond what they use, so it would fail for the wrong reason. A pages-shared-by-two-processes
+    sum counts them twice, which can only stop early. It sees only what stays in the process tree: a
+    daemon that double-forks is out of reach.
+  - *Time:* pytest-timeout, `timeout = 120` in `pyproject.toml`, signal method, so only that test
+    fails. Measured on 2026-10-26: the slowest test takes 8 s warm and the demo environment builds
+    in under 1 s cold from an empty uv cache on this machine; 120 s leaves room for a slow CI runner
+    and still ends a hang within two minutes. `timeout_func_only` keeps fixture setup outside it,
+    since a cold run on a slow network may spend longer than that building the demo environment
+    (its uv steps carry limits of their own, 300 s each, as does the ESLint run). A test that needs
+    more says so with `@pytest.mark.timeout(seconds)`.
+  - *Chrome:* `frontend/shots/capped.sh`, the one helper `make shots` uses for the capture and the
+    detector, runs the command under `systemd-run --user --scope -q -p MemoryMax=6G -p
+    MemorySwapMax=0` when that works here and as it is when it does not (CI, sandboxes). The probe
+    carries the same properties as the real call, so a manager that refuses them gets the fallback.
 - **The frontend's lint is type-aware** (`strictTypeChecked`), with the exhaustive-switch rule on,
   so a new event type fails the build until every switch handles it.
 

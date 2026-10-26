@@ -44,9 +44,11 @@ replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with
 # shots: screenshots of the UI from the recorded run LOG, 1920x1080, into .shots/ (gitignored), then
 # IMPECCABLE's detector on the served URL. It serves the player and Vite on free ports, so a running
 # `make dev` is undisturbed, and is not part of `make check`. Run it before handing back UI work.
+# Chrome and the detector run under frontend/shots/capped.sh: 6 GiB of memory and no swap, through
+# systemd-run when this machine has a user manager, and uncapped when it does not.
 IMPECCABLE ?= .agents/skills/impeccable/scripts/impeccable
 
-shots: ## screenshots of the UI from LOG into .shots/, plus the Impeccable scan; not in check
+shots: ## screenshots of the UI from LOG into .shots/ and the Impeccable scan, Chrome capped at 6G; not in check
 	@$(NO_KEYS) LOG="$(LOG)" IMPECCABLE="$(IMPECCABLE)" bash frontend/shots/run.sh
 
 # smoke: the backend on a free port with its own runtime directory, so a running dev or replay is
@@ -54,7 +56,10 @@ shots: ## screenshots of the UI from LOG into .shots/, plus the Impeccable scan;
 smoke: ## start the backend and check /health and /graph
 	$(UV) python tools/smoke.py
 
-check: check-python check-contracts check-frontend check-secrets ## every gate; spends no credits
+# Every pytest run is capped: conftest.py loads tools/memwatch.py, which ends a run whose tests and
+# their children pass OVERSIGHT_TEST_MEM_GB GiB resident (8 by default) with a line naming the test,
+# and pyproject.toml gives each test 120 s (pytest-timeout).
+check: check-python check-contracts check-frontend check-secrets ## every gate, tests capped at 8G and 120s each; spends no credits
 
 check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
 
