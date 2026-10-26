@@ -217,6 +217,26 @@ async def test_the_time_limit_covers_the_first_scan(small_tree: Opened) -> None:
     assert states(recorder) == ["starting", "halted"]
 
 
+async def test_a_root_lost_before_the_first_scan_halts_the_run(small_tree: Opened) -> None:
+    _, worktree = small_tree
+    root = worktree.root
+    moved = root.with_name("moved-away")
+    root.rename(moved)  # the root vanishes after the worktree was made, before the run starts
+    root.symlink_to(moved, target_is_directory=True)  # and a link to the old files takes its place
+    model = script([("finish", {"summary": "ok"})])
+    recorder = Recorder()
+    end = await make_run(small_tree, model, recorder).run()
+    assert end.state == "halted" and end.steps == 0 and end.summary is None
+    assert end.detail is not None and end.detail.startswith("The worktree cannot be used: ")
+    assert "\n" not in end.detail
+    assert model.requests == []
+    assert states(recorder) == ["starting", "halted"]
+    (halted,) = [s for s in recorder.of("AgentStatus") if cast(AgentStatus, s).state == "halted"]
+    assert cast(AgentStatus, halted).detail == end.detail
+    # The sink would read the invalid root, so it is never asked.
+    assert "sink.proposed" not in recorder.kinds()
+
+
 async def test_a_tool_cut_short_by_the_time_limit_still_gets_its_step(
     small_tree: Opened, monkeypatch: pytest.MonkeyPatch
 ) -> None:

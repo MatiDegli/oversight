@@ -26,7 +26,7 @@ from oversight.agents.sink import ChangeSink
 from oversight.agents.tools import TOOL_SCHEMAS, Toolbox, ToolOutcome, interrupted
 from oversight.agents.usage import Pricing, UsageLedger
 from oversight.events import EventPayload
-from oversight.workspace import Tree, Workspace
+from oversight.workspace import Tree, Workspace, WorkspaceError
 from oversight_contracts.common import AgentId, ChangeId, Slot
 from oversight_contracts.events import (
     AgentFocus,
@@ -82,6 +82,10 @@ class _Halt(Exception):
     def __init__(self, detail: str) -> None:
         super().__init__(detail)
         self.detail = detail
+
+
+class _RootLost(_Halt):
+    """The first scan found the worktree's root gone or swapped: nothing may touch it again."""
 
 
 def _canonical(arguments: str) -> str:
@@ -158,14 +162,20 @@ class AgentRun:
         ]
         summary: str | None = None
         detail: str | None = None
+        root_lost = False
         try:
             # The clock starts before the scan, so a slow scan cannot spend the budget unseen.
             async with asyncio.timeout(self._task.limits.max_wall_clock_s):
-                await self._tools.refresh_graph()
+                try:
+                    await self._tools.refresh_graph()
+                except WorkspaceError as error:
+                    reason = " ".join(str(error).split()) or type(error).__name__
+                    raise _RootLost(f"The worktree cannot be used: {reason}.") from error
                 await self._status("working")
                 summary = await self._loop(messages)
         except _Halt as halt:
             detail = halt.detail
+            root_lost = isinstance(halt, _RootLost)
         except TimeoutError:
             detail = f"Ran past the time limit of {self._task.limits.max_wall_clock_s} s."
         except ModelAPIError as error:
@@ -179,7 +189,8 @@ class AgentRun:
                     fatal=True,
                 )
             )
-        await self._sink.proposed(self._task.agent_id, summary)
+        if not root_lost:  # the sink reads the worktree, and its root is not the agent's any more
+            await self._sink.proposed(self._task.agent_id, summary)
         if detail is None:
             await self._status("ready_for_review")
             return RunEnd("ready_for_review", None, self._step, summary)
