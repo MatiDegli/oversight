@@ -11,7 +11,7 @@ UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
-	contracts check-contracts check-secrets demo-repo-check
+	contracts check-contracts check-secrets demo-repo-check replay
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -27,6 +27,17 @@ setup: install ## install the dependencies and the git hooks: pre-commit, commit
 # whoever ran it. uv forwards SIGTERM to its child, and uvicorn stops its reload worker.
 dev: ## FastAPI with reload and the Vite dev server, one origin through Vite's proxy
 	@uv run --frozen python -m oversight serve --reload & backend=$$!; \
+	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
+	pnpm -C frontend dev
+
+# replay: the backend serves LOG through the fake player instead of a live run, on the usual port, so
+# `curl -N localhost:8710/events` streams it. SPEED=1 follows the log's gaps, each capped at 2 s;
+# SPEED=0 sends everything at once. It stops only the backend it started, as dev does.
+LOG ?= fixtures/events/handwritten-level1.jsonl
+SPEED ?= 1
+
+replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with the Vite dev server
+	@uv run --frozen python -m oversight replay "$(LOG)" --speed "$(SPEED)" & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
 
