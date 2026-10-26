@@ -147,6 +147,11 @@ class Harness:
     fail_once: type[BaseModel] | None = None
     """The next `fail_times` payloads of this type fail to publish, as a closing store would."""
     fail_times: int = 1
+    hold: type[BaseModel] | None = None
+    """The next payload of this type is committed, then its receipt waits for `release`, with
+    `held` set meanwhile, as a slow store's would."""
+    held: asyncio.Event = field(default_factory=asyncio.Event)
+    release: asyncio.Event = field(default_factory=asyncio.Event)
     _manager: ChangeManager | None = None
 
     @property
@@ -162,6 +167,10 @@ class Harness:
             raise RuntimeError("an armed publish failure")
         event = await self.store.publish(payload)
         self.log.append(event)
+        if self.hold is not None and isinstance(payload, self.hold):
+            self.hold = None
+            self.held.set()
+            await self.release.wait()
         return event
 
     # --- The fake runtime -------------------------------------------------------------------

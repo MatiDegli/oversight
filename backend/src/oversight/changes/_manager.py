@@ -87,6 +87,8 @@ class _Change:
     fallback: State = "ready"
     """Where a decision that ends without settling leaves the change: the state it was taken from,
     or `broken` once the merge may have touched main."""
+    decision: int = 0
+    """Counts the decisions taken; only the latest one's task may end `deciding`."""
 
     @property
     def agent_id(self) -> AgentId:
@@ -420,19 +422,23 @@ class ChangeManager:
                 f"{change_id} is {rec.state}; {verb} needs {' or '.join(sorted(allowed))}"
             )
         rec.fallback, rec.state = rec.state, "deciding"
+        rec.decision += 1
         return rec
 
     def _decide(self, rec: _Change, work: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         """Run a decision in a tracked task. A decision that ends still `deciding`, such as a task
         cancelled before its first step, which runs none of its code, goes back to `fallback`
-        through a done-callback, which runs before anyone awaiting the task resumes."""
+        through a done-callback, which runs before anyone awaiting the task resumes. The callback
+        keeps its decision's number: a decision that settled, then took a while to report it, ends
+        after the next one was taken, and must leave that one `deciding`."""
         task = self._spawn(work)
-        task.add_done_callback(lambda _: self._restore(rec))
+        decision = rec.decision
+        task.add_done_callback(lambda _: self._restore(rec, decision))
         return task
 
     @staticmethod
-    def _restore(rec: _Change) -> None:
-        if rec.state == "deciding":
+    def _restore(rec: _Change, decision: int) -> None:
+        if rec.state == "deciding" and rec.decision == decision:
             rec.state = rec.fallback
 
     def approve(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:

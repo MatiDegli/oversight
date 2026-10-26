@@ -189,6 +189,28 @@ async def test_decision_cancelled_before_it_starts(h: Harness, decision: str) ->
 
 
 @bounded
+async def test_stale_decision_leaves_a_retry_deciding(h: Harness) -> None:
+    """Approve fails and is retried while its `error` is still going out: the first task's end
+    leaves the retry `deciding`, so Reject answers WrongState until the retry is over."""
+    await h.run_agent(1, EDIT)
+    h.workspace.arm("merge", mode="timeout")
+    h.hold = ErrorReport
+    first = h.manager.approve("change-1", None)
+    await h.held.wait()  # back in ready, its `error` not yet out
+    second = h.manager.approve("change-1", None)
+    h.release.set()
+
+    await first
+
+    assert not second.done()
+    with pytest.raises(WrongState, match="is deciding"):
+        h.manager.reject("change-1", "While the retry merges.")
+    await second
+    assert [r.merge for r in h.payloads(ChangeResolved)] == ["merged"]
+    assert not await h.has_branch("agent-1")
+
+
+@bounded
 async def test_cancel_mid_merge_aborts_to_pre(h: Harness) -> None:
     """Cancelled after `merge --no-commit`: main goes back to `pre`, an `error` says so, and the
     change is ready again."""
