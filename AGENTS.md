@@ -51,6 +51,7 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 - Color is an agent (A orange #ff5c1f, B blue #4f7dff) or a state (green passed or added, red failed, removed or destructive), nothing else, and never alone: letters A and B, + and - in diffs, icons on tests. No amber warnings; counters across agents are neutral.
 - Type: Atkinson Hyperlegible Next for text and graph labels, Atkinson Hyperlegible Mono for code, hashes and numbers, both from Fontsource packages; sentence case. Monaco is created after the fonts load, or calls monaco.editor.remeasureFonts().
 - The dot-field light behind the graph is its own canvas under a transparent Cytoscape canvas. It comes after level 1; until then the background is plain black.
+- docs/design.md is the design reference: tokens with their values, graph states, panels, and what is never done.
 
 ## Runtime workspace
 - On start, the backend copies demo-repo/ to .runtime/workspace/ and runs git init there, so every demo starts clean.
