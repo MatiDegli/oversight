@@ -65,6 +65,43 @@ def split_relative(path: str) -> list[str]:
     return parts
 
 
+def _plain_dir(path: Path) -> bool:
+    """True for a real directory: `lstat`, so a symbolic link to one does not count."""
+    try:
+        return stat.S_ISDIR(os.lstat(path).st_mode)
+    except OSError:
+        return False
+
+
+def verify_tree_root(runtime_root: Path, root: Path) -> None:
+    """A tree's root must be exactly `workspace` or `worktrees/{agent id}` under the runtime
+    directory, with no symbolic link from the runtime directory down to it, and it must be its own
+    real path. Read at the moment of use: a link swapped in after startup is refused here."""
+    main = runtime_root / "workspace"
+    agent = root.parent == runtime_root / "worktrees" and valid_agent_id(root.name)
+    if root != main and not agent:
+        raise InvalidPath("invalid workspace root: not a tree of this runtime directory")
+    # root.parent is the runtime directory itself for main, and `worktrees` for an agent.
+    if not all(_plain_dir(directory) for directory in {runtime_root, root.parent, root}):
+        raise InvalidPath("invalid workspace root: a directory on the way is missing or linked")
+    if os.path.realpath(root) != str(root):
+        raise InvalidPath("invalid workspace root: it resolves somewhere else")
+
+
+def ensure_plain_dir(runtime_root: Path, directory: Path) -> None:
+    """Create `directory`, a child of the runtime directory, or accept it if it already is a real
+    directory. A symbolic link, or a file, in its place is refused before anything is created."""
+    if directory.parent != runtime_root or os.path.realpath(runtime_root) != str(runtime_root):
+        raise WorkspaceError(f"{directory.name} is not directly under the runtime directory")
+    try:
+        mode = os.lstat(directory).st_mode
+    except FileNotFoundError:
+        os.mkdir(directory, DIR_MODE)
+        return
+    if not stat.S_ISDIR(mode):
+        raise WorkspaceError(f"{directory.name} is not a plain directory")
+
+
 def resolve_in(root: Path, path: str) -> Path:
     """Rules 4 and 5: no existing component is a symlink, and the real path stays under the root.
 
@@ -93,7 +130,9 @@ def resolve_in(root: Path, path: str) -> Path:
 def _read_bytes(root: Path, path: str) -> bytes:
     target = resolve_in(root, path)
     try:
-        fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        # O_NONBLOCK: opening a FIFO must not wait for a writer. The regular-file test comes after.
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_NOCTTY | os.O_CLOEXEC
+        fd = os.open(target, flags)
     except OSError as error:
         if error.errno == errno.ELOOP:
             raise _refuse(path, "a component is a symbolic link") from error

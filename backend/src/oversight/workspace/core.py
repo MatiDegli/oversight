@@ -25,6 +25,7 @@ from oversight.workspace.files import (
     DIR_MODE,
     FileRead,
     copy_template,
+    ensure_plain_dir,
     list_files,
     read_file,
     registered_worktree,
@@ -32,6 +33,7 @@ from oversight.workspace.files import (
     resolve_in,
     valid_agent_id,
     validate_runtime_root,
+    verify_tree_root,
     write_file,
 )
 from oversight.workspace.locks import Locks, offload
@@ -54,8 +56,22 @@ GIT_FLAGS = (
     "core.symlinks=false",
 )
 FORBIDDEN_GIT = frozenset({"stash", "rebase"})
+EXCLUDE_NEWER = "14 days"
+"""The repository's release-age rule (pyproject.toml, `tool.uv.exclude-newer`); `--no-config` drops
+it, so the demo venv's install passes it explicitly."""
 UV_PASSTHROUGH = frozenset(
     {
+        # Only what uv needs to find its cache and Pythons and to reach the network, by name. A
+        # prefix would also let UV_OVERRIDE, UV_EXCLUDE or UV_CONSTRAINT change what gets installed.
+        "UV_CACHE_DIR",
+        "UV_PYTHON_INSTALL_DIR",
+        "UV_PYTHON_CACHE_DIR",
+        "UV_PYTHON_DOWNLOADS",
+        "UV_PYTHON_PREFERENCE",
+        "UV_LINK_MODE",
+        "UV_NATIVE_TLS",
+        "UV_HTTP_TIMEOUT",
+        "UV_OFFLINE",
         "HOME",
         "XDG_CACHE_HOME",
         "XDG_DATA_HOME",
@@ -81,19 +97,6 @@ class Author:
 OVERSIGHT_AUTHOR = Author("Oversight", "oversight@oversight.invalid")
 
 
-def _subcommand(args: Sequence[str]) -> str | None:
-    """The first argument that is a git subcommand, skipping options and the values of -C and -c."""
-    skip = False
-    for arg in args:
-        if skip:
-            skip = False
-        elif arg in ("-C", "-c"):
-            skip = True
-        elif not arg.startswith("-"):
-            return arg
-    return None
-
-
 class Tree:
     """Main, or one agent's worktree. Created by `Workspace`, never by callers."""
 
@@ -111,20 +114,28 @@ class Tree:
         self.branch = branch
         self.base_commit = base_commit
 
+    def verify_root(self) -> None:
+        """`InvalidPath` unless the root is this tree's own plain directory, with no link to it."""
+        verify_tree_root(self._workspace.runtime_root, self.root)
+
     @asynccontextmanager
     async def section(self, *, locked: bool) -> AsyncGenerator[None]:
-        """Count an operation, so `reset` can see it, and take this tree's lock if asked."""
+        """Count an operation, so `reset` can see it, take this tree's lock if asked, and check that
+        the root is still the directory it was made as."""
         with self._workspace.operations.track():
             if locked:
                 async with self._workspace.locks(
                     main=self.agent_id is None, agent_id=self.agent_id
                 ):
+                    await offload(self.verify_root)
                     yield
             else:
+                await offload(self.verify_root)
                 yield
 
     def resolve(self, path: str) -> Path:
         """The path under this tree's root, or `InvalidPath`."""
+        self.verify_root()
         return resolve_in(self.root, path)
 
     async def read_text(self, path: str) -> FileRead:
@@ -193,6 +204,10 @@ class Workspace:
         return self._locks
 
     @property
+    def runtime_root(self) -> Path:
+        return self._root
+
+    @property
     def tmp_dir(self) -> Path:
         return self._root / "tmp"
 
@@ -250,11 +265,16 @@ class Workspace:
         author: Author | None = None,
         date: str | None = None,
     ) -> ProcessResult:
-        """Run git in `tree`. The caller holds the tree's lock; `stash` and `rebase` never spawn."""
+        """Run git in `tree`. The caller holds the tree's lock. `args` start with the subcommand:
+        the only global options are the ones this module adds, so a caller cannot move the git
+        directory or the work tree, or define an alias. `stash` and `rebase` never spawn."""
         if not self._locks.holds(main=tree.agent_id is None, agent_id=tree.agent_id):
             raise LockOrderError("git runs only while the caller holds the tree's lock")
-        if _subcommand(args) in FORBIDDEN_GIT:
-            raise WorkspaceError(f"git {_subcommand(args)} is not allowed")
+        if not args or args[0].startswith("-"):
+            raise WorkspaceError("a git option before the subcommand is not allowed")
+        if args[0] in FORBIDDEN_GIT:
+            raise WorkspaceError(f"git {args[0]} is not allowed")
+        await offload(tree.verify_root)
         return await run_process(
             ["git", *GIT_FLAGS, *args],
             cwd=tree.root,
@@ -274,7 +294,7 @@ class Workspace:
         result = await self.git(tree, *args, timeout_s=timeout_s, author=author, date=date)
         if result.returncode != 0:
             detail = self.redact(result.stderr.strip())[-500:]
-            raise WorkspaceError(f"git {_subcommand(args)} failed: {detail}")
+            raise WorkspaceError(f"git {args[0]} failed: {detail}")
         return result.stdout
 
     async def _run_ok(
@@ -344,12 +364,8 @@ class Workspace:
 
     def _uv_env(self) -> dict[str, str]:
         """uv needs its cache, its Python installs and the network settings, which HOME and the
-        allowlist would hide. API keys are not among them."""
-        return {
-            key: value
-            for key, value in os.environ.items()
-            if key in UV_PASSTHROUGH or key.startswith("UV_")
-        }
+        allowlist would hide: the names in `UV_PASSTHROUGH`, nothing else. No API key is there."""
+        return {key: value for key, value in os.environ.items() if key in UV_PASSTHROUGH}
 
     async def ensure_demo_venv(self) -> None:
         """Reuse `demo-venv/` if its stamp names the pinned pytest and its python runs; otherwise
@@ -367,13 +383,16 @@ class Workspace:
                 return None
 
         if await offload(read_stamp) == want:
-            probe = await run_process(
-                [str(self._demo_python), "-c", "import pytest"],
-                cwd=self._root,
-                timeout_s=60,
-                env={"HOME": str(self._root / "tmp" / "home")},
-            )
-            if probe.returncode == 0:
+            try:
+                probe = await run_process(
+                    [str(self._demo_python), "-c", "import pytest"],
+                    cwd=self._root,
+                    timeout_s=60,
+                    env={"HOME": str(self._root / "tmp" / "home")},
+                )
+            except OSError:
+                probe = None  # no interpreter, or a symlink to one that is gone: rebuild
+            if probe is not None and probe.returncode == 0:
                 return
         await offload(partial(remove_tree, self._root, venv))
         env = self._uv_env()
@@ -390,6 +409,8 @@ class Workspace:
                 "pip",
                 "install",
                 "--quiet",
+                "--exclude-newer",
+                EXCLUDE_NEWER,
                 "--python",
                 str(self._demo_python),
                 want,
@@ -411,8 +432,8 @@ class Workspace:
             async with self._locks.acquire(main=True, agent_id=agent_id):
                 if agent_id in self._trees or await offload(lambda: os.path.lexists(target)):
                     raise WorkspaceError(f"{agent_id} already has a worktree")
-                await offload(lambda: target.parent.mkdir(mode=DIR_MODE, exist_ok=True))
-                head = await self._main.head()
+                head = await self._main.head()  # also refuses a main root that is not plain
+                await offload(partial(ensure_plain_dir, self._root, target.parent))
                 add = ("worktree", "add", "-q", "-b", agent_id, str(target), head)
                 await self.git_ok(self._main, *add)
                 tree = Tree(self, target, agent_id, agent_id, head)

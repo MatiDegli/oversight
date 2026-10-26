@@ -2,8 +2,11 @@
 repository this project lives in, or its .runtime."""
 
 import asyncio
+import contextlib
+import os
 import stat
 import threading
+import tomllib
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -406,6 +409,109 @@ async def test_symlinked_ancestor_refused_at_use(
     assert list((workspace.main.root.parent / "tmp").glob(".write-*")) == []
 
 
+@pytest.mark.parametrize("swap", ["main", "agent", "worktrees"])
+async def test_a_root_replaced_by_a_symlink_is_refused_for_every_operation(
+    workspace: Workspace, tmp_path: Path, swap: str
+) -> None:
+    runtime = workspace.runtime_root
+    agent = await workspace.create_worktree("agent-1")
+    tree = workspace.main if swap == "main" else agent
+    read = await tree.read_text("shop/mod.py")
+    swapped = {
+        "main": runtime / "workspace",
+        "agent": runtime / "worktrees" / "agent-1",
+        "worktrees": runtime / "worktrees",
+    }[swap]
+    outside = tmp_path / "outside"
+    swapped.rename(outside)
+    swapped.symlink_to(outside, target_is_directory=True)
+    before = sorted(path.relative_to(outside) for path in outside.rglob("*"))
+    mod = outside / ("agent-1" if swap == "worktrees" else "") / "shop" / "mod.py"
+    original = mod.read_text()
+    with pytest.raises(InvalidPath):
+        await tree.read_text("shop/mod.py")
+    with pytest.raises(InvalidPath):
+        await tree.write_text("shop/mod.py", "pwned = True\n", expected_hash=read.hash)
+    with pytest.raises(InvalidPath):
+        await tree.write_text("shop/new.py", "pwned = True\n", expected_hash=None)
+    with pytest.raises(InvalidPath):
+        await tree.list_files()
+    with pytest.raises(InvalidPath):
+        tree.resolve("shop/mod.py")
+    with pytest.raises(InvalidPath):
+        await tree.commit_all("pwned", workspace.user_author())
+    async with workspace.locks(main=tree.agent_id is None, agent_id=tree.agent_id):
+        with pytest.raises(InvalidPath):
+            await workspace.git(tree, "status")
+    assert mod.read_text() == original
+    assert sorted(path.relative_to(outside) for path in outside.rglob("*")) == before
+    assert list(workspace.tmp_dir.glob(".write-*")) == []
+
+
+@pytest.mark.parametrize("damage", ["worktrees symlink", "worktrees file", "workspace symlink"])
+async def test_create_worktree_refuses_a_linked_or_misplaced_directory(
+    workspace: Workspace, tmp_path: Path, git_out: GitOut, damage: str
+) -> None:
+    runtime = workspace.runtime_root
+    outside = tmp_path / "outside"
+    repo = runtime / "workspace"
+    if damage == "workspace symlink":
+        repo.rename(outside)
+        repo.symlink_to(outside, target_is_directory=True)
+        repo = outside
+    elif damage == "worktrees symlink":
+        outside.mkdir()
+        (runtime / "worktrees").symlink_to(outside, target_is_directory=True)
+    else:
+        (runtime / "worktrees").write_text("in the way")
+    with pytest.raises(WorkspaceError):
+        await workspace.create_worktree("agent-1")
+    with pytest.raises(WorkspaceError):
+        workspace.worktree("agent-1")
+    if damage == "worktrees symlink":
+        assert list(outside.iterdir()) == []
+    elif damage == "worktrees file":
+        assert (runtime / "worktrees").read_text() == "in the way"
+    else:
+        assert not (runtime / "worktrees").exists()
+    assert not (repo / ".git" / "worktrees").exists()
+    assert (await git_out(repo, "branch", "--list", "agent-1")).strip() == ""
+    assert (await git_out(repo, "worktree", "list")).count("\n") == 1
+
+
+@pytest.mark.parametrize("where", ["main", "agent-1"])
+async def test_a_fifo_is_refused_at_once_and_the_lock_is_released(
+    workspace: Workspace, where: str
+) -> None:
+    tree = workspace.main if where == "main" else await workspace.create_worktree("agent-1")
+    fifo = tree.root / "shop" / "pipe"
+    os.mkfifo(fifo)
+    stalled = threading.Event()
+
+    def unblock() -> None:
+        """Only if the read is stuck in open(): let it go, so the test fails instead of hanging."""
+        stalled.set()
+        with contextlib.suppress(OSError):
+            os.close(os.open(fifo, os.O_WRONLY | os.O_NONBLOCK))
+
+    watchdog = threading.Timer(5, unblock)
+    watchdog.start()
+    try:
+        with pytest.raises(InvalidPath, match="regular file"):
+            await tree.read_text("shop/pipe")
+        with pytest.raises(InvalidPath, match="regular file"):
+            await tree.write_text("shop/pipe", "x = 1\n", expected_hash=None)
+    finally:
+        watchdog.cancel()
+    assert not stalled.is_set(), "the read blocked on the FIFO"
+
+    async def take_lock() -> None:
+        async with workspace.locks(main=tree.agent_id is None, agent_id=tree.agent_id):
+            pass
+
+    await asyncio.wait_for(take_lock(), 10)
+
+
 async def test_tree_resolve_read_write_and_stale_rules(workspace: Workspace) -> None:
     tree = await workspace.create_worktree("agent-1")
     assert tree.resolve("shop/mod.py") == tree.root / "shop" / "mod.py"
@@ -465,6 +571,14 @@ async def test_git_refusals(workspace: Workspace, monkeypatch: pytest.MonkeyPatc
             ("rebase", "main"),
             ("-C", ".", "stash", "push"),
             ("-c", "a=b", "rebase"),
+            ("-c", "a=b", "stash"),
+            ("--git-dir", "x", "stash"),
+            ("--git-dir=x", "stash"),
+            ("--work-tree=x", "stash"),
+            ("--work-tree", "x", "status"),
+            ("-c", "alias.s=stash", "s"),
+            ("--exec-path=x", "status"),
+            (),
         ):
             with pytest.raises(WorkspaceError, match="not allowed"):
                 await workspace.git(workspace.main, *args)
@@ -508,8 +622,13 @@ async def test_approval_waits_for_agent_edit(
 # --- Demo venv and redaction ------------------------------------------------------------------
 
 
+def interpreter_exists(path: str) -> bool:
+    return Path(path).exists()
+
+
 class FakeUv:
-    """Stands in for the runner: records calls, builds a fake venv, and answers the probe."""
+    """Stands in for the runner: records calls, builds a fake venv, and answers the probe. Like the
+    real runner, starting an interpreter that is not there raises `FileNotFoundError`."""
 
     def __init__(self, root: Path, *, probe_ok: bool = True, install_ok: bool = True) -> None:
         self.root = root
@@ -527,6 +646,8 @@ class FakeUv:
         elif "pip" in argv and not self.install_ok:
             code = 1
         elif argv[0].endswith("python"):
+            if not interpreter_exists(argv[0]):  # absent, or a symlink whose target is gone
+                raise FileNotFoundError(2, "No such file or directory", argv[0])
             code = 0 if self.probe_ok else 1
         return ProcessResult(code, "", "boom" if code else "", False, False, 1)
 
@@ -545,6 +666,8 @@ async def test_ensure_demo_venv_builds_with_absolute_targets_and_stamps_last(
     monkeypatch.setattr(workspace_core, "run_process", fake)
     monkeypatch.setenv("META_API_KEY", "test-key")
     monkeypatch.setenv("UV_CACHE_DIR", str(root / "uv-cache"))
+    for name in ("UV_OVERRIDE", "UV_EXCLUDE", "UV_CONSTRAINT", "UV_INDEX_URL", "UV_NO_SOURCES"):
+        monkeypatch.setenv(name, "test-value")
     await workspace.ensure_demo_venv()
     venv, python = root / "demo-venv", root / "demo-venv" / "bin" / "python"
     assert fake.commands == [
@@ -555,6 +678,8 @@ async def test_ensure_demo_venv_builds_with_absolute_targets_and_stamps_last(
             "pip",
             "install",
             "--quiet",
+            "--exclude-newer",
+            "14 days",
             "--python",
             str(python),
             "pytest==9.1.1",
@@ -565,6 +690,7 @@ async def test_ensure_demo_venv_builds_with_absolute_targets_and_stamps_last(
     for _, env in fake.calls:
         assert "META_API_KEY" not in env
         assert env["UV_CACHE_DIR"] == str(root / "uv-cache")
+        assert sorted(key for key in env if key.startswith("UV_")) == ["UV_CACHE_DIR"]
 
 
 async def test_ensure_demo_venv_reuses_a_stamped_venv_that_runs(
@@ -572,7 +698,8 @@ async def test_ensure_demo_venv_reuses_a_stamped_venv_that_runs(
 ) -> None:
     workspace = make_workspace("reuse")
     root = workspace.main.root.parent
-    (root / "demo-venv").mkdir(parents=True)
+    (root / "demo-venv" / "bin").mkdir(parents=True)
+    (root / "demo-venv" / "bin" / "python").write_text("")
     (root / "demo-venv" / "oversight-stamp").write_text("pytest==9.1.1\n")
     fake = FakeUv(root)
     monkeypatch.setattr(workspace_core, "run_process", fake)
@@ -602,12 +729,37 @@ async def test_ensure_demo_venv_rebuilds_when_the_python_does_not_run(
 ) -> None:
     workspace = make_workspace("broken")
     root = workspace.main.root.parent
-    (root / "demo-venv").mkdir(parents=True)
+    (root / "demo-venv" / "bin").mkdir(parents=True)
+    (root / "demo-venv" / "bin" / "python").write_text("")
     (root / "demo-venv" / "oversight-stamp").write_text("pytest==9.1.1\n")
     fake = FakeUv(root, probe_ok=False)
     monkeypatch.setattr(workspace_core, "run_process", fake)
     await workspace.ensure_demo_venv()
     assert len(fake.commands) == 3
+
+
+@pytest.mark.parametrize("damage", ["no interpreter", "dangling symlink"])
+async def test_ensure_demo_venv_rebuilds_when_the_python_is_missing_or_a_broken_link(
+    make_workspace: MakeWorkspace, monkeypatch: pytest.MonkeyPatch, damage: str
+) -> None:
+    workspace = make_workspace("missing")
+    root = workspace.main.root.parent
+    (root / "demo-venv" / "bin").mkdir(parents=True)
+    (root / "demo-venv" / "oversight-stamp").write_text("pytest==9.1.1\n")
+    if damage == "dangling symlink":
+        (root / "demo-venv" / "bin" / "python").symlink_to(root / "gone" / "python3.12")
+    fake = FakeUv(root)
+    monkeypatch.setattr(workspace_core, "run_process", fake)
+    await workspace.ensure_demo_venv()
+    python = str(root / "demo-venv" / "bin" / "python")
+    assert [argv[0] for argv in fake.commands] == [python, "uv", "uv"]
+    assert [argv[2] for argv in fake.commands[1:]] == ["venv", "pip"]
+    assert (root / "demo-venv" / "oversight-stamp").read_text().strip() == "pytest==9.1.1"
+
+
+def test_the_install_passes_the_repositorys_release_age_rule(repo_root: Path) -> None:
+    pyproject = tomllib.loads((repo_root / "pyproject.toml").read_text())
+    assert pyproject["tool"]["uv"]["exclude-newer"] == workspace_core.EXCLUDE_NEWER
 
 
 async def test_a_failed_install_leaves_no_stamp(
