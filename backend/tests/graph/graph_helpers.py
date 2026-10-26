@@ -3,7 +3,7 @@
 from pathlib import Path
 from textwrap import dedent
 
-from oversight.graph import WorkspaceGraph
+from oversight.graph import CodeVersion, WorkspaceGraph, parse_version
 from oversight_contracts.graph import GraphEdge, GraphNode, GraphSnapshot
 
 COMMIT = "0" * 40
@@ -36,3 +36,9 @@ def calls(snapshot: GraphSnapshot, src: str) -> dict[str, GraphEdge]:
 def summary(snapshot: GraphSnapshot, src: str) -> dict[str, str]:
     """Each call target of `src` with "exact" or the possible reason."""
     return {dst: e.reason or "exact" for dst, e in calls(snapshot, src).items()}
+
+
+def version(files: dict[str, str], previous: CodeVersion | None = None) -> CodeVersion:
+    """Parse a file set given as dedented sources, as a change's version is parsed."""
+    data = {path: dedent(source).lstrip("\n").encode() for path, source in files.items()}
+    return parse_version(data, COMMIT, previous)

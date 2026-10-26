@@ -208,16 +208,21 @@ class _Nodes:
         return at if at >= 0 else offset
 
     def own_hashes(self) -> dict[str, str]:
+        """Per node, the hash of its source with the nested nodes cut out. Lines that are blank
+        once the nested nodes are gone are left out, so adding, removing or moving a method does
+        not mark its class modified, nor a new function its module."""
         hashes: dict[str, str] = {}
         for node_id, (start, end) in self.spans.items():
-            digest = hashlib.sha256()
+            pieces: list[bytes] = []
             cursor = start
             for child in sorted(self.children[node_id], key=lambda c: self.spans[c][0]):
                 child_start, child_end = self.spans[child]
-                digest.update(self.data[cursor:child_start])
+                pieces.append(self.data[cursor:child_start])
                 cursor = child_end
-            digest.update(self.data[cursor:end])
-            hashes[node_id] = digest.hexdigest()
+            pieces.append(self.data[cursor:end])
+            lines = b"".join(pieces).splitlines()
+            own = b"\n".join(line for line in lines if line.strip())
+            hashes[node_id] = hashlib.sha256(own).hexdigest()
         return hashes
 
 
