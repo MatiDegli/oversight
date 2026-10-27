@@ -1,8 +1,5 @@
 """Two agents in parallel (docs/plans/two-slots.md): the claim, the release, the pick, the profiles,
-the clients and their combinations, and the one log both runs write.
-
-Slot B is closed by a constant until a merge on a moved main is tested. The tests that need it open
-it with `slot_b_open`; `test_slot_b_is_closed_until_r5` keeps the real constant."""
+the clients and their combinations, and the one log both runs write."""
 
 import asyncio
 import contextlib
@@ -35,9 +32,9 @@ from oversight.agents import (
     parse_script,
 )
 from oversight.api import ApiError
-from oversight.app import LIMITS, OFFERED_SLOTS, LiveRun
+from oversight.app import LIMITS, LiveRun
 from oversight.changes import ChangeManager
-from oversight_contracts.commands import AgentCreated, StartAgent
+from oversight_contracts.commands import StartAgent
 from oversight_contracts.common import Slot
 from oversight_contracts.events import ChangeResolved, Conflict, ModelProfile
 
@@ -61,25 +58,7 @@ def scripted(text: str) -> Script:
 # --- The claim and the pick ----------------------------------------------------------------------
 
 
-async def test_slot_b_is_closed_until_r5(tmp_path: Path) -> None:
-    # B opens once the combined tests run before a merge on a moved main. The constant is the gate:
-    # the branch that opens it also adds the end-to-end test of that combination (plan, section 7).
-    assert OFFERED_SLOTS == ("A",)
-    a, _, clients = gated_clients()
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), clients) as s:
-        run = s.events()[0].payload
-        assert [(slot.slot, slot.default_model) for slot in run.slots] == [("A", "fake")]
-        assert error_code(await start(s, slot="B")) == (422, "invalid_request")
-        created = AgentCreated.model_validate((await start(s)).json())
-        assert created.slot == "A"
-        # With A held, a start with no slot has nowhere to go: B is not a fallback.
-        refused = await start(s)
-        assert error_code(refused) == (409, "slot_busy")
-        assert refused.json()["error"]["message"] == "slot A is taken (agent-1)"
-        assert clients.built == [("fake", "A")] and not a.cancelled.is_set()
-
-
-async def test_concurrent_starts_take_a_then_b_then_busy(tmp_path: Path, slot_b_open: None) -> None:
+async def test_concurrent_starts_take_a_then_b_then_busy(tmp_path: Path) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path)) as s:
         release = asyncio.Event()
 
@@ -109,7 +88,7 @@ async def test_concurrent_starts_take_a_then_b_then_busy(tmp_path: Path, slot_b_
             )
 
 
-async def test_slot_rules(tmp_path: Path, slot_b_open: None) -> None:
+async def test_slot_rules(tmp_path: Path) -> None:
     _, _, clients = gated_clients()
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), clients) as s:
         # With no slot: A while it is free, then B.
@@ -125,7 +104,7 @@ async def test_slot_rules(tmp_path: Path, slot_b_open: None) -> None:
         assert clients.built == [("fake", "A"), ("fake", "B")]
 
 
-async def test_a_failed_open_in_b_frees_only_b(tmp_path: Path, slot_b_open: None) -> None:
+async def test_a_failed_open_in_b_frees_only_b(tmp_path: Path) -> None:
     _, _, clients = gated_clients()
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), clients) as s:
         assert (await start(s, slot="A")).status_code == 201
@@ -139,7 +118,7 @@ async def test_a_failed_open_in_b_frees_only_b(tmp_path: Path, slot_b_open: None
 
 
 async def test_a_cancelled_start_in_b_frees_only_b(
-    tmp_path: Path, slot_b_open: None, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     entered = asyncio.Event()
     real_open = ChangeManager.open
@@ -190,7 +169,7 @@ def resolved(agent_id: str, decision: str, merge: str | None) -> ChangeResolved:
     ],
 )
 async def test_a_resolution_frees_only_its_slot(
-    tmp_path: Path, slot_b_open: None, decision: str, merge: str | None, frees: bool
+    tmp_path: Path, decision: str, merge: str | None, frees: bool
 ) -> None:
     # A rejection and a landed merge give the slot back; a conflict and a request for changes keep
     # it, as the change lives on. Either way the other slot's holder is untouched.
@@ -203,7 +182,7 @@ async def test_a_resolution_frees_only_its_slot(
 
 
 async def test_a_decided_run_frees_its_slot_and_the_next_start_takes_the_first_free(
-    tmp_path: Path, slot_b_open: None
+    tmp_path: Path,
 ) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path)) as s:
         assert (await start(s, slot="B")).status_code == 201
@@ -243,7 +222,6 @@ async def test_a_decided_run_frees_its_slot_and_the_next_start_takes_the_first_f
 )
 async def test_run_started_lists_the_offered_slots(
     tmp_path: Path,
-    slot_b_open: None,
     overrides: dict[str, Any],
     slots: list[tuple[str, str]],
     models: list[str],
@@ -257,14 +235,14 @@ async def test_run_started_lists_the_offered_slots(
     assert [model.id for model in run.models] == models
 
 
-def test_a_slot_names_the_variable_of_an_unknown_model(tmp_path: Path, slot_b_open: None) -> None:
+def test_a_slot_names_the_variable_of_an_unknown_model(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="OVERSIGHT_AGENT_MODEL_B must be one of"):
         LiveRun(two_fakes(tmp_path, agent_model_b="gpt"))
     with pytest.raises(ValueError, match="OVERSIGHT_AGENT_MODEL must be one of"):
         LiveRun(two_fakes(tmp_path, agent_model="gpt"))
 
 
-async def test_each_start_builds_its_own_client(tmp_path: Path, slot_b_open: None) -> None:
+async def test_each_start_builds_its_own_client(tmp_path: Path) -> None:
     # The real factory: each slot plays its own script, so the two edits are different ones.
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path)) as s:
         assert (await start(s, slot="A")).status_code == 201
@@ -292,7 +270,7 @@ class SpyClient(ScriptedModel):
 
 @pytest.mark.usefixtures("baseten_verified")
 async def test_the_client_endpoint_follows_the_provider(
-    tmp_path: Path, slot_b_open: None, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("oversight.app.OpenAIClient", SpyClient)
     monkeypatch.setattr(SpyClient, "made", [])
@@ -320,7 +298,7 @@ def scripted_clients() -> BySlot:
     return BySlot(lambda profile, _slot: ScriptedModel(scripted(FINISH), profile))
 
 
-async def test_the_brake_refuses_the_metered_slot_only(tmp_path: Path, slot_b_open: None) -> None:
+async def test_the_brake_refuses_the_metered_slot_only(tmp_path: Path) -> None:
     # A on the fake model, B on Muse Spark, 136 of the 150 credits spent: past the 90% line.
     settings = meta_settings(
         tmp_path, agent_model="fake", agent_model_b="muse-spark", fake_script=FAKE_SCRIPT
@@ -336,7 +314,7 @@ async def test_the_brake_refuses_the_metered_slot_only(tmp_path: Path, slot_b_op
     assert clients.built == [("fake", "A")]
 
 
-async def test_an_omitted_slot_skips_a_braked_one(tmp_path: Path, slot_b_open: None) -> None:
+async def test_an_omitted_slot_skips_a_braked_one(tmp_path: Path) -> None:
     # A on Muse Spark, braked; B on the fake model. A start with no slot goes to B; one that names
     # A is refused, not rerouted.
     settings = meta_settings(tmp_path, agent_model_b="fake", fake_script_b=FAKE_SCRIPT_B)
@@ -349,9 +327,7 @@ async def test_an_omitted_slot_skips_a_braked_one(tmp_path: Path, slot_b_open: N
         assert clients.built == [("fake", "B")]
 
 
-async def test_an_omitted_slot_with_both_braked_is_refused_with_the_brake(
-    tmp_path: Path, slot_b_open: None
-) -> None:
+async def test_an_omitted_slot_with_both_braked_is_refused_with_the_brake(tmp_path: Path) -> None:
     settings = meta_settings(tmp_path)  # A and B both on Muse Spark
     write_ledger(settings, {"spent_usd": 136.0, "unknown": []})
     clients = scripted_clients()
@@ -444,7 +420,6 @@ async def test_an_omitted_slot_with_both_braked_is_refused_with_the_brake(
 )
 async def test_slot_model_combinations(
     tmp_path: Path,
-    slot_b_open: None,
     overrides: dict[str, Any],
     body: dict[str, str],
     status: int,
@@ -464,7 +439,7 @@ async def test_slot_model_combinations(
 
 
 async def test_an_unverified_profile_is_refused_on_either_slot(
-    tmp_path: Path, slot_b_open: None, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("oversight.app.UNVERIFIED_PROFILES", frozenset({"muse-spark-open"}))
     settings = meta_settings(tmp_path, agent_model_b="muse-spark-open", baseten_api_key="test-key")
@@ -477,7 +452,7 @@ async def test_an_unverified_profile_is_refused_on_either_slot(
     assert clients.built == []
 
 
-async def test_fake_a_alone_has_no_slot_b(tmp_path: Path, slot_b_open: None) -> None:
+async def test_fake_a_alone_has_no_slot_b(tmp_path: Path) -> None:
     # A on the fake model and B with no script of its own: B is not offered, with the constant open.
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         assert error_code(await start(s, slot="B")) == (422, "invalid_request")
