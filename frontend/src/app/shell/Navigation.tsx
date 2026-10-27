@@ -98,6 +98,10 @@ export function ShortcutsSheet({ onClose }: { onClose: () => void }) {
       ref={dialog}
       aria-label="Keyboard shortcuts"
       onClose={onClose}
+      onKeyDown={(event) => {
+        // Native dialog cancellation also treats Meta+Escape as Escape.
+        if (event.metaKey && event.key === "Escape") event.preventDefault();
+      }}
       className="shortcuts-sheet"
     >
       <header className="flex items-center gap-8">

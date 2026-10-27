@@ -12,7 +12,7 @@ export function useEscapeCloses(open: boolean, onClose: () => void): void {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (!isTyping(event.target) && closesPanel(event)) onClose();
+      if (!event.metaKey && !isTyping(event.target) && closesPanel(event)) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {

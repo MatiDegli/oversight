@@ -204,3 +204,32 @@ it("ignores shell shortcuts in the task box and Monaco, and events never open a 
     await check(page.getByText("This window is too narrow.", { exact: false })).toBeVisible();
   });
 }, 40_000);
+
+it.each(["Meta+Control+b", "Meta+Control+Backquote", "Meta+Alt+w", "Meta+Escape"])(
+  "ignores the Meta-modified shell shortcut %s",
+  async (key) => {
+    await withPage(1920, 1080, async (page) => {
+      await page.evaluate(() => {
+        window.shellTest.open("file");
+      });
+      await page.getByRole("button", { name: "Close file", exact: true }).focus();
+      await page.keyboard.press(key);
+      await check(page.locator(".shell-sidebar, .bottom-dock")).toHaveCount(0);
+      await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(1);
+      await page.keyboard.press("Alt+w");
+      await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(0);
+    });
+  },
+  30_000,
+);
+
+it("ignores Meta+Escape in the shortcuts sheet", async () => {
+  await withPage(1920, 1080, async (page) => {
+    await page.getByRole("button", { name: "Keyboard shortcuts", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+    await page.keyboard.press("Meta+Escape");
+    await check(sheet).toBeVisible();
+    await page.keyboard.press("Escape");
+    await check(sheet).toHaveCount(0);
+  });
+}, 30_000);

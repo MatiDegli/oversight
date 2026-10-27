@@ -25,7 +25,8 @@ export function useShell(open: boolean, onClose: () => void) {
   const [maximized, setMaximized] = useState(false);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || isTyping(event.target)) return;
+      if (event.defaultPrevented || event.isComposing || event.metaKey || isTyping(event.target))
+        return;
       if (event.key === "Escape" && shortcuts) {
         event.preventDefault();
         setShortcuts(false);

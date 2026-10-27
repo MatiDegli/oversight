@@ -222,7 +222,19 @@ function contrast(a: string, b: string) {
   const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
 }
-const surfaces = ["shell", "panel", "page", "card", "card-end", "raised", "inset"] as const;
+const surfaces = [
+  "shell",
+  "panel",
+  "field",
+  "page",
+  "page-raised",
+  "card",
+  "card-end",
+  "raised",
+  "inset",
+  "matte-top",
+  "matte-bottom",
+] as const;
 const bodyText = [
   "text",
   "muted",
@@ -243,6 +255,54 @@ it.each(surfaces)("meets body contrast for every shell text token on %s", (surfa
       contrast(tokens[mark], tokens[surface]),
       `${mark} UI mark on ${surface}`,
     ).toBeGreaterThanOrEqual(3);
+});
+
+// CSS alpha compositing happens in sRGB before relative luminance is calculated.
+function composite(foreground: { color: string; alpha: number }, background: string): string {
+  return `#${[1, 3, 5]
+    .map((offset) => {
+      const front = Number.parseInt(foreground.color.slice(offset, offset + 2), 16);
+      const back = Number.parseInt(background.slice(offset, offset + 2), 16);
+      return Math.round(front * foreground.alpha + back * (1 - foreground.alpha))
+        .toString(16)
+        .padStart(2, "0");
+    })
+    .join("")}`;
+}
+
+it.each(["agent-a", "agent-b"] as const)(
+  "meets body contrast for %s text on its tint and letters on its fill",
+  (agent) => {
+    // Card badges include both gradient ends; the collapsed agent rail uses shell.
+    for (const surface of ["shell", "card", "card-end", "matte-top"] as const) {
+      const background = composite(tokens[`${agent}-tint`], tokens[surface]);
+      expect(
+        contrast(tokens[`${agent}-text`], background),
+        `${agent}-text on ${agent}-tint over ${surface}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(
+      contrast(tokens["on-agent"], tokens[agent]),
+      `on-agent on ${agent}`,
+    ).toBeGreaterThanOrEqual(4.5);
+  },
+);
+
+it.each(["text", "muted"] as const)("meets body contrast for %s on frosted overlays", (text) => {
+  // Bound any blurred graph content, including agent lights, between black and white.
+  for (const backdrop of ["#000000", "#ffffff"]) {
+    const background = composite(tokens["overlay-panel"], backdrop);
+    expect(
+      contrast(tokens[text], background),
+      `${text} on overlay-panel over ${backdrop}`,
+    ).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+it("checks alpha compositing against reference colors", () => {
+  expect(composite({ color: "#ffffff", alpha: 0.5 }, "#000000")).toBe("#808080");
+  expect(composite({ color: "#ff0000", alpha: 0 }, "#123456")).toBe("#123456");
+  expect(composite({ color: "#ff0000", alpha: 1 }, "#123456")).toBe("#ff0000");
 });
 it("checks WCAG reference pairs so a broken calculation cannot pass", () => {
   expect(contrast("#000000", "#ffffff")).toBe(21);
