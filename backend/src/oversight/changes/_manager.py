@@ -26,7 +26,6 @@ import functools
 import logging
 import os
 from collections.abc import Coroutine
-from datetime import UTC
 from typing import Any, Literal
 
 from oversight.agents import AgentTask, Publish, RunEnd
@@ -70,7 +69,6 @@ from oversight.graph import (
 from oversight.workspace import (
     FileRead,
     InvalidPath,
-    ProcessResult,
     StaleFile,
     Tree,
     Workspace,
@@ -84,7 +82,6 @@ from oversight_contracts.events import (
     ChangeResolved,
     ChangeUpdated,
     Conflict,
-    ErrorReport,
     FileDiff,
     FileStat,
     SuiteResult,
@@ -149,87 +146,6 @@ class ChangeManager:
         restarts and the next start's `reset` rebuilds main. Rejecting that change keeps it true."""
         return self._ctx.state.suspect
 
-    def _date(self) -> str:
-        return self._ctx.clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
-
-    async def _run(self, tree: Tree, *args: str) -> ProcessResult:
-        return await self._ctx.workspace.git(tree, *args, timeout_s=self._ctx.timeout)
-
-    async def _git(self, tree: Tree, *args: str, commit_as: str | None = None) -> str:
-        """`git_ok` with the manager's timeout; a commit gets an author and the clock's date."""
-        if commit_as is None:
-            return await self._ctx.workspace.git_ok(tree, *args, timeout_s=self._ctx.timeout)
-        workspace = self._ctx.workspace
-        author = (
-            workspace.user_author() if commit_as == "user" else workspace.agent_author(commit_as)
-        )
-        return await workspace.git_ok(
-            tree, *args, timeout_s=self._ctx.timeout, author=author, date=self._date()
-        )
-
-    async def _yes_no(self, tree: Tree, *args: str) -> bool:
-        """A git query that answers with its exit code: 0 yes, 1 no, anything else fails."""
-        result = await self._run(tree, *args)
-        if result.timed_out or result.returncode not in (0, 1):
-            raise WorkspaceError(
-                f"git {args[0]} failed: {self._ctx.workspace.redact(result.stderr)}"
-            )
-        return result.returncode == 0
-
-    async def _error(
-        self, source: Source, message: str, rec: ChangeRecord | None, *, fatal: bool
-    ) -> bool:
-        """Publish an `error`; False when the store refused it: nowhere left to say so."""
-        report = ErrorReport(
-            source=source,
-            message=self._ctx.workspace.redact(message)[:1000],
-            agent_id=rec.agent_id if rec else None,
-            change_id=rec.change_id if rec else None,
-            fatal=fatal,
-        )
-        try:
-            await self._ctx.publish(report)
-        except Exception:
-            return False
-        return True
-
-    def _spawn[T](self, work: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
-        task = asyncio.get_running_loop().create_task(work)
-        self._ctx.state.tasks.add(task)
-        task.add_done_callback(self._ctx.state.tasks.discard)
-        return task
-
-    async def _whole[T](self, work: Coroutine[Any, Any, T]) -> T:
-        """Run `work` as a tracked task and wait for its end through every cancel, then re-raise
-        the first cancel. For a publish and the bookkeeping that must match what the store took, so
-        a cancel never leaves one without the other; and for a save or rescan on main, whole."""
-        task = self._spawn(work)
-        cancelled = False
-        while not task.done():
-            try:
-                await asyncio.wait([task])
-            except asyncio.CancelledError:
-                cancelled = True
-        if cancelled:
-            raise asyncio.CancelledError
-        return task.result()
-
-    async def _scan(self, commit: str) -> GraphSnapshot:
-        """M2: `WorkspaceGraph.scan` in a thread. A cancel waits for the thread to return before it
-        is re-raised, so no lock is released while the graph is being rewritten."""
-        scanning = asyncio.ensure_future(asyncio.to_thread(self._ctx.main_graph.scan, commit))
-        cancelled = False
-        while not scanning.done():
-            try:
-                await asyncio.wait([scanning])
-            except asyncio.CancelledError:
-                cancelled = True
-        if cancelled:
-            if not scanning.cancelled() and scanning.exception() is not None:
-                _log.error("A cancelled scan of main failed: %s", scanning.exception())
-            raise asyncio.CancelledError
-        return scanning.result()
-
     async def open(self, task: AgentTask, model_id: str) -> Tree:
         """Create the agent's worktree from main's HEAD and record its base files and graph."""
         if task.change_id in self._ctx.state.changes or task.agent_id in self._ctx.state.agents:
@@ -288,13 +204,13 @@ class ChangeManager:
                     try:
                         await self._update(rec, earlier)
                     except Exception as error:
-                        await self._error("server", f"{earlier}: {error}", rec, fatal=False)
+                        await self._ctx.error("server", f"{earlier}: {error}", rec, fatal=False)
                 await self._update(rec, path)
             return True
         except Exception as error:
             if rec is not None:
                 rec.unpublished.add(path)
-            await self._error(
+            await self._ctx.error(
                 "server", f"The edit of {path} was not shown: {error}", rec, fatal=False
             )
             return False
@@ -378,7 +294,9 @@ class ChangeManager:
         except Exception as error:
             source: Source = "git" if isinstance(error, WorkspaceError) else "server"
             change = rec.change_id if rec else agent_id
-            await self._error(source, f"{change} could not be proposed: {error}", rec, fatal=True)
+            await self._ctx.error(
+                source, f"{change} could not be proposed: {error}", rec, fatal=True
+            )
             return False
 
     async def _proposal(
@@ -427,7 +345,7 @@ class ChangeManager:
             tests=tests,
             impact=impact,
         )
-        await self._whole(self._record_proposal(rec, proposal))
+        await self._ctx.whole(self._record_proposal(rec, proposal))
 
     async def _record_proposal(self, rec: ChangeRecord, proposal: ChangeProposed) -> None:
         """R7: a run cancelled during this publish still finds the record matching the store."""
@@ -441,15 +359,15 @@ class ChangeManager:
         """Commit the worktree as the agent, or as the user for edits in review; HEAD, and the
         files that differ from the base."""
         tree = rec.tree
-        await self._git(tree, "add", "-A")
-        if (await self._git(tree, "status", "--porcelain")).strip():
+        await self._ctx.git(tree, "add", "-A")
+        if (await self._ctx.git(tree, "status", "--porcelain")).strip():
             if by == "agent":
                 message, author = f"{rec.change_id} ({rec.agent_id})", rec.agent_id
             else:
                 message, author = f"{rec.change_id}: edited in review", "user"
-            await self._git(tree, "commit", "-q", "-m", message, commit_as=author)
-        head = (await self._git(tree, "rev-parse", "HEAD")).strip()
-        names = await self._git(
+            await self._ctx.git(tree, "commit", "-q", "-m", message, commit_as=author)
+        head = (await self._ctx.git(tree, "rev-parse", "HEAD")).strip()
+        names = await self._ctx.git(
             tree, "diff", "--name-status", "--no-renames", "-z", rec.base_commit, head
         )
         return head, parse_name_status(names)
@@ -460,7 +378,7 @@ class ChangeManager:
                 rec.tree, timeout_s=rec.task.limits.test_timeout_s
             )
         except (WorkspaceError, OSError) as error:
-            await self._error("tests", f"The tests could not run: {error}", rec, fatal=False)
+            await self._ctx.error("tests", f"The tests could not run: {error}", rec, fatal=False)
             return SuiteResult(
                 outcome="error", passed=0, failed=0, skipped=0, duration_ms=0, failed_tests=[]
             )
@@ -529,7 +447,7 @@ class ChangeManager:
         merges: main is untouched, so the decision's end puts the change back to `ready`. The
         caller holds both locks."""
         if rec.revision != rec.taken:
-            await self._error(
+            await self._ctx.error(
                 "server",
                 f"Revision {rec.revision} of {rec.change_id} arrived after you clicked; "
                 "review it and approve again.",
@@ -539,17 +457,17 @@ class ChangeManager:
             return False
         tree = rec.tree
         try:
-            head = (await self._git(tree, "rev-parse", "HEAD")).strip()
+            head = (await self._ctx.git(tree, "rev-parse", "HEAD")).strip()
             if (
                 head == rec.head_commit
-                and not (await self._git(tree, "status", "--porcelain")).strip()
+                and not (await self._ctx.git(tree, "status", "--porcelain")).strip()
             ):
                 return True
             head, files = await self._commit(rec, "user")
             await self._proposal(rec, head, files, "user", rec.summary)
         except Exception as error:
             source: Source = "git" if isinstance(error, WorkspaceError) else "server"
-            await self._error(
+            await self._ctx.error(
                 source,
                 f"Approving {rec.change_id} merged nothing: its worktree could not be checked or "
                 f"re-proposed ({error}); approve again or reject.",
@@ -557,7 +475,7 @@ class ChangeManager:
                 fatal=False,
             )
             return False
-        await self._error(
+        await self._ctx.error(
             "server",
             f"Revision {rec.revision} of {rec.change_id} holds edits that were not proposed when "
             "you clicked; review it and approve again.",
@@ -608,7 +526,7 @@ class ChangeManager:
         The same bytes commit nothing. A failed commit restores the file and raises
         `WorkspaceError`; the commit is the save, so a failed rescan after it still answers saved.
         Runs no tests: the next approval tests the combination (R5)."""
-        return await self._whole(self._save_main(path, content, base_hash))
+        return await self._ctx.whole(self._save_main(path, content, base_hash))
 
     async def _save_main(self, path: str, content: str, base_hash: str) -> FileSaved:
         # M4: a pending close-out usually sends its delta here, moving `snapshot`, before the
@@ -620,7 +538,7 @@ class ChangeManager:
             blocked = await self._main_blocked()
             if blocked is not None:
                 raise WrongState(f"{blocked}; nothing was saved")
-            pre = (await self._git(main, "rev-parse", "HEAD")).strip()
+            pre = (await self._ctx.git(main, "rev-parse", "HEAD")).strip()
             try:
                 original = (await self._read_text(main, path)).content
             except FileNotFoundError:
@@ -630,17 +548,17 @@ class ChangeManager:
                 return FileSaved(path=path, hash=saved)  # the same bytes: no commit, no event
             try:
                 # `:(literal)`: the path is a file's name, never a glob or a pathspec's magic.
-                await self._git(main, "add", "--", f":(literal){path}")
-                await self._git(main, "commit", "-q", "-m", f"Edit {path}", commit_as="user")
+                await self._ctx.git(main, "add", "--", f":(literal){path}")
+                await self._ctx.git(main, "commit", "-q", "-m", f"Edit {path}", commit_as="user")
             except Exception as failure:
                 await self._settle_save(path, pre, original, saved, failure)
             try:
-                head = (await self._git(main, "rev-parse", "HEAD")).strip()
+                head = (await self._ctx.git(main, "rev-parse", "HEAD")).strip()
                 await self._publish_main(head, "user_edit")
             except Exception as error:
                 # The snapshot stays: the next merge, save or rescan covers this commit.
                 message = f"Main's graph was not updated after saving {path}: {error}"
-                await self._report("graph", message, fatal=False)
+                await self._ctx.report("graph", message, fatal=False)
             return FileSaved(path=path, hash=saved)
 
     async def _settle_save(
@@ -655,12 +573,12 @@ class ChangeManager:
         if landed:
             return
         if landed is False and await self._restore_save(path, original, saved):
-            await self._report(
+            await self._ctx.report(
                 "git", f"Saving {path} failed ({failure}); main is unchanged.", fatal=False
             )
         else:
             self._ctx.state.suspect = True
-            await self._report(
+            await self._ctx.report(
                 "git",
                 f"Saving {path} failed ({failure}) and main's state is unknown; "
                 "reject the change and restart the server.",
@@ -674,15 +592,15 @@ class ChangeManager:
         merge. None for anything else, and when a fact cannot be read."""
         main = self._ctx.workspace.main
         try:
-            head = (await self._git(main, "rev-parse", "HEAD")).strip()
-            if await self._yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+            head = (await self._ctx.git(main, "rev-parse", "HEAD")).strip()
+            if await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
                 return None
             if head == pre:
                 return False
-            parent = (await self._git(main, "rev-parse", "HEAD^")).strip()
+            parent = (await self._ctx.git(main, "rev-parse", "HEAD^")).strip()
             diff = ("diff", "--name-only", "--no-renames", "-z", pre, "HEAD")
-            names = [name for name in (await self._git(main, *diff)).split("\0") if name]
-            clean = not (await self._git(main, "status", "--porcelain")).strip()
+            names = [name for name in (await self._ctx.git(main, *diff)).split("\0") if name]
+            clean = not (await self._ctx.git(main, "status", "--porcelain")).strip()
             on_disk = (await main.read_text(path)).hash
         except Exception:
             return None
@@ -693,8 +611,8 @@ class ChangeManager:
         main = self._ctx.workspace.main
         try:
             await main.write_text(path, original, expected_hash=saved)
-            await self._git(main, "add", "--", f":(literal){path}")
-            return not (await self._git(main, "status", "--porcelain")).strip()
+            await self._ctx.git(main, "add", "--", f":(literal){path}")
+            return not (await self._ctx.git(main, "status", "--porcelain")).strip()
         except Exception:
             return False
 
@@ -704,7 +622,7 @@ class ChangeManager:
         that is suspect, mid-merge or dirty is not main's graph at any commit: refused with an
         `error` event and nothing published, until the contract lists `wrong_state` for it (P1).
         A scan or publish that raises sends an `error`, keeps `snapshot` and re-raises."""
-        await self._whole(self._rescan())
+        await self._ctx.whole(self._rescan())
 
     async def _rescan(self) -> None:
         await self._finish_pending()
@@ -712,13 +630,15 @@ class ChangeManager:
             await self._drain_pending()
             blocked = await self._main_blocked()
             if blocked is not None:
-                await self._report("graph", f"{blocked}; nothing was rescanned.", fatal=False)
+                await self._ctx.report("graph", f"{blocked}; nothing was rescanned.", fatal=False)
                 return
             try:
-                head = (await self._git(self._ctx.workspace.main, "rev-parse", "HEAD")).strip()
+                head = (await self._ctx.git(self._ctx.workspace.main, "rev-parse", "HEAD")).strip()
                 await self._publish_main(head, "rescan")
             except Exception as error:
-                await self._report("graph", f"Main's graph was not rescanned: {error}", fatal=False)
+                await self._ctx.report(
+                    "graph", f"Main's graph was not rescanned: {error}", fatal=False
+                )
                 raise
 
     async def _main_blocked(self) -> str | None:
@@ -734,7 +654,7 @@ class ChangeManager:
     async def _publish_main(self, head: str, cause: DeltaCause) -> None:
         """M3: scan main at `head` and send the one delta from the graph the UI holds, then move
         `snapshot` to it with no await between. A rescan sends none when nothing moved."""
-        new = await self._scan(head)
+        new = await self._ctx.scan(head)
         old = self._ctx.state.snapshot
         delta = (
             rescan_delta(old, new, head) if cause == "rescan" else main_delta(old, new, head, cause)
@@ -744,11 +664,6 @@ class ChangeManager:
         self._supersede_pending()
         await self._ctx.publish(delta)
         self._ctx.state.snapshot = with_positions(new, old)
-
-    async def _report(self, source: Source, message: str, *, fatal: bool) -> None:
-        """An `error` with no change or agent; a store that refuses it leaves a log line."""
-        if not await self._error(source, message, None, fatal=fatal):
-            _log.error("The store refused an error event: %s", self._ctx.workspace.redact(message))
 
     def _take(self, change_id: ChangeId, allowed: frozenset[State], verb: str) -> ChangeRecord:
         """Check and flip the state with no `await`, so a second click fails at once."""
@@ -769,7 +684,7 @@ class ChangeManager:
         through a done-callback, which runs before anyone awaiting the task resumes. The callback
         keeps its decision's number: a decision that settled, then took a while to report it, ends
         after the next one was taken, and must leave that one `deciding`."""
-        task = self._spawn(work)
+        task = self._ctx.spawn(work)
         decision = rec.decision
         task.add_done_callback(lambda _: self._ctx.state.restore(rec, decision))
         return task
@@ -816,8 +731,8 @@ class ChangeManager:
         main = self._ctx.workspace.main
         async with self._ctx.workspace.locks(main=True):
             try:
-                merging = await self._yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD")
-                dirty = bool((await self._git(main, "status", "--porcelain")).strip())
+                merging = await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+                dirty = bool((await self._ctx.git(main, "status", "--porcelain")).strip())
             except (WorkspaceError, OSError):
                 return None
         return not merging and not dirty
@@ -841,7 +756,7 @@ class ChangeManager:
                     continue  # all sent; only its cleanup is pending
                 if failure:
                     unsent = ", ".join(EVENT_TYPES[name] for name in names)
-                    reported = await self._error(
+                    reported = await self._ctx.error(
                         "server",
                         f"Shutting down with the close-out of {rec.change_id} incomplete "
                         f"({failure}): {unsent} never sent.",
@@ -867,7 +782,7 @@ class ChangeManager:
             if self._ctx.state.suspect:
                 # M5: main turned suspect while this queued. No git call; the decision's end puts
                 # the change back to `ready`.
-                await self._error(
+                await self._ctx.error(
                     "server",
                     "Main became suspect before this approval ran; reject the change or restart.",
                     rec,
@@ -878,7 +793,7 @@ class ChangeManager:
                 return
             pre: str | None = None
             try:
-                pre = (await self._git(self._ctx.workspace.main, "rev-parse", "HEAD")).strip()
+                pre = (await self._ctx.git(self._ctx.workspace.main, "rev-parse", "HEAD")).strip()
                 await self._merge(rec, comment, pre)
             except asyncio.CancelledError:
                 # Still under both locks: settle main from its facts, then cancel.
@@ -906,14 +821,14 @@ class ChangeManager:
                 except Exception as error:
                     await self._settle_move(rec, move, error)
                     return None
-            return await self._whole(self._requested(rec, comment, note))
+            return await self._ctx.whole(self._requested(rec, comment, note))
         # From `ready`, under both locks as every decision: a save in review holds the agent's
         # lock until its revision is proposed, so the request names that revision and precedes
         # the revision run.
         async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
             if await self._refused_as_suspect(rec):
                 return None
-            return await self._whole(self._requested(rec, comment, note))
+            return await self._ctx.whole(self._requested(rec, comment, note))
 
     async def _refused_as_suspect(self, rec: ChangeRecord) -> bool:
         """F1, under main's lock: main turned suspect while the request queued, so it is refused
@@ -921,7 +836,7 @@ class ChangeManager:
         puts the change back to `ready` or `conflict`, where it was taken from."""
         if not self._ctx.state.suspect:
             return False
-        await self._error(
+        await self._ctx.error(
             "server",
             "Main became suspect before this request ran; reject it or restart.",
             rec,
@@ -933,21 +848,21 @@ class ChangeManager:
         """Merge main's HEAD into the agent's branch, committing as the agent; unmerged paths are
         committed with their markers, for the agent, which has no git, to resolve. The note."""
         main, tree = self._ctx.workspace.main, rec.tree
-        move.main_head = (await self._git(main, "rev-parse", "HEAD")).strip()
-        if (await self._git(main, "status", "--porcelain")).strip():
+        move.main_head = (await self._ctx.git(main, "rev-parse", "HEAD")).strip()
+        if (await self._ctx.git(main, "status", "--porcelain")).strip():
             raise WorkspaceError("main has uncommitted changes")
-        move.old_head = (await self._git(tree, "rev-parse", "HEAD")).strip()
+        move.old_head = (await self._ctx.git(tree, "rev-parse", "HEAD")).strip()
         message = f"Merge main into {rec.change_id} ({rec.agent_id})"
-        result = await self._run(tree, "merge", "--no-ff", "--no-commit", move.main_head)
+        result = await self._ctx.run(tree, "merge", "--no-ff", "--no-commit", move.main_head)
         if result.returncode == 0:
             # Exit 0 with no MERGE_HEAD: the branch already holds main.
-            if await self._yes_no(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
-                await self._git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
+            if await self._ctx.yes_no(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+                await self._ctx.git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
         elif result.returncode == 1 and (
-            await self._git(tree, "diff", "--name-only", "--diff-filter=U", "-z")
+            await self._ctx.git(tree, "diff", "--name-only", "--diff-filter=U", "-z")
         ).strip("\0"):
-            await self._git(tree, "add", "-A")
-            await self._git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
+            await self._ctx.git(tree, "add", "-A")
+            await self._ctx.git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
         else:
             detail = "timed out" if result.timed_out else self._ctx.workspace.redact(result.stderr)
             raise WorkspaceError(f"git merge failed: {detail.strip()[-500:]}")
@@ -967,7 +882,7 @@ class ChangeManager:
         head_files = await self._read_files(tree)
         head = await parse(head_files, main_head, None)
         diff = ("diff", "--name-only", "--no-renames", "-z", main_head, "HEAD")
-        names = await self._git(tree, *diff)
+        names = await self._ctx.git(tree, *diff)
         touched = {path for path in names.split("\0") if path}
         for path in rec.published.keys() | rec.touched | touched:
             before = rec.base_files.get(path), rec.head_files.get(path)
@@ -980,7 +895,7 @@ class ChangeManager:
             try:
                 await self._send_file(rec, path)
             except Exception as error:
-                await self._error(
+                await self._ctx.error(
                     "server", f"{path} was not shown again: {error}", rec, fatal=False
                 )
 
@@ -1012,11 +927,13 @@ class ChangeManager:
         tree = rec.tree
         cut = False
         try:
-            if await self._yes_no(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
-                await self._git(tree, "merge", "--abort")
-            head = (await self._git(tree, "rev-parse", "HEAD")).strip()
-            clean = not (await self._git(tree, "status", "--porcelain")).strip()
-            parents = (await self._git(tree, "rev-list", "--parents", "-n", "1", head)).split()[1:]
+            if await self._ctx.yes_no(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+                await self._ctx.git(tree, "merge", "--abort")
+            head = (await self._ctx.git(tree, "rev-parse", "HEAD")).strip()
+            clean = not (await self._ctx.git(tree, "status", "--porcelain")).strip()
+            parents = (await self._ctx.git(tree, "rev-list", "--parents", "-n", "1", head)).split()[
+                1:
+            ]
             if clean and move.old_head in (None, head):  # None: the merge never ran
                 note = "its worktree is unchanged; request changes again or reject"
             elif clean and move.main_head and parents == [move.old_head, move.main_head]:
@@ -1032,7 +949,7 @@ class ChangeManager:
             rec.state = "broken"
             note = "its worktree's state is unknown; reject the change"
         what = "was cancelled" if error is None else f"failed: {error}"
-        await self._error(
+        await self._ctx.error(
             "git", f"Requesting changes on {rec.change_id} {what}; {note}.", rec, fatal=False
         )
         if cut:
@@ -1055,7 +972,7 @@ class ChangeManager:
         failure = await self._send_requested(rec)
         if failure:
             self._ctx.state.pending[rec.agent_id] = rec
-            await self._error(
+            await self._ctx.error(
                 "server",
                 f"The request for changes on {rec.change_id} was not sent ({failure}); "
                 "it is sent before the next proposal.",
@@ -1132,7 +1049,7 @@ class ChangeManager:
         rec.fallback = "broken"  # from here on, main may change
         # --no-ff on every merge: --no-commit alone fast-forwards a head that descends from main,
         # leaving HEAD moved and nothing for `merge --abort` to undo.
-        result = await self._run(main, "merge", "--no-ff", "--no-commit", head)
+        result = await self._ctx.run(main, "merge", "--no-ff", "--no-commit", head)
         if result.returncode != 0:
             if (
                 result.returncode == 1
@@ -1142,10 +1059,10 @@ class ChangeManager:
                 return
             detail = "timed out" if result.timed_out else self._ctx.workspace.redact(result.stderr)
             raise WorkspaceError(f"git merge failed: {detail.strip()[-500:]}")
-        if await self._yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+        if await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
             if pre != rec.base_commit and not await self._combined_tests_pass(rec, comment, pre):
                 return
-            await self._git(
+            await self._ctx.git(
                 main,
                 "commit",
                 "-q",
@@ -1160,11 +1077,11 @@ class ChangeManager:
 
     async def _conflict(self, rec: ChangeRecord, comment: str | None, pre: str) -> bool:
         main = self._ctx.workspace.main
-        names = await self._git(main, "diff", "--name-only", "--diff-filter=U", "-z")
+        names = await self._ctx.git(main, "diff", "--name-only", "--diff-filter=U", "-z")
         paths = sorted(p for p in names.split("\0") if p)
         if not paths:
             return False
-        await self._git(main, "merge", "--abort")
+        await self._ctx.git(main, "merge", "--abort")
         if not (await self._facts(rec.head_commit or rec.base_commit)).unchanged(pre):
             raise WorkspaceError("main did not return to its HEAD after the conflict")
         await self._conflicted(rec, comment, Conflict(kind="merge", paths=paths, tests=None))
@@ -1178,7 +1095,7 @@ class ChangeManager:
         run = await self._ctx.workspace.run_tests(main, timeout_s=rec.task.limits.test_timeout_s)
         if run.result.outcome == "passed":
             return True
-        await self._git(main, "merge", "--abort")
+        await self._ctx.git(main, "merge", "--abort")
         if not (await self._facts(rec.head_commit or rec.base_commit)).unchanged(pre):
             raise WorkspaceError("main did not return to its HEAD after the combined tests")
         await self._conflicted(rec, comment, Conflict(kind="tests", paths=[], tests=run.result))
@@ -1191,7 +1108,7 @@ class ChangeManager:
         as its fallback: the decision's end, or its recovery, makes it `conflict`, and no other
         decision enters before."""
         resolution = self._resolution(rec, "approved", comment, conflict=conflict)
-        await self._whole(self._record_conflict(rec, resolution, conflict))
+        await self._ctx.whole(self._record_conflict(rec, resolution, conflict))
 
     async def _record_conflict(
         self, rec: ChangeRecord, resolution: ChangeResolved, conflict: Conflict
@@ -1202,10 +1119,12 @@ class ChangeManager:
     async def _facts(self, head_commit: str) -> Facts:
         main = self._ctx.workspace.main
         return Facts(
-            head=(await self._git(main, "rev-parse", "HEAD")).strip(),
-            clean=not (await self._git(main, "status", "--porcelain")).strip(),
-            merging=await self._yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"),
-            contains=await self._yes_no(main, "merge-base", "--is-ancestor", head_commit, "HEAD"),
+            head=(await self._ctx.git(main, "rev-parse", "HEAD")).strip(),
+            clean=not (await self._ctx.git(main, "status", "--porcelain")).strip(),
+            merging=await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"),
+            contains=await self._ctx.yes_no(
+                main, "merge-base", "--is-ancestor", head_commit, "HEAD"
+            ),
         )
 
     async def _recover(
@@ -1218,8 +1137,8 @@ class ChangeManager:
         main = self._ctx.workspace.main
         facts: Facts | None = None
         try:
-            if await self._yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
-                await self._git(main, "merge", "--abort")
+            if await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+                await self._ctx.git(main, "merge", "--abort")
             facts = await self._facts(rec.head_commit or rec.base_commit)
         except Exception:
             facts = None
@@ -1240,15 +1159,17 @@ class ChangeManager:
             self._ctx.state.break_change(rec)
             note = "main's state is unknown; reject the change or restart"
         what = "was cancelled" if error is None else f"failed: {error}"
-        await self._error("git", f"Approving {rec.change_id} {what}. {note}.", rec, fatal=False)
+        await self._ctx.error("git", f"Approving {rec.change_id} {what}. {note}.", rec, fatal=False)
 
     async def _record_merge(self, rec: ChangeRecord, comment: str | None, post: str) -> None:
         """The merge is a fact: rescan main and build the resolution and delta, sending nothing."""
         try:
-            new = await self._scan(post)
+            new = await self._ctx.scan(post)
         except Exception as error:
             # The snapshot stays, so the next delta starts from what the UI holds.
-            await self._error("graph", f"Main's graph was not rescanned: {error}", rec, fatal=False)
+            await self._ctx.error(
+                "graph", f"Main's graph was not rescanned: {error}", rec, fatal=False
+            )
         else:
             rec.delta = main_delta(self._ctx.state.snapshot, new, post, "merge")
             rec.next_snapshot = with_positions(new, self._ctx.state.snapshot)
@@ -1298,7 +1219,7 @@ class ChangeManager:
         self._ctx.state.pending[rec.agent_id] = rec
         failure = await self._try_close_out(rec)
         if failure:
-            await self._error(
+            await self._ctx.error(
                 "server",
                 f"The close-out of {rec.change_id} is incomplete ({failure}). "
                 "The next decision or agent start sends the rest.",
@@ -1354,10 +1275,10 @@ class ChangeManager:
         # The publish runs in its own task, kept on the record, and a done-callback records its
         # outcome: the store may commit the event however many cancels the close-out gets, and
         # the next close-out must not send it again.
-        sending = self._spawn(self._deliver(payload))
+        sending = self._ctx.spawn(self._deliver(payload))
         sending.add_done_callback(functools.partial(self._receipt, rec, name))
         rec.sending = sending
-        cancelled = await self._settled(sending)
+        cancelled = await self._ctx.settled(sending)
         if cancelled or sending.cancelled():
             raise asyncio.CancelledError
         failure = sending.exception()
@@ -1403,18 +1324,6 @@ class ChangeManager:
         if rec.sending is not None:
             await asyncio.wait([rec.sending])
 
-    @staticmethod
-    async def _settled(task: asyncio.Task[None]) -> bool:
-        """Wait for `task` through one cancel of the caller: True if one came, for the caller to
-        re-raise once the outcome is recorded. A second cancel ends the wait; `task` runs on, kept
-        on the record, records its own outcome, and the next close-out or merge waits for it."""
-        try:
-            await asyncio.wait([task])
-        except asyncio.CancelledError:
-            await asyncio.wait([task])
-            return True
-        return False
-
     async def _cleanup(self, rec: ChangeRecord) -> None:
         """Remove the worktree, then the branch, each step skipped once done, so a rerun after a
         failure finishes the job. A failure is reported and retried by the next decision or
@@ -1423,7 +1332,7 @@ class ChangeManager:
         main = workspace.main
         try:
             async with workspace.locks(main=True, agent_id=agent):
-                listing = await self._git(main, "worktree", "list", "--porcelain", "-z")
+                listing = await self._ctx.git(main, "worktree", "list", "--porcelain", "-z")
                 if f"worktree {rec.tree.root}" in listing.split("\0"):
                     if await asyncio.to_thread(os.path.lexists, rec.tree.root):
                         remove = (
@@ -1433,14 +1342,14 @@ class ChangeManager:
                         )
                         await remove(agent, delete_branch=False)
                     else:
-                        await self._git(main, "worktree", "prune")
-                if await self._yes_no(
+                        await self._ctx.git(main, "worktree", "prune")
+                if await self._ctx.yes_no(
                     main, "rev-parse", "--verify", "--quiet", f"refs/heads/{agent}"
                 ):
                     # -d after a merge, so a branch that is not in main is never deleted.
-                    await self._git(main, "branch", "-d" if rec.merged else "-D", agent)
+                    await self._ctx.git(main, "branch", "-d" if rec.merged else "-D", agent)
         except Exception as error:
-            await self._error(
+            await self._ctx.error(
                 "git",
                 f"Cleaning up after {rec.change_id} failed: {error}. "
                 "The next decision or agent start tries again.",
