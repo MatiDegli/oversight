@@ -36,7 +36,9 @@ const slotSwatch = { A: "bg-agent-a", B: "bg-agent-b" } as const;
 
 /**
  * What the graph's looks mean, in the states it can draw now. A glyph is never the only signal: each
- * has its words. The dashed one is the pending change, the one thing a dashed border means.
+ * has its words. A dashed border is the pending change, the one thing it means: filled for a node
+ * an agent is editing or has changed, an outline for one that main does not have yet. (The sketch
+ * draws editing solid; DESIGN.md's departures table has the dashed border.)
  */
 export function Legend({ state }: { state: State }) {
   const slots = state.run?.slots ?? [];
@@ -63,6 +65,13 @@ export function Legend({ state }: { state: State }) {
         <span
           aria-hidden="true"
           className="h-3.5 w-6 rounded-node border-(length:--agent-border-width) border-dashed border-muted bg-raised"
+        />
+        Editing or changed
+      </li>
+      <li className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="h-3.5 w-6 rounded-node border-(length:--agent-border-width) border-dashed border-muted"
         />
         Not in main yet
       </li>

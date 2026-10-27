@@ -27,10 +27,34 @@ describe("the graph heading", () => {
 describe("the legend", () => {
   it("lists an agent for each slot of the run and the looks the graph draws, each in words", () => {
     const markup = renderToStaticMarkup(<Legend state={through(4)} />);
-    for (const words of ["Agent A", "Agent B", "Read", "Not in main yet", "Possible call"])
-      expect(markup).toContain(words);
+    const words = [
+      "Agent A",
+      "Agent B",
+      "Read",
+      "Editing or changed",
+      "Not in main yet",
+      "Possible call",
+    ];
+    for (const word of words) expect(markup).toContain(word);
+    // The sketch's order: the agents, then reading, editing, what main lacks, and a possible call.
+    const places = words.map((word) => markup.indexOf(word));
+    expect(places).toEqual([...places].sort((x, y) => x - y));
     // Glyphs carry no meaning to a reader of the page: the words do.
-    expect(markup.match(/aria-hidden="true"/g)).toHaveLength(5);
+    expect(markup.match(/aria-hidden="true"/g)).toHaveLength(6);
+  });
+
+  it("draws editing or changed as a dashed, filled box and not-in-main as a dashed outline", () => {
+    const markup = renderToStaticMarkup(<Legend state={through(4)} />);
+    const glyph = (words: string) =>
+      new RegExp(`<span aria-hidden="true" class="([^"]*)"></span>${words}`).exec(markup)?.[1] ??
+      "";
+    expect(glyph("Editing or changed")).toContain("border-dashed");
+    expect(glyph("Editing or changed")).toContain("bg-raised");
+    expect(glyph("Not in main yet")).toContain("border-dashed");
+    expect(glyph("Not in main yet")).not.toContain("bg-raised");
+    // Read is the only solid one: a dashed border means a pending change and nothing else.
+    expect(glyph("Read")).not.toContain("border-dashed");
+    expect(glyph("Possible call")).not.toContain("border-dashed");
   });
 
   it("is absent before a run has started", () => {
