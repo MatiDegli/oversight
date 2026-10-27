@@ -9,7 +9,6 @@ from agent_helpers import FAKE_MODEL_DIR, Recorder, make_run, script
 from oversight.agents import (
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
-    UNVERIFIED_PROFILES,
     ModelAPIError,
     ModelReply,
     ScriptedModel,
@@ -24,6 +23,7 @@ from oversight_contracts.events import (
     AgentStatus,
     AgentStep,
     ErrorReport,
+    ModelProfile,
     UsageTick,
 )
 
@@ -280,11 +280,32 @@ async def test_a_tool_cut_short_by_stop_still_gets_its_step(
     assert "sink.proposed" not in recorder.kinds()
 
 
-async def test_a_run_on_an_unverified_profile_is_refused(small_tree: Opened) -> None:
+UNVERIFIED_TEST_PROFILE = ModelProfile(
+    id="test-unverified",
+    label="Unverified test profile",
+    provider="fake",
+    model="test-model",
+    reasoning=None,
+)
+
+
+async def test_a_run_on_an_unverified_profile_is_refused(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No shipped profile is unverified now: the test puts a synthetic one in the set.
+    monkeypatch.setattr(
+        "oversight.agents.client.UNVERIFIED_PROFILES", frozenset({UNVERIFIED_TEST_PROFILE.id})
+    )
     empty = parse_script('{"task": "t", "turns": []}')
-    model = ScriptedModel(empty, profile=MUSE_SPARK_OPEN)
+    model = ScriptedModel(empty, profile=UNVERIFIED_TEST_PROFILE)
     with pytest.raises(UnverifiedProfile, match="reasoning setting is unverified") as refused:
         make_run(small_tree, model, Recorder())
-    assert "Baseten probe" in str(refused.value)
-    assert MUSE_SPARK.id not in UNVERIFIED_PROFILES
+    assert "Unverified test profile (test-model)" in str(refused.value)
+    assert "tools/probe_api.py" in str(refused.value)
     make_run(small_tree, ScriptedModel(empty, profile=MUSE_SPARK), Recorder())
+
+
+async def test_both_muse_profiles_may_run_agents(small_tree: Opened) -> None:
+    empty = parse_script('{"task": "t", "turns": []}')
+    for profile in (MUSE_SPARK, MUSE_SPARK_OPEN):
+        make_run(small_tree, ScriptedModel(empty, profile=profile), Recorder())

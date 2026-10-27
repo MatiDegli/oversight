@@ -961,11 +961,10 @@ def skipped_section(provider: Provider, reason: str) -> str:
     return (
         f"## {provider.title}\n\n"
         f"Skipped: {reason}\n\n"
-        f"Still unknown for agent B: which slug is right (`{provider.model}` in AGENTS.md; the "
-        "Baseten changelog's example is `meta-models/muse-spark-open`), whether native tool "
-        "calling and parallel calls work, which parameter sets reasoning, what usage is "
-        "reported, and the latency. Run `uv run --frozen python tools/probe_api.py baseten` "
-        f"once `{provider.key_name}` is set.\n\n"
+        f"Not probed in this report: whether `{provider.model}` takes native tool calls and "
+        "parallel calls, which parameter sets reasoning, what usage is reported, and the latency. "
+        f"Run `uv run --frozen python tools/probe_api.py {provider.name}` once "
+        f"`{provider.key_name}` is set.\n\n"
         f"### Where the endpoint and model names came from\n\n{bullets(provider.sources)}"
     )
 

@@ -138,10 +138,22 @@ async def test_every_call_sets_the_model_reasoning_and_limits() -> None:
     assert body["model"] == "muse-spark-1.3-contributor" and body["reasoning_effort"] == "low"
     assert body["max_completion_tokens"] == 2048 and body["tool_choice"] == "auto"
     assert body["tools"] == TOOLS
-    # A profile with no known reasoning parameter sends none.
-    await client(api, sleeps, profile=MUSE_SPARK_OPEN).complete(USER, TOOLS)
+    # A profile with no reasoning setting sends none.
+    no_reasoning = MUSE_SPARK_OPEN.model_copy(update={"reasoning": None})
+    await client(api, sleeps, profile=no_reasoning).complete(USER, TOOLS)
     assert "reasoning_effort" not in api.bodies[1]
-    assert api.bodies[1]["model"] == "meta-models/muse-spark-open-1026"
+
+
+async def test_muse_spark_open_sends_reasoning_effort_low_at_the_top_level() -> None:
+    # docs/api-probe.md, "Baseten: Muse Spark Open": Chat Completions takes the top-level
+    # `reasoning_effort`; the profile sends it on every call, with the model id the API reports.
+    api = FakeApi(ok(), ok())
+    await client(api, [], profile=MUSE_SPARK_OPEN).complete(USER, TOOLS)
+    await client(api, [], profile=MUSE_SPARK_OPEN).complete(USER, [])
+    for body in api.bodies:
+        assert body["model"] == "meta-models/muse-spark-open-1026"
+        assert body["reasoning_effort"] == "low"
+        assert "reasoning" not in body and "extra_body" not in body
 
 
 async def test_usage_is_read_or_left_unknown() -> None:
