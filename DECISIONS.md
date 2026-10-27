@@ -352,6 +352,10 @@ Ours wins in every case below.
 
 ## Level 2 closed on Tue Oct 27
 
-Level 2 closed on Tue Oct 27. Close-run logs, validation results and spending records
-are not included in this repository. Level 3 wiring starts now. Contracts 1.4.0 await
-the maintainer's approval.
+Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
+start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
+recorded two-agent replay. The maintainer's team also ran three real two-agent runs from a
+clean start, both agents on Muse Spark, and each run merged both changes; a real recorded run
+will be bundled for the static replay.
+
+Level 3 wiring starts now. Contracts 1.4.0 await the maintainer's approval.

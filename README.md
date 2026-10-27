@@ -35,10 +35,12 @@ through others. Nothing reaches main until you approve it.
   agents, without API keys or credits: overlap, Request changes and a higher revision, merge,
   Stop/discard during work, a file edit on main, usage ticks and saving the editable new side
   (`PUT /files` with `agent_id`). Smoke tests, screenshot tooling and test resource caps are merged.
-- Level 2 closed on Tue Oct 27. Close-run logs, validation results and spending records are
-  not included in this repository.
-- The static replay build currently plays a hand-written event log and labels it as a fixture. A
-  real recorded run for the judges has not been bundled yet.
+- Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
+  start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
+  recorded two-agent replay. The maintainer's team also ran three real two-agent runs from a
+  clean start, both agents on Muse Spark, and each run merged both changes; a real recorded run
+  will be bundled for the static replay.
+- The static replay build currently plays a hand-written event log and labels it as a fixture.
 
 To bundle a finished real run, install gitleaks 8.30.1 and run `make record RUN=<id>` (or
 `make record` for the latest run). This reads the SQLite log without model calls or credits and
