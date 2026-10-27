@@ -3,7 +3,7 @@ import { Network, X } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { AgentCard, TaskBox } from "../agents";
+import { AgentCard, slotUsage, TaskBox } from "../agents";
 import { FileView, LiveDiff } from "../editor";
 import type { FileAccess } from "../editor";
 import { GraphView } from "../graph";
@@ -117,36 +117,43 @@ function AgentsPanel({
     const data = selectAgentCard(state, agent.agent_id);
     return data ? [data] : [];
   });
-  // One keyed list, so the new-agent box keeps its place in the tree (and the person's focus)
-  // when the first card appears above it.
-  const body = [
-    ...cards.map((data) => {
-      const review = canReview?.(data.agent.change_id) === true;
-      return (
-        <AgentCard
-          key={data.agent.agent_id}
-          data={data}
-          onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
-          onReview={review ? onReview : undefined}
-        />
-      );
-    }),
-    <TaskBox key="new-agent" state={state} onStart={onStartAgent} replayOf={replayOf} />,
-  ];
-  if (cards.length === 0) {
-    body.push(
-      <p key="empty" className="text-sm text-muted">
-        No agents yet. Each agent gets a card here when it starts.
-      </p>,
-    );
-  }
+  const slots = slotUsage(state);
   return (
     <aside
       aria-label="Agents"
-      className="flex w-(--agents-panel-width) shrink-0 flex-col gap-2.5 overflow-y-auto border-l border-divider bg-panel p-3.5"
+      className="flex w-(--agents-panel-width) shrink-0 flex-col border-l border-divider bg-panel"
     >
-      <h2 className="text-(length:--title-size) font-bold">Agents</h2>
-      {body}
+      <div className="flex items-baseline gap-2.5 px-3.5 pt-3.5 pb-2.5">
+        <h2 className="text-(length:--title-size) font-bold">Agents</h2>
+        {slots && (
+          <span className="text-sm text-muted">
+            {slots.held} of {slots.total} {slots.total === 1 ? "slot" : "slots"}
+          </span>
+        )}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 pb-3.5">
+        {cards.map((data) => {
+          const review = canReview?.(data.agent.change_id) === true;
+          return (
+            <AgentCard
+              key={data.agent.agent_id}
+              data={data}
+              onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
+              onReview={review ? onReview : undefined}
+            />
+          );
+        })}
+        {cards.length === 0 && (
+          <p className="text-sm text-muted">
+            No agents yet. Each agent gets a card here when it starts.
+          </p>
+        )}
+      </div>
+      {/* Pinned to the bottom, as in the sketch: a card appearing above never moves it, or the
+          person's focus in it. */}
+      <div className="shrink-0 border-t border-divider p-3.5">
+        <TaskBox state={state} onStart={onStartAgent} replayOf={replayOf} />
+      </div>
     </aside>
   );
 }

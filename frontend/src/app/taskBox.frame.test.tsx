@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Frame } from "./Frame";
 import type { FrameProps } from "./Frame";
+import { createInitialState } from "../state";
 import { through } from "./replay.fixture";
 import { initialView } from "./view";
 
@@ -35,12 +36,49 @@ function render(seq: number, props: Partial<FrameProps> = {}, slots?: ("A" | "B"
 const live = { onStartAgent: () => Promise.resolve(undefined) };
 
 describe("the agents panel's new-agent section", () => {
-  it("is the first thing under the heading while there are no agents", () => {
+  it("says there are no agents above the box while there are none", () => {
     const markup = render(2, live);
-    expect(markup.indexOf(">Agents</h2>")).toBeLessThan(markup.indexOf(">New agent</h3>"));
-    expect(markup.indexOf(">New agent</h3>")).toBeLessThan(markup.indexOf("No agents yet"));
+    expect(markup.indexOf(">Agents</h2>")).toBeLessThan(markup.indexOf("No agents yet"));
+    expect(markup.indexOf("No agents yet")).toBeLessThan(markup.indexOf(">New agent</h3>"));
     expect(markup).not.toContain("<article");
     expect(markup).toContain("<textarea");
+  });
+
+  it("is pinned to the panel's bottom under a divider, outside the scrolling cards", () => {
+    for (const seq of [2, 4, 20]) {
+      const markup = render(seq, live);
+      const panel = markup.slice(markup.indexOf('<aside aria-label="Agents"'));
+      const pinned = /<div class="shrink-0 border-t border-divider[^"]*">/.exec(panel);
+      expect(pinned, `seq ${String(seq)}`).not.toBeNull();
+      const scrolling = panel.indexOf("overflow-y-auto");
+      // The cards scroll in a region of their own, which ends before the pinned one begins.
+      expect(scrolling).toBeGreaterThan(-1);
+      expect(scrolling).toBeLessThan(pinned?.index ?? 0);
+      expect(panel.indexOf("<article")).toBeLessThan(pinned?.index ?? 0);
+      expect(panel.indexOf(">New agent</h3>")).toBeGreaterThan(pinned?.index ?? 0);
+      expect(panel.slice(0, pinned?.index)).not.toContain("<textarea");
+    }
+  });
+
+  it("counts the slots in use beside the heading, as the server offers them", () => {
+    expect(render(2, live)).toContain("0 of 2 slots");
+    // Agent A holds its slot while it works and while it waits for review.
+    expect(render(4, live)).toContain("1 of 2 slots");
+    expect(render(20, live)).toContain("1 of 2 slots");
+    // A level 1 server offers one slot.
+    expect(render(4, live, ["A"])).toContain("1 of 1 slot<");
+    // Nothing to count before the run has started.
+    const before = renderToStaticMarkup(
+      <Frame
+        state={createInitialState()}
+        view={initialView}
+        onNodeTap={vi.fn()}
+        canOpenChange={() => false}
+        onOpenChange={vi.fn()}
+        onClosePanel={vi.fn()}
+      />,
+    );
+    expect(before).not.toContain("slot");
   });
 
   it("sits below the agent cards, and says why when no slot is free", () => {

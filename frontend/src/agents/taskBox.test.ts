@@ -11,6 +11,7 @@ import {
   nextSlot,
   selectedSlot,
   slotChoice,
+  slotUsage,
   startBlock,
   startFailure,
 } from "./taskBox";
@@ -67,6 +68,18 @@ function withSlots(state: State, slots: ("A" | "B")[]): State {
 }
 
 const levelOne = (seq: number) => withSlots(through(seq), ["A"]);
+
+describe("slotUsage", () => {
+  it("counts the slots that hold an agent, until its change is resolved", () => {
+    expect(slotUsage(createInitialState())).toBeNull();
+    expect(slotUsage(through(2))).toEqual({ held: 0, total: 2 });
+    expect(slotUsage(through(14))).toEqual({ held: 1, total: 2 });
+    // Waiting for review still holds the slot; the merge frees it.
+    expect(slotUsage(through(20))).toEqual({ held: 1, total: 2 });
+    expect(slotUsage(through(21))).toEqual({ held: 0, total: 2 });
+    expect(slotUsage(levelOne(14))).toEqual({ held: 1, total: 1 });
+  });
+});
 
 describe("nextSlot (K14)", () => {
   const bothHeld = () => {
