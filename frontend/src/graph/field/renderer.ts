@@ -71,46 +71,69 @@ void main() {
   outColor = vec4(color, 1.0);
 }`;
 
-function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader | null {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
+/** Own handles immediately, including partially initialized resources. */
+class Resources {
+  private readonly cleanup: (() => void)[] = [];
+  constructor(readonly gl: WebGL2RenderingContext) {}
+  own<T>(handle: T | null, release: (handle: T) => void): T {
+    if (handle === null) throw new Error("WebGL allocation failed");
+    this.cleanup.push(() => {
+      release(handle);
+    });
+    return handle;
+  }
+  dispose = () => {
+    for (const release of this.cleanup.splice(0).reverse()) release();
+  };
+}
+
+function compile(resources: Resources, type: number, source: string): WebGLShader {
+  const { gl } = resources;
+  const shader = resources.own(gl.createShader(type), (handle) => {
+    gl.deleteShader(handle);
+  });
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
-  if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) === true) return shader;
-  gl.deleteShader(shader);
-  return null;
+  if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) !== true)
+    throw new Error("WebGL shader compile failed");
+  return shader;
 }
 
-function link(gl: WebGL2RenderingContext): WebGLProgram | null {
-  const vertex = compile(gl, gl.VERTEX_SHADER, VERTEX);
-  const fragment = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT);
-  const program = gl.createProgram();
-  if (!vertex || !fragment) return null;
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
-  gl.deleteShader(vertex);
-  gl.deleteShader(fragment);
-  if (gl.getProgramParameter(program, gl.LINK_STATUS) === true) return program;
-  gl.deleteProgram(program);
-  return null;
+function link(resources: Resources): WebGLProgram {
+  const { gl } = resources;
+  const shaders = new Resources(gl);
+  try {
+    const vertex = compile(shaders, gl.VERTEX_SHADER, VERTEX);
+    const fragment = compile(shaders, gl.FRAGMENT_SHADER, FRAGMENT);
+    const program = resources.own(gl.createProgram(), (handle) => {
+      gl.deleteProgram(handle);
+    });
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    if (gl.getProgramParameter(program, gl.LINK_STATUS) !== true)
+      throw new Error("WebGL program link failed");
+    return program;
+  } finally {
+    shaders.dispose();
+  }
 }
 
-/** Null when the canvas cannot give a WebGL2 context or the shader does not build. */
-export function createLampRenderer(canvas: HTMLCanvasElement): LampRenderer | null {
-  const gl = canvas.getContext("webgl2", {
-    alpha: true,
-    antialias: false,
-    depth: false,
-    stencil: false,
-    premultipliedAlpha: true,
-    preserveDrawingBuffer: false,
+function check(gl: WebGL2RenderingContext) {
+  if (gl.isContextLost() || gl.getError() !== gl.NO_ERROR) throw new Error("WebGL context failed");
+}
+
+function initialize(resources: Resources) {
+  const { gl } = resources;
+  const program = link(resources);
+  const texture = resources.own(gl.createTexture(), (handle) => {
+    gl.deleteTexture(handle);
   });
-  if (!gl) return null;
-  const program = link(gl);
-  const texture = gl.createTexture();
-  if (!program) return null;
-  const uniform = (name: string) => gl.getUniformLocation(program, name);
+  const uniform = (name: string) => {
+    const location = gl.getUniformLocation(program, name);
+    if (location === null) throw new Error(`Missing WebGL uniform: ${name}`);
+    return location;
+  };
   const at = {
     cells: uniform("uCells"),
     view: uniform("uView"),
@@ -122,8 +145,6 @@ export function createLampRenderer(canvas: HTMLCanvasElement): LampRenderer | nu
     every: uniform("uEvery"),
     guideColor: uniform("uGuideColor"),
   };
-  let ratio = 1;
-  let uploaded = { cols: 0, rows: 0 };
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -131,6 +152,42 @@ export function createLampRenderer(canvas: HTMLCanvasElement): LampRenderer | nu
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   gl.disable(gl.BLEND);
+  check(gl);
+  return { program, texture, at };
+}
+
+type Initialized = ReturnType<typeof initialize>;
+
+/** Null on any failed initialization; no resources survive a failed attempt. */
+export function createLampRenderer(canvas: HTMLCanvasElement): LampRenderer | null {
+  let resources: Resources | undefined;
+  try {
+    const gl = canvas.getContext("webgl2", {
+      alpha: true,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      premultipliedAlpha: true,
+      preserveDrawingBuffer: false,
+    });
+    if (!gl) return null;
+    resources = new Resources(gl);
+    return renderer(canvas, resources, initialize(resources));
+  } catch {
+    resources?.dispose();
+    return null;
+  }
+}
+
+function renderer(
+  canvas: HTMLCanvasElement,
+  resources: Resources,
+  initialized: Initialized,
+): LampRenderer {
+  const { gl } = resources;
+  const { texture } = initialized;
+  let ratio = 1;
+  let uploaded = { cols: 0, rows: 0 };
   return {
     resize(width, height, nextRatio) {
       ratio = nextRatio;
@@ -140,49 +197,11 @@ export function createLampRenderer(canvas: HTMLCanvasElement): LampRenderer | nu
       if (canvas.height !== h) canvas.height = h;
     },
     draw(grid, look) {
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.useProgram(program);
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      if (uploaded.cols === grid.cols && uploaded.rows === grid.rows) {
-        gl.texSubImage2D(
-          gl.TEXTURE_2D,
-          0,
-          0,
-          0,
-          grid.cols,
-          grid.rows,
-          gl.RGBA,
-          gl.UNSIGNED_BYTE,
-          grid.data,
-        );
-      } else {
-        gl.texImage2D(
-          gl.TEXTURE_2D,
-          0,
-          gl.RGBA8,
-          grid.cols,
-          grid.rows,
-          0,
-          gl.RGBA,
-          gl.UNSIGNED_BYTE,
-          grid.data,
-        );
-        uploaded = { cols: grid.cols, rows: grid.rows };
-      }
-      gl.uniform1i(at.cells, 0);
-      gl.uniform2f(at.view, canvas.width, canvas.height);
-      gl.uniform2f(at.grid, grid.cols, grid.rows);
-      gl.uniform1f(at.scale, ratio);
-      gl.uniform1f(at.cell, look.cell);
-      gl.uniform1f(at.lamp, look.cell * look.coverage);
-      gl.uniform1f(at.guide, look.guideSize);
-      gl.uniform1i(at.every, look.guideEvery);
-      const [r, g, b] = look.guide.color;
-      gl.uniform4f(at.guideColor, r / 255, g / 255, b / 255, look.guide.alpha);
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      upload(gl, grid, texture, uploaded);
+      uploaded = { cols: grid.cols, rows: grid.rows };
+      paint(gl, canvas, initialized, grid, look, ratio);
+      check(gl);
     },
     pixel(x, y) {
       const px = Math.floor(x * ratio);
@@ -193,9 +212,65 @@ export function createLampRenderer(canvas: HTMLCanvasElement): LampRenderer | nu
       return [out[0] ?? 0, out[1] ?? 0, out[2] ?? 0, out[3] ?? 0];
     },
     lost: () => gl.isContextLost(),
-    dispose() {
-      gl.deleteTexture(texture);
-      gl.deleteProgram(program);
-    },
+    dispose: resources.dispose,
   };
+}
+
+function upload(
+  gl: WebGL2RenderingContext,
+  grid: LampGrid,
+  texture: WebGLTexture,
+  uploaded: { cols: number; rows: number },
+) {
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  if (uploaded.cols === grid.cols && uploaded.rows === grid.rows) {
+    gl.texSubImage2D(
+      gl.TEXTURE_2D,
+      0,
+      0,
+      0,
+      grid.cols,
+      grid.rows,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      grid.data,
+    );
+  } else {
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA8,
+      grid.cols,
+      grid.rows,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      grid.data,
+    );
+  }
+}
+
+function paint(
+  gl: WebGL2RenderingContext,
+  canvas: HTMLCanvasElement,
+  { program, at }: Initialized,
+  grid: LampGrid,
+  look: LampLook,
+  ratio: number,
+) {
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.useProgram(program);
+  gl.uniform1i(at.cells, 0);
+  gl.uniform2f(at.view, canvas.width, canvas.height);
+  gl.uniform2f(at.grid, grid.cols, grid.rows);
+  gl.uniform1f(at.scale, ratio);
+  gl.uniform1f(at.cell, look.cell);
+  gl.uniform1f(at.lamp, look.cell * look.coverage);
+  gl.uniform1f(at.guide, look.guideSize);
+  gl.uniform1i(at.every, look.guideEvery);
+  const [r, g, b] = look.guide.color;
+  gl.uniform4f(at.guideColor, r / 255, g / 255, b / 255, look.guide.alpha);
+  gl.clearColor(0, 0, 0, 0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
