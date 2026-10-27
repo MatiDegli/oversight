@@ -11,7 +11,7 @@ export {
   selectNodeMarks,
   selectPendingChanges,
 } from "./selectors";
-export type { AgentCardData, LiveDiffData } from "./selectors";
+export type { AgentCardData, LiveDiffData, NodeMarks } from "./selectors";
 export { createStateStore, stateStore } from "./store";
 export type { StateStore } from "./store";
 export { createInitialState } from "./types";

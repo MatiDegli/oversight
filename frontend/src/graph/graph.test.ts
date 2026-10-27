@@ -1,4 +1,4 @@
-import type { AgentStatus, GraphNode, ServerEvent } from "@contracts";
+import type { AgentStatus, GraphNode, ImpactCone, ServerEvent } from "@contracts";
 import cytoscape from "cytoscape";
 import type { Core } from "cytoscape";
 import fcose from "cytoscape-fcose";
@@ -299,7 +299,15 @@ describe("graph mapping", () => {
     const lit = graph.getElementById("billing:fee");
     expect(lit.hasClass("focus-A-read")).toBe(true);
     expect(lit.hasClass("focus-B-edit")).toBe(true);
-    expect(lit.data("label")).toBe("billing:fee\nA read · B edit");
+    expect(lit.data("label")).toBe("billing:fee");
+    expect(lit.data("marks")).toEqual({
+      word: "editing",
+      slot: "B",
+      badges: [
+        { slot: "A", filled: false },
+        { slot: "B", filled: true },
+      ],
+    });
     expect(lit.hasClass("focus-both")).toBe(true);
     expect(lit.style("background-fill")).toBe("solid");
     expect(lit.style("background-color")).toBe(rgb(theme["agent-b-node"].color));
@@ -341,7 +349,7 @@ describe("graph mapping", () => {
     }
   });
 
-  it("maps semantic marks to classes with one marks line below the name", () => {
+  it("maps semantic marks to classes and to the marks the node draws apart from its name", () => {
     const state = updated();
     state.focus = {
       [a.agent_id]: { agent_id: a.agent_id, mode: "edit", node_ids: ["billing:fee"], ranges: [] },
@@ -349,7 +357,16 @@ describe("graph mapping", () => {
     };
     const target = graphElements(state).find((e) => e.data.id === "billing:fee");
     if (!target) throw new Error("Missing fee");
-    expect(Object.keys(target.data).sort()).toEqual(["id", "kind", "label", "parent"]);
+    expect(Object.keys(target.data).sort()).toEqual(["id", "kind", "label", "marks", "parent"]);
+    // A edits and has the change pending (editing outranks changed); B only reads.
+    expect(target.data.marks).toEqual({
+      word: "editing",
+      slot: "A",
+      badges: [
+        { slot: "A", filled: true },
+        { slot: "B", filled: false },
+      ],
+    });
     expect(target.classes.split(" ")).toEqual(
       expect.arrayContaining([
         "pending",
@@ -359,7 +376,7 @@ describe("graph mapping", () => {
         "focus-both",
       ]),
     );
-    expect(target.data.label).toBe("billing:fee\nA edit · B read · A pending");
+    expect(target.data.label).toBe("billing:fee");
     const unknown = { ...state, agents: {} };
     const graph = render(unknown);
     const added = graph.getElementById("billing:discount");
@@ -379,7 +396,12 @@ describe("graph mapping", () => {
       const fill = id === "billing:discount" ? theme["agent-a-node-new"] : theme["agent-a-node"];
       expect(pending.style("background-color")).toBe(rgb(fill.color));
       expect(Number(pending.style("background-opacity"))).toBe(fill.alpha);
-      expect(pending.data("label")).toContain("A pending");
+      // Added is new; modified and removed are changed.
+      expect(pending.data("marks")).toEqual({
+        word: id === "billing:discount" ? "new" : "changed",
+        slot: "A",
+        badges: [{ slot: "A", filled: true }],
+      });
     }
     expect(graph.getElementById("billing").style("border-style")).toBe("solid");
     expect(graph.getElementById("added-call").nonempty()).toBe(true);
@@ -425,10 +447,18 @@ describe("graph mapping", () => {
     expect(Number(target.style("background-opacity"))).toBe(theme["agent-a-node"].alpha);
     expect(target.style("border-style")).toBe("dashed");
     expect(target.style("border-color")).toBe(rgb(theme["agent-a"]));
-    expect(target.data("label")).toContain("A+B pending");
+    // Both agents changed it: one word, in A's color on a tie, and a filled badge for each.
+    expect(target.data("marks")).toEqual({
+      word: "changed",
+      slot: "A",
+      badges: [
+        { slot: "A", filled: true },
+        { slot: "B", filled: true },
+      ],
+    });
   });
 
-  it("keeps the whole node name first and marks on one second line without ellipsis", () => {
+  it("keeps the whole node name on one line, and the marks apart from it", () => {
     const state = initial();
     const original = state.graph?.nodes.find((n) => n.id === "billing:fee");
     if (!original || !state.graph) throw new Error("Missing fee");
@@ -442,10 +472,75 @@ describe("graph mapping", () => {
       [b.agent_id]: { agent_id: b.agent_id, mode: "edit", node_ids: [source.id], ranges: [] },
     };
     const target = render(state).getElementById(source.id);
-    expect(String(target.data("label")).startsWith(source.name)).toBe(true);
-    expect(String(target.data("label")).split("\n")).toEqual([source.name, "A read · B edit"]);
+    expect(target.data("label")).toBe(source.name);
+    expect(target.data("marks")).toMatchObject({ word: "editing", slot: "B" });
     expect(target.style("text-wrap")).toBe("wrap");
     expect(Number.parseFloat(String(target.style("text-max-width")))).toBeGreaterThan(1000);
+  });
+
+  it("gives each frame its title and its count, and counts what a change adds as new", () => {
+    const frames = Object.fromEntries(
+      graphElements(updated())
+        .filter((element) => element.data.title !== undefined)
+        .map((element) => [element.data.id, element.data]),
+    );
+    // A module's title is its file's name; its count is the functions and methods below it.
+    expect(frames["billing"]).toMatchObject({ title: "billing.py", count: "3 functions · 1 new" });
+    // A class's title is its name (these fixtures name a node by its id).
+    expect(frames["billing:Bill"]).toMatchObject({ title: "billing:Bill", count: "1 method" });
+    // A leaf carries neither.
+    expect(frames["billing:fee"]).toBeUndefined();
+    // A module with only classes says so.
+    const state = initial();
+    if (!state.graph) throw new Error("Missing graph");
+    state.graph = {
+      ...state.graph,
+      nodes: [node("m", "module"), node("m:A", "class", "m"), node("m:B", "class", "m")],
+      edges: [],
+    };
+    expect(graphElements(state).find((element) => element.data.id === "m")?.data.count).toBe(
+      "2 classes",
+    );
+  });
+
+  it("draws a marked leaf's word and badge as one image under its name, and a frame's header as two", () => {
+    const marked = render(updated());
+    const fee = marked.getElementById("billing:fee");
+    expect(fee.hasClass("marked")).toBe(true);
+    expect(fee.numericStyle("text-margin-y")).toBeLessThan(0);
+    const word = decodeURIComponent(String(fee.style("background-image")));
+    expect(word).toContain(">changed</text>");
+    expect(word).toContain(`fill="${theme["agent-a-text"]}"`);
+    expect(word).toContain(`fill="${theme["agent-a"]}"`);
+    const frame = marked.getElementById("billing");
+    expect(frame.style("label")).toBe("");
+    const header = String(frame.style("background-image")).split(" ");
+    expect(header).toHaveLength(2);
+    expect(decodeURIComponent(header[0] ?? "")).toContain(">billing.py</text>");
+    expect(decodeURIComponent(header[1] ?? "")).toContain(">3 functions · 1 new</text>");
+    expect(render(initial()).getElementById("billing:fee").style("background-image")).toBe("none");
+  });
+
+  it("gives a marked node in the cone both images, the marks and the distance badge", () => {
+    const state = updated();
+    const cone: ImpactCone = {
+      seeds: [],
+      entries: [{ node_id: "billing:fee", distance: 1 }],
+      edges_followed: "exact",
+      max_depth: 3,
+      max_nodes: 20,
+      omitted_by_depth: 0,
+      omitted_by_limit: 0,
+      tests_reaching: 0,
+    };
+    cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(theme) });
+    updateGraph(cy, graphElements(state, false, new Set(["billing:fee"]), cone));
+    const fee = cy.getElementById("billing:fee");
+    expect(fee.hasClass("cone") && fee.hasClass("marked")).toBe(true);
+    const images = String(fee.style("background-image")).split(" ");
+    expect(images).toHaveLength(2);
+    expect(decodeURIComponent(images[0] ?? "")).toContain(">changed</text>");
+    expect(decodeURIComponent(images[1] ?? "")).toContain(">1</text>");
   });
 
   it.each(["A", "B"] as const)("prioritizes %s editing over the other agent reading", (slot) => {

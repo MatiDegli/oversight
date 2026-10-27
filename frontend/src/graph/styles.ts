@@ -1,9 +1,11 @@
-import type { StylesheetJson } from "cytoscape";
+import type { NodeSingular, StylesheetJson } from "cytoscape";
 import badgeFont from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-700-normal.woff2?inline";
 
 import type { getActiveTheme } from "../theme";
 
 import { nodeGeometry } from "./geometry";
+import { headerLayers, marksLayer } from "./layers";
+import type { Layer, NodeMarks } from "./layers";
 
 export type EdgeShape = "bezier" | "taxi";
 // The product default. The dev-only query override lets make shots compare identical presets.
@@ -36,6 +38,35 @@ export function graphStyles(
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
   };
   const geometry = nodeGeometry(theme);
+  const distanceBadge = (node: NodeSingular): Layer => ({
+    image: badge(node.data("distance") as number),
+    width: badgeSize,
+    height: badgeSize,
+    x: "100%",
+    y: "0%",
+    offsetX: badgeSize / 2,
+    offsetY: -badgeSize / 2,
+    clip: "none",
+  });
+  const marks = (node: NodeSingular): Layer[] => {
+    const value = node.data("marks") as NodeMarks | undefined;
+    return value
+      ? [marksLayer(theme, value, { width: geometry.width, height: geometry.height })]
+      : [];
+  };
+  // One property per image: Cytoscape takes a list for each when a node carries several.
+  const layered = (layers: (node: NodeSingular) => Layer[]) => ({
+    "background-image": (node: NodeSingular) => layers(node).map((layer) => layer.image),
+    "background-width": (node: NodeSingular) => layers(node).map((layer) => layer.width),
+    "background-height": (node: NodeSingular) => layers(node).map((layer) => layer.height),
+    "background-position-x": (node: NodeSingular) => layers(node).map((layer) => layer.x),
+    "background-position-y": (node: NodeSingular) => layers(node).map((layer) => layer.y),
+    "background-offset-x": (node: NodeSingular) => layers(node).map((layer) => layer.offsetX),
+    "background-offset-y": (node: NodeSingular) => layers(node).map((layer) => layer.offsetY),
+    "background-clip": (node: NodeSingular) => layers(node).map((layer) => layer.clip),
+    "background-image-containment": (node: NodeSingular) =>
+      layers(node).map((layer) => (layer.clip === "none" ? "over" : "inside")),
+  });
   const pendingBorder = {
     "border-style": "dashed" as const,
     "border-width": theme["agent-border-width"],
@@ -67,6 +98,15 @@ export function graphStyles(
       },
     },
     {
+      // A leaf's name starts at the same left padding as the state word under it. The label sits
+      // outside the box's right edge, so a negative margin of the box's width brings it in.
+      selector: "node:childless",
+      style: {
+        "text-halign": "right",
+        "text-margin-x": -(geometry.width - px(theme["spacing-md"])),
+      },
+    },
+    {
       // A module or class keeps its frame colors with or without children, so it still reads as a
       // container; only a parent gets the padding and the label above it.
       selector: "node.module, node.class",
@@ -81,6 +121,24 @@ export function graphStyles(
     {
       selector: "node.module:parent, node.class:parent",
       style: { "text-valign": "top", padding: `${String(geometry.padding)}px` },
+    },
+    {
+      // A frame's title and count are its header row, drawn as images; its label would sit above it.
+      selector: "node:parent",
+      style: {
+        label: "",
+        ...layered((node) =>
+          headerLayers(theme, String(node.data("title") ?? ""), String(node.data("count") ?? "")),
+        ),
+      },
+    },
+    {
+      // The state word and badges take the bottom row, so the name moves up to make room.
+      selector: "node.marked:childless",
+      style: {
+        "text-margin-y": -geometry.height / 6,
+        ...layered(marks),
+      },
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
       (["A", "B"] as const).map((slot) => {
@@ -155,6 +213,11 @@ export function graphStyles(
       },
     },
     {
+      // A pending node can also sit in the cone: its marks and the distance badge are two images.
+      selector: "node.cone.marked:childless",
+      style: layered((node) => [...marks(node), distanceBadge(node)]),
+    },
+    {
       selector: "edge",
       style: {
         "curve-style": shape,
@@ -203,6 +266,7 @@ export function graphStyles(
       style: {
         opacity: 1,
         "background-opacity": theme["module-opacity"] * theme["dim-node"],
+        "background-image-opacity": theme["dim-node"],
         "border-opacity": theme["dim-node"],
         "text-opacity": theme["dim-node"],
       },
@@ -211,6 +275,7 @@ export function graphStyles(
       selector: "node.module:parent.dimmed",
       style: {
         "background-opacity": theme["module-opacity"] * theme["dim-module"],
+        "background-image-opacity": theme["dim-module"],
         "border-opacity": theme["dim-module"],
         "text-opacity": theme["dim-module"],
       },

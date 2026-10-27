@@ -465,7 +465,7 @@ person is doing.
 - **Graph overlays** sit 24px from the graph's edges: heading top left, cone card top left in
   review, legend bottom left, zoom controls bottom right.
 - **Sizes:** buttons 40px tall, small buttons 34px; search box and queue counter 34px; chips 30px;
-  letter avatar 36px; status lamp 10px; distance badge 20px.
+  letter avatar 36px; status lamp 10px; distance badge and node letter badge 20px.
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
   every take. Switching modes changes the camera, never node positions. Edges are curves: orthogonal
