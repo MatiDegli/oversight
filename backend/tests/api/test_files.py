@@ -46,10 +46,8 @@ async def read(s: LiveServer, path: str, agent: str | None = None) -> FileConten
     return FileContent.model_validate(response.json())
 
 
-async def put(
-    s: LiveServer, path: str, content: str, base_hash: str, agent_id: str | None = None
-) -> httpx.Response:
-    body = {"path": path, "content": content, "base_hash": base_hash, "agent_id": agent_id}
+async def put(s: LiveServer, path: str, content: str, base_hash: str) -> httpx.Response:
+    body = {"path": path, "content": content, "base_hash": base_hash}
     return await s.client.put("/files", json=body)
 
 

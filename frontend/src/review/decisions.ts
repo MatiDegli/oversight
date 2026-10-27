@@ -31,12 +31,12 @@ export const revisionOf = (change: ChangeState | undefined): number =>
 export type DecisionView =
   /** A recorded run: no commands, and the recorded decision once it arrives. */
   | { kind: "recorded"; resolution: ChangeResolved | null }
-  /** Both buttons enabled, with the last attempt's failure, if any. */
+  /** All three decisions available, with the last attempt's failure, if any. */
   | { kind: "open"; failure: string | null }
   /** From the click until change.resolved, a 4xx, or an error naming the change. */
   | { kind: "pending"; action: DecisionAction }
   | { kind: "revising"; resolution: ChangeResolved | null }
-  /** Approved but not merged: in level 1 the person may only reject it. */
+  /** Approved but not merged: the person may request changes or reject it. */
   | { kind: "conflict"; resolution: ChangeResolved; failure: string | null }
   /** Approved and merged, or rejected: nothing is left to decide. */
   | { kind: "decided"; resolution: ChangeResolved };
