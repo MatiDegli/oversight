@@ -166,6 +166,14 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await expect(review).toBeVisible();
     await expect(editable).toHaveAttribute("data-state", "clean");
     await expect(review.getByText("Editable · Inline diff")).toBeVisible();
+    const signals = review.getByRole("region", { name: "Review signals" });
+    await expect(signals).toContainText("Tests in this change: 0 recorded test changes");
+    await expect(signals).toContainText("added_tests producer unavailable (package 4)");
+    await expect(signals).toContainText("run_findings producer unavailable (package 5)");
+    await expect(signals).toContainText("Signals for your review. You decide.");
+    await expect(signals).toContainText("(agent): passed");
+    await expect(signals).toContainText("(proposal): passed");
+    await expect(signals).toContainText(`Size: ${String(proposal.files.length)} files`);
     const cone = page.getByRole("region", { name: "Possibly affected", exact: true });
     await expect(cone).toBeVisible();
     expect(proposal.impact.entries.length).toBeGreaterThan(0);
@@ -274,6 +282,12 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     });
     await release(page, holds.edit);
     await engaged(page, holds.saved);
+    // Monaco virtualizes off-screen lines; navigate to the saved footer explicitly.
+    await review
+      .locator(".editor.modified :is(.native-edit-context, textarea.inputarea)")
+      .last()
+      .focus();
+    await page.keyboard.press("Control+End");
     await expect(review.locator(".editor.modified .view-lines")).toContainText(
       "# Reviewed by the developer.",
     );

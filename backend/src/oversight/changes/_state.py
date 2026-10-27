@@ -8,12 +8,14 @@ from oversight.graph import (
     CodeVersion,
 )
 from oversight.workspace import (
+    SuiteRun,
     Tree,
 )
 from oversight_contracts.common import AgentId, ChangeId
 from oversight_contracts.events import (
     ChangeResolved,
     Conflict,
+    SuiteExecution,
 )
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot
 from oversight_contracts.review import FinishDeclaration
@@ -102,10 +104,13 @@ class ChangeRecord:
     conflict: Conflict | None = None
     """The last approval's conflict, for the note of a redo on the new base."""
     merged: bool = False
+    observed_paths: set[str] = field(default_factory=set[str])
     touched: set[str] = field(default_factory=lambda: set[str]())
     published: dict[str, str | None] = field(default_factory=lambda: dict[str, str | None]())
     """Per path, the `modified` last sent in a `change.updated`."""
     unpublished: set[str] = field(default_factory=lambda: set[str]())
+    executions: dict[int, SuiteExecution] = field(default_factory=dict[int, SuiteExecution])
+    suite_runs: dict[int, SuiteRun] = field(default_factory=dict[int, SuiteRun])
     declared: FinishDeclaration | None = None
     delivery_rejected: str | None = None
     evidence: WriteEvidence | None = None

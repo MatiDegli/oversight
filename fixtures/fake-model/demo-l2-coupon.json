@@ -73,7 +73,14 @@
         {
           "name": "finish",
           "arguments": {
-            "summary": "Documented apply_coupon."
+            "summary": "Documented apply_coupon.",
+            "files": [
+              "shop/pricing.py"
+            ],
+            "tests_run": true,
+            "tests": [
+              "tests/test_pricing.py::test_coupons_ignore_case_and_unknown_codes"
+            ]
           }
         }
       ],
@@ -158,7 +165,14 @@
         {
           "name": "finish",
           "arguments": {
-            "summary": "Shortened the coupon docstring."
+            "summary": "Shortened the coupon docstring.",
+            "files": [
+              "shop/pricing.py"
+            ],
+            "tests_run": true,
+            "tests": [
+              "tests/test_pricing.py::test_coupons_ignore_case_and_unknown_codes"
+            ]
           }
         }
       ],

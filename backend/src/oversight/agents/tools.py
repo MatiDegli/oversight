@@ -17,7 +17,15 @@ from typing import Literal, cast
 from pydantic import ValidationError
 
 from oversight.graph import WorkspaceGraph
-from oversight.workspace import FileRead, FileTooLarge, Tree, Workspace, WorkspaceError
+from oversight.workspace import (
+    FileRead,
+    FileTooLarge,
+    SuiteRun,
+    SuiteUnavailable,
+    Tree,
+    Workspace,
+    WorkspaceError,
+)
 from oversight_contracts.events import FocusRange, SuiteResult
 from oversight_contracts.review import FinishDeclaration
 
@@ -106,6 +114,7 @@ class ToolOutcome:
     node_ids: list[str] = field(default_factory=lambda: list[str]())
     edited_path: str | None = None
     tests: SuiteResult | None = None
+    suite_run: SuiteRun | None = None
     finish_summary: str | None = None
     declaration: FinishDeclaration | None = None
 
@@ -214,6 +223,14 @@ class Toolbox:
             message = "arguments are not valid JSON"
         except (ToolError, WorkspaceError) as error:
             message = self._workspace.redact(str(error))
+        except SuiteUnavailable as error:
+            message = f"cannot access the file: {error.strerror or type(error.cause).__name__}"
+            return ToolOutcome(
+                content=f"Error: {message}",
+                ok=False,
+                summary=_failed(name, raw_arguments),
+                suite_run=error.run,
+            )
         except OSError as error:
             message = f"cannot access the file: {error.strerror or type(error).__name__}"
         return ToolOutcome(
@@ -392,7 +409,11 @@ class Toolbox:
             headline = f"Ran tests: {result.passed} of {result.passed + result.failed} pass"
         output = run.output[-MAX_TEST_OUTPUT:]
         return ToolOutcome(
-            content=f"{headline}\n\n{output}", ok=True, summary=headline, tests=result
+            content=f"{headline}\n\n{output}",
+            ok=True,
+            summary=headline,
+            tests=result,
+            suite_run=run,
         )
 
     def _finish(self, arguments: dict[str, object]) -> ToolOutcome:

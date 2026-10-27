@@ -17,7 +17,7 @@ from oversight.agents import (
     parse_script,
 )
 from oversight.events import EventPayload
-from oversight.workspace import Tree, Workspace
+from oversight.workspace import SuiteRun, Tree, Workspace
 from oversight_contracts.events import Limits
 from oversight_contracts.review import FinishDeclaration
 
@@ -43,6 +43,7 @@ class Recorder:
 
     def __init__(self) -> None:
         self.log: list[tuple[str, object]] = []
+        self.suites: list[SuiteRun] = []
         self.edit_result: bool | Exception = True
         self.propose_result: bool | Exception = True
 
@@ -54,6 +55,9 @@ class Recorder:
         if isinstance(self.edit_result, Exception):
             raise self.edit_result
         return self.edit_result
+
+    async def tests_executed(self, agent_id: str, run: SuiteRun) -> None:
+        self.suites.append(run)
 
     async def proposed(
         self, agent_id: str, summary: str | None, *, declaration: FinishDeclaration | None = None

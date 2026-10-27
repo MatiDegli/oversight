@@ -172,13 +172,24 @@ export function applyEvent(state: State, event: ServerEvent): State {
           !profile || profile.provider === "meta" ? tick.cost_usd === null : state.spendUnknown,
       };
     }
+    case "tests.executed":
+      return { ...next, testExecutions: { ...state.testExecutions, [event.seq]: event.payload } };
+    case "change.facts_recorded":
+      return {
+        ...next,
+        changeFacts: {
+          ...state.changeFacts,
+          [event.payload.change_id]: [
+            ...(state.changeFacts[event.payload.change_id] ?? []),
+            event.payload,
+          ],
+        },
+      };
     // Reserved contracts: consume the sequence without enabling level 3 behavior.
     case "change.assessed":
     case "merge_mode.changed":
     case "plan.updated":
     case "change.reviewed":
-    case "change.facts_recorded":
-    case "tests.executed":
     case "revert.resolved":
     case "queue.updated":
     case "lead.status":

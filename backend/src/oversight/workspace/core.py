@@ -11,7 +11,7 @@ import re
 import shutil
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 
@@ -40,7 +40,8 @@ from oversight.workspace.files import (
 from oversight.workspace.locks import Locks, offload
 from oversight.workspace.ranges import FileRange, read_range
 from oversight.workspace.runner import ProcessResult, run_process
-from oversight.workspace.suite import SuiteRun, run_suite
+from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
+from oversight.workspace.test_tree import capture_test_tree
 from oversight_contracts.common import AgentId
 
 PLUGIN_DIR = Path(__file__).resolve().parent / "report_plugin"
@@ -493,15 +494,27 @@ class Workspace:
         """Run the demo repo's tests in `tree`, under its lock, in the demo venv."""
         async with tree.section(locked=True):
             await offload(lambda: self.tmp_dir.mkdir(mode=DIR_MODE, parents=True, exist_ok=True))
-            return await run_suite(
-                python=self._demo_python,
-                plugin_dir=PLUGIN_DIR,
-                runtime_root=self._root,
-                tree_root=tree.root,
+            tested_tree, tested_commit = await capture_test_tree(
+                tree.root,
+                self.tmp_dir,
+                env=self._git_env(None, None),
+                flags=GIT_FLAGS,
                 timeout_s=timeout_s,
-                redact=self.redact,
-                spawn=run_process,
             )
+            try:
+                run = await run_suite(
+                    python=self._demo_python,
+                    plugin_dir=PLUGIN_DIR,
+                    runtime_root=self._root,
+                    tree_root=tree.root,
+                    timeout_s=timeout_s,
+                    redact=self.redact,
+                    spawn=run_process,
+                )
+            except (SuiteInterrupted, SuiteUnavailable) as error:
+                error.run = replace(error.run, tested_tree=tested_tree, tested_commit=tested_commit)
+                raise
+            return replace(run, tested_tree=tested_tree, tested_commit=tested_commit)
 
 
 __all__ = ["Author", "Tree", "Workspace"]

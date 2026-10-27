@@ -141,3 +141,24 @@ def test_the_level1_log_follows_the_order_of_section_4_5() -> None:
     assert types[merged:] == ["change.resolved", "graph.delta", "agent.status"]
     steps = sum(1 for t in types if t == "agent.step")
     assert sum(1 for t in types if t == "usage.tick") == steps
+
+
+def test_scripted_run_has_valid_suite_and_facts_evidence_for_every_proposal() -> None:
+    events = [
+        SERVER_EVENT.validate_json(line)
+        for line in (FIXTURES / "scripted-level2.jsonl").read_text().splitlines()
+    ]
+    suites = {event.seq: event.payload for event in events if event.type == "tests.executed"}
+    facts = [event for event in events if event.type == "change.facts_recorded"]
+    proposals = [event for event in events if event.type == "change.proposed"]
+    assert len(facts) == len(proposals) > 0
+    for proposed, recorded in zip(proposals, facts, strict=True):
+        p, f = proposed.payload, recorded.payload
+        assert recorded.seq == proposed.seq + 1
+        assert (p.change_id, p.revision, p.head_commit) == (f.change_id, f.revision, f.head_commit)
+        assert not f.complete and len(f.problems) >= 4
+        assert f.test_runs and all(seq < recorded.seq for seq in f.test_runs)
+        for seq in f.test_runs:
+            execution = suites[seq]
+            assert execution.change_id == p.change_id and execution.agent_id == p.agent_id
+            assert execution.suite.cases and execution.suite.cases_complete
