@@ -191,8 +191,28 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   Approve has no keyboard shortcut and must never fire while a comment is typed, and Tab then Space
   from the comment box would merge into main. Cost: keyboard and screen-reader users cannot approve;
   they are told why, and the merge stays a deliberate pointer act.
-- **Bezier edges kept over taxi (maintainer, 2026-10-26):** captures of both on the preset layout
-  were compared; curves read better.
+- **Bezier edges kept over taxi (maintainer, 2026-10-26), superseded on 2026-10-27 by the graph
+  at the sketch's direction, below:** captures of both on the preset layout were compared; curves
+  read better. That preset packed every module in a tight box, with no room for lanes; on the wide
+  preset taxi reads better.
+- **The graph at the sketch's direction (maintainer, 2026-10-27):** the merged graph was far below
+  the Signal sketch, and the maintainer said that not everything has to fit on screen. It is now
+  a canvas that is panned and zoomed, built to the sketch's measurements at 100% on a 1920x1080
+  frame: rows of 282x46px with the name, state word and badge on one line, frames with a header
+  band, classes inside modules, a 26px badge, radii of 6 and 10px. Edges are taxi: orthogonal
+  with rounded corners, routed through the gutters between frames (`routes.ts`), because a curve
+  between two columns of rows crosses the rows in between; the router can loop a call at the left
+  of a column, which Cytoscape's own taxi cannot do for two rows of one column. Cost: Cytoscape
+  has no per-side padding and no way to read the bends of an edge in a headless test, so the
+  header band is built from uniform padding and a minimum size (`frames.ts`) and the bends are
+  computed from the boxes and checked against the geometry. The preset is generated in two passes
+  (module blocks in columns by who calls whom, then each module's contents in its block) with
+  gutters of 120px and 80px, so a later zoom view can shrink a block to a dot. The camera starts at
+  100% on the hub's module and never fits on its own (the fit button does); the view's edges move
+  to a gutter rather than cut a frame. Import edges are kept in the data and not drawn: the sketch
+  draws calls, and with 36 functions the imports doubled the lines without saying what a change
+  reaches. Cost of the whole: in review, at the 12px floor, only the nearest callers of the demo's
+  hub fit beside the cone card; the rest are lit and listed as out of view.
 - **Visual parity round 1 (maintainer, 2026-10-27).** Nothing moves; each answer below is built.
   Edges draw under leaf nodes and quiet down (0.45) unless an agent is at them or the person
   selects a node; frame headers can still be crossed by an edge (a frame is one node, and its fill

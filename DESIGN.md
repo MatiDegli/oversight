@@ -278,7 +278,12 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | --- | --- | --- | --- |
 | Border of a changed node | solid | dashed | AGENTS.md: a dashed border means a pending change, changed and new alike |
 | Module names on the graph | Mono | Next | AGENTS.md: graph labels use Next |
-| State word and letter badge on a node | on the name's row, at the right | a second row under the name | the preset's leaf is 150px wide, too narrow for a long name, the word and the badge on one row; widening it would move every node |
+| Long name on a touched row | not drawn | the name is cut with an ellipsis where it would meet the state word | a row is fixed at 282px; the state word and badges keep their place |
+| Title weight of a frame | light, Mono | 600, Next | AGENTS.md: graph labels use Next; at 17px a light weight does not keep 4.5:1 |
+| Import edges | not drawn | in the data, not drawn | the sketch draws calls; imports say which files, not which functions |
+| Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed border or line means a pending change in the agent's color, and color is an agent only on its own change |
+| Skip-column edges | routed around the frames | run through the gutters and cross a frame they do not join, under its rows | the router has no channel search for frames that stand between two columns; the edge still ends on its two rows |
+| First view | the whole demo in view | 100% on the module of the hub, more beyond the edges | the graph is a canvas to pan and zoom; the demo has 36 functions, not the sketch's 19 |
 | State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
 | Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
 | Code-dim (line numbers, comments) | `#6d6d68`, 3.8:1 on page | `#7d7d78`, 4.7:1 | quality floor: text at 4.5:1 |
@@ -440,11 +445,14 @@ packages; Monaco is created after the fonts load, or calls `monaco.editor.remeas
 - **Headline** (700, 20px, 1.3): the change's title at the top of the left panel.
 - **Brand** (700, 17px): the product name in the top bar.
 - **Title** (700, 16px): the agent's name on its card, section headings.
-- **Body** (400, 15px, 1.5): running text, buttons, node labels. Prose such as the agent's note
-  stays within about 75 characters a line.
+- **Body** (400, 15px, 1.5): running text and buttons. Prose such as the agent's note stays within
+  about 75 characters a line.
+- **Graph name** (400, 18px): a function's or method's name on its row; its state word is 16px, 600.
+  A frame's title is 17px, 600, and its count 16px, 400. The graph is read at 100%, the size the
+  sketch is drawn at, so these are the sketch's sizes, not the panels' scale.
 - **Label** (600, 14px): buttons, pills, chips and labels that name something.
 - **Caption** (400, 13px): captions, keyboard hints, a module's function count.
-- **Badge** (700, 13px): the letter on a node badge; cursor names use 12px.
+- **Badge** (700, 15px): the letter on a node badge (a 26px square); cursor names use 12px.
 - **Code** (Mono 400, 15px, 21px lines): code in Monaco; line numbers at 13px.
 - **Data** (Mono 400, 14px): hashes, money, counts shown as data.
 
@@ -473,12 +481,33 @@ person is doing.
   cone (live diff, file view) the top left is empty, as in the live sketch: the graph beside the
   panel is framed on its own nodes, and a heading there would sit on top of them.
 - **Sizes:** buttons 40px tall, small buttons 34px; search box and queue counter 34px; chips 30px;
-  letter avatar 36px; status lamp 10px; distance badge and node letter badge 20px.
+  letter avatar 36px; status lamp 10px; distance badge 20px; node letter badge 26px.
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
-  every take. Switching modes changes the camera, never node positions. Edges are curves: orthogonal
-  ("taxi") edges were compared on the preset layout and curves read better (DECISIONS.md,
-  2026-10-26).
+  every take. Switching modes changes the camera, never node positions.
+- **A canvas, not a fit:** the graph is larger than the screen and is panned and zoomed. It starts
+  at 100% on the module of the graph's hub (the function with the most callers), kept inside the
+  graph's bounds and moved to the nearest gutter where an edge of the view would cut a frame in
+  two. Dragging pans, the wheel and the +/- buttons zoom between 20% and 300%, and the fit button
+  shows everything. The camera moves on its own only where it already does by design (opening and
+  closing review, a node added while the person is not navigating); no node ever moves.
+- **The preset's arrangement:** modules in columns, calls flowing from left to right, in two passes
+  (blocks first, then each module's contents inside its block), so that a zoom view can later shrink
+  a module to a dot at its center. Gutters of 120px between columns and 80px between stacked
+  modules (never under 60px), leaving room for the edges' lanes; tests in their own band below.
+  `frontend/tools/layout.ts` generates it.
+- **Rows and frames:** a function or method is a row of 282x46px, 11px from the next, name at the
+  left and the state word and letter badge at the right, on one line. A module frame has a header
+  band (54px above its first row, the title at the left and the count at the right) and 27px at the
+  left, 17px at the right and below; a class is a frame inside it, as wide as one of its rows, with
+  a 44px band and 12px around its rows. A module or class with nothing in it is one 70px header row
+  and says, for example, "3 classes".
+- **Edges are taxi:** orthogonal lines with rounded corners, thin and grey with a small arrowhead,
+  routed through the gutters between module frames on lanes 12px apart, and drawn under the rows.
+  A call between two rows of one module, or of two modules in one column, loops through a lane at
+  the left. Imports are in the graph's data and not drawn: the sketch draws calls, and a module's
+  imports say which files it uses, not which functions a change may reach. The router (`routes.ts`)
+  only reads boxes and places no node; it runs again when a node lands after a drag.
 
 ## Elevation & Depth
 
@@ -499,7 +528,7 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 
 - Card, file row, banner, text box: card radius (10px).
 - Button, input, chip, fact: control radius (7px).
-- Module frame: module radius (8px). Node: node radius (5px).
+- Module frame and class frame: module radius (10px). Row: node radius (6px).
 - Cursor name label: label radius (4px); keyboard hint: 5px.
 - Status pill, distance badge, status lamp: fully round.
 - The dash, 6px with a 4px gap, belongs to pending changes only.
@@ -582,7 +611,7 @@ node ("read", "editing", "changed", "new"):
 2. **What is the agent doing with it now?** The letter badge: outlined for read, filled for a
    change.
 
-- **Rest:** card fill at 94%, 1px node-border, node radius, label in text at 15px. Hover turns the
+- **Rest:** card fill at 94%, 1px node-border, node radius, name in text at 18px. Hover turns the
   border node-hover. A module frame: panel fill at 90%, 1px card-border, module radius, its name in
   module-label, its function count in faint. An exact call edge: 1.4px in edge, with a small filled
   arrowhead of the same color.
@@ -606,7 +635,8 @@ node ("read", "editing", "changed", "new"):
   opacity, and a possible call that a change adds is not dashed (its node already is).
 
 **Letter badges.** Agents are a letter and a color, nothing more: no avatars, beads or mascots. On
-a node: a small rounded square at the node's right end with A or B in badge type. Filled for
+a node: a 26px rounded square at the right end of the row, on the name's line, with A or B in badge
+type. Filled for
 editing and pending: the agent's color with the letter in on-agent. Outlined for read: a 1.5px
 border in the agent's color, no fill, the letter in that color. On the agent card and in panel
 headings: a small square swatch in the agent's color followed by "Agent A" or "Agent B".
