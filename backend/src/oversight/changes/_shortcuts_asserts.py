@@ -11,6 +11,11 @@ from oversight.changes._shortcuts_common import (
     is_literal_like,
     walk_local,
 )
+from oversight.changes._shortcuts_equivalence import (
+    align_parameters,
+    body_key,
+    singleton_tightening,
+)
 from oversight.changes._shortcuts_normalize import inline_assertion_calls, normalize_assertions
 
 
@@ -24,22 +29,10 @@ def is_assert_call(node: ast.AST, source: Source) -> bool:
 
 
 def _assert_nodes(func: FuncNode, source: Source) -> list[ast.Assert | ast.Call]:
-    raises_ctx: set[int] = set()
     local = walk_local(func)
-    for node in local:
-        if isinstance(node, (ast.With, ast.AsyncWith)):
-            for item in node.items:
-                if isinstance(item.context_expr, ast.Call):
-                    name = source.resolve(item.context_expr.func)
-                    if name is not None and name.rsplit(".", 1)[-1] in {
-                        "raises",
-                        "assertRaises",
-                        "assertRaisesRegex",
-                    }:
-                        raises_ctx.add(id(item.context_expr))
     nodes: list[ast.Assert | ast.Call] = []
     for node in local:
-        if id(node) in raises_ctx:
+        if isinstance(node, ast.Call) and _raises_key(node, source) is not None:
             continue
         if isinstance(node, ast.Assert) or (
             isinstance(node, ast.Call) and is_assert_call(node, source)
@@ -166,23 +159,25 @@ def _check_pair(
     return None
 
 
+def _raises_key(call: ast.Call, source: Source) -> str | None:
+    name = source.resolve(call.func)
+    last = name.rsplit(".", 1)[-1] if name else ""
+    if last not in {"raises", "assertRaises", "assertRaisesRegex"} or not call.args:
+        return None
+    match = next((kw.value for kw in call.keywords if kw.arg == "match"), None)
+    if last == "assertRaisesRegex" and len(call.args) >= 2:
+        match = call.args[1]
+    return ast.dump(call.args[0]) + ":" + (ast.dump(match) if match is not None else "")
+
+
 def _raises_wrappers(func: FuncNode, source: Source) -> list[tuple[str, int]]:
-    out: list[tuple[str, int]] = []
-    for node in walk_local(func):
-        if not isinstance(node, (ast.With, ast.AsyncWith)):
-            continue
-        for item in node.items:
-            ctx = item.context_expr
-            if not isinstance(ctx, ast.Call):
-                continue
-            name = source.resolve(ctx.func)
-            if name is None:
-                continue
-            last = name.rsplit(".", 1)[-1]
-            if last not in {"raises", "assertRaises", "assertRaisesRegex"}:
-                continue
-            out.append((ast.dump(ctx), node.lineno))
-    return out
+    # Callable and context-manager forms check the same exception. The called
+    # body/arguments may change without removing the exception expectation.
+    return [
+        (key, node.lineno)
+        for node in walk_local(func)
+        if isinstance(node, ast.Call) and (key := _raises_key(node, source)) is not None
+    ]
 
 
 def _assert_key(node: ast.Assert | ast.Call) -> str:
@@ -199,6 +194,9 @@ def detect_assertions(
     for qual, old_func in old.functions.items():
         new_func = new.functions.get(qual)
         if new_func is None:
+            continue
+        align_parameters(old, new, old_func, new_func)
+        if body_key(old_func) == body_key(new_func):
             continue
         old_asserts = _assert_nodes(old_func, old)
         new_asserts = _assert_nodes(new_func, new)
@@ -265,7 +263,9 @@ def detect_assertions(
             tight_idx: int | None = None
             for idx, cand in enumerate(unmatched_new):
                 reverse = _check_pair(path, cand, old_node, new, old)
-                if reverse is not None and reverse.kind == ShortcutKind.ASSERTION_LOOSENED:
+                if (
+                    reverse is not None and reverse.kind == ShortcutKind.ASSERTION_LOOSENED
+                ) or singleton_tightening(old_node, cand):
                     tight_idx = idx
                     break
             if tight_idx is not None:

@@ -6,6 +6,7 @@ import tokenize
 from collections import Counter
 
 from oversight.changes._shortcuts_common import Finding, ShortcutKind, Source, walk_local
+from oversight.changes._shortcuts_tests import TestRef
 
 
 def _todo_comments(source: str) -> list[tuple[int, str]]:
@@ -89,8 +90,21 @@ def _inventory(source: Source) -> dict[str, list[Stub]]:
     return result
 
 
-def detect_stubs(path: str, old: Source | None, new: Source) -> list[Finding]:
+def detect_stubs(
+    path: str,
+    old: Source | None,
+    new: Source,
+    old_sources: dict[str, Source],
+    matches: dict[TestRef, TestRef],
+) -> list[Finding]:
     before = _inventory(old) if old else {}
+    # Preserve placeholders owned by intact renamed/moved tests and their helpers.
+    for (new_path, qual), (old_path, old_qual) in matches.items():
+        if new_path != path or (old_path == path and qual == old_qual):
+            continue
+        for owner, stubs in _inventory(old_sources[old_path]).items():
+            if owner == old_qual or owner.startswith(old_qual + "."):
+                before[qual + owner[len(old_qual) :]] = stubs
     interfaces = _interfaces(new)
     findings: list[Finding] = []
     for qual, stubs in _inventory(new).items():

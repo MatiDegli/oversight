@@ -5,6 +5,7 @@ import copy
 from collections import Counter
 
 from oversight.changes._shortcuts_common import FuncNode, Source, walk_local
+from oversight.changes._shortcuts_equivalence import canonicalize, unittest_checks
 
 # Positional diagnostic-message slots in unittest.TestCase. Other arguments
 # (places, delta, regex, callable arguments) must remain part of the check.
@@ -59,6 +60,7 @@ class _SplitAnd(ast.NodeTransformer):
 def normalize_assertions(source: Source) -> Source:
     """Keep original locations and scoped bindings on the copied syntax nodes."""
     source = copy.deepcopy(source)
+    canonicalize(source)
     for func in source.functions.values():
         local = walk_local(func)
         for node in local:
@@ -70,7 +72,9 @@ def normalize_assertions(source: Source) -> Source:
                     node.keywords = [kw for kw in node.keywords if kw.arg != "msg"]
                     if len(node.args) > slot:
                         node.args.pop(slot)
+        unittest_checks(func)
         _SplitAnd().visit(func)
+    canonicalize(source)
     return source
 
 

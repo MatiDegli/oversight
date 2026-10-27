@@ -64,7 +64,14 @@ def _rename_key(source: Source, func: FuncNode) -> tuple[tuple[str, ...], tuple[
         local = {}
     normalizer = _LocalNames(local)
     body: list[str] = []
-    for stmt in func.body:
+    for index, stmt in enumerate(func.body):
+        if (
+            index == 0
+            and isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            continue
         copied = copy.deepcopy(stmt)
         # Import paths can change during a move. Preserve the final callee name
         # (add versus sub still differs), rather than the module or import alias.

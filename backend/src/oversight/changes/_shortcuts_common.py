@@ -133,6 +133,10 @@ class Source:
 
     def __post_init__(self) -> None:
         self.tree = ast.parse(self.text)
+        # Python 3 unicode-prefix spelling does not change a string's value.
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.Constant):
+                node.kind = None
         self._visit(self.tree, "", _scope_bindings(self.tree.body), True)
 
     def _visit(

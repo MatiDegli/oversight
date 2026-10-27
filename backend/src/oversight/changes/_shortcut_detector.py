@@ -3,9 +3,16 @@
 Each change is ``(path, old, new)``; None denotes a missing version. Findings
 ask for review: legitimate changes can trigger them, and a human decides.
 
-Known limit: literals reaching the code under test only through a fixture's
-return value are not tracked. Only explicit call inputs and non-expected
-parametrize columns count. This module is not wired into the change manager.
+Known limits: this is syntax review, not semantic equivalence or pytest execution.
+Fixture return values, dynamically constructed parameter tables and nested-scope
+parameter renames are not tracked. Only explicit call inputs and non-expected
+parametrize columns count as test inputs. Custom collection/inheritance, dynamic
+framework aliases, overlapping test renames, API/helper rewrites and complex
+expected expressions can need review even when behavior is preserved. Callable/with raises
+checks compare the exception and match pattern, not callable arguments or pytest
+check= predicates. Non-test function moves/renames can re-report old placeholders.
+Unknown runtime approx values cannot prove a tolerance wider. Historical Python 2
+syntax is reported as a parse error. This module is not wired into the manager.
 """
 
 from collections.abc import Iterable
@@ -115,5 +122,5 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
                     inputs,
                 )
             )
-        findings.extend(detect_stubs(path, old, new))
+        findings.extend(detect_stubs(path, old, new, old_sources, matches))
     return sorted(findings, key=lambda f: (f.path, f.line, f.kind, f.message))
