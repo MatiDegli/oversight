@@ -689,13 +689,11 @@ class ChangeManager:
     @staticmethod
     async def _read_text(tree: Tree, path: str) -> FileRead:
         """`tree.read_text`, with what a person's request can meet as `InvalidPath`: a path through
-        a file, a directory, and a file that is not UTF-8 text."""
+        a file, and a file that is not UTF-8 text (a directory is refused by the workspace)."""
         try:
             return await tree.read_text(path)
         except NotADirectoryError as error:
             raise InvalidPath(f"invalid path {path[:80]!r}: a parent is not a directory") from error
-        except IsADirectoryError as error:
-            raise InvalidPath(f"invalid path {path[:80]!r}: not a regular file") from error
         except WorkspaceError as error:
             if isinstance(error.__cause__, UnicodeDecodeError):
                 raise InvalidPath(f"{path[:80]!r} is not a UTF-8 text file") from error
