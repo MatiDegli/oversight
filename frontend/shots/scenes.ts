@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
+import type { ServerEvent } from "@contracts";
 import type { Page } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
 
@@ -148,7 +149,43 @@ export const scenes: readonly Scene[] = [
   {
     name: "review",
     enabled: true,
-    prepare: (page) => clickChangedNode(page, "Review panel"),
+    prepare: async (page) => {
+      // The replay API has no worktrees. Read only the diff already present in this fixture.
+      const text = await readFile(
+        new URL("../../fixtures/events/handwritten-level1-proposed.jsonl", import.meta.url),
+        "utf8",
+      );
+      const updates = text
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as ServerEvent)
+        .filter((event) => event.type === "change.updated");
+      await page.route("**/files?*", (route) => {
+        const path = new URL(route.request().url()).searchParams.get("path");
+        const update = updates.findLast((event) => event.payload.file.path === path);
+        if (!update) return route.abort();
+        const content = update.payload.file.modified ?? "";
+        return route.fulfill({
+          json: {
+            path,
+            content,
+            agent_id: update.payload.agent_id,
+            hash: createHash("sha256").update(content).digest("hex"),
+          },
+        });
+      });
+      await clickChangedNode(page, "Review panel");
+      await page
+        .getByLabel("Editable review file")
+        .getByText("Edits go to the agent’s worktree")
+        .waitFor();
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector('[aria-label="Editable review file"]')
+            ?.getAttribute("data-state") === "clean",
+      );
+    },
   },
   {
     name: "live-diff",

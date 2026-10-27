@@ -5,6 +5,7 @@
 import type { Core } from "cytoscape";
 
 import type { Box } from "./model";
+import { visibleId } from "../foldVisibility";
 
 export interface BoxSource {
   attach(cy: Core): void;
@@ -37,7 +38,7 @@ export function createBoxSource(): BoxSource {
       const found = new Map<string, Box>();
       if (!graph) return found;
       for (const id of ids) {
-        const node = graph.getElementById(id);
+        const node = graph.getElementById(visibleId(graph, id));
         if (node.empty() || !node.isNode()) continue;
         const { x1, y1, x2, y2 } = node.renderedBoundingBox({
           includeLabels: false,

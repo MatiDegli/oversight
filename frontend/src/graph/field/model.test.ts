@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { themes } from "../../theme";
-import type { FieldMode } from "./lights";
+import type { FieldLight, FieldMode } from "./lights";
 import {
   bayerMatrix,
   boxDistance,
@@ -243,6 +243,49 @@ describe("the lamps", () => {
       boxes,
     );
     expect(placed).toEqual([{ box: BOX, color: BLUE, weight: 0.4, pulses: true }]);
+  });
+
+  it.each([false, true])("keep the strongest light on a folded row (reversed: %s)", (reverse) => {
+    // Hidden methods have separate box objects with the folded class row's same bounds.
+    const boxes = new Map([
+      ["Cart.add", { ...BOX }],
+      ["Cart.total", { ...BOX }],
+    ]);
+    const lights: FieldLight[] = [
+      { id: "Cart.add", source: "agent-a", weight: 0.36, pulses: false },
+      { id: "Cart.total", source: "agent-a", weight: 1, pulses: true, pulseWeight: 0.8 },
+    ];
+    const placed = placeLights(themes.dark, reverse ? lights.toReversed() : lights, boxes);
+    const strongest = light(BOX, { pulses: true, pulseWeight: 0.8 });
+    expect(placed).toEqual([strongest]);
+    const lamps = createLampField();
+    const actual = [...lamps(config, 600, 400, placed, null).data];
+    expect(actual).toEqual([...lamps(config, 600, 400, [strongest], null).data]);
+  });
+
+  it("keep separate sources on a folded row and separate visible rows", () => {
+    const other = { ...BOX, y1: 220, y2: 290 };
+    const placed = placeLights(
+      themes.dark,
+      [
+        { id: "Cart.add", source: "agent-a", weight: 0.36, pulses: false },
+        { id: "Cart.total", source: "agent-a", weight: 0.72, pulses: false },
+        { id: "Cart.add", source: "agent-b", weight: 1, pulses: true },
+        { id: "Cart.total", source: "work-light", weight: 0.52, pulses: false },
+        { id: "quote", source: "agent-a", weight: 0.36, pulses: false },
+      ],
+      new Map([
+        ["Cart.add", { ...BOX }],
+        ["Cart.total", { ...BOX }],
+        ["quote", other],
+      ]),
+    );
+    expect(placed).toEqual([
+      light(BOX, { weight: 0.72 }),
+      light(BOX, { color: BLUE, pulses: true }),
+      light(BOX, { color: parseHex(themes.dark["work-light"]), weight: 0.52 }),
+      light(other, { weight: 0.36 }),
+    ]);
   });
 });
 

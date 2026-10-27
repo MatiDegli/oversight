@@ -6,6 +6,8 @@ import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
+import { assertPanelFrame } from "../../shots/framing";
+
 import type {} from "./camera.browser.fixture";
 import type { GraphProbeHost } from "../graph";
 
@@ -116,13 +118,7 @@ function report(page: Page, ids: string[]) {
     const probe = element?.oversightGraph;
     if (!element || !probe) throw new Error("The graph is not mounted");
     const drawn = probe.nodeCenters();
-    const centers = wanted.length
-      ? wanted.flatMap((id) => {
-          const node = drawn.find((node) => node.id === probe.representative(id));
-          return node ? [{ ...node, id }] : [];
-        })
-      : drawn;
-    const outside = (list: typeof centers) =>
+    const outside = (list: typeof drawn) =>
       list
         .filter(({ x, y }) => x < 0 || y < 0 || x > element.clientWidth || y > element.clientHeight)
         .map(({ id }) => id);
@@ -134,13 +130,35 @@ function report(page: Page, ids: string[]) {
         const card = document.querySelector('[aria-label="Possibly affected"]');
         return card ? card.getBoundingClientRect().right - element.getBoundingClientRect().left : 0;
       })(),
-      cutOffAnywhere: outside(centers),
+      cutOffAnywhere: outside(drawn),
       animating: probe.animating(),
       zoom: probe.zoom(),
       pan: probe.pan(),
       positions: probe.positions(),
     };
   }, ids);
+}
+
+function panelFrame(page: Page) {
+  return page.evaluate(() => {
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const view = host?.oversightGraph;
+    const clear = document.querySelector("[data-graph-clear-area]")?.getBoundingClientRect();
+    if (!host || !view || !clear) throw new Error("Missing graph clear area");
+    return {
+      zoom: view.zoom(),
+      pan: view.pan(),
+      size: { width: host.clientWidth, height: host.clientHeight },
+      area: {
+        x1: 40,
+        y1: 40,
+        x2: host.clientWidth - 40,
+        y2: Math.min(host.clientHeight - 40, clear.bottom - host.getBoundingClientRect().top),
+      },
+      focus: view.nodeBounds("node.pending"),
+      cone: view.nodeBounds("node.cone"),
+    };
+  });
 }
 
 async function settled(page: Page) {
@@ -207,6 +225,99 @@ it.each(["after-mount", "at-mount"] as const)(
 
 /** The nodes the camera frames when the change opens: the change's own, in the recorded run. */
 const wanted = (page: Page) => page.evaluate(() => [window.graphTest.changed]);
+
+it("live diff lights its callers and dims unrelated nodes, then clears that scope on close", async () => {
+  await withPage("reduce", async (page) => {
+    const scope = () =>
+      page.evaluate(() => {
+        const probe = document.querySelector<GraphProbeHost>(
+          '[aria-label="Repository graph"]',
+        )?.oversightGraph;
+        if (!probe) throw new Error("The graph is not mounted");
+        return {
+          callers: probe.nodeCenters("node.cone:not(.dimmed)").map(({ id }) => id),
+          dimmed: probe.nodeCenters("node.dimmed").map(({ id }) => id),
+        };
+      });
+    expect(await scope()).toEqual({ callers: [], dimmed: [] });
+    await page.evaluate(() => {
+      window.graphTest.open();
+    });
+    const live = await scope();
+    const caller = await page.evaluate(() => window.graphTest.caller);
+    const visibleCaller = (await report(page, [caller])).centers;
+    expect(visibleCaller).toHaveLength(1);
+    expect(live.callers).toContain(visibleCaller[0]?.id);
+    expect(live.dimmed.length).toBeGreaterThan(0);
+    await browserExpect(page.getByRole("region", { name: "Possibly affected" })).toHaveCount(0);
+    await page.evaluate(() => {
+      window.graphTest.close();
+    });
+    expect(await scope()).toEqual({ callers: [], dimmed: [] });
+  });
+}, 30_000);
+
+it("opening the panel frames the changed node and its callers; closing restores the camera", async () => {
+  await withPage("no-preference", async (page) => {
+    const ids = await wanted(page);
+    expect(ids).toHaveLength(1);
+    const wide = await report(page, ids);
+    // The graph starts at 100%: nothing is fitted, and what does not fit lies beyond the edge.
+    expect(wide.zoom).toBe(1);
+    expect(wide.cutOffAnywhere.length).toBeGreaterThan(0);
+    const everything = Object.keys(wide.positions);
+    const watch = (await report(page, everything)).centers;
+
+    // The panel narrows the graph; with the camera left alone the far right is cut off.
+    const eased = await page.evaluate(() => {
+      window.graphTest.open();
+      return document
+        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+        ?.oversightGraph?.animating();
+    });
+    expect(eased).toBe(true);
+    await settled(page);
+    const open = await report(page, ids);
+    await browserExpect(page.getByRole("region", { name: "Possibly affected" })).toHaveCount(0);
+    const caller = await page.evaluate(() => window.graphTest.caller);
+    const callers = (await report(page, [caller])).centers;
+    expect(callers).toHaveLength(1);
+    expect(open.cutOff).toEqual([]);
+    expect(open.positions).toEqual(wide.positions);
+    assertPanelFrame(await panelFrame(page), "live-diff");
+
+    await page.evaluate(() => {
+      window.graphTest.close();
+    });
+    await settled(page);
+    const closed = await report(page, everything);
+    expect(closed.positions).toEqual(wide.positions);
+    expect(closed.zoom).toBeCloseTo(wide.zoom, 6);
+    // The person's own camera comes back, not a fit: every node is on screen where it was.
+    expect(closed.centers).toEqual(watch);
+  });
+}, 30_000);
+
+it("under reduced motion the camera jumps and nothing eases", async () => {
+  await withPage("reduce", async (page) => {
+    const ids = await wanted(page);
+    const jumped = await page.evaluate(() => {
+      window.graphTest.open();
+      return document
+        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+        ?.oversightGraph?.animating();
+    });
+    expect(jumped).toBe(false);
+    expect((await report(page, ids)).cutOff).toEqual([]);
+    await page.evaluate(() => {
+      window.graphTest.close();
+    });
+    // Closing jumps back to the camera the watch view had, with no animation.
+    const closed = await report(page, ids);
+    expect(closed.animating).toBe(false);
+    expect(closed.zoom).toBe(1);
+  });
+}, 30_000);
 
 it.each(["open", "review"] as const)(
   "%s eases the change and cone once; closing restores the personal camera",

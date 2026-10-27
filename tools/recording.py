@@ -27,7 +27,7 @@ class Provenance(BaseModel):
     """An exporter receipt, bound to the exact JSONL bytes; not an event or a signature."""
 
     model_config = ConfigDict(extra="forbid")
-    exporter: Literal["oversight.record_run.v1"]
+    exporter: Literal["oversight.record_run.v1", "oversight.fake_recording.v1"]
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     run_id: RunId
     event_count: int = Field(ge=1)
@@ -37,7 +37,7 @@ def provenance_path(log: Path) -> Path:
     return log.with_name(log.name + ".provenance.json")
 
 
-def validate_text(text: str) -> list[ServerEvent]:
+def validate_text(text: str, *, fake_fixture: bool = False) -> list[ServerEvent]:
     """Validate every line against the unchanged contracts, then enforce publication rules."""
     events: list[ServerEvent] = []
     for number, line in enumerate(text.splitlines(), 1):
@@ -57,33 +57,38 @@ def validate_text(text: str) -> list[ServerEvent]:
     for event in events:
         if event.type == "run.started":
             if not event.payload.models or any(
-                model.provider == "fake" or not model.model.strip()
+                (model.provider != "fake" if fake_fixture else model.provider == "fake")
+                or not model.model.strip()
                 for model in event.payload.models
             ):
-                raise RecordError("the run used an empty or scripted fake model, not a real model")
+                raise RecordError(
+                    "the run has an empty model or the wrong provider for fake fixture mode"
+                    if fake_fixture
+                    else "the run used an empty or scripted fake model, not a real model"
+                )
             if event.seq != 1:
                 raise RecordError("the log contains another run.started")
     return events
 
 
-def receipt(text: str, events: list[ServerEvent]) -> Provenance:
+def receipt(text: str, events: list[ServerEvent], *, fake_fixture: bool = False) -> Provenance:
     first = events[0]
     assert first.type == "run.started"
     return Provenance(
-        exporter="oversight.record_run.v1",
+        exporter="oversight.fake_recording.v1" if fake_fixture else "oversight.record_run.v1",
         sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
         run_id=first.payload.run_id,
         event_count=len(events),
     )
 
 
-def load_recording(log: Path) -> dict[str, object]:
+def load_recording(log: Path, *, fake_fixture: bool = False) -> dict[str, object]:
     """The build gate: require the exporter receipt and revalidate the exact bundled text."""
     try:
         text = log.read_bytes().decode("utf-8")
         provenance = Provenance.model_validate_json(provenance_path(log).read_bytes())
-        events = validate_text(text)
-        if provenance != receipt(text, events):
+        events = validate_text(text, fake_fixture=fake_fixture)
+        if provenance != receipt(text, events, fake_fixture=fake_fixture):
             raise RecordError("exporter provenance does not match the recorded log")
         # Recheck secrets at build time too, in case scanning rules have changed.
         with TemporaryDirectory(prefix="oversight-bundle-") as scratch:

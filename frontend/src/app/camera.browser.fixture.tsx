@@ -7,6 +7,10 @@ import { createRoot } from "react-dom/client";
 import { GraphView } from "../graph";
 import type { Framing, GraphApi } from "../graph";
 import { applyEvent, createInitialState, stateStore } from "../state";
+import { fieldInput } from "./fieldScope";
+import { graphScope } from "./graphScope";
+import { TopBar } from "./TopBar";
+import { initialView } from "./view";
 import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import demoGraph from "../../../fixtures/graph/demo-repo.json";
@@ -25,7 +29,6 @@ const proposal = recorded.changes["change-1"]?.proposal;
 if (!proposal) throw new Error("The fixture has no cone");
 const cone = proposal.impact;
 const nodes = recorded.graph.nodes;
-let preview = cone;
 // A wide preset with the changed function far right and a caller below the initial review view.
 const positions = Object.fromEntries(
   nodes.map((node, index) => [node.id, { x: (index % 10) * 170, y: Math.floor(index / 10) * 90 }]),
@@ -48,65 +51,77 @@ async function loadCone() {
 }
 
 /** Exercise the camera without importing Frame's unrelated Monaco editor and workers. */
-function Harness({ mode }: { mode: Mode }) {
+function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
+  const state = stateStore.getState().state;
   const api = useRef<GraphApi | null>(null);
   const card = useRef<HTMLDivElement>(null);
   const startArea = useRef<HTMLDivElement>(null);
   const [framing, setFraming] = useState<Framing | null>(null);
-  const impact = mode === "review" ? cone : null;
-  const litIds = useMemo(
-    () => (mode !== "watch" ? [CHANGED, ...cone.entries.map((entry) => entry.node_id)] : null),
+  const view = useMemo(
+    () => ({
+      ...initialView,
+      diff: mode === "panel" ? { changeId: "change-1", path: "shop/pricing.py" } : null,
+      review: mode === "review" ? "change-1" : null,
+    }),
     [mode],
   );
+  // Use Frame's scope builders so the harness exercises the actual lights and dimming.
+  const { cone: impact, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
+  const field = useMemo(() => fieldInput(state, view, liveCone), [state, view, liveCone]);
   return (
-    <div className="flex h-full bg-ground text-text">
-      {mode !== "watch" && <aside aria-label="Panel" className="w-[700px] shrink-0" />}
-      <main className="relative min-w-0 flex-1">
-        <GraphView
-          panelOpen={mode !== "watch"}
-          frameIds={[CHANGED]}
-          frameKey={mode}
-          cone={impact}
-          liveCone={mode === "panel" ? preview : null}
-          litIds={litIds}
-          onFramed={setFraming}
-          coneCardRef={card}
-          apiRef={api}
-          startAreaRef={startArea}
-        />
-        <div className="pointer-events-none absolute inset-6 flex flex-col gap-(--spacing-md)">
-          <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
-            {impact ? (
-              <div ref={card} className="pointer-events-auto w-(--cone-card-width)">
-                <ImpactConeCard
-                  cone={impact}
-                  nodes={nodes}
-                  outOfView={framing?.outOfView}
-                  onReveal={(id) => api.current?.reveal(id)}
-                />
+    <div className="flex h-full flex-col bg-ground text-text">
+      {demo && <TopBar state={state} />}
+      <div className="flex min-h-0 flex-1">
+        {mode !== "watch" && <aside aria-label="Panel" className="w-[700px] shrink-0" />}
+        <main className="relative min-w-0 flex-1">
+          <GraphView
+            panelOpen={mode !== "watch"}
+            frameIds={[CHANGED]}
+            frameKey={mode}
+            cone={impact}
+            liveCone={liveCone}
+            field={field}
+            litIds={litIds}
+            onFramed={setFraming}
+            coneCardRef={card}
+            apiRef={api}
+            startAreaRef={startArea}
+          />
+          <div className="pointer-events-none absolute inset-6 flex flex-col gap-(--spacing-md)">
+            <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
+              {impact ? (
+                <div ref={card} className="pointer-events-auto w-(--cone-card-width)">
+                  <ImpactConeCard
+                    cone={impact}
+                    nodes={nodes}
+                    outOfView={framing?.outOfView}
+                    onReveal={(id) => api.current?.reveal(id)}
+                  />
+                </div>
+              ) : mode === "watch" ? (
+                <GraphHeading state={stateStore.getState().state} />
+              ) : null}
+            </div>
+            <div data-graph-clear-area ref={startArea} className="min-h-0 flex-1" />
+            <div className="flex items-end justify-between gap-(--spacing-lg)">
+              <div className="pointer-events-auto min-w-0">
+                <Legend state={stateStore.getState().state} />
               </div>
-            ) : mode === "watch" ? (
-              <GraphHeading state={stateStore.getState().state} />
-            ) : null}
-          </div>
-          <div data-graph-clear-area ref={startArea} className="min-h-0 flex-1" />
-          <div className="flex items-end justify-between gap-(--spacing-lg)">
-            <div className="pointer-events-auto min-w-0">
-              <Legend state={stateStore.getState().state} />
-            </div>
-            <div className="pointer-events-auto">
-              <ZoomControls api={api} />
+              <div className="pointer-events-auto">
+                <ZoomControls api={api} />
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
+        {demo && <aside aria-label="Agents" className="w-(--agents-panel-width) shrink-0" />}
+      </div>
     </div>
   );
 }
 
-function render(mode: Mode) {
+function render(mode: Mode, demo = false) {
   flushSync(() => {
-    root.render(<Harness mode={mode} />);
+    root.render(<Harness mode={mode} demo={demo} />);
   });
 }
 
@@ -138,13 +153,13 @@ export const graphTest = {
   },
   mountEmpty() {
     stateStore.setState({ state: createInitialState() });
-    render("watch");
+    render("watch", true);
   },
   loadDemo() {
     stateStore.setState({
       state: { ...recorded, graph: { ...demoGraph, positions: demoPreset } as GraphSnapshot },
     });
-    render("watch");
+    render("watch", true);
   },
   open: () => {
     render("panel");
@@ -157,8 +172,16 @@ export const graphTest = {
     render("watch");
   },
   update() {
-    preview = { ...cone, entries: cone.entries.filter((entry) => entry.distance === 1) };
-    stateStore.setState({ state: { ...stateStore.getState().state } });
+    const state = stateStore.getState().state;
+    stateStore.setState({
+      state: {
+        ...state,
+        focus: {
+          ...state.focus,
+          "agent-1": { agent_id: "agent-1", mode: "read", node_ids: [CALLER], ranges: [] },
+        },
+      },
+    });
     render("panel");
   },
   mountCone,

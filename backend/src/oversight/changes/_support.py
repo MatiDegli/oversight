@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from collections.abc import Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
 from datetime import UTC
 from typing import Any
@@ -26,6 +26,13 @@ _log = logging.getLogger("oversight.changes._manager")
 
 
 @dataclass
+class ChangePorts:
+    """Lambdas resolve facade methods at call time, including class-level spies."""
+
+    drain: Callable[[ChangeRecord], Awaitable[None]]
+
+
+@dataclass
 class ChangeContext:
     """Dependencies and utilities shared by stages; state has exactly one owner."""
 
@@ -35,6 +42,7 @@ class ChangeContext:
     clock: Clock
     timeout: float
     state: ChangeState
+    ports: ChangePorts
 
     def date(self) -> str:
         return self.clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")

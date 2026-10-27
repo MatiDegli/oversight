@@ -8,6 +8,8 @@ revision 8, `changes/` at 0657c5a (main 352bc85 changed only the frontend), `age
 
 ## 1. Request changes (`changes/_manager.py`)
 
+After the stage split, `_finish_pending` is `_delivery.finish_pending` and `_recover` is `_recovery.recover`.
+
 ```python
 @dataclass(frozen=True)
 class Revision:                  # what the agent resumes with

@@ -24,6 +24,14 @@ export interface GraphProbe {
   /** Layout positions of the nodes with no children, which no camera move may change. A box's own position follows its children. */
   positions(): Record<string, { x: number; y: number }>;
   representative(id: string): string;
+  /** Computed renderer styles, for checking pending borders and agent colors on the canvas. */
+  appearance(selector: string): {
+    id: string;
+    borderStyle: string;
+    borderColor: string;
+    lineStyle: string;
+    opacity: number;
+  }[];
   zoom(): number;
   pan(): { x: number; y: number };
   /** True while the camera is easing to a place. */
@@ -56,6 +64,14 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
     positions: () =>
       Object.fromEntries(cy.nodes(":childless").map((node) => [node.id(), { ...node.position() }])),
     representative: (id) => visibleId(cy, id),
+    appearance: (selector) =>
+      cy.elements(selector).map((element) => ({
+        id: element.id(),
+        borderStyle: String(element.style("border-style")),
+        borderColor: String(element.style("border-color")),
+        lineStyle: String(element.style("line-style")),
+        opacity: Number(element.numericStyle("opacity")),
+      })),
     zoom: () => cy.zoom(),
     pan: () => ({ ...cy.pan() }),
     animating: () => cy.animated() || cy.scratch("foldAnimating") === true,

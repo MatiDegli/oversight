@@ -17,8 +17,41 @@ starting agents stays in front 16.
 
 ## 1. Facade and callers
 
-`oversight.changes` exports the class and errors below; internals are `_manager.py` (records,
-states, decisions, cleanup), `_versions.py` (file sets, graphs, cone, main's deltas), `_diff.py`.
+`oversight.changes` keeps four exports: `ChangeManager`, `ChangeNotFound`, `Revision` and
+`WrongState`. The 2026-10-27 stage split preserves the facade and behavior:
+
+| Private module | Owner or stage |
+| --- | --- |
+| `_state.py` | `ChangeState` owns all mutable manager state; records, constants and transitions, no I/O |
+| `_support.py` | `ChangeContext` owns dependencies and utilities; `ChangePorts` holds the dynamic drain callback |
+| `_proposal.py` | Worktree opening, base/version reads, live diff, proposal, commit, tests, cone and run end |
+| `_approval.py` | Approval body and validation of the clicked revision |
+| `_merge.py` | Merge, combined tests and conflict publication |
+| `_recovery.py` | Git facts and approval recovery |
+| `_delivery.py` | Merge record, close-out, receipts, retries, pending work, cleanup, shutdown and `EVENT_TYPES` |
+| `_files.py`, `_revision.py` | File/read/save/rescan/main checks; Request changes and base-move transactions |
+| `_manager.py` | 282-line admission/forwarding facade, Reject, Stop and dynamic `_request_changes`/`_drain` |
+
+`_versions.py` and `_diff.py` retain their existing responsibilities. `_policy.py`, `_zones.py`
+and `_beforeafter.py` remain unwired. Helpers never import `_manager`, even under `TYPE_CHECKING`;
+`changes-no-facade-backedge` enforces this alongside the existing import contracts.
+
+The extraction has four stages: state/support; proposal; approval/merge/recovery; delivery.
+At each branch tip, the AST fidelity check compared all 85 original operations and the four
+records against `fa58329`, normalizing only declared owner paths, signatures, calls and docstring
+indentation. It preserved callbacks, locks, awaits and exception boundaries, rejected unknown
+`self`/`ctx` accesses, and rejected 3/3 seeded mutations: a removed await, swapped lock sites and
+a widened exception handler. The checker and move/rename manifest live in the history of
+`refactor/cm-split-1`. The AST comparison excluded constructors, forwarding wrappers,
+compatibility properties, imports and port construction. Existing tests are unchanged.
+
+The facade stores only one context reference; its assignable `_suspect`, `_agents`, `_main_graph`
+and `snapshot` properties delegate to the owners. `main_suspect` reads the shared state.
+Calls between stages use direct module imports. `ChangePorts.drain` is constructed as
+`lambda rec: self._drain(rec)` and used by delivery's `send_requested`, `send_close_out` and
+`drain_pending`, so class-level spies still observe waits outside the approval task.
+`request_changes` still resolves `self._request_changes` when called. Logger names stay
+`oversight.changes._manager`. No review-policy or before/after wiring is introduced.
 
 ```python
 class ChangeManager:                      # satisfies oversight.agents.ChangeSink structurally
