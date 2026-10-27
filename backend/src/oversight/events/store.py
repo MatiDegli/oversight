@@ -10,6 +10,7 @@ import asyncio
 import json
 import re
 import sqlite3
+from collections import ChainMap
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -173,6 +174,7 @@ class EventStore:
         self._queue: asyncio.Queue[_Pending | None] = asyncio.Queue()
         self._writer: asyncio.Task[None] | None = None
         self._events: list[StoredEvent] = []
+        self._reference_events: dict[int, ServerEvent] = {}
         self._graph: GraphSnapshot | None = None
         self._committed = asyncio.Event()
         self._shutdown_task: asyncio.Task[None] | None = None
@@ -341,10 +343,13 @@ class EventStore:
     async def _commit(self, batch: list[_Pending]) -> None:
         rows: list[StoredEvent] = []
         accepted: list[tuple[_Pending, ServerEvent]] = []
-        prior = [TypeAdapter(ServerEvent).validate_json(row.envelope) for row in self._events]
+        # Batch-local candidates can reference earlier accepted candidates without copying the
+        # committed index. Only a successful SQL transaction extends the store's index.
+        staged: dict[int, ServerEvent] = {}
+        prior = ChainMap(staged, self._reference_events)
         for pending in batch:
             try:
-                seq = len(prior) + 1
+                seq = len(self._events) + len(rows) + 1
                 ts = pending.ts or format_ts(self._clock())
                 event = TypeAdapter(ServerEvent).validate_python(
                     {
@@ -364,7 +369,7 @@ class EventStore:
                 continue
             rows.append(row)
             accepted.append((pending, event))
-            prior.append(event)
+            staged[seq] = event
         if not rows:
             return
         try:
@@ -377,6 +382,7 @@ class EventStore:
             return
         for (pending, event), row in zip(accepted, rows, strict=True):
             self._events.append(row)
+            self._reference_events[row.seq] = event
             if event.type == "graph.snapshot":
                 self._graph = event.payload
             elif event.type == "graph.delta" and self._graph is not None:

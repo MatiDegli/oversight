@@ -314,12 +314,6 @@ class ChangeResolved(ContractModel):
         return self
 
     @model_validator(mode="after")
-    def _live_head(self, info: ValidationInfo) -> Self:
-        if (info.context or {}).get("live") and not self.head_commit:
-            raise ValueError("live resolutions require the observed head")
-        return self
-
-    @model_validator(mode="after")
     def _zero_resolution(self) -> Self:
         if self.revision == 0 and (
             self.decision != "rejected"

@@ -1,17 +1,18 @@
 """Validate log references against committed or earlier accepted envelopes only."""
 
+from collections.abc import Mapping
 from typing import Any, cast
 
 from oversight_contracts.events import ServerEvent
 
 
-def validate_references(event: ServerEvent, prior: list[ServerEvent]) -> None:
+def validate_references(event: ServerEvent, prior: Mapping[int, ServerEvent]) -> None:
     """References cannot see future or rejected candidates, including within one SQL batch."""
 
     def referenced(seq: int, expected: str | None = None) -> ServerEvent:
-        if seq < 1 or seq > len(prior):
+        if seq not in prior:
             raise ValueError("event reference is absent or not earlier")
-        source = prior[seq - 1]
+        source = prior[seq]
         if expected is not None and source.type != expected:
             raise ValueError(f"event reference requires {expected}")
         return source

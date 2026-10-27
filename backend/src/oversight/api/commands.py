@@ -122,6 +122,7 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
 
     @router.post("/agents", status_code=201)
     async def start_agent(request: StartAgent) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
+        # request.zone is reserved and ignored until zones are delivered in 1.5.0.
         return await commands.start(request)
 
     @router.post("/changes/{change_id}/approve", status_code=202, response_class=Response)
