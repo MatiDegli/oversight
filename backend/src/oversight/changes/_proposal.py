@@ -1,5 +1,3 @@
-import logging
-
 from oversight.agents import AgentTask, RunEnd
 from oversight.changes import _delivery as delivery
 from oversight.changes._diff import count_lines, file_status, parse_name_status
@@ -34,8 +32,6 @@ from oversight_contracts.events import (
     FileStat,
     SuiteResult,
 )
-
-_log = logging.getLogger("oversight.changes._manager")
 
 
 async def open(ctx: ChangeContext, task: AgentTask, model_id: str) -> Tree:

@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -16,8 +15,6 @@ from oversight_contracts.events import (
     Conflict,
 )
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot
-
-_log = logging.getLogger("oversight.changes._manager")
 
 type State = Literal[
     "working", "ready", "unproposed", "deciding", "conflict", "closing", "closed", "broken"

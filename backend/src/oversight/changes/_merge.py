@@ -1,5 +1,3 @@
-import logging
-
 from oversight.changes import _delivery as delivery
 from oversight.changes import _recovery as recovery
 from oversight.changes._state import ChangeRecord
@@ -11,8 +9,6 @@ from oversight_contracts.events import (
     ChangeResolved,
     Conflict,
 )
-
-_log = logging.getLogger("oversight.changes._manager")
 
 
 async def merge(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre: str) -> None:

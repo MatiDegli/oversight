@@ -22,7 +22,6 @@ The person's edits on main (docs/plans/files.md): `save_main` commits one file a
 """
 
 import asyncio
-import logging
 from collections.abc import Coroutine
 from typing import Any
 
@@ -71,8 +70,6 @@ from oversight_contracts.events import (
     ChangeResolved,
 )
 from oversight_contracts.graph import GraphSnapshot
-
-_log = logging.getLogger("oversight.changes._manager")
 
 
 class ChangeManager:
