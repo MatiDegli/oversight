@@ -127,8 +127,9 @@ def detect_unknown(
     parameters = (_parameter_unknown(old, new, matched) if old else set[str]()) | (
         _parameter_unknown(new, old, matched) if new else set[str]()
     )
-    # Even removal of an opaque construct can change collection. Stable opaque
-    # setup is a documented limit, rather than a new fact on every unrelated edit.
+    # Removing opaque collection constructs can matter. Parameter comparisons
+    # remain unknown even for stable opaque tables on an unrelated edit: their
+    # rows were not compared, so the gate cannot report a complete analysis.
     return [
         unknown(path, reason)
         for reason in sorted({r for r, _ in (before - after) + (after - before)} | parameters)

@@ -13,6 +13,9 @@ only binding capture and direct literal tautologies are recognized. The broad
 rule flagged four legitimate setup changes in the repository history. Fixture
 return values, added mocks, stable opaque framework aliases, nested-scope
 parameter renames and arbitrary helper extraction/inlining remain untracked.
+Imported parameter tables changed only in their own module, fixture params and
+metafunc.parametrize are untracked. Dead-branch checks beyond literal False ifs,
+class-qualified helper calls and aliased skip marks can escape comparison.
 Expected columns are inferred only from a direct call == name assertion (or a
 column name containing "expected"); more complex expected expressions are a limit.
 Custom collection/inheritance and API rewrites can require review even when
@@ -50,6 +53,7 @@ from oversight.changes._shortcuts_unknown import COLLECTION_CONFIG, detect_unkno
 
 def _parse_sources(
     change_list: list[Change],
+    deadline: float,
 ) -> tuple[dict[str, Source], dict[str, Source], set[str], list[Finding]]:
     findings: list[Finding] = []
     old_sources: dict[str, Source] = {}
@@ -64,7 +68,7 @@ def _parse_sources(
             if text is None:
                 continue
             try:
-                sources[path] = Source(text)
+                sources[path] = Source(text, deadline=deadline)
             except (SyntaxError, ValueError, RecursionError, MemoryError) as exc:
                 if path not in failed:
                     findings.append(
@@ -181,7 +185,7 @@ def _detect(changes: Iterable[Change], deadline: float) -> list[Finding]:
         raise TimeoutError("analysis timeout")
     if sum(len(text) for _, a, b in change_list for text in (a, b) if text) > 2_000_000:
         raise TimeoutError("analysis source size cap (2 MB)")
-    old_sources, new_sources, failed, findings = _parse_sources(change_list)
+    old_sources, new_sources, failed, findings = _parse_sources(change_list, deadline)
     moved = _exact_moves(change_list, old_sources, new_sources)
     removed, matches = match_tests(old_sources, new_sources, deadline=deadline)
     compared: dict[str, set[str]] = {}

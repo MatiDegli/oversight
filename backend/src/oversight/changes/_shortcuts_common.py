@@ -152,11 +152,15 @@ class Source:
     """One definition walk per parsed version, shared by every detection."""
 
     text: str
+    deadline: float = float("inf")
     tree: ast.Module = field(init=False)
     functions: dict[str, FuncNode] = field(default_factory=dict[str, FuncNode], init=False)
     classes: dict[str, ast.ClassDef] = field(default_factory=dict[str, ast.ClassDef], init=False)
     tests: dict[str, FuncNode] = field(default_factory=dict[str, FuncNode], init=False)
     scopes: dict[ast.AST, Bindings] = field(default_factory=dict[ast.AST, Bindings], init=False)
+    definition_bindings: dict[Definition, Bindings] = field(
+        default_factory=dict[Definition, Bindings], init=False
+    )
 
     def __post_init__(self) -> None:
         self.tree = ast.parse(self.text)
@@ -199,7 +203,9 @@ class Source:
                 self._visit(dec, prefix, scope, False)
             # Methods close over the surrounding lexical scope, not class locals.
             outer = closure if closure is not None else scope
-            inner = {**outer, **_scope_bindings(node.body, args)}
+            local = _scope_bindings(node.body, args)
+            self.definition_bindings[node] = local
+            inner = {**outer, **local}
             if args is not None and closure is not None:
                 positional = [*args.posonlyargs, *args.args]
                 if (
@@ -254,20 +260,29 @@ class Source:
     def tables(self) -> ModuleTables:
         return ModuleTables(self.tree, self.resolve)
 
+    @cached_property
+    def table_shadows(self) -> dict[ast.Name, bool]:
+        """Index enclosing definitions once, rather than walking them per lookup."""
+        shadows: dict[ast.Name, bool] = {}
+        stack: list[tuple[ast.AST, frozenset[str]]] = [(self.tree, frozenset())]
+        while stack:
+            check_deadline(self.deadline)
+            node, hidden = stack.pop()
+            if isinstance(node, ast.Name):
+                shadows[node] = node.id in hidden
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                local = frozenset(hidden | self.definition_bindings[node].keys())
+                body = set(node.body)
+                for child in ast.iter_child_nodes(node):
+                    stack.append((child, local if child in body else hidden))
+            else:
+                stack.extend((child, hidden) for child in ast.iter_child_nodes(node))
+        return shadows
+
     def table_value(self, node: ast.Name) -> ast.List | ast.Tuple | None:
-        if self.scopes.get(node) is not self.scopes[self.tree]:
-            # Decorators execute in their enclosing scope. A module table also
-            # works on a method unless an enclosing class/function hides it.
-            for definition in self.definitions.values():
-                args = (
-                    definition.args
-                    if isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    else None
-                )
-                if node.id in _scope_bindings(definition.body, args) and any(
-                    child is node for stmt in definition.body for child in ast.walk(stmt)
-                ):
-                    return None
+        check_deadline(self.deadline)
+        if self.table_shadows.get(node, False):
+            return None
         return self.tables.values.get(node.id)
 
     @property
