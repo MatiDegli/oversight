@@ -26,19 +26,20 @@ describe("the top bar", () => {
     expect(render(14)).not.toContain("ready for review");
   });
 
-  it("shows search, history and settings as unavailable, never as live controls", () => {
+  it("leaves out search, history and settings until each is built, with no hint of a shortcut", () => {
     const markup = render(14);
-    // Each one is a disabled control that says why, and none promises a shortcut that does nothing.
-    for (const [label = "", title = ""] of [
-      ["Find a function or file", "Search: not built yet"],
-      ["Earlier today", "Earlier today: not built yet"],
-      ["Settings", "Settings: not built yet"],
-    ]) {
-      const tag = new RegExp(`<[a-z]+ [^>]*aria-label="${label}"[^>]*>`).exec(markup)?.[0];
-      expect(tag, label).toContain("disabled");
-      expect(tag, label).toContain(`title="${title}"`);
-    }
+    for (const unbuilt of ["Find a function or file", "Earlier today", "Settings", "search"])
+      expect(markup).not.toContain(unbuilt);
+    expect(markup).not.toContain("disabled");
     expect(markup).not.toContain("Ctrl");
-    expect(markup).not.toContain("hover:bg");
+    expect(markup).not.toContain("lucide-search");
+    expect(markup).not.toContain("lucide-history");
+    expect(markup).not.toContain("lucide-settings");
+  });
+
+  it("keeps the queue counter and the spend at the right edge without them", () => {
+    const markup = render(20, vi.fn());
+    expect(markup.indexOf('aria-label="Review queue"')).toBeLessThan(markup.indexOf("Spent"));
+    expect(markup).toMatch(/aria-label="Review queue" class="ml-auto /);
   });
 });

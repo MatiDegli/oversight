@@ -1,5 +1,4 @@
-import { Folder, GitBranch, History, Search, Settings } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Folder, GitBranch } from "lucide-react";
 
 import type { State } from "../state";
 import { SpendMeter } from "./SpendMeter";
@@ -9,44 +8,10 @@ const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
 /**
- * A control whose feature is not built yet. It is shown the way the design places it, plainly
- * unavailable: a disabled control in the faint color with no hover, and the reason in its title. It
- * never looks live, and it has no shortcut hint, since a hint promises a key that does nothing.
+ * The top bar: name, repository, branch and commit, the review queue and spend. The sketches also
+ * show a search box, "Earlier today" and settings; each joins the bar when its feature is built, so
+ * the bar never carries a control that looks present and does nothing.
  */
-function Unbuilt({ label, icon: Icon }: { label: string; icon: LucideIcon }) {
-  return (
-    <button
-      type="button"
-      disabled
-      aria-label={label}
-      title={`${label}: not built yet`}
-      className="grid size-(--button-small-height) cursor-default place-items-center rounded-control text-faint opacity-60"
-    >
-      <Icon aria-hidden="true" className="size-5" />
-    </button>
-  );
-}
-
-function UnbuiltSearch() {
-  return (
-    <div
-      role="search"
-      className="ml-3.5 flex h-(--search-box-height) w-105 min-w-0 items-center gap-2.5 rounded-card border border-card-border bg-field px-3"
-    >
-      <Search aria-hidden="true" className="size-4 shrink-0 text-faint" />
-      <input
-        type="search"
-        disabled
-        aria-label="Find a function or file"
-        title="Search: not built yet"
-        placeholder="Find a function or file"
-        className="min-w-0 flex-1 cursor-default bg-transparent text-sm text-faint placeholder:text-faint"
-      />
-    </div>
-  );
-}
-
-/** The top bar: name, repository, branch and commit, search, the review queue, spend, history, settings. */
 export function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () => void }) {
   const ready = readyCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
@@ -72,7 +37,6 @@ export function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () 
           </p>
         </>
       )}
-      <UnbuiltSearch />
       {/* Always mounted, so the counter's arrival is announced and nothing else moves. */}
       <div role="status" aria-label="Review queue" className="ml-auto flex items-center">
         {ready > 0 && (
@@ -89,10 +53,6 @@ export function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () 
         )}
       </div>
       <SpendMeter state={state} />
-      <div className="flex items-center">
-        <Unbuilt label="Earlier today" icon={History} />
-        <Unbuilt label="Settings" icon={Settings} />
-      </div>
     </header>
   );
 }
