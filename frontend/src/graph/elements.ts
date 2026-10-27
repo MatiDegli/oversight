@@ -17,8 +17,16 @@ export interface GraphElement {
   position?: Point;
 }
 
-/** Main stays intact; unapproved additions and marks are a separate visual overlay. */
-export function graphElements(state: State, showTests = false): GraphElement[] {
+/**
+ * Main stays intact; unapproved additions and marks are a separate visual overlay. With `lit`, every
+ * node outside it dims, except the boxes that hold a lit node (a box's opacity reaches its
+ * children), and so does every edge without both ends lit.
+ */
+export function graphElements(
+  state: State,
+  showTests = false,
+  lit: ReadonlySet<string> | null = null,
+): GraphElement[] {
   const nodes = new Map(state.graph?.nodes.map((node) => [node.id, node]));
   const edges = new Map(state.graph?.edges.map((edge) => [edge.id, edge]));
   const nodeMarks = selectNodeMarks(state);
@@ -42,9 +50,18 @@ export function graphElements(state: State, showTests = false): GraphElement[] {
     }
   }
   const visible = new Map([...nodes].filter(([, node]) => showTests || !node.is_test));
+  const kept = new Set<string>();
+  for (const id of lit ?? []) {
+    for (let node = nodes.get(id); node && !kept.has(node.id);) {
+      kept.add(node.id);
+      node = node.parent_id ? nodes.get(node.parent_id) : undefined;
+    }
+  }
+  const dims = (id: string) => lit !== null && !kept.has(id);
   const elements: GraphElement[] = [];
   for (const node of visible.values()) {
     const classes: string[] = [node.kind, ...(addedNodeSlots.get(node.id) ?? [])];
+    if (dims(node.id)) classes.push("dimmed");
     const marks = nodeMarks[node.id];
     const badges: string[] = [];
     for (const [slot, mode] of Object.entries(marks?.focus ?? {})) {
@@ -75,7 +92,12 @@ export function graphElements(state: State, showTests = false): GraphElement[] {
     elements.push({
       group: "edges",
       data: { id: edge.id, kind: edge.kind, source: edge.src, target: edge.dst },
-      classes: [edge.kind, edge.confidence, ...(addedEdgeSlots.get(edge.id) ?? [])].join(" "),
+      classes: [
+        edge.kind,
+        edge.confidence,
+        ...(addedEdgeSlots.get(edge.id) ?? []),
+        ...(lit !== null && !(lit.has(edge.src) && lit.has(edge.dst)) ? ["dimmed"] : []),
+      ].join(" "),
     });
   }
   return elements;

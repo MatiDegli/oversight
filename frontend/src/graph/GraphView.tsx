@@ -24,21 +24,27 @@ export interface GraphViewProps {
    * camera moves (to the selected node's neighbourhood on open, to the whole graph on close).
    */
   panelOpen?: boolean;
+  /** The nodes that stay lit while everything else dims, as in review; null dims nothing. */
+  litIds?: readonly string[] | null;
 }
 
 export function GraphView({
   selectedId = null,
   onNodeTap,
   panelOpen = false,
+  litIds = null,
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
   const graph = useRef<Core | undefined>(undefined);
   const latest = useRef<GraphViewProps>({});
+  const resync = useRef<(() => void) | undefined>(undefined);
   const framedFor = useRef(panelOpen);
   useEffect(() => {
-    latest.current = { selectedId, onNodeTap, panelOpen };
-    if (graph.current) showSelection(graph.current, selectedId);
-  }, [selectedId, onNodeTap, panelOpen]);
+    const relit = latest.current.litIds !== litIds;
+    latest.current = { selectedId, onNodeTap, panelOpen, litIds };
+    if (relit) resync.current?.();
+    else if (graph.current) showSelection(graph.current, selectedId);
+  }, [selectedId, onNodeTap, panelOpen, litIds]);
   // Only a change of the panel moves the camera, never a tap or an event; the first render keeps
   // the fit the first layout made.
   useEffect(() => {
@@ -73,9 +79,14 @@ export function GraphView({
         ),
       );
       const sync = () => {
-        updateGraph(cy, graphElements(stateStore.getState().state));
+        const lit = latest.current.litIds;
+        updateGraph(
+          cy,
+          graphElements(stateStore.getState().state, false, lit ? new Set(lit) : null),
+        );
         showSelection(cy, latest.current.selectedId ?? null);
       };
+      resync.current = sync;
       cy.on("tap", "node", (event) => {
         latest.current.onNodeTap?.((event.target as NodeSingular).id());
       });
@@ -89,6 +100,7 @@ export function GraphView({
         unsubscribe();
         unexpose();
         resize.disconnect();
+        resync.current = undefined;
         graph.current = undefined;
         cy.destroy();
       };
