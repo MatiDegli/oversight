@@ -182,6 +182,109 @@ An agent with tools to start agents, read their changes and request changes on t
 merges and never approves: merges stay with idea 7 or the person. Only if 7 and 8 are done before
 the freeze. It runs on Meta models like every agent in the product.
 
+## Ideas 10 to 21: oversight as a property of the harness
+
+Proposed on 2026-10-27 and not yet placed: the maintainer decides which ones move into the
+hackathon and which stay out of scope.
+
+In a multi-agent coding workflow built from command-line agents, scripts and a chat, the effort
+goes to the same five places: the coordinating agent's context, which rereads the whole state on
+every turn; claims in hand-backs that someone checks by hand; rules that only an agent remembers;
+state written by hand in markdown; and the person, who carries messages between sessions and finds
+overspending and drift late. The harness, the coordination and the person's surface are three
+separate pieces, glued together by a model and by the person. Oversight is the three in one
+process: its agents run inside it with fixed tools, and every step is an event. What such a
+workflow keeps as a rule, Oversight can enforce as a property of the harness.
+
+The principle behind all of them: the server holds the state, starts the agents, waits and merges.
+A model is called without state for one judgment at a time (split a task, review a change, write a
+handoff), on a small context the server builds. Idea 8 already works this way.
+
+| # | Idea | What changes | Cost | Builds on |
+| --- | --- | --- | --- | --- |
+| 10 | Task with "done when" | The task form takes a goal, a "done when" line and the zone; the harness supplies the rest | small | 2, `POST /agents` |
+| 11 | Budget check and reserve | The agent hears at half its step budget, and the last steps stay reserved for `finish` | small | the tool loop, `halted` |
+| 12 | Context cap | The runtime owns the history and caps it; past the cap, the run continues from a generated handoff | small to medium | the tool loop |
+| 13 | Generated hand-back | The change's report is built from events; the agent writes only what is still open | small | "said versus did" |
+| 14 | Review tied to the version | A review or assessment belongs to one revision of the change; a new edit voids it | small | change revisions, 7 |
+| 15 | Fails before, passes after | New tests also run on the base; one that passes there does not count as testing the change | small to medium | run_tests, 7 |
+| 16 | Fresh fix round with siblings | Request changes can start a fresh run from a generated handoff, with the callers and siblings of each finding's node | medium | Request changes, the graph |
+| 17 | Plan before code in protected areas | In a protected area, `edit_file` stays blocked until the person approves the agent's plan | medium | 2, 6 |
+| 18 | Follow main by itself | When main moves, the server retests the change on the new main; a conflict goes back to the agent or to "needs you" | medium | tests on the combined result, 7 |
+| 19 | Task queue | Waiting tasks start by themselves when an agent slot frees up | small | 8 |
+| 20 | Cost and rounds per accepted change | Spend and review rounds per accepted change, per role and per model, and the pace against the budget | small | the spend meter |
+| 21 | Decision cards | "Needs you" as a card with options and a recommended one, kept as data | small | 3, 5 |
+
+Where they could go, as a proposal: 13, 14, 15 and 20 are cheap and add rules to idea 7; 19 goes
+with idea 8; 16, 17 and focused tests by cone (idea 4) only if time remains after level 2. The rest
+is the maintainer's call.
+
+**10. Task with "done when".** The task is three fields: the goal, one "done when" line and the
+zone. The base is main's HEAD by construction; the step budget, the checks, the report format and
+what stays untouched come from the harness, not from the text. At start, the server checks the
+task's premises against the graph: every node the zone names exists.
+
+**11. Budget check and reserve.** At half the step budget, the loop adds one message with the steps
+used and left. The last steps are kept for `finish`, so a run near its limit proposes what it has
+instead of being cut off mid-edit. A run that stops already tries to propose its change as it is
+(`halted`), while its worktree is still there.
+
+**12. Context cap.** Every step resends the whole history, so cost grows with the length of the
+run. The runtime owns that history: past a cap, it closes the run's context and starts a fresh one
+from a generated handoff (the task, the files changed, the last test result), shown as a step on
+the agent's card.
+
+**13. Generated hand-back.** Oversight saw every edit and every test run, so the report is facts,
+not claims: the files and nodes changed, the tests run with their ids and results, the steps, the
+duration and the cost. The agent writes only what is still open. Where its `finish` disagrees with
+the events, the review shows it ("said versus did").
+
+**14. Review tied to the version.** A model's review, an assessment for idea 7 or the person's
+comment names the revision and commit it saw. A later edit marks it stale, and a stale review never
+counts toward a merge.
+
+**15. Fails before, passes after.** The tests a change adds also run on its base. A new test that
+already passes there does not prove the change: the review says so, and under idea 7 the change
+needs you.
+
+**16. Fresh fix round with siblings.** In level 2, Request changes sends the comment into the
+agent's own history, as AGENTS.md says. The level 3 option: start a fresh run from a generated
+handoff with the findings, the diff and the failing tests, instead of the whole earlier history.
+The graph adds the callers and siblings of each finding's node, since a fix round often finds the
+same problem one function away.
+
+**17. Plan before code in protected areas.** In an area marked protected (ideas 2 and 6), the agent
+may read, but `edit_file` fails until the person approves a short plan the agent writes. The gate
+belongs to the tool, not to a rule the agent has to remember.
+
+**18. Follow main by itself.** In "Merge alone when safe", a change whose base moved is retested on
+the new main by the server, never by the agent. A conflict sends the change back to its agent with
+the conflicting files, or to "needs you". In "Ask me", the person still chooses, as today.
+
+**19. Task queue.** The person queues tasks; when an agent finishes or stops and its slot frees up,
+the server starts the next one. Overlapping zones are flagged before the start, as in idea 8.
+
+**20. Cost and rounds per accepted change.** Every model call goes through one gate, so cost can be
+split by change, by role (writer or reviewer) and by model, live, together with the review rounds
+per accepted change and the pace of spend against the budget. Overspending shows while it happens,
+not after.
+
+**21. Decision cards.** An escalation becomes a card in the "needs you" list: the question, two or
+three options with the recommended one first, and the evidence. The answer is kept as data with the
+change, next to idea 5's pairs.
+
+**Already covered elsewhere:** a reviewer from the other Meta model with a clean context (idea 1:
+it receives the task, the diff and the cone, never the author's reasoning); overlap by node, live
+(the level 3 cone overlap alert, and idea 8); rules loaded only where they apply (idea 6); focused
+tests by cone (idea 4); measured comparisons on the same task set (front B); outside agents on the
+same graph (the README's Next section).
+
+**Already true, for the pitch:** agents have no shell; each agent has its own worktree; the server
+runs the tests with a timeout; the event log is the state, and replay is its audit; a halted run
+tries to propose its change while its worktree is still there; every model call goes through one
+gate; the spend brake refuses new Meta runs above 90% of the Meta credits. The gap is the same as in any such tool, and worth saying: tests run code with
+the user's permissions, and a sandbox is out of scope.
+
 ## Isolated fronts outside the product
 
 Fronts that never touch the product's code or contracts. Each lives in its own folder, worktree and
@@ -227,8 +330,9 @@ future work.
 - **Dependency guard:** when an agent adds a package, a node shows its license, age, known
   vulnerabilities (OSV) and whether it exists on PyPI, which catches hallucinated packages.
 - **Bring your own agent:** other coding agents report their edits through hooks or MCP and are
-  supervised on the same graph. After the hackathon, since during the event the product runs only
-  Meta models.
+  supervised on the same graph. It is the bridge to supervising the multi-agent development
+  workflows that today run in terminals and a chat. After the hackathon, since during the event the
+  product runs only Meta models.
 - **Team integrations:** a pull request with evidence (cone, tests, a link to the replay), tasks
   from an issue tracker with their acceptance criteria, production errors on the graph, owners
   warned when the cone crosses their module.
@@ -248,3 +352,9 @@ Ideas 7 to 9 add: who decided a change (`decided_by`, the person or the rules) a
 `change.resolved`; the merge mode as a setting; a Revert command with its own graph delta cause;
 a plan entity with its subtasks and zones, and the plan an agent belongs to; for idea 9, the agent
 that started another one.
+
+Ideas 10 to 21 would add: a "done when" field on the task; the revision a review saw (idea 7's
+assessment already records it); the base result of added tests; a handoff and a round number on a
+run; a plan-approval state for an agent in a protected area; a queued task; cost per change and per
+role; and decision cards with their answers. None of them is reserved until the maintainer approves
+it.
