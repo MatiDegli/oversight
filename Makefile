@@ -62,12 +62,17 @@ demo: ## build the UI, then serve it and the API on one port (DEMO_PORT) from .e
 
 # demo-check: the demo's path three times in a row from a clean start, on the scripted fake model, so
 # no key and no credits (tools/demo_check.py says what each run checks). It builds the UI once, then
-# bounds the three runs at DEMO_CHECK_TIMEOUT seconds, and 30 s later kills what is left.
-DEMO_CHECK_TIMEOUT ?= 540
-
+# runs the check, which computes its own overall deadline (--print-deadline, the worst-case sum of
+# its phase deadlines plus a margin). Its in-process deadlines are best effort: in a normal failure
+# they fail naming the phase that ran out, but they cannot promise to fire. The hard bound is this
+# outer timeout, 60 s above that deadline and 30 s later killing what is left: it leaves no process
+# behind, because the server takes SIGTERM when the check's process dies (PR_SET_PDEATHSIG).
 demo-check: ## the demo path three times from a clean start, on the fake model; no credits; not in check
 	$(UI_BUILD)
-	timeout --kill-after=30 $(DEMO_CHECK_TIMEOUT) $(UV) python tools/demo_check.py
+	@deadline=$$($(UV) python tools/demo_check.py --print-deadline); \
+	backstop=$$((deadline + 60)); \
+	echo "demo-check: overall deadline $${deadline}s, outer timeout $${backstop}s"; \
+	timeout --kill-after=30 $$backstop $(UV) python tools/demo_check.py
 
 # shots: screenshots of the UI from the recorded run LOG, 1920x1080, into .shots/ (gitignored), then
 # IMPECCABLE's detector on the served URL. It serves the player and Vite on free ports, so a running
