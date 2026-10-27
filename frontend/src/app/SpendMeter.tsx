@@ -1,7 +1,7 @@
 import type { UsageTick } from "@contracts";
 import { Ban, CircleAlert } from "lucide-react";
 
-import { formatUsd, selectSpend } from "../state";
+import { formatBudget, formatUsd, selectSpend } from "../state";
 import type { State } from "../state";
 
 const captions: Record<UsageTick["brake"], string | null> = {
@@ -11,7 +11,7 @@ const captions: Record<UsageTick["brake"], string | null> = {
   blocked: "New Meta runs are blocked: the budget is nearly spent",
 };
 /**
- * "Spent US$0.47 of US$150.00" on the bar's own line. The group is anchored to the bar's right
+ * "Spent US$0.47 of US$150" on the bar's own line. The group is anchored to the bar's right
  * edge, and a brake caption (icon and words) comes before it on the same line, so the total never
  * moves when the caption appears.
  */
@@ -38,7 +38,7 @@ export function SpendMeter({ state }: { state: State }) {
       <p>
         Spent{" "}
         <span className="font-mono text-(length:--data-size) font-bold text-text">{total}</span> of{" "}
-        <span className="font-mono text-(length:--data-size)">{formatUsd(spend.budgetUsd)}</span>
+        <span className="font-mono text-(length:--data-size)">{formatBudget(spend.budgetUsd)}</span>
       </p>
     </div>
   );

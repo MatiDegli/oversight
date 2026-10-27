@@ -14,6 +14,13 @@ const money = new Intl.NumberFormat("en-US", {
 export const formatUsd = (amount: number) =>
   money.format(amount).replace("USD", "US$").replace(/\s/g, "");
 
+/**
+ * The budget as the sketches write it: `US$150` when it is a round number of dollars, `US$150.50`
+ * otherwise. A spent total always shows its cents (`formatUsd`): it is a reading, not a limit.
+ */
+export const formatBudget = (amount: number) =>
+  Number.isInteger(amount) ? `US$${String(amount)}` : formatUsd(amount);
+
 export interface Spend {
   spentUsd: number | null;
   budgetUsd: number;

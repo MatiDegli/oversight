@@ -54,7 +54,7 @@ describe("the top bar spend meter", () => {
     ["blocked", "New Meta runs are blocked: the budget is nearly spent"],
   ] as const)("labels %s in words and an icon, using neutral tokens", (brake, caption) => {
     const markup = render(metered({ brake }));
-    expect(words(markup)).toContain("Spent US$12.40 of US$150.00");
+    expect(words(markup)).toContain("Spent US$12.40 of US$150");
     expect(markup).toContain('role="group" aria-label="Spend"');
     expect(markup).toContain("font-mono text-(length:--data-size)");
     expect(markup).toContain('role="status" aria-atomic="true"');
@@ -92,16 +92,16 @@ describe("the top bar spend meter", () => {
 
   it("shows unknown rather than a zero or the known ledger subtotal for a null cost", () => {
     const markup = render(metered({ cost_usd: null, brake: "blocked" }));
-    expect(words(markup)).toContain("Spent unknown of US$150.00");
+    expect(words(markup)).toContain("Spent unknown of US$150");
     expect(words(markup)).not.toMatch(/Spent US\$/);
     expect(markup).toContain("New Meta runs are blocked: the budget is nearly spent");
     expect(words(render(metered({ cost_usd: 0, spent_usd: 0 })))).toContain(
-      "Spent US$0.00 of US$150.00",
+      "Spent US$0.00 of US$150",
     );
   });
 
   it("shows the starting ledger total before any tick", () => {
-    expect(words(render({ ...metered(), usage: null }))).toContain("Spent US$10.00 of US$150.00");
+    expect(words(render({ ...metered(), usage: null }))).toContain("Spent US$10.00 of US$150");
   });
 
   it("renders nothing without a run or a positive run budget", () => {
@@ -124,7 +124,7 @@ describe("the top bar spend meter", () => {
       />,
     );
     expect(words(markup.slice(0, markup.indexOf("</header>")))).toContain(
-      "Spent US$12.40 of US$150.00",
+      "Spent US$12.40 of US$150",
     );
   });
 
@@ -136,7 +136,7 @@ describe("the top bar spend meter", () => {
       await replay.ready;
       const state = store.getState().state;
       expect(state.usage?.spent_usd).toBe(0.009794);
-      expect(words(render(state))).toContain("Spent US$0.01 of US$50.00");
+      expect(words(render(state))).toContain("Spent US$0.01 of US$50");
       expect(render(state)).not.toContain("New Meta runs are blocked");
       expect(request).not.toHaveBeenCalled();
     } finally {

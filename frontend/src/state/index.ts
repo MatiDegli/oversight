@@ -1,5 +1,5 @@
 export { applyEvent } from "./applyEvent";
-export { formatUsd, selectSpend } from "./spend";
+export { formatBudget, formatUsd, selectSpend } from "./spend";
 export {
   selectAgentCard,
   selectLiveDiff,

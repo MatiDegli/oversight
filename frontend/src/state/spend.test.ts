@@ -1,7 +1,14 @@
 import type { ServerEvent, UsageTick } from "@contracts";
 import { describe, expect, it } from "vitest";
 
-import { applyEvent, createInitialState, createStateStore, selectSpend } from "./index";
+import {
+  applyEvent,
+  createInitialState,
+  createStateStore,
+  formatBudget,
+  formatUsd,
+  selectSpend,
+} from "./index";
 import { appendEvent, through } from "./panels.fixture";
 import { nextSlot } from "../agents";
 
@@ -21,6 +28,22 @@ const tick: ServerEvent & { type: "usage.tick" } = {
     brake: "ok",
   },
 };
+
+describe("how the budget is written", () => {
+  it.each([
+    [150, "US$150"],
+    [50, "US$50"],
+    [0.5, "US$0.50"],
+    [150.5, "US$150.50"],
+    [1234, "US$1234"],
+  ])("reads %s as %s", (amount, written) => {
+    expect(formatBudget(amount)).toBe(written);
+  });
+
+  it("keeps the cents of a spent total, even when it is a round number", () => {
+    expect(formatUsd(10)).toBe("US$10.00");
+  });
+});
 
 describe("spend events and selection", () => {
   it.each(["baseten", "fake"] as const)(
