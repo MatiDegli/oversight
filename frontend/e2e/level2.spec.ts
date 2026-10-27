@@ -165,7 +165,11 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await cardA.getByRole("button", { name: "Review change" }).click();
     await expect(review).toBeVisible();
     await expect(editable).toHaveAttribute("data-state", "clean");
-    await expect(review.getByText("Editable · Inline diff")).toBeVisible();
+    await expect(
+      review
+        .getByRole("region", { name: "Diff of shop/pricing.py" })
+        .getByText("Editable · Inline diff"),
+    ).toBeVisible();
     const signals = review.getByRole("region", { name: "Review signals" });
     await expect(signals).toContainText("Tests in this change: 0 recorded test changes");
     await expect(signals).not.toContainText("added_tests producer unavailable (package 4)");
@@ -203,8 +207,14 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await expect
       .poll(() => nodeIds(page, "node.cone:childless"))
       .toEqual(proposal.impact.entries.map((entry) => entry.node_id).toSorted());
+    const drawn = new Set(await nodeIds(page, "node"));
     for (const id of lit) {
-      expect((await appearance(page, `node[id="${id}"]`))[0]?.opacity).toBe(1);
+      if (!drawn.has(id)) {
+        // Added tests are evidence seeds; test nodes stay hidden on the graph.
+        expect(proposal.graph.nodes_added.find((node) => node.id === id)?.is_test).toBe(true);
+      } else {
+        expect((await appearance(page, `node[id="${id}"]`))[0]?.opacity).toBe(1);
+      }
     }
     expect((await appearance(page, "node.dimmed:childless")).every((n) => n.opacity < 1)).toBe(
       true,
@@ -259,7 +269,11 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     expect(revised.payload.change_id).toBe(proposal.change_id);
     expect(revised.payload.revision).toBeGreaterThan(proposal.revision);
     await expect(approve).toBeEnabled();
-    await expect(review.getByText("Editable · Inline diff")).toBeVisible();
+    await expect(
+      review
+        .getByRole("region", { name: "Diff of shop/pricing.py" })
+        .getByText("Editable · Inline diff"),
+    ).toBeVisible();
     // Close/reopen review loads the actual new revision; live diff never becomes editable.
     await review.getByRole("button", { name: "Close review" }).click();
     await cardA.getByRole("button", { name: "Review change" }).click();
