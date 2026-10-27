@@ -1,5 +1,7 @@
 import type { Core } from "cytoscape";
 
+import { visibleId } from "./foldVisibility";
+
 /**
  * Shows the app's selection: the one node the person clicked, or none. Every element stays
  * unselectable, so Cytoscape's own taps (a background tap unselects everything) cannot change the
@@ -9,7 +11,7 @@ import type { Core } from "cytoscape";
 export function showSelection(cy: Core, nodeId: string | null) {
   cy.batch(() => {
     const elements = cy.elements();
-    const target = nodeId === null ? cy.collection() : cy.getElementById(nodeId);
+    const target = nodeId === null ? cy.collection() : cy.getElementById(visibleId(cy, nodeId));
     elements.unselectify();
     elements.difference(target).filter(":selected").selectify().unselect().unselectify();
     target.selectify().select().unselectify();

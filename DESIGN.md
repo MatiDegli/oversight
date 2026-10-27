@@ -282,7 +282,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Title weight of a frame | light, Mono | 600, Next | AGENTS.md: graph labels use Next; at 17px a light weight does not keep 4.5:1 |
 | Import edges | not drawn | in the data, not drawn | the sketch draws calls; imports say which files, not which functions |
 | Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed border or line means a pending change in the agent's color, and color is an agent only on its own change |
-| Skip-column edges | routed around the frames | run through the gutters and cross a frame they do not join, under its rows | the router has no channel search for frames that stand between two columns; the edge still ends on its two rows |
+| Skip-column edges | routed around the frames | visibility-grid routes outside frames, sharing one trunk per target | only short endpoint taps traverse their own containing frame; back calls use an outside detour |
 | First view | the whole demo in view | 100% on the module of the hub, more beyond the edges | the graph is a canvas to pan and zoom; the demo has 36 functions, not the sketch's 19 |
 | State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
 | Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
@@ -742,6 +742,17 @@ WebGL is missing, the graph's background is plain ground.
   a time, growing at 55px per second from the node's center to 340px, then starting again; a soft
   band about 10px wide at 90% strength, fading out between 60px and 340px. No rings in review or
   file view.
+
+### Class folding
+
+Classes start as one header row with their method count. A click toggles the class; a fresh change
+adding or modifying a method opens it, and the person can fold it again. Reading a hidden method
+lights the class row with the read badge. Cone membership projects onto that row at the nearest
+distance; calls to hidden methods merge onto the row. Imports remain hidden.
+
+Preset coordinates and fold state determine positions. Only the later rows and modules in the
+same column slide when a class toggles, for 240ms with `cubic-bezier(0.2, 0.7, 0.2, 1)`; under reduced
+motion they jump. Mode changes move the camera alone.
 
 ### Motion
 

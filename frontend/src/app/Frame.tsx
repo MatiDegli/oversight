@@ -271,6 +271,7 @@ export function Frame(props: FrameProps) {
   const frameKey = view.review === null ? shown : `review:${view.review}`;
   const [framing, setFraming] = useState<{ key: string | null; outOfView: ReadonlySet<string> }>();
   const coneCardRef = useRef<HTMLDivElement>(null);
+  const startAreaRef = useRef<HTMLDivElement>(null);
   const graphApi = useRef<GraphApi | null>(null);
   const onFramed = useCallback(
     (result: Framing | null) => {
@@ -318,11 +319,12 @@ export function Frame(props: FrameProps) {
             onFramed={onFramed}
             coneCardRef={coneCardRef}
             apiRef={graphApi}
+            startAreaRef={startAreaRef}
             field={field}
           />
           {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
               review) top left, the legend bottom left, the zoom controls bottom right. */}
-          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col justify-between gap-(--spacing-md)">
+          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
             <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
               {cone ? (
                 <div
@@ -350,6 +352,8 @@ export function Frame(props: FrameProps) {
               )}
               {notice && <div className="pointer-events-auto text-muted">{notice}</div>}
             </div>
+            {/* The start camera uses the space between overlays, measured after fonts load. */}
+            <div ref={startAreaRef} className="min-h-0 flex-1" />
             <div className="flex items-end justify-between gap-(--spacing-lg)">
               <div className="pointer-events-auto min-w-0">
                 <Legend state={state} />

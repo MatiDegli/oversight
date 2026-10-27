@@ -654,8 +654,8 @@ describe("startingView", () => {
     const clamped = startingView(wide, frames[2] as never, narrow, 40);
     expect(clamped.pan.x).toBe(-(1180 - 900));
     const snapped = startingView(wide, frames[2] as never, narrow, 40, frames);
-    // The first frame goes whole, and the view starts 40px past it.
-    expect(snapped.pan.x).toBe(-340);
+    // The first frame goes whole; the nearest gutter starts at its trailing edge.
+    expect(snapped.pan.x).toBe(-300);
     // A focus that the move would push out of view keeps its centered camera, cut or not.
     const focus = { x1: 100, y1: 0, x2: 1100, y2: 100 };
     expect(startingView(wide, focus, narrow, 40, frames).pan.x).toBe(-150);
