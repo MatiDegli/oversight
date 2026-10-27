@@ -5,6 +5,8 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { useStore } from "zustand";
 
+import { createCommandClient } from "../transport";
+import { createFileSession } from "./files";
 import { sendDecision } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { applyEvent, createInitialState, stateStore } from "../state";
@@ -30,7 +32,22 @@ const events = log
 /** What the panel asked to send; the fake server accepts each and never answers by itself. */
 const decisions: { changeId: string; action: DecisionAction; comment: string }[] = [];
 const accepted = () => new Promise<undefined>(() => undefined);
-const client = { approveChange: accepted, rejectChange: accepted };
+const client = { approveChange: accepted, rejectChange: accepted, requestChanges: accepted };
+
+const commands = createCommandClient();
+const files = createFileSession({
+  async getFile(path, agentId) {
+    const state = stateStore.getState().state;
+    const change = Object.values(state.changes).find((item) => item.agent_id === agentId);
+    const content = change?.files[path]?.file.modified ?? "";
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
+    const hash = [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    return { path, agent_id: agentId ?? null, content, hash };
+  },
+  saveFile: commands.saveFile,
+});
 
 /** The app's wiring of view and decisions, around the real frame, without a transport. */
 function Harness({ recorded }: { recorded: boolean }) {
@@ -45,6 +62,8 @@ function Harness({ recorded }: { recorded: boolean }) {
   return (
     <Frame
       state={state}
+      files={recorded ? undefined : files}
+      onStopAgent={recorded ? undefined : commands.stopAgent}
       view={view}
       onNodeTap={(id) => {
         setView((current) => clickNode(now(), current, id));
@@ -81,6 +100,13 @@ function Harness({ recorded }: { recorded: boolean }) {
 }
 
 export const reviewTest = {
+  emit(event: ServerEvent) {
+    const state = stateStore.getState().state;
+    stateStore.setState({ state: applyEvent(state, { ...event, seq: state.lastSeq + 1 }) });
+  },
+  state() {
+    return stateStore.getState().state;
+  },
   changed: "shop.pricing:compute_price",
   lit: events.flatMap((event) =>
     event.type === "change.proposed"

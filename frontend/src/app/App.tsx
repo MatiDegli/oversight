@@ -107,6 +107,7 @@ export function App() {
       onOpenChange={onOpenChange}
       onClosePanel={onClosePanel}
       onStartAgent={commands?.startAgent}
+      onStopAgent={commands?.stopAgent}
       canReview={(changeId) => openReview(state, view, changeId) !== null}
       onReview={onReview}
       onOpenQueue={onOpenQueue}

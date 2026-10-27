@@ -60,6 +60,7 @@ export interface FrameProps {
   onClosePanel: () => void;
   /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
+  onStopAgent?: (agentId: string) => Promise<unknown>;
   /** True for a proposed change: its card offers Review change instead of the live diff. */
   canReview?: (changeId: string) => boolean;
   onReview?: (changeId: string) => void;
@@ -102,6 +103,7 @@ function AgentsPanel({
   canOpenChange,
   onOpenChange,
   onStartAgent,
+  onStopAgent,
   canReview,
   onReview,
   replayOf,
@@ -110,6 +112,7 @@ function AgentsPanel({
   | "state"
   | "canOpenChange"
   | "onOpenChange"
+  | "onStopAgent"
   | "onStartAgent"
   | "canReview"
   | "onReview"
@@ -140,6 +143,7 @@ function AgentsPanel({
             <AgentCard
               key={data.agent.agent_id}
               data={data}
+              onStop={onStopAgent}
               onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
               onReview={review ? onReview : undefined}
             />
@@ -280,6 +284,7 @@ export function Frame(props: FrameProps) {
             state={state}
             changeId={view.review}
             attempt={props.attempts?.[view.review]}
+            files={props.files}
             onDecide={props.onDecide}
             replayOf={props.replayOf}
             onClose={onClosePanel}
@@ -357,6 +362,7 @@ export function Frame(props: FrameProps) {
             canOpenChange={canOpenChange}
             onOpenChange={onOpenChange}
             onStartAgent={props.onStartAgent}
+            onStopAgent={props.onStopAgent}
             canReview={props.canReview}
             onReview={props.onReview}
             replayOf={props.replayOf}
