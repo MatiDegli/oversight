@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+from oversight.limits import bounded_text
 from oversight.workspace.errors import (
     LockOrderError,
     UnsafeDeletion,
@@ -37,6 +38,7 @@ from oversight.workspace.files import (
     write_file,
 )
 from oversight.workspace.locks import Locks, offload
+from oversight.workspace.ranges import FileRange, read_range
 from oversight.workspace.runner import ProcessResult, run_process
 from oversight.workspace.suite import SuiteRun, run_suite
 from oversight_contracts.common import AgentId
@@ -147,6 +149,10 @@ class Tree:
     async def read_text(self, path: str) -> FileRead:
         async with self.section(locked=self.agent_id is not None):
             return await offload(partial(read_file, self.root, path))
+
+    async def read_range(self, path: str, first: int, last: int, chars: int) -> FileRange:
+        async with self.section(locked=self.agent_id is not None):
+            return await offload(partial(read_range, self.root, path, first, last, chars))
 
     async def write_text(self, path: str, content: str, *, expected_hash: str | None) -> str:
         """Write under the tree's lock; return the new hash. `StaleFile` if the file is not the one
@@ -384,7 +390,7 @@ class Workspace:
 
         def read_stamp() -> str | None:
             try:
-                return stamp.read_text(encoding="utf-8").strip()
+                return bounded_text(stamp).strip()
             except FileNotFoundError:
                 return None
 

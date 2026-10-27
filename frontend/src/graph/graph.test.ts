@@ -40,6 +40,10 @@ const nodes = [
   node("billing:fee", "function", "billing"),
 ];
 const agent = (slot: "A" | "B"): AgentStatus => ({
+  zone: null,
+  started_by: null,
+  queued_task_id: null,
+  base_commit: null,
   agent_id: `agent-${slot}`,
   change_id: `change-${slot}`,
   slot,

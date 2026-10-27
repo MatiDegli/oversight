@@ -47,7 +47,9 @@ def dist(tmp_path: Path) -> Path:
 @contextlib.asynccontextmanager
 async def ui_app(tmp_path: Path, dist: Path) -> AsyncIterator[tuple[FastAPI, httpx.AsyncClient]]:
     """The real router over a real store with a graph, then the UI, behind an in-process client."""
-    async with EventStore(tmp_path / "run-20261027-140312.sqlite", "run-20261027-140312") as store:
+    async with EventStore(
+        tmp_path / "run-20261027-140312.sqlite", "run-20261027-140312", mode="replay"
+    ) as store:
         await store.publish(EMPTY_GRAPH)
         app = FastAPI()
         app.include_router(create_router(store, "live"))
@@ -204,7 +206,7 @@ def test_the_api_paths_are_the_frontend_proxys_and_the_routers() -> None:
     }
     assert proxied == API_PATHS
 
-    store = EventStore(Path("unused.sqlite"), "run-20261027-140312")
+    store = EventStore(Path("unused.sqlite"), "run-20261027-140312", mode="replay")
     paths = {route.path for route in create_router(store, "live").routes}  # pyright: ignore[reportAttributeAccessIssue,reportUnknownVariableType,reportUnknownMemberType]
     assert {path.split("/")[1] for path in paths} == API_PATHS
 
@@ -237,5 +239,7 @@ async def test_a_replay_never_serves_the_ui(tmp_path: Path, dist: Path) -> None:
     app = create_app(settings, ReplayConfig(log=REPLAY_LOG, speed=0))
     async with app.router.lifespan_context(app):
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport, base_url=f"http://localhost:{settings.port}"
+        ) as client:
             assert_api_error(await client.get("/"), 404, "not_found")

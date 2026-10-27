@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 from changes_helpers import TWICE, VALUE, Harness, bounded, queued_callbacks_ran
+from decision_helpers import observed_target
 
 from oversight_contracts.events import AgentStatus, ChangeProposed, ChangeResolved, ChangeUpdated
 
@@ -62,7 +63,7 @@ async def test_halted_run_proposes_too(h: Harness) -> None:
 
     [proposal] = h.payloads(ChangeProposed)
     assert proposal.summary is None
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert "change.resolved" in h.types()
 
 
@@ -84,7 +85,7 @@ async def test_cancel_during_the_proposal_publish(h: Harness) -> None:
     h.manager.run_ended("agent-1", None, steps=4)
 
     [proposal] = h.payloads(ChangeProposed)
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     [resolved] = h.payloads(ChangeResolved)
     assert (resolved.revision, resolved.merge) == (proposal.revision, "merged") == (1, "merged")
     assert h.payloads(AgentStatus)[-1].step == 4

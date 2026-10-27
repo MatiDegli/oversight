@@ -89,6 +89,10 @@ const snapshot: GraphSnapshot = {
   positions: { [node.id]: { x: 10, y: 20 } },
 };
 const agent: AgentStatus = {
+  zone: null,
+  started_by: null,
+  queued_task_id: null,
+  base_commit: null,
   agent_id: "agent-1",
   change_id: "change-1",
   slot: "A",
@@ -137,7 +141,16 @@ const proposal: ChangeProposed = {
   lines_added: 1,
   lines_removed: 1,
   graph: overlay,
-  tests: { outcome: "passed", passed: 2, failed: 0, skipped: 0, duration_ms: 3, failed_tests: [] },
+  tests: {
+    cases: null,
+    cases_complete: null,
+    outcome: "passed",
+    passed: 2,
+    failed: 0,
+    skipped: 0,
+    duration_ms: 3,
+    failed_tests: [],
+  },
   impact: {
     seeds: [node.id],
     entries: [{ node_id: "shop:order", distance: 1 }],
@@ -150,6 +163,9 @@ const proposal: ChangeProposed = {
   },
 };
 const resolution: ChangeResolved = {
+  review_seq: null,
+  requested_by: null,
+  head_commit: null,
   change_id: agent.change_id,
   agent_id: agent.agent_id,
   revision: 1,
@@ -267,6 +283,9 @@ describe("applyEvent", () => {
         reasoning: null,
       };
       const usage = {
+        role: null,
+        change_id: null,
+        plan_id: null,
         agent_id: agent.agent_id,
         model: "meta-api",
         input_tokens: null,
@@ -312,7 +331,11 @@ describe("applyEvent", () => {
       }
       expect(replay.spendUnknown).toBe(true);
       expect(replay.usage?.spent_usd).toBe(3.5);
-      expect(selectSpend(replay)).toEqual({ spentUsd: null, budgetUsd: 10, brake: "blocked" });
+      expect(selectSpend(replay)).toEqual({
+        spentUsd: null,
+        budgetUsd: 10,
+        brake: "blocked",
+      });
     },
   );
   it("starts with fresh plain data and sets the main snapshot", () => {
@@ -359,6 +382,9 @@ describe("applyEvent", () => {
         tests: null,
       }),
       event(8, "usage.tick", {
+        role: null,
+        change_id: null,
+        plan_id: null,
         agent_id: agent.agent_id,
         model: null,
         input_tokens: null,
@@ -661,6 +687,9 @@ describe("applyEvent", () => {
 
   it("preserves unknown usage as null and records errors without inventing statuses", () => {
     const usage = {
+      role: null,
+      change_id: null,
+      plan_id: null,
       agent_id: agent.agent_id,
       model: null,
       input_tokens: null,

@@ -151,6 +151,7 @@ def main() -> None:
                 app.create_app(settings),
                 host=settings.host,
                 port=settings.port,
+                proxy_headers=False,
                 timeout_graceful_shutdown=1,
             )
     else:

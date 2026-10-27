@@ -47,6 +47,9 @@ export function chooseReplaySource(
       events.length !== provenance.event_count ||
       events.some((event, index) => event.seq !== index + 1) ||
       first.payload.models.length === 0 ||
+      events.some(
+        (event) => event.type === "change.reviewed" && event.payload.reviewer_provider === "fake",
+      ) ||
       first.payload.models.some((model) => model.provider === "fake" || !model.model.trim())
     )
       throw new Error("Recorded replay must be an exported real model run");

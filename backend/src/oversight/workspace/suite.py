@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
+from oversight.limits import SizeLimitError, bounded_text
 from oversight.workspace.locks import offload
 from oversight.workspace.runner import Spawn
 from oversight_contracts.events import SuiteResult
@@ -92,8 +93,11 @@ def summarize(
 
 def _take_report(path: Path) -> list[str] | None:
     try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        lines = bounded_text(path, errors="replace").splitlines()
     except FileNotFoundError:
+        return None
+    except SizeLimitError:
+        path.unlink(missing_ok=True)
         return None
     path.unlink(missing_ok=True)
     return lines

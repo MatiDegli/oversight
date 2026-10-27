@@ -54,7 +54,14 @@ def validate_text(text: str, *, fake_fixture: bool = False) -> list[ServerEvent]
         events.append(event)
     if not events or events[0].type != "run.started":
         raise RecordError("the log must start with run.started")
+    allow_fake_provider = fake_fixture
     for event in events:
+        if (
+            event.type == "change.reviewed"
+            and event.payload.reviewer_provider == "fake"
+            and not allow_fake_provider
+        ):
+            raise RecordError("fake review provider requires explicit fixture authorization")
         if event.type == "run.started":
             if not event.payload.models or any(
                 (model.provider != "fake" if fake_fixture else model.provider == "fake")

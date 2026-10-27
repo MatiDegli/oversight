@@ -19,6 +19,7 @@ from oversight.agents import (
 from oversight.events import EventPayload
 from oversight.workspace import Tree, Workspace
 from oversight_contracts.events import Limits
+from oversight_contracts.review import FinishDeclaration
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_REPO = REPO_ROOT / "demo-repo"
@@ -54,7 +55,9 @@ class Recorder:
             raise self.edit_result
         return self.edit_result
 
-    async def proposed(self, agent_id: str, summary: str | None) -> bool:
+    async def proposed(
+        self, agent_id: str, summary: str | None, *, declaration: FinishDeclaration | None = None
+    ) -> bool:
         self.log.append(("sink.proposed", (agent_id, summary)))
         if isinstance(self.propose_result, Exception):
             raise self.propose_result

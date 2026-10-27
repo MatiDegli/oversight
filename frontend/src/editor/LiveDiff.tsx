@@ -5,6 +5,7 @@ import type { editor } from "monaco-editor";
 import type { LiveDiffData } from "../state";
 import { getActiveTheme } from "../theme";
 import { loadEditorFonts } from "./fonts";
+import { DiffViewport } from "./diffViewport";
 import { monaco } from "./monaco";
 import { createEditorTheme } from "./theme";
 import type { EditorColors } from "./theme";
@@ -21,6 +22,15 @@ export function diffEditorOptions(
     domReadOnly: true,
     renderSideBySide: false,
     useInlineViewWhenSpaceIsLimited: true,
+    wordWrap: "on",
+    diffWordWrap: "on",
+    hideUnchangedRegions: {
+      enabled: true,
+      contextLineCount: 3,
+      minimumLineCount: 3,
+      revealLineCount: 10,
+    },
+    smoothScrolling: false,
     automaticLayout: true,
     minimap: { enabled: false },
     scrollBeyondLastLine: false,
@@ -94,18 +104,28 @@ export function InlineDiff({
   onMount,
   readOnly = true,
   managedModified = false,
+  follow = false,
 }: {
   data: LiveDiffData;
   readOnly?: boolean;
   managedModified?: boolean;
+  follow?: boolean;
   onMount?: (diffEditor: editor.IStandaloneDiffEditor) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const diffEditor = useRef<editor.IStandaloneDiffEditor | null>(null);
   const shown = useRef<ShownDiff | undefined>(undefined);
-  const { changeId, path, original, modified } = data;
+  const viewport = useRef<DiffViewport | undefined>(undefined);
+  const { changeId, path, original, modified, author } = data;
   const reportMount = useEffectEvent((created: editor.IStandaloneDiffEditor) => {
-    shown.current = showDiff(created, undefined, data, createPythonModel);
+    viewport.current = new DiffViewport(created);
+    viewport.current.update(
+      { changeId, path, original, modified, author },
+      () => {
+        shown.current = showDiff(created, undefined, data, createPythonModel);
+      },
+      follow,
+    );
     onMount?.(created);
   });
 
@@ -120,6 +140,8 @@ export function InlineDiff({
     reportMount(created);
     return () => {
       const models = shown.current?.models;
+      viewport.current?.dispose();
+      viewport.current = undefined;
       created.setModel(null);
       created.dispose();
       models?.original.dispose();
@@ -132,14 +154,20 @@ export function InlineDiff({
   useEffect(() => {
     const current = diffEditor.current;
     if (!current) return;
-    shown.current = showDiff(
-      current,
-      shown.current,
-      { changeId, path, original, modified },
-      createPythonModel,
-      managedModified,
+    viewport.current?.update(
+      { changeId, path, original, modified, author },
+      () => {
+        shown.current = showDiff(
+          current,
+          shown.current,
+          { changeId, path, original, modified },
+          createPythonModel,
+          managedModified,
+        );
+      },
+      follow,
     );
-  }, [changeId, path, original, modified, managedModified]);
+  }, [changeId, path, original, modified, author, managedModified, follow]);
 
   useEffect(() => {
     diffEditor.current?.updateOptions({ readOnly, domReadOnly: readOnly });
@@ -153,6 +181,8 @@ export interface LiveDiffProps {
   palette?: EditorColors;
   readOnly?: boolean;
   managedModified?: boolean;
+  /** Live updates follow the agent unless the person is using the diff. Review only opens at a hunk. */
+  follow?: boolean;
   /** Called once, when the diff editor is created; selections and edits reuse it. */
   onMount?: (diffEditor: editor.IStandaloneDiffEditor) => void;
 }
@@ -167,6 +197,7 @@ export function EditorDiff({
   onMount,
   readOnly = true,
   managedModified,
+  follow,
 }: LiveDiffProps) {
   const [fonts, setFonts] = useState<"loading" | "ready" | "failed">("loading");
 
@@ -208,6 +239,7 @@ export function EditorDiff({
           onMount={onMount}
           readOnly={readOnly}
           managedModified={managedModified}
+          follow={follow}
         />
       )}
     </>
@@ -238,7 +270,7 @@ export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
           : "Select a changed file to see its live diff."}
       </p>
       <div className="min-h-0 flex-1" hidden={!data}>
-        <EditorDiff data={data} palette={palette} onMount={onMount} />
+        <EditorDiff data={data} palette={palette} onMount={onMount} follow />
       </div>
     </section>
   );

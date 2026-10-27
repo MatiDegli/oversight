@@ -107,6 +107,10 @@ describe("panel selectors over the level 1 fixture", () => {
 });
 
 const agent = (slot: "A" | "B", state: AgentStatus["state"] = "working"): AgentStatus => ({
+  zone: null,
+  started_by: null,
+  queued_task_id: null,
+  base_commit: null,
   agent_id: slot,
   change_id: slot,
   slot,

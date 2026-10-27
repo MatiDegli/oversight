@@ -1,9 +1,10 @@
 """Reserved safe-merge evidence and assessments; no policy evaluation or merge execution."""
 
-from typing import Literal, Self, get_args
+from typing import Literal, Self
 
 from pydantic import (
     ConfigDict,
+    Field,
     FiniteFloat,
     JsonValue,
     NonNegativeInt,
@@ -68,6 +69,36 @@ class _ExistingTests(_Inputs):
     deleted_existing_paths: list[WorkspacePath]
 
 
+class CheckInputs(_Inputs):
+    """Strict observed counts for the additional evidence rules."""
+
+    violations: NonNegativeInt = Field(strict=True)
+    """The number of proven violations."""
+    complete: bool = Field(strict=True)
+    """Whether all required evidence was checked."""
+
+
+SAFE_MERGE_V1_RULES: frozenset[RuleId] = frozenset(
+    {"combined_tests", "small_cone", "small_change", "known_spend", "existing_tests_untouched"}
+)
+_REVIEW_RULES = SAFE_MERGE_V1_RULES | frozenset[RuleId]({"cross_review"})
+_INTEGRITY_RULES = _REVIEW_RULES | frozenset[RuleId]({"test_integrity"})
+_PROBE_RULES = _INTEGRITY_RULES | frozenset[RuleId]({"added_tests_fail_before"})
+SAFE_MERGE_V2_RULES = _PROBE_RULES | frozenset[RuleId](
+    {"run_test_integrity", "tests_reach_changes", "within_zone"}
+)
+POLICY_RULES: dict[str, frozenset[RuleId]] = {
+    "safe-merge-v1": SAFE_MERGE_V1_RULES,
+    "safe-merge-review-v1": _REVIEW_RULES,
+    "safe-merge-integrity-v1": _INTEGRITY_RULES,
+    "safe-merge-probes-v1": _PROBE_RULES,
+    "safe-merge-run-v1": _PROBE_RULES | frozenset[RuleId]({"run_test_integrity"}),
+    "safe-merge-reach-v1": _PROBE_RULES | frozenset[RuleId]({"tests_reach_changes"}),
+    "safe-merge-zone-v1": _PROBE_RULES | frozenset[RuleId]({"within_zone"}),
+    "safe-merge-v2": SAFE_MERGE_V2_RULES,
+}
+
+
 _THRESHOLDS: dict[RuleId, dict[str, JsonValue]] = {
     "combined_tests": {"outcome": "passed", "passed_min": 1, "failed_max": 0, "skipped_max": 0},
     "small_cone": {
@@ -87,6 +118,10 @@ _INPUTS: dict[RuleId, type[ContractModel]] = {
     "known_spend": _Spend,
     "existing_tests_untouched": _ExistingTests,
 }
+
+for _rule in SAFE_MERGE_V2_RULES - SAFE_MERGE_V1_RULES:
+    _THRESHOLDS[_rule] = {"violations_max": 0, "complete": True}
+    _INPUTS[_rule] = CheckInputs
 
 
 class RuleAssessment(ContractModel):
@@ -119,7 +154,13 @@ class RuleAssessment(ContractModel):
             if tests.outcome in {"error", "timeout"} and self.result != "unknown":
                 raise ValueError("test errors and timeouts require an unknown result")
         else:
-            _INPUTS[self.rule].model_validate(self.observed)
+            observed = _INPUTS[self.rule].model_validate(self.observed)
+            if isinstance(observed, CheckInputs):
+                expected_result = (
+                    "fail" if observed.violations else "pass" if observed.complete else "unknown"
+                )
+                if self.result != expected_result:
+                    raise ValueError("check result must follow proven violations and completeness")
         return self
 
 
@@ -147,8 +188,7 @@ class ChangeAssessment(ContractModel):
 
     @model_validator(mode="after")
     def _all_rules_once(self) -> Self:
-        if len(self.rules) != 5 or {rule.rule for rule in self.rules} != set(
-            get_args(RuleId.__value__)
-        ):
-            raise ValueError("an assessment requires all five rules exactly once")
+        expected = POLICY_RULES.get(self.policy_version, SAFE_MERGE_V1_RULES)
+        if len(self.rules) != len(expected) or {rule.rule for rule in self.rules} != set(expected):
+            raise ValueError("an assessment requires its profile's exact rules once each")
         return self

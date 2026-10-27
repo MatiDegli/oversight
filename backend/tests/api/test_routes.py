@@ -6,6 +6,7 @@ import json
 import socket
 import threading
 from collections.abc import AsyncIterator, Callable
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -52,13 +53,17 @@ EMPTY_GRAPH = GraphSnapshot(
 
 
 @contextlib.asynccontextmanager
-async def serve(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
+async def serve(app: FastAPI | Settings) -> AsyncIterator[httpx.AsyncClient]:
     """Uvicorn on a socket bound to a free port before it starts, so no wait for readiness."""
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     sock.listen()
     port = sock.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_graceful_shutdown=1))
+    if isinstance(app, Settings):
+        app = create_app(replace(app, port=port), ReplayConfig(log=LOG, speed=0))
+    server = uvicorn.Server(
+        uvicorn.Config(app, log_level="warning", proxy_headers=False, timeout_graceful_shutdown=1)
+    )
     task = asyncio.create_task(server.serve(sockets=[sock]))
     try:
         async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as client:
@@ -71,7 +76,7 @@ async def serve(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
 
 @contextlib.asynccontextmanager
 async def store_app(tmp_path: Path) -> AsyncIterator[tuple[EventStore, httpx.AsyncClient]]:
-    async with EventStore(tmp_path / f"{RUN_ID}.sqlite", RUN_ID) as store:
+    async with EventStore(tmp_path / f"{RUN_ID}.sqlite", RUN_ID, mode="replay") as store:
         app = FastAPI()
         app.include_router(create_router(store, "live"))
         install_error_handlers(app)
@@ -244,11 +249,12 @@ async def test_graph_is_not_found_before_a_snapshot_then_read_with_its_seq(
 
 async def test_replay_streams_the_whole_log_and_serves_its_final_graph(tmp_path: Path) -> None:
     events = read_jsonl(LOG)
-    app = create_app(Settings(runtime_dir=tmp_path), ReplayConfig(log=LOG, speed=0))
-    async with serve(app) as client:
+    async with serve(Settings(runtime_dir=tmp_path)) as client:
         _, messages = await read_messages(client, len(events))
         graph = GraphResponse.model_validate((await client.get("/graph")).json())
         health = Health.model_validate((await client.get("/health")).json())
+        _, resumed = await read_messages(client, 2, headers={"Last-Event-ID": "1"})
+        assert seqs(resumed) == [2, 3]
     lines = [event.model_dump_json() for event in events]
     assert [m[0].removeprefix("data: ") for m in messages] == lines
     assert (health.mode, health.run_id) == ("replay", RUN_ID)

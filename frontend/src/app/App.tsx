@@ -113,18 +113,24 @@ export function App() {
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {
       if (!commands) return;
+      const change = state.changes[changeId];
+      const proposal = change?.proposal;
+      const base = change ? state.agents[change.agent_id]?.base_commit : null;
+      const head = proposal?.head_commit ?? base;
+      const target = head ? { revision: proposal?.revision ?? 0, head_commit: head } : undefined;
       void sendDecision(
         commands,
-        stateStore.getState().state,
+        state,
         changeId,
         action,
         comment,
         (attempt) => {
           setAttempts((current) => ({ ...current, [changeId]: attempt }));
         },
+        target,
       );
     },
-    [commands],
+    [commands, state],
   );
   return (
     <Frame
