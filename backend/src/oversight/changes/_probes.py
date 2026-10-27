@@ -52,6 +52,8 @@ def added_cases(rec: ChangeRecord, revision: int) -> tuple[tuple[str, ...], tupl
         except (SyntaxError, ValueError, RecursionError):
             problems.append(f"added tests: cannot resolve definitions in {path}")
             continue
+        if not baseline and _parameter_sources_changed(before, after):
+            problems.append(f"added tests: base parameter ids unavailable for {path}")
         if any("#" in qual for qual in after.tests):
             problems.append(f"added tests: duplicate definitions in {path}")
             ids.difference_update(
@@ -84,6 +86,33 @@ def added_cases(rec: ChangeRecord, revision: int) -> tuple[tuple[str, ...], tupl
     return tuple(sorted(ids)), tuple(problems)
 
 
+def _parameter_sources_changed(before: Source, after: Source) -> bool:
+    """Fixture and class parameters can add ids without changing any test body."""
+
+    def sources(source: Source) -> dict[str, tuple[str, ...]]:
+        found: dict[str, tuple[str, ...]] = {}
+        for qual, node in {**source.classes, **source.functions}.items():
+            if qual in source.tests:
+                continue  # Test decorators are handled with the individual definitions.
+            decorators: list[str] = []
+            for decorator in node.decorator_list:
+                resolved = source.resolve(decorator)
+                fixture = (
+                    resolved == "pytest.fixture"
+                    and isinstance(decorator, ast.Call)
+                    and any(keyword.arg == "params" for keyword in decorator.keywords)
+                )
+                if resolved == "pytest.mark.parametrize" or fixture:
+                    decorators.append(ast.dump(decorator))
+            if decorators:
+                found[qual] = tuple(decorators)
+            if node.name == "pytest_generate_tests":
+                found[qual] = (ast.dump(node),)
+        return found
+
+    return sources(before) != sources(after)
+
+
 def comparison(
     ids: tuple[str, ...], before: SuiteExecution, after: SuiteExecution
 ) -> tuple[tuple[str, FactKind], ...]:
@@ -95,6 +124,20 @@ def comparison(
         (RunProblem("incomplete probe evidence"),) if incomplete else (),
     )
     return tuple((fact.test_id, fact.kind) for fact in affected_tests(ids, old, new))
+
+
+def _probe_paths(rec: ChangeRecord, ids: tuple[str, ...]) -> tuple[str, ...]:
+    """The selected test files and changed test support, with implementation left at base."""
+    return tuple(
+        sorted(
+            {test_id.split("::", 1)[0] for test_id in ids}
+            | {
+                path
+                for path in rec.head_files
+                if is_test_file(path) and rec.base_files.get(path) != rec.head_files[path]
+            }
+        )
+    )
 
 
 async def probe_added_tests(
@@ -109,16 +152,7 @@ async def probe_added_tests(
     ids, diagnostics = added_cases(rec, revision)
     if not ids:
         return (), diagnostics
-    paths = tuple(
-        sorted(
-            {test_id.split("::", 1)[0] for test_id in ids}
-            | {
-                path
-                for path in rec.head_files
-                if is_test_file(path) and rec.base_files.get(path) != rec.head_files[path]
-            }
-        )
-    )
+    paths = _probe_paths(rec, ids)
     problems = list(diagnostics)
     seqs: list[int | None] = []
     for phase in ("base_probe", "head_probe"):
@@ -163,6 +197,8 @@ async def probe_added_tests(
     before_seq, after_seq = seqs
     if before_seq is None or after_seq is None:
         return (), tuple(problems)
+    if rec.executions[after_seq].tested_commit != head:
+        return (), (*problems, "added tests: head worktree differs from proposed commit")
     facts = comparison(ids, rec.executions[before_seq], rec.executions[after_seq])
     probes = tuple(
         AddedTestProbe(test_id=test_id, before_seq=before_seq, after_seq=after_seq, result=kind)

@@ -326,3 +326,45 @@ async def test_cleanup_fault_keeps_execution_and_filesystem_fallback(h: Harness)
     assert probe.result == "passes_before_and_after"
     assert_clean(h)
     assert "base-probe-" not in (await h.main_git("worktree", "list", "--porcelain")).stdout
+
+
+@pytest.mark.anyio
+async def test_fixture_parameters_without_base_evidence_stay_explicitly_unknown(h: Harness) -> None:
+    tree = await h.open(1)
+    await tree.write_text(
+        "tests/conftest.py",
+        "import pytest\n@pytest.fixture(params=[1, 2], autouse=True)\n"
+        "def sample(request):\n    return request.param\n",
+        expected_hash=None,
+    )
+    assert await h.manager.file_edited("agent-1", "tests/conftest.py")
+    assert await h.finish(1)
+    facts = h.payloads(ChangeFacts)[-1]
+    assert not facts.added_tests
+    assert "added tests: base parameter ids unavailable for tests/conftest.py" in facts.problems
+
+
+@pytest.mark.anyio
+async def test_head_mutated_by_suite_cannot_certify_the_proposed_tree(
+    h: Harness, monkeypatch
+) -> None:
+    await h.open(1)
+    await add_test(h, "def test_added():\n    assert True\n")
+    original = h.workspace.run_tests
+
+    async def mutate_after_suite(tree, *, timeout_s, case_ids=()):
+        run = await original(tree, timeout_s=timeout_s, case_ids=case_ids)
+        if not case_ids:
+            source = await tree.read_text("shop/mod.py")
+            await tree.write_text(
+                "shop/mod.py", source.content + "# suite side effect\n", expected_hash=source.hash
+            )
+        return run
+
+    monkeypatch.setattr(h.workspace, "run_tests", mutate_after_suite)
+    assert await h.finish(1)
+    facts = h.payloads(ChangeFacts)[-1]
+    assert not facts.added_tests
+    assert "added tests: head worktree differs from proposed commit" in facts.problems
+    assert any(e.phase == "head_probe" for e in h.payloads(SuiteExecution))
+    assert_clean(h)
