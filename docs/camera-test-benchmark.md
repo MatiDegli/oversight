@@ -348,3 +348,91 @@ on sampling the closing animation. The application stylesheet maps the disabled
 surface to `--field`, with enough specificity to override Monaco's bundled CSS.
 The original color audit and its assertions are retained; this adds one browser
 case, bringing the full suite to 73 cases.
+
+## Review fix round 1: verified Monaco tip and additional load samples
+
+Measured 2026-10-27, 19:48–19:58 ART (UTC-3), on committed code tip `2b3234d`,
+which includes the Monaco fix and sixth editor browser case from `fc94088`.
+The documentation-only commit recording these results changes no measured code.
+The earlier failed `69d7e0c` gate above remains part of the history.
+
+### Regression checks and cache coverage
+
+Removing only the disabled-find stylesheet rule temporarily made the existing
+`keeps disabled find inputs on the field token after closing the widget` browser
+regression exit 1: the computed surface was `rgb(51, 51, 51)` rather than the
+field token's `rgb(11, 11, 11)`. The rule was restored before all passing runs
+below. Both that regression and the original rendered Monaco color audit pass
+in the full 73-case suite, verifying the override's specificity in Chromium.
+
+The two remaining shared supports now derive their cache directory from Vitest's
+current test file, rather than from the support's URL. `fileView` and
+`functionTask` therefore use separate caches, as do `review` and `reviewControls`.
+The distinct-cache guard now covers all nine browser files, including these
+pairs, the editor and folds. The expanded guard failed before changing the
+supports and passes afterward; a fifth config check rejects a missing test path.
+All five config checks pass, and the two-worker cap remains unchanged.
+
+### Camera alone on the verified code tip
+
+The command and JSON-reporter/monotonic-wall method are unchanged from above.
+Each row is a fresh process running every camera case. Caches were retained,
+and no timeout, retry, assertion or camera-driving behavior changed.
+
+| Run | Passing cases | All 17 (s) | Wall (s) | Slowest case (s) |
+| --- | --- | --- | --- | --- |
+| 1 | 17/17 | 13.530 | 15.037 | 1.612 |
+| 2 | 17/17 | 12.328 | 13.708 | 1.470 |
+| 3 | 17/17 | 13.456 | 14.845 | 1.622 |
+| 4 | 17/17 | 12.255 | 13.811 | 1.468 |
+| 5 | 17/17 | 12.973 | 14.378 | 1.575 |
+| 6 | 17/17 | 13.196 | 14.766 | 1.561 |
+| 7 | 17/17 | 12.875 | 14.521 | 1.491 |
+| 8 | 17/17 | 13.096 | 14.548 | 1.623 |
+| 9 | 17/17 | 13.412 | 14.934 | 1.557 |
+| 10 | 17/17 | 13.442 | 14.912 | 1.636 |
+
+Ten of ten runs passed, **170/170 cases**. Median all-17 sum: **13.146 s**;
+median wall: **14.657 s**. Slowest case: **1.636 s**.
+
+### Five additional camera samples alongside make check
+
+Each camera process started immediately after its own fresh `make check` in the
+repository root. Every check was still running when its camera process finished;
+all five checks subsequently exited 0. These runs are additional to the loaded
+samples recorded earlier, and no failed attempt was discarded.
+
+| Run | Passing cases | All 17 (s) | Wall (s) | Slowest case (s) | Check exit |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 17/17 | 17.742 | 19.661 | 1.950 | 0 |
+| 2 | 17/17 | 14.688 | 16.414 | 1.727 | 0 |
+| 3 | 17/17 | 15.571 | 17.429 | 1.689 | 0 |
+| 4 | 17/17 | 17.523 | 19.520 | 2.298 | 0 |
+| 5 | 17/17 | 14.923 | 16.521 | 1.675 | 0 |
+
+Five of five runs passed, **85/85 cases**. Median all-17 sum: **15.571 s**;
+median wall: **17.429 s**. The slowest individual case was **2.298 s**, leaving
+**2.702 s (54.0%)** below the unchanged 5 s limit. All five loaded maxima were
+below 2.3 s. These samples establish the observed margin on this machine during
+this round; they do not guarantee a margin under arbitrary peak machine load.
+The earlier 4.723 s sample remains recorded above.
+
+Each loaded check passed 2318 general Python tests, 17 frontend-boundary tests,
+646 frontend unit tests and 43 tooling tests. No model API was used.
+
+### Full-suite and screenshot gates on the verified code tip
+
+The full-suite command ran directly, without a pipe or output redirection:
+
+```sh
+cd frontend && pnpm test:browser
+```
+
+Result on `2b3234d`: **exit 0, 9/9 files, 73/73 cases, 111.67 s**. This includes
+both Monaco color cases and every one of the 17 camera cases alongside the
+other fixture families. The result closes the previously unverified 73-case gate.
+
+`make shots` also ran directly on `2b3234d`, 19:58–19:59 ART: **exit 0,
+8/8 dark captures**, including review and live diff with the camera framing
+oracle; the detector exited 0 with **zero findings**. The existing day-mode
+capture exclusions are unchanged. Both gates used fake/recorded fixtures only.
