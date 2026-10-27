@@ -360,3 +360,33 @@ start using the scripted fake model (anyone can rerun it), and `make e2e` passed
 scripted two-agent replay. A real recorded run will be bundled for the static replay.
 
 Level 3 wiring starts now. Contracts 1.4.0 await the maintainer's approval.
+
+## 2026-10-27 — Approved shell frame and Chrome close-tab key
+
+The maintainer's shell-frame brief supersedes the earlier flat-surface rules in DESIGN.md:
+shell `#09090a`, panel `#0d0d0f`, page `#101012`, card gradient `#151518` to `#111113`,
+raised `#1b1b1f`, inset `#09090b`, translucent dividers and borders, a top highlight and
+soft card shadow. Graph overlays use the translucent panel token with 12 px backdrop blur.
+Group labels use uppercase 11.5 px text with tracking. Agent accents stay unchanged.
+The contrast matrix covers every requested text token on all seven surfaces and both card
+ends at 4.5:1; no text token needed adjustment. The docs front owns the DESIGN.md update.
+
+At 1920 px the fixed zones are a 52 px header, 56 px view rail, optional 280 px sidebar,
+880 px focus panel, graph of at least 560 px, 400 px agents panel or 56 px agents rail,
+optional 280 px dock, and 24 px status line. At 1440 px and below, the sidebar and full
+agents panel overlay. The focus panel yields width to preserve the graph's 560 px minimum.
+Maximize is an explicit action; its Show graph button restores the same mounted graph.
+The start-from-function task panel keeps its expanded exception, overlaying when necessary.
+
+Focus tabs are person-owned reducer state: file, live diff and review retain their own
+camera scope, six-tab cap, oldest inactive eviction and previous-active close behavior.
+Events update tab contents and review state but never navigate. The dock and sidebar
+contain honest placeholders until their owning fronts land. Replay provenance and connection
+failures belong to the status line, with a retry that restarts only the transport session.
+
+A headed Chromium test sends native XTest keys through Xvfb, rather than Playwright's CDP
+keyboard dispatch (which bypasses browser accelerators). Native Ctrl+W closes the browser tab
+without delivering W to the page; native Alt+W reaches it. Therefore Alt+W closes an Oversight
+focus tab. Ctrl+B toggles the sidebar, Ctrl+backquote the dock, and Escape closes the active
+tab. Shell shortcuts are ignored in text fields, task boxes and Monaco. Review's existing
+keys remain local; Approve has no shortcut or command.

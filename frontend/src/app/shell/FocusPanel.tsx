@@ -25,7 +25,7 @@ export function FocusPanel(
             const change = changeId ? state.changes[changeId] : undefined;
             const slot = change ? state.agents[change.agent_id]?.slot : undefined;
             const title = tab.review
-              ? `Review · ${tab.review ?? ""}`
+              ? `Review · ${tab.review}`
               : tab.diff
                 ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
                 : (tab.file?.path.split("/").at(-1) ?? "File");

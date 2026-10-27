@@ -8,7 +8,7 @@ import type { State } from "../state";
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 // Graph overlays sit on the shell color at 90%, so the graph shows faintly through (DESIGN.md).
-const surface = "border border-card-border bg-shell/(--shell-opacity)";
+const surface = "frosted border border-border";
 
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 

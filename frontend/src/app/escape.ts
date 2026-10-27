@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 
+import { isTyping } from "./shell/useShell";
 import { closesPanel } from "./view";
 
 /**
@@ -11,7 +12,7 @@ export function useEscapeCloses(open: boolean, onClose: () => void): void {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (closesPanel(event)) onClose();
+      if (!isTyping(event.target) && closesPanel(event)) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {

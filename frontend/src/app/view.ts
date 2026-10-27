@@ -104,7 +104,7 @@ export function diffForNode(state: State, nodeId: string): DiffTarget | null {
 export function clickNode(state: State, view: View, nodeId: string, filesEnabled = false): View {
   const diff = diffForNode(state, nodeId);
   if (!diff) {
-    if (view.review !== null && view.tabs === undefined) return { ...view, selected: nodeId };
+    if (view.review !== null) return { ...view, selected: nodeId };
     const node = state.graph?.nodes.find((candidate) => candidate.id === nodeId);
     if (!filesEnabled || !node) return { ...view, selected: nodeId };
     return {

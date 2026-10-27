@@ -45,7 +45,7 @@ export function ImpactConeCard({
   return (
     <section
       aria-label="Possibly affected"
-      className="min-h-0 overflow-auto rounded-card border border-card-border bg-panel/[calc(var(--cone-card-opacity)*100%)] p-(--spacing-lg) text-(length:--data-size)"
+      className="min-h-0 overflow-auto rounded-card border border-card-border frosted p-(--spacing-lg) text-(length:--data-size)"
     >
       <h2 className="text-(length:--title-size) font-bold">Possibly affected</h2>
       {cone.entries.length === 0 && (
