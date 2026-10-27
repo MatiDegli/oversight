@@ -70,12 +70,26 @@ describe("the new-agent box", () => {
   });
 });
 
-describe("the new-agent box in a recorded run", () => {
-  it("says so and renders no live control", () => {
-    const markup = renderToStaticMarkup(<TaskBox state={createInitialState()} />);
+describe("the new-agent box in a replay", () => {
+  const box = (replayOf?: string) =>
+    renderToStaticMarkup(<TaskBox state={createInitialState()} replayOf={replayOf} />);
+
+  it("names a hand-written fixture as one, never as a recording, and renders no live control", () => {
+    const markup = box("hand-written demo fixture");
     expect(markup).toContain("New agent");
-    expect(markup).toContain("Recorded run: agents cannot be started here.");
+    expect(markup).toContain(
+      "Replay of a hand-written demo fixture: agents cannot be started here.",
+    );
+    expect(markup).not.toMatch(/recorded run/i);
     for (const live of ["<textarea", "<button", "Start agent", "<kbd"])
       expect(markup).not.toContain(live);
+  });
+
+  it("calls a log a real recorded run only when its source says so", () => {
+    expect(box("real recorded run")).toContain(
+      "Replay of a real recorded run: agents cannot be started here.",
+    );
+    expect(box()).toContain("Replay: agents cannot be started here.");
+    expect(box()).not.toMatch(/recorded run/i);
   });
 });

@@ -103,14 +103,16 @@ export function TaskBoxView({
 
 export interface TaskBoxProps {
   state: State;
-  /** Absent in a recorded run, which has no backend and starts nothing. */
+  /** Absent in a replay, which has no backend and starts nothing. */
   onStart?: (body: StartAgent) => Promise<unknown>;
+  /** What a replay plays, such as "hand-written demo fixture"; absent in a live run. */
+  replayOf?: string;
   /** The draft and request; the app's one box by default. */
   store?: StoreApi<TaskBoxModel>;
 }
 
 /** The agents panel's "New agent" section: a task box and a Start agent button. */
-export function TaskBox({ state, onStart, store = taskBoxStore }: TaskBoxProps) {
+export function TaskBox({ state, onStart, replayOf, store = taskBoxStore }: TaskBoxProps) {
   const draft = useStore(store, (model) => model.draft);
   const pending = useStore(store, (model) => model.pending);
   const failure = useStore(store, (model) => model.failure);
@@ -118,7 +120,10 @@ export function TaskBox({ state, onStart, store = taskBoxStore }: TaskBoxProps) 
     return (
       <section aria-label="New agent" className="flex flex-col gap-2.5">
         <h3 className={heading}>New agent</h3>
-        <p className="text-sm text-muted">Recorded run: agents cannot be started here.</p>
+        {/* What the log is comes from its source: only a real recording may call itself one. */}
+        <p className="text-sm text-muted">
+          {`${replayOf === undefined ? "Replay" : `Replay of a ${replayOf}`}: agents cannot be started here.`}
+        </p>
       </section>
     );
   }

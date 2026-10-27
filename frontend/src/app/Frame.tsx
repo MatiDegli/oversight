@@ -64,7 +64,7 @@ export interface FrameProps {
   attempts?: Readonly<Record<string, DecisionAttempt>>;
   /** Absent in a recorded run, which sends no commands: review then shows the recorded decision. */
   onDecide?: (changeId: string, action: DecisionAction, comment: string) => void;
-  /** What the replay plays, from its source: review words its decision area with it. */
+  /** What the replay plays, from its source: review and the new-agent box word themselves with it. */
   replayOf?: string;
   /** Overlay lines on the graph, such as the replay label and a transport failure. */
   notice?: ReactNode;
@@ -139,9 +139,16 @@ function AgentsPanel({
   onStartAgent,
   canReview,
   onReview,
+  replayOf,
 }: Pick<
   FrameProps,
-  "state" | "canOpenChange" | "onOpenChange" | "onStartAgent" | "canReview" | "onReview"
+  | "state"
+  | "canOpenChange"
+  | "onOpenChange"
+  | "onStartAgent"
+  | "canReview"
+  | "onReview"
+  | "replayOf"
 >) {
   const cards = selectAgents(state).flatMap((agent) => {
     const data = selectAgentCard(state, agent.agent_id);
@@ -161,7 +168,7 @@ function AgentsPanel({
         />
       );
     }),
-    <TaskBox key="new-agent" state={state} onStart={onStartAgent} />,
+    <TaskBox key="new-agent" state={state} onStart={onStartAgent} replayOf={replayOf} />,
   ];
   if (cards.length === 0) {
     body.push(
@@ -348,6 +355,7 @@ export function Frame(props: FrameProps) {
             onStartAgent={props.onStartAgent}
             canReview={props.canReview}
             onReview={props.onReview}
+            replayOf={props.replayOf}
           />
         )}
       </div>

@@ -343,6 +343,12 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
     await expect(label).toBeVisible();
     await expect(label).toContainText(/hand-written/i);
     await expect(label).not.toContainText(/real recorded run/i);
+    // So does the new-agent box on the demo path: it never calls the fixture a recording.
+    const newAgent = page.getByRole("region", { name: "New agent" });
+    await expect(newAgent).toContainText(
+      "Replay of a hand-written demo fixture: agents cannot be started here.",
+    );
+    await expect(newAgent).not.toContainText(/recorded run/i);
   });
 
   const card = page.getByRole("article", { name: `Agent ${slot}` });
