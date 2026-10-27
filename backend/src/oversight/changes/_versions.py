@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Mapping
 
-from oversight.graph import CodeVersion, graph_delta, parse_version
+from oversight.graph import CodeVersion, DeltaCause, graph_delta, parse_version
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot
 
 
@@ -25,14 +25,17 @@ def nodes_in_path(
     return sorted(found)
 
 
-def main_delta(old: GraphSnapshot, new: GraphSnapshot, commit: str) -> GraphDelta:
-    """Exactly one delta per merge, so `from_version` always chains: `graph_delta`'s, or an empty
-    one from `old.version` to `new.version` when no node, edge or parse error changed."""
-    return graph_delta(old, new, "merge", commit) or GraphDelta(
+def main_delta(
+    old: GraphSnapshot, new: GraphSnapshot, commit: str, cause: DeltaCause
+) -> GraphDelta:
+    """Exactly one delta per commit on main, a merge or a save, so `from_version` always chains:
+    `graph_delta`'s, or an empty one from `old.version` to `new.version` (equal when no Python file
+    changed) when no node, edge or parse error changed, still carrying the new `commit`."""
+    return graph_delta(old, new, cause, commit) or GraphDelta(
         from_version=old.version,
         to_version=new.version,
         commit=commit,
-        cause="merge",
+        cause=cause,
         nodes_added=[],
         nodes_changed=[],
         nodes_removed=[],
