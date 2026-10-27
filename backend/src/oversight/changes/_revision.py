@@ -1,15 +1,37 @@
 """Request changes, move an agent's base and settle revision transactions."""
 
 import asyncio
+import logging
 
 from oversight.changes import _delivery as delivery
 from oversight.changes import _proposal as proposal
+from oversight.changes._neighbors import graph_context
 from oversight.changes._state import ChangeRecord, Move, Revision
 from oversight.changes._support import ChangeContext
 from oversight.changes._versions import parse
 from oversight.graph import change_graph
 from oversight.workspace import WorkspaceError
 from oversight_contracts.events import ChangeResolved
+
+_log = logging.getLogger(__name__)
+
+
+def revision_comment(ctx: ChangeContext, rec: ChangeRecord, comment: str) -> str:
+    """Enrich only the agent's message; unavailable graph context never blocks a revision."""
+    try:
+        graph = rec.head.graph
+        if graph.parse_errors:
+            raise ValueError(f"parse errors in {', '.join(e.path for e in graph.parse_errors)}")
+        edited = [n.id for n in rec.graph.nodes_added] + rec.graph.nodes_modified
+        block = graph_context(graph, edited)
+        return f"{comment}\n\n{block}" if block else comment
+    except Exception as error:
+        _log.warning(
+            "Graph context unavailable for %s; sending comment alone: %s",
+            rec.change_id,
+            ctx.workspace.redact(str(error)),
+        )
+        return comment
 
 
 async def request_changes(ctx: ChangeContext, rec: ChangeRecord, comment: str) -> Revision | None:
@@ -192,4 +214,4 @@ async def requested(
         )
     rec.state, rec.proposed_now = "working", False
     rec.requests += 1
-    return Revision(comment, note)
+    return Revision(revision_comment(ctx, rec, comment), note)

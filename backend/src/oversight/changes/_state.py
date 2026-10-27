@@ -49,6 +49,8 @@ class Revision:
     """What the agent resumes with after Request changes."""
 
     comment: str
+    """The person's unchanged comment, followed by graph context when available; only for the
+    agent's next message. The resolution event carries the person's comment alone."""
     note: str | None
     """Set when the base moved: main merged in, and the files with conflict markers or the tests
     that failed with main."""
