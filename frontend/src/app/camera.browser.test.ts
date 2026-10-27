@@ -54,7 +54,9 @@ async function withPage(
   const errors: string[] = [];
   const editorRequests: string[] = [];
   page.on("request", (request) => {
-    if (request.url().includes("monaco")) editorRequests.push(request.url());
+    const path = new URL(request.url()).pathname;
+    if (path.includes("monaco-editor") || path.endsWith("/editor/monaco.ts"))
+      editorRequests.push(request.url());
   });
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {

@@ -303,7 +303,7 @@ export function ReviewPanel({
   const proposal = change?.proposal ?? null;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
-  const [editingBlocked, setEditingBlocked] = useState(false);
+  const [editing, setEditing] = useState<{ path: string; blocked: boolean } | null>(null);
   const decision = change
     ? decisionView(change, state.errors, attempt, onDecide === undefined)
     : undefined;
@@ -313,6 +313,12 @@ export function ReviewPanel({
     decision?.kind === "open";
   const [chosen, setChosen] = useState<string | null>(null);
   const openPath = chosen !== null && files.includes(chosen) ? chosen : (files[0] ?? null);
+  // A deferred editor cannot report readiness until its chunk and file have loaded.
+  const editingBlocked =
+    fileAccess !== undefined &&
+    openPath !== null &&
+    selectLiveDiff(state, changeId, openPath) !== undefined &&
+    (editing?.path !== openPath || editing.blocked);
   const stats = new Map(proposal?.files.map((file) => [file.path, file]));
   const look = agent ? agentLook[agent.slot] : undefined;
   return (
@@ -426,7 +432,7 @@ export function ReviewPanel({
                               fileAccess.drafts.has(fileKey(name, data.agentId)) ||
                               fileAccess.inFlightSaves.has(fileKey(name, data.agentId)),
                           );
-                          setEditingBlocked(blocked || hasDraft);
+                          setEditing({ path, blocked: blocked || hasDraft });
                         }}
                       />
                     ) : (

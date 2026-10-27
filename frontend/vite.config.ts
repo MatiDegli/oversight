@@ -28,6 +28,7 @@ export default defineConfig({
   ...(cacheDir === undefined || cacheDir === "" ? {} : { cacheDir }),
   plugins: [recordedReplayPlugin(), react(), tailwindcss()],
   worker: { format: "es" },
+  build: { manifest: true },
   resolve: {
     alias: {
       "@contracts": fileURLToPath(new URL("../contracts/generated/contracts.ts", import.meta.url)),

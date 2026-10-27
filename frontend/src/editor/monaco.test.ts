@@ -3,7 +3,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 
 vi.mock("@monaco-editor/react", () => ({ loader: { config: vi.fn() } }));
-vi.mock("monaco-editor", () => ({ editor: {} }));
+vi.mock("monaco-editor/editor", () => ({ editor: {} }));
+vi.mock("monaco-editor/features/register.all", () => ({}));
+vi.mock("monaco-editor/languages/definitions/python/register", () => ({}));
 vi.mock("monaco-editor/editor/editor.worker.js?worker", () => ({
   default: class LocalEditorWorker {
     readonly name = "local-worker";
