@@ -15,12 +15,12 @@ export interface Scene {
   name: string;
   enabled: boolean;
   /** Use a derived cut or a hand-written fixture instead of the served proposal log. */
-  log?: "editing" | "one-slot" | "handwritten-two-slots-braked.jsonl";
+  log?: "editing" | "proposed" | "one-slot" | "handwritten-two-slots-braked.jsonl";
   edgeShapes?: readonly ("bezier" | "taxi")[];
   /** What enables a disabled scene. Printed next to "skipped". */
   needs?: string;
   /** Puts the page in this scene's state, after the shell is ready. Nothing to do when omitted. */
-  prepare?: (page: Page) => Promise<void>;
+  prepare?: (page: Page, jsonl: string) => Promise<void>;
 }
 
 export interface Theme {
@@ -119,6 +119,7 @@ export const scenes: readonly Scene[] = [
   {
     name: "watch",
     enabled: true,
+    log: "proposed",
     prepare: async (page) => {
       await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
     },
@@ -127,6 +128,7 @@ export const scenes: readonly Scene[] = [
   {
     name: "watch-fit",
     enabled: true,
+    log: "proposed",
     prepare: async (page) => {
       await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
       await page.getByRole("button", { name: "Fit the graph to the view" }).click();
@@ -137,18 +139,14 @@ export const scenes: readonly Scene[] = [
     },
   },
   // Review: the proposed change's node opens it, with Monaco's inline diff on the left and the graph
-  // dimmed but for the change and its cone. It needs a log that ends while the change is proposed: `make shots`
-  // serves handwritten-level1-proposed.jsonl, the hand-written log cut after seq 20.
+  // dimmed but for the change and its cone. Cut before the first decision to retain proposals.
   {
     name: "review",
     enabled: true,
-    prepare: async (page) => {
-      // The replay API has no worktrees. Read only the diff already present in this fixture.
-      const text = await readFile(
-        new URL("../../fixtures/events/handwritten-level1-proposed.jsonl", import.meta.url),
-        "utf8",
-      );
-      const updates = text
+    log: "proposed",
+    prepare: async (page, jsonl) => {
+      // The replay API has no worktrees. Read only the diff present in this scene's log.
+      const updates = jsonl
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line) as ServerEvent)

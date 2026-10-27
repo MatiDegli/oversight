@@ -129,7 +129,7 @@ async function main(): Promise<number> {
         target.searchParams.set("field-time", FIELD_TIME);
         await page.goto(target.href, { waitUntil: "load" });
         await waitUntilReady(page, lastSeq(captureLog));
-        await scene?.prepare?.(page);
+        await scene?.prepare?.(page, captureLog);
         await page.evaluate((theme) => {
           document.documentElement.dataset.theme = theme;
         }, job.theme);

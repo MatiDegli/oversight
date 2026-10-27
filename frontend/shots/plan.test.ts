@@ -106,7 +106,7 @@ void test("live diff uses a derived cut through the last edit before the proposa
 void test("a log without a pre-proposal edit still captures watch, review and file view, skipping only live diff", () => {
   const source = '{"seq":1,"type":"change.proposed"}\n{"seq":2,"type":"change.updated"}\n';
   const enabled = scenes.filter(
-    (scene) => scene.enabled && (!scene.log || scene.log === "editing"),
+    (scene) => scene.enabled && (!scene.log || ["editing", "proposed"].includes(scene.log)),
   );
   assert.deepEqual(
     enabled.map((scene) => [scene.name, logForScene(source, scene)]),
@@ -120,6 +120,24 @@ void test("a log without a pre-proposal edit still captures watch, review and fi
   );
   // Scenes using the served log do not even parse an editing cut.
   assert.equal(logForScene("not parsed", {}), "not parsed");
+});
+
+void test("watch and review use the real recording through both proposals, before either merge", () => {
+  const source = readFileSync(
+    new URL("../../fixtures/events/recorded-demo.jsonl", import.meta.url),
+    "utf8",
+  );
+  const cut = logForScene(source, { log: "proposed" });
+  assert.ok(cut);
+  assert.ok(source.startsWith(cut));
+  const events = cut
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as { type: string });
+  assert.equal(events.filter((event) => event.type === "change.proposed").length, 2);
+  assert.ok(events.every((event) => event.type !== "change.resolved"));
+  for (const name of ["watch", "watch-fit", "review"])
+    assert.equal(scenes.find((scene) => scene.name === name)?.log, "proposed");
 });
 
 void test("task scenes replay one offered slot and two with a non-Meta tick carrying A's brake", () => {
