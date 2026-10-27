@@ -175,7 +175,8 @@ describe("graph mapping", () => {
     expect(module.style("color")).toBe(rgb(theme["module-label"]));
     expect(module.style("font-family")).toBe(theme["text-font"]);
     module.addClass("dimmed");
-    expect(Number(module.style("opacity"))).toBe(theme["dim-module"]);
+    expect(Number(module.style("opacity"))).toBe(1);
+    expect(Number(module.style("border-opacity"))).toBe(theme["dim-module"]);
     const target = graph.getElementById("billing:fee").addClass("dimmed");
     expect(Number(target.style("opacity"))).toBe(theme["dim-node"]);
     const exact = graph.getElementById("edge-imports").addClass("dimmed");
@@ -623,7 +624,7 @@ describe("graph updates and log entry point", () => {
 });
 
 describe("review dimming", () => {
-  it("dims every node and edge but the lit ones, keeping the boxes that hold a lit node", () => {
+  it("dims context including compound frames while retaining the lit children's opacity", () => {
     const state = initial();
     const classes = (lit: ReadonlySet<string> | null) =>
       Object.fromEntries(
@@ -631,8 +632,8 @@ describe("review dimming", () => {
       );
     expect(Object.values(classes(null)).some((names) => names.includes("dimmed"))).toBe(false);
     const lit = classes(new Set(["billing:Bill.total"]));
-    for (const id of ["billing", "billing:Bill", "billing:Bill.total"])
-      expect(lit[id]).not.toContain("dimmed");
+    for (const id of ["billing", "billing:Bill"]) expect(lit[id]).toContain("dimmed");
+    expect(lit["billing:Bill.total"]).not.toContain("dimmed");
     expect(lit["billing:fee"]).toContain("dimmed");
     for (const kind of ["calls", "imports", "inherits"])
       expect(lit[`edge-${kind}`]).toContain("dimmed");

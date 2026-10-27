@@ -1,4 +1,5 @@
 import type { StylesheetJson } from "cytoscape";
+import badgeFont from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-700-normal.woff2?inline";
 
 import type { getActiveTheme } from "../theme";
 
@@ -24,6 +25,14 @@ export function graphStyles(
 ): StylesheetJson {
   const px = Number.parseFloat;
   const agents = { A: "agent-a", B: "agent-b" } as const;
+  const badgeSize = px(theme["distance-badge-size"]);
+  const badge = (distance: number) => {
+    // SVG images cannot see the page's @font-face. Embed the local font for the numeric badge.
+    // This decorates the existing node without synthetic graph nodes or layout changes.
+    const font = `<style>@font-face{font-family:${theme["text-font"].split(",")[0] ?? "sans-serif"};src:url("${badgeFont}") format("woff2");font-weight:${String(theme["distance-badge-font-weight"])}}</style>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(badgeSize)}" height="${String(badgeSize)}">${font}<circle cx="${String(badgeSize / 2)}" cy="${String(badgeSize / 2)}" r="${String(badgeSize / 2)}" fill="${theme.text}"/><text x="50%" y="50%" dy=".35em" text-anchor="middle" fill="${theme.page}" font-family='${theme["text-font"]}' font-size="${theme["distance-badge-font-size"]}" font-weight="${String(theme["distance-badge-font-weight"])}">${String(distance)}</text></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  };
   const pendingBorder = {
     "border-style": "dashed" as const,
     "border-width": theme["agent-border-width"],
@@ -128,6 +137,21 @@ export function graphStyles(
       style: { "outline-color": theme.text, "outline-width": theme["selected-ring-width"] },
     },
     {
+      selector: "node.cone",
+      style: {
+        "background-image": (node) => badge(node.data("distance") as number),
+        "background-width": theme["distance-badge-size"],
+        "background-height": theme["distance-badge-size"],
+        "background-position-x": "100%",
+        "background-position-y": "0%",
+        "background-offset-x": badgeSize / 2,
+        "background-offset-y": -badgeSize / 2,
+        "background-image-containment": "over",
+        "background-clip": "none",
+        "bounds-expansion": badgeSize / 2,
+      },
+    },
+    {
       selector: "edge",
       style: {
         "curve-style": shape,
@@ -170,5 +194,23 @@ export function graphStyles(
     },
     { selector: "node.dimmed, edge.dimmed", style: { opacity: theme["dim-node"] } },
     { selector: "node.module.dimmed", style: { opacity: theme["dim-module"] } },
+    {
+      // Overall compound opacity multiplies into every child. Dim only the frame's paint.
+      selector: "node:parent.dimmed",
+      style: {
+        opacity: 1,
+        "background-opacity": theme["module-opacity"] * theme["dim-node"],
+        "border-opacity": theme["dim-node"],
+        "text-opacity": theme["dim-node"],
+      },
+    },
+    {
+      selector: "node.module:parent.dimmed",
+      style: {
+        "background-opacity": theme["module-opacity"] * theme["dim-module"],
+        "border-opacity": theme["dim-module"],
+        "text-opacity": theme["dim-module"],
+      },
+    },
   ];
 }
