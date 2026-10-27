@@ -155,6 +155,11 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   plain 500, outside the single `ErrorResponse` format. A minor version, since it only adds a code;
   recorded logs at 1.0.0 still validate.
 
+- **Contract 1.3.0 reserves level 3 merge policy and two-agent plans** (approved by the maintainer,
+  2026-10-27): optional fields, three events (`change.assessed`, `merge_mode.changed`, `plan.updated`)
+  and seven endpoints that return 501 reserve the wire format, so a later level can add behavior
+  without a breaking change. File creation moves to 1.4.0.
+
 ## Design
 
 - **Signal lives in `DESIGN.md` at the root, with `PRODUCT.md` beside it:** the design skill
@@ -313,3 +318,6 @@ Ours wins in every case below.
 - **Classes start folded (maintainer, 2026-10-27):** one row names the class and its method count; a click toggles it, and a new change adding or modifying a method opens it. Reads and cone membership project onto the folded row (nearest distance). Preset positions plus fold state determine all positions; only later rows and modules in that column slide for 240ms with cubic-bezier(0.2, 0.7, 0.2, 1), or jump under reduced motion. Incoming calls share a target trunk outside frames; endpoint taps alone traverse their own containing frame.
 
 - **Graph cleanup evidence (2026-10-27):** comparison images and work reports stay outside the product repository; the start camera stays at 100%, frames settled header bounds, and treats the heading, notices and bottom overlays as viewport edges when choosing the nearest clear gutter.
+- **Dot field brought forward (maintainer, 2026-10-27):** the dot field, rings and breathing light
+  behind the graph move from "after level 1" to now, built as DESIGN.md specifies; it must never
+  block level 1, so with no WebGL, a failed draw or a lost context the graph shows plain ground.

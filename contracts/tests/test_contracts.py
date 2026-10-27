@@ -217,11 +217,10 @@ def event(event_type: str, seq: int = 1, **payload_changes: Any) -> dict[str, An
     return {"seq": seq, "ts": TS, "type": event_type, "payload": payload}
 
 
-def test_the_eleven_event_types_are_agents_md_list() -> None:
+def test_the_event_types_include_the_approved_level3_reservations() -> None:
     union = get_args(get_args(ServerEvent.__value__)[0])
     types = {get_args(model.model_fields["type"].annotation)[0] for model in union}
-    assert types == set(PAYLOADS)
-    assert len(PAYLOADS) == 11
+    assert types == set(PAYLOADS) | {"change.assessed", "merge_mode.changed", "plan.updated"}
 
 
 @pytest.mark.parametrize("event_type", sorted(PAYLOADS))
@@ -229,6 +228,12 @@ def test_every_event_round_trips_with_every_key_present_in_order(event_type: str
     # The examples list every field in docs/proposal.md's order, so comparing the serialized text
     # also checks the order of the keys.
     original = event(event_type)
+    defaults = {
+        "run.started": {"merge_mode": None},
+        "agent.status": {"plan_id": None},
+        "change.resolved": {"decided_by": None, "reasons": [], "assessment": None},
+    }
+    original["payload"].update(defaults.get(event_type, {}))
     parsed = EVENTS.validate_python(original)
     dumped = EVENTS.dump_json(parsed).decode()
     assert dumped == json.dumps(original, separators=(",", ":"))
@@ -348,7 +353,9 @@ def test_every_error_code_has_the_status_of_section_4_7() -> None:
 def test_the_schema_forbids_extra_keys_and_requires_every_response_key() -> None:
     schema = json.loads((GENERATED / "oversight.schema.json").read_text())
     requests = {"StartAgent", "AgentMessage", "ApproveChange", "RequestChanges", "RejectChange"}
-    requests.add("SaveFile")
+    requests.update(
+        {"SaveFile", "SetMergeMode", "CreatePlan", "UpdatePlan", "PlanRevision", "RejectPlan"}
+    )
     objects = {name: d for name, d in schema["$defs"].items() if d.get("type") == "object"}
     assert "ChangeResolvedEvent" in objects
     for name, definition in objects.items():
@@ -367,7 +374,7 @@ def test_the_typescript_types_carry_the_contract_version() -> None:
     assert "export type ServerEvent =" in typescript
 
 
-@pytest.mark.parametrize("version", ["1.0.0", "1.1.0"])
+@pytest.mark.parametrize("version", ["1.0.0", "1.1.0", "1.2.0"])
 def test_older_recorded_events_still_validate(version: str) -> None:
     EVENTS.validate_python(event("run.started", contract_version=version))
 

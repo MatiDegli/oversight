@@ -26,6 +26,13 @@ from oversight_contracts.commands import (
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("GET", "/impact", "The impact query"),
+    ("GET", "/merge-mode", "Reading the merge mode"),
+    ("PUT", "/merge-mode", "Setting the merge mode"),
+    ("POST", "/plans", "Creating a plan"),
+    ("GET", "/plans/{plan_id}", "Reading a plan"),
+    ("PUT", "/plans/{plan_id}", "Updating a plan"),
+    ("POST", "/plans/{plan_id}/start", "Starting a plan"),
+    ("POST", "/plans/{plan_id}/reject", "Rejecting a plan"),
     ("POST", "/agents/{agent_id}/message", "Messages to an agent"),
     ("POST", "/agents/{agent_id}/pause", "Pause"),
     ("POST", "/agents/{agent_id}/resume", "Resume"),

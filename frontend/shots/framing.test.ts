@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { assertReadableFrame } from "./framing.ts";
+import { assertPanelFrame, assertReadableFrame } from "./framing.ts";
 
 const changed = { id: "changed", x1: 100, y1: 80, x2: 150, y2: 120 };
 const near = { id: "caller", x1: 250, y1: 150, x2: 350, y2: 250, distance: 1 };
@@ -12,6 +12,27 @@ const frame = {
   focus: [changed],
   cone: [near],
 };
+
+void test("live diff frames only the change despite lit callers, with no review card or rows", () => {
+  const live = { ...frame, pan: { x: 175, y: 100 } };
+  assertPanelFrame(1, live, "live-diff");
+  assert.throws(() => {
+    assertPanelFrame(1, { ...live, zoom: 0.8 }, "live-diff");
+  }, /expected 1/);
+  assert.throws(() => {
+    assertPanelFrame(1, frame, "live-diff");
+  }, /off center/);
+  assert.throws(() => {
+    assertPanelFrame(1, { ...live, card: { x1: 24, y1: 24, x2: 304, y2: 180 } }, "live-diff");
+  }, /review card/);
+  assert.throws(() => {
+    assertPanelFrame(1, { ...live, outOfView: [near.id] }, "live-diff");
+  }, /review rows/);
+  assertPanelFrame(1, frame, "review");
+  assert.throws(() => {
+    assertPanelFrame(1, live, "review");
+  }, /off center/);
+});
 
 void test("shots keeps watch zoom if the lit set fits, rejecting unnecessary shrink or wrong centering", () => {
   assertReadableFrame(1, frame);

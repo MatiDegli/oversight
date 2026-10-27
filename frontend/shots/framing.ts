@@ -14,6 +14,19 @@ interface Frame {
   outOfView?: string[];
 }
 
+/** Review frames callers beside its card; live diff frames the change without review overlays. */
+export function assertPanelFrame(
+  watchZoom: number,
+  frame: Frame,
+  mode: "review" | "live-diff",
+): void {
+  if (mode === "live-diff") {
+    assert(!frame.card && !frame.leftInset, "live diff must not show the review card");
+    assert(!frame.outOfView?.length, "live diff must not report review rows");
+    assertReadableFrame(watchZoom, { ...frame, cone: [] });
+  } else assertReadableFrame(watchZoom, frame);
+}
+
 /** Independent acceptance oracle in model coordinates, shared by browser tests and make shots. */
 export function assertReadableFrame(watchZoom: number, frame: Frame): void {
   const floor = 12 / 15;

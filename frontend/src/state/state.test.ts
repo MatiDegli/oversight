@@ -40,6 +40,7 @@ function event<K extends ServerEvent["type"]>(
 
 const run: RunStarted = {
   run_id: "run-1",
+  merge_mode: null,
   contract_version: "1.0.0",
   prompt_version: "test-prompt",
   workspace: "demo-repo",
@@ -97,6 +98,7 @@ const agent: AgentStatus = {
   step: 0,
   max_steps: 10,
   detail: null,
+  plan_id: null,
 };
 const overlay: ChangeGraph = {
   nodes_added: [{ ...node, id: "shop:discount", name: "discount", qualname: "discount" }],
@@ -157,6 +159,9 @@ const resolution: ChangeResolved = {
   merge: "merged",
   merge_commit: "merged",
   conflict: null,
+  decided_by: null,
+  reasons: [],
+  assessment: null,
 };
 const delta: GraphDelta = {
   from_version: "v1",
