@@ -11,10 +11,10 @@ UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
-	contracts check-contracts check-secrets demo-repo-check replay shots smoke layout test-browser
+	contracts check-contracts check-secrets demo-repo-check replay shots smoke layout test-browser e2e
 
 help: ## list the targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
 
 install: ## install the Python and Node dependencies from the lockfiles
 	uv sync --frozen
@@ -66,6 +66,13 @@ smoke: ## start the backend and check /health and /graph
 # make check and CI run without a browser, so pnpm test leaves these out.
 test-browser: ## the frontend's browser tests in Playwright's Chromium; not in check
 	$(PNPM) test:browser
+
+# e2e: one Playwright test over the static replay build (vite build --mode replay, served by vite
+# preview) and the hand-written log: level 1's definition of done, with no backend and no credits.
+# The build and the run share one time bound of 600 s (10 s more, then killed) and the 6 GiB memory
+# cap of make shots. It is not part of make check yet; CI runs it in its own job.
+e2e: ## Playwright over the static replay build and the hand-written log; 600 s, 6G cap; not in check
+	@$(NO_KEYS) timeout --kill-after=10 600 bash tools/capped.sh 6G bash frontend/e2e/run.sh
 
 # Two layers keep a runaway test from taking the machine. The soft one, for every pytest run
 # including a bare `uv run pytest` and CI: conftest.py loads tools/memwatch.py, which ends a run
