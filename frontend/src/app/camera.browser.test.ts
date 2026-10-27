@@ -46,13 +46,17 @@ async function withPage(
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, reducedMotion });
   page.setDefaultTimeout(15_000);
   const errors: string[] = [];
+  const editorRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("monaco")) editorRequests.push(request.url());
+  });
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error" && !message.location().url.endsWith("/@vite/client"))
       errors.push(message.text());
   });
   try {
-    // Avoid starting the application's transport: only the frame is mounted.
+    // Avoid starting the application's transport: only the graph harness is mounted.
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     await page.goto(url);
     await page.waitForFunction(() => "graphTest" in window);
@@ -66,6 +70,9 @@ async function withPage(
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
     );
+    // Camera setup must not load an editor: cold Monaco modules and its worker made this
+    // camera test depend on unrelated module/editor startup under machine load.
+    expect(editorRequests).toEqual([]);
     await test(page);
     expect(errors).toEqual([]);
   } finally {
@@ -165,5 +172,85 @@ it("under reduced motion the camera jumps and nothing eases", async () => {
     const closed = await report(page, ids);
     expect(closed.animating).toBe(false);
     expect(closed.zoom).toBe(1);
+  });
+}, 30_000);
+
+it("refreshes a revealed cone row after pan, zoom and Fit without moving the camera itself", async () => {
+  await withPage("reduce", async (page) => {
+    const id = await page.evaluate(() => window.graphTest.caller);
+    await page.evaluate(() => window.graphTest.review());
+    const row = page.getByRole("region", { name: "Possibly affected", exact: true }).getByTitle(id);
+    await browserExpect(row).toContainText("Out of view");
+    await row.click();
+    await browserExpect(row).not.toContainText("Out of view");
+    const positions = (await report(page, [])).positions;
+    // Start in empty canvas below the card, then drag far enough to hide the revealed caller.
+    const graph = page.getByRole("img", { name: "Repository graph" });
+    const box = await graph.boundingBox();
+    if (!box) throw new Error("Missing graph box");
+    const empty = await page.evaluate(() => {
+      const probe = document.querySelector<GraphProbeHost>(
+        '[aria-label="Repository graph"]',
+      )?.oversightGraph;
+      if (!probe) throw new Error("Missing graph");
+      const { width, height } = probe.metrics().viewport;
+      const zoom = probe.zoom();
+      const pan = probe.pan();
+      const boxes = probe.nodeBounds();
+      for (let y = height - 90; y > height / 2; y -= 20)
+        for (let x = width - 90; x > 0; x -= 20)
+          if (
+            !boxes.some(
+              (b) =>
+                x >= b.x1 * zoom + pan.x - 5 &&
+                x <= b.x2 * zoom + pan.x + 5 &&
+                y >= b.y1 * zoom + pan.y - 5 &&
+                y <= b.y2 * zoom + pan.y + 5,
+            )
+          )
+            return { x, y };
+      throw new Error("No empty canvas for panning");
+    });
+    await page.mouse.move(box.x + empty.x, box.y + empty.y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + empty.x, box.y + empty.y - box.height, { steps: 8 });
+    await page.mouse.up();
+    await browserExpect(row).toContainText("Out of view");
+    await browserExpect(row).toHaveRole("button");
+    expect((await report(page, [id])).cutOff).toContain(id);
+    // Let another browser frame pass: reporting visibility must never recenter the camera.
+    const away = await report(page, [id]);
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    expect((await report(page, [id])).centers).toEqual(away.centers);
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await browserExpect(row).not.toContainText("Out of view");
+    expect((await report(page, [id])).cutOff).toEqual([]);
+    // Zooming at the viewport center hides the distant caller without a pan gesture.
+    for (let step = 0; step < 5; step++)
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await browserExpect(row).toContainText("Out of view");
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await browserExpect(row).not.toContainText("Out of view");
+    expect((await report(page, [])).positions).toEqual(positions);
+  });
+}, 30_000);
+
+it("the impact cone component keeps keyboard focus on a revealed row and never takes it on prop updates", async () => {
+  await withPage("reduce", async (page) => {
+    const id = await page.evaluate(async () => {
+      await window.graphTest.mountCone();
+      return window.graphTest.caller;
+    });
+    const row = page.getByTitle(id);
+    await row.focus();
+    await row.press("Enter");
+    await browserExpect(row).not.toContainText("Out of view");
+    await browserExpect(row.locator("..")).toBeFocused();
+    const other = page.getByRole("button", { name: "Other control" });
+    await other.focus();
+    await page.evaluate(() => window.graphTest.mountCone(true));
+    await browserExpect(other).toBeFocused();
+    await page.evaluate(() => window.graphTest.mountCone(false));
+    await browserExpect(other).toBeFocused();
   });
 }, 30_000);
