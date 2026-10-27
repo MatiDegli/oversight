@@ -73,7 +73,7 @@ class Commands(Protocol):
 
     async def save_file(self, request: SaveFile) -> FileSaved:
         """Raises `ChangeNotFound`, `InvalidPath`, `StaleFile`, `WrongState`, and
-        `WorkspaceError` for a save that failed and was undone."""
+        `WorkspaceError` for a save that failed; review edits may remain in the worktree."""
         ...
 
     async def rescan(self) -> None: ...
@@ -166,8 +166,8 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
         except WrongState as error:
             raise ApiError("wrong_state", str(error)) from None
         except WorkspaceError as error:
-            # A save that failed and was undone: the manager has sent the error event.
-            raise ApiError("internal", f"{error}; see the error events") from None
+            # Review save failures may leave edits in the worktree without an error event.
+            raise ApiError("internal", str(error)) from None
 
     @router.post("/graph/rescan", status_code=202, response_class=Response)
     async def rescan() -> Response:  # pyright: ignore[reportUnusedFunction]

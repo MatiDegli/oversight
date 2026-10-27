@@ -114,10 +114,23 @@ async def test_failed_review_save_answers_internal_and_preserves_the_file(
 
         assert calls == 1
         assert error_code(response) == (500, "internal")
-        assert "The review file could not be written" in response.json()["error"]["message"]
+        assert response.json()["error"]["message"] == "The review file could not be written"
         assert await read(s, PRICING, created.agent_id) == before
         assert await read(s, PRICING) == main
         assert s.events()[-1].seq == cursor
+
+
+async def test_missing_review_file_creates_no_directories(tmp_path: Path) -> None:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        created = await reviewed(s)
+        before = await read(s, PRICING, created.agent_id)
+        path = "a/b/c/missing.py"
+        response = await put(s, path, "# mine\n", before.hash, created.agent_id)
+
+        assert error_code(response) == (409, "stale_file")
+        assert response.json()["error"]["message"] == f"{path} no longer exists"
+        assert not (s.live.workspace.runtime_root / "worktrees" / created.agent_id / "a").exists()
+        assert await read(s, PRICING, created.agent_id) == before
 
 
 async def test_review_save_while_working_is_wrong_state(tmp_path: Path) -> None:

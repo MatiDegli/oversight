@@ -1,0 +1,56 @@
+import logging
+
+from oversight.changes import _delivery as delivery
+from oversight.changes._state import ChangeRecord, Facts
+from oversight.changes._support import ChangeContext
+
+_log = logging.getLogger("oversight.changes._manager")
+
+
+async def read_facts(ctx: ChangeContext, head_commit: str) -> Facts:
+    main = ctx.workspace.main
+    return Facts(
+        head=(await ctx.git(main, "rev-parse", "HEAD")).strip(),
+        clean=not (await ctx.git(main, "status", "--porcelain")).strip(),
+        merging=await ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"),
+        contains=await ctx.yes_no(main, "merge-base", "--is-ancestor", head_commit, "HEAD"),
+    )
+
+
+async def recover(
+    ctx: ChangeContext,
+    rec: ChangeRecord,
+    comment: str | None,
+    pre: str | None,
+    error: Exception | None,
+) -> None:
+    """Decide from git facts after a failed approval, or a cancelled one (`error` is `None`):
+    abort an unfinished merge, record a landed one; a conflict already sent stays `conflict`. No
+    `reset --hard`, no lock removal. A cancelled approval always reports; a landed merge closes
+    out first and leaves its cleanup to the next decision or `open`."""
+    main = ctx.workspace.main
+    facts: Facts | None = None
+    try:
+        if await ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+            await ctx.git(main, "merge", "--abort")
+        facts = await read_facts(ctx, rec.head_commit or rec.base_commit)
+    except Exception:
+        facts = None
+    if facts is not None and facts.merged:
+        await delivery.record_merge(ctx, rec, comment, facts.head)
+        if error is not None:
+            return  # the approval closes out and cleans up
+        await delivery.close_out(ctx, rec)
+        note = "the merge landed and is recorded"
+    elif facts is not None and facts.unchanged(pre):
+        if rec.fallback == "conflict":  # set only by `_record_conflict`: the store has it
+            rec.state = "conflict"
+            note = "main is unchanged and the conflict is recorded; request changes or reject"
+        else:
+            rec.state = "ready"
+            note = "main is unchanged; approve again or reject"
+    else:
+        ctx.state.break_change(rec)
+        note = "main's state is unknown; reject the change or restart"
+    what = "was cancelled" if error is None else f"failed: {error}"
+    await ctx.error("git", f"Approving {rec.change_id} {what}. {note}.", rec, fatal=False)

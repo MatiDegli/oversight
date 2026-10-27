@@ -17,54 +17,74 @@ async function typeEdit(page: Page, text: string) {
   await page.keyboard.insertText(text);
 }
 
-it("allows only Reject after an approval conflicts, even with a comment", async () => {
-  await withPage(false, async (page) => {
-    await open(page);
-    const request = panel(page).getByRole("button", { name: "Request changes", exact: true });
-    const approve = panel(page).getByRole("button", { name: "Approve and merge" });
-    const reject = panel(page).getByRole("button", { name: "Reject", exact: true });
-    const comment = panel(page).getByRole("textbox", { name: /Comment/ });
-    await comment.fill("Cover empty carts");
-    await browserExpect(request).toBeEnabled();
-    await approve.click();
-    await browserExpect(request).toBeDisabled();
-    await page.evaluate(() => {
-      window.reviewTest.emit({
-        seq: 0,
-        ts: "2026-10-27T14:04:00Z",
-        type: "change.resolved",
-        payload: {
-          change_id: "change-1",
-          agent_id: "agent-1",
-          revision: 1,
-          decision: "approved",
-          comment: "Cover empty carts",
-          merge: "conflict",
-          merge_commit: null,
-          conflict: { kind: "merge", paths: ["shop/pricing.py"], tests: null },
-          reason: null,
-          decided_by: null,
-          reasons: [],
-          assessment: null,
-        },
-      });
+it.each(["merge", "tests"] as const)(
+  "allows Request changes after a %s conflict",
+  async (kind) => {
+    await withPage(false, async (page) => {
+      await open(page);
+      const request = panel(page).getByRole("button", { name: "Request changes", exact: true });
+      const approve = panel(page).getByRole("button", { name: "Approve and merge" });
+      const reject = panel(page).getByRole("button", { name: "Reject", exact: true });
+      const comment = panel(page).getByRole("textbox", { name: /Comment/ });
+      await comment.fill("Cover empty carts");
+      await browserExpect(request).toBeEnabled();
+      await approve.click();
+      await browserExpect(request).toBeDisabled();
+      await page.evaluate((kind) => {
+        window.reviewTest.emit({
+          seq: 0,
+          ts: "2026-10-27T14:04:00Z",
+          type: "change.resolved",
+          payload: {
+            change_id: "change-1",
+            agent_id: "agent-1",
+            revision: 1,
+            decision: "approved",
+            comment: "Cover empty carts",
+            merge: "conflict",
+            merge_commit: null,
+            conflict:
+              kind === "merge"
+                ? { kind, paths: ["shop/pricing.py"], tests: null }
+                : {
+                    kind,
+                    paths: [],
+                    tests: {
+                      outcome: "failed",
+                      passed: 27,
+                      failed: 1,
+                      skipped: 0,
+                      duration_ms: 100,
+                      failed_tests: ["test_combined_discount"],
+                    },
+                  },
+            reason: null,
+            decided_by: null,
+            reasons: [],
+            assessment: null,
+          },
+        });
+      }, kind);
+      await browserExpect(panel(page).getByText(/Approved, not merged/)).toBeVisible();
+      await browserExpect(approve).toBeDisabled();
+      await browserExpect(request).toBeEnabled();
+      await browserExpect(reject).toBeEnabled();
+      await comment.fill("   ");
+      await browserExpect(request).toBeDisabled();
+      await comment.fill("Try again on the new base");
+      await browserExpect(comment).toBeFocused();
+      await browserExpect(request).toBeEnabled();
+      await request.focus();
+      await page.keyboard.press("Enter");
+      expect(await page.evaluate(() => window.reviewTest.decisions)).toMatchObject([
+        { action: "approve" },
+        { action: "request-changes", comment: "Try again on the new base" },
+      ]);
+      await browserExpect(request).toBeDisabled();
     });
-    await browserExpect(panel(page).getByText(/Approved, not merged/)).toBeVisible();
-    await browserExpect(approve).toBeDisabled();
-    await browserExpect(request).toBeDisabled();
-    await browserExpect(reject).toBeEnabled();
-    // Editing the comment cannot reopen Request changes in the conflict state.
-    await comment.fill("Try again on the new base");
-    await browserExpect(comment).toBeFocused();
-    await browserExpect(request).toBeDisabled();
-    await reject.focus();
-    await page.keyboard.press("Enter");
-    expect(await page.evaluate(() => window.reviewTest.decisions)).toMatchObject([
-      { action: "approve" },
-      { action: "reject", comment: "Try again on the new base" },
-    ]);
-  });
-}, 30_000);
+  },
+  30_000,
+);
 
 it("requires a comment, stays pending until SSE, and reopens the same change after revision", async () => {
   await withPage(false, async (page) => {
@@ -241,9 +261,13 @@ it("edits only the new side, saves with its base hash and agent id, and keeps te
   );
 }, 30_000);
 
-it.each([4, 20])(
-  "Stop asks first on the agent card at seq %i and waits for SSE without moving focus",
-  async (seq) => {
+it.each([
+  { seq: 4, state: "working" },
+  { seq: 20, state: "ready_for_review" },
+  { seq: 4, state: "halted" },
+] as const)(
+  "Stop asks first on the $state card and waits for SSE without moving focus",
+  async ({ seq, state }) => {
     await withPage(
       false,
       async (page) => {
@@ -252,6 +276,23 @@ it.each([4, 20])(
           calls++;
           await route.fulfill({ status: 202 });
         });
+        if (state === "halted") {
+          expect(
+            await page.evaluate(() => window.reviewTest.state().changes["change-1"]?.proposal),
+          ).toBeNull();
+          await page.evaluate(() => {
+            const agent = window.reviewTest.state().agents["agent-1"];
+            if (!agent) throw new Error("Missing agent");
+            window.reviewTest.emit({
+              seq: 0,
+              ts: "2026-10-27T14:04:00Z",
+              type: "agent.status",
+              payload: { ...agent, state: "halted", detail: "Could not propose the change" },
+            });
+          });
+          await browserExpect(page.getByText("Could not propose the change")).toBeVisible();
+          await browserExpect(page.getByRole("button", { name: "Review change" })).toHaveCount(0);
+        }
         const stop = page.getByRole("button", { name: "Stop and discard", exact: true });
         await stop.click();
         expect(calls).toBe(0);

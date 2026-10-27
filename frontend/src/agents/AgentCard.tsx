@@ -260,7 +260,7 @@ export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps
             <Eye aria-hidden="true" className="size-4" /> Review change
           </button>
         )}
-        {onStop && ["working", "revising", "ready_for_review"].includes(agent.state) && (
+        {onStop && ["working", "revising", "ready_for_review", "halted"].includes(agent.state) && (
           <StopControl agentId={agent.agent_id} onStop={onStop} />
         )}
       </footer>
