@@ -101,7 +101,12 @@ describe("the decision area's state", () => {
     expect(failureMessage("reject", new TypeError("Failed to fetch"))).toBe(
       "Reject did not reach the server. Check the connection and try again.",
     );
-    const failed: DecisionAttempt = { phase: "failed", action: "approve", message: "Busy." };
+    const failed: DecisionAttempt = {
+      phase: "failed",
+      action: "approve",
+      revision: 1,
+      message: "Busy.",
+    };
     expect(view(through(20), failed)).toEqual({ kind: "open", failure: "Busy." });
   });
 
@@ -116,6 +121,38 @@ describe("the decision area's state", () => {
       kind: "conflict",
       failure: null,
     });
+  });
+
+  it("starts a new revision idle: an attempt on revision 1 does not come back with revision 2", () => {
+    const ready = through(20);
+    const approving = startAttempt(ready, "change-1", "approve");
+    expect(approving.revision).toBe(1);
+    // Approved, then not merged: the change keeps only Reject, and the person asks for a redo.
+    const conflicted = resolved(ready, {
+      decision: "approved",
+      merge: "conflict",
+      conflict: { kind: "merge", paths: ["shop/pricing.py"], tests: null },
+    });
+    expect(view(conflicted, approving).kind).toBe("conflict");
+    const proposed = log.find((event) => event.type === "change.proposed");
+    if (proposed?.type !== "change.proposed") throw new Error("The fixture has no proposal");
+    const again = applyEvent(conflicted, {
+      ...proposed,
+      seq: conflicted.lastSeq + 1,
+      payload: { ...proposed.payload, revision: 2 },
+    });
+    expect(again.changes["change-1"]?.resolution).toBeNull();
+    // Without the revision, the old attempt (resolution null at its click) reads as pending again.
+    expect(view(again, approving)).toEqual({ kind: "open", failure: null });
+    const failed: DecisionAttempt = {
+      phase: "failed",
+      action: "approve",
+      revision: 1,
+      message: "Busy.",
+    };
+    expect(view(again, failed)).toEqual({ kind: "open", failure: null });
+    // An attempt on the new revision counts as usual.
+    expect(view(again, startAttempt(again, "change-1", "approve")).kind).toBe("pending");
   });
 
   it("in a recorded run shows the recorded decision and never a pending state", () => {
@@ -154,6 +191,11 @@ describe("sending a decision", () => {
     });
     expect(refused.rejectChange).toHaveBeenCalledWith("change-1", { comment: "too broad" });
     expect(records.map((attempt) => attempt.phase)).toEqual(["pending", "failed"]);
-    expect(records[1]).toEqual({ phase: "failed", action: "reject", message: "Not proposed." });
+    expect(records[1]).toEqual({
+      phase: "failed",
+      action: "reject",
+      revision: 1,
+      message: "Not proposed.",
+    });
   });
 });

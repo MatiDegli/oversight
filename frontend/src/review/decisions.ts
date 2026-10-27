@@ -7,18 +7,25 @@ export type DecisionAction = "approve" | "reject";
 
 /**
  * What the person's last click on a change started. The app keeps it per change, so closing and
- * reopening review does not enable the buttons while the server still works on the decision.
+ * reopening review does not enable the buttons while the server still works on the decision. It
+ * belongs to the revision that was proposed at the click: a new proposal starts with no attempt.
  */
 export type DecisionAttempt =
   | {
       phase: "pending";
       action: DecisionAction;
+      /** The proposal's revision at the click (0 before any). */
+      revision: number;
       /** The change's resolution at the click: a different one is the server's answer. */
       resolution: ChangeResolved | null;
       /** How many errors the state held at the click: a later one naming the change ends it. */
       errorCount: number;
     }
-  | { phase: "failed"; action: DecisionAction; message: string };
+  | { phase: "failed"; action: DecisionAction; revision: number; message: string };
+
+/** The revision on the table: the latest proposal's, or 0 while the change was never proposed. */
+export const revisionOf = (change: ChangeState | undefined): number =>
+  change?.proposal?.revision ?? 0;
 
 /** What the decision area shows. */
 export type DecisionView =
@@ -37,6 +44,7 @@ export function startAttempt(state: State, changeId: string, action: DecisionAct
   return {
     phase: "pending",
     action,
+    revision: revisionOf(state.changes[changeId]),
     resolution: state.changes[changeId]?.resolution ?? null,
     errorCount: state.errors.length,
   } satisfies DecisionAttempt;
@@ -58,11 +66,13 @@ export function failureMessage(action: DecisionAction, error: unknown): string {
 export function decisionView(
   change: ChangeState,
   errors: readonly ErrorReport[],
-  attempt: DecisionAttempt | undefined,
+  last: DecisionAttempt | undefined,
   recorded: boolean,
 ): DecisionView {
   const { resolution } = change;
   if (recorded) return { kind: "recorded", resolution };
+  // An attempt on an earlier revision says nothing about this one, whose resolution is null again.
+  const attempt = last?.revision === revisionOf(change) ? last : undefined;
   let failure = attempt?.phase === "failed" ? attempt.message : null;
   if (attempt?.phase === "pending" && resolution === attempt.resolution) {
     const named = errors
@@ -96,7 +106,8 @@ export async function sendDecision(
   comment: string,
   record: (attempt: DecisionAttempt) => void,
 ): Promise<void> {
-  record(startAttempt(state, changeId, action));
+  const started = startAttempt(state, changeId, action);
+  record(started);
   const text = comment.trim();
   const body = text === "" ? {} : { comment: text };
   try {
@@ -104,6 +115,11 @@ export async function sendDecision(
       ? client.approveChange(changeId, body)
       : client.rejectChange(changeId, body));
   } catch (error) {
-    record({ phase: "failed", action, message: failureMessage(action, error) });
+    record({
+      phase: "failed",
+      action,
+      revision: started.revision,
+      message: failureMessage(action, error),
+    });
   }
 }

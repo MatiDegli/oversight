@@ -146,7 +146,9 @@ describe("review mode over the level 1 fixture", () => {
     expect(button(pending, "Reject")).toContain('disabled=""');
     expect(pending).toContain("Approving: waiting for the merge result.");
     const refused = reviewing(20, {
-      attempts: { "change-1": { phase: "failed", action: "approve", message: "Main moved." } },
+      attempts: {
+        "change-1": { phase: "failed", action: "approve", revision: 1, message: "Main moved." },
+      },
     });
     expect(button(refused, "Approve and merge")).not.toContain('disabled=""');
     expect(refused).toMatch(/role="alert"[^>]*>.*Main moved\./);
