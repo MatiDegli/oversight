@@ -66,12 +66,13 @@ export function showDiff(
   shown: ShownDiff | undefined,
   next: DiffText,
   createModel: (text: string) => editor.ITextModel,
+  managedModified = false,
 ): ShownDiff {
   const key = JSON.stringify([next.changeId, next.path]);
   if (shown?.key === key) {
     const { original, modified } = shown.models;
     if (original.getValue() !== next.original) original.setValue(next.original);
-    if (modified.getValue() !== next.modified) modified.setValue(next.modified);
+    if (!managedModified && modified.getValue() !== next.modified) modified.setValue(next.modified);
     return shown;
   }
   const models = { original: createModel(next.original), modified: createModel(next.modified) };
@@ -91,8 +92,12 @@ function createPythonModel(text: string): editor.ITextModel {
 export function InlineDiff({
   data,
   onMount,
+  readOnly = true,
+  managedModified = false,
 }: {
   data: LiveDiffData;
+  readOnly?: boolean;
+  managedModified?: boolean;
   onMount?: (diffEditor: editor.IStandaloneDiffEditor) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
@@ -100,6 +105,7 @@ export function InlineDiff({
   const shown = useRef<ShownDiff | undefined>(undefined);
   const { changeId, path, original, modified } = data;
   const reportMount = useEffectEvent((created: editor.IStandaloneDiffEditor) => {
+    shown.current = showDiff(created, undefined, data, createPythonModel);
     onMount?.(created);
   });
 
@@ -131,8 +137,13 @@ export function InlineDiff({
       shown.current,
       { changeId, path, original, modified },
       createPythonModel,
+      managedModified,
     );
-  }, [changeId, path, original, modified]);
+  }, [changeId, path, original, modified, managedModified]);
+
+  useEffect(() => {
+    diffEditor.current?.updateOptions({ readOnly, domReadOnly: readOnly });
+  }, [readOnly]);
 
   return <div ref={host} className="h-full" />;
 }
@@ -140,6 +151,8 @@ export function InlineDiff({
 export interface LiveDiffProps {
   data: LiveDiffData | undefined;
   palette?: EditorColors;
+  readOnly?: boolean;
+  managedModified?: boolean;
   /** Called once, when the diff editor is created; selections and edits reuse it. */
   onMount?: (diffEditor: editor.IStandaloneDiffEditor) => void;
 }
@@ -148,7 +161,13 @@ export interface LiveDiffProps {
  * The read-only inline diff once the editor fonts load, with the editor theme from the active
  * tokens. The live diff and review both show their diffs through it.
  */
-export function EditorDiff({ data, palette = getActiveTheme(), onMount }: LiveDiffProps) {
+export function EditorDiff({
+  data,
+  palette = getActiveTheme(),
+  onMount,
+  readOnly = true,
+  managedModified,
+}: LiveDiffProps) {
   const [fonts, setFonts] = useState<"loading" | "ready" | "failed">("loading");
 
   useEffect(() => {
@@ -183,7 +202,14 @@ export function EditorDiff({ data, palette = getActiveTheme(), onMount }: LiveDi
           Editor fonts could not load. Reload to try again.
         </p>
       )}
-      {fonts === "ready" && data && <InlineDiff data={data} onMount={onMount} />}
+      {fonts === "ready" && data && (
+        <InlineDiff
+          data={data}
+          onMount={onMount}
+          readOnly={readOnly}
+          managedModified={managedModified}
+        />
+      )}
     </>
   );
 }

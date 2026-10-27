@@ -162,7 +162,7 @@ def test_the_overall_deadline_is_the_worst_case_sum_plus_a_small_margin() -> Non
         2 * demo_check.START_DEADLINE
         + 2 * demo_check.START_AGENT_DEADLINE
         + 3 * demo_check.PROPOSE_DEADLINE
-        + 20 * demo_check.DECIDE_DEADLINE
+        + 40 * demo_check.DECIDE_DEADLINE
         + 2 * demo_check.STOP_DEADLINE
         + demo_check.REQUESTS_PER_RUN * demo_check.REQUEST_TIMEOUT
     )

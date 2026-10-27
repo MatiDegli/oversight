@@ -1,6 +1,5 @@
-import logging
-
 from oversight.agents import AgentTask, RunEnd
+from oversight.changes import _delivery as delivery
 from oversight.changes._diff import count_lines, file_status, parse_name_status
 from oversight.changes._state import (
     SUSPECT,
@@ -34,14 +33,12 @@ from oversight_contracts.events import (
     SuiteResult,
 )
 
-_log = logging.getLogger("oversight.changes._manager")
-
 
 async def open(ctx: ChangeContext, task: AgentTask, model_id: str) -> Tree:
     """Create the agent's worktree from main's HEAD and record its base files and graph."""
     if task.change_id in ctx.state.changes or task.agent_id in ctx.state.agents:
         raise WrongState(f"{task.agent_id} or {task.change_id} was already opened")
-    await ctx.ports.finish_pending()
+    await delivery.finish_pending(ctx)
     async with ctx.workspace.locks(main=True):
         # M5: the route's check is a fast path; main may have turned suspect while this queued.
         if ctx.state.suspect:
@@ -183,7 +180,7 @@ async def proposed(ctx: ChangeContext, agent_id: AgentId, summary: str | None) -
         async with ctx.workspace.locks(agent_id=agent_id):
             if rec.requested is not None:
                 # R2: revision n + 1 never precedes its request in the log.
-                failure = await ctx.ports.send_requested(rec)
+                failure = await delivery.send_requested(ctx, rec)
                 if failure:
                     raise RuntimeError(f"its request for changes is still unsent ({failure})")
             head_commit, files = await commit(ctx, rec)

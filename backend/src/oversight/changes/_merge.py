@@ -1,5 +1,4 @@
-import logging
-
+from oversight.changes import _delivery as delivery
 from oversight.changes import _recovery as recovery
 from oversight.changes._state import ChangeRecord
 from oversight.changes._support import ChangeContext
@@ -10,8 +9,6 @@ from oversight_contracts.events import (
     ChangeResolved,
     Conflict,
 )
-
-_log = logging.getLogger("oversight.changes._manager")
 
 
 async def merge(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre: str) -> None:
@@ -44,7 +41,7 @@ async def merge(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre:
     facts = await recovery.read_facts(ctx, head)
     if not facts.merged:
         raise WorkspaceError("the merge did not land on main")
-    await ctx.ports.record_merge(rec, comment, facts.head)
+    await delivery.record_merge(ctx, rec, comment, facts.head)
 
 
 async def conflict(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre: str) -> bool:
@@ -85,7 +82,7 @@ async def conflicted(
     Approve or a Request changes, does not know. The change stays `deciding`, with `conflict`
     as its fallback: the decision's end, or its recovery, makes it `conflict`, and no other
     decision enters before."""
-    resolution = ctx.ports.resolution(rec, "approved", comment, conflict=conflict)
+    resolution = delivery.resolution(ctx, rec, "approved", comment, conflict=conflict)
     await ctx.whole(record_conflict(ctx, rec, resolution, conflict))
 
 

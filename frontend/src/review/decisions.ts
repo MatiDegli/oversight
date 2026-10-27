@@ -3,7 +3,7 @@ import type { ChangeResolved, ErrorReport } from "@contracts";
 import type { ChangeState, State } from "../state";
 import { commandFailure } from "../transport";
 
-export type DecisionAction = "approve" | "reject";
+export type DecisionAction = "approve" | "reject" | "request-changes";
 
 /**
  * What the person's last click on a change started. The app keeps it per change, so closing and
@@ -31,11 +31,12 @@ export const revisionOf = (change: ChangeState | undefined): number =>
 export type DecisionView =
   /** A recorded run: no commands, and the recorded decision once it arrives. */
   | { kind: "recorded"; resolution: ChangeResolved | null }
-  /** Both buttons enabled, with the last attempt's failure, if any. */
+  /** All three decisions available, with the last attempt's failure, if any. */
   | { kind: "open"; failure: string | null }
   /** From the click until change.resolved, a 4xx, or an error naming the change. */
   | { kind: "pending"; action: DecisionAction }
-  /** Approved but not merged: in level 1 the person may only reject it. */
+  | { kind: "revising"; resolution: ChangeResolved | null }
+  /** Approved but not merged: the person may request changes or reject it. */
   | { kind: "conflict"; resolution: ChangeResolved; failure: string | null }
   /** Approved and merged, or rejected: nothing is left to decide. */
   | { kind: "decided"; resolution: ChangeResolved };
@@ -50,7 +51,11 @@ export function startAttempt(state: State, changeId: string, action: DecisionAct
   } satisfies DecisionAttempt;
 }
 
-const verbs: Record<DecisionAction, string> = { approve: "Approve", reject: "Reject" };
+const verbs: Record<DecisionAction, string> = {
+  approve: "Approve",
+  reject: "Reject",
+  "request-changes": "Request changes",
+};
 
 /** A 4xx shows the server's message; a 500 or a lost request shows a plain failure line. */
 export function failureMessage(action: DecisionAction, error: unknown): string {
@@ -79,11 +84,14 @@ export function decisionView(
     return { kind: "decided", resolution };
   }
   if (resolution && change.status === "conflict") return { kind: "conflict", resolution, failure };
+  if (change.status === "revising" || change.status === "editing")
+    return { kind: "revising", resolution };
   return { kind: "open", failure };
 }
 
 export interface DecisionClient {
   approveChange(id: string, body: { comment?: string | null }): Promise<unknown>;
+  requestChanges(id: string, body: { comment: string }): Promise<unknown>;
   rejectChange(id: string, body: { comment?: string | null }): Promise<unknown>;
 }
 
@@ -100,6 +108,7 @@ export async function sendDecision(
   comment: string,
   record: (attempt: DecisionAttempt) => void,
 ): Promise<void> {
+  if (action === "request-changes" && comment.trim() === "") return;
   const started = startAttempt(state, changeId, action);
   record(started);
   const text = comment.trim();
@@ -107,7 +116,9 @@ export async function sendDecision(
   try {
     await (action === "approve"
       ? client.approveChange(changeId, body)
-      : client.rejectChange(changeId, body));
+      : action === "request-changes"
+        ? client.requestChanges(changeId, { comment: text })
+        : client.rejectChange(changeId, body));
   } catch (error) {
     record({
       phase: "failed",

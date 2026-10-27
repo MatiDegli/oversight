@@ -202,6 +202,34 @@ it.each(["after-mount", "at-mount"] as const)(
 /** The nodes the camera frames when the change opens: the change's own, in the recorded run. */
 const wanted = (page: Page) => page.evaluate(() => [window.graphTest.changed]);
 
+it("live diff lights its callers and dims unrelated nodes, then clears that scope on close", async () => {
+  await withPage("reduce", async (page) => {
+    const scope = () =>
+      page.evaluate(() => {
+        const probe = document.querySelector<GraphProbeHost>(
+          '[aria-label="Repository graph"]',
+        )?.oversightGraph;
+        if (!probe) throw new Error("The graph is not mounted");
+        return {
+          callers: probe.nodeCenters("node.cone:not(.dimmed)").map(({ id }) => id),
+          dimmed: probe.nodeCenters("node.dimmed").map(({ id }) => id),
+        };
+      });
+    expect(await scope()).toEqual({ callers: [], dimmed: [] });
+    await page.evaluate(() => {
+      window.graphTest.open();
+    });
+    const live = await scope();
+    expect(live.callers).toContain(await page.evaluate(() => window.graphTest.caller));
+    expect(live.dimmed.length).toBeGreaterThan(0);
+    await browserExpect(page.getByRole("region", { name: "Possibly affected" })).toHaveCount(0);
+    await page.evaluate(() => {
+      window.graphTest.close();
+    });
+    expect(await scope()).toEqual({ callers: [], dimmed: [] });
+  });
+}, 30_000);
+
 it("opening the panel centers the changed node at the same zoom; closing restores the camera", async () => {
   await withPage("no-preference", async (page) => {
     const ids = await wanted(page);
@@ -227,7 +255,8 @@ it("opening the panel centers the changed node at the same zoom; closing restore
     const callers = await page.evaluate(() =>
       document
         .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-        ?.oversightGraph?.nodeCenters("node.cone:not(.dimmed)"),
+        ?.oversightGraph?.nodeCenters()
+        .filter((node) => node.id === window.graphTest.caller),
     );
     expect(callers?.length).toBeGreaterThan(0);
     expect(open.cutOff).toEqual([]);

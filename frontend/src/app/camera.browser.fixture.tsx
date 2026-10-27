@@ -7,8 +7,11 @@ import { createRoot } from "react-dom/client";
 import { GraphView } from "../graph";
 import type { Framing, GraphApi } from "../graph";
 import { applyEvent, createInitialState, stateStore } from "../state";
+import { fieldInput } from "./fieldScope";
+import { graphScope } from "./graphScope";
 import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import { TopBar } from "./TopBar";
+import { initialView } from "./view";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import demoGraph from "../../../fixtures/graph/demo-repo.json";
 import demoPreset from "../../../fixtures/layouts/demo-repo.json";
@@ -52,12 +55,17 @@ function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
   const api = useRef<GraphApi | null>(null);
   const card = useRef<HTMLDivElement>(null);
   const [framing, setFraming] = useState<Framing | null>(null);
-  const impact = mode === "review" ? cone : null;
-  const liveCone = mode === "panel" ? cone : null;
-  const litIds = useMemo(() => {
-    const shown = impact ?? liveCone;
-    return shown ? [CHANGED, ...shown.entries.map((entry) => entry.node_id)] : null;
-  }, [impact, liveCone]);
+  const view = useMemo(
+    () => ({
+      ...initialView,
+      diff: mode === "panel" ? { changeId: "change-1", path: "shop/pricing.py" } : null,
+      review: mode === "review" ? "change-1" : null,
+    }),
+    [mode],
+  );
+  // Use Frame's scope builders so live preview lights stay separate from review framing.
+  const { cone: impact, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
+  const field = useMemo(() => fieldInput(state, view, liveCone), [state, view, liveCone]);
   return (
     <div className="flex h-full flex-col bg-ground text-text">
       {demo && <TopBar state={state} />}
@@ -72,6 +80,7 @@ function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
             liveCone={liveCone}
             startAreaRef={demo ? startArea : undefined}
             litIds={litIds}
+            field={field}
             onFramed={setFraming}
             coneCardRef={card}
             apiRef={api}

@@ -46,10 +46,8 @@ async def read(s: LiveServer, path: str, agent: str | None = None) -> FileConten
     return FileContent.model_validate(response.json())
 
 
-async def put(
-    s: LiveServer, path: str, content: str, base_hash: str, agent_id: str | None = None
-) -> httpx.Response:
-    body = {"path": path, "content": content, "base_hash": base_hash, "agent_id": agent_id}
+async def put(s: LiveServer, path: str, content: str, base_hash: str) -> httpx.Response:
+    body = {"path": path, "content": content, "base_hash": base_hash}
     return await s.client.put("/files", json=body)
 
 
@@ -107,21 +105,6 @@ async def test_get_file_for_a_closed_agent_is_not_found(tmp_path: Path) -> None:
         for agent in (created.agent_id, "agent-9", "../x"):
             gone = await s.client.get("/files", params={"path": PRICING, "agent": agent})
             assert error_code(gone) == (404, "not_found"), agent
-
-
-async def test_agent_save_answers_501_until_the_review_front(tmp_path: Path) -> None:
-    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
-        created = await reviewed(s)
-        agent = await read(s, PRICING, agent=created.agent_id)
-        main = await read(s, PRICING)
-        shown = len(s.events())
-
-        response = await put(s, PRICING, agent.content + "# mine\n", agent.hash, created.agent_id)
-
-        assert error_code(response) == (501, "not_implemented")
-        assert await read(s, PRICING, agent=created.agent_id) == agent  # nothing written
-        assert await read(s, PRICING) == main
-        assert len(s.events()) == shown
 
 
 async def test_get_refusals_and_misses(tmp_path: Path) -> None:
