@@ -166,7 +166,26 @@ def mutations(func: ast.FunctionDef | ast.AsyncFunctionDef) -> Iterator[tuple[st
         yield "stub:" + placeholder.splitlines()[0], "stub_left", production, new
 
 
-def run(repos: list[Path], output: Path) -> dict[str, object]:
+def branch_seed(
+    literal: ast.Constant, func: ast.FunctionDef | ast.AsyncFunctionDef, precision: bool
+) -> tuple[str, str, str]:
+    """Legacy guards remain reproducible; precision seeds tie input to expected output."""
+    value = literal.value
+    test = render(func)
+    returned = "None"
+    if precision:
+        if value in (0, 1, -1, ""):
+            value = f"precision-input:{value!r}"
+        cloned = copy.deepcopy(func)
+        cloned.body.extend(ast.parse(f"assert operation({value!r}) == 7123").body)
+        test = render(cloned)
+        returned = "7123"
+    old = "def operation(x):\n    return x\n"
+    new = f"def operation(x):\n    if x == {value!r}:\n        return {returned}\n    return x\n"
+    return old, new, test
+
+
+def run(repos: list[Path], output: Path, *, precision_branches: bool = False) -> dict[str, object]:
     counts: Counter[str] = Counter()
     hits: Counter[str] = Counter()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -220,13 +239,9 @@ def run(repos: list[Path], output: Path) -> dict[str, object]:
                         None,
                     )
                     if literal is not None:
-                        old = "def operation(x):\n    return x\n"
-                        new = (
-                            f"def operation(x):\n    if x == {literal.value!r}:\n"
-                            "        return None\n    return x\n"
-                        )
+                        old, new, test = branch_seed(literal, func, precision_branches)
                         found = detect_shortcuts(
-                            [("test_sample.py", None, render(func)), ("module.py", old, new)]
+                            [("test_sample.py", None, test), ("module.py", old, new)]
                         )
                         matched = any(f.kind == "literal_branch" for f in found)
                         counts["literal_branch"] += 1
@@ -240,6 +255,9 @@ def run(repos: list[Path], output: Path) -> dict[str, object]:
                                     "mutation": "literal_branch",
                                     "kind": "literal_branch",
                                     "hit": matched,
+                                    "branch_shape": "hardcoding"
+                                    if precision_branches
+                                    else "legacy",
                                 }
                             )
                             + "\n"
@@ -260,8 +278,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repos", type=Path, nargs="+")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--precision-branches",
+        action="store_true",
+        help="Seed hardcoded expected results; retain legacy guards by default",
+    )
     args = parser.parse_args()
-    print(json.dumps(run(args.repos, args.output), indent=2))
+    print(
+        json.dumps(
+            run(args.repos, args.output, precision_branches=args.precision_branches), indent=2
+        )
+    )
 
 
 if __name__ == "__main__":

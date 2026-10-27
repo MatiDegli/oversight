@@ -3,13 +3,16 @@
 import ast
 import copy
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 from oversight.changes._shortcuts_common import (
     Finding,
     FuncNode,
     ShortcutKind,
     Source,
+    is_literal_like,
     is_test_file,
+    walk_local,
 )
 
 
@@ -93,6 +96,78 @@ def _rename_key(source: Source, func: FuncNode) -> tuple[tuple[str, ...], tuple[
 type TestRef = tuple[str, str]
 
 
+def same_test_body(old: Source, before: FuncNode, new: Source, after: FuncNode) -> bool:
+    return _rename_key(old, before) == _rename_key(new, after)
+
+
+def _expression_checks(expr: ast.expr) -> int:
+    if isinstance(expr, ast.BoolOp) and isinstance(expr.op, ast.And):
+        return sum(_expression_checks(value) for value in expr.values)
+    if (
+        isinstance(expr, ast.Compare)
+        and len(expr.ops) == 1
+        and isinstance(expr.ops[0], ast.Eq)
+        and isinstance(expr.left, (ast.Tuple, ast.List))
+        and isinstance(expr.comparators[0], (ast.Tuple, ast.List))
+        and len(expr.left.elts) == len(expr.comparators[0].elts)
+    ):
+        return len(expr.left.elts)
+    return 1
+
+
+def _check_count(source: Source, func: FuncNode) -> int:
+    count = 0
+    for node in walk_local(func):
+        if isinstance(node, ast.Assert):
+            count += _expression_checks(node.test)
+        elif isinstance(node, ast.Call):
+            name = source.resolve(node.func) or ""
+            if name.rsplit(".", 1)[-1].startswith("assert") or name == "pytest.raises":
+                count += 1
+    return count
+
+
+def _similarity(old: Source, before: FuncNode, new: Source, after: FuncNode) -> float:
+    """A collected replacement must retain check count and share called behavior.
+
+    Exact matches are consumed first. Fuzzy matches need substantial body overlap
+    as well as a shared callee; unrelated tests cannot pair by check count alone.
+    """
+    if _check_count(new, after) < _check_count(old, before):
+        return 0
+
+    def expectations(func: FuncNode) -> dict[str, set[str]]:
+        values: dict[str, set[str]] = {}
+        for node in walk_local(func):
+            if isinstance(node, ast.Assert) and isinstance(node.test, ast.Compare):
+                check = node.test
+                if (
+                    len(check.ops) == 1
+                    and isinstance(check.ops[0], ast.Eq)
+                    and is_literal_like(check.comparators[0])
+                ):
+                    values.setdefault(ast.dump(check.left), set()).add(
+                        ast.dump(check.comparators[0])
+                    )
+        return values
+
+    previous, current = expectations(before), expectations(after)
+    if any(not values & current[key] for key, values in previous.items() if key in current):
+        return 0
+    left, old_calls = _rename_key(old, before)
+    right, new_calls = _rename_key(new, after)
+    old_set, new_set = set(old_calls), set(new_calls)
+    if old_set and not old_set & new_set:
+        return 0
+    ratio = SequenceMatcher(None, "\n".join(left), "\n".join(right), autojunk=False).ratio()
+    overlap = len(old_set & new_set) / max(1, len(old_set | new_set))
+    old_checks = {ast.dump(n.test) for n in walk_local(before) if isinstance(n, ast.Assert)}
+    new_checks = {ast.dump(n.test) for n in walk_local(after) if isinstance(n, ast.Assert)}
+    if old_checks and old_checks <= new_checks and (overlap >= 0.5 or not old_set | new_set):
+        return 1
+    return ratio if ratio >= 0.65 and (overlap >= 0.5 or not old_set | new_set) else 0
+
+
 def match_tests(
     old: dict[str, Source], new: dict[str, Source]
 ) -> tuple[list[Finding], dict[TestRef, TestRef]]:
@@ -118,6 +193,14 @@ def match_tests(
             match = next(
                 (i for i, (p, _q, f) in enumerate(pool) if _rename_key(new[p], f) == key), None
             )
+            if match is None:
+                scores = [
+                    (_similarity(src, node, new[p], f), p == path, -i, i)
+                    for i, (p, q, f) in enumerate(pool)
+                    if q in new[p].tests
+                ]
+                if scores and (best := max(scores))[0] > 0:
+                    match = best[3]
             target_path, target_line = path, node.lineno
             explanation = f"test '{qual}' was removed or replaced."
             if match is not None:

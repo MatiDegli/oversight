@@ -2,25 +2,12 @@
 
 import ast
 import io
+import re
 import tokenize
 from collections import Counter
 
 from oversight.changes._shortcuts_common import Finding, ShortcutKind, Source, walk_local
 from oversight.changes._shortcuts_tests import TestRef
-
-
-def _todo_comments(source: str) -> list[tuple[int, str]]:
-    out: list[tuple[int, str]] = []
-    try:
-        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-        for tok in tokens:
-            if tok.type == tokenize.COMMENT:
-                upper = tok.string.upper()
-                if "TODO" in upper or "FIXME" in upper:
-                    out.append((tok.start[0], tok.string.strip()))
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        return out
-    return out
 
 
 def _interfaces(source: Source) -> set[str]:
@@ -54,17 +41,52 @@ def _interfaces(source: Source) -> set[str]:
 type Stub = tuple[str, int, str]
 
 
+def _actionable_todos(source: Source) -> list[tuple[int, str]]:
+    """A leading action marker is a placeholder; prose mentioning TODO is not."""
+    comments: list[tuple[int, str]] = []
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(source.text).readline):
+            if token.type == tokenize.COMMENT and re.match(
+                r"#\s*(?:TODO|FIXME)\s*:\s*\S", token.string, re.IGNORECASE
+            ):
+                comments.append((token.start[0], token.string.strip()))
+    except (tokenize.TokenError, IndentationError):
+        pass
+    return comments
+
+
 def _inventory(source: Source) -> dict[str, list[Stub]]:
     result: dict[str, list[Stub]] = {qual: [] for qual in source.functions}
     for qual, func in source.functions.items():
+        if qual in source.tests:
+            continue
+        body = list(func.body)
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            body.pop(0)
+        parent = source.classes.get(qual.rpartition(".")[0])
+        no_op_method = parent is not None and (
+            func.name.startswith("visit_")
+            or bool(parent.bases)
+            or any(
+                source.resolve(dec) in {"typing.override", "typing_extensions.override"}
+                for dec in func.decorator_list
+            )
+        )
         for node in walk_local(func):
             label = None
-            if isinstance(node, ast.Pass):
+            if isinstance(node, ast.Pass) and body == [node] and not no_op_method:
                 label = "'pass'"
             elif (
                 isinstance(node, ast.Expr)
                 and isinstance(node.value, ast.Constant)
                 and node.value.value is Ellipsis
+                and body == [node]
+                and not no_op_method
             ):
                 label = "'...'"
             elif (
@@ -74,19 +96,26 @@ def _inventory(source: Source) -> dict[str, list[Stub]]:
                 in {"NotImplementedError", "builtins.NotImplementedError"}
             ):
                 label = "NotImplementedError"
+            elif (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and source.resolve(node.value.func) in {"TODO", "FIXME"}
+            ):
+                label = "TODO/FIXME"
             if label is not None and isinstance(node, ast.stmt):
                 result[qual].append((label, node.lineno, f"a {label} placeholder"))
-    for line, text in _todo_comments(source.text):
-        enclosing = [
+    for line, text in _actionable_todos(source):
+        owners = [
             (qual, func)
             for qual, func in source.functions.items()
             if func.lineno <= line <= (func.end_lineno or func.lineno)
         ]
-        if enclosing:
+        if owners:
             qual, _ = min(
-                enclosing, key=lambda item: (item[1].end_lineno or item[1].lineno) - item[1].lineno
+                owners, key=lambda item: (item[1].end_lineno or item[1].lineno) - item[1].lineno
             )
-            result[qual].append((text, line, f"a TODO/FIXME comment ('{text}')"))
+            if qual not in source.tests:
+                result[qual].append((text, line, f"an actionable TODO/FIXME marker ('{text}')"))
     return result
 
 

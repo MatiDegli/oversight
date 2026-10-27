@@ -57,6 +57,60 @@ class _SplitAnd(ast.NodeTransformer):
         return [ast.copy_location(ast.Assert(test=term), node) for term in terms(node.test)]
 
 
+class _SplitTuple(ast.NodeTransformer):
+    def visit_Assert(self, node: ast.Assert) -> ast.Assert | list[ast.Assert]:
+        check = node.test
+        if (
+            isinstance(check, ast.Compare)
+            and len(check.ops) == 1
+            and isinstance(check.ops[0], ast.Eq)
+            and isinstance(check.left, (ast.Tuple, ast.List))
+            and isinstance(check.comparators[0], type(check.left))
+        ):
+            right = check.comparators[0]
+            assert isinstance(right, (ast.Tuple, ast.List))
+            if len(check.left.elts) == len(right.elts):
+                return [
+                    ast.copy_location(
+                        ast.Assert(test=ast.Compare(left=a, ops=[ast.Eq()], comparators=[b])), node
+                    )
+                    for a, b in zip(check.left.elts, right.elts, strict=True)
+                ]
+        return node
+
+
+def align_local_names(before: FuncNode, after: FuncNode) -> None:
+    """Align single-bound locals with identical values, even when setup grew."""
+
+    def assignments(func: FuncNode) -> dict[str, str]:
+        nodes = walk_local(func)
+        stores = Counter(
+            n.id for n in nodes if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+        )
+        values: dict[str, list[str]] = {}
+        for node in nodes:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target = node.targets[0]
+                if isinstance(target, ast.Name) and stores[target.id] == 1:
+                    values.setdefault(ast.dump(node.value), []).append(target.id)
+        return {key: names[0] for key, names in values.items() if len(names) == 1}
+
+    left, right = assignments(before), assignments(after)
+    mapping = {name: right[key] for key, name in left.items() if key in right}
+    # Nested scope bindings can shadow a local; don't rewrite across them.
+    if any(
+        isinstance(
+            n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef, ast.comprehension)
+        )
+        for stmt in before.body
+        for n in ast.walk(stmt)
+    ):
+        return
+    for node in walk_local(before):
+        if isinstance(node, ast.Name):
+            node.id = mapping.get(node.id, node.id)
+
+
 def normalize_assertions(source: Source) -> Source:
     """Keep original locations and scoped bindings on the copied syntax nodes."""
     source = copy.deepcopy(source)
@@ -74,6 +128,7 @@ def normalize_assertions(source: Source) -> Source:
                         node.args.pop(slot)
         unittest_checks(func)
         _SplitAnd().visit(func)
+        _SplitTuple().visit(func)
     canonicalize(source)
     return source
 

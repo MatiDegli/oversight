@@ -21,7 +21,11 @@ from oversight.changes._shortcuts_asserts import detect_assertions
 from oversight.changes._shortcuts_common import Change, Source, is_test_file
 from oversight.changes._shortcuts_common import Finding as Finding
 from oversight.changes._shortcuts_common import ShortcutKind as ShortcutKind
-from oversight.changes._shortcuts_literals import collect_test_literals, detect_literal_branches
+from oversight.changes._shortcuts_literals import (
+    TestCase,
+    collect_test_cases,
+    detect_literal_branches,
+)
 from oversight.changes._shortcuts_skips import detect_skips
 from oversight.changes._shortcuts_stubs import detect_stubs
 from oversight.changes._shortcuts_tests import detect_parametrize_expected, match_tests
@@ -99,10 +103,10 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
                 )
             )
 
-    inputs: set[tuple[str, object]] = set()
+    inputs: list[TestCase] = []
     for path, source in new_sources.items():
         if is_test_file(path):
-            inputs.update(collect_test_literals(source))
+            inputs.extend(collect_test_cases(source))
 
     for path, new in new_sources.items():
         old = old_sources.get(moved.get(path, path))
@@ -112,6 +116,11 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
             if old:
                 findings.extend(detect_assertions(path, old, new))
                 findings.extend(detect_parametrize_expected(path, old, new))
+            for (new_path, new_qual), (old_path, old_qual) in matches.items():
+                if new_path == path and (old_path, old_qual) != (path, new_qual):
+                    findings.extend(
+                        detect_assertions(path, old_sources[old_path], new, [(old_qual, new_qual)])
+                    )
             findings.extend(detect_skips(path, old, new, old_sources, matches))
         else:
             findings.extend(
@@ -123,4 +132,19 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
                 )
             )
         findings.extend(detect_stubs(path, old, new, old_sources, matches))
-    return sorted(findings, key=lambda f: (f.path, f.line, f.kind, f.message))
+    groups: dict[tuple[str, ShortcutKind], list[Finding]] = {}
+    for finding in findings:
+        groups.setdefault((finding.path, finding.kind), []).append(finding)
+    combined: list[Finding] = []
+    for (path, kind), group in groups.items():
+        lines = sorted({f.line for f in group})
+        messages = dict.fromkeys(f.message for f in sorted(group, key=lambda f: f.line))
+        combined.append(
+            Finding(
+                path,
+                lines[0],
+                kind,
+                " ".join(messages) + " Lines: " + ", ".join(map(str, lines)) + ".",
+            )
+        )
+    return sorted(combined, key=lambda f: (f.path, f.line, f.kind, f.message))

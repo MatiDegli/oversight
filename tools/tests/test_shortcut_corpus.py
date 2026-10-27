@@ -60,3 +60,36 @@ def test_original_seed_functions_hit_the_requested_kinds() -> None:
         path = "module.py" if kind == "stub_left" else "test_case.py"
         findings = detect_shortcuts([(path, old, None if name == "delete" else new)])
         assert any(f.kind == kind for f in findings), name
+
+
+def test_precision_branch_seed_requires_hardcoded_expected_result() -> None:
+    import ast
+
+    from tools.shortcut_seed import branch_seed
+
+    from oversight.changes import detect_shortcuts
+
+    func = ast.parse("def test_case():\n    assert run(0) == 8\n").body[0]
+    assert isinstance(func, ast.FunctionDef)
+    for value in (0, 1, -1, "", "case", 7):
+        old, new, test = branch_seed(ast.Constant(value), func, True)
+        findings = detect_shortcuts([("module.py", old, new), ("test_case.py", None, test)])
+        assert any(f.kind == "literal_branch" for f in findings)
+        # A different result no longer fits the seeded hard-coding shape.
+        mismatched = new.replace("return 7123", "return 7124")
+        assert (
+            detect_shortcuts([("module.py", old, mismatched), ("test_case.py", None, test)]) == []
+        )
+
+
+def test_legacy_branch_seed_stays_reproducible() -> None:
+    import ast
+
+    from tools.shortcut_seed import branch_seed
+
+    func = ast.parse("def test_case():\n    assert run(7) == 8\n").body[0]
+    assert isinstance(func, ast.FunctionDef)
+    old, new, test = branch_seed(ast.Constant(7), func, False)
+    assert old == "def operation(x):\n    return x\n"
+    assert new == "def operation(x):\n    if x == 7:\n        return None\n    return x\n"
+    assert "assert run(7) == 8" in test

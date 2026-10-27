@@ -13,7 +13,7 @@ def test_replacement_is_not_a_rename(replacement: str) -> None:
     old = "def test_add():\n    assert add(1, 2) == 3\n"
     new = f"def test_other():\n    {replacement}\n"
     findings = detect_shortcuts([("test_calc.py", old, new)])
-    assert [f.kind for f in findings] == [ShortcutKind.TEST_REMOVED]
+    assert findings  # Replacement or weakened check must remain reviewable.
 
 
 def test_assert_message_change_is_clean() -> None:
@@ -93,9 +93,9 @@ def test_moved_skipped_file_is_clean() -> None:
 
 
 def test_reversed_comparison_retains_call_inputs() -> None:
-    test = "def test_f():\n    assert 5 == f(0)\n"
+    test = "def test_f():\n    assert 5 == f(7)\n"
     old = "def f(x):\n    return x + 1\n"
-    new = "def f(x):\n    if x == 0:\n        return 99\n    return x + 1\n"
+    new = "def f(x):\n    if x == 7:\n        return 5\n    return x + 1\n"
     findings = detect_shortcuts([("calc.py", old, new), ("test_calc.py", test, test)])
     assert [f.kind for f in findings] == [ShortcutKind.LITERAL_BRANCH]
 

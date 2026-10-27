@@ -16,7 +16,13 @@ from oversight.changes._shortcuts_equivalence import (
     body_key,
     singleton_tightening,
 )
-from oversight.changes._shortcuts_normalize import inline_assertion_calls, normalize_assertions
+from oversight.changes._shortcuts_normalize import (
+    align_local_names,
+    inline_assertion_calls,
+    normalize_assertions,
+)
+from oversight.changes._shortcuts_tests import same_test_body
+from oversight.changes._shortcuts_wording import cancel_reworded
 
 
 def is_assert_call(node: ast.AST, source: Source) -> bool:
@@ -188,14 +194,21 @@ def detect_assertions(
     path: str,
     old: Source,
     new: Source,
+    pairs: list[tuple[str, str]] | None = None,
 ) -> list[Finding]:
     old, new = normalize_assertions(old), normalize_assertions(new)
     findings: list[Finding] = []
-    for qual, old_func in old.functions.items():
-        new_func = new.functions.get(qual)
+    if pairs is None:
+        pairs = [(qual, qual) for qual in old.tests if qual in new.tests]
+    for old_qual, new_qual in pairs:
+        old_func = old.functions[old_qual]
+        new_func = new.functions.get(new_qual)
         if new_func is None:
             continue
+        if same_test_body(old, old_func, new, new_func) and old_qual != new_qual:
+            continue
         align_parameters(old, new, old_func, new_func)
+        align_local_names(old_func, new_func)
         if body_key(old_func) == body_key(new_func):
             continue
         old_asserts = _assert_nodes(old_func, old)
@@ -218,6 +231,7 @@ def detect_assertions(
         # does not mean that the assertion itself was removed.
         inline_assertion_calls(old_func)
         inline_assertion_calls(new_func)
+        remaining_old, unmatched_new = cancel_reworded(remaining_old, unmatched_new)
         # Pair remaining by a loosening / expected-value relation.
         still_old: list[ast.Assert | ast.Call] = []
         for old_node in remaining_old:
@@ -291,7 +305,7 @@ def detect_assertions(
         for key, line in old_wrappers:
             match_idx = None
             for idx, cand in enumerate(unmatched_wrappers):
-                if cand[0] == key:
+                if cand[0] == key or (key.endswith(":") and cand[0].startswith(key)):
                     match_idx = idx
                     break
             if match_idx is not None:
