@@ -53,6 +53,10 @@ Each change carries a score and its reasons: cone size, tests, edits outside the
 policy marks "would approve alone" or "needs you"; during the hackathon it never approves by
 itself. It is one line in the review header.
 
+Reasons also come from the shortcut detector (branch `review/shortcut-detector`, not wired in
+yet): a test removed or renamed out of collection, a skip added, an assertion loosened or a
+`pytest.raises` removed, an expected value changed, a stub left in code the change touched.
+
 ## 4. Verified cone
 
 Like test impact analysis: run only the tests that reach the cone's nodes, in the agent's
@@ -84,6 +88,38 @@ A rule tied to an area also saves context: the agent receives it only when it wo
   in AGENTS.md. Node ids come from qualified names, so a rule survives edits; a deleted or renamed
   node leaves the rule orphaned in the list, never lost silently. The agent receives rules as its
   own message when it enters the area, never inside a tool result.
+
+## Isolated fronts outside the product
+
+Fronts that never touch the product's code or contracts. Each lives in its own folder, worktree and
+branch, and is reviewed like any other front. Unlike the ideas above, A and B may start now.
+
+| # | Front | Why | Starts | Lives in |
+| --- | --- | --- | --- | --- |
+| A | Automated takes | The demo is 25%: identical, repeatable 1080p takes to edit, and a compression check | now | `tools/` and one recorded log |
+| B | Task bench with numbers | Measured data for the pitch: tasks solved per agent, steps, cost, Muse Spark versus Muse Spark Open, later the shortcuts flagged | now, without the detector numbers | `tools/eval/` |
+| C | TypeScript adapter | A second language for the graph, the most recognizable after Python | not before level 2 closes | its adapter folder, `fixtures/`, its tests |
+
+**A. Automated takes.** A Playwright script drives replay mode and records video at 1080p along a
+fixed path (clicks, zoom, review). It reuses the e2e replay setup. The takes come from a log
+recorded from a real run, since only those may be labeled as a recorded run. The same takes serve
+the compression check: encode at a low bitrate, or upload unlisted and watch at 720p.
+
+**B. Task bench.** 15 to 20 scripted tasks on the demo repository, run through Oversight itself
+(`POST /agents`), never by calling Meta's API directly, with results in a fixed format. Agents run
+in Contributor mode. A cap in USD of API and Baseten credits is set before the first run. The line
+"the detector flagged X shortcuts in N tasks" waits for the shortcut detector; the task set, the
+script and the result format do not.
+
+**C. TypeScript adapter.** tree-sitter (MIT) for TypeScript: modules, classes, functions and
+methods with the same node kinds and stable ids as Python. Calls through explicit imports resolve
+as "exact", the rest as "possible". It needs first graph core stage 2 in main and a small task that
+puts the Python parser behind a language-adapter interface with no contract change; the new
+dependency needs the maintainer's OK. A separate orchestrator runs it: Muse Code writes, Codex
+reviews each PR, with a weekly cap on Muse Code usage, and it reports only when done or blocked.
+Off by default, no merge before level 2 closes. The bar before it is shown: at least 70% of the
+test repository's calls resolved as "exact", and the cone checked by hand in three cases. If it
+passes, 5 seconds in the video and one line in the README; if not, it stays future work.
 
 ## Later, for the README's Next section
 
