@@ -9,7 +9,15 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from oversight_contracts import CONTRACT_VERSION
-from oversight_contracts.commands import ERROR_STATUS, ErrorCode, RequestChanges, StartAgent
+from oversight_contracts.commands import (
+    ERROR_STATUS,
+    ErrorCode,
+    ErrorDetail,
+    Health,
+    MissingSetting,
+    RequestChanges,
+    StartAgent,
+)
 from oversight_contracts.events import ServerEvent
 from oversight_contracts.graph import GraphEdge
 
@@ -327,6 +335,7 @@ def test_every_error_code_has_the_status_of_section_4_7() -> None:
         "wrong_state": 409,
         "slot_busy": 409,
         "spend_brake": 403,
+        "not_configured": 503,
         "invalid_path": 422,
         "stale_file": 409,
         "not_implemented": 501,
@@ -347,7 +356,8 @@ def test_the_schema_forbids_extra_keys_and_requires_every_response_key() -> None
             continue
         assert definition["additionalProperties"] is False, name
         if name not in requests:
-            assert set(definition["required"]) == set(definition["properties"]), name
+            optional = {"missing"} if name == "ErrorDetail" else set()
+            assert set(definition["required"]) == set(definition["properties"]) - optional, name
     assert "slot" not in schema["$defs"]["StartAgent"]["required"]
 
 
@@ -355,3 +365,39 @@ def test_the_typescript_types_carry_the_contract_version() -> None:
     typescript = (GENERATED / "contracts.ts").read_text()
     assert f'export const CONTRACT_VERSION = "{CONTRACT_VERSION}";' in typescript
     assert "export type ServerEvent =" in typescript
+
+
+@pytest.mark.parametrize("version", ["1.0.0", "1.1.0"])
+def test_older_recorded_events_still_validate(version: str) -> None:
+    EVENTS.validate_python(event("run.started", contract_version=version))
+
+
+def test_setup_details_and_health_defaults() -> None:
+    missing = MissingSetting(name="META_API_KEY", problem="missing", slots=["A", "B"])
+    error = ErrorDetail(
+        code="not_configured", message="Server setup is incomplete.", missing=[missing]
+    )
+    assert ErrorDetail.model_validate_json(error.model_dump_json()) == error
+    assert error.model_dump()["missing"] == [missing.model_dump()]
+    assert ErrorDetail(code="spend_brake", message="Ledger lost").model_dump() == {
+        "code": "spend_brake",
+        "message": "Ledger lost",
+    }
+    with pytest.raises(ValidationError, match="missing is set exactly"):
+        ErrorDetail(code="not_configured", message="Setup")
+    with pytest.raises(ValidationError, match="missing is set exactly"):
+        ErrorDetail(code="spend_brake", message="Brake", missing=[missing])
+    health = Health(
+        ok=True, run_id="run-20261027-140312", contract_version=CONTRACT_VERSION, mode="live"
+    )
+    assert health.missing_settings == []
+
+
+@pytest.mark.parametrize(
+    "bad", [{"name": "OTHER_KEY"}, {"problem": "secret"}, {"slots": ["C"]}, {"value": "secret"}]
+)
+def test_setup_details_reject_unknown_names_problems_slots_and_values(bad: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        MissingSetting.model_validate(
+            {"name": "META_API_KEY", "problem": "missing", "slots": ["A"], **bad}
+        )

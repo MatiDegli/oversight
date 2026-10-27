@@ -22,11 +22,18 @@ export type ErrorCode =
   | "wrong_state"
   | "slot_busy"
   | "spend_brake"
+  | "not_configured"
   | "invalid_path"
   | "stale_file"
   | "not_implemented"
   | "invalid_request"
   | "internal";
+export type SettingName =
+  | "META_API_KEY"
+  | "BASETEN_API_KEY"
+  | "OVERSIGHT_BUDGET_USD"
+  | "MUSE_SPARK_INPUT_USD_PER_M"
+  | "MUSE_SPARK_OUTPUT_USD_PER_M";
 export type RunId = string;
 export type ServerEvent =
   | RunStartedEvent
@@ -414,6 +421,18 @@ export interface ChangeUpdatedEvent {
 export interface ErrorDetail {
   code: ErrorCode;
   message: string;
+  /**
+   * Present only for not_configured; other errors keep their existing wire shape.
+   */
+  missing?: MissingSetting[] | null;
+}
+/**
+ * A setup problem: names and affected slots only, never configuration values.
+ */
+export interface MissingSetting {
+  name: SettingName;
+  problem: "missing" | "invalid";
+  slots: Slot[];
 }
 /**
  * A failure shown without breaking the demo.
@@ -552,6 +571,7 @@ export interface Health {
   run_id: RunId;
   contract_version: string;
   mode: "live" | "replay";
+  missing_settings: MissingSetting[];
 }
 export interface Limits {
   /**
@@ -697,4 +717,4 @@ export interface StartAgent {
   model?: string | null;
 }
 
-export const CONTRACT_VERSION = "1.1.0";
+export const CONTRACT_VERSION = "1.2.0";

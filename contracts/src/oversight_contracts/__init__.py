@@ -6,4 +6,4 @@ bodies, and `ErrorResponse`). JSON Schema and TypeScript are generated from them
 `make contracts`. A change follows docs/proposal.md, section 4.9.
 """
 
-CONTRACT_VERSION = "1.1.0"
+CONTRACT_VERSION = "1.2.0"

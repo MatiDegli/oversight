@@ -5,28 +5,39 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from oversight_contracts.commands import ERROR_STATUS, ErrorCode, ErrorDetail, ErrorResponse
+from oversight_contracts.commands import (
+    ERROR_STATUS,
+    ErrorCode,
+    ErrorDetail,
+    ErrorResponse,
+    MissingSetting,
+)
 
 
 class ApiError(Exception):
     """Raised by a route; answered with the code's status from `ERROR_STATUS`."""
 
-    def __init__(self, code: ErrorCode, message: str) -> None:
+    def __init__(
+        self, code: ErrorCode, message: str, *, missing: list[MissingSetting] | None = None
+    ) -> None:
         super().__init__(message)
         self.code: ErrorCode = code
         self.message = message
+        self.missing = missing
 
 
-def error_response(code: ErrorCode, message: str) -> JSONResponse:
+def error_response(
+    code: ErrorCode, message: str, *, missing: list[MissingSetting] | None = None
+) -> JSONResponse:
     """The error body with its status from `ERROR_STATUS`: no caller picks a status of its own."""
-    body = ErrorResponse(error=ErrorDetail(code=code, message=message))
+    body = ErrorResponse(error=ErrorDetail(code=code, message=message, missing=missing))
     return JSONResponse(body.model_dump(mode="json"), status_code=ERROR_STATUS[code])
 
 
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, error: ApiError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        return error_response(error.code, error.message)
+        return error_response(error.code, error.message, missing=error.missing)
 
     @app.exception_handler(RequestValidationError)
     async def _invalid_request(_: Request, error: RequestValidationError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]

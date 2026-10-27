@@ -240,3 +240,13 @@ Ours wins in every case below.
   product's `.env` key, which an exported variable would override, and never the hackathon
   credits, so the spending brake's ledger and Meta's console total stay about the product alone.
   The product's own agents still use only Muse Spark and Muse Spark Open.
+
+- **Structured setup readiness (maintainer, 2026-10-27; contracts 1.2.0):** missing or invalid
+  provider keys, Meta budget or token prices answer `not_configured` with HTTP 503, since server
+  configuration makes the requested service unavailable; 403 `spend_brake` remains for uncertain
+  ledger state or spend above the limit. Health lists the same problems across offered slots, and
+  `make demo` checks them before building. Details contain only setting names, problem kinds and
+  blocked slots, never values, key lengths or prefixes, so the UI can explain setup without
+  exposing credentials. Keys are opaque nonempty strings without whitespace; authenticity is not
+  checked by calling a provider. The optional error `missing` field is omitted for other codes,
+  preserving their existing wire shape; recorded 1.0 and 1.1 events remain valid.

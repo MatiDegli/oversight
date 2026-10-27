@@ -12,7 +12,7 @@ PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-ci check-fast check-python lint-python check-frontend \
 	lint-frontend contracts check-contracts check-secrets demo-repo-check replay shots smoke layout \
-	test-browser demo demo-check e2e
+	test-browser demo demo-setup-check demo-check e2e
 
 help: ## list the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -46,12 +46,15 @@ replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with
 # API on DEMO_PORT, no Vite. It builds the UI (the normal build, not the replay one), then starts the
 # live server with the settings from .env (Muse Spark) on a fixed host and port; the workspace starts
 # clean every time (the server's reset). Starting it spends no credits: only Start agent does, and
-# without a key or a budget Start agent answers its 422 or 403 in the task box. The provider keys are
-# not stripped here, as they are for check. Ctrl+C stops it: uvicorn runs the server's shutdown.
+# setup is checked before building. The provider keys are not stripped here, as they are for check.
+# Ctrl+C stops it: uvicorn runs the server's shutdown.
 DEMO_PORT ?= 8710
 UI_BUILD := $(PNPM) build
 
-demo: ## build the UI, then serve it and the API on one port (DEMO_PORT) from .env; Start agent spends credits
+demo-setup-check: ## check offered agents' keys, budget and prices in .env before the demo
+	uv run --frozen python -m oversight.setup --check
+
+demo: demo-setup-check ## build the UI, then serve it and the API on one port (DEMO_PORT) from .env; Start agent spends credits
 	$(UI_BUILD)
 	@echo ""
 	@echo "Oversight: open http://localhost:$(DEMO_PORT)/ in the browser (from Windows too: localhost is shared with WSL). Ctrl+C stops it."
