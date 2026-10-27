@@ -17,6 +17,12 @@ section).
 | 4 | Verified cone | Each node of the cone checked by the tests that reach it: passed, failed or no tests | medium | run_tests, the "no tests" badge |
 | 5 | Decisions as data | Rejected and approved versions with the comment, exported as preference pairs | small | Request changes |
 | 6 | Rules on areas | Rules tied to nodes or modules, loaded by an agent when it enters that area | small to medium | Request changes, cross-review |
+| 7 | Merge alone when safe | A mode in which a change that passes every rule merges by itself, with its reasons in the history; the rest waits as "needs you" | small to medium | tests on the combined result; 1 to 3 when approved |
+| 8 | One task, one plan, two agents | A large task split into two subtasks with their zones, drawn on the graph and started with one click | medium | 2, 7, two agent slots |
+| 9 | Lead agent | An agent that starts agents and requests changes on their work, never merges | medium to large | 7, 8 |
+
+Ideas 7 to 9 go at the top of level 3, in that order, ahead of the other level 3 items; 9 only if
+7 and 8 are done before the freeze.
 
 Smaller ones that fit beside these: "B reads compute_price, which A is changing" (a cheap form of
 the cone overlap alert, level 3), and "said versus did": `finish` declares the files it touched and
@@ -50,8 +56,8 @@ drift, worse than the edit it was meant to stop. So:
 ## 3. Risk and "needs you"
 
 Each change carries a score and its reasons: cone size, tests, edits outside the zone, cost. A
-policy marks "would approve alone" or "needs you"; during the hackathon it never approves by
-itself. It is one line in the review header.
+policy marks "would approve alone" or "needs you". It is one line in the review header. In the
+default mode it never approves by itself; idea 7 is the mode in which it does.
 
 **Test shortcuts: facts from the diff, the alarm from the run.** A detector that reads only the
 diff cannot tell a weakened test from an intended behavior change. The measurement is in
@@ -123,6 +129,59 @@ A rule tied to an area also saves context: the agent receives it only when it wo
   node leaves the rule orphaned in the list, never lost silently. The agent receives rules as its
   own message when it enters the area, never inside a tool result.
 
+## 7. Merge alone when safe
+
+The person who runs several agents is held up by approving every change by hand, not by the
+agents. This repository is built the other way: since `docs/approvals`, the coordinator merges a
+front once the checks pass and a reviewer from another provider has no open blocking or should-fix
+finding (for frontend views and docs, a should-fix off the demo path becomes a follow-up front;
+see docs/proposal.md, section 7), and only the critical decisions reach the maintainer. The product
+is stricter than the process that builds it. This idea brings that process into the product.
+
+- **Two modes:** "Ask me", the default and today's behavior, and "Merge alone when safe". The
+  level 1 and level 2 demos run in "Ask me".
+- **A change merges alone only if every rule holds:** the tests pass on main as it is now; no test
+  is removed, skipped or loosened (the detector's facts from idea 3, used here as a condition: a
+  false alarm only makes the change wait, which is today's cost); every changed function is
+  reached by a test in the call graph; every edit is inside its zone and none touches a protected
+  area; the other model's review (idea 1) has nothing blocking; size, cone and spend are under
+  their limits. A change to a function with a large cone, such as `compute_price`, always waits.
+- **Anything else is "needs you"**, with the failed rule as the first line of the review header.
+- **Ideas 1 to 3 are still not approved.** Approving ideas 7 to 9 does not approve them. The first
+  version of 7 works without them: the rules above that come from them (the detector's facts from
+  idea 3, the zone and the protected areas from idea 2, the other model's review from idea 1) are
+  added only as each of those ideas is approved and lands. The maintainer will set the initial
+  required rules in a separate plan. An unavailable required check means "needs you". For tests:
+  until idea 3's detector lands, any change that edits or deletes an existing test file needs you;
+  added tests are fine.
+- **A model can call the person in; only code lets a change through without them.** A model's
+  output can add a reason to wait, never remove one.
+- **Every merge by rules is in the history with its reasons**, and has a one-click Revert while it
+  applies cleanly. Undo is out of scope in AGENTS.md, so the Revert needs the maintainer's OK.
+- **Merge as in the repository's integration flow:** test the combined result first, then move
+  main.
+- **The pitch line:** decide the rules once and the exceptions live. If the idea ships, the
+  success sentence in PRODUCT.md ("nothing reaches main without their decision") would need to
+  change. Proposed: "nothing reaches main without their decision or a rule they set, and they can
+  see why each change merged". PRODUCT.md stays as it is until the maintainer approves this
+  sentence on its own.
+
+## 8. One task, one plan, two agents
+
+The person writes one larger task. Muse Spark proposes two subtasks, each with its zone and its
+text, and the plan is drawn on the graph in A's and B's colors before anything starts. One click
+starts both; the person can edit or refuse the plan. Overlapping zones are flagged before the start,
+which avoids most conflicts later. The server runs the plan, not a model: the model only proposes
+the split, and idea 7 decides the merges. This mirrors the repository's process, where the
+maintainer approves the proposal before any code and the coordinator integrates after, and it is
+deterministic enough for a demo that runs three times in a row.
+
+## 9. Lead agent
+
+An agent with tools to start agents, read their changes and request changes on them. It never
+merges and never approves: merges stay with idea 7 or the person. Only if 7 and 8 are done before
+the freeze. It runs on Meta models like every agent in the product.
+
 ## Isolated fronts outside the product
 
 Fronts that never touch the product's code or contracts. Each lives in its own folder, worktree and
@@ -184,3 +243,8 @@ an entity with create, change and delete events and commands to read and write t
 reserve them now as optional fields and as endpoints that answer 501, like the level 3 commands,
 so a later level adds behavior without a breaking change. Nothing here is reserved until the
 maintainer approves it.
+
+Ideas 7 to 9 add: who decided a change (`decided_by`, the person or the rules) and the reasons on
+`change.resolved`; the merge mode as a setting; a Revert command with its own graph delta cause;
+a plan entity with its subtasks and zones, and the plan an agent belongs to; for idea 9, the agent
+that started another one.
