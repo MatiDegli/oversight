@@ -4,21 +4,25 @@ A 202 means only that a command was accepted; its results arrive as events. Requ
 omit their optional keys; responses always carry every key.
 """
 
-from typing import Annotated, Literal, Self
+from typing import Literal, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, NonNegativeInt, PositiveInt, model_validator
 
 from oversight_contracts.common import (
     AgentId,
     ChangeId,
     ContractModel,
+    MergeMode,
+    PlanId,
     RunId,
     Slot,
     WorkspacePath,
 )
+from oversight_contracts.common import (
+    NonEmptyText as NonEmptyText,
+)
 from oversight_contracts.graph import GraphSnapshot
-
-type NonEmptyText = Annotated[str, StringConstraints(min_length=1)]
+from oversight_contracts.plans import SubtaskDraft
 
 
 class StartAgent(ContractModel):
@@ -175,3 +179,42 @@ class ErrorResponse(ContractModel):
     """Every error, from every command."""
 
     error: ErrorDetail
+
+
+class SetMergeMode(ContractModel):
+    """Select a merge mode using the last observed server revision."""
+
+    mode: MergeMode
+    revision: NonNegativeInt
+
+
+class CreatePlan(ContractModel):
+    """Request a proposed split without starting coding agents."""
+
+    task: NonEmptyText
+
+
+class PlanCreated(ContractModel):
+    """The created plan identifier; generation continues through events."""
+
+    plan_id: PlanId
+
+
+class UpdatePlan(ContractModel):
+    """Replace both proposed subtasks using the expected plan revision."""
+
+    revision: PositiveInt
+    graph_version: NonEmptyText
+    subtasks: tuple[SubtaskDraft, SubtaskDraft]
+
+
+class PlanRevision(ContractModel):
+    """The expected revision for a plan command."""
+
+    revision: PositiveInt
+
+
+class RejectPlan(PlanRevision):
+    """Refuse a proposed plan without starting its agents."""
+
+    comment: str | None = None
