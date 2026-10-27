@@ -160,6 +160,9 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   and seven endpoints that return 501 reserve the wire format, so a later level can add behavior
   without a breaking change. File creation moves to 1.4.0.
 
+- **GET /tree in the next contract batch (maintainer, Tue Oct 27, 2026):** reserve the runtime
+  workspace tree endpoint there. The shell's file navigation needs it. No contract changes here.
+
 ## Design
 
 - **Signal lives in `DESIGN.md` at the root, with `PRODUCT.md` beside it:** the design skill
@@ -260,6 +263,31 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   that required the fallback disappear, including rejection. Other modules stay put. This is the
   bounded consequence of the code addition, not an unsolicited rearrangement or a mode change;
   restoring it preserves the person's layout and DESIGN.md's “nothing moves by itself” rule.
+
+### Design rethink (maintainer, Tue Oct 27, 2026)
+
+- **R1: module folding accepted.** Modules join classes as foldable groups. Every module starts
+  as one card and opens on a read, an edit inside it or a click. Calls between folded modules
+  share one counted edge per pair. This keeps labels readable as the repository grows.
+- **R2: drag module frames only.** Function rows keep their column. Edges re-route on every
+  animation frame during a drag. This prevents stretched frames and routes that snap on drop.
+- **R3: function edges on demand.** Module edges show at rest. Function edges appear on hover,
+  selection and working agents' cones; calls within one file stay hidden. This reduces clutter
+  while keeping the calls relevant to the current work visible.
+- **R4: a local light.** Light surrounds the node the agent is on. The ambient field is dimmer
+  and masked under the title, legend, zoom controls and panels. This keeps the work visible
+  without flooding the graph or obscuring its controls.
+- **R5: motion that reports work accepted.** Events may cause motion that shows progress and
+  state changes. Motion needs a cause. DESIGN.md's Motion section waits for the motion sketches,
+  so each transition can be judged before its rules replace the current section.
+- **Shell zones accepted.** The top bar, left rail, sidebar, focus panel with tabs, graph stage,
+  agents panel, bottom dock and status line give each feature a known home. DESIGN.md's Layout
+  section waits for the shell sketches. Focus panel tabs, the Files view and the proposed approve
+  key need the maintainer to reconcile AGENTS.md first.
+- **Terminal placed now, built last.** Its home is the bottom dock. Implementation waits for an
+  independently reviewed security plan: bind to 127.0.0.1, use a per-session token, check Origin
+  and Host, and kill the terminal with the server. Agents never reach it. This reserves its place
+  without adding shell access before its boundaries are reviewed.
 
 ### Where Impeccable clashes with our rules
 

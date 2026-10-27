@@ -255,7 +255,7 @@ diff and file view are dark, flat and still. They hold text, decisions and code.
 
 The product is a tool someone operates for long stretches while agents work, and the demo is
 recorded on video. So the screen is dense but calm, every color means something, and nothing moves
-or opens unless the person asked for it. Everything is dark by default, the review panel included,
+without a cause. Everything is dark by default, the review panel included,
 with a dark Monaco theme. A day mode exists for the submission gallery only (see Colors).
 
 **Precedence.** AGENTS.md wins over this file. The direction was agreed on the final Signal sketches
@@ -468,6 +468,8 @@ code inside a panel stays Mono.
 
 ## Layout
 
+Being revised (Tue Oct 27): the shell and motion sketches will replace this section.
+
 One screen, two modes, no tabs. The graph is always visible; a side panel changes with what the
 person is doing.
 
@@ -636,6 +638,9 @@ node ("read", "editing", "changed", "new"):
   dashed" wins over every other edge rule: inside the cone it keeps its width and color at full
   opacity, and a possible call that a change adds is not dashed (its node already is).
 
+**Call visibility.** At rest, only module-to-module edges show. Function edges appear for the
+hovered or selected node and for the working agents' cones. Calls inside one file stay hidden.
+
 **Letter badges.** Agents are a letter and a color, nothing more: no avatars, beads or mascots. On
 a node: a 26px rounded square at the right end of the row, on the name's line, with A or B in badge
 type. Filled for
@@ -705,16 +710,17 @@ change is proposed.
 They were brought forward from after level 1 (DECISIONS.md) and never block a level. Whenever
 WebGL is missing, the graph's background is plain ground.
 
-- **Grid:** its own canvas under a transparent Cytoscape canvas, reading the rendered boxes of the
-  lit nodes; it never draws nodes or edges. Cells are 7px, fixed to the screen (they do not pan or
+- **Grid:** its own canvas under a transparent Cytoscape canvas, reading the rendered positions of
+  the lit nodes; it never draws nodes or edges. Cells are 7px, fixed to the screen (they do not pan or
   zoom). Each cell is a square lamp covering 72% of it, about 5px. Each lamp shows one of four
   levels (off and three steps), chosen with an 8 by 8 ordered (Bayer) dither. An unlit lamp is
   lamp-off (about 2% brightness, close to shell); a 2px guide dot in guide-dot every 28px marks the
-  grid where nothing is lit. The cells are large on purpose: they survive 720p compression.
-- **Light:** each lit node is a source shaped like its box. Intensity falls off with distance from
-  the box: about 72% a near term that decays quickly plus 28% a far term that spreads wider, times
-  the mode's gain and the node's weight. Overlapping lights mix colors by intensity; at most 8 at
-  once.
+  grid where nothing is lit. The ambient field is dimmer and masked under the legend, the title,
+  the zoom controls and the panels. The cells are large on purpose: they survive 720p compression.
+- **Light:** an agent lights a radius around the node it is on, never the whole module frame.
+  Intensity falls off from the node's center: about 72% a near term that decays quickly plus 28%
+  a far term that spreads wider, times the mode's gain and the node's weight. Overlapping lights
+  mix colors by intensity; at most 8 at once.
 
 | Mode | Near | Far | Gain | Why |
 | --- | --- | --- | --- | --- |
@@ -736,7 +742,11 @@ WebGL is missing, the graph's background is plain ground.
   band about 10px wide at 90% strength, fading out between 60px and 340px. No rings in review or
   file view.
 
-### Class folding
+### Class and module folding
+
+Classes and modules fold. At start, every module is one folded card, such as
+"pricing.py · 6 functions". A module opens when an agent reads or edits inside it, or on click.
+Calls between folded modules merge into one edge per module pair, labeled with its count.
 
 Classes start as one header row with their method count. A click toggles the class; a fresh change
 adding or modifying a method opens it, and the person can fold it again. Reading a hidden method
@@ -747,7 +757,12 @@ Preset coordinates and fold state determine positions. Only the later rows and m
 same column slide when a class toggles, for 240ms with `cubic-bezier(0.2, 0.7, 0.2, 1)`; under reduced
 motion they jump. Mode changes move the camera alone.
 
+Only module frames drag. Function rows stay in their frame's column. The frame's edges re-route
+on every animation frame during the drag, never only on drop.
+
 ### Motion
+
+Being revised (Tue Oct 27): the shell and motion sketches will replace this section.
 
 - Mode changes, dimming and highlights ease over 240ms (`cubic-bezier(0.2, 0.7, 0.2, 1)`).
 - **One exception on the person's surface:** a working agent's status lamp pulses (1.6s period),
