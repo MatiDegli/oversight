@@ -29,13 +29,14 @@ through others. Nothing reaches main until you approve it.
   layout; the worktree runner, agent runtime and scripted fake model; the change manager; and API
   wiring with the spending brake. The UI includes the graph, agent cards, live diff, Approve and
   Reject, task entry, the review impact cone and the spend meter. The runtime also supports revision
-  runs through `POST /changes/{id}/request-changes`; the review UI is developed on a separate front.
+  runs through `POST /changes/{id}/request-changes`, including the review UI.
 - `make demo` builds and serves the frontend and API together; starting an agent uses API credits.
   `make demo-check` checks the API demo path three times from clean starts using two scripted fake
   agents, without API keys or credits: overlap, Request changes and a higher revision, merge,
-  Stop/discard during work, a file edit on main and usage ticks. Saving the editable new side
-  (`PUT /files` with `agent_id`) is an explicitly skipped TODO for its parallel front. Smoke
-  tests, screenshot tooling and test resource caps are also merged.
+  Stop/discard during work, a file edit on main, usage ticks and saving the editable new side
+  (`PUT /files` with `agent_id`). Smoke tests, screenshot tooling and test resource caps are merged.
+- Level 2 closed on Tue Oct 27 at about 15:15 ART on `f5ea871`: `make demo-check` 3/3 (scripted fake, about 30 s/run), `make e2e` 2 passed.
+  Three real two-agent runs from clean starts also passed: A and B on Muse Spark, every change approved and merged; about US$0.016 total.
 - The static replay build currently plays a hand-written event log and labels it as a fixture. A
   real recorded run for the judges has not been bundled yet.
 

@@ -349,3 +349,12 @@ Ours wins in every case below.
   remains over 500 lines to keep the residual file and revision transactions within this agreed
   scope; no function exceeds 80 lines. Two unsuccessful fidelity/review repair rounds stop the
   sequence for a coordinator decision.
+
+## Level 2 closed on Tue Oct 27
+
+Level 2 closed at about 15:15 ART on `f5ea871`. `make demo-check` passed 3/3 from clean
+starts with the scripted fake model, about 30 s per run. `make e2e` passed both tests.
+Three real two-agent runs also passed from clean starts. A and B both used Muse Spark;
+each change was approved and merged. The three runs cost about US$0.016 in total.
+This meets the level 2 close criteria. Level 3 wiring starts now. Contracts 1.4.0 await
+the maintainer's approval.
