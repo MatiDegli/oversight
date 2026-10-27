@@ -123,6 +123,7 @@ export function GraphView({
   const watchCamera = useRef<Camera | undefined>(undefined);
   const targetFrame = useRef<Framing | null>(null);
   const observeCard = useRef<(() => void) | undefined>(undefined);
+  const reportViewport = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     const relit = latest.current.litIds !== litIds || latest.current.cone !== cone;
     latest.current = {
@@ -156,8 +157,7 @@ export function GraphView({
         restoreCamera: panelOpen ? undefined : watchCamera.current,
       });
       targetFrame.current = framing;
-      if (container.current)
-        reportFraming(graph.current, container.current, latest.current, framing);
+      reportViewport.current?.();
       observeCard.current?.();
       if (!panelOpen) watchCamera.current = undefined;
     }
@@ -185,6 +185,24 @@ export function GraphView({
           ),
         ),
       );
+      // Pan, zoom and animated camera moves can emit several viewport events per frame.
+      // Read the actual camera once, never change it while reporting cone visibility.
+      let viewportFrame: number | undefined;
+      const reportSoon = () => {
+        if (viewportFrame !== undefined) return;
+        viewportFrame = requestAnimationFrame(() => {
+          viewportFrame = undefined;
+          const framing = targetFrame.current;
+          if (framing)
+            reportFraming(cy, host, latest.current, {
+              ...framing,
+              zoom: cy.zoom(),
+              pan: { ...cy.pan() },
+            });
+        });
+      };
+      reportViewport.current = reportSoon;
+      cy.on("viewport", reportSoon);
       let interacting = false;
       let quietUntil = 0;
       const arriving = new Set<string>();
@@ -223,6 +241,7 @@ export function GraphView({
           ),
         );
         showSelection(cy, latest.current.selectedId ?? null);
+        reportSoon();
         if (
           existing.size > 0 &&
           !latest.current.panelOpen &&
@@ -261,7 +280,7 @@ export function GraphView({
             // The cone card lists what is out of view from the camera it is told of.
             const framing = { ...target, framed: new Set<string>(), outOfView: new Set<string>() };
             targetFrame.current = framing;
-            reportFraming(cy, host, latest.current, framing);
+            reportSoon();
           },
         };
       }
@@ -275,18 +294,11 @@ export function GraphView({
           watchZoom: watchCamera.current.zoom,
         });
         targetFrame.current = framing;
-        reportFraming(cy, host, latest.current, framing);
+        reportSoon();
       }
       const resize = new ResizeObserver(() => {
         cy.resize();
-        const framing = targetFrame.current;
-        if (framing && latest.current.cone)
-          reportFraming(
-            cy,
-            host,
-            latest.current,
-            cy.animated() ? framing : { ...framing, zoom: cy.zoom(), pan: cy.pan() },
-          );
+        reportSoon();
       });
       let observedCard: HTMLDivElement | null | undefined;
       resize.observe(host);
@@ -307,6 +319,8 @@ export function GraphView({
         resync.current = undefined;
         observeCard.current = undefined;
         graph.current = undefined;
+        reportViewport.current = undefined;
+        if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame);
         cy.destroy();
       };
     };

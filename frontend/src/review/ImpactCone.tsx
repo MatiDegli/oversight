@@ -71,14 +71,22 @@ export function ImpactConeCard({
                 </span>
               );
               return (
-                <li key={entry.node_id} className="flex items-center gap-(--spacing-sm)">
+                <li
+                  key={entry.node_id}
+                  tabIndex={-1}
+                  className={`flex items-center gap-(--spacing-sm) ${focusRing}`}
+                >
                   <DistanceBadge distance={distance} />
                   {away && onReveal ? (
                     <button
                       type="button"
                       className={`min-w-0 cursor-pointer break-words text-left hover:underline ${focusRing}`}
                       title={entry.node_id}
-                      onClick={() => {
+                      onClick={(event) => {
+                        // The button becomes plain text once revealed. Keep its focus on the
+                        // stable row, without focusing anything on unrelated visibility updates.
+                        if (document.activeElement === event.currentTarget)
+                          event.currentTarget.parentElement?.focus({ preventScroll: true });
                         onReveal(entry.node_id);
                       }}
                     >

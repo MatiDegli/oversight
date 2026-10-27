@@ -49,10 +49,18 @@ import { GraphView } from "./GraphView";
 import type { GraphApi, GraphViewProps } from "./GraphView";
 import * as camera from "./camera";
 
+const frames = new Map<number, FrameRequestCallback>();
+function paint() {
+  const pending = [...frames.values()];
+  frames.clear();
+  for (const callback of pending) callback(performance.now());
+}
+
 let cleanup: undefined | (() => void);
 afterEach(() => {
   cleanup?.();
   cleanup = undefined;
+  frames.clear();
   for (const cy of mocks.instances) cy.destroy();
   mocks.instances.length = 0;
   mocks.effects.length = 0;
@@ -92,6 +100,12 @@ function setLabel(name: string) {
 }
 
 function mount(props?: GraphViewProps) {
+  let frameId = 0;
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    frames.set(++frameId, callback);
+    return frameId;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
   let resolve!: (fonts: FontFace[]) => void;
   let reject!: (error: Error) => void;
   const pending = new Promise<FontFace[]>((onResolve, onReject) => {
@@ -121,6 +135,7 @@ function mount(props?: GraphViewProps) {
     else reject(new Error("Font unavailable"));
     await pending.catch(() => undefined);
     await Promise.resolve();
+    paint();
   };
   return { load, observer, settle, resize: () => onResize?.() };
 }
@@ -276,8 +291,11 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
     watchZoom: 0.5,
     restoreCamera: undefined,
   });
+  paint();
   expect(onFramed).toHaveBeenLastCalledWith({
     ...result,
+    zoom: cy.zoom(),
+    pan: cy.pan(),
     outOfView: new Set(["billing:changed", "billing:fee"]),
   });
   onFramed.mockClear();
@@ -286,6 +304,8 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   rerender({ ...review, cone: { ...review.cone }, selectedId: "billing:fee" });
   expect(frame).not.toHaveBeenCalled();
   expect(onFramed).not.toHaveBeenCalled();
+  paint();
+  expect(onFramed).toHaveBeenCalledOnce();
   rerender({ panelOpen: false, frameKey: null });
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, [], false, {
     coneIds: undefined,
@@ -441,14 +461,17 @@ it("measures the card's real height and refreshes marks when that height changes
       tests_reaching: 0,
     },
   });
+  paint();
   expect(onFramed).toHaveBeenLastCalledWith(expect.objectContaining({ outOfView: new Set() }));
   bottom = 500;
   resize();
+  paint();
   expect(onFramed).toHaveBeenLastCalledWith(
     expect.objectContaining({ outOfView: new Set(["billing:fee"]) }),
   );
   bottom = 300;
   resize();
+  paint();
   expect(onFramed).toHaveBeenLastCalledWith(expect.objectContaining({ outOfView: new Set() }));
 });
 
@@ -497,6 +520,7 @@ it("pans to a cone row's node only when asked, and tells the cone card what that
   });
   // Entering review framed the camera and listed the row as out of view; it moved nothing else.
   expect(frame).toHaveBeenCalledOnce();
+  paint();
   expect(onFramed).toHaveBeenLastCalledWith(
     expect.objectContaining({ outOfView: new Set(["billing:fee"]) }),
   );
@@ -508,10 +532,33 @@ it("pans to a cone row's node only when asked, and tells the cone card what that
   expect(reveal).toHaveBeenCalledExactlyOnceWith(cy, "billing:fee", true);
   expect(cy.zoom()).toBe(1);
   expect(cy.getElementById("billing:fee").renderedPosition().x).toBeCloseTo((304 + 928) / 2);
+  paint();
   expect(onFramed).toHaveBeenLastCalledWith(expect.objectContaining({ outOfView: new Set() }));
+  // Several viewport events in one frame report the final camera only, without reframing.
+  onFramed.mockClear();
+  cy.pan({ x: -4500, y: 0 });
+  cy.zoom(1.1);
+  cy.pan({ x: -3000, y: 0 });
+  const manualCamera = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+  expect(onFramed).not.toHaveBeenCalled();
+  expect(frames.size).toBe(1);
+  paint();
+  expect(onFramed).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ ...manualCamera, outOfView: new Set(["billing:fee"]) }),
+  );
+  expect({ zoom: cy.zoom(), pan: cy.pan() }).toEqual(manualCamera);
+  expect(frame).toHaveBeenCalledOnce();
   // A node that is not on the graph is no move and no report.
   onFramed.mockClear();
   apiRef.current?.reveal("missing");
+  paint();
+  expect(onFramed).not.toHaveBeenCalled();
+  cy.pan({ x: 0, y: 0 });
+  expect(frames.size).toBe(1);
+  cleanup?.();
+  cleanup = undefined;
+  expect(frames.size).toBe(0);
+  paint();
   expect(onFramed).not.toHaveBeenCalled();
 });
 
