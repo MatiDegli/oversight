@@ -329,3 +329,8 @@ body {
 .file-span {
   background-color: var(--file-span);
 }
+
+/* Monaco ships a literal grey for disabled find inputs, including during find dismissal. */
+.monaco-editor.vs-dark .monaco-findInput.disabled {
+  background-color: var(--field);
+}
