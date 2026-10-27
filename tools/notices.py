@@ -25,6 +25,8 @@ from packaging.utils import canonicalize_name
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWED = frozenset({"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC"})
+# Exact package/expression pair approved by the maintainer on 2026-10-27 (DECISIONS.md).
+LICENSE_EXCEPTIONS = frozenset({("typing-extensions", "PSF-2.0")})
 FONTS = frozenset(
     {"@fontsource/atkinson-hyperlegible-mono", "@fontsource/atkinson-hyperlegible-next"}
 )
@@ -44,6 +46,8 @@ class Package:
 
 def allowed_license(expression: str, name: str = "") -> bool:
     """Parse SPDX AND/OR/parentheses, failing closed on unknown IDs or WITH clauses."""
+    if (name, expression) in LICENSE_EXCEPTIONS:
+        return True
     tokens = re.findall(r"\(|\)|[^\s()]+", expression)
     index = 0
     allowed = ALLOWED | ({"OFL-1.1"} if name in FONTS else set[str]())
@@ -67,7 +71,7 @@ def allowed_license(expression: str, name: str = "") -> bool:
             if index >= len(tokens) or tokens[index] in {"AND", "OR", "(", ")", "WITH"}:
                 raise ValueError("Missing license exception")
             index += 1
-            return False  # No exception is part of the approved policy.
+            return False  # No SPDX WITH exception is part of the approved policy.
         return token in allowed
 
     def both() -> bool:

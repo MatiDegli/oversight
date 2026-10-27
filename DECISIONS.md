@@ -412,3 +412,14 @@ nullable unions. Four independent negative controls cover small max, min-only, h
 findings/evidence and a newly constrained existing field. Generator and TypeScript pins stay put.
 
 too_large (413) rides in 1.4.0; limits come with the API guard front (maintainer, M6, 2026-10-27)
+
+## Dependency licenses
+
+- **Named typing-extensions exception (decided by the maintainer, 2026-10-27):**
+  typing-extensions uses PSF-2.0, a permissive license, and is a transitive runtime
+  dependency of pydantic, pydantic-core, FastAPI, starlette, anyio, httpx2, openai,
+  opentelemetry-api and typing-inspection, so it cannot be dropped. The license
+  check permits only the exact pair `typing-extensions` and `PSF-2.0`; the
+  exception covers that package only. Every other license outside the AGENTS.md
+  list is rejected, with OFL-1.1 still restricted to the two Atkinson font
+  packages. THIRD_PARTY_NOTICES.md retains the PSF-2.0 declaration.

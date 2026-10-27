@@ -41,6 +41,29 @@ def test_ofl_is_only_allowed_for_the_two_font_packages() -> None:
     assert not notices.allowed_license("OFL-1.1", "@fontsource/another-font")
 
 
+@pytest.mark.parametrize(
+    ("name", "license", "allowed"),
+    [
+        ("typing-extensions", "PSF-2.0", True),
+        ("another-package", "PSF-2.0", False),
+        ("typing-extensions", "GPL-3.0-only", False),
+        ("typing-extensions", "OFL-1.1", False),
+        ("typing-extensions", "UNKNOWN", False),
+        ("typing-extensions", "PSF-2.0 AND GPL-3.0-only", False),
+        ("typing-extensions", "PSF-2.0 OR GPL-3.0-only", False),
+        ("typing-extensions", "PSF-2.0 WITH unreviewed-exception", False),
+    ],
+)
+def test_named_exception_requires_exact_package_and_license(
+    name: str, license: str, allowed: bool
+) -> None:
+    package = notices.Package("Python", name, "1", license, "https://example.org")
+    assert notices.allowed_license(license, name) is allowed
+    assert notices.policy_errors([package]) == (
+        [] if allowed else [f"{name}@1: {license}; required by "]
+    )
+
+
 @pytest.fixture
 def python_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """An installed-metadata fixture; no installs, network, real providers or resolver."""
@@ -109,6 +132,7 @@ def test_generation_is_sorted_portable_and_keeps_font_copyrights() -> None:
     assert "The Atkinson Hyperlegible Mono Project Authors" in generated
     assert "The Atkinson Hyperlegible Next Project Authors" in generated
     assert "monaco-editor@0.57.0/ThirdPartyNotices.txt" in generated
+    assert "| Python | typing-extensions | 4.16.0 | PSF-2.0 |" in generated
     assert "| Python | pytest |" not in generated
     assert "| Frontend | vite |" not in generated
     assert "| Frontend | @playwright/test |" not in generated
