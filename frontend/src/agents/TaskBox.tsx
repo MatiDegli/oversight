@@ -93,7 +93,7 @@ export function TaskBoxView({
         {line !== null && <p>{line}</p>}
       </div>
       {failure !== null && (
-        <p role="alert" className="flex items-start gap-2 text-sm text-failed-text">
+        <p role="alert" className="flex items-start gap-2 text-sm text-text">
           <X aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> {failure}
         </p>
       )}

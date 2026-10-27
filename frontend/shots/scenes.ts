@@ -11,6 +11,8 @@ import { assertReadableFrame } from "./framing.ts";
 export interface Scene {
   name: string;
   enabled: boolean;
+  /** Use a tooling-derived editing cut instead of the served proposal log. */
+  log?: "editing";
   edgeShapes?: readonly ("bezier" | "taxi")[];
   /** What enables a disabled scene. Printed next to "skipped". */
   needs?: string;
@@ -122,11 +124,8 @@ export const scenes: readonly Scene[] = [
   },
   {
     name: "live-diff",
-    // Ready: `prepare` clicks a changed node and waits for Monaco's inline diff. It needs a log that
-    // ends while the change is being edited: once proposed (seq 19) the node opens review instead.
-    // Run it with LOG set to a log cut between seq 12 and 18.
-    enabled: false,
-    needs: "a log that ends while the change is being edited, before change.proposed at seq 19",
+    enabled: true,
+    log: "editing",
     prepare: (page) => clickChangedNode(page, "Live diff panel"),
   },
   {

@@ -4,15 +4,18 @@
 //
 //   node shots/capture.ts --url http://127.0.0.1:5711/ --log ../fixtures/events/x.jsonl --out ../.shots
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import { join, resolve } from "node:path";
 import { exit, stdout } from "node:process";
 import { parseArgs } from "node:util";
 
 import { chromium } from "@playwright/test";
-import type { Page } from "@playwright/test";
-import type { Core } from "cytoscape";
+import type { Browser, Page } from "@playwright/test";
+import type { GraphProbeHost } from "../src/graph/probe.ts";
 
-import { lastSeq, planJobs } from "./plan.ts";
+import { editingLog, lastSeq, planJobs } from "./plan.ts";
+import { streamReplay } from "./replay.ts";
 import { scenes, themes } from "./scenes.ts";
 
 const VIEWPORT = { width: 1920, height: 1080 };
@@ -39,21 +42,14 @@ async function clearPreviousSet(): Promise<void> {
   }
 }
 
-// Cytoscape registers its instance on the host; inspect it only in this development capture tool.
-declare global {
-  interface HTMLElement {
-    _cyreg?: { cy?: Core };
-  }
-}
-
 async function waitUntilReady(page: Page, seq: number): Promise<void> {
   await page.locator("main").waitFor({ state: "visible" });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction((expected) => {
-    const host = document.querySelector<HTMLElement>('[aria-label="Repository graph"]');
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
     return (
       document.getElementById("root")?.dataset.seq === String(expected) &&
-      (host?._cyreg?.cy?.nodes().length ?? 0) > 0
+      (host?.oversightGraph?.nodeCenters().length ?? 0) > 0
     );
   }, seq);
   // Wait for a rendered frame, not a timed delay.
@@ -70,13 +66,29 @@ async function waitUntilReady(page: Page, seq: number): Promise<void> {
 }
 
 async function main(): Promise<number> {
-  const expectedSeq = lastSeq(await readFile(resolve(log), "utf8"));
+  const sourceLog = await readFile(resolve(log), "utf8");
+  const liveLog = editingLog(sourceLog);
+  const expectedSeq = lastSeq(sourceLog);
   stdout.write(`shots: waiting for fixture seq ${String(expectedSeq)} and the graph renderer\n`);
   await clearPreviousSet();
+  await writeFile(join(out, "live-diff.jsonl"), liveLog);
 
-  const browser = await chromium.launch();
+  // This tiny player serves only the derived cut. Keep SSE open so the live-diff scene has the
+  // same healthy connection as the full player's scenes, including reconnects by cursor.
+  const player = createServer((request, response) => {
+    const after = Number(
+      new URL(request.url ?? "/", "http://localhost").searchParams.get("after") ?? 0,
+    );
+    streamReplay(response, liveLog, after);
+  });
+  player.listen(0, "127.0.0.1");
+  await once(player, "listening");
+  const address = player.address();
+  if (!address || typeof address === "string") throw new Error("Editing player has no port");
+  let browser: Browser | undefined;
   let failures = 0;
   try {
+    browser = await chromium.launch();
     for (const job of planJobs(scenes, themes)) {
       if (job.skip !== null) {
         stdout.write(`shots: skipped ${job.file} (${job.skip})\n`);
@@ -89,10 +101,19 @@ async function main(): Promise<number> {
       const pageErrors: string[] = [];
       page.on("pageerror", (error) => pageErrors.push(error.message));
       try {
+        // Each live-diff capture replays the derived cut, independently of the served proposal log.
+        // Respect the transport cursor on reconnect so no later proposal can leak into the scene.
+        if (scene?.log === "editing") {
+          await page.route("**/events?*", (route) =>
+            route.continue({
+              url: `http://127.0.0.1:${String(address.port)}/events${new URL(route.request().url()).search}`,
+            }),
+          );
+        }
         const target = new URL(url);
         if (job.edgeShape) target.searchParams.set("edge-shape", job.edgeShape);
         await page.goto(target.href, { waitUntil: "load" });
-        await waitUntilReady(page, expectedSeq);
+        await waitUntilReady(page, scene?.log === "editing" ? lastSeq(liveLog) : expectedSeq);
         await scene?.prepare?.(page);
         await page.evaluate((theme) => {
           document.documentElement.dataset.theme = theme;
@@ -101,17 +122,11 @@ async function main(): Promise<number> {
         const path = join(out, job.file);
         await page.screenshot({ path });
         const metrics = await page.evaluate(() => {
-          const cy = document.querySelector<HTMLElement>('[aria-label="Repository graph"]')?._cyreg
-            ?.cy;
-          if (!cy) throw new Error("Graph renderer missing");
-          return {
-            viewport: { width: cy.width(), height: cy.height() },
-            zoom: cy.zoom(),
-            minLabelPx: Math.min(
-              ...cy.nodes().map((node) => node.numericStyle("font-size") * cy.zoom()),
-            ),
-            edgeShape: String(cy.edges().first().style("curve-style")),
-          };
+          const probe = document.querySelector<GraphProbeHost>(
+            '[aria-label="Repository graph"]',
+          )?.oversightGraph;
+          if (!probe) throw new Error("Graph renderer missing");
+          return probe.metrics();
         });
         await writeFile(
           join(out, job.file.replace(/\.png$/, ".json")),
@@ -129,7 +144,16 @@ async function main(): Promise<number> {
       }
     }
   } finally {
-    await browser.close();
+    try {
+      await browser?.close();
+    } finally {
+      player.closeAllConnections();
+      await new Promise<void>((done) =>
+        player.close(() => {
+          done();
+        }),
+      );
+    }
   }
   return failures === 0 ? 0 : 1;
 }

@@ -324,6 +324,75 @@ it("restores the person's exact watch camera after opening and closing review", 
   expect(cy.pan()).toEqual(watch.pan);
 });
 
+it("reframes a second review at the saved watch zoom while the panel remains open", async () => {
+  setLabel("Caller");
+  const { settle } = mount();
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Missing graph");
+  cy.zoom(0.9);
+  const frame = vi.spyOn(camera, "frameCamera").mockReturnValue(null);
+  rerender({ panelOpen: true, frameKey: "review:change-1", frameIds: ["first"] });
+  cy.zoom(0.4);
+  frame.mockClear();
+  rerender({ panelOpen: true, frameKey: "review:change-2", frameIds: ["second"] });
+  expect(frame).toHaveBeenCalledExactlyOnceWith(cy, ["second"], false, {
+    coneIds: undefined,
+    watchZoom: 0.9,
+    restoreCamera: undefined,
+  });
+});
+
+it("expands watch only for added nodes and yields to active pan, wheel zoom and open panels", async () => {
+  setLabel("Caller");
+  const { settle } = mount();
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Missing graph");
+  const expand = vi.spyOn(camera, "includeNewNodes").mockImplementation(() => undefined);
+  const add = (id: string) => {
+    const state = stateStore.getState().state;
+    const graph = state.graph;
+    const template = graph?.nodes[0];
+    if (!graph || !template) throw new Error("Missing graph data");
+    stateStore.setState({
+      state: {
+        ...state,
+        graph: { ...graph, nodes: [...graph.nodes, { ...template, id, name: id }] },
+      },
+    });
+  };
+  add("new");
+  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new"], false);
+  const animating = vi.spyOn(cy, "animated").mockReturnValue(true);
+  expand.mockClear();
+  add("before-ease-ends");
+  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new", "before-ease-ends"], false);
+  animating.mockReturnValue(false);
+  expand.mockClear();
+  stateStore.setState({ state: { ...stateStore.getState().state } });
+  expect(expand).not.toHaveBeenCalled();
+  expand.mockClear();
+  const stop = vi.spyOn(cy, "stop");
+  cy.emit("tapstart");
+  add("during-pan");
+  expect(expand).not.toHaveBeenCalled();
+  expect(stop).toHaveBeenCalledOnce();
+  cy.emit("tapend");
+  cy.emit("scrollzoom");
+  add("during-wheel");
+  expect(expand).not.toHaveBeenCalled();
+  vi.spyOn(performance, "now").mockReturnValue(performance.now() + 1000);
+  vi.spyOn(camera, "frameCamera").mockReturnValue(null);
+  rerender({ panelOpen: true, frameKey: "review:1", frameIds: ["new"] });
+  add("during-review");
+  expect(expand).not.toHaveBeenCalled();
+  rerender({ panelOpen: false, frameKey: null });
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
+  add("after-pan");
+  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["after-pan"], true);
+});
+
 it("measures the card's real height and refreshes marks when that height changes", async () => {
   setLabel("Caller");
   const { settle, resize } = mount();

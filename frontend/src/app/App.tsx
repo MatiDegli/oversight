@@ -53,8 +53,10 @@ export function App() {
   }, []);
   const onOpenQueue = useCallback(() => {
     const state = stateStore.getState().state;
-    const changeId = nextReview(state);
-    if (changeId !== null) setView((current) => openReview(state, current, changeId) ?? current);
+    setView((current) => {
+      const changeId = nextReview(state, current.review);
+      return changeId === null ? current : (openReview(state, current, changeId) ?? current);
+    });
   }, []);
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {

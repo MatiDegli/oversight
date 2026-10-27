@@ -59,7 +59,8 @@ describe("the new-agent box", () => {
 
   it("shows a failure under the box as an alert with an icon, never in color alone", () => {
     const markup = view({ draft: "Cap the discount", failure: "Slot A is busy." });
-    expect(markup).toMatch(/<p role="alert"[^>]*text-failed-text[^>]*><svg[^>]*aria-hidden="true"/);
+    expect(markup).toMatch(/<p role="alert"[^>]*text-text[^>]*><svg[^>]*aria-hidden="true"/);
+    expect(markup).not.toContain("text-failed");
     expect(markup).toContain("Slot A is busy.");
     expect(button(markup)).toContain('aria-disabled="false"');
     expect(view({ draft: "x" })).not.toContain('role="alert"');

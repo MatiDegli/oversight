@@ -3,7 +3,13 @@ import type { Core } from "cytoscape";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getActiveTheme } from "../theme";
-import { frameBox, frameCamera, nodesInViewport, prefersReducedMotion } from "./camera";
+import {
+  frameBox,
+  frameCamera,
+  includeNewNodes,
+  nodesInViewport,
+  prefersReducedMotion,
+} from "./camera";
 
 const theme = getActiveTheme();
 const graphs: Core[] = [];
@@ -431,5 +437,53 @@ describe("prefersReducedMotion", () => {
       matches: query === "(prefers-reduced-motion: reduce)",
     }));
     expect(prefersReducedMotion()).toBe(true);
+  });
+});
+
+describe("watch growth", () => {
+  it.each([true, false])(
+    "includes an offscreen addition with the minimum centred zoom-out (reduced: %s)",
+    (reduced) => {
+      const cy = narrowedGraph(600);
+      const before = structuredClone(positions(cy));
+      const zoom = cy.zoom();
+      const pan = { ...cy.pan() };
+      const center = { x: (300 - pan.x) / zoom, y: (300 - pan.y) / zoom };
+      const box = cy
+        .getElementById("lone")
+        .boundingBox({ includeLabels: true, includeOverlays: false });
+      const animate = vi.spyOn(cy, "animate").mockReturnValue(cy);
+      includeNewNodes(cy, ["lone"], reduced);
+      if (!reduced) {
+        expect(animate).toHaveBeenCalledOnce();
+        const target = animate.mock.calls[0]?.[0];
+        if (!target) throw new Error("Missing target");
+        if (typeof target.zoom !== "number" || !target.pan) throw new Error("Missing viewport");
+        cy.viewport({ zoom: target.zoom, pan: target.pan });
+        expect(animate.mock.calls[0]?.[1]).toEqual({
+          duration: 240,
+          easing: theme["transition-easing"],
+        });
+      } else expect(animate).not.toHaveBeenCalled();
+      expect(cy.zoom()).toBeLessThan(zoom);
+      expect((300 - cy.pan().x) / cy.zoom()).toBeCloseTo(center.x);
+      expect((300 - cy.pan().y) / cy.zoom()).toBeCloseTo(center.y);
+      expect(box.x2 * cy.zoom() + cy.pan().x).toBeCloseTo(560);
+      expect(cy.getElementById("lone").renderedBoundingBox().x1).toBeGreaterThanOrEqual(40);
+      expect(positions(cy)).toEqual(before);
+      expect(cy.nodes(":selected")).toHaveLength(0);
+    },
+  );
+
+  it("leaves the camera alone for additions already in view, missing nodes and a cramped viewport", () => {
+    const cy = narrowedGraph(600);
+    const viewport = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+    const animate = vi.spyOn(cy, "animate");
+    includeNewNodes(cy, ["b"], false);
+    includeNewNodes(cy, ["missing"], false);
+    vi.spyOn(cy, "width").mockReturnValue(60);
+    includeNewNodes(cy, ["lone"], false);
+    expect(animate).not.toHaveBeenCalled();
+    expect({ zoom: cy.zoom(), pan: cy.pan() }).toEqual(viewport);
   });
 });
