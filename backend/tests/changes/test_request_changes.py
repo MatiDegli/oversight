@@ -4,9 +4,17 @@ from a conflict, main is merged into its branch first, so it redoes the change o
 import asyncio
 
 import pytest
-from changes_helpers import TEMPLATE, VALUE, Harness, bounded, queued_callbacks_ran
+from changes_helpers import (
+    TEMPLATE,
+    VALUE,
+    Harness,
+    bounded,
+    hold_a_save_that_ends_suspect,
+    queued_callbacks_ran,
+)
 
 from oversight.changes import ChangeNotFound, Revision, WrongState
+from oversight.workspace import WorkspaceError
 from oversight_contracts.events import (
     AgentStatus,
     ChangeProposed,
@@ -479,3 +487,30 @@ async def test_redo_keeps_mains_callers(h: Harness) -> None:
     assert f"shop.use:{USE}" not in second.graph.nodes_removed
     assert f"shop.use:{USE}" in [entry.node_id for entry in second.impact.entries]
     assert [f.path for f in second.files] == ["shop/mod.py"]
+
+
+@bounded
+async def test_request_changes_queued_behind_a_failing_save_starts_no_revision(
+    h: Harness,
+) -> None:
+    """F1: a save on main fails and makes main suspect while Request changes from a conflict waits
+    for main's lock. Phase A finds main suspect: no base move, no revision, the change still
+    `conflict`, one `error`."""
+    await conflicted(h)
+    before = (await worktree_git(h, "rev-parse", "HEAD")).strip()
+    save = await hold_a_save_that_ends_suspect(h)
+    request = h.manager.request_changes("change-1", "Redo it.")  # the app's check passed
+    await queued_callbacks_ran()
+    assert not request.done()  # it waits for main's lock
+    h.workspace.resume.set()
+    with pytest.raises(WorkspaceError):
+        await save
+
+    assert await request is None
+    assert (await worktree_git(h, "rev-parse", "HEAD")).strip() == before  # the base did not move
+    [error] = [
+        e for e in h.payloads(ErrorReport) if "became suspect before this request" in e.message
+    ]
+    assert (error.source, error.fatal, error.change_id) == ("server", False, "change-1")
+    assert [r.decision for r in h.payloads(ChangeResolved)] == ["approved"]  # no request sent
+    assert await h.manager.request_changes("change-1", "Again.") is None  # `conflict`, not stuck

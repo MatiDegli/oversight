@@ -1010,6 +1010,16 @@ class ChangeManager:
         if rec.fallback == "conflict":
             # Phase A, cancellable: a cancel before phase B leaves the change as it was.
             async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+                if self._suspect:
+                    # F1: main turned suspect while this queued. No base move and no revision; the
+                    # decision's end puts the change back to `conflict`.
+                    await self._error(
+                        "server",
+                        "Main became suspect before this request ran; reject it or restart.",
+                        rec,
+                        fatal=False,
+                    )
+                    return None
                 move = _Move()
                 try:
                     note = await self._move_base(rec, move)
