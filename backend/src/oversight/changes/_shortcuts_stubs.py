@@ -127,11 +127,12 @@ def detect_stubs(
     matches: dict[TestRef, TestRef],
 ) -> list[Finding]:
     before = _inventory(old) if old else {}
+    inventories = {p: _inventory(src) for p, src in old_sources.items()}
     # Preserve placeholders owned by intact renamed/moved tests and their helpers.
     for (new_path, qual), (old_path, old_qual) in matches.items():
         if new_path != path or (old_path == path and qual == old_qual):
             continue
-        for owner, stubs in _inventory(old_sources[old_path]).items():
+        for owner, stubs in inventories[old_path].items():
             if owner == old_qual or owner.startswith(old_qual + "."):
                 before[qual + owner[len(old_qual) :]] = stubs
     interfaces = _interfaces(new)

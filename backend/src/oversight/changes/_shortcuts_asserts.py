@@ -2,7 +2,7 @@
 
 import ast
 
-from oversight.changes._shortcuts_approx import approx_signature
+from oversight.changes._shortcuts_approx import approx_signature, symbolic_relation
 from oversight.changes._shortcuts_common import (
     Finding,
     FuncNode,
@@ -11,6 +11,7 @@ from oversight.changes._shortcuts_common import (
     is_literal_like,
     walk_local,
 )
+from oversight.changes._shortcuts_control import detect_control
 from oversight.changes._shortcuts_equivalence import (
     align_parameters,
     body_key,
@@ -21,7 +22,8 @@ from oversight.changes._shortcuts_normalize import (
     inline_assertion_calls,
     normalize_assertions,
 )
-from oversight.changes._shortcuts_tests import same_test_body
+from oversight.changes._shortcuts_tests import same_test_body, single_case_inlined
+from oversight.changes._shortcuts_unknown import unknown
 from oversight.changes._shortcuts_wording import cancel_reworded
 
 
@@ -57,11 +59,14 @@ def _check_pair(
 ) -> Finding | None:
     old_shape, old_tolerances = approx_signature(old_node, old)
     new_shape, new_tolerances = approx_signature(new_node, new)
-    if old_shape == new_shape and any(
-        before is not None
-        and after is not None
-        and any(right > left for left, right in zip(before, after, strict=True))
-        for before, after in zip(old_tolerances, new_tolerances, strict=False)
+    if old_shape == new_shape and (
+        symbolic_relation(old_node, new_node, old, new) == "wider"
+        or any(
+            before is not None
+            and after is not None
+            and any(right > left for left, right in zip(before, after, strict=True))
+            for before, after in zip(old_tolerances, new_tolerances, strict=False)
+        )
     ):
         return Finding(
             path,
@@ -270,6 +275,10 @@ def _compare_assertions(
                 None,
             )
             if approx_idx is not None:
+                if symbolic_relation(old_node, unmatched_new[approx_idx], old, new) == "unknown":
+                    findings.append(
+                        unknown(path, "approx tolerances cannot be compared", old_node.lineno)
+                    )
                 unmatched_new.pop(approx_idx)
                 continue
         if paired is not None and paired_idx is not None:
@@ -351,10 +360,13 @@ def detect_assertions(
             continue
         if same_test_body(old, old_func, new, new_func) and old_qual != new_qual:
             continue
+        if single_case_inlined(old, old_qual, new, new_qual):
+            continue
         align_parameters(old, new, old_func, new_func)
         align_local_names(old_func, new_func)
         if body_key(old_func) == body_key(new_func):
             continue
+        findings.extend(detect_control(path, old_func, new_func, old, new))
         remaining_old, unmatched_new = _unmatched_assertions(old_func, new_func, old, new)
         findings.extend(_compare_assertions(path, remaining_old, unmatched_new, old, new))
         findings.extend(_compare_raises(path, old_func, new_func, old, new))

@@ -6,6 +6,7 @@ import math
 from typing import cast
 
 from oversight.changes._shortcuts_common import Source
+from oversight.changes._shortcuts_numeric import numeric_domain
 
 
 def _number(node: ast.expr) -> float | None:
@@ -31,10 +32,7 @@ def _expected_numbers(node: ast.expr) -> tuple[float, ...] | None:
     return None
 
 
-def _effective(call: ast.Call) -> tuple[float, ...] | None:
-    if not call.args:
-        return None
-    expected = _expected_numbers(call.args[0])
+def _coefficients(call: ast.Call) -> tuple[float, float] | None:
     options = dict(
         [
             *zip(("rel", "abs"), call.args[1:3], strict=False),
@@ -58,9 +56,44 @@ def _effective(call: ast.Call) -> tuple[float, ...] | None:
             rel = number
         else:
             absolute = number
-    if expected is None:
+    return rel, absolute
+
+
+def _effective(call: ast.Call, source: Source) -> tuple[float, ...] | None:
+    if not call.args:
         return None
+    expected = _expected_numbers(call.args[0]) or numeric_domain(call, source)
+    coefficients = _coefficients(call)
+    if expected is None or coefficients is None:
+        return None
+    rel, absolute = coefficients
     return tuple(max(rel * abs(number), absolute) for number in expected)
+
+
+def symbolic_relation(before: ast.AST, after: ast.AST, old: Source, new: Source) -> str:
+    """Compare coefficients monotonically when the expected value is opaque."""
+
+    def calls(node: ast.AST, source: Source) -> list[ast.Call]:
+        expression = node.test if isinstance(node, ast.Assert) else node
+        return [
+            n
+            for n in ast.walk(expression)
+            if isinstance(n, ast.Call) and source.resolve(n.func) == "pytest.approx"
+        ]
+
+    relations: list[str] = []
+    for left, right in zip(calls(before, old), calls(after, new), strict=True):
+        if _effective(left, old) is not None and _effective(right, new) is not None:
+            continue
+        a, b = _coefficients(left), _coefficients(right)
+        if a is None or b is None:
+            if ast.dump(left) != ast.dump(right):
+                relations.append("unknown")
+        elif all(y >= x for x, y in zip(a, b, strict=True)) and a != b:
+            relations.append("wider")
+        elif not all(y <= x for x, y in zip(a, b, strict=True)):
+            relations.append("unknown")
+    return "wider" if "wider" in relations else "unknown" if "unknown" in relations else "preserved"
 
 
 def approx_signature(node: ast.AST, source: Source) -> tuple[str, list[tuple[float, ...] | None]]:
@@ -83,7 +116,7 @@ def approx_signature(node: ast.AST, source: Source) -> tuple[str, list[tuple[flo
                     [clone(v) if isinstance(v, ast.AST) else v for v in cast(list[object], value)],
                 )
         if isinstance(current, ast.Call) and source.resolve(current.func) == "pytest.approx":
-            tolerances.append(_effective(current))
+            tolerances.append(_effective(current, source))
             assert isinstance(copied, ast.Call)
             copied.func = ast.Name(id="@pytest.approx", ctx=ast.Load())
             copied.args = copied.args[:1] + copied.args[3:]

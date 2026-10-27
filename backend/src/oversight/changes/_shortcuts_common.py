@@ -19,6 +19,7 @@ class ShortcutKind(StrEnum):
     LITERAL_BRANCH = "literal_branch"
     STUB_LEFT = "stub_left"
     PARSE_ERROR = "parse_error"
+    UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +28,27 @@ class Finding:
     line: int
     kind: ShortcutKind
     message: str
+
+
+class DetectionResult(list[Finding]):
+    """Facts plus an explicit analysis status; absence of facts is no safety proof."""
+
+    @property
+    def status(self) -> str:
+        if any(f.kind in {ShortcutKind.UNKNOWN, ShortcutKind.PARSE_ERROR} for f in self):
+            return "unknown"
+        return "findings" if self else "no_facts"
+
+    @property
+    def reasons(self) -> tuple[str, ...]:
+        return tuple(
+            f.message for f in self if f.kind in {ShortcutKind.UNKNOWN, ShortcutKind.PARSE_ERROR}
+        )
+
+
+def is_collected_file(path: str) -> bool:
+    name = PurePosixPath(path).name
+    return name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py"))
 
 
 def is_test_file(path: str) -> bool:

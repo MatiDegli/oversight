@@ -4,7 +4,7 @@ import ast
 from collections import Counter
 
 from oversight.changes._shortcuts_common import Finding, ShortcutKind, Source, walk_local
-from oversight.changes._shortcuts_tests import TestRef
+from oversight.changes._shortcuts_tests import TestRef, parametrize_parts
 
 DECORATOR_SKIP = frozenset(
     {
@@ -17,7 +17,7 @@ DECORATOR_SKIP = frozenset(
         "unittest.expectedFailure",
     }
 )
-CALL_SKIP = frozenset({"pytest.skip", "pytest.xfail"})
+CALL_SKIP = frozenset({"pytest.skip", "pytest.xfail", "pytest.importorskip"})
 
 
 def _decorators(source: Source, decorators: list[ast.expr]) -> list[tuple[str, int]]:
@@ -29,6 +29,10 @@ def _decorators(source: Source, decorators: list[ast.expr]) -> list[tuple[str, i
 def _parameter_markers(source: Source, node: ast.AST) -> list[tuple[str, int]]:
     markers: list[tuple[str, int]] = []
     for call in ast.walk(node):
+        if isinstance(call, ast.Call):
+            parts = parametrize_parts(call, source)
+            if parts is not None and not parts.cases.elts:
+                markers.append(("empty parametrize", call.lineno))
         if not isinstance(call, ast.Call) or source.resolve(call.func) != "pytest.param":
             continue
         for kw in call.keywords:
@@ -49,15 +53,42 @@ def _definition_markers(source: Source, qual: str) -> list[tuple[str, int]]:
         markers.extend(_parameter_markers(source, dec))
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         for child in walk_local(node):
-            if isinstance(child, ast.Call) and (name := source.resolve(child.func)) in CALL_SKIP:
-                markers.append((name, child.lineno))
+            if isinstance(child, ast.Call):
+                name = source.resolve(child.func) or ""
+                if name in CALL_SKIP or name.rsplit(".", 1)[-1] == "skipTest":
+                    markers.append((name, child.lineno))
+            if (
+                isinstance(child, ast.Raise)
+                and child.exc is not None
+                and source.resolve(child.exc) == "unittest.SkipTest"
+            ):
+                markers.append(("unittest.SkipTest", child.lineno))
             if isinstance(child, ast.Call) and source.resolve(child.func) == "pytest.param":
                 markers.extend(_parameter_markers(source, child))
+    markers.extend(_test_false(node.body))
     return sorted(set(markers), key=lambda marker: (marker[1], marker[0]))
 
 
+def _test_false(body: list[ast.stmt]) -> list[tuple[str, int]]:
+    markers: list[tuple[str, int]] = []
+    for node in body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if (
+                isinstance(node.value, ast.Constant)
+                and node.value.value is False
+                and any(
+                    (isinstance(t, ast.Name) and t.id == "__test__")
+                    or (isinstance(t, ast.Attribute) and t.attr == "__test__")
+                    for t in targets
+                )
+            ):
+                markers.append(("__test__ = False", node.lineno))
+    return markers
+
+
 def _module_markers(source: Source) -> list[tuple[str, int]]:
-    markers: set[tuple[str, int]] = set()
+    markers: set[tuple[str, int]] = set(_test_false(source.tree.body))
     stack: list[ast.AST] = list(source.tree.body)
     while stack:
         node = stack.pop()
@@ -68,11 +99,14 @@ def _module_markers(source: Source) -> list[tuple[str, int]]:
         if (
             isinstance(node, ast.Call)
             and (name := source.resolve(node.func)) in CALL_SKIP
-            and any(
-                kw.arg == "allow_module_level"
-                and isinstance(kw.value, ast.Constant)
-                and kw.value.value is True
-                for kw in node.keywords
+            and (
+                name == "pytest.importorskip"
+                or any(
+                    kw.arg == "allow_module_level"
+                    and isinstance(kw.value, ast.Constant)
+                    and kw.value.value is True
+                    for kw in node.keywords
+                )
             )
         ):
             markers.add((name, node.lineno))

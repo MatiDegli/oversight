@@ -104,6 +104,12 @@ def _binding_values(
             if include_plain:
                 for target in node.targets:
                     bind(target, node.value, "value")
+        elif isinstance(node, ast.AugAssign):
+            bind(node.target, node.value, type(node.op).__name__)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                target = ast.Name(id=alias.asname or alias.name.split(".")[0])
+                bind(target, ast.Constant(value=ast.dump(node)), "import")
         elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and node.value is not None:
             bind(node.target, node.value, "value")
         elif isinstance(node, (ast.For, ast.AsyncFor)):
@@ -161,12 +167,29 @@ def align_local_names(before: FuncNode, after: FuncNode) -> None:
     # per name, including annotated/walrus assignments and for/with targets.
     old_bindings, new_bindings = _binding_values(before), _binding_values(after)
     nonplain = _binding_values(after, include_plain=False)
+    tautological = {
+        node.test.left.id
+        for node in walk_local(after)
+        if isinstance(node, ast.Assert)
+        and isinstance(node.test, ast.Compare)
+        and len(node.test.ops) == 1
+        and isinstance(node.test.ops[0], ast.Eq)
+        and isinstance(node.test.left, ast.Name)
+        and any(
+            kind == "value" and value == ast.dump(node.test.comparators[0])
+            for kind, value, _ in new_bindings.get(node.test.left.id, [])
+        )
+    }
     captured = {
         name
         for name in new_bindings
         if name in existing
         and new_bindings[name] != old_bindings.get(name)
-        and (name in nonplain or len(new_bindings[name]) > len(old_bindings.get(name, [])))
+        and (
+            name in nonplain
+            or name in tautological
+            or len(new_bindings[name]) > len(old_bindings.get(name, []))
+        )
     }
     for node in walk_local(before):
         if isinstance(node, ast.Name) and node.id in captured:
