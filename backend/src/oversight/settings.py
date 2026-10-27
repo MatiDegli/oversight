@@ -1,5 +1,6 @@
 """Configuration from the environment and the .env file. Read by app.py and the API probe."""
 
+import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,23 @@ class Settings:
     # The provider keys. repr=False keeps them out of any log line or traceback that shows Settings.
     meta_api_key: str | None = field(default=None, repr=False)
     baseten_api_key: str | None = field(default=None, repr=False)
+    agent_model: str = "muse-spark"
+    """The profile agents run on: `muse-spark` (Meta) or `fake` (the scripted model, which needs
+    `fake_script`). OVERSIGHT_AGENT_MODEL."""
+    fake_script: Path | None = None
+    """The fake model's script, for `fake`; a relative path starts at the repository root.
+    OVERSIGHT_FAKE_SCRIPT."""
+    # The spending brake: no defaults. A value that is missing, not a number or not positive is
+    # `None`, and every start on a Meta profile is then refused (spend_brake).
+    budget_usd: float | None = None
+    """The credits, in US dollars. OVERSIGHT_BUDGET_USD."""
+    input_usd_per_m: float | None = None
+    """Muse Spark's input price, US dollars per million tokens. MUSE_SPARK_INPUT_USD_PER_M."""
+    output_usd_per_m: float | None = None
+    """Muse Spark's output price, US dollars per million tokens. MUSE_SPARK_OUTPUT_USD_PER_M."""
+    demo_python: Path | None = None
+    """Tests only, no variable: an interpreter with pytest, used instead of building the demo
+    venv."""
 
     @classmethod
     def load(cls, env_file: Path = REPO_ROOT / ".env") -> "Settings":
@@ -48,4 +66,24 @@ class Settings:
             # An empty value, as in .env.example, means the key is not set.
             meta_api_key=merged.get("META_API_KEY") or None,
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,
+            agent_model=merged.get("OVERSIGHT_AGENT_MODEL") or cls.agent_model,
+            fake_script=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT")),
+            budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
+            input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
+            output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
         )
+
+
+def _repo_path(value: str | None) -> Path | None:
+    return REPO_ROOT / value if value else None
+
+
+def positive_amount(value: str | None) -> float | None:
+    """A finite amount above zero, or `None`: missing, not a number, zero or less fail closed."""
+    if value is None:
+        return None
+    try:
+        amount = float(value)
+    except ValueError:
+        return None
+    return amount if math.isfinite(amount) and amount > 0 else None
