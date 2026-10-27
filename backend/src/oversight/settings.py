@@ -52,6 +52,9 @@ class Settings:
     demo_python: Path | None = None
     """Tests only, no variable: an interpreter with pytest, used instead of building the demo
     venv."""
+    frontend_dist: Path | None = None
+    """The built frontend the live app serves, or `None` for none. No variable: `load` sets
+    frontend/dist, and a test that builds `Settings` itself gets no UI unless it passes one."""
 
     @classmethod
     def load(cls, env_file: Path = REPO_ROOT / ".env") -> "Settings":
@@ -71,6 +74,7 @@ class Settings:
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
             input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
             output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
+            frontend_dist=REPO_ROOT / "frontend" / "dist",
         )
 
 
