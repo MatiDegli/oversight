@@ -183,7 +183,7 @@ def _combine_findings(findings: list[Finding]) -> list[Finding]:
     return sorted(combined, key=lambda f: (f.path, f.line, f.kind, f.message))
 
 
-def _detect(changes: Iterable[Change], deadline: float) -> list[Finding]:
+def _detect(changes: Iterable[Change], deadline: float, *, grouped: bool) -> list[Finding]:
     change_list = sorted(changes, key=lambda change: change[0])
     if time.monotonic() >= deadline:
         raise TimeoutError("analysis timeout")
@@ -253,10 +253,16 @@ def _detect(changes: Iterable[Change], deadline: float) -> list[Finding]:
         )
         if time.monotonic() >= deadline:
             raise TimeoutError("analysis timeout")
-    return _combine_findings(findings)
+    return (
+        _combine_findings(findings)
+        if grouped
+        else sorted(set(findings), key=lambda f: (f.path, f.line, f.kind, f.message))
+    )
 
 
-def detect_shortcuts(changes: Iterable[Change], *, timeout: float = 2.0) -> DetectionResult:
+def detect_shortcuts(
+    changes: Iterable[Change], *, timeout: float = 2.0, grouped: bool = True
+) -> DetectionResult:
     """Return sorted facts and an explicit status, without running test code.
 
     ``[]`` means "no facts", NEVER "safe": policy must not treat it as permission
@@ -268,6 +274,6 @@ def detect_shortcuts(changes: Iterable[Change], *, timeout: float = 2.0) -> Dete
     and matching caps bound expensive work, rather than promising preemption.
     """
     try:
-        return DetectionResult(_detect(changes, time.monotonic() + timeout))
+        return DetectionResult(_detect(changes, time.monotonic() + timeout, grouped=grouped))
     except Exception as exc:
         return DetectionResult([unknown("<analysis>", f"{type(exc).__name__}: {exc}")])

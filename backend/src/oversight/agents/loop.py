@@ -12,7 +12,7 @@ import json
 import time
 from collections import Counter
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, cast
 
 from oversight.agents.client import (
@@ -26,7 +26,7 @@ from oversight.agents.sink import ChangeSink
 from oversight.agents.tools import TOOL_SCHEMAS, Toolbox, ToolOutcome, interrupted
 from oversight.agents.usage import Pricing, UsageLedger
 from oversight.events import EventPayload
-from oversight.workspace import Tree, Workspace, WorkspaceError
+from oversight.workspace import SuiteInterrupted, Tree, Workspace, WorkspaceError
 from oversight_contracts.common import AgentId, ChangeId, Slot
 from oversight_contracts.events import (
     AgentFocus,
@@ -356,10 +356,12 @@ class AgentRun:
                 started = self._monotonic()
                 try:
                     outcome = await self._tools.call(call.name, call.arguments)
-                except asyncio.CancelledError:
+                except asyncio.CancelledError as error:
                     # The time limit or Stop cut the call short: it is still a step, an error.
                     self._step += 1
                     stopped = interrupted(call.name, call.arguments)
+                    if isinstance(error, SuiteInterrupted):
+                        stopped = replace(stopped, suite_run=error.run)
                     await self._report(call.name, stopped, self._since(started))
                     raise
                 duration_ms = self._since(started)
@@ -419,6 +421,8 @@ class AgentRun:
         agent_id = self._task.agent_id
         # The edit is on disk either way. A lost record only changes what the UI is told: the
         # model's result, the failure count and the stop rules still follow `outcome`.
+        if outcome.suite_run is not None:
+            await self._sink.tests_executed(self._task.agent_id, outcome.suite_run)
         recorded = outcome.edited_path is None
         cut_short: asyncio.CancelledError | None = None
         if outcome.edited_path is not None:
