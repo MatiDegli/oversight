@@ -314,3 +314,7 @@ Ours wins in every case below.
   exposing credentials. Keys are opaque nonempty strings without whitespace; authenticity is not
   checked by calling a provider. The optional error `missing` field is omitted for other codes,
   preserving their existing wire shape; recorded 1.0 and 1.1 events remain valid.
+
+- **Dot field brought forward (maintainer, 2026-10-27):** the dot field, rings and breathing light
+  behind the graph move from "after level 1" to now, built as DESIGN.md specifies; it must never
+  block level 1, so with no WebGL, a failed draw or a lost context the graph shows plain ground.
