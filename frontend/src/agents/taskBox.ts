@@ -126,6 +126,8 @@ export interface TaskBoxModel {
   choice: SlotChoice | null;
   choose: (choice: SlotChoice) => void;
   setDraft: (text: string) => void;
+  /** Fill only an empty, idle box; even whitespace belongs to the person. */
+  prefill: (text: string) => boolean;
   /** Sends the trimmed task and the selected slot when the box offers a choice. */
   start: (send: (body: StartAgent) => Promise<unknown>, slot?: Slot | null) => Promise<void>;
 }
@@ -145,6 +147,11 @@ export function createTaskBoxStore() {
     },
     setDraft: (draft) => {
       set({ draft, failure: null });
+    },
+    prefill: (draft) => {
+      if (get().pending || get().draft !== "") return false;
+      set({ draft, failure: null });
+      return true;
     },
     start: async (send, slot) => {
       const task = get().draft.trim();

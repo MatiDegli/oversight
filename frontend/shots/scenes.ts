@@ -108,6 +108,41 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
   assertPanelFrame(zoomBefore, framed, panel === "Review panel" ? "review" : "live-diff");
 }
 
+async function openFileView(page: Page): Promise<void> {
+  const path = "shop/cart.py";
+  const content = await readFile(new URL(`../../demo-repo/${path}`, import.meta.url), "utf8");
+  await page.route("**/files?*", (route) =>
+    route.fulfill({
+      json: {
+        path,
+        content,
+        hash: createHash("sha256").update(content).digest("hex"),
+        agent_id: null,
+      },
+    }),
+  );
+  const point = await page.evaluate(() => {
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const node = host?.oversightGraph?.nodeCenters().find(({ id }) => id === "shop.cart:Cart.add");
+    if (!host || !node) throw new Error("The untouched cart node is missing");
+    const box = host.getBoundingClientRect();
+    return { x: box.left + node.x, y: box.top + node.y };
+  });
+  await page.mouse.click(point.x, point.y);
+  const panel = page.getByRole("complementary", { name: "File view" });
+  await panel.locator(".monaco-editor .view-lines").waitFor();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[aria-label="File view"]')?.getAttribute("data-state") === "clean",
+  );
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+        ?.oversightGraph?.animating() === false,
+  );
+}
+
 export const scenes: readonly Scene[] = [
   // Watch mode: the graph and the agents panel, captured once the replay has put a card in it.
   {
@@ -208,42 +243,17 @@ export const scenes: readonly Scene[] = [
     enabled: true,
     // The replay API has no file contents. This scene reads the demo template through a GET
     // double; it is a capture of the file view, not a saved edit reconstructed from the log.
+    prepare: openFileView,
+  },
+  {
+    name: "file-view-task",
+    enabled: true,
     prepare: async (page) => {
-      const path = "shop/cart.py";
-      const content = await readFile(new URL(`../../demo-repo/${path}`, import.meta.url), "utf8");
-      await page.route("**/files?*", (route) =>
-        route.fulfill({
-          json: {
-            path,
-            content,
-            hash: createHash("sha256").update(content).digest("hex"),
-            agent_id: null,
-          },
-        }),
-      );
-      const point = await page.evaluate(() => {
-        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
-        const node = host?.oversightGraph
-          ?.nodeCenters()
-          .find(({ id }) => id === "shop.cart:Cart.add");
-        if (!host || !node) throw new Error("The untouched cart node is missing");
-        const box = host.getBoundingClientRect();
-        return { x: box.left + node.x, y: box.top + node.y };
-      });
-      await page.mouse.click(point.x, point.y);
-      const panel = page.getByRole("complementary", { name: "File view" });
-      await panel.locator(".monaco-editor .view-lines").waitFor();
-      await page.waitForFunction(
-        () =>
-          document.querySelector('[aria-label="File view"]')?.getAttribute("data-state") ===
-          "clean",
-      );
-      await page.waitForFunction(
-        () =>
-          document
-            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-            ?.oversightGraph?.animating() === false,
-      );
+      await openFileView(page);
+      await page.getByRole("button", { name: "Start an agent here" }).click();
+      const box = page.getByLabel("Task for the new agent");
+      assert.equal(await box.inputValue(), "In shop/cart.py, Cart.add: ");
+      assert.equal(await box.evaluate((element) => document.activeElement === element), true);
     },
   },
 ];
