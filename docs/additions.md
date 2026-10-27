@@ -134,8 +134,9 @@ A rule tied to an area also saves context: the agent receives it only when it wo
 The person who runs several agents is held up by approving every change by hand, not by the
 agents. This repository is built the other way: since `docs/approvals`, the coordinator merges a
 front once the checks pass and a reviewer from another provider has no open blocking or should-fix
-finding, and only the critical decisions reach the maintainer. The product is stricter than the
-process that builds it. This idea brings that process into the product.
+finding (for frontend views and docs, a should-fix off the demo path becomes a follow-up front;
+see docs/proposal.md, section 7), and only the critical decisions reach the maintainer. The product
+is stricter than the process that builds it. This idea brings that process into the product.
 
 - **Two modes:** "Ask me", the default and today's behavior, and "Merge alone when safe". The
   level 1 and level 2 demos run in "Ask me".
@@ -146,6 +147,10 @@ process that builds it. This idea brings that process into the product.
   area; the other model's review (idea 1) has nothing blocking; size, cone and spend are under
   their limits. A change to a function with a large cone, such as `compute_price`, always waits.
 - **Anything else is "needs you"**, with the failed rule as the first line of the review header.
+- **Ideas 1 to 3 are still not approved.** Approving ideas 7 to 9 does not approve them. The first
+  version of 7 works without them: the rules above that come from them (the detector's facts from
+  idea 3, the zone and the protected areas from idea 2, the other model's review from idea 1) are
+  added only as each of those ideas is approved and lands.
 - **A model can call the person in; only code lets a change through without them.** A model's
   output can add a reason to wait, never remove one.
 - **Every merge by rules is in the history with its reasons**, and has a one-click Revert while it
@@ -153,8 +158,10 @@ process that builds it. This idea brings that process into the product.
 - **Merge as in the repository's integration flow:** test the combined result first, then move
   main.
 - **The pitch line:** decide the rules once and the exceptions live. If the idea ships, the
-  success sentence in PRODUCT.md ("nothing reaches main without their decision") becomes "nothing
-  reaches main without their decision or a rule they set, and they can see why each change merged".
+  success sentence in PRODUCT.md ("nothing reaches main without their decision") would need to
+  change. Proposed: "nothing reaches main without their decision or a rule they set, and they can
+  see why each change merged". PRODUCT.md stays as it is until the maintainer approves this
+  sentence on its own.
 
 ## 8. One task, one plan, two agents
 
