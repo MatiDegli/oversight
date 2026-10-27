@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStore } from "zustand";
 
 import { stateStore } from "../state";
-import { replayBuild, replaySource } from "../transport";
+import { createCommandClient, replayBuild, replaySource } from "../transport";
 import { Frame } from "./Frame";
 import { startAppSession } from "./session";
 import { clickNode, closePanel, closesPanel, initialView, openChange } from "./view";
@@ -11,6 +11,8 @@ import type { View } from "./view";
 export function App() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>(initialView);
+  // The replay build has no backend: it never creates the command client, and starts no agent.
+  const commands = useMemo(() => (replayBuild ? null : createCommandClient()), []);
   const state = useStore(stateStore, (store) => store.state);
   useEffect(() => {
     return startAppSession(document.getElementById("root"), (failure) => {
@@ -49,6 +51,7 @@ export function App() {
       canOpenChange={(changeId) => openChange(state, view, changeId) !== null}
       onOpenChange={onOpenChange}
       onClosePanel={onClosePanel}
+      onStartAgent={commands?.startAgent}
       notice={
         replayBuild || error !== null ? (
           <>

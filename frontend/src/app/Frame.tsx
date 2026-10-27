@@ -1,8 +1,8 @@
-import type { AgentStatus } from "@contracts";
+import type { AgentStatus, StartAgent } from "@contracts";
 import { GitBranch, Network, X } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { AgentCard } from "../agents";
+import { AgentCard, TaskBox } from "../agents";
 import { LiveDiff } from "../editor";
 import { GraphView } from "../graph";
 import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
@@ -48,6 +48,8 @@ export interface FrameProps {
   canOpenChange: (changeId: string) => boolean;
   onOpenChange: (changeId: string) => void;
   onClosePanel: () => void;
+  /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
+  onStartAgent?: (body: StartAgent) => Promise<unknown>;
   /** Overlay lines on the graph, such as the replay label and a transport failure. */
   notice?: ReactNode;
 }
@@ -111,29 +113,38 @@ function AgentsPanel({
   state,
   canOpenChange,
   onOpenChange,
-}: Pick<FrameProps, "state" | "canOpenChange" | "onOpenChange">) {
+  onStartAgent,
+}: Pick<FrameProps, "state" | "canOpenChange" | "onOpenChange" | "onStartAgent">) {
   const cards = selectAgents(state).flatMap((agent) => {
     const data = selectAgentCard(state, agent.agent_id);
     return data ? [data] : [];
   });
+  // One keyed list, so the new-agent box keeps its place in the tree (and the person's focus)
+  // when the first card appears above it.
+  const body = [
+    ...cards.map((data) => (
+      <AgentCard
+        key={data.agent.agent_id}
+        data={data}
+        onOpenDiff={canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
+      />
+    )),
+    <TaskBox key="new-agent" state={state} onStart={onStartAgent} />,
+  ];
+  if (cards.length === 0) {
+    body.push(
+      <p key="empty" className="text-sm text-muted">
+        No agents yet. Each agent gets a card here when it starts.
+      </p>,
+    );
+  }
   return (
     <aside
       aria-label="Agents"
       className="flex w-(--agents-panel-width) shrink-0 flex-col gap-2.5 overflow-y-auto border-l border-divider bg-panel p-3.5"
     >
       <h2 className="text-(length:--title-size) font-bold">Agents</h2>
-      {cards.map((data) => (
-        <AgentCard
-          key={data.agent.agent_id}
-          data={data}
-          onOpenDiff={canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
-        />
-      ))}
-      {cards.length === 0 && (
-        <p className="text-sm text-muted">
-          No agents yet. Each agent gets a card here when it starts.
-        </p>
-      )}
+      {body}
     </aside>
   );
 }
@@ -245,7 +256,12 @@ export function Frame(props: FrameProps) {
         {view.diff ? (
           <AgentsRail state={state} />
         ) : (
-          <AgentsPanel state={state} canOpenChange={canOpenChange} onOpenChange={onOpenChange} />
+          <AgentsPanel
+            state={state}
+            canOpenChange={canOpenChange}
+            onOpenChange={onOpenChange}
+            onStartAgent={props.onStartAgent}
+          />
         )}
       </div>
     </div>
