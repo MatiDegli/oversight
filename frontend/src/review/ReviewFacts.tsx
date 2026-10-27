@@ -112,16 +112,22 @@ function executionLine(seq: number, execution: SuiteExecution): string {
   return `Tests #${String(seq)} (${execution.phase}): ${suite.outcome}; ${String(suite.passed)} passed, ${String(suite.failed)} failed, ${String(suite.skipped)} skipped${failed.length ? `; failed ids: ${failed.join(", ")}` : ""}${suite.cases_complete === true ? "" : "; per-test evidence incomplete"}`;
 }
 
-/** Compact, scrollable evidence; events never move focus or open it automatically. */
-export function ReviewFacts({ state, proposal }: { state: State; proposal: ChangeProposed }) {
-  const facts = state.changeFacts[proposal.change_id]?.findLast(
+export function factsForRevision(state: State, proposal: ChangeProposed): ChangeFacts | undefined {
+  return state.changeFacts[proposal.change_id]?.findLast(
     (f) => f.revision === proposal.revision && f.head_commit === proposal.head_commit,
   );
-  const executions =
-    facts?.test_runs
-      .map((seq) => state.testExecutions[seq])
-      .filter((e): e is SuiteExecution => e !== undefined && e.change_id === proposal.change_id) ??
-    [];
+}
+
+/** Compact, scrollable evidence; events never move focus or open it automatically. */
+export function ReviewFacts({ state, proposal }: { state: State; proposal: ChangeProposed }) {
+  const facts = factsForRevision(state, proposal);
+  if (!facts) return <span> · Facts incomplete: facts for this revision are unavailable</span>;
+  const executions = facts.test_runs
+    .map((seq) => state.testExecutions[seq])
+    .filter(
+      (e): e is SuiteExecution =>
+        e !== undefined && e.change_id === proposal.change_id && e.agent_id === proposal.agent_id,
+    );
   return (
     <section
       aria-label="Review signals"
@@ -129,7 +135,7 @@ export function ReviewFacts({ state, proposal }: { state: State; proposal: Chang
     >
       <details open>
         <summary className="cursor-pointer rounded-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text">
-          Review signals · {facts?.complete ? "Recorded facts" : "Incomplete"}
+          Review signals · {facts.complete ? "Recorded facts" : "Incomplete"}
         </summary>
         <div className="mt-2 max-h-48 overflow-y-auto break-words text-muted">
           <p>Signals for your review. You decide.</p>
@@ -137,30 +143,27 @@ export function ReviewFacts({ state, proposal }: { state: State; proposal: Chang
             Size: {proposal.files.length} files, +{proposal.lines_added}/−{proposal.lines_removed}{" "}
             lines
           </p>
-          {facts ? (
-            <>
-              <ul aria-label="Said versus did">
-                {discrepancies(facts, executions, proposal.summary).map((line) => (
-                  <li key={line}>Said versus did: {line}</li>
-                ))}
-              </ul>
-              {facts.test_runs.length === 0 && <p>Tests: no execution evidence recorded</p>}
-              {facts.test_runs.map((seq) => {
-                const execution = state.testExecutions[seq];
-                return (
-                  <p key={seq}>
-                    {execution?.change_id === proposal.change_id
-                      ? executionLine(seq, execution)
-                      : `Tests #${String(seq)}: evidence unavailable`}
-                  </p>
-                );
-              })}
-              <p>{detectorLine(facts)}</p>
-              {!facts.complete && <p>Incomplete: {facts.problems.join("; ")}</p>}
-            </>
-          ) : (
-            <p>Incomplete: facts for this revision are unavailable</p>
-          )}
+          <>
+            <ul aria-label="Said versus did">
+              {discrepancies(facts, executions, proposal.summary).map((line) => (
+                <li key={line}>Said versus did: {line}</li>
+              ))}
+            </ul>
+            {facts.test_runs.length === 0 && <p>Tests: no execution evidence recorded</p>}
+            {facts.test_runs.map((seq) => {
+              const execution = state.testExecutions[seq];
+              return (
+                <p key={seq}>
+                  {execution?.change_id === proposal.change_id &&
+                  execution.agent_id === proposal.agent_id
+                    ? executionLine(seq, execution)
+                    : `Tests #${String(seq)}: evidence unavailable`}
+                </p>
+              );
+            })}
+            <p>{detectorLine(facts)}</p>
+            {!facts.complete && <p>Incomplete: {facts.problems.join("; ")}</p>}
+          </>
         </div>
       </details>
     </section>

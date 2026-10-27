@@ -114,9 +114,9 @@ describe("review evidence", () => {
       ...state,
       changeFacts: { [facts.change_id]: [{ ...facts, revision: facts.revision + 1 }] },
     };
-    expect(renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />)).toContain(
-      "facts for this revision are unavailable",
-    );
+    const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
+    expect(html).toContain("facts for this revision are unavailable");
+    expect(html).not.toContain("<section"); // Historical logs keep the editor's existing height.
   });
 
   it("preserves detector unknown, parse errors and neutral observations", () => {

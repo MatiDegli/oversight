@@ -17,7 +17,7 @@ import type { ChangeState, State } from "../state";
 import { decisionView } from "./decisions";
 import type { DecisionAction, DecisionAttempt, DecisionView } from "./decisions";
 import { impactSummary } from "./ImpactCone";
-import { ReviewFacts } from "./ReviewFacts";
+import { factsForRevision, ReviewFacts } from "./ReviewFacts";
 
 const statusWords: Record<ChangeState["status"], string> = {
   editing: "Editing",
@@ -302,6 +302,7 @@ export function ReviewPanel({
 }: ReviewPanelProps) {
   const change = state.changes[changeId];
   const proposal = change?.proposal ?? null;
+  const hasFacts = proposal !== null && factsForRevision(state, proposal) !== undefined;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
   const [editingBlocked, setEditingBlocked] = useState(false);
@@ -370,10 +371,13 @@ export function ReviewPanel({
           </ul>
         )}
         {proposal && (
-          <p className="text-(length:--data-size) text-muted">{impactSummary(proposal.impact)}</p>
+          <p className="text-(length:--data-size) text-muted">
+            {impactSummary(proposal.impact)}
+            {!hasFacts && <ReviewFacts state={state} proposal={proposal} />}
+          </p>
         )}
       </header>
-      {proposal && <ReviewFacts state={state} proposal={proposal} />}
+      {proposal && hasFacts && <ReviewFacts state={state} proposal={proposal} />}
       <div className="flex min-h-0 flex-1 flex-col">
         <p className="border-b border-page-border px-4.5 py-3.5 text-(length:--body-size)">
           {proposal?.summary ?? "The agent left no note."}
