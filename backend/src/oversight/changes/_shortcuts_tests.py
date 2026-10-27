@@ -293,11 +293,22 @@ def _collect_parametrize(source: Source) -> dict[tuple[str, tuple[str, ...]], li
     return result
 
 
-def detect_parametrize_expected(path: str, old: Source, new: Source) -> list[Finding]:
+def detect_parametrize_expected(
+    path: str,
+    old: Source,
+    new: Source,
+    pairs: list[tuple[str, str]] | None = None,
+) -> list[Finding]:
     old_map, new_map = _collect_parametrize(old), _collect_parametrize(new)
+    owners = dict(pairs) if pairs is not None else None
     findings: list[Finding] = []
     for key, old_entries in old_map.items():
-        remaining = list(new_map.get(key, []))
+        owner, names = key
+        if owners is not None:
+            if owner not in owners:
+                continue
+            owner = owners[owner]
+        remaining = list(new_map.get((owner, names), []))
         unmatched: list[_Case] = []
         # Cancel the complete multiset first, including duplicate inputs/rows.
         for entry in old_entries:

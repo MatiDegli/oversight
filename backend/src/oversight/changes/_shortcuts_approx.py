@@ -35,11 +35,16 @@ def _effective(call: ast.Call) -> tuple[float, ...] | None:
     if not call.args:
         return None
     expected = _expected_numbers(call.args[0])
-    rel, absolute = 1e-6, 1e-12
-    for key, value in [
-        *zip(("rel", "abs"), call.args[1:3], strict=False),
-        *((kw.arg, kw.value) for kw in call.keywords if kw.arg in {"rel", "abs"}),
-    ]:
+    options = dict(
+        [
+            *zip(("rel", "abs"), call.args[1:3], strict=False),
+            *((kw.arg, kw.value) for kw in call.keywords if kw.arg in {"rel", "abs"}),
+        ]
+    )
+    # pytest uses only the absolute tolerance when abs is explicitly supplied
+    # and rel is omitted. Its default relative tolerance no longer applies.
+    rel, absolute = (0.0 if "abs" in options and "rel" not in options else 1e-6), 1e-12
+    for key, value in options.items():
         number = _number(value)
         if number is None or number < 0:
             return None

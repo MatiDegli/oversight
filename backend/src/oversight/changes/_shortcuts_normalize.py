@@ -96,7 +96,23 @@ def align_local_names(before: FuncNode, after: FuncNode) -> None:
         return {key: names[0] for key, names in values.items() if len(names) == 1}
 
     left, right = assignments(before), assignments(after)
-    mapping = {name: right[key] for key, name in left.items() if key in right}
+    existing = {
+        n.id if isinstance(n, ast.Name) else n.arg
+        for n in walk_local(before)
+        if isinstance(n, (ast.Name, ast.arg))
+    }
+    # Even a load of a global/fixture is significant: a local rename must not
+    # capture it and make the old check look like a check of the new local.
+    mapping = {
+        name: right[key]
+        for key, name in left.items()
+        if key in right and (right[key] == name or right[key] not in existing)
+    }
+    captured = {
+        right[key]
+        for key, name in left.items()
+        if key in right and right[key] != name and right[key] in existing
+    }
     # Nested scope bindings can shadow a local; don't rewrite across them.
     if any(
         isinstance(
@@ -108,7 +124,9 @@ def align_local_names(before: FuncNode, after: FuncNode) -> None:
         return
     for node in walk_local(before):
         if isinstance(node, ast.Name):
-            node.id = mapping.get(node.id, node.id)
+            # Keep a captured fixture/global distinct even if the assertion's
+            # spelling is unchanged: it no longer checks the same binding.
+            node.id = f"@before:{node.id}" if node.id in captured else mapping.get(node.id, node.id)
 
 
 def normalize_assertions(source: Source) -> Source:

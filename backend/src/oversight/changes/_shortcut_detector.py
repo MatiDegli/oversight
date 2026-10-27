@@ -28,12 +28,12 @@ from oversight.changes._shortcuts_literals import (
 )
 from oversight.changes._shortcuts_skips import detect_skips
 from oversight.changes._shortcuts_stubs import detect_stubs
-from oversight.changes._shortcuts_tests import detect_parametrize_expected, match_tests
+from oversight.changes._shortcuts_tests import TestRef, detect_parametrize_expected, match_tests
 
 
-def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
-    """Return findings sorted by path, line and kind, without side effects."""
-    change_list = sorted(changes, key=lambda change: change[0])
+def _parse_sources(
+    change_list: list[Change],
+) -> tuple[dict[str, Source], dict[str, Source], set[str], list[Finding]]:
     findings: list[Finding] = []
     old_sources: dict[str, Source] = {}
     new_sources: dict[str, Source] = {}
@@ -60,8 +60,13 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
             old_sources.pop(path, None)
             new_sources.pop(path, None)
 
-    # Exact moves preserve the baseline for every per-file check, including
-    # class/module skip markers and comments in functions. Consume origins once.
+    return old_sources, new_sources, failed, findings
+
+
+def _exact_moves(
+    change_list: list[Change], old_sources: dict[str, Source], new_sources: dict[str, Source]
+) -> dict[str, str]:
+    # Preserve class/module markers and comments, consuming each origin once.
     origins = [
         path
         for path, old, new in change_list
@@ -83,6 +88,70 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
             moved[path] = origin
             origins.remove(origin)
 
+    return moved
+
+
+def _compare_file(
+    path: str,
+    old: Source | None,
+    new: Source,
+    old_sources: dict[str, Source],
+    matches: dict[TestRef, TestRef],
+    inputs: list[TestCase],
+) -> list[Finding]:
+    findings: list[Finding] = []
+    if is_test_file(path):
+        if old:
+            findings.extend(detect_assertions(path, old, new))
+            findings.extend(detect_parametrize_expected(path, old, new))
+        for (new_path, new_qual), (old_path, old_qual) in matches.items():
+            if new_path == path and (old_path, old_qual) != (path, new_qual):
+                findings.extend(
+                    detect_assertions(path, old_sources[old_path], new, [(old_qual, new_qual)])
+                )
+                findings.extend(
+                    detect_parametrize_expected(
+                        path, old_sources[old_path], new, [(old_qual, new_qual)]
+                    )
+                )
+        findings.extend(detect_skips(path, old, new, old_sources, matches))
+    else:
+        findings.extend(
+            detect_literal_branches(
+                path,
+                old.tree if old else None,
+                new.tree,
+                inputs,
+            )
+        )
+    findings.extend(detect_stubs(path, old, new, old_sources, matches))
+    return findings
+
+
+def _combine_findings(findings: list[Finding]) -> list[Finding]:
+    groups: dict[tuple[str, ShortcutKind], list[Finding]] = {}
+    for finding in findings:
+        groups.setdefault((finding.path, finding.kind), []).append(finding)
+    combined: list[Finding] = []
+    for (path, kind), group in groups.items():
+        lines = sorted({f.line for f in group})
+        messages = dict.fromkeys(f.message for f in sorted(group, key=lambda f: f.line))
+        combined.append(
+            Finding(
+                path,
+                lines[0],
+                kind,
+                " ".join(messages) + " Lines: " + ", ".join(map(str, lines)) + ".",
+            )
+        )
+    return sorted(combined, key=lambda f: (f.path, f.line, f.kind, f.message))
+
+
+def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
+    """Return findings sorted by path, line and kind, without side effects."""
+    change_list = sorted(changes, key=lambda change: change[0])
+    old_sources, new_sources, failed, findings = _parse_sources(change_list)
+    moved = _exact_moves(change_list, old_sources, new_sources)
     removed, matches = match_tests(old_sources, new_sources)
     findings.extend(removed)
     for path, old, new in change_list:
@@ -103,48 +172,15 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
                 )
             )
 
-    inputs: list[TestCase] = []
-    for path, source in new_sources.items():
-        if is_test_file(path):
-            inputs.extend(collect_test_cases(source))
-
+    inputs = [
+        case
+        for path, source in new_sources.items()
+        if is_test_file(path)
+        for case in collect_test_cases(source)
+    ]
     for path, new in new_sources.items():
         old = old_sources.get(moved.get(path, path))
         if old is not None and old.text == new.text:
             continue
-        if is_test_file(path):
-            if old:
-                findings.extend(detect_assertions(path, old, new))
-                findings.extend(detect_parametrize_expected(path, old, new))
-            for (new_path, new_qual), (old_path, old_qual) in matches.items():
-                if new_path == path and (old_path, old_qual) != (path, new_qual):
-                    findings.extend(
-                        detect_assertions(path, old_sources[old_path], new, [(old_qual, new_qual)])
-                    )
-            findings.extend(detect_skips(path, old, new, old_sources, matches))
-        else:
-            findings.extend(
-                detect_literal_branches(
-                    path,
-                    old.tree if old else None,
-                    new.tree,
-                    inputs,
-                )
-            )
-        findings.extend(detect_stubs(path, old, new, old_sources, matches))
-    groups: dict[tuple[str, ShortcutKind], list[Finding]] = {}
-    for finding in findings:
-        groups.setdefault((finding.path, finding.kind), []).append(finding)
-    combined: list[Finding] = []
-    for (path, kind), group in groups.items():
-        lines = sorted({f.line for f in group})
-        messages = dict.fromkeys(f.message for f in sorted(group, key=lambda f: f.line))
-        combined.append(
-            Finding(
-                path,
-                lines[0],
-                kind,
-                " ".join(messages) + " Lines: " + ", ".join(map(str, lines)) + ".",
-            )
-        )
-    return sorted(combined, key=lambda f: (f.path, f.line, f.kind, f.message))
+        findings.extend(_compare_file(path, old, new, old_sources, matches, inputs))
+    return _combine_findings(findings)

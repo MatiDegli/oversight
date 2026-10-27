@@ -5,56 +5,93 @@ import re
 from collections import Counter
 
 
+def _groups(nodes: list[ast.Assert | ast.Call]) -> dict[str, list[tuple[int, str]]]:
+    result: dict[str, list[tuple[int, str]]] = {}
+    for index, node in enumerate(nodes):
+        if not isinstance(node, ast.Assert) or not isinstance(node.test, ast.Compare):
+            continue
+        check = node.test
+        if (
+            len(check.ops) == 1
+            and isinstance(check.ops[0], ast.In)
+            and isinstance(check.left, ast.Constant)
+            and isinstance(check.left.value, str)
+        ):
+            result.setdefault(ast.dump(check.comparators[0]), []).append((index, check.left.value))
+    return result
+
+
+def _components(
+    left: list[tuple[int, str]], right: list[tuple[int, str]]
+) -> list[tuple[list[tuple[int, str]], list[tuple[int, str]]]]:
+    """Join only checks sharing words across versions, never just a receiver.
+
+    Several checks may become one message check. An unrelated check on the
+    same result must survive cancellation even when the numeric checks agree.
+    """
+    entries = [(0, index, text) for index, text in left] + [
+        (1, index, text) for index, text in right
+    ]
+    words = [set(re.findall(r"[^\W\d_]+", text.lower())) for _, _, text in entries]
+    pending = set(range(len(entries)))
+    result: list[tuple[list[tuple[int, str]], list[tuple[int, str]]]] = []
+    while pending:
+        queue = [min(pending)]
+        pending.remove(queue[0])
+        before: list[tuple[int, str]] = []
+        after: list[tuple[int, str]] = []
+        for current in queue:
+            side, index, text = entries[current]
+            (before if side == 0 else after).append((index, text))
+            neighbors = sorted(
+                other
+                for other in pending
+                if entries[other][0] != side and words[current] & words[other]
+            )
+            pending.difference_update(neighbors)
+            queue.extend(neighbors)
+        result.append((before, after))
+    return result
+
+
+def _same_constraints(before: list[tuple[int, str]], after: list[tuple[int, str]]) -> bool:
+    old_text = " ".join(text for _, text in before).lower()
+    new_text = " ".join(text for _, text in after).lower()
+    numbers = Counter(re.findall(r"\b\d+(?:\.\d+)?\b", old_text))
+    words = set(re.findall(r"\w+", old_text)) & set(re.findall(r"\w+", new_text))
+    weaker = any(
+        phrase in new_text and phrase not in old_text
+        for phrase in (
+            "at least",
+            "at most",
+            "more than",
+            "less than",
+            "up to",
+            "minimum",
+            "maximum",
+            "roughly",
+            "approximately",
+        )
+    )
+    return bool(
+        numbers
+        and numbers == Counter(re.findall(r"\b\d+(?:\.\d+)?\b", new_text))
+        and len(words) >= 2
+        and not weaker
+    )
+
+
 def cancel_reworded(
     before: list[ast.Assert | ast.Call], after: list[ast.Assert | ast.Call]
 ) -> tuple[list[ast.Assert | ast.Call], list[ast.Assert | ast.Call]]:
-    def groups(nodes: list[ast.Assert | ast.Call]) -> dict[str, list[tuple[int, str]]]:
-        result: dict[str, list[tuple[int, str]]] = {}
-        for index, node in enumerate(nodes):
-            if not isinstance(node, ast.Assert) or not isinstance(node.test, ast.Compare):
-                continue
-            check = node.test
-            if (
-                len(check.ops) == 1
-                and isinstance(check.ops[0], ast.In)
-                and isinstance(check.left, ast.Constant)
-                and isinstance(check.left.value, str)
-            ):
-                result.setdefault(ast.dump(check.comparators[0]), []).append(
-                    (index, check.left.value)
-                )
-        return result
-
-    left, right = groups(before), groups(after)
+    left, right = _groups(before), _groups(after)
     matched_old: set[int] = set()
     matched_new: set[int] = set()
-    for key in left.keys() & right.keys():
-        old_text = " ".join(text for _, text in left[key]).lower()
-        new_text = " ".join(text for _, text in right[key]).lower()
-        numbers = Counter(re.findall(r"\b\d+(?:\.\d+)?\b", old_text))
-        words = set(re.findall(r"\w+", old_text)) & set(re.findall(r"\w+", new_text))
-        weaker = any(
-            phrase in new_text and phrase not in old_text
-            for phrase in (
-                "at least",
-                "at most",
-                "more than",
-                "less than",
-                "up to",
-                "minimum",
-                "maximum",
-                "roughly",
-                "approximately",
-            )
-        )
-        if (
-            numbers
-            and numbers == Counter(re.findall(r"\b\d+(?:\.\d+)?\b", new_text))
-            and len(words) >= 2
-            and not weaker
-        ):
-            matched_old.update(i for i, _ in left[key])
-            matched_new.update(i for i, _ in right[key])
+    for key in sorted(left.keys() & right.keys()):
+        for old_entries, new_entries in _components(left[key], right[key]):
+            if _same_constraints(old_entries, new_entries):
+                matched_old.update(i for i, _ in old_entries)
+                matched_new.update(i for i, _ in new_entries)
     return (
         [node for i, node in enumerate(before) if i not in matched_old],
         [node for i, node in enumerate(after) if i not in matched_new],

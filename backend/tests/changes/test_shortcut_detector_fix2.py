@@ -6,14 +6,18 @@ from oversight.changes import ShortcutKind, detect_shortcuts
 
 
 @pytest.mark.parametrize(
-    "replacement",
-    ["assert sub(5, 2) == 3", "assert add(1, 2)", "assert add(1, 2) == 4"],
+    "replacement, expected",
+    [
+        ("assert sub(5, 2) == 3", ShortcutKind.TEST_REMOVED),
+        ("assert add(1, 2)", ShortcutKind.ASSERTION_LOOSENED),
+        ("assert add(1, 2) == 4", ShortcutKind.TEST_REMOVED),
+    ],
 )
-def test_replacement_is_not_a_rename(replacement: str) -> None:
+def test_replacement_is_not_a_rename(replacement: str, expected: ShortcutKind) -> None:
     old = "def test_add():\n    assert add(1, 2) == 3\n"
     new = f"def test_other():\n    {replacement}\n"
     findings = detect_shortcuts([("test_calc.py", old, new)])
-    assert findings  # Replacement or weakened check must remain reviewable.
+    assert [f.kind for f in findings] == [expected]
 
 
 def test_assert_message_change_is_clean() -> None:
