@@ -6,8 +6,9 @@ from pathlib import Path
 
 from oversight.graph._spans import SpanIndex
 from oversight.graph._version import FileEntry, assemble, parse_entries, select_python_paths
+from oversight.limits import MAX_FILE_BYTES, SizeLimitError, bounded_read
 from oversight_contracts.common import NodeId
-from oversight_contracts.graph import GraphSnapshot, Point
+from oversight_contracts.graph import GraphSnapshot, ParseError, Point
 
 
 def python_files(root: Path) -> list[str]:
@@ -45,8 +46,26 @@ class WorkspaceGraph:
         """The paths the last scan parsed, because they were new or their bytes changed."""
 
     def scan(self, commit: str) -> GraphSnapshot:
-        files = {path: (self._root / path).read_bytes() for path in python_files(self._root)}
+        files: dict[str, bytes] = {}
+        oversized: list[str] = []
+        for path in python_files(self._root):
+            try:
+                # Decode only in the parser, which handles invalid UTF-8 as a parse error.
+                with (self._root / path).open("rb") as handle:
+                    files[path] = bounded_read(handle)
+            except SizeLimitError:
+                oversized.append(path)
         self._entries, self.last_parsed = parse_entries(files, self._entries)
+        for path in oversized:
+            self._entries[path] = FileEntry(
+                "too_large",
+                None,
+                ParseError(
+                    path=path,
+                    line=None,
+                    message=f"source exceeds the {MAX_FILE_BYTES}-byte size limit; skipped",
+                ),
+            )
         snapshot, self._own = assemble(self._entries, commit, self._layout)
         self._spans = SpanIndex(snapshot.nodes)
         return snapshot

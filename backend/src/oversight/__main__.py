@@ -40,6 +40,7 @@ def main() -> None:
             host=settings.host,
             port=settings.port,
             reload=args.reload,
+            proxy_headers=False,
             # Open streams never end by themselves: shutdown gives them a second, then closes them.
             timeout_graceful_shutdown=1,
         )
@@ -58,7 +59,13 @@ def main() -> None:
             ),
         )
         # Open streams never end by themselves, so shutdown gives them a second, then closes them.
-        uvicorn.run(app, host=settings.host, port=settings.port, timeout_graceful_shutdown=1)
+        uvicorn.run(
+            app,
+            host=settings.host,
+            port=settings.port,
+            proxy_headers=False,
+            timeout_graceful_shutdown=1,
+        )
 
 
 if __name__ == "__main__":

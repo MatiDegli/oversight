@@ -92,9 +92,7 @@ def test_live_provenance_is_required_but_readers_keep_historical_null() -> None:
     assert ChangeResolved.model_validate(RESOLUTION).decided_by is None
     with pytest.raises(ValidationError):
         ChangeResolved.model_validate(RESOLUTION, context={"live": True})
-    ChangeResolved.model_validate(
-        {**RESOLUTION, "decided_by": "person", "head_commit": "head"}, context={"live": True}
-    )
+    ChangeResolved.model_validate({**RESOLUTION, "decided_by": "person"}, context={"live": True})
     for actor in ("cross_review", "lead_agent"):
         with pytest.raises(ValidationError):
             ChangeResolved.model_validate({**RESOLUTION, "decided_by": actor})

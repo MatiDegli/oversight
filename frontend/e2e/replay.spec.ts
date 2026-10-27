@@ -68,8 +68,8 @@ const lighting = payloads("agent.focus").map(
 );
 const changedNode = update.graph.nodes_modified[0];
 if (changedNode === undefined) throw new Error(`${LOG_NAME}: the edit names no node`);
-// The lines the agent's edit added inside the node it changed: what the diff must show. Monaco
-// draws only the lines in view, and the node it changed is at the top of the file.
+// The lines the agent's edit added inside the node it changed: what the diff must show.
+// Unchanged regions are collapsed, so interact with a changed line rather than the function header.
 const span = delta.nodes_changed.find((node) => node.id === changedNode);
 if (!span) throw new Error(`${LOG_NAME}: the delta does not carry ${changedNode}`);
 const originalLines = (update.file.original ?? "").split("\n");
@@ -82,7 +82,8 @@ const addedLines = (update.file.modified ?? "")
       line.trim() !== "" &&
       !originalLines.includes(line),
   );
-if (addedLines.length === 0)
+const firstAddedLine = addedLines[0];
+if (firstAddedLine === undefined)
   throw new Error(`${LOG_NAME}: the edit adds no line in ${changedNode}`);
 // The change adds a function: it waits on the graph as a pending new node, and the merge's delta
 // moves it into main. Without it, a delta that changes lines only would show nothing on the page.
@@ -280,7 +281,7 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
     for (const line of addedLines) await expect(lines).toContainText(line.trim());
     await panel
       .locator(".editor.modified .view-line")
-      .filter({ hasText: "def compute_price" })
+      .filter({ hasText: firstAddedLine.trim() })
       .click();
     await page.keyboard.type("typed_by_the_test = 1");
     await page.evaluate(

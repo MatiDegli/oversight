@@ -20,6 +20,7 @@ def test_dev_stops_only_the_backend_it_started(tmp_path: Path) -> None:
         textwrap.dedent(
             """\
             #!/bin/bash
+            if [ "${4:-}" = "tools/resolve_ports.py" ]; then echo "8710 5710"; exit 0; fi
             trap 'echo stopped > "$FAKE_DIR/uv.stopped"; exit 0' TERM
             echo $$ > "$FAKE_DIR/uv.pid"
             while true; do sleep 0.05; done

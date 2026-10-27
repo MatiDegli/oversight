@@ -1,11 +1,12 @@
 """The runtime workspace, worktrees, the async process and git runner, locks, paths and tests.
 
 Other modules import only what this file exports; everything else here is internal. The module
-imports only `oversight_contracts` and the standard library.
+imports only `oversight_contracts`, shared byte limits and the standard library.
 """
 
 from oversight.workspace.core import Author, Tree, Workspace
 from oversight.workspace.errors import (
+    FileTooLarge,
     InvalidPath,
     LockOrderError,
     StaleFile,
@@ -13,7 +14,7 @@ from oversight.workspace.errors import (
     WorkspaceBusy,
     WorkspaceError,
 )
-from oversight.workspace.files import FileRead, content_hash
+from oversight.workspace.files import FileRead, check_content, content_hash
 from oversight.workspace.junit import MAX_TESTS, MAX_XML_BYTES, RunProblem, parse_junit
 from oversight.workspace.junit import Outcome as JUnitOutcome
 from oversight.workspace.junit import TestRun as JUnitRun
@@ -31,6 +32,7 @@ __all__ = [
     "MAX_XML_BYTES",
     "Author",
     "FileRead",
+    "FileTooLarge",
     "InvalidPath",
     "JUnitOutcome",
     "JUnitRun",
@@ -47,6 +49,7 @@ __all__ = [
     "WorkspaceBusy",
     "WorkspaceError",
     "base_probe_checkout",
+    "check_content",
     "content_hash",
     "parse_junit",
     "run_process",

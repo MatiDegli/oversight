@@ -1,5 +1,6 @@
 """Keep full reports internally and publish a deterministic bounded projection."""
 
+import asyncio
 from dataclasses import replace
 from typing import Literal
 
@@ -74,7 +75,20 @@ async def publish_suite(
     phase: Literal["agent", "proposal", "combined", "base_probe", "head_probe"],
     revision: int | None,
 ) -> SuiteExecution:
-    cases, retained = retain_cases(run.cases, added_test_ids=added_ids(rec, run))
+    # Keep the caller's locks and record the run even if cancellation arrives during parsing.
+    return await ctx.whole(_publish_suite(ctx, rec, run, phase=phase, revision=revision))
+
+
+async def _publish_suite(
+    ctx: ChangeContext,
+    rec: ChangeRecord,
+    run: SuiteRun,
+    *,
+    phase: Literal["agent", "proposal", "combined", "base_probe", "head_probe"],
+    revision: int | None,
+) -> SuiteExecution:
+    retention_ids = await asyncio.to_thread(added_ids, rec, run)
+    cases, retained = retain_cases(run.cases, added_test_ids=retention_ids)
     suite = run.result.model_copy(
         update={
             "cases": cases,
@@ -100,7 +114,7 @@ async def publish_suite(
         revision=revision,
         phase=phase,
     )
-    await ctx.whole(_record(ctx, rec, execution, run))
+    await _record(ctx, rec, execution, run)
     return execution
 
 

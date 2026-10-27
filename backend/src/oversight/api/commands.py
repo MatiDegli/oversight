@@ -12,7 +12,7 @@ from fastapi import APIRouter, Response
 
 from oversight.api.errors import ApiError
 from oversight.changes import ChangeNotFound, WrongState
-from oversight.workspace import InvalidPath, StaleFile, WorkspaceError
+from oversight.workspace import FileTooLarge, InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
     AgentCreated,
     ApproveChange,
@@ -122,6 +122,7 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
 
     @router.post("/agents", status_code=201)
     async def start_agent(request: StartAgent) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
+        # request.zone is reserved and ignored until zones are delivered in 1.5.0.
         return await commands.start(request)
 
     @router.post("/changes/{change_id}/approve", status_code=202, response_class=Response)
@@ -161,6 +162,8 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
             raise ApiError("not_found", f"there is no live worktree for {agent!r}") from None
         except FileNotFoundError:
             raise ApiError("not_found", f"there is no file {path[:80]!r}") from None
+        except FileTooLarge as error:
+            raise ApiError("too_large", str(error)) from None
         except InvalidPath as error:
             raise ApiError("invalid_path", str(error)) from None
 
@@ -172,6 +175,8 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
             raise ApiError(
                 "not_found", f"there is no live worktree for {request.agent_id!r}"
             ) from None
+        except FileTooLarge as error:
+            raise ApiError("too_large", str(error)) from None
         except InvalidPath as error:
             raise ApiError("invalid_path", str(error)) from None
         except StaleFile as error:

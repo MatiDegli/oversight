@@ -1537,7 +1537,8 @@
         "not_implemented",
         "invalid_request",
         "internal",
-        "forbidden"
+        "forbidden",
+        "too_large"
       ],
       "type": "string"
     },

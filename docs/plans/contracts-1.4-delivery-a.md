@@ -62,3 +62,5 @@ The array gate inspects changed restrictions generically against the pinned base
 fixtures are freshly generated using the repository generator; legacy, generic-max, generic-min
 and existing-min each must report its concrete tuple field with exit 1. The current schema must
 pass with exit 0, and the plain-array TypeScript consumer compiles without casts.
+
+M6 adds too_large (HTTP 413) to unshipped 1.4.0; the API guard front adds the size limits later.

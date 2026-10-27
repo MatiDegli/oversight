@@ -133,6 +133,12 @@ typography:
     fontFamily: "Atkinson Hyperlegible Next, sans-serif"
     fontSize: "14px"
     fontWeight: 600
+  group:
+    fontFamily: "Atkinson Hyperlegible Next, sans-serif"
+    fontSize: "11.5px"
+    fontWeight: 600
+    letterSpacing: "0.08em"
+    textTransform: "uppercase"
   caption:
     fontFamily: "Atkinson Hyperlegible Next, sans-serif"
     fontSize: "13px"
@@ -251,26 +257,31 @@ Oversight has two surfaces with different jobs, and they never borrow each other
 graph is the machines' surface: it shows what the agents are doing, with nodes that light up, a
 change in its agent's color, and rings and a field of dots that glow like an LED panel. It is the
 only place where light moves. The panels are the person's surface: the agents panel, review, live
-diff and file view are dark, flat and still. They hold text, decisions and code.
+diff and file view are dark and plain. Their transitions report events. They hold text, decisions
+and code.
 
 The product is a tool someone operates for long stretches while agents work, and the demo is
 recorded on video. So the screen is dense but calm, every color means something, and nothing moves
-or opens unless the person asked for it. Everything is dark by default, the review panel included,
+without a cause. Everything is dark by default, the review panel included,
 with a dark Monaco theme. A day mode exists for the submission gallery only (see Colors).
 
-**Precedence.** AGENTS.md wins over this file. The direction was agreed on the final Signal sketches
-with the matte review header, made before the kickoff; this file takes values and rules from them,
-never code or images. Where a sketch disagrees with AGENTS.md or with the quality floor below, this
-file departs from it and says so in the table of departures. Sizes are CSS pixels on a 1920 by 1080
+**Precedence.** AGENTS.md wins over this file. The maintainer approved the v4 shell sketches on
+2026-10-27: [watch](docs/sketches/v4/watch.png), [focus](docs/sketches/v4/focus.png),
+[conversation](docs/sketches/v4/conversation.png), [review](docs/sketches/v4/review.png),
+[changes](docs/sketches/v4/changes.png), [settings](docs/sketches/v4/settings.png) and
+[motion marker](docs/sketches/v4/motion-marker.png). These are the shell target, inside Signal
+and with the matte review header retained. This file records their design, not their implementation.
+Where a sketch disagrees with AGENTS.md, the table of departures records the rule that wins;
+contrast failures remain explicit maintainer notes below. Sizes are CSS pixels on a 1920 by 1080
 frame, the size the demo is recorded at. Panels scale with the window; type sizes and radii do not.
 
 **Key Characteristics:**
 
 - Black ground, warm white text, two agent colors and two state colors, nothing else.
 - One family, Atkinson Hyperlegible, in sentence case.
-- Flat panels with hairline borders; light lives only on the graph.
+- Layered dark surfaces with hairline borders; light lives only on the graph.
 - Every state is told in words or signs as well as color.
-- The layout never moves between modes; only the camera and the lights change.
+- The shell gives every view a home; opening a panel preserves the graph and its node positions.
 
 ### Departures from the sketches
 
@@ -286,21 +297,23 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | First view | the whole demo in view | 100% on the module of the hub, more beyond the edges | the graph is a canvas to pan and zoom; the demo has 36 functions, not the sketch's 19 |
 | State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
 | Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
-| Code-dim (line numbers, comments) | `#6d6d68`, 3.8:1 on page | `#7d7d78`, 4.7:1 | quality floor: text at 4.5:1 |
-| Text-box placeholder | `#6d6d68` | faint `#85857f`, 5.3:1 on field | same |
-| Exact call edge | `#4a4a46`, 2.4:1 on black | `#6a6a65`, 3.7:1 | quality floor: meaningful graphics at 3:1 |
-| Possible call edge | `#3a3a37`, 1.8:1 | `#5f5f5b`, 3.14:1 on a module frame at 90% over ground (3.28:1 on ground) | same, measured on its worst surface, unrounded; it stays thinner and grey |
+| Code-dim (line numbers, comments) | `#6d6d68` | `#7d7d78`; v4 ratios below | quality floor: text at 4.5:1 |
+| Text-box placeholder | `#6d6d68` | faint `#85857f`; v4 ratios below | same |
+| Exact call edge | `#4a4a46`, 2.4:1 on black | edge; v4 ratios below | quality floor: meaningful graphics at 3:1 |
+| Possible call edge | `#3a3a37`, 1.8:1 | edge-possible; v4 ratios below | it stays thinner and grey; a surface below 3:1 needs a maintainer decision |
 | Call edge no agent is at (watch) | full strength | quiet-edge, 0.45 opacity, until an agent reads, edits or changes a node it touches, or the person selects one | the demo graph has 47 edges across its frames; stepping back the ones nobody is at lets the others read. Context, like the dimmed nodes of review: the full edge returns on selection |
 | Edge draw order | not specified | frames, then edges, then leaf nodes; a frame's header is part of its frame, so an edge can still cross it | keeps a line from crossing a node's name without hiding the edges behind the frames' fill |
 | Task box keyboard hint | none | "Ctrl+Enter to start" under the box | the hint is how the keyboard starts an agent; a hint belongs next to what it starts |
 | Search, history and settings in the top bar | drawn | left out until each feature is built | a control that looks present and does nothing is worse than no control |
-| Input border | `#222222` to `#262626` | control-edge `#62625e`, 3.2:1 on field | quality floor: a control's boundary at 3:1 |
-| Task box fill | `#070707` | field `#0b0b0b` | one fill for every input |
-| Pressed rail button | `#161616` | raised `#121212` | one color for hover and pressed |
+| Input border | `#222222` to `#262626` | control-edge `#62625e`, 3.25:1 on field | quality floor: a control's boundary at 3:1 |
+| Task box fill | varies in the earlier sketches | field, the inset token | one fill for every input |
+| Pressed rail button | varies in the earlier sketches | raised | one color for hover and pressed |
 | New-node fill for agent B | not drawn | `rgba(4, 8, 20, 0.95)` | derived from A's pair, so both agents follow one rule |
-| Letter in a rail avatar | the agent's color | agent-a-text, agent-b-text | text at 4.5:1 in both modes; agent B's own color gives 4.41:1 on its tint over card |
+| Letter in a rail avatar | the agent's color | agent-a-text, agent-b-text | use the text variants; tint contrasts are checked below |
 | Live diff hint | "Pause to edit by hand" | read-only; editing happens in review | AGENTS.md: the new side is editable only in review while the agent is idle; pause is level 3 |
 | Product name | "Graph IDE" | Oversight | the placeholder was replaced |
+| Approve fill in v4 review | blue | text fill, page label | neutral decision; blue belongs to agent B |
+| Settings examples | sample numbers, rules and provider rows | backed settings only | the sketch does not create configuration or change contracts |
 
 ## Colors
 
@@ -327,14 +340,36 @@ green and red only ever mean passed and failed.
 
 ### Neutral
 
-From darkest to lightest:
+The frontmatter's colors record the current theme. The approved v4 dark surface target below
+is pending implementation in the shell front; it overrides these tokens and adds inset,
+card-bottom, top-highlight and card-shadow. All other colors retain their frontmatter values.
+The roles below and the v4 contrast tables use this target set.
+
+| Token | v4 target |
+| --- | --- |
+| `shell` | `#09090a` |
+| `panel` | `#0d0d0f` |
+| `field` | `#09090b` |
+| `inset` | `#09090b` |
+| `page` | `#101012` |
+| `card` | `#151518` |
+| `card-bottom` | `#111113` |
+| `raised` | `#1b1b1f` |
+| `divider` | `rgba(255, 255, 255, 0.06)` |
+| `border` | `rgba(255, 255, 255, 0.10)` |
+| `top-highlight` | `rgba(255, 255, 255, 0.045)` |
+| `card-shadow` | `rgba(0, 0, 0, 0.24)` |
+
+The neutral roles:
 
 - **Ground** (ground): behind the graph, and the page itself.
 - **Shell** (shell): the app frame: top bar, left rail; graph overlays (legend, zoom) at 90%.
 - **Panel** (panel): the agents panel; the cone card on the graph at 94%; module frames at 90%.
-- **Field** (field): every input: search, task box, comment box.
-- **Page** (page): the left panel: review, live diff, file view; Monaco's background.
-- **Card** (card): an agent card; a graph node at rest, at 94%.
+- **Inset** (inset): inputs and terminal. Field (field) takes the same value for search, task and
+  comment boxes.
+- **Page** (page): the focus panel: review, live diff, file view and settings; Monaco's background.
+- **Card** (card, card-bottom): cards run from card at the top to card-bottom below; graph nodes
+  at rest use card at 94%. Agent and model-slot cards carry a 2px top line in their agent token.
 - **Raised** (raised): hover on a control or row; a pressed rail button; the queue counter.
 - **Page raised** (page-raised): chips, facts and file rows inside the left panel.
 - **Text** (text): primary text everywhere; a slightly warm white, because pure white glares on
@@ -351,9 +386,8 @@ From darkest to lightest:
 - **Review header and highlights:** matte-top and matte-bottom are the two ends of the matte
   header's gradient; span-highlight and fold-tint are the Monaco highlights described below.
 - **Graph neutrals:** edge for an exact call edge, edge-possible for a possible one, lit-edge for an
-  edge inside the cone or the change, node-hover for a hovered node's border, work-light for the
-  light the cone casts; lamp-off for an unlit lamp of the dot field and guide-dot for its guide
-  dots.
+  edge inside the cone or the change, node-hover for a hovered node's border; lamp-off for an
+  unlit lamp of the dot field and guide-dot for its guide dots.
 
 ### Code colors
 
@@ -366,6 +400,8 @@ fold-tint (white at 3.5%).
 
 ### Day mode
 
+The v4 dark surfaces leave the day token set unchanged; day cards keep day-card and inputs day-field.
+
 Day mode exists for the submission gallery, which shows both modes. **The video and the demo are
 dark.** Building day mode is a bounded front for Mon Nov 2, started only once level 2 is closed;
 otherwise it is cut like level 3. The screenshots (`make shots`, once it exists) cover both modes.
@@ -373,11 +409,12 @@ otherwise it is cut like level 3. The screenshots (`make shots`, once it exists)
 - **Every color comes from a token**, including the colors Cytoscape, Monaco and the dot-field
   canvas receive. The token sets hang off `data-theme` on the root element (`dark` or `day`); no
   component picks a color itself, and switching the attribute repaints everything.
-- **The light set** is the frontmatter's `day-` tokens, and each `day-x` replaces `x`, one to one:
+- **The light set** is the frontmatter's `day-` tokens, for the paired roles:
   `day-agent-a-text` and `day-agent-b-text` replace the agents' text variants, `day-failed-text`
   replaces failed-text (so Reject is `#b8262b`, not the dark `#ff7b7b`, which is 2.34:1 on
   day-page), and `day-span-highlight` and `day-fold-tint` (black at 4% and 3%) replace the white
-  highlights. Panels are light warm greys of the same warm family as the dark set's text.
+  highlights. The new dark-only card layers reuse day-card in day mode, and inset uses day-field;
+  the dark shadow and highlight do not add colors to that set. Panels stay light warm greys.
 - **Hover moves away from the text color.** The primary button's fill is day-text, its label
   day-page; on hover the fill goes to `day-text-hover`, black, never white (day-page on white is
   1.07:1).
@@ -451,6 +488,8 @@ packages; Monaco is created after the fonts load, or calls `monaco.editor.remeas
   A frame's title is 17px, 600, and its count 16px, 400. The graph is read at 100%, the size the
   sketch is drawn at, so these are the sketch's sizes, not the panels' scale.
 - **Label** (600, 14px): buttons, pills, chips and labels that name something.
+- **Group** (600, 11.5px, tracked 0.08em, uppercase): group labels such as the queue and settings
+  groups; the exception to sentence case.
 - **Caption** (400, 13px): captions, keyboard hints, a module's function count.
 - **Badge** (700, 15px): the letter on a node badge (a 26px square); cursor names use 12px.
 - **Code** (Mono 400, 15px, 21px lines): code in Monaco; line numbers at 13px.
@@ -460,22 +499,51 @@ The fonts need weights 400, 600 and 700 loaded.
 
 ### Named Rules
 
-**The Sentence Case Rule.** Sentence case everywhere. No small uppercase labels, no letter-spaced
-eyebrows.
+**The Sentence Case Rule.** Sentence case for titles, actions and prose. Only group labels use
+the small uppercase, tracked group style.
 
 **The Next on the Graph Rule.** Graph labels, module names included, use Next. A file path shown as
 code inside a panel stays Mono.
 
 ## Layout
 
-One screen, two modes, no tabs. The graph is always visible; a side panel changes with what the
-person is doing.
+One shell, with zones and docks. The graph stays visible beside the active focus tab, except
+when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches/v4/) show the
+1920x1080 recording frame; these are CSS pixels, not a requirement to show every zone at once.
 
-- **Frame:** a top bar (52px) across the width; a left rail (56px) with the view icons.
-- **Watch mode:** the graph fills the center; the agents panel (400px) sits on the right.
-- **Review mode:** a left panel opens at about half the width (880px of 1920); the same graph stays
-  on the right; the agents panel folds into the agents rail (56px).
-- **Live diff and file view** use the same left panel. There is no third screen.
+| Zone | Size at 1920x1080 | Contents |
+| --- | --- | --- |
+| Top bar | 52px high | product, repository, branch, hash; Ctrl K search; review queue, spend, history, settings |
+| Left rail | 56px wide | Graph, Files, Changes, Agents; terminal toggle and shortcuts at the bottom |
+| Sidebar | 280px wide, collapsible | Files tree or Changes: queue first, then decision history |
+| Focus panel | 880px wide | tabs for file view, live diff, review, conversation, plan and settings |
+| Graph stage | remaining width, at least 560px | the same graph, its heading, legend and controls |
+| Agents panel / rail | 400px / 56px wide | cards and task composer, or letter avatars with state |
+| Bottom dock | 280px high when open | Terminal, Tests, Activity log; later the replay timeline |
+| Status line | 24px high | live or named replay, merge mode, budget brake and connection |
+
+- **Watch:** the focus panel is closed, leaving the graph beside the agents panel.
+- **Focus:** opening any focus tab folds the agents panel into its rail. Up to six tabs open by
+  navigation; the active tab frames its subject on the graph. Its 2px top line takes agent-a,
+  agent-b or neutral text according to what it shows. A review tab also names the change's state.
+- **Docks:** the bottom dock occupies the width under the focus panel and graph, leaving the
+  sidebar and both rails intact. Its terminal is labeled main, reserved now and built last after
+  its security plan is reviewed; product agents never use it.
+- **Width:** by 1440px, the sidebar and expanded agents panel overlay their part of the work area
+  instead of taking graph width. With a focus tab open, both 56px rails stay docked and the graph
+  keeps its 560px minimum: the sidebar becomes an overlay first, below 1832px, when its 280px no
+  longer fits beside the 880px focus panel. Below 1552px, the focus panel shrinks to
+  `min(880px, viewport width - 112px - 560px)`: 823px at 1495px, 768px at 1440px and 608px at
+  1280px. Overlays cover their part of the work area without changing these widths. Below 1280px
+  a notice asks the person to widen the window. Type and radii do not shrink to fit.
+- **Maximize:** an explicit focus-panel control fills the work area and hides the graph behind a
+  restore-graph button. Restoring returns to the same shell; maximize is not used in the video.
+- **Keyboard:** Ctrl K jumps to functions and files and runs commands; Ctrl B toggles the sidebar;
+  Ctrl backtick toggles the bottom dock; Ctrl W closes the active focus tab; Esc dismisses the
+  current overlay. In review, R requests changes outside text inputs. The rail opens the shortcuts
+  sheet. There is no Approve key, including Ctrl+Enter, and no Approve command in Ctrl K.
+- **Attention:** a proposal updates the queue and agent card, never opens or selects a tab. The
+  status line reports the spending brake. Only a failed command calls for a toast.
 - **Graph overlays** sit 24px from the graph's edges: heading top left in watch only, cone card top
   left in review, legend bottom left, zoom controls bottom right. With the left panel open and no
   cone (live diff, file view) the top left is empty, as in the live sketch: the graph beside the
@@ -523,16 +591,22 @@ person is doing.
 
 ## Elevation & Depth
 
-Flat. There are no shadows on the person's surface; depth is tonal: ground, shell, panel, field,
-page, card and raised step up in small increments of lightness, and hairline borders separate them.
-Graph overlays sit on their surface color at 90 to 94% opacity, so the graph shows faintly through.
-The one texture on the person's surface is the matte review header's still grain. The only light is
-on the graph: node highlights, the dot field and the rings.
+Depth comes from the approved dark surfaces: shell, panel, page, card and raised, with inset
+for inputs and terminal. Cards use a gentle vertical card-to-card-bottom gradient, a border token,
+a soft shadow (`0 4px 16px` in card-shadow) and a top highlight (`inset 0 1px 0` in top-highlight).
+Agent and model-slot cards add their 2px agent-colored top line. Divider separates shell regions;
+border encloses cards and controls where decorative. Neither replaces control-edge or the focus
+ring when a boundary carries meaning.
+
+Graph overlays keep their shell or panel backing at 90 to 94% opacity and frost the graph beneath
+with a 12px backdrop blur. Their field mask keeps moving light out of the overlay. The review
+header retains its matte still grain. Every gradient end, highlight, shadow and overlay color is
+a theme token under `data-theme`, including what Cytoscape, Monaco and the field canvas receive.
 
 ### Named Rules
 
-**The Flat Panel Rule.** No blur, glass, glow or shadow on panels. If a panel needs separation, it
-gets a divider.
+**The Plain Panel Rule.** Tonal layers separate the person's work. Cards have the specified soft
+shadow; frosting belongs to graph overlays. Agent light stays on the graph.
 
 ## Shapes
 
@@ -552,7 +626,7 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 - **Shape:** control radius (7px), 40px tall (small: 34px), label type.
 - **Primary (Approve and merge, Send, Start agent):** text-colored fill with page-colored text. On
   hover the fill moves to text-hover, away from the label's color: white in the dark set (page
-  text on it 19.56:1, 16.68:1 at rest), black in day mode (day-page text on day-text-hover
+  text ratios are in the contrast table), black in day mode (day-page text on day-text-hover
   19.59:1, 15.92:1 at rest). A day fill never goes to white, where its label would read 1.07:1.
 - **Review change (the ready agent card):** the agent's color as fill with on-agent text and an eye
   icon, as in the sketches. It sits on that agent's own card, which already carries the color in
@@ -570,7 +644,8 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 
 ### Cards / Containers
 
-- **Agent card:** card fill, card-border border, card radius. First row: status lamp, agent name,
+- **Agent card:** card-to-card-bottom gradient, border, top highlight, soft shadow and card
+  radius, with the 2px agent-colored top line. First row: status lamp, agent name,
   model (its name as the run lists it, "Muse Spark"), and the status pill on the right. Then the task
   in one line, what the agent is doing now ("Editing restock in inventory.py"), a step progress bar
   with "Step 7 of 25" and the cost so far, and the last steps from `agent.step`, each with an icon,
@@ -608,10 +683,39 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 - **Review queue counter:** "1 change ready for review" with a lamp, on raised. It counts across
   agents, so it is neutral, never an agent's color.
 - **Left rail** (shell): icon buttons; the current view's button on raised.
-- **Agents rail** (review mode): one letter avatar per agent: a 36px square with card radius,
+- **Agents rail** (whenever the focus panel is open): one letter avatar per agent: a 36px square
+  with card radius,
   agent-tint fill, a 1.5px border in the agent's color and the letter in the agent's text color
   (agent-a-text, agent-b-text) at 15px, weight 700. A status
   lamp sits on its top-right corner and a one-word caption under it ("Ready", "Editing").
+
+### Settings tab
+
+Settings opens in the focus panel. The tab names it once: there is no second Settings title in
+the content. A left navigation lists Merge mode, Limits and budget, Protected areas, Models and
+keys, with a Saved line and the repository scope below. Section headings remain in the content.
+
+- **Merge mode:** two choice cards, Ask me and Merge alone when safe, followed by the rules
+  checklist. Each rule is named in words with a result icon. The checklist reflects the backed
+  policy and its assessment; the sketch's sample list does not redefine the merge rules.
+- **Limits and budget:** a currency input for the budget, then a threshold bar showing spent,
+  warnings at 50% and 80%, and the brake at 90%. Labels and marks carry these meanings without
+  color alone; warnings are neutral. The brake refuses new runs above 90%, as AGENTS.md specifies.
+  Steps per task is a minus/value/plus stepper. Change size and cone limits use numeric inputs
+  with visible units (lines, functions); they do not turn fixed contract limits into editable
+  settings without backing support.
+- **Protected areas:** rows name the path or function, its type and a remove action; an add field
+  and Add button follow the list. The row states that an edit waits for the person.
+- **Models and keys:** one card per model slot with its letter and model selector. The card's top
+  line takes that slot's agent color. Below the slot cards, separate rows hold the cross-review
+  selector and key-status pills. Selectors use actual offered models and review choices. Key
+  pills report configured, missing or invalid from readiness; they never show a key value or
+  imply a provider was contacted to verify it.
+- **Real settings only:** sample values are illustrative. Drop any row or choice with no backing
+  in Oversight, including a second provider-key row when none is configured for an offered slot.
+  A generic Muse key is not another credential: show Meta and, when used, Baseten readiness from
+  their actual settings. Keys stay in .env. Reserved behavior is not presented as a working
+  control, and Saved appears only after a supported save succeeds.
 
 ### Graph nodes and their states (signature component)
 
@@ -646,6 +750,18 @@ node ("read", "editing", "changed", "new"):
   dashed" wins over every other edge rule: inside the cone it keeps its width and color at full
   opacity, and a possible call that a change adds is not dashed (its node already is).
 
+**Call visibility.** At rest, only module-to-module edges show. Hovering or selecting a node
+reveals both incoming and outgoing calls incident to that node. For each cone, reveal only calls
+where both endpoints are in the union of that change's nodes and its cone. This applies to every
+working or revising agent's cone, and in review or live diff to the displayed change's cone even
+when its agent is idle. The visible set is the union of these requests; a call appears once.
+Calls inside one file stay hidden. A call with a folded endpoint stays aggregated under the
+folding rule below.
+
+Hover edges hide on pointer leave; selection edges hide when selection clears or changes.
+Agent cone edges hide when the agent stops working or revising; displayed cone edges hide when
+its panel closes or shows another change. An edge stays visible while another request includes it.
+
 **Letter badges.** Agents are a letter and a color, nothing more: no avatars, beads or mascots. On
 a node: a 26px rounded square at the right end of the row, on the name's line, with A or B in badge
 type. Filled for
@@ -673,7 +789,7 @@ everything else steps back.
   says what the bounds cut, for example "+12 omitted by depth". It is "possibly affected", never a
   complete list. The review panel keeps a one-line summary.
 - In level 1, before the cone exists, review dims everything except the change's nodes.
-- Once both the cone (level 2) and the dot field exist, the cone also casts the neutral work light.
+- The cone changes node and edge emphasis; it adds no light source to the LED field.
 
 ### Review panel with the matte header (signature component)
 
@@ -719,41 +835,36 @@ change is proposed.
 
 ### Dot field and rings (signature component)
 
-They were brought forward from after level 1 (DECISIONS.md) and never block a level. Whenever
-WebGL is missing, the graph's background is plain ground.
+The signal sketch's LED field stays: light follows the box it comes from, rather than making a
+round glow. It was brought forward from after level 1 and never blocks a level. Missing WebGL,
+a failed draw or a lost context leaves plain ground behind the graph.
 
-- **Grid:** its own canvas under a transparent Cytoscape canvas, reading the rendered boxes of the
-  lit nodes; it never draws nodes or edges. Cells are 7px, fixed to the screen (they do not pan or
-  zoom). Each cell is a square lamp covering 72% of it, about 5px. Each lamp shows one of four
-  levels (off and three steps), chosen with an 8 by 8 ordered (Bayer) dither. An unlit lamp is
-  lamp-off (about 2% brightness, close to shell); a 2px guide dot in guide-dot every 28px marks the
-  grid where nothing is lit. The cells are large on purpose: they survive 720p compression.
-- **Light:** each lit node is a source shaped like its box. Intensity falls off with distance from
-  the box: about 72% a near term that decays quickly plus 28% a far term that spreads wider, times
-  the mode's gain and the node's weight. Overlapping lights mix colors by intensity; at most 8 at
-  once.
+- **LEDs:** a canvas of 7px square LEDs under transparent Cytoscape, with off and three lit levels
+  chosen by ordered dithering. Lamp-off and guide-dot make a faint 28px grid at rest. The canvas
+  reads rendered boxes; it does not draw graph nodes or edges.
+- **Shape and spread:** light follows the outline of the current row or folded card, never its
+  whole module frame. The near and far spreads are about 26px and 72px at 100% zoom, measured
+  outward from that box, and scale with graph zoom. This preserves the box-shaped pool of light.
+- **Sources:** only each agent's current node at full strength and its last read node at about
+  0.4 emit light, in that agent's token. The last read is one node, not an accumulating history;
+  other changed nodes, selected neighbors and the impact cone are not additional emitters.
+- **Mask:** the title, legend, zoom controls and every overlay mask the field, including the
+  resting grid. Neither the LEDs nor a travelling light may show through those areas.
+- **Working ring:** an expanding ring in the agent's color reports a working agent. It stops
+  when the agent stops working. It is a work signal, not a second pool of ambient light.
+- **Marker:** on each agent.focus, the lettered marker glides to the current node along the edge
+  route when one exists, carrying its local light with it. On approval the marker and its light
+  fade out. The Motion rules set its timing and reduced-motion fallback.
 
-| Mode | Near | Far | Gain | Why |
-| --- | --- | --- | --- | --- |
-| Watch and live diff | 34px | 90px | 0.92 | the agents are the subject; their light spreads |
-| File view | 22px | 50px | 0.80 | one function and its neighbors |
-| Review | 16px | 34px | 0.70 | the cone carries the meaning, so the light is held in |
+### Class and module folding
 
-| Mode | Lit nodes and weights |
-| --- | --- |
-| Watch | per agent, in its color: the editing node (or, once the agent is done, its main changed node) 1.0, other changed nodes 0.72, read nodes 0.36 |
-| Review | the change in the agent's color: changed nodes 1.0, new nodes 0.8; the cone in work-light: distance 1 at 0.52, farther at 0.38. Read nodes are not lit. |
-| Live diff | in the agent's color: the editing node 1.0, read nodes 0.4; the cone so far in work-light at 0.48 |
-| File view | in work-light: the selected node 0.8, its direct callers and callees 0.32 |
-
-- **Breathing:** in watch and live diff, the editing node's light swings between 72% and 100% of
-  its weight, a full cycle about every 2.9 seconds. In review it holds still.
-- **Rings:** in watch and live diff, rings spread from the editing node in its agent's color: one at
-  a time, growing at 55px per second from the node's center to 340px, then starting again; a soft
-  band about 10px wide at 90% strength, fading out between 60px and 340px. No rings in review or
-  file view.
-
-### Class folding
+Classes and modules fold. At start, every module is one folded card, such as
+"pricing.py · 6 functions". A module opens when an agent reads or edits inside it. Clicking a
+module's header toggles it open or folded, including after an agent opened it.
+Cross-file calls aggregate whenever either endpoint module is folded: one edge per directed
+module pair, labeled with its count. The count includes only calls in that direction;
+A → B and B → A keep separate arrows and counts. The aggregate attaches to each module's card
+or open frame, so this also applies when only one module is folded.
 
 Classes start as one header row with their method count. A click toggles the class; a fresh change
 adding or modifying a method opens it, and the person can fold it again. Reading a hidden method
@@ -764,16 +875,36 @@ Preset coordinates and fold state determine positions. Only the later rows and m
 same column slide when a class toggles, for 240ms with `cubic-bezier(0.2, 0.7, 0.2, 1)`; under reduced
 motion they jump. Mode changes move the camera alone.
 
+Only module frames drag. Function rows stay in their frame's column. The frame's edges re-route
+on every animation frame during the drag, never only on drop.
+
 ### Motion
 
-- Mode changes, dimming and highlights ease over 240ms (`cubic-bezier(0.2, 0.7, 0.2, 1)`).
-- **One exception on the person's surface:** a working agent's status lamp pulses (1.6s period),
-  because it reports that work is going on. Nothing else in a panel animates on its own.
-- On the graph: the rings and the breathing light.
-- **Reduced motion** (`prefers-reduced-motion: reduce`): the rings, the breathing, the lamp pulse
-  and the camera's eased moves stop; the camera jumps. What stays: the dot field's still light,
-  every state change (it switches at once instead of easing), and the lamp as a static fill. No
-  information is carried only by motion.
+Nothing moves without a cause. Event-driven transitions take 160 to 320ms with
+`cubic-bezier(0.2, 0.7, 0.2, 1)`; the standard is 240ms, including module and class opening.
+Each motion says what changed:
+
+- **Agent starts:** its card slides and fades in from the right.
+- **agent.step / usage.tick:** a new step row slides in at the top, older rows move down; the
+  step bar and spend number ease to the reported value.
+- **agent.status / change.proposed:** the status pill crossfades; the top bar's ready-for-review
+  pill slides in once. These events never open a panel or move keyboard focus.
+- **agent.focus:** the lettered marker in the agent's color glides between nodes, following the
+  edge route when present, with its light following it. A working agent's status lamp may pulse
+  (the existing 1.6s period) and its graph ring expands only while work continues.
+- **Module or class opens:** its rows slide into place, including an opening caused by an agent's
+  read or edit. This does not rearrange the preset between modes.
+- **Person opens review:** the camera eases to the change, the focus panel slides in and the diff
+  scrolls to its first hunk. The live diff follows a new edit and marks the changed lines once;
+  a proposal does not switch tabs or turn it into review by itself.
+- **change.resolved, approved and merged:** pending dashed borders become solid, rows settle into
+  main's neutral colors, added nodes grow in, and the agent marker and its light fade out.
+- **View changes:** dimming and highlights ease to their new state after navigation or an event.
+
+**Reduced motion** (`prefers-reduced-motion: reduce`) turns all of these motions off, including
+card and row movement, value easing, crossfades, rings, lamp pulses, marker travel, fades, node
+growth, camera moves and animated scrolling. State and camera changes happen immediately; the
+field's current light and the lamp remain still. No information depends on motion.
 
 ### Quality floor
 
@@ -783,22 +914,93 @@ Each item is a target checked on the built result:
   offset 2px). Keyboard order follows the screen; nothing steals focus.
 - **Contrast:** text at 4.5:1 or more against its surface; graphics that carry meaning (agent
   borders, badges, dashes, state icons, call edges, the focus ring) and control boundaries at 3:1.
-  Measured for the dark set: text 16.7:1 on page; muted 7.6:1 on card; faint 5.3:1 on field;
-  code-dim 4.7:1 on page; agent-a-text 7.5:1 and agent-b-text 8.0:1 on card, and 6.4:1 and 6.7:1 on
-  their tints over card (6.9:1 and 7.2:1 over shell, where the rail sits); agent-a and agent-b as
-  graphics 6.8:1 and 5.7:1 on ground; on-agent letters 6.1:1 on A and 5.1:1 on B; passed 10.3:1 and
-  failed-text 7.8:1 on page; edge 3.70:1 and edge-possible 3.14:1 on a module frame at 90% over
-  ground (3.86:1 and 3.28:1 on ground); control-edge 3.2:1 on field; lit-edge 14.0:1 and work-light
-  6.2:1 on ground; every syntax color 8.1:1 or more on page; page-colored button label 19.56:1 on
-  text-hover; the matte header's text, muted and faint 15.6:1, 7.2:1 and 4.9:1 on matte-top (the
-  lightest end), and agent text on a tint over matte-top 6.0:1 and 6.3:1. The day set's numbers are
-  in its table. Rest borders (divider, border, node-border) are decorative: what they enclose is
-  identified by its text.
+  The dark-set contrast tables below cover the v4 surfaces and card gradient; the day set keeps
+  its table above. Decorative borders do not carry a control's identity or state; meaningful
+  boundaries use control-edge and focus uses text. Values below the floor stay visible as
+  maintainer notes, not silent token changes.
 - **Errors:** every error message says what happened and how to go on, in the product's words:
   "The merge conflicts with main in pricing.py. Ask Agent A to redo it on the new base, or reject
   it." Never a bare code or "Something went wrong". Errors use neutral colors with an icon;
   failed red is for failing tests and destructive actions, not for chrome.
 - **Browser surfaces:** text selection, caret, scrollbars and focus rings take theme tokens.
+
+### Contrast on the v4 dark surfaces
+
+WCAG relative luminance uses the sRGB transfer curve and `(Llighter + 0.05) / (Ldarker + 0.05)`.
+Ratios are displayed to two decimals; pass/fail uses the unrounded value. Card is the lighter
+gradient end; card-bottom is the darker end. Field equals inset. These tables include every
+text foreground, even where its use is restricted. **Bold** ratios fall below the applicable floor.
+
+| Text token (4.5:1) | shell | panel | page | card | card-bottom | raised | inset |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| text | 16.97 | 16.55 | 16.20 | 15.54 | 16.08 | 14.64 | 16.96 |
+| text-hover | 19.90 | 19.42 | 19.01 | 18.22 | 18.86 | 17.17 | 19.90 |
+| muted | 7.86 | 7.66 | 7.50 | 7.19 | 7.45 | 6.78 | 7.85 |
+| faint | 5.36 | 5.23 | 5.12 | 4.91 | 5.08 | 4.63 | 5.36 |
+| code-dim | 4.81 | 4.69 | 4.59 | **4.41** | 4.56 | **4.15** | 4.81 |
+| module-label | 13.12 | 12.80 | 12.53 | 12.01 | 12.43 | 11.32 | 13.11 |
+| agent-a-text | 7.70 | 7.51 | 7.35 | 7.05 | 7.29 | 6.64 | 7.69 |
+| agent-b-text | 8.24 | 8.04 | 7.87 | 7.55 | 7.81 | 7.11 | 8.24 |
+| on-agent | **1.06** | **1.04** | **1.01** | **1.03** | **1.01** | **1.09** | **1.06** |
+| passed | 10.49 | 10.23 | 10.01 | 9.60 | 9.94 | 9.05 | 10.48 |
+| failed | 6.88 | 6.71 | 6.57 | 6.30 | 6.52 | 5.93 | 6.88 |
+| failed-text | 7.93 | 7.74 | 7.58 | 7.26 | 7.52 | 6.84 | 7.93 |
+| syntax-plain | 13.79 | 13.45 | 13.17 | 12.63 | 13.07 | 11.90 | 13.79 |
+| syntax-keyword | 8.29 | 8.09 | 7.92 | 7.59 | 7.86 | 7.15 | 8.29 |
+| syntax-string | 10.02 | 9.78 | 9.57 | 9.18 | 9.50 | 8.64 | 10.02 |
+| syntax-number | 10.73 | 10.47 | 10.24 | 9.82 | 10.17 | 9.25 | 10.72 |
+| syntax-builtin | 9.27 | 9.04 | 8.85 | 8.49 | 8.79 | 8.00 | 9.27 |
+| syntax-definition | 17.58 | 17.15 | 16.79 | 16.09 | 16.66 | 15.16 | 17.57 |
+
+| Graphic/control token (3:1) | shell | panel | page | card | card-bottom | raised | inset |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| agent-a | 6.45 | 6.29 | 6.16 | 5.90 | 6.11 | 5.56 | 6.44 |
+| agent-b | 5.41 | 5.28 | 5.17 | 4.96 | 5.13 | 4.67 | 5.41 |
+| passed | 10.49 | 10.23 | 10.01 | 9.60 | 9.94 | 9.05 | 10.48 |
+| failed | 6.88 | 6.71 | 6.57 | 6.30 | 6.52 | 5.93 | 6.88 |
+| edge | 3.66 | 3.57 | 3.50 | 3.35 | 3.47 | 3.16 | 3.66 |
+| edge-possible | 3.10 | 3.03 | **2.96** | **2.84** | **2.94** | **2.68** | 3.10 |
+| lit-edge | 13.31 | 12.98 | 12.71 | 12.18 | 12.61 | 11.48 | 13.30 |
+| work-light | 5.90 | 5.75 | 5.63 | 5.40 | 5.59 | 5.09 | 5.89 |
+| node-hover | 3.91 | 3.81 | 3.73 | 3.58 | 3.70 | 3.37 | 3.91 |
+| control-edge | 3.25 | 3.17 | 3.10 | **2.97** | 3.08 | **2.80** | 3.25 |
+
+**Maintainer notes; approved values remain unchanged.** The proposed alternatives below are the
+nearest passing 8-bit values along an equal-channel lightening ramp from the existing token.
+They are proposals for the stated surface, not replacements made here.
+
+| Pair below the floor | Ratio | Proposed foreground | Ratio |
+| --- | --- | --- | --- |
+| code-dim on card (text) | 4.41 | `#7f7f7a` | 4.53 |
+| code-dim on raised (text) | 4.15 | `#83837e` | 4.51 |
+| on-agent on shell (text) | 1.06 | `#7d7771` | 4.50 |
+| on-agent on panel (text) | 1.04 | `#7f7973` | 4.52 |
+| on-agent on page (text) | 1.01 | `#817b75` | 4.55 |
+| on-agent on card (text) | 1.03 | `#847e78` | 4.54 |
+| on-agent on card-bottom (text) | 1.01 | `#817b75` | 4.51 |
+| on-agent on raised (text) | 1.09 | `#88827c` | 4.52 |
+| on-agent on inset (text) | 1.06 | `#7e7872` | 4.56 |
+| edge-possible on page (graphic/control) | 2.96 | `#60605c` | 3.01 |
+| edge-possible on card (graphic/control) | 2.84 | `#63635f` | 3.02 |
+| edge-possible on card-bottom (graphic/control) | 2.94 | `#61615d` | 3.03 |
+| edge-possible on raised (graphic/control) | 2.68 | `#676763` | 3.02 |
+| control-edge on card (graphic/control) | 2.97 | `#63635f` | 3.02 |
+| control-edge on raised (graphic/control) | 2.80 | `#676763` | 3.02 |
+
+On-agent is an inverse label for filled agent badges and buttons, never for the seven dark
+surfaces above. Its intended pairs remain 6.07:1 on agent-a / 5.09:1 on agent-b.
+Code-dim remains limited to page and field/inset; its failures on card and raised rule out reuse
+there.
+Edge and edge-possible are measured at full strength; dimmed context carries no independent state.
+A meaningful edge or control on a failing surface needs the proposed token adjustment approved
+before use. Decorative divider and border do not meet 3:1 and must not identify controls by themselves.
+
+| Additional intended pair | Ratios |
+| --- | --- |
+| agent-a-text on its tint over shell / panel / page / card / card-bottom / raised / inset | 6.69 / 6.45 / 6.27 / 5.95 / 6.20 / 5.57 / 6.68 |
+| agent-b-text on its tint over shell / panel / page / card / card-bottom / raised / inset | 7.03 / 6.77 / 6.57 / 6.23 / 6.50 / 5.82 / 7.02 |
+| page inverse label on text / text-hover fill | 16.20 / 19.01 |
+| text / muted / faint on matte-top (lighter header end) | 15.57 / 7.21 / 4.92 |
 
 ## Do's and Don'ts
 
@@ -809,8 +1011,8 @@ Each item is a target checked on the built result:
 - **Do** keep the review queue counter and any count across agents neutral.
 - **Do** show a pending change with a dashed 1.5px border in its agent's color, changed and new
   alike.
-- **Do** leave the screen still when an agent finishes: only its card, its pill and the queue
-  counter change.
+- **Do** keep the current view when an agent finishes: only its card, its pill and the queue
+  counter report readiness.
 - **Do** take every color from a token under `data-theme`, Cytoscape, Monaco and the dot field
   included: hovers, highlights, gradient ends and the grid's lamps and dots too, never a raw hex or
   `white` in a component.
@@ -821,15 +1023,14 @@ Each item is a target checked on the built result:
 - **Don't** use amber or yellow, for warnings or anything else.
 - **Don't** use color alone to say anything.
 - **Don't** give any hue a meaning other than Agent A, Agent B, passed or failed.
-- **Don't** steal focus: nothing opens, moves or scrolls by itself.
+- **Don't** steal focus or open a tab when an agent finishes; motion follows only the causes above.
 - **Don't** dash anything but a pending change: not possible calls, selection, hover or empty
   states.
-- **Don't** put blur, glass, glow or shadow on a panel; the matte header's still grain is the only
-  texture.
+- **Don't** add surface effects beyond the card layers, frosted graph overlays and still matte header.
 - **Don't** move nodes between modes.
 - **Don't** give Approve a keyboard shortcut, Ctrl+Enter included.
-- **Don't** use small uppercase labels or Mono as decoration.
-- **Don't** let the sketches' code or images into the repository.
+- **Don't** use uppercase outside group labels, or Mono as decoration.
+- **Don't** copy sketch implementation into product code; the approved v4 images are design references.
 
 ## By level
 
@@ -838,6 +1039,6 @@ Each item is a target checked on the built result:
 | 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the queue counter; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
 | 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
-| Brought forward to level 1, never blocking | the dot field with its light, the rings and the breathing light; plain black ground whenever WebGL is missing |
+| Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker; plain black ground whenever WebGL is missing |
 | After level 1, never blocking | the matte header's grain |
 | Mon Nov 2, only with level 2 closed | day mode |

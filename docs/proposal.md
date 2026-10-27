@@ -582,8 +582,8 @@ the single error format.
 
 - Every error is `ErrorResponse {error: {code, message}}`. The codes are `not_found`,
   `wrong_state`, `slot_busy`, `not_configured`, `spend_brake`, `invalid_path`, `stale_file`,
-  `not_implemented`, `invalid_request`, `internal` and `forbidden`. They map to 404, 409, 409, 503, 403, 422,
-  409, 501, 422, 500 and 403. Only `not_configured` adds `missing: list[MissingSetting]`, where
+  `not_implemented`, `invalid_request`, `internal`, `forbidden` and `too_large`. They map to 404, 409, 409, 503, 403, 422,
+  409, 501, 422, 500, 403 and 413. Only `not_configured` adds `missing: list[MissingSetting]`, where
   `MissingSetting {name: SettingName, problem: "missing" | "invalid", slots: list[Slot]}`.
   `SettingName` is `META_API_KEY`, `BASETEN_API_KEY`, `OVERSIGHT_BUDGET_USD`,
   `MUSE_SPARK_INPUT_USD_PER_M` or `MUSE_SPARK_OUTPUT_USD_PER_M`; values are never sent.
@@ -763,8 +763,10 @@ details outside this repository.
 | Support and mechanical steps: test additions, smoke scripts, surveys, formatting, reruns; no design and no new module | GLM; Claude Haiku or Sonnet when GLM is out of quota |
 | Independent review | a model from another provider than the author's: Claude reviews Codex's changes, Codex reviews Claude's |
 
-- Muse is not used to build Oversight. The Meta API is called only from inside the product: its
-  agents, the probe, and recorded demo runs.
+- Muse Code (Muse Wonder) contributed bounded implementations, tests, tooling fixes and development plans, and later
+  reviewed the coordinator's Codex implementation loops. Development use runs under the maintainer's subscription with
+  its own stored credential, separate from the product key and hackathon credits. The Meta API is called only from
+  inside Oversight: its agents, the API probe and deliberately recorded demo runs.
 - At least four writers run at once, at least one per lane: the critical path, the frontend,
   bounded backend work, and support. Helpers are the first to stop when usage runs ahead of pace. Every headless run states its permission mode and turn limit.
 - Every worker stays inside its own worktree and is launched confined where its tool allows. Review

@@ -47,7 +47,7 @@ async def client_for(
     live: LiveRun = app.state.live
     live._manager = manager  # pyright: ignore[reportPrivateUsage]
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app), base_url="http://localhost"
+        transport=httpx.ASGITransport(app), base_url=f"http://localhost:{settings.port}"
     ) as client:
         yield client
 
@@ -73,7 +73,7 @@ async def proposed_run(
     live._kept["agent-1"] = Mock(spec=AgentRun, steps=1)  # pyright: ignore[reportPrivateUsage]
     live.ledger.state = LedgerState(0.0, ())
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app), base_url="http://localhost"
+        transport=httpx.ASGITransport(app), base_url=f"http://localhost:{settings.port}"
     ) as client:
         yield client, live
 

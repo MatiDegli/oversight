@@ -173,7 +173,7 @@ async def test_unbuilt_commands_answer_501_without_reading_the_body(tmp_path: Pa
 def test_a_replay_takes_no_commands(tmp_path: Path) -> None:
     log = REPO_ROOT / "fixtures" / "events" / "handwritten-level1.jsonl"
     app = create_app(live_settings(tmp_path), ReplayConfig(log=log))
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1:8710")
     for url in (
         "/agents",
         "/agents/agent-1/stop",
