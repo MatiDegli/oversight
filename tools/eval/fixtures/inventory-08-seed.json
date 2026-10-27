@@ -1,0 +1,7 @@
+[
+  {
+    "path": "shop/inventory.py",
+    "old": "        if quantity > self.available(sku):\n            raise OutOfStock(f\"{sku}: wanted {quantity}, have {self.available(sku)}\")\n        self._reserved[sku] = self._reserved.get(sku, 0) + quantity",
+    "new": "        free = self.available(sku)\n        self._reserved[sku] = self._reserved.get(sku, 0) + quantity\n        if quantity > free:\n            raise OutOfStock(f\"{sku}: wanted {quantity}, have {free}\")"
+  }
+]

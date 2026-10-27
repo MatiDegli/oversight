@@ -42,3 +42,6 @@ CLAUDE.local.md
 # Playwright
 playwright-report/
 test-results/
+
+# Task bench results, raw events and durable spending ledger
+.eval-output/
