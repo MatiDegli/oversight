@@ -1536,7 +1536,8 @@
         "stale_file",
         "not_implemented",
         "invalid_request",
-        "internal"
+        "internal",
+        "forbidden"
       ],
       "type": "string"
     },

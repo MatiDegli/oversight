@@ -401,6 +401,10 @@ Level 3 wiring starts now. Contracts 1.4.0 delivery A was approved by the mainta
 14. **Plan agents belong to that authorization** — approved by the maintainer, 2026-10-27.
     Their AgentStatus.started_by is None even if a lead requested the plan. Plan.started_by
     preserves that requester; it does not grant the lead authority to revise these agents.
+15. **API guard refusal code** — approved by the maintainer, 2026-10-27.
+    Add forbidden (HTTP 403) within this same 1.4.0 delivery for requests whose Host or Origin
+    is not on the allow list, supporting the planned DNS rebinding defense. The API guard is
+    a later front; nothing returns forbidden yet.
 
 The tuple gate compares all changed array constraints with the byte-exact 1.3.0 baseline.
 It discovers fields generically and checks generated TypeScript, including local references and

@@ -26,6 +26,7 @@ const errorCodes: Record<ErrorCode, true> = {
   not_implemented: true,
   invalid_request: true,
   internal: true,
+  forbidden: true,
 };
 
 export class CommandError extends Error {

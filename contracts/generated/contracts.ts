@@ -45,7 +45,8 @@ export type ErrorCode =
   | "stale_file"
   | "not_implemented"
   | "invalid_request"
-  | "internal";
+  | "internal"
+  | "forbidden";
 export type SettingName =
   | "META_API_KEY"
   | "BASETEN_API_KEY"

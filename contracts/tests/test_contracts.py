@@ -372,6 +372,7 @@ def test_every_error_code_has_the_status_of_section_4_7() -> None:
         "not_implemented": 501,
         "invalid_request": 422,
         "internal": 500,
+        "forbidden": 403,
     }
     assert set(ERROR_STATUS) == set(get_args(ErrorCode.__value__))
 
