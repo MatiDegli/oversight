@@ -145,6 +145,34 @@ describe("live transport", () => {
     expect(onError).toHaveBeenCalledOnce();
   });
 
+  it("keeps a bad-event alert through a failed reconnect and healthy reopen until an event applies", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const { source, sources, store, onError } = setup();
+    source().emit(run);
+    source().raw("{");
+    expect(onError).toHaveBeenCalledOnce();
+    const badEvent: unknown = onError.mock.calls[0]?.[0];
+    expect(badEvent).toBeInstanceOf(Error);
+    await vi.advanceTimersByTimeAsync(250);
+    source().fail();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(sources).toHaveLength(3);
+    source().open();
+    expect(store.getState().state.lastSeq).toBe(1);
+    expect(onError).toHaveBeenCalledExactlyOnceWith(badEvent);
+    source().emit(graph);
+    expect(store.getState().state.lastSeq).toBe(2);
+    // Applied events clear the shell's alert through its store subscription. The next connection
+    // failure starts a fresh streak, whose alert can now be cleared by a healthy reopen alone.
+    source().fail();
+    expect(onError).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(250);
+    source().open();
+    expect(onError).toHaveBeenCalledTimes(3);
+    expect(onError).toHaveBeenLastCalledWith(null);
+  });
+
   it.each(["malformed JSON", "reducer exception", "sequence gap", "graph version"])(
     "backs off with jitter on repeated %s, reports once and resets on an applied event",
     async (failure) => {

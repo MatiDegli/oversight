@@ -28,6 +28,7 @@ export function startLive({
   // The last failure was a lost connection, which a healthy reopen ends. A bad event does not
   // end that way: the reopened stream replays it, so only an applied event clears that failure.
   let disconnected = false;
+  let badEvent = false;
 
   function retry(error: unknown) {
     stream?.close();
@@ -55,7 +56,7 @@ export function startLive({
         if (stopped || current !== stream || !disconnected) return;
         // A server with nothing new to send applies no event, so the shell would keep its alert.
         disconnected = false;
-        if (reported) {
+        if (reported && !badEvent) {
           reported = false;
           onError?.(null);
         }
@@ -68,7 +69,9 @@ export function startLive({
             throw new Error(`Live sequence or graph version mismatch at ${String(event.seq)}`);
           retryWindow = 500;
           reported = false;
+          badEvent = false;
         } catch (error) {
+          badEvent = true;
           retry(error);
         }
       };

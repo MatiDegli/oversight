@@ -48,9 +48,9 @@ afterEach(() => {
 });
 
 /** The demo at its saved preset, then `nodes` arrive as one graph update. */
-function grow(nodes: GraphNode[]) {
+function grow(nodes: GraphNode[], baseSnapshot = snapshot) {
   const state = createInitialState();
-  const base = { ...snapshot, positions: preset };
+  const base = { ...baseSnapshot, positions: preset };
   cy = cytoscape({
     headless: true,
     styleEnabled: true,
@@ -83,16 +83,17 @@ function grow(nodes: GraphNode[]) {
     return found;
   };
   const overlapsBefore = overlaps();
+  const moduleBounds = graph.getElementById("shop.orders").boundingBox({ includeLabels: true });
   updateGraph(
     graph,
     graphElements({ ...state, graph: { ...base, nodes: [...base.nodes, ...nodes] } }),
   );
-  return { graph, before, overlapsBefore, overlapsAfter: overlaps() };
+  return { graph, before, moduleBounds, overlapsBefore, overlapsAfter: overlaps() };
 }
 
 describe("a class that gets its first method", () => {
   it.each(["shop.orders:Order", "shop.models:OrderLine", "shop.inventory:OutOfStock"])(
-    "grows %s without covering a sibling or moving an existing node",
+    "grows %s without overlap and restores every leaf position after rejection",
     (classId) => {
       const parent = byId(classId);
       const method = added(`${classId}.refund`, "method", parent);
@@ -100,10 +101,58 @@ describe("a class that gets its first method", () => {
       expect(overlapsBefore).toEqual([]);
       expect(overlapsAfter).toEqual([]);
       expect(graph.getElementById(method.id).parent().first().id()).toBe(classId);
+      for (const [id, position] of before) {
+        const node = graph.getElementById(id);
+        if (node.isChildless()) expect(node.position()).toEqual(position);
+      }
+      updateGraph(
+        graph,
+        graphElements({ ...createInitialState(), graph: { ...snapshot, positions: preset } }),
+      );
       for (const [id, position] of before)
-        if (id !== classId) expect(graph.getElementById(id).position()).toEqual(position);
+        expect(graph.getElementById(id).position()).toEqual(position);
     },
   );
+
+  it("places Order's first method below its module when there is room without overlap or moving existing leaves", () => {
+    const parent = byId("shop.orders:Order");
+    const method = added(`${parent.id}.refund`, "method", parent);
+    // Keep the module's tight preset, but leave its surroundings free for the direction choice.
+    const orders = {
+      ...snapshot,
+      nodes: snapshot.nodes.filter(
+        (node) => node.id === parent.parent_id || node.parent_id === parent.parent_id,
+      ),
+      edges: [],
+    };
+    const { graph, before, moduleBounds, overlapsAfter } = grow([method], orders);
+    const box = graph.getElementById(method.id).boundingBox({ includeLabels: true });
+    expect(box.y1).toBeGreaterThan(moduleBounds.y2);
+    expect(overlapsAfter).toEqual([]);
+    for (const [id, position] of before) {
+      const node = graph.getElementById(id);
+      if (node.isChildless()) expect(node.position()).toEqual(position);
+    }
+  });
+
+  it("restores a dragged leaf position through repeated growth and rejection without a preset", () => {
+    const parent = byId("shop.orders:Order");
+    const method = added(`${parent.id}.refund`, "method", parent);
+    const { graph } = grow([method]);
+    const base = graphElements({ ...createInitialState(), graph: snapshot });
+    const withMethod = graphElements({
+      ...createInitialState(),
+      graph: { ...snapshot, nodes: [...snapshot.nodes, method] },
+    });
+    updateGraph(graph, base);
+    const dragged = { x: 731, y: 80 };
+    graph.getElementById(parent.id).position(dragged);
+    for (let round = 0; round < 2; round++) {
+      updateGraph(graph, withMethod);
+      updateGraph(graph, base);
+      expect(graph.getElementById(parent.id).position()).toEqual(dragged);
+    }
+  });
 
   it("keeps clear of every sibling when two methods arrive in one update", () => {
     const parent = byId("shop.orders:Order");
@@ -117,6 +166,60 @@ describe("a class that gets its first method", () => {
 });
 
 describe("the box of a new node", () => {
+  it("uses a free spot below the graph when all 100 rings are blocked", () => {
+    const node = (
+      id: string,
+      kind: "class" | "module" | "function",
+      x: number,
+      y: number,
+    ): GraphElement => ({
+      group: "nodes",
+      data: { id, kind, label: id },
+      classes: kind,
+      position: { x, y },
+    });
+    const base = [
+      node("class", "class", 0, 0),
+      node("sibling", "function", 0, 100),
+      node("left", "module", -1590, 0),
+      node("right", "module", 1590, 0),
+      node("top", "module", 0, -190),
+    ];
+    cy = cytoscape({
+      headless: true,
+      styleEnabled: true,
+      style: [
+        ...graphStyles(themes.dark),
+        { selector: "#left, #right", style: { width: 3000, height: 6000 } },
+        { selector: "#top", style: { width: 6180, height: 200 } },
+      ],
+      elements: base,
+      layout: { name: "preset" },
+    });
+    const before = new Map(cy.nodes().map((n) => [n.id(), { ...n.position() }]));
+    const boundary = cy.nodes().boundingBox({ includeLabels: true });
+    updateGraph(cy, [
+      ...base,
+      {
+        group: "nodes",
+        data: { id: "method", kind: "method", parent: "class", label: "method" },
+        classes: "method",
+      },
+    ]);
+    for (const id of ["class", "method"]) {
+      const box = cy.getElementById(id).boundingBox({ includeLabels: true });
+      expect(box.y1).toBeGreaterThan(boundary.y2);
+      for (const otherId of ["sibling", "left", "right", "top"]) {
+        const other = cy.getElementById(otherId).boundingBox({ includeLabels: true });
+        expect(
+          box.x1 >= other.x2 || box.x2 <= other.x1 || box.y1 >= other.y2 || box.y2 <= other.y1,
+        ).toBe(true);
+      }
+    }
+    for (const [id, position] of before)
+      if (id !== "class") expect(cy.getElementById(id).position()).toEqual(position);
+  });
+
   it("comes from the theme's tokens, so a larger body type keeps larger nodes apart", () => {
     const large = { ...themes.dark, "body-size": "30px" };
     cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(large) });

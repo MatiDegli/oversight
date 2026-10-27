@@ -21,6 +21,10 @@ const union = (a: Box, b: Box): Box => ({
   x2: Math.max(a.x2, b.x2),
   y2: Math.max(a.y2, b.y2),
 });
+
+// A compound's centre follows its children. Keep the last position it had as a leaf separately,
+// including human drags, so removing its last child does not leave it at the frame's centre.
+const leafPositions = new WeakMap<Core, Map<string, Position>>();
 /**
  * Measure before batching: compound bounds are stale while Cytoscape batches writes.
  *
@@ -126,17 +130,35 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
       for (let x = anchor.x1 + edgeX; x <= anchor.x2 - edgeX; x += g.gap)
         for (let y = anchor.y1 + edgeY; y <= anchor.y2 - edgeY; y += g.gap) inside.push({ x, y });
       position = nearest(inside).find(fits);
-      for (let ring = 0; !position && ring < 100; ring++) {
-        const far = ring * g.gap;
-        const [x1, x2] = [anchor.x1 - edgeX - far, anchor.x2 + edgeX + far];
-        const [y1, y2] = [anchor.y1 - edgeY - far, anchor.y2 + edgeY + far];
-        const candidates: Position[] = [];
-        for (let x = x1; x <= x2; x += g.gap) candidates.push({ x, y: y1 }, { x, y: y2 });
-        for (let y = y1 + g.gap; y < y2; y += g.gap) candidates.push({ x: x1, y }, { x: x2, y });
-        position = nearest(candidates).find(fits);
+      // Search below first, then beside the module, and above last to spare its heading.
+      const module = parents.find((id) => nodes.get(id)?.data.kind === "module");
+      const boundary = boxes.get(module ?? "") ?? anchor;
+      const direction = (point: Position) => {
+        const box = boxAt(point);
+        return box.y1 > boundary.y2 ? 0 : box.x2 < boundary.x1 || box.x1 > boundary.x2 ? 1 : 2;
+      };
+      for (let preferred = 0; !position && preferred < 3; preferred++) {
+        for (let ring = 0; !position && ring < 100; ring++) {
+          const far = ring * g.gap;
+          const [x1, x2] = [anchor.x1 - edgeX - far, anchor.x2 + edgeX + far];
+          const [y1, y2] = [anchor.y1 - edgeY - far, anchor.y2 + edgeY + far];
+          const candidates: Position[] = [];
+          for (let x = x1; x <= x2; x += g.gap) candidates.push({ x, y: y1 }, { x, y: y2 });
+          for (let y = y1 + g.gap; y < y2; y += g.gap) candidates.push({ x: x1, y }, { x: x2, y });
+          position = nearest(candidates.filter((point) => direction(point) === preferred)).find(
+            fits,
+          );
+        }
       }
-      // If surrounding modules leave no growth corridor, keep the parent's box intact.
-      position ??= center;
+      // Beyond the bounded search, put the new leaf and its frames below every occupied box.
+      // Unlike the parent's centre, this spot cannot overlap the surrounding nodes.
+      if (!position) {
+        const bottom = Math.max(0, ...[...boxes.values()].map((box) => box.y2));
+        position = {
+          x: center.x,
+          y: bottom + halfHeight + (parents.length + 1) * inset + g.label + g.margin,
+        };
+      }
     }
     const result = { ...element, position };
     placed.set(id, result);
@@ -158,6 +180,15 @@ export function updateGraph(
 ): void {
   const initial = cy.nodes().empty();
   const byId = new Map(elements.map((element) => [element.data.id, element]));
+  const remembered = leafPositions.get(cy) ?? new Map<string, Position>();
+  leafPositions.set(cy, remembered);
+  for (const id of remembered.keys()) if (!byId.has(id)) remembered.delete(id);
+  for (const node of cy.nodes(":childless"))
+    if (byId.has(node.id())) remembered.set(node.id(), { ...node.position() });
+  const parents = new Set(elements.map((element) => element.data.parent));
+  const restore = cy
+    .nodes(":parent")
+    .filter((node) => byId.has(node.id()) && !parents.has(node.id()) && remembered.has(node.id()));
   const added = placeAdditions(cy, elements, theme);
   cy.batch(() => {
     // Detach survivors before removing a parent (which would remove its children too).
@@ -170,6 +201,10 @@ export function updateGraph(
     cy.elements()
       .filter((element) => !byId.has(element.id()))
       .remove();
+    for (const node of restore) {
+      const position = remembered.get(node.id());
+      if (position) node.position(position);
+    }
     cy.add(added);
     for (const definition of elements) {
       const element = cy.getElementById(definition.data.id);
