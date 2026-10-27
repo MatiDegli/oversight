@@ -10,27 +10,35 @@ const captions: Record<UsageTick["brake"], string | null> = {
   warn_80: "80% of the budget used",
   blocked: "New runs are blocked: the budget is nearly spent",
 };
-const budgetFormat = new Intl.NumberFormat("en-US", {
+const money = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  currencyDisplay: "code",
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
+/** `US$150.00`: the code Meta's invoices use, and no space, as the total is written. */
+const usd = (amount: number) => money.format(amount).replace("USD", "US$").replace(/\s/g, "");
+
+/**
+ * "Spent US$0.47 of US$150.00" on the bar's own line. The group is anchored to the bar's right
+ * edge, and a brake caption (icon and words) comes before it on the same line, so the total never
+ * moves when the caption appears.
+ */
 export function SpendMeter({ state }: { state: State }) {
   const spend = selectSpend(state);
   if (!spend) return null;
   const caption = captions[spend.brake];
   const Icon = spend.brake === "blocked" ? Ban : CircleAlert;
-  const total = spend.spentUsd === null ? "unknown" : `US$${spend.spentUsd.toFixed(2)}`;
+  const total = spend.spentUsd === null ? "unknown" : usd(spend.spentUsd);
   return (
-    <div role="group" aria-label="Spend" className="shrink-0 text-muted">
-      <p className="font-mono text-(length:--data-size) font-normal text-text">
-        {`${total} of ${budgetFormat.format(spend.budgetUsd)}`}
-      </p>
-      <div
-        role="status"
-        aria-atomic="true"
-        className="h-lh text-(length:--caption-size) whitespace-nowrap"
-      >
+    <div
+      role="group"
+      aria-label="Spend"
+      className="flex shrink-0 items-center gap-3.5 text-sm whitespace-nowrap text-muted"
+    >
+      <div role="status" aria-atomic="true" className="text-(length:--caption-size)">
         {caption && (
           <p className="flex items-center gap-1.5">
             <Icon aria-hidden="true" className="size-3.5 shrink-0" />
@@ -38,6 +46,11 @@ export function SpendMeter({ state }: { state: State }) {
           </p>
         )}
       </div>
+      <p>
+        Spent{" "}
+        <span className="font-mono text-(length:--data-size) font-bold text-text">{total}</span> of{" "}
+        <span className="font-mono text-(length:--data-size)">{usd(spend.budgetUsd)}</span>
+      </p>
     </div>
   );
 }

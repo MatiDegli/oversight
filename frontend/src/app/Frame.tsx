@@ -1,5 +1,5 @@
 import type { AgentStatus, StartAgent } from "@contracts";
-import { GitBranch, Network, X } from "lucide-react";
+import { Network, X } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -12,8 +12,8 @@ import type { DecisionAction, DecisionAttempt } from "../review";
 import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
 import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
-import { SpendMeter } from "./SpendMeter";
-import { changeNodeIds, litNodeIds, panelOpen, readyCount } from "./view";
+import { TopBar } from "./TopBar";
+import { changeNodeIds, litNodeIds, panelOpen } from "./view";
 import type { View } from "./view";
 
 type AgentState = AgentStatus["state"];
@@ -69,46 +69,6 @@ export interface FrameProps {
   replayOf?: string;
   /** Overlay lines on the graph, such as the replay label and a transport failure. */
   notice?: ReactNode;
-}
-
-function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () => void }) {
-  const ready = readyCount(state);
-  const commit = state.graph?.commit ?? state.run?.base_commit;
-  return (
-    <header className="flex h-(--top-bar-height) shrink-0 items-center gap-3.5 border-b border-divider bg-shell px-4.5">
-      <span className="text-(length:--brand-size) font-bold">Oversight</span>
-      {state.run && (
-        <p className="flex min-w-0 items-center gap-2.5 text-sm text-muted">
-          <span className="truncate text-text">{state.run.workspace}</span>
-          <span className="inline-flex items-center gap-1.5">
-            <GitBranch aria-hidden="true" className="size-4" /> main
-          </span>
-          {commit && (
-            <span className="font-mono" title={commit}>
-              {commit.slice(0, 7)}
-            </span>
-          )}
-        </p>
-      )}
-      {/* Always mounted, so the counter's arrival is announced and nothing else moves. */}
-      <div role="status" aria-label="Review queue" className="ml-auto flex items-center">
-        {ready > 0 && (
-          <button
-            type="button"
-            disabled={onOpenQueue === undefined}
-            onClick={onOpenQueue}
-            title="Open the next change in review"
-            className={`inline-flex h-(--queue-counter-height) items-center gap-2 rounded-full bg-raised px-3.5 text-sm text-text enabled:hover:bg-page-raised ${focusRing}`}
-          >
-            <span aria-hidden="true" className="size-(--status-lamp-size) rounded-full bg-text" />
-            <span className="font-mono">{ready}</span>{" "}
-            {ready === 1 ? "change ready for review" : "changes ready for review"}
-          </button>
-        )}
-      </div>
-      <SpendMeter state={state} />
-    </header>
-  );
 }
 
 function LeftRail({ watching, onWatch }: { watching: boolean; onWatch: () => void }) {
