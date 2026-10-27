@@ -12,7 +12,7 @@ PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-ci check-fast check-python lint-python check-frontend \
 	lint-frontend contracts check-contracts check-contract-tuples check-secrets demo-repo-check replay shots smoke layout \
-	test-browser demo demo-setup-check demo-check e2e record record-level2
+	test-browser demo demo-setup-check demo-check e2e record record-level2 manifest
 
 help: ## list the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -40,6 +40,9 @@ RUN ?=
 
 record: ## bundle a finished run (RUN=<id>, or the latest run) into fixtures/events/recorded-demo.jsonl; reads a finished run and spends no credits
 	@if [ -n "$(RUN)" ]; then $(UV) python tools/record_run.py "$(RUN)"; else $(UV) python tools/record_run.py --latest; fi
+
+manifest: ## summarize recorded model execution from LOG (OUT=prefix, EXPECT_B=model, REAL=1); no API calls
+	$(UV) python tools/meta_manifest.py "$(LOG)" $(if $(OUT),--out "$(OUT)") $(if $(EXPECT_B),--expect-b "$(EXPECT_B)") $(if $(filter 1,$(REAL)),--real)
 
 replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with the Vite dev server
 	@uv run --frozen python -m oversight replay "$(LOG)" --allow-fake-provider --speed "$(SPEED)" & backend=$$!; \
