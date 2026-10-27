@@ -20,7 +20,7 @@ const vitePort = port("OVERSIGHT_VITE_PORT", process.env.OVERSIGHT_VITE_PORT || 
 if (vitePort === backendPort) {
   throw new Error("OVERSIGHT_VITE_PORT must differ from OVERSIGHT_PORT");
 }
-const backend = `http://127.0.0.1:${backendPort}`;
+const backend = `http://127.0.0.1:${String(backendPort)}`;
 // `make shots` keeps Vite's cache under .shots/ through this variable, so it never shares state with
 // `make dev`. Without it, Vite's default (node_modules/.vite) applies.
 const cacheDir = process.env.OVERSIGHT_VITE_CACHE_DIR;
