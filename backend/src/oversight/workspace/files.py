@@ -14,8 +14,16 @@ import stat
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
-from oversight.workspace.errors import InvalidPath, StaleFile, UnsafeDeletion, WorkspaceError
+from oversight.limits import MAX_FILE_BYTES, SizeLimitError, bounded_read, bounded_text
+from oversight.workspace.errors import (
+    FileTooLarge,
+    InvalidPath,
+    StaleFile,
+    UnsafeDeletion,
+    WorkspaceError,
+)
 
 _AGENT_ID = re.compile(r"agent-[1-9][0-9]{0,3}")
 MAX_PATH_CHARS = 1024
@@ -127,7 +135,7 @@ def resolve_in(root: Path, path: str) -> Path:
 # --- Read, write, list ------------------------------------------------------------------------
 
 
-def _read_bytes(root: Path, path: str) -> bytes:
+def open_file(root: Path, path: str) -> BinaryIO:
     target = resolve_in(root, path)
     try:
         # O_NONBLOCK: opening a FIFO must not wait for a writer. The regular-file test comes after.
@@ -145,8 +153,20 @@ def _read_bytes(root: Path, path: str) -> bytes:
     except BaseException:
         os.close(fd)
         raise
-    with handle:  # from here the handle owns the descriptor and closes it, whatever the read does
-        return handle.read()
+    return handle  # the caller owns and closes the descriptor
+
+
+def _read_bytes(root: Path, path: str) -> bytes:
+    with open_file(root, path) as handle:
+        try:
+            return bounded_read(handle)
+        except SizeLimitError as error:
+            raise FileTooLarge(str(error)) from error
+
+
+def check_content(content: str) -> None:
+    if len(content) > MAX_FILE_BYTES or len(content.encode("utf-8")) > MAX_FILE_BYTES:
+        raise FileTooLarge(f"content exceeds the {MAX_FILE_BYTES}-byte size limit")
 
 
 def read_file(root: Path, path: str) -> FileRead:
@@ -179,6 +199,7 @@ def write_file(
     `expected_hash=None` requires that the file not exist. The data goes to a temp file in
     `tmp_dir`, then `os.replace` swaps it in, so a reader never sees half a file.
     """
+    check_content(content)
     data = content.encode("utf-8")
     mode = FILE_MODE
     current_hash: str | None = None
@@ -309,8 +330,8 @@ def registered_worktree(root: Path, main_root: Path, agent_id: str) -> Path:
     metadata = main_root / ".git" / "worktrees" / agent_id
     dotgit = target / ".git"
     try:
-        named = (metadata / "gitdir").read_text(encoding="utf-8").strip()
-        pointer = dotgit.read_text(encoding="utf-8").strip() if not dotgit.is_symlink() else ""
+        named = bounded_text(metadata / "gitdir").strip()
+        pointer = bounded_text(dotgit).strip() if not dotgit.is_symlink() else ""
     except OSError as error:
         raise UnsafeDeletion(f"{agent_id} is not a registered worktree") from error
     if named != str(dotgit) or pointer != f"gitdir: {metadata}":
