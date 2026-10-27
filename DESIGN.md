@@ -505,6 +505,9 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
   hover the fill moves to text-hover, away from the label's color: white in the dark set (page
   text on it 19.56:1, 16.68:1 at rest), black in day mode (day-page text on day-text-hover
   19.59:1, 15.92:1 at rest). A day fill never goes to white, where its label would read 1.07:1.
+- **Review change (the ready agent card):** the agent's color as fill with on-agent text and an eye
+  icon, as in the sketches. It sits on that agent's own card, which already carries the color in
+  its lamp and pill.
 - **Secondary (Request changes, Message, Live diff):** transparent with an outline border.
 - **Destructive (Reject, Stop and discard):** failed-text label and icon, no fill.
 - **Focus:** every control shows a visible keyboard focus ring: 2px in text color, offset 2px,

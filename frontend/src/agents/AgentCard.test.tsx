@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import type { ServerEvent } from "@contracts";
+import type { ServerEvent, SuiteResult } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -18,10 +18,36 @@ const events = readFileSync(
 const through = (seq: number) =>
   events.filter((event) => event.seq <= seq).reduce(applyEvent, createInitialState());
 
-function render(state: State) {
+function render(state: State, onReview?: () => void) {
   const data = selectAgentCard(state, "agent-1");
   if (!data) throw new Error("Fixture needs agent-1");
-  return renderToStaticMarkup(<AgentCard data={data} />);
+  return renderToStaticMarkup(<AgentCard data={data} onReview={onReview} />);
+}
+
+/** The text of the card's summary, tags removed: what a person reads, in order. */
+function summary(html: string): string {
+  const block = /<dl[^>]*>.*?<\/dl>/s.exec(html)?.[0] ?? "";
+  return block
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** The fixture's ready state with the proposal's tests replaced. */
+function readyWith(tests: Partial<SuiteResult>): State {
+  const state = through(20);
+  const change = state.changes["change-1"];
+  if (!change?.proposal) throw new Error("Fixture needs the proposal");
+  return {
+    ...state,
+    changes: {
+      ...state.changes,
+      "change-1": {
+        ...change,
+        proposal: { ...change.proposal, tests: { ...change.proposal.tests, ...tests } },
+      },
+    },
+  };
 }
 
 describe("AgentCard over the level 1 fixture", () => {
@@ -47,17 +73,33 @@ describe("AgentCard over the level 1 fixture", () => {
     const working = render(through(19));
     expect(working).not.toContain("Ready for review");
     expect(working).not.toContain('role="status"');
-    expect(working).not.toContain("border-agent-a");
+    expect(/<article[^>]*>/.exec(working)?.[0]).not.toContain("border-agent-a");
     expect(working).toContain("bg-card");
     expect(working).toContain("border-card-border");
     expect(working).toContain("bg-raised");
     expect(working).toContain("bg-agent-a-tint text-agent-a-text");
+    expect(working.indexOf("Step 5")).toBeLessThan(working.indexOf("Step 1"));
     const ready = render(through(20));
     expect(ready).toContain('role="status"');
     expect(ready).toContain("Ready for review");
     expect(ready).toContain("border-agent-a");
-    expect(ready.indexOf("Step 5")).toBeLessThan(ready.indexOf("Step 1"));
     expect(render(through(23))).not.toContain("Ready for review");
+  });
+
+  it("names the model as the run does, not by its id", () => {
+    const html = render(through(4));
+    expect(html).toContain("Muse Spark");
+    expect(html).not.toContain(">muse-spark<");
+  });
+
+  it("shows a lamp filled in the agent's color only when the change is ready", () => {
+    const lamp = (html: string) =>
+      /<span aria-hidden="true" class="[^"]*rounded-full[^"]*">/.exec(html)?.[0];
+    expect(lamp(render(through(19)))).toContain("bg-card");
+    expect(lamp(render(through(19)))).toContain("animate-pulse");
+    expect(lamp(render(through(20)))).toContain("bg-agent-a");
+    expect(lamp(render(through(20)))).not.toContain("animate-pulse");
+    expect(lamp(render(through(20)))).not.toContain("bg-card");
   });
 
   it("renders an error step and the halted reason, and identifies slot B in words and color", () => {
@@ -85,5 +127,86 @@ describe("AgentCard over the level 1 fixture", () => {
     expect(html).toContain('aria-label="Agent B"');
     expect(html).toContain("text-agent-b-text");
     expect(html).not.toContain("Ready for review");
+  });
+
+  it("summarizes a ready change with tests, change, steps and cost instead of the step list", () => {
+    const ready = render(through(20));
+    expect(summary(ready)).toBe(
+      "Tests 28 of 28 pass Change +2 −0 in 1 file Steps 5 of 30 Cost US$0.01",
+    );
+    expect(ready).not.toContain('aria-label="Agent A steps, newest first"');
+    expect(ready).not.toContain('role="progressbar"');
+    expect(ready).toContain('aria-label="Agent A summary"');
+    // A check beside the words and green on the count: never color alone.
+    expect(ready).toMatch(/lucide-circle-check[^>]*text-passed/);
+    expect(ready).toContain("text-passed");
+  });
+
+  it("tells failed tests with a cross and the count, and a run that did not finish in words", () => {
+    const failed = render(readyWith({ outcome: "failed", passed: 26, failed: 2 }));
+    expect(summary(failed)).toContain("Tests 26 of 28 pass");
+    expect(failed).toMatch(/lucide-circle-x[^>]*text-failed-text/);
+    expect(failed).not.toContain("lucide-circle-check");
+    expect(summary(render(readyWith({ outcome: "passed", passed: 26, skipped: 3 })))).toContain(
+      "26 of 26 pass, 3 skipped",
+    );
+    expect(summary(render(readyWith({ outcome: "error", passed: 0 })))).toContain(
+      "Tests Could not run",
+    );
+    expect(summary(render(readyWith({ outcome: "timeout", passed: 0 })))).toContain(
+      "Tests Timed out",
+    );
+  });
+
+  it("pluralizes the files and shows a removal count", () => {
+    const state = through(20);
+    const change = state.changes["change-1"];
+    if (!change?.proposal) throw new Error("Fixture needs the proposal");
+    const proposal = {
+      ...change.proposal,
+      lines_added: 26,
+      lines_removed: 1,
+      files: [...change.proposal.files, ...change.proposal.files],
+    };
+    const html = render({
+      ...state,
+      changes: { ...state.changes, "change-1": { ...change, proposal } },
+    });
+    expect(summary(html)).toContain("Change +26 −1 in 2 files");
+    expect(html).toMatch(/font-bold text-failed-text">−1</);
+  });
+
+  it("shows no summary of tests or lines until the proposal has arrived, and no cost before a tick", () => {
+    const state = through(20);
+    const proposed = { ...state, changes: {} };
+    expect(summary(render(proposed))).toBe("Steps 5 of 30 Cost US$0.01");
+    expect(summary(render({ ...proposed, agentCosts: {} }))).toBe("Steps 5 of 30");
+  });
+
+  it("shows an unreported cost as unknown, never as a zero", () => {
+    const state = through(20);
+    expect(summary(render({ ...state, agentCosts: { "agent-1": null } }))).toContain(
+      "Cost Unknown",
+    );
+    const working = render({ ...through(11), agentCosts: { "agent-1": null } });
+    expect(working).toContain("Cost unknown");
+    expect(working).not.toContain("US$0.00");
+  });
+
+  it("puts the cost so far beside the step count while working, and keeps a small cost off zero", () => {
+    // 0.005296 so far rounds to a cent; 0.001264 is under half a cent.
+    expect(render(through(11))).toMatch(/title="Cost so far"[^>]*>US\$0\.01</);
+    expect(render(through(5))).toMatch(/title="Cost so far"[^>]*>&lt;US\$0\.01</);
+  });
+
+  it("offers Review change in the agent's color only when the change is ready and can be opened", () => {
+    expect(render(through(20))).not.toContain("Review change");
+    const ready = render(through(20), () => undefined);
+    const button = /<button [^>]*>.*?<\/button>/s.exec(ready)?.[0] ?? "";
+    expect(button).toContain("Review change");
+    expect(button).toContain("bg-agent-a");
+    expect(button).toContain("text-on-agent");
+    expect(button).toContain("lucide-eye");
+    expect(render(through(19), () => undefined)).not.toContain("Review change");
   });
 });
