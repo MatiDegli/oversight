@@ -619,6 +619,58 @@ describe("graph mapping", () => {
       expect(second).not.toContain("0 functions");
     });
 
+    describe("when what a node says changes under it", () => {
+      const cone: ImpactCone = {
+        seeds: [],
+        entries: [{ node_id: "billing:fee", distance: 1 }],
+        edges_followed: "exact",
+        max_depth: 3,
+        max_nodes: 20,
+        omitted_by_depth: 0,
+        omitted_by_limit: 0,
+        tests_reaching: 0,
+      };
+      const open = () => {
+        cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(theme) });
+        return cy;
+      };
+
+      it("goes back to the count and a bare box when the focus is gone", () => {
+        const state = initial();
+        const graph = open();
+        updateGraph(graph, graphElements(touch(state, ["billing", "billing:fee"])));
+        expect(images(graph.getElementById("billing"))[1]).toContain(">read</text>");
+        expect(images(graph.getElementById("billing:fee"))[0]).toContain(">read</text>");
+        updateGraph(graph, graphElements(state));
+        const frame = graph.getElementById("billing");
+        expect(frame.data("marks")).toBeUndefined();
+        expect(images(frame)[1]).toContain(">2 functions</text>");
+        expect(graph.getElementById("billing:fee").data("marks")).toBeUndefined();
+        expect(graph.getElementById("billing:fee").style("background-image")).toBe("none");
+      });
+
+      it("leaves the read history off the cone in review, and drops its distance in watch", () => {
+        const state = touch(initial(), ["billing", "billing:fee"]);
+        const graph = open();
+        updateGraph(graph, graphElements(state));
+        expect(graph.getElementById("billing:fee").data("marks")).toBeDefined();
+        updateGraph(graph, graphElements(state, false, new Set(["billing", "billing:fee"]), cone));
+        const fee = graph.getElementById("billing:fee");
+        expect(fee.hasClass("cone") && !fee.hasClass("marked")).toBe(true);
+        expect(fee.data("marks")).toBeUndefined();
+        expect(graph.getElementById("billing").data("marks")).toBeUndefined();
+        // Only the distance badge is left on the node, with no word under its name.
+        expect(images(fee)).toHaveLength(1);
+        expect(images(fee)[0]).toContain(">1</text>");
+        expect(images(fee)[0]).not.toContain(">read</text>");
+        expect(images(graph.getElementById("billing"))[1]).toContain("functions</text>");
+        // Back in watch, the node is no longer in the cone and says nothing of a distance.
+        updateGraph(graph, graphElements(state));
+        expect(fee.data("distance")).toBeUndefined();
+        expect(fee.data("marks")).toBeDefined();
+      });
+    });
+
     it("keeps an empty module's header and adds the distance badge in the cone", () => {
       const state = initial();
       if (!state.graph) throw new Error("Missing graph");

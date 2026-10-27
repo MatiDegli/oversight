@@ -305,8 +305,8 @@ export function Frame(props: FrameProps) {
             coneCardRef={coneCardRef}
             apiRef={graphApi}
           />
-          {/* Overlays sit 24px in from the graph's edges: the heading (or the cone card in review)
-              top left, the legend bottom left, the zoom controls bottom right. */}
+          {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
+              review) top left, the legend bottom left, the zoom controls bottom right. */}
           <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col justify-between gap-(--spacing-md)">
             <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
               {cone ? (
@@ -321,9 +321,13 @@ export function Frame(props: FrameProps) {
                   />
                 </div>
               ) : (
-                <div className="pointer-events-auto">
-                  <GraphHeading state={state} />
-                </div>
+                // The narrower graph beside the editor panel is framed on its own nodes, so a
+                // heading there would sit on top of them: it is a watch-mode overlay.
+                !open && (
+                  <div className="pointer-events-auto">
+                    <GraphHeading state={state} />
+                  </div>
+                )
               )}
               {notice && <div className="pointer-events-auto text-muted">{notice}</div>}
             </div>

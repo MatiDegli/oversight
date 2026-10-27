@@ -120,6 +120,9 @@ describe("the frame over the level 1 fixture", () => {
       file: null,
     });
     expect(tag(markup, "Live diff panel")).toContain("w-[min(var(--review-panel-width),46vw)]");
+    // The heading is a watch overlay: beside the panel it would sit on the graph's own nodes.
+    expect(markup).not.toContain("agent working");
+    expect(markup).not.toContain("6 modules");
     expect(markup).toContain('aria-label="Live diff"');
     expect(markup).toContain("shop/pricing.py");
     expect(markup).toContain('aria-label="Close live diff"');
@@ -255,6 +258,8 @@ it("puts the file view in the same panel slot, folds the rail, and gives review 
   expect(tag(markup, "Repository graph")).toBe(tag(render(20), "Repository graph"));
   expect(markup).not.toContain("Live diff panel");
   expect(markup).not.toContain("Review panel");
+  expect(markup).not.toContain("6 modules");
+  expect(markup).toContain("Possible call");
   const reviewing = render(20, { ...view, review: "change-1" }, { files });
   expect(reviewing).toContain('aria-label="Review panel"');
   expect(reviewing).not.toContain('aria-label="File view"');

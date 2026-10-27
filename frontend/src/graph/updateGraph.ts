@@ -254,6 +254,12 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
   return { additions: pending.map((element) => placed.get(element.data.id) ?? element), relocated };
 }
 
+/**
+ * The data keys a node carries only some of the time. `data()` merges, so a key the new definition
+ * leaves out would keep its old value: a mark long after the focus is gone.
+ */
+const OPTIONAL_DATA = ["marks", "distance", "title", "count"] as const;
+
 /** Update by id, retaining dragged positions and the viewport after the first layout. */
 export function updateGraph(
   cy: Core,
@@ -318,6 +324,7 @@ export function updateGraph(
       ) {
         element.move({ source: definition.data.source, target: definition.data.target });
       }
+      for (const key of OPTIONAL_DATA) if (!(key in definition.data)) element.removeData(key);
       element.data(definition.data);
       element.classes(definition.classes);
     }

@@ -468,8 +468,10 @@ person is doing.
 - **Review mode:** a left panel opens at about half the width (880px of 1920); the same graph stays
   on the right; the agents panel folds into the agents rail (56px).
 - **Live diff and file view** use the same left panel. There is no third screen.
-- **Graph overlays** sit 24px from the graph's edges: heading top left, cone card top left in
-  review, legend bottom left, zoom controls bottom right.
+- **Graph overlays** sit 24px from the graph's edges: heading top left in watch only, cone card top
+  left in review, legend bottom left, zoom controls bottom right. With the left panel open and no
+  cone (live diff, file view) the top left is empty, as in the live sketch: the graph beside the
+  panel is framed on its own nodes, and a heading there would sit on top of them.
 - **Sizes:** buttons 40px tall, small buttons 34px; search box and queue counter 34px; chips 30px;
   letter avatar 36px; status lamp 10px; distance badge and node letter badge 20px.
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
