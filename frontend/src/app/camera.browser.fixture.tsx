@@ -173,17 +173,28 @@ export const graphTest = {
   },
   update() {
     const state = stateStore.getState().state;
+    const change = state.changes["change-1"];
+    if (!change) throw new Error("Missing fixture change");
     stateStore.setState({
       state: {
         ...state,
-        focus: {
-          ...state.focus,
-          "agent-1": { agent_id: "agent-1", mode: "read", node_ids: [CALLER], ranges: [] },
+        changes: {
+          ...state.changes,
+          "change-1": {
+            ...change,
+            graph: {
+              ...change.graph,
+              edges_removed:
+                state.graph?.edges.filter((edge) => edge.src === CALLER).map((edge) => edge.id) ??
+                [],
+            },
+          },
         },
       },
     });
     render("panel");
   },
+  prepareReview: loadCone,
   mountCone,
 };
 

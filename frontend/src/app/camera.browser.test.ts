@@ -64,6 +64,9 @@ async function withPage(
   try {
     // Avoid starting the application's transport: only the graph harness is mounted.
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    // Install before Cytoscape imports capture the browser's performance clock.
+    if (reducedMotion === "no-preference")
+      await page.clock.install({ time: new Date("2026-10-27T15:00:00Z") });
     await page.goto(url);
     await page.waitForFunction(() => "graphTest" in window);
     await page.evaluate((demo) => {
@@ -158,6 +161,32 @@ function panelFrame(page: Page) {
       focus: view.nodeBounds("node.pending"),
       cone: view.nodeBounds("node.cone"),
     };
+  });
+}
+
+function emptyCanvasPoint(page: Page) {
+  return page.evaluate(() => {
+    const probe = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    if (!probe) throw new Error("Missing graph");
+    const { width, height } = probe.metrics().viewport;
+    const zoom = probe.zoom();
+    const pan = probe.pan();
+    const boxes = probe.nodeBounds();
+    for (let y = height - 90; y > height / 2; y -= 20)
+      for (let x = width - 90; x > 0; x -= 20)
+        if (
+          !boxes.some(
+            (b) =>
+              x >= b.x1 * zoom + pan.x - 5 &&
+              x <= b.x2 * zoom + pan.x + 5 &&
+              y >= b.y1 * zoom + pan.y - 5 &&
+              y <= b.y2 * zoom + pan.y + 5,
+          )
+        )
+          return { x, y };
+    throw new Error("No empty canvas for panning");
   });
 }
 
@@ -332,7 +361,6 @@ it.each(["open", "review"] as const)(
         await focus.focus();
         // Drive browser frames explicitly so renderer load cannot skip the entire 240ms move.
         const clockStart = new Date("2026-10-27T15:00:00Z");
-        await page.clock.install({ time: clockStart });
         await page.clock.pauseAt(new Date(clockStart.getTime() + 60_000));
         const easing = await page.evaluate(async (mode) => {
           await window.graphTest[mode]();
@@ -410,37 +438,42 @@ it.each(["open", "review"] as const)(
   30_000,
 );
 
-it.each(["pan", "zoom"] as const)(
-  "a person's %s interrupts the opening move and keeps control",
-  async (gesture) => {
+it.each([
+  ["open", "pan"],
+  ["open", "zoom"],
+  ["review", "pan"],
+  ["review", "zoom"],
+] as const)(
+  "%s: a person's %s interrupts the opening move and keeps control",
+  async (mode, gesture) => {
     await withPage("no-preference", async (page) => {
       const before = await report(page, []);
       const graph = page.getByRole("img", { name: "Repository graph" });
-      await page.evaluate(() => {
-        window.graphTest.open();
-      });
+      if (mode === "review") await page.evaluate(() => window.graphTest.prepareReview());
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+      await page.evaluate(async (mode) => window.graphTest[mode](), mode);
+      await page.clock.runFor(32);
+      const moving = await report(page, []);
+      expect(moving.animating).toBe(true);
       const box = await graph.boundingBox();
       if (!box) throw new Error("No graph box");
-      await page.mouse.move(box.x + box.width - 40, box.y + box.height / 2);
+      const empty = await emptyCanvasPoint(page);
+      await page.mouse.move(box.x + empty.x, box.y + empty.y);
       if (gesture === "pan") {
         await page.mouse.down();
-        await page.mouse.move(box.x + box.width - 180, box.y + box.height / 2 + 60, { steps: 3 });
+        await page.mouse.move(box.x + empty.x - 140, box.y + empty.y + 60, { steps: 3 });
         await page.mouse.up();
       } else await page.mouse.wheel(0, -100);
-      await settled(page);
+      // Allow wheel delivery, then demand cancellation before the 240ms move could finish.
+      await page.clock.runFor(32);
       const manual = await report(page, []);
-      // Wait past the interrupted 240ms move using browser frames.
-      await page.evaluate(
-        () =>
-          new Promise<void>((resolve) => {
-            const start = performance.now();
-            const tick = () => {
-              if (performance.now() - start > 300) resolve();
-              else requestAnimationFrame(tick);
-            };
-            requestAnimationFrame(tick);
-          }),
-      );
+      expect(manual.animating).toBe(false);
+      expect({ pan: manual.pan, zoom: manual.zoom }).not.toEqual({
+        pan: moving.pan,
+        zoom: moving.zoom,
+      });
+      // Run past the interrupted move; no queued easing may take back the camera.
+      await page.clock.runFor(300);
       const after = await report(page, []);
       expect(after.pan).toEqual(manual.pan);
       expect(after.zoom).toBe(manual.zoom);
@@ -463,29 +496,7 @@ it("refreshes a revealed cone row after pan, zoom and Fit without moving the cam
     const graph = page.getByRole("img", { name: "Repository graph" });
     const box = await graph.boundingBox();
     if (!box) throw new Error("Missing graph box");
-    const empty = await page.evaluate(() => {
-      const probe = document.querySelector<GraphProbeHost>(
-        '[aria-label="Repository graph"]',
-      )?.oversightGraph;
-      if (!probe) throw new Error("Missing graph");
-      const { width, height } = probe.metrics().viewport;
-      const zoom = probe.zoom();
-      const pan = probe.pan();
-      const boxes = probe.nodeBounds();
-      for (let y = height - 90; y > height / 2; y -= 20)
-        for (let x = width - 90; x > 0; x -= 20)
-          if (
-            !boxes.some(
-              (b) =>
-                x >= b.x1 * zoom + pan.x - 5 &&
-                x <= b.x2 * zoom + pan.x + 5 &&
-                y >= b.y1 * zoom + pan.y - 5 &&
-                y <= b.y2 * zoom + pan.y + 5,
-            )
-          )
-            return { x, y };
-      throw new Error("No empty canvas for panning");
-    });
+    const empty = await emptyCanvasPoint(page);
     await page.mouse.move(box.x + empty.x, box.y + empty.y);
     await page.mouse.down();
     await page.mouse.move(box.x + empty.x, box.y + empty.y - box.height, { steps: 8 });
