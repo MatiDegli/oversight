@@ -226,8 +226,8 @@ task's premises against the graph: every node the zone names exists.
 
 **11. Budget check and reserve.** At half the step budget, the loop adds one message with the steps
 used and left. The last steps are kept for `finish`, so a run near its limit proposes what it has
-instead of being cut off mid-edit. A run that stops already proposes its change as it is
-(`halted`).
+instead of being cut off mid-edit. A run that stops already tries to propose its change as it is
+(`halted`), while its worktree is still there.
 
 **12. Context cap.** Every step resends the whole history, so cost grows with the length of the
 run. The runtime owns that history: past a cap, it closes the run's context and starts a fresh one
@@ -281,8 +281,8 @@ same graph (the README's Next section).
 
 **Already true, for the pitch:** agents have no shell; each agent has its own worktree; the server
 runs the tests with a timeout; the event log is the state, and replay is its audit; a halted run
-proposes its change; every model call goes through one gate; the spend brake refuses new runs above
-90% of the credits. The gap is the same as in any such tool, and worth saying: tests run code with
+tries to propose its change while its worktree is still there; every model call goes through one
+gate; the spend brake refuses new Meta runs above 90% of the Meta credits. The gap is the same as in any such tool, and worth saying: tests run code with
 the user's permissions, and a sandbox is out of scope.
 
 ## Isolated fronts outside the product
