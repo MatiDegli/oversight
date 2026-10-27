@@ -7,6 +7,7 @@ import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -20,7 +21,6 @@ from live_helpers import (
     script_json,
 )
 
-import oversight.app
 from oversight.agents import (
     MUSE_SPARK,
     LedgerFile,
@@ -33,6 +33,7 @@ from oversight.agents import (
     UnknownUsage,
     parse_script,
 )
+from oversight.agents import loop as agent_loop
 from oversight.app import ledger_command
 from oversight.settings import Settings
 from oversight.workspace import WorkspaceBusy
@@ -402,27 +403,101 @@ async def test_a_cancel_during_a_ledger_write_that_then_fails_closes_the_brake(
     assert model.calls == 1
 
 
+class Expiry:
+    """The run's wall-clock limit, held open until the test says it has passed: the loop gets a
+    deadline-less timeout, and `expire` moves its deadline to now, which cancels the run exactly
+    as the limit does. The loop's `asyncio` is the only one swapped."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.timeouts: list[asyncio.Timeout] = []
+
+        def timeout(_delay: float | None) -> asyncio.Timeout:
+            held = asyncio.timeout(None)
+            self.timeouts.append(held)
+            return held
+
+        swapped = SimpleNamespace(**{**vars(asyncio), "timeout": timeout})
+        monkeypatch.setattr(agent_loop, "asyncio", swapped)
+
+    def expire(self) -> None:
+        [limit] = self.timeouts
+        limit.reschedule(asyncio.get_running_loop().time())
+
+
+class HeldCommit:
+    """The event store's commit of a batch with a `halted` status, held in its thread on
+    `release`: the event is queued and its publisher waits for the receipt. `held` is set once
+    the commit is waiting."""
+
+    def __init__(self, store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.held = threading.Event()
+        self.release = threading.Event()
+        real_insert = store._insert  # pyright: ignore[reportPrivateUsage]
+
+        def insert(rows: Sequence[Any]) -> None:
+            if any('"state":"halted"' in row.envelope for row in rows):
+                self.held.set()
+                assert self.release.wait(DEADLINE_S)
+            real_insert(rows)
+
+        monkeypatch.setattr(store, "_insert", insert)
+
+    async def wait_held(self) -> None:
+        assert await asyncio.to_thread(self.held.wait, DEADLINE_S)
+
+
 async def test_the_run_timeout_during_a_failing_ledger_write_closes_the_brake(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The run's wall-clock limit (2 s here, long against the start of the run) lands while the
-    # write waits; the test waits on the drain starting, which only the timeout can cause.
-    limits = oversight.app.LIMITS.model_copy(update={"max_wall_clock_s": 2})
-    monkeypatch.setattr(oversight.app, "LIMITS", limits)
+    # The run's wall-clock limit passes while the write waits: the test lets it pass once the
+    # write has started, so no machine speed decides the order.
     settings = lost_run_settings(tmp_path)
     model = CountingModel(ScriptedModel(parse_script(TWO_CALLS), MUSE_SPARK))
     client: ModelClient = model
+    expiry = Expiry(monkeypatch)
     async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _: client) as s:
         gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
         gate.watch_drain(s.live.ledger, monkeypatch)
         created = (await s.client.post("/agents", json={"task": "t"})).json()
         await gate.wait_entered()
+        expiry.expire()
         await gate.draining.wait()
         gate.release.set()
         # The loop ends its own run at the limit, halted for that reason; no second status.
         await expect_lost_ledger(s, settings, created, model, "time limit")
         halted = [e for e in s.events() if e.type == "agent.status" and e.payload.state == "halted"]
         assert len(halted) == 1
+    assert model.calls == 1
+
+
+async def test_a_cancel_while_the_timeouts_halt_is_committing_adds_no_second_halt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The limit passes during a failing ledger write, so the loop publishes its own `halted`
+    # ("time limit"). A shutdown cancels the run while that event waits for its receipt: the
+    # ledger's halt must not follow it, or the card would read the ledger's reason instead.
+    settings = lost_run_settings(tmp_path)
+    model = CountingModel(ScriptedModel(parse_script(TWO_CALLS), MUSE_SPARK))
+    client: ModelClient = model
+    expiry = Expiry(monkeypatch)
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _: client) as s:
+        gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
+        gate.watch_drain(s.live.ledger, monkeypatch)
+        commit = HeldCommit(s.store, monkeypatch)
+        created = (await s.client.post("/agents", json={"task": "t"})).json()
+        await gate.wait_entered()
+        expiry.expire()
+        await gate.draining.wait()
+        gate.release.set()
+        await commit.wait_held()  # the loop's `halted` is queued, and its receipt is awaited
+        run = s.live._runs[created["agent_id"]]  # pyright: ignore[reportPrivateUsage]
+        run.cancel()
+        commit.release.set()
+        await asyncio.wait({run})
+        assert run.cancelled()
+        await expect_lost_ledger(s, settings, created, model, "time limit")
+        halted = [e for e in s.events() if e.type == "agent.status" and e.payload.state == "halted"]
+        assert [e.payload.detail for e in halted] == ["Ran past the time limit of 600 s."]
     assert model.calls == 1
 
 
