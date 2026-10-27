@@ -7,7 +7,10 @@ import { createRoot } from "react-dom/client";
 import { GraphView } from "../graph";
 import type { Framing, GraphApi } from "../graph";
 import { applyEvent, createInitialState, stateStore } from "../state";
+import { fieldInput } from "./fieldScope";
+import { graphScope } from "./graphScope";
 import { ZoomControls } from "./GraphOverlays";
+import { initialView } from "./view";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 
 const CHANGED = "shop.pricing:compute_price";
@@ -47,11 +50,17 @@ function Harness({ mode }: { mode: Mode }) {
   const api = useRef<GraphApi | null>(null);
   const card = useRef<HTMLDivElement>(null);
   const [framing, setFraming] = useState<Framing | null>(null);
-  const impact = mode === "review" ? cone : null;
-  const litIds = useMemo(
-    () => (impact ? [CHANGED, ...impact.entries.map((entry) => entry.node_id)] : null),
-    [impact],
+  const view = useMemo(
+    () => ({
+      ...initialView,
+      diff: mode === "panel" ? { changeId: "change-1", path: "shop/pricing.py" } : null,
+      review: mode === "review" ? "change-1" : null,
+    }),
+    [mode],
   );
+  // Use Frame's scope builders so live preview lights stay separate from review framing.
+  const { cone: impact, liveCone, litIds } = useMemo(() => graphScope(recorded, view), [view]);
+  const field = useMemo(() => fieldInput(recorded, view, liveCone), [view, liveCone]);
   return (
     <div className="flex h-full bg-ground text-text">
       {mode !== "watch" && <aside aria-label="Panel" className="w-[700px] shrink-0" />}
@@ -61,7 +70,9 @@ function Harness({ mode }: { mode: Mode }) {
           frameIds={[CHANGED]}
           frameKey={mode}
           cone={impact}
+          liveCone={liveCone}
           litIds={litIds}
+          field={field}
           onFramed={setFraming}
           coneCardRef={card}
           apiRef={api}
