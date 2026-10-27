@@ -1,8 +1,12 @@
 # Camera browser test timing
 
+## Pre-merge measurements
+
+The measurements and conclusions in this section predate the merge of main `8fe87a1`.
+
 Measured 2026-10-27 14:34 ART (UTC-3) in the camera-test-flake clone. Baseline: `beda135`.
 
-## Method
+### Method
 
 Each row is a fresh Vitest process running all four cases of
 `frontend/src/app/camera.browser.test.ts`. Ten runs were sequential and isolated;
@@ -29,7 +33,7 @@ C3: cone visibility after pan/zoom/Fit; C4: keyboard focus.
 Vite, Chromium and module startup. Sharing the page moves module startup into
 `beforeAll`, so both measures are reported.
 
-## Baseline caveat
+### Baseline caveat
 
 The supplied branch already assigned 30 s explicitly to each case. These runs did
 not reproduce the reported 5 s timeout. Instead, C1 failed in all 13 baseline runs:
@@ -41,9 +45,9 @@ measurements below restore the live cone in panel mode and the non-empty asserti
 including a named caller beyond the frame. All camera assertions now run with the
 normal 5 s limit and no custom per-case timeout.
 
-## Isolated runs
+### Isolated runs
 
-### Before
+#### Before
 
 | Run | C1    | C2    | C3    | C4    | Sum    | Wall   | Result    |
 | --- | ----- | ----- | ----- | ----- | ------ | ------ | --------- |
@@ -58,7 +62,7 @@ normal 5 s limit and no custom per-case timeout.
 | 9   | 2.070 | 1.423 | 2.422 | 1.404 | 7.320  | 8.122  | C1 failed |
 | 10  | 2.172 | 1.466 | 2.437 | 1.356 | 7.430  | 8.282  | C1 failed |
 
-### Initial optimization (before review)
+#### Initial optimization (before review)
 
 | Run | C1    | C2    | C3    | C4    | Sum   | Wall  | Result |
 | --- | ----- | ----- | ----- | ----- | ----- | ----- | ------ |
@@ -73,7 +77,7 @@ normal 5 s limit and no custom per-case timeout.
 | 9   | 0.973 | 0.416 | 1.077 | 0.534 | 3.000 | 4.799 | pass   |
 | 10  | 1.137 | 0.491 | 1.050 | 0.498 | 3.177 | 4.831 | pass   |
 
-## Runs alongside make check
+### Runs alongside make check
 
 | Phase  | Run | C1    | C2    | C3    | C4    | Sum   | Wall  | Result    |
 | ------ | --- | ----- | ----- | ----- | ----- | ----- | ----- | --------- |
@@ -84,7 +88,7 @@ normal 5 s limit and no custom per-case timeout.
 | after  | 2   | 1.532 | 0.668 | 1.419 | 0.582 | 4.201 | 6.739 | pass      |
 | after  | 3   | 1.709 | 0.665 | 1.672 | 0.700 | 4.746 | 7.861 | pass      |
 
-## Interpretation
+### Interpretation
 
 - Isolated: median case sum 7.458 → 3.185 s (57.3% lower);
   slowest initially optimized individual case 1.274 s.
@@ -109,7 +113,7 @@ those remain. The 2d Cytoscape renderer remains real. WebGL drawing is covered b
 `dotField.browser.test.ts`, including its plain-ground fallback. No application code,
 contracts, dependencies, README or DEVLOG changed.
 
-## Fix round 1: restored regression coverage
+### Fix round 1: restored regression coverage
 
 Measured 2026-10-27 14:54 ART (UTC-3), with the same commands and baseline above.
 The panel fixture now supplies `liveCone` and its lit ids, independently of review's
@@ -128,7 +132,7 @@ made its targeted browser test exit 1. All three fixes were then restored.
 **Wall** now includes all five cases and shared setup. All 13 runs passed 5/5;
 each loaded run overlapped a fresh `make check` that subsequently exited 0.
 
-### Isolated after review
+#### Isolated after review
 
 | Run | C1    | C2    | C3    | C4    | D     | Sum   | Wall  |
 | --- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
@@ -146,7 +150,7 @@ each loaded run overlapped a fresh `make check` that subsequently exited 0.
 Median C1–C4 sum: 7.458 → 4.297 s (42.4% lower).
 Slowest original case: 1.724 s; slowest including D: 1.724 s.
 
-### Alongside make check after review
+#### Alongside make check after review
 
 | Run | C1    | C2    | C3    | C4    | D     | Sum   | Wall  |
 | --- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
@@ -156,3 +160,83 @@ Slowest original case: 1.724 s; slowest including D: 1.724 s.
 
 Median C1–C4 sum: 7.758 → 4.705 s (39.4% lower).
 Slowest original case: 1.864 s; slowest including D: 1.864 s.
+
+## Post-merge measurements
+
+Measured 2026-10-27 16:49 ART (UTC-3) on merge commit `2135454`, whose parents
+are branch tip `a4f6423` and main `8fe87a1`. The documentation-only commit that
+records these results does not change the measured test or fixture.
+
+### Accepted camera expectations
+
+Only the three conflicting expectations in the original animated panel case changed:
+
+- Zoom: previously `toBeCloseTo(wide.zoom, 6)` (1); now exactly
+  `11 / Math.min(framed.labelSizes.name, framed.labelSizes.state)`, with the active
+  token-derived floor itself required to equal `11 / 16` (0.6875).
+- Horizontal center: previously the changed node's x was within `toBeCloseTo(..., 0)`
+  of `(open.leftInset + open.size.width) / 2`; now `assertPanelFrame` checks
+  camera-frame's horizontal framing and centering rule.
+- Vertical center: previously the changed node's y was within `toBeCloseTo(..., 0)`
+  of `open.size.height / 2`; now the same oracle checks camera-frame's vertical rule.
+
+This is the existing independent acceptance oracle used by camera-frame's browser
+and screenshot tests, including its unchanged tolerances. It selects the whole
+cone when legible, then distance 1, then the nearest distance-1 boxes that fit at
+the floor. It requires those boxes inside the clear area and checks the nearest
+uncut module view to the bounded center, falling back to bounded centering when
+no uncut view fits. No loose zoom bound or additional centering range was added.
+All other assertions from both parents remain, including non-empty live callers,
+the named caller outside the frame, intermediate easing, stable node positions,
+restoration, trusted clicks, focus and diagnostic reset checks.
+
+### Method and scope
+
+The command and monotonic wall-time method are the same as in the pre-merge
+section. Each fresh process now runs all **17 cases** in the merged file: the
+five branch cases plus twelve from main. Ten runs were sequential and isolated;
+three more each overlapped a fresh `make check`, which was still running when
+the browser command finished and subsequently exited 0. Every run passed 17/17
+with the normal 5 s per-case limit. No model API was used.
+
+C1–C4 and **D** retain their pre-merge meanings. **Sum** still adds C1–C4;
+**All 17** sums every case, including D and main's additional cases.
+**Wall** includes all 17 cases and shared process/browser/module setup. Times
+are seconds; sums use the unrounded reporter values. The changed camera behavior
+and expanded suite mean whole-command times cover more work than pre-merge.
+
+### Isolated after merge
+
+| Run | C1 | C2 | C3 | C4 | D | Sum | All 17 | Wall |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.845 | 0.716 | 1.078 | 0.294 | 0.264 | 2.932 | 12.141 | 13.502 |
+| 2 | 0.941 | 0.763 | 1.109 | 0.285 | 0.257 | 3.098 | 12.234 | 13.605 |
+| 3 | 0.905 | 0.779 | 1.089 | 0.643 | 0.288 | 3.416 | 12.643 | 13.963 |
+| 4 | 0.928 | 0.743 | 0.998 | 0.302 | 0.407 | 2.971 | 12.390 | 13.716 |
+| 5 | 0.926 | 0.754 | 1.075 | 0.317 | 0.321 | 3.071 | 12.309 | 13.644 |
+| 6 | 0.865 | 0.716 | 1.032 | 0.590 | 0.264 | 3.204 | 12.911 | 14.306 |
+| 7 | 0.930 | 0.759 | 1.098 | 0.298 | 0.252 | 3.085 | 12.357 | 13.711 |
+| 8 | 0.934 | 0.777 | 0.990 | 0.561 | 0.254 | 3.263 | 13.075 | 14.491 |
+| 9 | 0.974 | 0.779 | 0.997 | 0.585 | 0.258 | 3.334 | 12.766 | 14.107 |
+| 10 | 0.971 | 0.767 | 1.047 | 0.551 | 0.280 | 3.336 | 12.696 | 14.107 |
+
+Median C1–C4 sum: **3.151 s**; median all-17 sum: **12.517 s**;
+median wall: **13.839 s**. Slowest individual case across all 17: **1.489 s**.
+
+### Alongside make check after merge
+
+| Run | C1 | C2 | C3 | C4 | D | Sum | All 17 | Wall |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.904 | 0.766 | 1.261 | 0.339 | 0.315 | 3.270 | 13.960 | 15.456 |
+| 2 | 0.922 | 0.748 | 1.101 | 0.658 | 0.279 | 3.429 | 13.582 | 15.015 |
+| 3 | 0.995 | 0.803 | 1.094 | 0.354 | 0.289 | 3.246 | 13.314 | 14.813 |
+
+Median C1–C4 sum: **3.270 s**; median all-17 sum: **13.582 s**;
+median wall: **15.015 s**. Slowest individual case across all 17: **1.572 s**.
+
+### Review signal
+
+`camera.browser.test.ts` is 761 lines after retaining both parents' regression
+cases and their shared browser/frame/input helpers in one test file. Keeping the
+shared setup together preserves the measured one-browser-per-process method;
+the file-size signal remains for coordinator review.
