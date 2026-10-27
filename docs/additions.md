@@ -53,9 +53,26 @@ Each change carries a score and its reasons: cone size, tests, edits outside the
 policy marks "would approve alone" or "needs you"; during the hackathon it never approves by
 itself. It is one line in the review header.
 
-Reasons also come from the shortcut detector (branch `review/shortcut-detector`, not wired in
-yet): a test removed or renamed out of collection, a skip added, an assertion loosened or a
-`pytest.raises` removed, an expected value changed, a stub left in code the change touched.
+**Test shortcuts: facts from the diff, the alarm from the run.** A detector that reads only the
+diff cannot tell a weakened test from an intended behavior change. Measured on this repository's
+own history, the diff-only detector (branch `review/shortcut-detector`) gave 101 findings in 90
+commits, 16% of them worth a reviewer's time; a precision round brought it to 24 findings, about
+half of them useful. Most test changes are legitimate and real shortcuts are rare, so the diff
+alone has a ceiling. The product knows what a diff does not: the task, every `run_tests` result
+with its failed test ids, and the order of the agent's edits. So the work splits in two:
+
+- **Facts in review, never an alarm:** the detector's output as a neutral line in the review
+  header: "tests in this change: 1 removed, 2 checks changed, 1 expected value changed".
+- **"Needs you" from the run:** a test that failed in one of the agent's `run_tests` calls, whose
+  checks the agent then removed, loosened, skipped or deleted, and which no longer fails in a
+  later run. Optionally, only for those, one Muse Spark call with the task, the test diff and the
+  results writes the reason ("loosened the assertion so it passes; the task did not ask for it").
+
+The detector stays a pure function over plain data. The rule takes the change set and a small run
+trace (each `run_tests` result's failed test ids and the edited paths, in order), built by an
+adapter in the change manager from `AgentStep` events, so it needs no contract change for its
+inputs and is tested without the runtime. The task bench (front B below) measures it with tasks
+built to tempt a shortcut, such as a test that cannot pass without touching it.
 
 ## 4. Verified cone
 
