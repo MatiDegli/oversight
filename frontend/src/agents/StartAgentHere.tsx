@@ -19,10 +19,9 @@ export function StartAgentHere({
   const id = useId();
   const draft = useStore(taskBoxStore, (box) => box.draft);
   const pending = useStore(taskBoxStore, (box) => box.pending);
-  const [prefilled, setPrefilled] = useState<string | null>(null);
+  const prefilled = useStore(taskBoxStore, (box) => box.prefilled);
   const [refused, setRefused] = useState(false);
-  if (draft === "" && (prefilled !== null || refused)) {
-    setPrefilled(null);
+  if (draft === "" && refused) {
     setRefused(false);
   }
   if (node.kind !== "function" && node.kind !== "method") return null;
@@ -40,9 +39,10 @@ export function StartAgentHere({
         title={reason ?? undefined}
         className="inline-flex h-(--button-small-height) items-center gap-2 rounded-control px-3 text-sm text-muted not-aria-disabled:hover:bg-raised not-aria-disabled:hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text aria-disabled:cursor-not-allowed"
         onClick={() => {
-          if (reason === occupied && draft !== prefilled) setRefused(true);
-          if (reason !== null || !taskBoxStore.getState().prefill(functionTask(node))) return;
-          setPrefilled(functionTask(node));
+          if (reason === occupied && (prefilled?.nodeId !== node.id || prefilled.text !== draft))
+            setRefused(true);
+          if (reason !== null || !taskBoxStore.getState().prefill(functionTask(node), node.id))
+            return;
           setRefused(false);
           onOpen();
         }}

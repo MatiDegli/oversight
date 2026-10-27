@@ -98,6 +98,38 @@ it("keeps the header quiet when a repeated click finds its own prefill", async (
   });
 });
 
+it.each(["another node", "close file"])(
+  "recognizes its own prefill after returning from %s and clicking again",
+  { timeout: 30_000 },
+  async (event) => {
+    await withPage(async (page) => {
+      await clickUntouched(page);
+      const action = filePanel(page).getByRole("button", { name: "Start an agent here" });
+      const note = filePanel(page).getByText(occupied, { exact: true });
+      await action.click();
+      if (event === "another node") {
+        await clickGraphNode(page, "shop.cart:Cart.remove");
+        await action.click({ force: true });
+        await browserExpect(note).toBeVisible();
+      } else {
+        await page.getByRole("button", { name: "Close file" }).click();
+      }
+      await clickUntouched(page);
+      await browserExpect(note).toHaveCount(0);
+      await action.click({ force: true });
+      await browserExpect(note).toHaveCount(0);
+      await browserExpect(action).toHaveAccessibleName(`Start an agent here. ${occupied}`);
+      await browserExpect(action).toHaveAttribute("title", occupied);
+      if (event === "another node") {
+        await page.getByRole("button", { name: "Close file" }).click();
+      }
+      await browserExpect(page.getByLabel("Task for the new agent")).toHaveValue(
+        "In shop/cart.py, Cart.add: ",
+      );
+    });
+  },
+);
+
 it("disables the file action with the task box's reason when no slot is free", async () => {
   await withPage(async (page) => {
     let starts = 0;

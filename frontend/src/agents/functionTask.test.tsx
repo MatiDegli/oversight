@@ -36,11 +36,12 @@ it.each(["module", "class"] as const)("offers no action for a %s", (kind) => {
 
 it("fills only an empty idle store, preserving text, whitespace and a pending request", async () => {
   const store = createTaskBoxStore();
-  expect(store.getState().prefill("In shop/cart.py, Cart.add: ")).toBe(true);
-  expect(store.getState().prefill("Replace")).toBe(false);
+  const nodeId = "shop.cart:Cart.add";
+  expect(store.getState().prefill("In shop/cart.py, Cart.add: ", nodeId)).toBe(true);
+  expect(store.getState().prefill("Replace", nodeId)).toBe(false);
   expect(store.getState().draft).toBe("In shop/cart.py, Cart.add: ");
   store.getState().setDraft(" ");
-  expect(store.getState().prefill("Replace")).toBe(false);
+  expect(store.getState().prefill("Replace", nodeId)).toBe(false);
   expect(store.getState().draft).toBe(" ");
   store.getState().setDraft("Keep the task");
   let finish: () => void = () => undefined;
@@ -51,7 +52,29 @@ it("fills only an empty idle store, preserving text, whitespace and a pending re
       }),
   );
   store.getState().setDraft("");
-  expect(store.getState().prefill("Replace")).toBe(false);
+  expect(store.getState().prefill("Replace", nodeId)).toBe(false);
   finish();
   await pending;
+});
+
+it("keeps the prefill's node and text until the person edits or starts the task", async () => {
+  const store = createTaskBoxStore();
+  const text = "In shop/cart.py, Cart.add: ";
+  const nodeId = "shop.cart:Cart.add";
+  store.getState().prefill(text, nodeId);
+  expect(store.getState().prefilled).toEqual({ nodeId, text });
+  // A refused prefill from another node cannot claim the existing text.
+  expect(store.getState().prefill("In shop/cart.py, Cart.remove: ", "shop.cart:Cart.remove")).toBe(
+    false,
+  );
+  expect(store.getState().prefilled).toEqual({ nodeId, text });
+  store.getState().setDraft(`${text}Keep my edit`);
+  expect(store.getState().prefilled).toBeNull();
+  store.getState().setDraft("");
+  store.getState().setDraft(text);
+  expect(store.getState().prefilled).toBeNull();
+  store.getState().setDraft("");
+  store.getState().prefill(text, nodeId);
+  await store.getState().start(() => Promise.resolve());
+  expect(store.getState()).toMatchObject({ draft: "", prefilled: null });
 });
