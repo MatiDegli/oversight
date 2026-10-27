@@ -107,9 +107,12 @@ async def test_from_half_the_budget_runs_start_and_ticks_warn(
     # 1000 input and 100 output tokens at 0.10 and 0.20 per million.
     cost = (1000 * 0.10 + 100 * 0.20) / 1_000_000
     assert tick.payload.brake == brake
-    assert tick.payload.cost_usd == pytest.approx(cost)
-    assert tick.payload.spent_usd == pytest.approx(spent + cost)
-    assert read_ledger(settings) == {"spent_usd": pytest.approx(spent + cost), "unknown": []}
+    assert tick.payload.cost_usd == pytest.approx(cost, rel=0, abs=1e-12)
+    assert tick.payload.spent_usd == pytest.approx(spent + cost, rel=0, abs=1e-9)
+    assert read_ledger(settings) == {
+        "spent_usd": pytest.approx(spent + cost, rel=0, abs=1e-9),
+        "unknown": [],
+    }
 
 
 async def test_replies_without_usage_refuse_the_next_start_until_settled(tmp_path: Path) -> None:
