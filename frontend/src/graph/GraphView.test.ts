@@ -348,6 +348,45 @@ it("restores the person's exact watch camera after opening and closing review", 
   expect(cy.pan()).toEqual(watch.pan);
 });
 
+it.each([false, true])(
+  "mounting with a panel open respects reduced motion (%s) and restores the measured start camera",
+  async (reduced) => {
+    setLabel("Caller");
+    vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
+    const startAreaRef = {
+      current: {
+        getBoundingClientRect: () => ({ left: 24, top: 80, right: 876, bottom: 810 }),
+      } as HTMLDivElement,
+    };
+    const start = vi.spyOn(camera, "startCamera");
+    const frame = vi.spyOn(camera, "frameCamera").mockImplementation((cy) => {
+      cy.viewport({ zoom: 0.5, pan: { x: -100, y: -200 } });
+      return null;
+    });
+    const { settle } = mount({ panelOpen: true, frameIds: ["billing:fee"], startAreaRef });
+    await settle("resolved");
+    const cy = mocks.instances[0];
+    if (!cy) throw new Error("Graph was not created");
+    expect(frame).toHaveBeenCalledOnce();
+    expect(frame.mock.calls[0]?.[1]).toEqual(["billing:fee"]);
+    expect(frame.mock.calls[0]?.[2]).toBe(reduced);
+    // The initial overlay measurement must precede framing, rather than being skipped in a panel.
+    expect(start.mock.calls.at(-1)?.[1]).toEqual({ x1: 24, y1: 80, x2: 876, y2: 810 });
+    const openingPositions = cy.nodes().map((node) => ({ ...node.position() }));
+    // Compute the real start at that same measured area, independently of the saved ref.
+    camera.startCamera(cy, { x1: 24, y1: 80, x2: 876, y2: 810 });
+    const expected = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+    cy.viewport({ zoom: 0.6, pan: { x: -500, y: 300 } });
+    frame.mockClear();
+    rerender({ panelOpen: false, startAreaRef });
+    expect(frame).toHaveBeenCalledExactlyOnceWith(cy, [], reduced, {
+      coneIds: undefined,
+      restoreCamera: expected,
+    });
+    expect(cy.nodes().map((node) => ({ ...node.position() }))).toEqual(openingPositions);
+  },
+);
+
 it("reframes a second review while the panel remains open", async () => {
   setLabel("Caller");
   const { settle } = mount();

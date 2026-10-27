@@ -304,6 +304,16 @@ export function GraphView({
       });
       const folding = foldController(cy);
       let startFrame: number | undefined;
+      const mountedWithPanel = latest.current.panelOpen;
+      const frameInitialPanel = () => {
+        watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+        const framing = frameCamera(cy, latest.current.frameIds ?? [], prefersReducedMotion(), {
+          coneIds: openingCone(latest.current),
+          ...panelGeometry(host, latest.current),
+        });
+        targetFrame.current = framing;
+        reportSoon();
+      };
       const sync = () => {
         // A second addition can arrive before the first ease ends. Include both targets when
         // replacing that animation, rather than leaving the first addition outside the view.
@@ -329,7 +339,7 @@ export function GraphView({
           // SSE may populate the graph before React commits the heading and legend. Measure
           // after that commit, so the initial camera sees the overlays the person will see.
           startFrame = requestAnimationFrame(() => {
-            if (latest.current.panelOpen || !startAreaRef.current) return;
+            if (!startAreaRef.current || (latest.current.panelOpen && !mountedWithPanel)) return;
             const area = startAreaRef.current.getBoundingClientRect();
             const box = host.getBoundingClientRect();
             startCamera(cy, {
@@ -338,6 +348,7 @@ export function GraphView({
               x2: area.right - box.left,
               y2: area.bottom - box.top,
             });
+            if (latest.current.panelOpen) frameInitialPanel();
           });
         }
         showSelection(cy, latest.current.selectedId ?? null);
@@ -391,15 +402,7 @@ export function GraphView({
       source.attach(cy);
       const unsubscribe = stateStore.subscribe(sync);
       sync();
-      if (latest.current.panelOpen) {
-        watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
-        const framing = frameCamera(cy, latest.current.frameIds ?? [], true, {
-          coneIds: openingCone(latest.current),
-          ...panelGeometry(host, latest.current),
-        });
-        targetFrame.current = framing;
-        reportSoon();
-      }
+      if (latest.current.panelOpen && startFrame === undefined) frameInitialPanel();
       const resize = new ResizeObserver(() => {
         cy.resize();
         reportSoon();
