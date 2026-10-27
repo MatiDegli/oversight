@@ -8,6 +8,7 @@ import {
   a,
   added,
   approved,
+  approvedProposal,
   b,
   bProposal,
   events,
@@ -217,7 +218,11 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
         {
           path: `/changes/${a.change_id}/request-changes`,
           method: "POST",
-          body: { comment: requestedA.payload.comment },
+          body: {
+            revision: proposal.revision,
+            head_commit: proposal.head_commit,
+            comment: requestedA.payload.comment,
+          },
         },
       ]);
     // HTTP 202 alone changes no visible state: only the replay's resolution does.
@@ -312,7 +317,11 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
       .toEqual({
         path: `/changes/${b.change_id}/request-changes`,
         method: "POST",
-        body: { comment: requestedB.payload.comment },
+        body: {
+          revision: bProposal.revision,
+          head_commit: bProposal.head_commit,
+          comment: requestedB.payload.comment,
+        },
       });
     await review.getByRole("button", { name: "Close review" }).click();
     await release(page, holds.saved);
@@ -350,7 +359,11 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await approve.click();
     await expect
       .poll(() => sent.at(-1))
-      .toEqual({ path: `/changes/${a.change_id}/approve`, method: "POST", body: {} });
+      .toEqual({
+        path: `/changes/${a.change_id}/approve`,
+        method: "POST",
+        body: { revision: approvedProposal.revision, head_commit: approvedProposal.head_commit },
+      });
     await release(page, holds.approve);
     await engaged(page, holds.main);
     await expect(review.getByText("Approved and merged into main")).toBeVisible();

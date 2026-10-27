@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
+from decision_helpers import observed_body
 from fastapi.testclient import TestClient
 from live_helpers import (
     DEADLINE_S,
@@ -98,7 +99,11 @@ async def test_get_file_for_a_closed_agent_is_not_found(tmp_path: Path) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         created = await reviewed(s)
         assert (await read(s, PRICING, agent=created.agent_id)).agent_id == created.agent_id
-        assert (await s.client.post(f"/changes/{created.change_id}/reject")).status_code == 202
+        assert (
+            await s.client.post(
+                f"/changes/{created.change_id}/reject", json=observed_body(s, created.change_id)
+            )
+        ).status_code == 202
         await s.until(is_type("agent.status", agent_id=created.agent_id, state="done"))
         await read(s, PATH)  # waits for main's lock, which the close-out holds through its cleanup
 

@@ -47,7 +47,9 @@ def dist(tmp_path: Path) -> Path:
 @contextlib.asynccontextmanager
 async def ui_app(tmp_path: Path, dist: Path) -> AsyncIterator[tuple[FastAPI, httpx.AsyncClient]]:
     """The real router over a real store with a graph, then the UI, behind an in-process client."""
-    async with EventStore(tmp_path / "run-20261027-140312.sqlite", "run-20261027-140312") as store:
+    async with EventStore(
+        tmp_path / "run-20261027-140312.sqlite", "run-20261027-140312", mode="replay"
+    ) as store:
         await store.publish(EMPTY_GRAPH)
         app = FastAPI()
         app.include_router(create_router(store, "live"))
@@ -204,7 +206,7 @@ def test_the_api_paths_are_the_frontend_proxys_and_the_routers() -> None:
     }
     assert proxied == API_PATHS
 
-    store = EventStore(Path("unused.sqlite"), "run-20261027-140312")
+    store = EventStore(Path("unused.sqlite"), "run-20261027-140312", mode="replay")
     paths = {route.path for route in create_router(store, "live").routes}  # pyright: ignore[reportAttributeAccessIssue,reportUnknownVariableType,reportUnknownMemberType]
     assert {path.split("/")[1] for path in paths} == API_PATHS
 

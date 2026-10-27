@@ -22,6 +22,10 @@ const apiPaths = [
   "/impact",
   "/merge-mode",
   "/plans",
+  "/tree",
+  "/history",
+  "/queue",
+  "/leads",
 ];
 
 export default defineConfig({

@@ -27,12 +27,53 @@ EXAMPLES = json.loads((ROOT / "fixtures/contracts/reserved-1.3.json").read_text(
 EVENTS = TypeAdapter(ServerEvent)
 
 
+def with_defaults(raw: Any) -> Any:
+    """Expected additive defaults, including suites inside steps, proposals and conflicts."""
+    if isinstance(raw, list):
+        return [with_defaults(item) for item in raw]
+    if not isinstance(raw, dict):
+        return raw
+    result = {
+        key: (value if key == "observed" else with_defaults(value)) for key, value in raw.items()
+    }
+    if "failed_tests" in result:
+        result = {"cases": None, "cases_complete": None, **result}
+    defaults = {
+        "run.started": {"merge_mode": None},
+        "agent.status": {
+            "plan_id": None,
+            "zone": None,
+            "started_by": None,
+            "queued_task_id": None,
+            "base_commit": None,
+        },
+        "usage.tick": {"role": None, "change_id": None, "plan_id": None},
+        "change.resolved": {
+            "decided_by": None,
+            "review_seq": None,
+            "requested_by": None,
+            "head_commit": None,
+            "reasons": [],
+            "assessment": None,
+        },
+        "plan.updated": {"started_by": None, "queued_task_id": None},
+    }
+    if "type" in result and "payload" in result:
+        result["payload"] = {**defaults.get(result["type"], {}), **result["payload"]}
+    return result
+
+
 def assessment(**updates: Any) -> dict[str, Any]:
     return {**copy.deepcopy(EXAMPLES[0]["payload"]), **updates}
 
 
 def plan(**updates: Any) -> dict[str, Any]:
-    return {**copy.deepcopy(EXAMPLES[2]["payload"]), **updates}
+    return {
+        **copy.deepcopy(EXAMPLES[2]["payload"]),
+        "started_by": None,
+        "queued_task_id": None,
+        **updates,
+    }
 
 
 def resolution(**updates: Any) -> dict[str, Any]:
@@ -56,7 +97,7 @@ def resolution(**updates: Any) -> dict[str, Any]:
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e["type"])
 def test_reserved_events_round_trip_with_required_type_and_serialized_keys(example: Any) -> None:
     event = EVENTS.validate_python(example)
-    assert json.loads(EVENTS.dump_json(event)) == example
+    assert json.loads(EVENTS.dump_json(event)) == with_defaults(example)
     assert EVENTS.validate_json(EVENTS.dump_json(event)) == event
     with pytest.raises(ValidationError):
         EVENTS.validate_python({k: v for k, v in example.items() if k != "type"})
@@ -68,23 +109,14 @@ def test_reserved_events_round_trip_with_required_type_and_serialized_keys(examp
     "log", sorted((ROOT / "fixtures/events").glob("*.jsonl")), ids=lambda p: p.name
 )
 def test_all_older_recordings_validate_and_get_serialized_defaults(log: Path) -> None:
-    defaults = {
-        "run.started": {"merge_mode": None},
-        "agent.status": {"plan_id": None},
-        "change.resolved": {"decided_by": None, "reasons": [], "assessment": None},
-    }
     for line in log.read_text().splitlines():
         raw = json.loads(line)
         event = EVENTS.validate_json(line)
-        dumped = json.loads(EVENTS.dump_json(event))
-        assert dumped == {
-            **raw,
-            "payload": {**defaults.get(raw["type"], {}), **raw["payload"]},
-        }
+        assert json.loads(EVENTS.dump_json(event)) == with_defaults(raw)
 
 
 def test_defaults_and_request_response_shapes() -> None:
-    assert CONTRACT_VERSION == "1.3.0"
+    assert CONTRACT_VERSION == "1.4.0"
     assert MergeModeState().model_dump() == {"mode": "ask_me", "revision": 0}
     assert SetMergeMode(mode="ask_me", revision=0).model_dump() == {"mode": "ask_me", "revision": 0}
     assert CreatePlan(task="Split this").task == "Split this"

@@ -14,9 +14,12 @@ from functools import partial
 from pathlib import PurePosixPath
 from typing import Literal, cast
 
+from pydantic import ValidationError
+
 from oversight.graph import WorkspaceGraph
 from oversight.workspace import FileRead, Tree, Workspace, WorkspaceError
 from oversight_contracts.events import FocusRange, SuiteResult
+from oversight_contracts.review import FinishDeclaration
 
 MAX_READ_LINES = 400
 MAX_READ_CHARS = 40_000
@@ -77,7 +80,12 @@ TOOL_SCHEMAS: list[dict[str, object]] = [
     _function(
         "finish",
         "Finish the task and hand the change to the reviewer, with a short note on what changed.",
-        {"summary": {"type": "string"}},
+        {
+            "summary": {"type": "string"},
+            "files": {"type": ["array", "null"], "items": {"type": "string"}},
+            "tests_run": {"type": ["boolean", "null"]},
+            "tests": {"type": ["array", "null"], "items": {"type": "string"}},
+        },
         ["summary"],
     ),
 ]
@@ -99,6 +107,7 @@ class ToolOutcome:
     edited_path: str | None = None
     tests: SuiteResult | None = None
     finish_summary: str | None = None
+    declaration: FinishDeclaration | None = None
 
 
 def _name(path: str) -> str:
@@ -370,8 +379,18 @@ class Toolbox:
 
     def _finish(self, arguments: dict[str, object]) -> ToolOutcome:
         note = cast(str, _string(arguments, "summary"))
+        try:
+            declaration = FinishDeclaration.model_validate(
+                {key: value for key, value in arguments.items() if key != "summary"}
+            )
+        except ValidationError as error:
+            raise ToolError("invalid finish declaration") from error
         return ToolOutcome(
-            content="Finished.", ok=True, summary="Finished the task", finish_summary=note
+            declaration=declaration,
+            content="Finished.",
+            ok=True,
+            summary="Finished the task",
+            finish_summary=note,
         )
 
 

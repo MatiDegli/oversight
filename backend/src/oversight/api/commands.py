@@ -6,9 +6,9 @@ app passes an object that implements `Commands`; this module maps its errors to 
 """
 
 from collections.abc import Callable, Coroutine
-from typing import Annotated, Any, Protocol
+from typing import Any, Protocol
 
-from fastapi import APIRouter, Body, Response
+from fastapi import APIRouter, Response
 
 from oversight.api.errors import ApiError
 from oversight.changes import ChangeNotFound, WrongState
@@ -25,6 +25,19 @@ from oversight_contracts.commands import (
 )
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/tree", "Reserved /tree"),
+    ("GET", "/history", "Reserved /history"),
+    ("POST", "/queue", "Reserved /queue"),
+    ("GET", "/queue", "Reserved /queue"),
+    ("GET", "/queue/{queued_task_id}", "Reserved /queue/{queued_task_id}"),
+    ("POST", "/queue/{queued_task_id}/cancel", "Reserved /queue/{queued_task_id}/cancel"),
+    ("POST", "/leads", "Reserved /leads"),
+    ("GET", "/leads/{agent_id}", "Reserved /leads/{agent_id}"),
+    ("POST", "/leads/{agent_id}/stop", "Reserved /leads/{agent_id}/stop"),
+    ("POST", "/changes/{change_id}/review", "Reserved /changes/{change_id}/review"),
+    ("POST", "/changes/{change_id}/revert", "Reserved /changes/{change_id}/revert"),
+    ("GET", "/changes/{change_id}", "Reserved /changes/{change_id}"),
+    ("GET", "/agents/{agent_id}", "Reserved /agents/{agent_id}"),
     ("GET", "/impact", "The impact query"),
     ("GET", "/merge-mode", "Reading the merge mode"),
     ("PUT", "/merge-mode", "Setting the merge mode"),
@@ -58,11 +71,11 @@ class Commands(Protocol):
 
     async def start(self, request: StartAgent) -> AgentCreated: ...
 
-    def approve(self, change_id: str, comment: str | None) -> None: ...
+    def approve(self, change_id: str, request: ApproveChange) -> None: ...
 
-    def reject(self, change_id: str, comment: str | None) -> None: ...
+    def reject(self, change_id: str, request: RejectChange) -> None: ...
 
-    def request_changes(self, change_id: str, comment: str) -> None: ...
+    def request_changes(self, change_id: str, request: RequestChanges) -> None: ...
 
     def stop(self, agent_id: str) -> None: ...
 
@@ -109,25 +122,26 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
 
     @router.post("/agents", status_code=201)
     async def start_agent(request: StartAgent) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
+        # request.zone is reserved and ignored until zones are delivered in 1.5.0.
         return await commands.start(request)
 
     @router.post("/changes/{change_id}/approve", status_code=202, response_class=Response)
     async def approve(  # pyright: ignore[reportUnusedFunction]
-        change_id: str, body: Annotated[ApproveChange | None, Body()] = None
+        change_id: str, body: ApproveChange
     ) -> Response:
-        _decide(commands.approve, change_id, body.comment if body else None)
+        _decide(commands.approve, change_id, body)
         return Response(status_code=202)
 
     @router.post("/changes/{change_id}/reject", status_code=202, response_class=Response)
     async def reject(  # pyright: ignore[reportUnusedFunction]
-        change_id: str, body: Annotated[RejectChange | None, Body()] = None
+        change_id: str, body: RejectChange
     ) -> Response:
-        _decide(commands.reject, change_id, body.comment if body else None)
+        _decide(commands.reject, change_id, body)
         return Response(status_code=202)
 
     @router.post("/changes/{change_id}/request-changes", status_code=202, response_class=Response)
     async def request_changes(change_id: str, body: RequestChanges) -> Response:  # pyright: ignore[reportUnusedFunction]
-        _decide(commands.request_changes, change_id, body.comment)
+        _decide(commands.request_changes, change_id, body)
         return Response(status_code=202)
 
     @router.post("/agents/{agent_id}/stop", status_code=202, response_class=Response)

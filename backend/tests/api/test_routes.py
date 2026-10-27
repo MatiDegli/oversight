@@ -71,7 +71,7 @@ async def serve(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
 
 @contextlib.asynccontextmanager
 async def store_app(tmp_path: Path) -> AsyncIterator[tuple[EventStore, httpx.AsyncClient]]:
-    async with EventStore(tmp_path / f"{RUN_ID}.sqlite", RUN_ID) as store:
+    async with EventStore(tmp_path / f"{RUN_ID}.sqlite", RUN_ID, mode="replay") as store:
         app = FastAPI()
         app.include_router(create_router(store, "live"))
         install_error_handlers(app)

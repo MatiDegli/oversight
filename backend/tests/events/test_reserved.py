@@ -20,7 +20,7 @@ async def test_reserved_events_publish_replay_and_export_without_losing_fields(
     events = [read_jsonl(ROOT / "fixtures/events/handwritten-level1.jsonl")[0]]
     examples = json.loads((ROOT / "fixtures/contracts/reserved-1.3.json").read_text())
     events.extend(adapter.validate_python(example) for example in examples)
-    async with EventStore(tmp_path / "live.sqlite", "run-20261027-140312") as live:
+    async with EventStore(tmp_path / "live.sqlite", "run-20261027-140312", mode="replay") as live:
         for event in events:
             await live.publish(event.payload, ts=event.ts)
         rows = read_store(live.path)
@@ -29,6 +29,8 @@ async def test_reserved_events_publish_replay_and_export_without_losing_fields(
     assert export_run(live.path, output) == 4
     restored = read_jsonl(output)
     assert restored == events
-    async with EventStore(tmp_path / "replay.sqlite", "run-20261027-140312") as replay:
+    async with EventStore(
+        tmp_path / "replay.sqlite", "run-20261027-140312", mode="replay"
+    ) as replay:
         await play(replay, restored, speed=0)
         assert read_store(replay.path) == rows

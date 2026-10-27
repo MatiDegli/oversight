@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from changes_helpers import EDIT, bounded, start_harness
+from decision_helpers import observed_target
 
 from oversight_contracts.graph import GraphDelta
 
@@ -25,7 +26,9 @@ async def test_closing_the_harness_opens_a_gate_a_test_left_closed(
         harness.hold = GraphDelta
     else:
         harness.gate = GraphDelta
-    approval = harness.manager.approve("change-1", None)
+    approval = harness.manager.approve(
+        "change-1", None, **observed_target(harness.manager, "change-1")
+    )
     if gate == "held git":
         await harness.workspace.entered.wait()
     elif gate == "held publish":

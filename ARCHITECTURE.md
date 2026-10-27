@@ -229,6 +229,17 @@ Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
 `GET /graph`, `GET /health` and `GET /events` provide graph, readiness and events.
 
 `GET /impact`, agent message/pause/resume, merge-mode and plan routes still return 501.
+The 1.4 reservations also include tree, history, queue, leads, GET agent/change, and change
+review/revert. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
+Six more event types are reserved: change.reviewed, change.facts_recorded, tests.executed,
+revert.resolved, queue.updated and lead.status. Transport and reducer consume their sequences.
+Approve, Reject and Request changes require the revision and head shown by the review render;
+revision zero is limited to rejecting the published agent base before any proposal.
+Live resolutions record principal and head explicitly. The writer validates each frozen
+candidate independently before SQL admission. EventRejected is terminal for that delivery;
+valid neighbors still commit with contiguous sequences. A rejected post-effect resolution
+retains its Git facts, evidence, worktree and slot until a clean restart. Replay stores are
+configured explicitly; accepting fake reviews additionally requires explicit server permission.
 Proposal cones and the frontend's live preview work without `GET /impact`.
 Backend replay returns 501 for all command routes, including file reads and rescans.
 
@@ -261,5 +272,5 @@ Main contains `changes/_policy`, `_zones`, `_runrule`, `_beforeafter`, `_reviewf
 `agents/_crossreview`. They cover merge rules, plan zones, test-run evidence, before/after
 results, review facts and cross-review parsing. They are private and not wired into the live
 flow. Reserved `change.assessed`, `merge_mode.changed` and `plan.updated` events only advance
-the frontend sequence. Contracts are at 1.3.0; 1.4.0 awaits the maintainer's approval.
+the frontend sequence. Contracts are at 1.4.0; delivery A was approved by the maintainer, 2026-10-27.
 Level 3 wiring starts after this level 2 close.

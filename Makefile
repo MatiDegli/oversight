@@ -11,7 +11,7 @@ UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-ci check-fast check-python lint-python check-frontend \
-	lint-frontend contracts check-contracts check-secrets demo-repo-check replay shots smoke layout \
+	lint-frontend contracts check-contracts check-contract-tuples check-secrets demo-repo-check replay shots smoke layout \
 	test-browser demo demo-setup-check demo-check e2e record record-level2
 
 help: ## list the targets
@@ -42,7 +42,7 @@ record: ## bundle a finished run (RUN=<id>, or the latest run) into fixtures/eve
 	@if [ -n "$(RUN)" ]; then $(UV) python tools/record_run.py "$(RUN)"; else $(UV) python tools/record_run.py --latest; fi
 
 replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with the Vite dev server
-	@uv run --frozen python -m oversight replay "$(LOG)" --speed "$(SPEED)" & backend=$$!; \
+	@uv run --frozen python -m oversight replay "$(LOG)" --allow-fake-provider --speed "$(SPEED)" & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
 
@@ -193,7 +193,10 @@ lint-frontend:
 contracts: ## regenerate contracts/generated: JSON Schema and TypeScript from the Pydantic models
 	$(UV) python contracts/generate.py
 
-check-contracts:
+check-contract-tuples:
+	node contracts/check_tuples.cjs --base contracts/baselines/1.3.0.schema.json --schema contracts/generated/oversight.schema.json --types contracts/generated/contracts.ts --node-modules frontend/node_modules
+
+check-contracts: check-contract-tuples
 	$(UV) python contracts/generate.py --check
 
 check-secrets:

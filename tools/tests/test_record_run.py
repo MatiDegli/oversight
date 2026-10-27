@@ -52,7 +52,7 @@ def step(summary: str = "Read shop/pricing.py") -> AgentStep:
 
 def write_store(path: Path, run_id: str, events: list[tuple[EventPayload, str]]) -> Path:
     async def build() -> None:
-        async with EventStore(path, run_id) as store:
+        async with EventStore(path, run_id, mode="replay") as store:
             for payload, ts in events:
                 await store.publish(payload, ts=ts)
 
@@ -370,3 +370,22 @@ def test_fake_mode_refuses_real_model(tmp_path: Path) -> None:
     with pytest.raises(recording.RecordError, match="provider"):
         record_run.record_run(real_store(tmp_path), out, fake_fixture=True)
     assert not out.exists()
+
+
+def test_fake_review_authorization_is_independent_of_run_model() -> None:
+    rows = [
+        json.loads(line)
+        for line in (FIXTURES / "handwritten-level1.jsonl").read_text().splitlines()
+    ]
+    fixture = FIXTURES.parent / "contracts/reserved-1.4.json"
+    review = next(
+        row for row in json.loads(fixture.read_text()) if row["type"] == "change.reviewed"
+    )
+    review["seq"] = len(rows) + 1
+    rows.append(review)
+    text = "\n".join(json.dumps(row) for row in rows)
+    with pytest.raises(recording.RecordError, match="fake review"):
+        recording.validate_text(text)
+    rows[0]["payload"]["models"] = [FAKE.model_dump(mode="json")]
+    text = "\n".join(json.dumps(row) for row in rows)
+    assert recording.validate_text(text, fake_fixture=True)[-1].type == "change.reviewed"

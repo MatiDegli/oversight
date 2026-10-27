@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from decision_helpers import observed_body
 from live_helpers import FAKE_SCRIPT, FAKE_SCRIPT_B, LiveServer
 
 from oversight.agents import ScriptedModel, parse_script
@@ -48,7 +49,14 @@ CHANGE = "/changes/change-1"
 async def request(
     s: LiveServer, comment: str = "Shorter, please.", change: str = "change-1"
 ) -> Any:
-    return await s.client.post(f"/changes/{change}/request-changes", json={"comment": comment})
+    return await s.client.post(
+        f"/changes/{change}/request-changes",
+        json={
+            **observed_body(s, change),
+            "revision": max(1, observed_body(s, change)["revision"]),
+            "comment": comment,
+        },
+    )
 
 
 def states(events: list[Any], agent: str = "agent-1") -> list[str]:

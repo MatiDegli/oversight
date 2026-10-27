@@ -10,6 +10,7 @@ from oversight_contracts.common import (
     NodeId,
     NonEmptyText,
     PlanId,
+    QueuedTaskId,
     WorkspacePath,
 )
 
@@ -46,6 +47,11 @@ class Plan(ContractModel):
     ] = "planning"
     subtasks: tuple[PlanSubtask, PlanSubtask] | None = None
     detail: str | None = None
+
+    started_by: AgentId | None = None
+    """The lead that requested this plan."""
+    queued_task_id: QueuedTaskId | None = None
+    """The queue item dispatching this plan."""
 
     @model_validator(mode="after")
     def _state_has_subtasks(self) -> Self:

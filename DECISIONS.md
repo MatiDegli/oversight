@@ -359,4 +359,56 @@ Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row f
 start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
 scripted two-agent replay. A real recorded run will be bundled for the static replay.
 
-Level 3 wiring starts now. Contracts 1.4.0 await the maintainer's approval.
+Level 3 wiring starts now. Contracts 1.4.0 delivery A was approved by the maintainer, 2026-10-27.
+
+## Contracts 1.4.0 delivery A
+
+1. **Guarded decisions and tree shape** — approved by the maintainer, 2026-10-27.
+   Require revision/head guards, explicit live provenance and published agent bases. Reserve
+   GET /tree with required nullable file hashes, a joint 2,000-entry cap and a future 8 MiB
+   hashing budget; no traversal is enabled yet.
+2. **Finish declarations** — approved by the maintainer, 2026-10-27.
+   Optional files, tests_run and pytest ids preserve agent claims separately from observed facts.
+3. **Evidence rules** — approved by the maintainer, 2026-10-27.
+   Reserve cross_review, test_integrity, added_tests_fail_before, run_test_integrity,
+   tests_reach_changes and within_zone; incomplete observations cannot authorize a merge.
+4. **Fixed profiles** — approved by the maintainer, 2026-10-27.
+   Keep the five-rule v1 set frozen. Review/integrity/probes have 6/7/8 rules;
+   run/reach/zone each have 9 independently; v2 has all 11. Zone excludes run and reach.
+   Profiles wait for their wired producers and explicit enablement.
+5. **Server provenance** — approved by the maintainer, 2026-10-27.
+   Requests cannot supply decision authority, starter identity or reviewer evidence.
+6. **FIFO queue** — approved by the maintainer, 2026-10-27.
+   Queue one standalone task or an exact plan revision; a plan reserves both slots together.
+7. **Atomic A after level 2** — approved by the maintainer, 2026-10-27.
+   Migrate contracts, generated outputs, routes, consumers, fixtures and guards together.
+   Writer rejection is isolated per event; a terminal post-effect refusal retains the slot.
+   Historical constructors use explicit replay mode, independently of fake-provider permission.
+8. **Zones** — approved by the maintainer, 2026-10-27.
+   Future assignments cover whole files or nodes with ranges and descendants.
+9. **Lead standalone queueing** — approved by the maintainer, 2026-10-27.
+   A lead may later queue individual tasks it owns; this grants no merge authority.
+10. **Lead plan requests** — approved by the maintainer, 2026-10-27.
+    A lead may request a plan; requesting grants no dispatch authority.
+11. **Creation at 1.5.0** — approved by the maintainer, 2026-10-27.
+    Keep SaveFile exactly 1.3 in A. Deliver required nullable base_hash only with safe creation,
+    zones and inventory, including exclusive publication and verified existing parents.
+12. **Bounded section 4.9 exception** — approved by the maintainer, 2026-10-27.
+    Permit enum extensions and required guards in 1.4.0, then nullable base_hash in 1.5.0.
+    Each version identifies one schema; this does not permit republishing changed 1.4.0 bytes.
+13. **Personal plan authorization** — approved by the maintainer, 2026-10-27.
+    Only the person queues and dispatches the exact reviewed plan revision.
+14. **Plan agents belong to that authorization** — approved by the maintainer, 2026-10-27.
+    Their AgentStatus.started_by is None even if a lead requested the plan. Plan.started_by
+    preserves that requester; it does not grant the lead authority to revise these agents.
+15. **API guard refusal code** — approved by the maintainer, 2026-10-27.
+    Add forbidden (HTTP 403) within this same 1.4.0 delivery for requests whose Host or Origin
+    is not on the allow list, supporting the planned DNS rebinding defense. The API guard is
+    a later front; nothing returns forbidden yet.
+
+The tuple gate compares all changed array constraints with the byte-exact 1.3.0 baseline.
+It discovers fields generically and checks generated TypeScript, including local references and
+nullable unions. Four independent negative controls cover small max, min-only, historical
+findings/evidence and a newly constrained existing field. Generator and TypeScript pins stay put.
+
+too_large (413) rides in 1.4.0; limits come with the API guard front (maintainer, M6, 2026-10-27)

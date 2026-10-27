@@ -14,6 +14,7 @@ from changes_helpers import (
     bounded,
     queued_callbacks_ran,
 )
+from decision_helpers import observed_target
 
 from oversight.changes import ChangeNotFound, WrongState
 from oversight.workspace import StaleFile, WorkspaceError, content_hash
@@ -88,7 +89,7 @@ async def test_save_commits_as_the_user(h: Harness) -> None:
     )
     assert (second.summary, second.tests.outcome) == ("Done.", "passed")  # the agent's summary
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     resolved = h.payloads(ChangeResolved)[-1]
     assert (resolved.merge, resolved.revision) == ("merged", 2)
@@ -123,13 +124,13 @@ async def test_save_needs_ready_and_the_hash_it_started_from(h: Harness) -> None
         old = (await h.workspace.main.read_text(PATH)).hash
         await h.workspace.main.write_text(PATH, main_mod, expected_hash=old)
         await h.workspace.git_ok(h.workspace.main, "commit", "-qam", "Edit on main")
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     with pytest.raises(WrongState, match="is deciding"):
         await h.manager.save_for_review("agent-1", PATH, content, base)
     await approval
     with pytest.raises(WrongState, match="is conflict"):
         await h.manager.save_for_review("agent-1", PATH, content, base)
-    await h.manager.reject("change-1", None)
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     with pytest.raises(WrongState, match="is closed"):
         await h.manager.save_for_review("agent-1", PATH, content, base)
     assert [u.author for u in h.payloads(ChangeUpdated)] == ["agent"]
@@ -145,7 +146,7 @@ async def test_save_rechecks_under_the_lock(h: Harness) -> None:
         save = start_save(h, content, base)
         await queued_callbacks_ran()
         assert not save.done()  # it waits for the lock
-        rejection = h.manager.reject("change-1", None)
+        rejection = h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
 
     with pytest.raises(WrongState, match="is deciding"):
         await save
@@ -175,7 +176,7 @@ async def test_cut_save_is_never_approved_stale(h: Harness, cut: str) -> None:
     assert len(h.payloads(ChangeProposed)) == 1
     pre = await h.main_head()
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert await h.main_head() == pre
     assert h.payloads(ChangeResolved) == []
@@ -188,7 +189,7 @@ async def test_cut_save_is_never_approved_stale(h: Harness, cut: str) -> None:
     [error] = errors(h, "Revision 2 of change-1 holds edits that were not proposed")
     assert not error.fatal
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     resolved = h.payloads(ChangeResolved)[-1]
     assert (resolved.merge, resolved.revision) == ("merged", 2)
@@ -218,7 +219,7 @@ async def test_approve_cut_in_its_reproposal(h: Harness, where: str) -> None:
         h.workspace.arm("commit", tree="agent-1", mode="cancel")
     else:
         h.hold = ChangeProposed
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     if where == "publish":
         await h.held.wait()
         approval.cancel()
@@ -231,9 +232,11 @@ async def test_approve_cut_in_its_reproposal(h: Harness, where: str) -> None:
     assert (await worktree_git(h, "log", "-1", "--format=%an")).strip() == "User"
 
     if where == "commit":
-        await h.manager.approve("change-1", None)  # proposes revision 2 and names it
+        await h.manager.approve(
+            "change-1", None, **observed_target(h.manager, "change-1")
+        )  # proposes revision 2 and names it
         assert errors(h, "Revision 2 of change-1 holds edits")
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert revisions(h) == [("change.proposed", 1), ("change.proposed", 2), ("change.resolved", 2)]
     assert h.payloads(ChangeResolved)[-1].merge == "merged"
@@ -249,14 +252,16 @@ async def test_approve_merges_nothing_when_the_worktree_cannot_be_read(
     pre = await h.main_head()
     h.workspace.arm(subcommand, tree="agent-1")
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert h.workspace.faults[0].left == 0
     assert await h.main_head() == pre
     [error] = errors(h, "Approving change-1 merged nothing")
     assert (error.source, error.fatal) == ("git", False)
     assert h.payloads(ChangeResolved) == []
-    await h.manager.approve("change-1", None)  # `ready` again
+    await h.manager.approve(
+        "change-1", None, **observed_target(h.manager, "change-1")
+    )  # `ready` again
     assert h.payloads(ChangeResolved)[-1].merge == "merged"
 
 
@@ -270,7 +275,7 @@ async def test_approve_wants_the_revision_it_saw(h: Harness) -> None:
     h.gate = ChangeProposed
     save = start_save(h, content, base)
     await h.at_gate.wait()
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     h.open_gate.set()
     await save
 
@@ -280,7 +285,7 @@ async def test_approve_wants_the_revision_it_saw(h: Harness) -> None:
     assert revisions(h) == [("change.proposed", 1), ("change.proposed", 2)]
     [error] = errors(h, "Revision 2 of change-1 arrived after you clicked")
     assert not error.fatal
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     resolved = h.payloads(ChangeResolved)[-1]
     assert (resolved.merge, resolved.revision) == ("merged", 2)
     assert await main_text(h) == content
@@ -305,7 +310,7 @@ async def test_save_cancelled_in_its_publish_is_recorded(h: Harness, cancels: in
     with pytest.raises(asyncio.CancelledError):
         await save
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert revisions(h) == [("change.proposed", 1), ("change.proposed", 2), ("change.resolved", 2)]
     assert h.payloads(ChangeResolved)[-1].merge == "merged"
@@ -354,17 +359,19 @@ async def test_identical_save_is_a_no_op(h: Harness) -> None:
 @bounded
 async def test_decision_during_a_save_names_its_revision(h: Harness, decision: str) -> None:
     """Request changes or Reject is clicked while the save's revision 2 waits before the store: the
-    decision waits for the save, so its resolution names revision 2 and follows it. A revision run
-    that then ends without proposing leaves the change `unproposed`, never `ready` on the save."""
+    decision waits for the save and refuses its stale observed target without resolving or
+    resuming. The person must review revision 2 before another decision."""
     await h.run_agent(1, EDIT)
     content, base = await new_side(h, "return 3", "return 4")
     h.gate = ChangeProposed
     save = start_save(h, content, base)
     await h.at_gate.wait()
     if decision == "request_changes":
-        task: asyncio.Task[object] = h.manager.request_changes("change-1", "Make it 5.")
+        task: asyncio.Task[object] = h.manager.request_changes(
+            "change-1", "Make it 5.", **observed_target(h.manager, "change-1")
+        )
     else:
-        task = h.manager.reject("change-1", None)
+        task = h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     for _ in range(3):
         await queued_callbacks_ran()  # time enough for a decision that did not wait to resolve
     h.open_gate.set()
@@ -372,11 +379,10 @@ async def test_decision_during_a_save_names_its_revision(h: Harness, decision: s
 
     await task
 
-    assert revisions(h) == [("change.proposed", 1), ("change.proposed", 2), ("change.resolved", 2)]
-    if decision == "request_changes":
-        h.manager.run_ended("agent-1", None, steps=5)
-        with pytest.raises(WrongState, match="is unproposed"):
-            h.manager.approve("change-1", None)
+    assert revisions(h) == [("change.proposed", 1), ("change.proposed", 2)]
+    assert h.manager._agents["agent-1"].state == "ready"
+    assert not h.payloads(ChangeResolved)
+    assert errors(h, "target changed")
 
 
 @bounded
@@ -385,7 +391,9 @@ async def test_request_cancelled_while_waiting_for_the_locks(h: Harness) -> None
     there, it sends nothing and leaves the change `ready`."""
     await h.run_agent(1, EDIT)
     async with h.workspace.locks(main=True):
-        request = h.manager.request_changes("change-1", "Make it 4.")
+        request = h.manager.request_changes(
+            "change-1", "Make it 4.", **observed_target(h.manager, "change-1")
+        )
         await queued_callbacks_ran()
         assert not request.done()  # it waits for main's lock
         request.cancel()
@@ -393,5 +401,7 @@ async def test_request_cancelled_while_waiting_for_the_locks(h: Harness) -> None
             await request
 
     assert h.payloads(ChangeResolved) == []
-    await h.manager.approve("change-1", None)  # still `ready`
+    await h.manager.approve(
+        "change-1", None, **observed_target(h.manager, "change-1")
+    )  # still `ready`
     assert h.payloads(ChangeResolved)[-1].merge == "merged"

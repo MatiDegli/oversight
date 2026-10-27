@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from decision_helpers import observed_body
 from live_helpers import (
     DEADLINE_S,
     BySlot,
@@ -53,8 +54,20 @@ async def test_back_to_back_approvals_chain_their_deltas(tmp_path: Path) -> None
         assert (await start(s, slot="B")).status_code == 201
         for agent in ("agent-1", "agent-2"):
             await s.until(is_type("agent.status", agent_id=agent, state="ready_for_review"))
-        first = await s.client.post("/changes/change-1/approve")
-        second = await s.client.post("/changes/change-2/approve")
+        first = await s.client.post(
+            "/changes/change-1/approve",
+            json={
+                **observed_body(s, "change-1"),
+                "revision": max(1, observed_body(s, "change-1")["revision"]),
+            },
+        )
+        second = await s.client.post(
+            "/changes/change-2/approve",
+            json={
+                **observed_body(s, "change-2"),
+                "revision": max(1, observed_body(s, "change-2")["revision"]),
+            },
+        )
         assert (first.status_code, second.status_code) == (202, 202)
         for agent in ("agent-1", "agent-2"):
             await s.until(is_type("agent.status", agent_id=agent, state="done"))
@@ -116,7 +129,15 @@ async def test_a_then_b_with_a_failing_combination(
             model_a.permits.release()
         for agent in ("agent-1", "agent-2"):
             await s.until(is_type("agent.status", agent_id=agent, state="ready_for_review"))
-        assert (await s.client.post("/changes/change-1/approve")).status_code == 202
+        assert (
+            await s.client.post(
+                "/changes/change-1/approve",
+                json={
+                    **observed_body(s, "change-1"),
+                    "revision": max(1, observed_body(s, "change-1")["revision"]),
+                },
+            )
+        ).status_code == 202
         await s.until(is_type("change.resolved", change_id="change-1"))
         workspace = s.live.workspace
 
@@ -128,7 +149,15 @@ async def test_a_then_b_with_a_failing_combination(
 
         after_a = await main_state()
         assert after_a[1] == ""  # clean
-        assert (await s.client.post("/changes/change-2/approve")).status_code == 202
+        assert (
+            await s.client.post(
+                "/changes/change-2/approve",
+                json={
+                    **observed_body(s, "change-2"),
+                    "revision": max(1, observed_body(s, "change-2")["revision"]),
+                },
+            )
+        ).status_code == 202
         await s.until(is_type("change.resolved", change_id="change-2"))
         assert await main_state() == after_a  # B's merge was aborted: same head, still clean
         events = s.events()
