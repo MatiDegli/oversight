@@ -3,16 +3,12 @@ name: Oversight
 description: A web IDE where one person supervises coding agents on a live graph of a Python repository.
 colors:
   ground: "#000000"
-  shell: "#09090a"
-  panel: "#0d0d0f"
-  field: "#09090b"
-  inset: "#09090b"
-  page: "#101012"
-  card: "#151518"
-  card-bottom: "#111113"
-  top-highlight: "rgba(255, 255, 255, 0.045)"
-  card-shadow: "rgba(0, 0, 0, 0.24)"
-  raised: "#1b1b1f"
+  shell: "#060606"
+  panel: "#080808"
+  field: "#0b0b0b"
+  page: "#0c0c0c"
+  card: "#0e0e0e"
+  raised: "#121212"
   page-raised: "#131313"
   text: "#ededea"
   text-hover: "#ffffff"
@@ -20,8 +16,8 @@ colors:
   faint: "#85857f"
   code-dim: "#7d7d78"
   module-label: "#d2d2cd"
-  divider: "rgba(255, 255, 255, 0.06)"
-  border: "rgba(255, 255, 255, 0.10)"
+  divider: "#1c1c1c"
+  border: "#2a2a2a"
   page-border: "#262626"
   card-border: "#242424"
   node-border: "#2e2e2e"
@@ -343,6 +339,26 @@ green and red only ever mean passed and failed.
   As text it uses failed-text. Its tint (removed-tint) is the background of a removed line.
 
 ### Neutral
+
+The frontmatter's colors record the current theme. The approved v4 dark surface target below
+is pending implementation in the shell front; it overrides these tokens and adds inset,
+card-bottom, top-highlight and card-shadow. All other colors retain their frontmatter values.
+The roles below and the v4 contrast tables use this target set.
+
+| Token | v4 target |
+| --- | --- |
+| `shell` | `#09090a` |
+| `panel` | `#0d0d0f` |
+| `field` | `#09090b` |
+| `inset` | `#09090b` |
+| `page` | `#101012` |
+| `card` | `#151518` |
+| `card-bottom` | `#111113` |
+| `raised` | `#1b1b1f` |
+| `divider` | `rgba(255, 255, 255, 0.06)` |
+| `border` | `rgba(255, 255, 255, 0.10)` |
+| `top-highlight` | `rgba(255, 255, 255, 0.045)` |
+| `card-shadow` | `rgba(0, 0, 0, 0.24)` |
 
 The neutral roles:
 

@@ -322,8 +322,9 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   subject's agent color or neutral. Graph overlays frost at 12px blur; group labels are 11.5px,
   uppercase and tracked. Every color remains a theme token, accents and day colors unchanged.
   Reason: the approved layers distinguish work surfaces without adding a hue. DESIGN.md records
-  the full contrast matrix and nearest passing proposals for failures; approved values are not
-  silently adjusted. This supersedes the blanket ban on panel shadows and overlay blur.
+  the target token overrides, full contrast matrix and nearest passing proposals for failures;
+  its frontmatter keeps the current theme until the shell front implements the target. Approved
+  values are not silently adjusted. This supersedes the blanket ban on panel shadows and overlay blur.
 - **R4 amended: the Signal LED field (maintainer, 2026-10-27).** Keep 7px square LEDs, three
   dithered lit levels, box-shaped light, a faint 28px resting grid and an expanding working ring.
   Only the current node (full) and last read (about 0.4) emit light; spreads are about 26px and
