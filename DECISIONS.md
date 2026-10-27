@@ -184,6 +184,19 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 - **Bezier edges kept over taxi (maintainer, 2026-10-26):** captures of both on the preset layout
   were compared; curves read better.
 
+- **Watch growth includes a new node only outside a panel and after navigation rests:** if an
+  added node lands outside the viewport, the camera may widen to include it. It waits three seconds
+  since the person's last pan, wheel zoom or pinch, and never interrupts navigation. This changes
+  the camera, not node positions, and keeps new code visible without stealing focus. DESIGN.md's
+  “nothing moves by itself” protects node positions the person did not cause; it does not forbid
+  this guarded camera adjustment.
+- **Growth relocates a module only as a last resort, and restores it:** when a new node cannot fit
+  anywhere without overlapping another frame, its root module shifts as a unit, retaining its
+  leaves' relative positions. The pre-shift positions are saved and restored when the additions
+  that required the fallback disappear, including rejection. Other modules stay put. This is the
+  bounded consequence of the code addition, not an unsolicited rearrangement or a mode change;
+  restoring it preserves the person's layout and DESIGN.md's “nothing moves by itself” rule.
+
 ### Where Impeccable clashes with our rules
 
 Ours wins in every case below.

@@ -89,6 +89,24 @@ describe("the recorded impact cone", () => {
     expect(impactSummary(empty)).toBe("No functions possibly affected within the cone bounds");
   });
 
+  it("renders decision errors in a neutral token with an icon", () => {
+    const html = renderToStaticMarkup(
+      <ReviewPanel
+        state={state}
+        changeId="change-1"
+        attempt={{ phase: "failed", action: "approve", revision: 1, message: "Busy. Try again." }}
+        onDecide={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    const alert = html.match(/<p role="alert".*?<\/p>/)?.[0];
+    expect(alert).toContain("text-text");
+    expect(alert).not.toContain("text-failed-text");
+    expect(alert).toContain("<svg");
+    expect(alert).toContain('aria-hidden="true"');
+    expect(alert).toContain("Busy. Try again.");
+  });
+
   it("summarizes the displayed functions and farthest distance, including singular", () => {
     expect(impactSummary(cone)).toBe("9 functions possibly affected, up to distance 2");
     expect(impactSummary({ ...cone, entries: [{ node_id: "caller", distance: 3 }] })).toBe(

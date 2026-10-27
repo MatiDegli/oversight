@@ -211,6 +211,28 @@ describe("the box of a new node", () => {
     },
   );
 
+  it("restores pricing's pre-shift leaves after nested growth is rejected, repeatedly without a preset", () => {
+    const parent = byId("shop.pricing");
+    const newClass = added(`${parent.id}:NewClass`, "class", parent);
+    const method = added(`${newClass.id}.method`, "method", newClass);
+    const { graph, before, overlapsAfter } = grow([newClass, method]);
+    expect(overlapsAfter).toEqual([]);
+    const base = graphElements({ ...createInitialState(), graph: snapshot });
+    const grown = graphElements({
+      ...createInitialState(),
+      graph: { ...snapshot, nodes: [...snapshot.nodes, newClass, method] },
+    });
+    // Intermediate events must not replace the saved pre-shift positions.
+    updateGraph(graph, grown);
+    updateGraph(graph, base);
+    for (const [id, position] of before)
+      expect(graph.getElementById(id).position(), id).toEqual(position);
+    updateGraph(graph, grown);
+    updateGraph(graph, base);
+    for (const [id, position] of before)
+      expect(graph.getElementById(id).position(), id).toEqual(position);
+  });
+
   it("tries the sides before above when the space below a module is blocked", () => {
     const base: GraphElement[] = [
       {

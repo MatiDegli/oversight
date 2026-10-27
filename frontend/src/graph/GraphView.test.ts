@@ -382,7 +382,11 @@ it("expands watch only for added nodes and yields to active pan, wheel zoom and 
   cy.emit("scrollzoom");
   add("during-wheel");
   expect(expand).not.toHaveBeenCalled();
-  vi.spyOn(performance, "now").mockReturnValue(performance.now() + 1000);
+  const navigationEnded = performance.now();
+  const now = vi.spyOn(performance, "now").mockReturnValue(navigationEnded + 1000);
+  add("one-second-after-wheel");
+  expect(expand.mock.calls.length).toBe(0);
+  now.mockReturnValue(navigationEnded + 3100);
   vi.spyOn(camera, "frameCamera").mockReturnValue(null);
   rerender({ panelOpen: true, frameKey: "review:1", frameIds: ["new"] });
   add("during-review");

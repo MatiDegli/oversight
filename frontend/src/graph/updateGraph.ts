@@ -25,6 +25,12 @@ const union = (a: Box, b: Box): Box => ({
 // A compound's centre follows its children. Keep the last position it had as a leaf separately,
 // including human drags, so removing its last child does not leave it at the frame's centre.
 const leafPositions = new WeakMap<Core, Map<string, Position>>();
+// Keep the person's layout until all additions that needed a fallback go away.
+interface GrowthLayout {
+  positions: Map<string, Position>;
+  additions: Set<string>;
+}
+const growthPositions = new WeakMap<Core, Map<string, GrowthLayout>>();
 /**
  * Measure before batching: compound bounds are stale while Cytoscape batches writes.
  *
@@ -190,15 +196,24 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
         const bottom = Math.max(0, ...[...boxes.values()].map((box) => box.y2));
         position = {
           x: center.x,
-          y: bottom + halfHeight + (parents.length + 1) * inset + g.label + g.margin,
-        };
-        if (root) {
-          position.y =
-            (boxes.get(root)?.y2 ?? bottom) +
+          y:
+            (boxes.get(root ?? "")?.y2 ?? bottom) +
             halfHeight +
             (parents.length + 1) * inset +
             g.label +
-            g.margin;
+            g.margin,
+        };
+        if (root) {
+          const history = growthPositions.get(cy) ?? new Map<string, GrowthLayout>();
+          growthPositions.set(cy, history);
+          const saved = history.get(root) ?? {
+            positions: new Map<string, Position>(),
+            additions: new Set<string>(),
+          };
+          history.set(root, saved);
+          for (const candidate of nodes.keys())
+            if (cy.getElementById(candidate).empty() && ancestorsOf(candidate).includes(root))
+              saved.additions.add(candidate);
           const grown = grownAt(root, parents.length - 1, position);
           const dy = bottom + g.margin - grown.y1;
           const family = [...boxes.keys()].filter(
@@ -216,6 +231,7 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
             const node = cy.getElementById(other);
             if (node.nonempty() && node.isChildless()) {
               const previous = relocated.get(other) ?? node.position();
+              if (!saved.positions.has(other)) saved.positions.set(other, { ...previous });
               relocated.set(other, { x: previous.x, y: previous.y + dy });
             }
           }
@@ -255,8 +271,7 @@ export function updateGraph(
   const restore = cy
     .nodes(":parent")
     .filter((node) => byId.has(node.id()) && !parents.has(node.id()) && remembered.has(node.id()));
-  const { additions, relocated } = placeAdditions(cy, elements, theme);
-  cy.batch(() => {
+  const removeObsolete = () => {
     // Detach survivors before removing a parent (which would remove its children too).
     for (const node of cy.nodes()) {
       const definition = byId.get(node.id());
@@ -271,6 +286,24 @@ export function updateGraph(
       const position = remembered.get(node.id());
       if (position) node.position(position);
     }
+    const history = growthPositions.get(cy);
+    for (const [root, saved] of history ?? []) {
+      if ([...saved.additions].some((id) => byId.has(id))) continue;
+      for (const [id, point] of saved.positions) {
+        cy.getElementById(id).position(point);
+        if (byId.has(id)) remembered.set(id, { ...point });
+      }
+      history?.delete(root);
+    }
+  };
+  const restoringGrowth = [...(growthPositions.get(cy)?.values() ?? [])].some(
+    (saved) => ![...saved.additions].some((id) => byId.has(id)),
+  );
+  // A restored frame must be measured at its original position before placing new arrivals.
+  if (restoringGrowth) cy.batch(removeObsolete);
+  const { additions, relocated } = placeAdditions(cy, elements, theme);
+  cy.batch(() => {
+    if (!restoringGrowth) removeObsolete();
     for (const [id, point] of relocated) cy.getElementById(id).position(point);
     cy.add(additions);
     for (const definition of elements) {
