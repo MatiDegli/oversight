@@ -16,6 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 CAPPED = ROOT / "tools" / "capped.sh"
 BASH = shutil.which("bash") or "/usr/bin/bash"
+NO_CAP_NOTICE = "capped.sh: no memory cap of 10G: this machine has no user systemd"
 CAP_OPTIONS = "--user --scope -q -p MemoryMax=10G -p MemorySwapMax=0"
 
 # A systemd-run that logs its arguments. It exits with $FAKE_PROBE for the probe (the call that ends
@@ -70,6 +71,7 @@ def test_it_runs_the_command_under_the_limit_it_was_given(tmp_path: Path) -> Non
     )
     assert done.returncode == 7, "the command's own exit status comes through"
     assert "ran ['a b']" in done.stdout
+    assert done.stderr == "", "under a cap there is nothing to say"
     assert log == [
         f"{CAP_OPTIONS} true",
         f"{CAP_OPTIONS} -- {sys.executable} -c import sys; print('ran', sys.argv[1:]); "
@@ -98,6 +100,7 @@ def test_it_falls_back_when_the_manager_refuses_the_scope(tmp_path: Path) -> Non
     assert done.returncode == 0, done.stderr
     assert "ran without a cap" in done.stdout
     assert log == [f"{CAP_OPTIONS} true"], "only the probe went to systemd-run"
+    assert NO_CAP_NOTICE in done.stderr, "a missing cap is said, never silent"
 
 
 def test_it_falls_back_when_systemd_run_is_missing(tmp_path: Path) -> None:
@@ -112,6 +115,7 @@ def test_it_falls_back_when_systemd_run_is_missing(tmp_path: Path) -> None:
     assert done.returncode == 0, done.stderr
     assert "ran without systemd" in done.stdout
     assert log == []
+    assert NO_CAP_NOTICE in done.stderr, "a missing cap is said, never silent"
 
 
 @pytest.mark.parametrize("arguments", [(), ("10G",)])

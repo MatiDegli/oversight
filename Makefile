@@ -70,8 +70,10 @@ test-browser: ## the frontend's browser tests in Playwright's Chromium; not in c
 # e2e: one Playwright test over the static replay build (vite build --mode replay, served by vite
 # preview) and the hand-written log: level 1's definition of done, with no backend and no credits.
 # The build and the run share one time bound of 600 s (10 s more, then killed) and the 6 GiB memory
-# cap of make shots. It is not part of make check yet; CI runs it in its own job.
-e2e: ## Playwright over the static replay build and the hand-written log; 600 s, 6G cap; not in check
+# cap of make shots, which needs a user systemd: without one (CI) the run has the time bound only,
+# and tools/capped.sh says so on stderr. The preview server is run.sh's own and never outlives it.
+# It is not part of make check yet; CI runs it in its own job.
+e2e: ## Playwright over the static replay build and a hand-written log; 600 s; 6G cap only with a user systemd (not in CI); not in check
 	@$(NO_KEYS) timeout --kill-after=10 600 bash tools/capped.sh 6G bash frontend/e2e/run.sh
 
 # Two layers keep a runaway test from taking the machine. The soft one, for every pytest run
