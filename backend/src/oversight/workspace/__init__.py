@@ -1,11 +1,12 @@
 """The runtime workspace, worktrees, the async process and git runner, locks, paths and tests.
 
 Other modules import only what this file exports; everything else here is internal. The module
-imports only `oversight_contracts` and the standard library.
+imports only `oversight_contracts`, shared byte limits and the standard library.
 """
 
 from oversight.workspace.core import Author, Tree, Workspace
 from oversight.workspace.errors import (
+    FileTooLarge,
     InvalidPath,
     LockOrderError,
     StaleFile,
@@ -13,13 +14,14 @@ from oversight.workspace.errors import (
     WorkspaceBusy,
     WorkspaceError,
 )
-from oversight.workspace.files import FileRead, content_hash
+from oversight.workspace.files import FileRead, check_content, content_hash
 from oversight.workspace.runner import ProcessResult, run_process
 from oversight.workspace.suite import SuiteRun
 
 __all__ = [
     "Author",
     "FileRead",
+    "FileTooLarge",
     "InvalidPath",
     "LockOrderError",
     "ProcessResult",
@@ -30,6 +32,7 @@ __all__ = [
     "Workspace",
     "WorkspaceBusy",
     "WorkspaceError",
+    "check_content",
     "content_hash",
     "run_process",
 ]

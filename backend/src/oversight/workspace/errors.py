@@ -5,6 +5,10 @@ class WorkspaceError(Exception):
     """Base class: a workspace operation failed and changed nothing it should not have."""
 
 
+class FileTooLarge(WorkspaceError):
+    """A file or replacement content exceeds the editable-file byte ceiling (HTTP 413)."""
+
+
 class InvalidPath(WorkspaceError):
     """A path escapes the tree or breaks a path rule (HTTP 422, `invalid_path`)."""
 
