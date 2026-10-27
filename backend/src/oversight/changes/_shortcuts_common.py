@@ -305,3 +305,12 @@ def within_deadline[T](items: Iterable[T], deadline: float) -> Iterator[T]:
     for item in items:
         check_deadline(deadline)
         yield item
+
+
+class DeadlineTransformer(ast.NodeTransformer):
+    def __init__(self, deadline: float = float("inf")) -> None:
+        self.deadline = deadline
+
+    def visit(self, node: ast.AST) -> ast.AST | list[ast.AST] | None:
+        check_deadline(self.deadline)
+        return super().visit(node)

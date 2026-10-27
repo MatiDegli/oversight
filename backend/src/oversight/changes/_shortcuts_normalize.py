@@ -4,7 +4,14 @@ import ast
 import copy
 from collections import Counter
 
-from oversight.changes._shortcuts_common import FuncNode, Source, walk_local
+from oversight.changes._shortcuts_common import (
+    DeadlineTransformer,
+    FuncNode,
+    Source,
+    check_deadline,
+    walk_local,
+    within_deadline,
+)
 from oversight.changes._shortcuts_equivalence import canonicalize, unittest_checks
 
 # Positional diagnostic-message slots in unittest.TestCase. Other arguments
@@ -47,7 +54,7 @@ class _ReplaceLocal(ast.NodeTransformer):
         return self.value if node.id == self.name and isinstance(node.ctx, ast.Load) else node
 
 
-class _SplitAnd(ast.NodeTransformer):
+class _SplitAnd(DeadlineTransformer):
     def visit_Assert(self, node: ast.Assert) -> ast.Assert | list[ast.Assert]:
         def terms(expr: ast.expr) -> list[ast.expr]:
             if isinstance(expr, ast.BoolOp) and isinstance(expr.op, ast.And):
@@ -57,7 +64,7 @@ class _SplitAnd(ast.NodeTransformer):
         return [ast.copy_location(ast.Assert(test=term), node) for term in terms(node.test)]
 
 
-class _SplitTuple(ast.NodeTransformer):
+class _SplitTuple(DeadlineTransformer):
     def visit_Assert(self, node: ast.Assert) -> ast.Assert | list[ast.Assert]:
         check = node.test
         if (
@@ -198,13 +205,14 @@ def align_local_names(before: FuncNode, after: FuncNode) -> None:
             node.id = f"@before:{node.id}"
 
 
-def normalize_assertions(source: Source) -> Source:
+def normalize_assertions(source: Source, *, deadline: float = float("inf")) -> Source:
     """Keep original locations and scoped bindings on the copied syntax nodes."""
+    check_deadline(deadline)
     source = copy.deepcopy(source)
-    canonicalize(source)
+    canonicalize(source, deadline=deadline)
     for func in source.functions.values():
         local = walk_local(func)
-        for node in local:
+        for node in within_deadline(local, deadline):
             if isinstance(node, ast.Call):
                 name = source.resolve(node.func)
                 last = name.rsplit(".", 1)[-1] if name else ""
@@ -213,10 +221,10 @@ def normalize_assertions(source: Source) -> Source:
                     node.keywords = [kw for kw in node.keywords if kw.arg != "msg"]
                     if len(node.args) > slot:
                         node.args.pop(slot)
-        unittest_checks(func)
-        _SplitAnd().visit(func)
-        _SplitTuple().visit(func)
-    canonicalize(source)
+        unittest_checks(func, deadline=deadline)
+        _SplitAnd(deadline).visit(func)
+        _SplitTuple(deadline).visit(func)
+    canonicalize(source, deadline=deadline)
     return source
 
 

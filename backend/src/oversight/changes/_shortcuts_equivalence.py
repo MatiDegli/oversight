@@ -4,7 +4,13 @@ import ast
 import copy
 import string
 
-from oversight.changes._shortcuts_common import FuncNode, Source, is_literal_like
+from oversight.changes._shortcuts_common import (
+    DeadlineTransformer,
+    FuncNode,
+    Source,
+    is_literal_like,
+    within_deadline,
+)
 from oversight.changes._shortcuts_tests import parametrize_parts
 
 ALIASES = {
@@ -14,10 +20,11 @@ ALIASES = {
 }
 
 
-class Canonical(ast.NodeTransformer):
+class Canonical(DeadlineTransformer):
     """Canonicalize literal expectations, equality orientation and unittest aliases."""
 
-    def __init__(self, source: Source) -> None:
+    def __init__(self, source: Source, deadline: float = float("inf")) -> None:
+        super().__init__(deadline)
         self.source = source
 
     def visit_Call(self, node: ast.Call) -> ast.expr:
@@ -94,7 +101,7 @@ class _LocalNames(ast.NodeTransformer):
         return node
 
 
-def body_key(func: FuncNode) -> tuple[str, ...]:
+def body_key(func: FuncNode, *, deadline: float = float("inf")) -> tuple[str, ...]:
     """Alpha-equivalent local assignments with unchanged fixture arguments.
 
     Nested scopes and parameters stay exact. Only skip the checks when the
@@ -111,7 +118,7 @@ def body_key(func: FuncNode) -> tuple[str, ...]:
     names: dict[str, str] = {}
     if not any(
         isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda))
-        for stmt in body
+        for stmt in within_deadline(body, deadline)
         for n in ast.walk(stmt)
     ):
         for stmt in body:
@@ -119,14 +126,17 @@ def body_key(func: FuncNode) -> tuple[str, ...]:
                 if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
                     names.setdefault(node.id, f"@local{len(names)}")
     normalizer = _LocalNames(names)
-    return (ast.dump(func.args), *(ast.dump(normalizer.visit(copy.deepcopy(s))) for s in body))
+    return (
+        ast.dump(func.args),
+        *(ast.dump(normalizer.visit(copy.deepcopy(s))) for s in within_deadline(body, deadline)),
+    )
 
 
-def canonicalize(source: Source) -> None:
-    Canonical(source).visit(source.tree)
+def canonicalize(source: Source, *, deadline: float = float("inf")) -> None:
+    Canonical(source, deadline).visit(source.tree)
 
 
-class _UnittestChecks(ast.NodeTransformer):
+class _UnittestChecks(DeadlineTransformer):
     """Represent standard TestCase checks as ordinary asserts for comparison."""
 
     def visit_Expr(self, node: ast.Expr) -> ast.AST:
@@ -168,8 +178,8 @@ class _UnittestChecks(ast.NodeTransformer):
         return ast.copy_location(ast.Assert(test=expr), node)
 
 
-def unittest_checks(func: FuncNode) -> None:
-    _UnittestChecks().visit(func)
+def unittest_checks(func: FuncNode, *, deadline: float = float("inf")) -> None:
+    _UnittestChecks(deadline).visit(func)
 
 
 def align_parameters(old: Source, new: Source, old_func: FuncNode, new_func: FuncNode) -> None:

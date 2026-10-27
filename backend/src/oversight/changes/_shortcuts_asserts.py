@@ -371,7 +371,10 @@ def detect_assertions(
     *,
     deadline: float = float("inf"),
 ) -> list[Finding]:
-    old, new = normalize_assertions(old), normalize_assertions(new)
+    old, new = (
+        normalize_assertions(old, deadline=deadline),
+        normalize_assertions(new, deadline=deadline),
+    )
     findings: list[Finding] = []
     if pairs is None:
         pairs = [(qual, qual) for qual in old.functions if qual in new.functions]
@@ -381,13 +384,13 @@ def detect_assertions(
         new_func = new.functions.get(new_qual)
         if new_func is None:
             continue
-        if same_test_body(old, old_func, new, new_func) and old_qual != new_qual:
+        if old_qual != new_qual and same_test_body(old, old_func, new, new_func):
             continue
         if single_case_inlined(old, old_qual, new, new_qual):
             continue
         align_parameters(old, new, old_func, new_func)
         align_local_names(old_func, new_func)
-        if body_key(old_func) == body_key(new_func):
+        if body_key(old_func, deadline=deadline) == body_key(new_func, deadline=deadline):
             continue
         findings.extend(detect_control(path, old_func, new_func, old, new))
         remaining_old, unmatched_new = _unmatched_assertions(old_func, new_func, old, new, deadline)
