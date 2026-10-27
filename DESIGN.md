@@ -278,11 +278,17 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | --- | --- | --- | --- |
 | Border of a changed node | solid | dashed | AGENTS.md: a dashed border means a pending change, changed and new alike |
 | Module names on the graph | Mono | Next | AGENTS.md: graph labels use Next |
+| State word and letter badge on a node | on the name's row, at the right | a second row under the name | the preset's leaf is 150px wide, too narrow for a long name, the word and the badge on one row; widening it would move every node |
+| State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
 | Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
 | Code-dim (line numbers, comments) | `#6d6d68`, 3.8:1 on page | `#7d7d78`, 4.7:1 | quality floor: text at 4.5:1 |
 | Text-box placeholder | `#6d6d68` | faint `#85857f`, 5.3:1 on field | same |
 | Exact call edge | `#4a4a46`, 2.4:1 on black | `#6a6a65`, 3.7:1 | quality floor: meaningful graphics at 3:1 |
 | Possible call edge | `#3a3a37`, 1.8:1 | `#5f5f5b`, 3.14:1 on a module frame at 90% over ground (3.28:1 on ground) | same, measured on its worst surface, unrounded; it stays thinner and grey |
+| Call edge no agent is at (watch) | full strength | quiet-edge, 0.45 opacity, until an agent reads, edits or changes a node it touches, or the person selects one | the demo graph has 47 edges across its frames; stepping back the ones nobody is at lets the others read. Context, like the dimmed nodes of review: the full edge returns on selection |
+| Edge draw order | not specified | frames, then edges, then leaf nodes; a frame's header is part of its frame, so an edge can still cross it | keeps a line from crossing a node's name without hiding the edges behind the frames' fill |
+| Task box keyboard hint | none | "Ctrl+Enter to start" under the box | the hint is how the keyboard starts an agent; a hint belongs next to what it starts |
+| Search, history and settings in the top bar | drawn | left out until each feature is built | a control that looks present and does nothing is worse than no control |
 | Input border | `#222222` to `#262626` | control-edge `#62625e`, 3.2:1 on field | quality floor: a control's boundary at 3:1 |
 | Task box fill | `#070707` | field `#0b0b0b` | one fill for every input |
 | Pressed rail button | `#161616` | raised `#121212` | one color for hover and pressed |
@@ -462,10 +468,12 @@ person is doing.
 - **Review mode:** a left panel opens at about half the width (880px of 1920); the same graph stays
   on the right; the agents panel folds into the agents rail (56px).
 - **Live diff and file view** use the same left panel. There is no third screen.
-- **Graph overlays** sit 24px from the graph's edges: heading top left, cone card top left in
-  review, legend bottom left, zoom controls bottom right.
+- **Graph overlays** sit 24px from the graph's edges: heading top left in watch only, cone card top
+  left in review, legend bottom left, zoom controls bottom right. With the left panel open and no
+  cone (live diff, file view) the top left is empty, as in the live sketch: the graph beside the
+  panel is framed on its own nodes, and a heading there would sit on top of them.
 - **Sizes:** buttons 40px tall, small buttons 34px; search box and queue counter 34px; chips 30px;
-  letter avatar 36px; status lamp 10px; distance badge 20px.
+  letter avatar 36px; status lamp 10px; distance badge and node letter badge 20px.
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
   every take. Switching modes changes the camera, never node positions. Edges are curves: orthogonal
@@ -505,6 +513,9 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
   hover the fill moves to text-hover, away from the label's color: white in the dark set (page
   text on it 19.56:1, 16.68:1 at rest), black in day mode (day-page text on day-text-hover
   19.59:1, 15.92:1 at rest). A day fill never goes to white, where its label would read 1.07:1.
+- **Review change (the ready agent card):** the agent's color as fill with on-agent text and an eye
+  icon, as in the sketches. It sits on that agent's own card, which already carries the color in
+  its lamp and pill.
 - **Secondary (Request changes, Message, Live diff):** transparent with an outline border.
 - **Destructive (Reject, Stop and discard):** failed-text label and icon, no fill.
 - **Focus:** every control shows a visible keyboard focus ring: 2px in text color, offset 2px,
@@ -519,12 +530,17 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 ### Cards / Containers
 
 - **Agent card:** card fill, card-border border, card radius. First row: status lamp, agent name,
-  model, and the status pill on the right. Then the task in one line, what the agent is doing now
-  ("Editing restock in inventory.py"), a step progress bar with "Step 7 of 25" and the cost, and the
-  last steps from `agent.step`, each with an icon, a short summary and its age. Buttons: Live diff,
-  and from level 2 Stop and discard.
+  model (its name as the run lists it, "Muse Spark"), and the status pill on the right. Then the task
+  in one line, what the agent is doing now ("Editing restock in inventory.py"), a step progress bar
+  with "Step 7 of 25" and the cost so far, and the last steps from `agent.step`, each with an icon,
+  a short summary and its age ("now", "40 s ago", "2 min ago"), counted from the latest event's time,
+  not the reader's clock. Buttons: Live diff, and from level 2 Stop and discard.
 - **Ready for review:** the card's pill changes to "Ready for review", its border turns the agent's
-  color, and a "Review change" button appears. Nothing else on the screen changes.
+  color and its lamp fills. The card's body then gives way to a summary of what the agent finished
+  with: tests ("28 of 28 pass", with an icon), the change ("+2 -0 in 1 file"), steps and cost; the
+  steps and the progress bar go, and a "Review change" button replaces Live diff. Nothing else on
+  the screen changes, and if the person's focus was in what went, it goes to the card, never
+  elsewhere.
 - **Status pill:** the agent's state in words ("Editing", "Revising", "Ready for review") on the
   agent's tint in its text color. It belongs to one agent, so it may carry that agent's color.
 - **Status lamp:** a 10px circle in the agent's color, filled when the agent needs the person,
@@ -544,8 +560,10 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 
 ### Navigation
 
-- **Top bar** (shell): product name, repository, branch and short commit hash (Mono), the search
-  box, the review queue counter, the spend total (level 2), history and settings icons.
+- **Top bar** (shell): product name, repository, branch and short commit hash (Mono), the review
+  queue counter and the spend total (level 2, the budget in whole dollars when it is round:
+  "US$150"). The search box, the history icon and the settings icon join the bar when each feature
+  is built, not before.
 - **Review queue counter:** "1 change ready for review" with a lamp, on raised. It counts across
   agents, so it is neutral, never an agent's color.
 - **Left rail** (shell): icon buttons; the current view's button on raised.

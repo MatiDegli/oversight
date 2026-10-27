@@ -9,6 +9,8 @@ import {
   includeNewNodes,
   nodesInViewport,
   prefersReducedMotion,
+  ZOOM_RANGE,
+  zoomBy,
 } from "./camera";
 
 const theme = getActiveTheme();
@@ -485,5 +487,29 @@ describe("watch growth", () => {
     includeNewNodes(cy, ["lone"], false);
     expect(animate).not.toHaveBeenCalled();
     expect({ zoom: cy.zoom(), pan: cy.pan() }).toEqual(viewport);
+  });
+});
+
+describe("zoomBy", () => {
+  it("zooms about the middle of the view and moves no node", () => {
+    const cy = narrowedGraph(1000);
+    const before = positions(cy);
+    // The model point under the middle of the view (500, 300) at zoom 1 and pan (20, 40).
+    zoomBy(cy, 2, true);
+    expect(cy.zoom()).toBe(2);
+    expect(cy.pan()).toEqual({ x: 500 + (20 - 500) * 2, y: 300 + (40 - 300) * 2 });
+    expect(positions(cy)).toEqual(before);
+    zoomBy(cy, 0.5, true);
+    expect(cy.zoom()).toBeCloseTo(1);
+    expect(cy.pan().x).toBeCloseTo(20);
+    expect(cy.pan().y).toBeCloseTo(40);
+  });
+
+  it("stays inside the zoom range, however far the person keeps pressing", () => {
+    const cy = narrowedGraph(1000);
+    for (let press = 0; press < 40; press++) zoomBy(cy, 1.25, true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.max);
+    for (let press = 0; press < 80; press++) zoomBy(cy, 0.8, true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
   });
 });

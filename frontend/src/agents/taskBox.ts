@@ -34,6 +34,13 @@ export function slotHolder(state: State, slot: Slot): AgentStatus | undefined {
   );
 }
 
+/** How many of the run's slots hold an agent, for the panel's "1 of 2 slots"; null before the run. */
+export function slotUsage(state: State): { held: number; total: number } | null {
+  if (!state.run) return null;
+  const slots = state.run.slots.map((info) => info.slot);
+  return { held: slots.filter((slot) => slotHolder(state, slot)).length, total: slots.length };
+}
+
 export const holderReason = (agent: AgentStatus) =>
   `Agent ${agent.slot} is ${holding[agent.state]}.`;
 

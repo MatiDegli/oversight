@@ -53,7 +53,9 @@ describe("the frame over the level 1 fixture", () => {
     const markup = (view: View) => render(20, view, { state });
     const card = markup(initialView);
     const bCard = card.slice(card.indexOf('<article aria-label="Agent B"'));
-    expect(bCard).toContain("muse-spark-open");
+    // The card names the model as the run does ("Muse Spark Open"), not by its id.
+    expect(bCard).toContain(">Muse Spark Open<");
+    expect(bCard).not.toContain("muse-spark-open");
     for (const token of ["text-agent-b-text", "bg-agent-b-tint", "border-agent-b", "bg-agent-b"])
       expect(bCard).toContain(token);
     const rail = markup({ selected: null, diff, review: null, file: null });
@@ -71,6 +73,19 @@ describe("the frame over the level 1 fixture", () => {
     expect(markup.match(/<article aria-label="Agent A"/g)).toHaveLength(1);
     expect(tag(markup, "Watch")).toContain('aria-current="page"');
     expect(markup).not.toContain("Live diff panel");
+  });
+
+  it("overlays the graph with the heading, the legend and the zoom controls", () => {
+    const markup = render(14);
+    for (const text of ["6 modules", "36 functions", "1 agent working", "Possible call", "Zoom in"])
+      expect(markup).toContain(text);
+    // In review the cone card takes the heading's place; the legend and the zoom stay.
+    const state = through(20);
+    const review = openReview(state, initialView, "change-1");
+    if (!review) throw new Error("Missing recorded review");
+    const reviewing = render(20, review);
+    expect(reviewing).not.toContain("agents working");
+    for (const text of ["Possible call", "Zoom in"]) expect(reviewing).toContain(text);
   });
 
   it("offers the card's Live diff only for a pending change with a file, and no decisions", () => {
@@ -105,6 +120,9 @@ describe("the frame over the level 1 fixture", () => {
       file: null,
     });
     expect(tag(markup, "Live diff panel")).toContain("w-[min(var(--review-panel-width),46vw)]");
+    // The heading is a watch overlay: beside the panel it would sit on the graph's own nodes.
+    expect(markup).not.toContain("agent working");
+    expect(markup).not.toContain("6 modules");
     expect(markup).toContain('aria-label="Live diff"');
     expect(markup).toContain("shop/pricing.py");
     expect(markup).toContain('aria-label="Close live diff"');
@@ -240,6 +258,8 @@ it("puts the file view in the same panel slot, folds the rail, and gives review 
   expect(tag(markup, "Repository graph")).toBe(tag(render(20), "Repository graph"));
   expect(markup).not.toContain("Live diff panel");
   expect(markup).not.toContain("Review panel");
+  expect(markup).not.toContain("6 modules");
+  expect(markup).toContain("Possible call");
   const reviewing = render(20, { ...view, review: "change-1" }, { files });
   expect(reviewing).toContain('aria-label="Review panel"');
   expect(reviewing).not.toContain('aria-label="File view"');

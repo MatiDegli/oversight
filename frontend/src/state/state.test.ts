@@ -377,9 +377,52 @@ describe("applyEvent", () => {
       ...createInitialState(),
       run: newRun,
       lastSeq: 1,
+      // The new run's first event is its "now"; nothing of the old run's times survives.
+      clock: "2026-10-27T14:03:12.345Z",
     });
     expect(applyEvent(dirty, event(2, "run.started", newRun))).toEqual({ ...dirty, gap: true });
     expect(applyEvent(dirty, event(1, "run.started", run))).toEqual({ ...dirty, gap: true });
+  });
+
+  it("keeps each step's event time by agent and step, and the latest event's time as the clock", () => {
+    const step = (seq: number, n: number, ts: string) => ({
+      ...event(seq, "agent.step", {
+        agent_id: agent.agent_id,
+        step: n,
+        tool: "read_file",
+        summary: "Read",
+        result: "ok",
+        error: null,
+        duration_ms: 1,
+        tests: null,
+      }),
+      ts,
+    });
+    const first = applyEvent(proposed(), step(6, 1, "2026-10-27T14:05:00.000Z"));
+    const second = applyEvent(first, step(7, 2, "2026-10-27T14:05:40.000Z"));
+    expect(second.stepTimes[agent.agent_id]).toEqual({
+      1: "2026-10-27T14:05:00.000Z",
+      2: "2026-10-27T14:05:40.000Z",
+    });
+    expect(second.clock).toBe("2026-10-27T14:05:40.000Z");
+    // Any event moves the clock, and the earlier maps are left as they were.
+    const later = applyEvent(second, {
+      ...event(8, "error", {
+        source: "server",
+        message: "Example",
+        agent_id: null,
+        change_id: null,
+        fatal: false,
+      }),
+      ts: "2026-10-27T14:06:00.000Z",
+    });
+    expect(later.clock).toBe("2026-10-27T14:06:00.000Z");
+    expect(first.stepTimes[agent.agent_id]).toEqual({ 1: "2026-10-27T14:05:00.000Z" });
+    // An event out of sequence changes neither.
+    const gap = applyEvent(later, { ...step(20, 3, "2026-10-27T14:07:00.000Z") });
+    expect(gap.gap).toBe(true);
+    expect(gap.clock).toBe(later.clock);
+    expect(gap.stepTimes).toBe(later.stepTimes);
   });
 
   it("patches main by id, retains positions, and keeps another change's overlay intact", () => {

@@ -168,6 +168,7 @@ describe("theme", () => {
     }
     expect(tokens["dim-node"]).toBe(0.16);
     expect(tokens["dim-module"]).toBe(0.6);
+    expect(tokens["quiet-edge"]).toBe(0.45);
   });
 
   it("loads the documented font weights from the installed packages", () => {

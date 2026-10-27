@@ -14,9 +14,18 @@ export function selectAgentCard(state: State, agentId: string) {
   const steps = state.steps[agentId] ?? [];
   return {
     agent,
+    /** The model's own name from the run ("Muse Spark"); the id when the run does not list it. */
+    modelLabel: state.run?.models.find((model) => model.id === agent.model)?.label ?? agent.model,
     steps: [...steps].reverse(),
+    /** When each step arrived, by step number, and the clock to read it against. */
+    stepTimes: state.stepTimes[agentId] ?? {},
+    now: state.clock,
     step: Math.max(agent.step, ...steps.map((step) => step.step)),
     readyForReview: agent.state === "ready_for_review",
+    /** What the agent proposed, with its tests; null until change.proposed arrives. */
+    proposal: state.changes[agent.change_id]?.proposal ?? null,
+    /** Null: unknown, as the server reported it. Undefined: no usage tick yet, so nothing to say. */
+    cost: state.agentCosts[agentId],
   };
 }
 
@@ -92,4 +101,19 @@ export function selectNodeMarks(state: State): Record<string, NodeMarks> {
     for (const id of focus.node_ids) get(id).focus[agent.slot] = focus.mode;
   }
   return marks;
+}
+
+/** What the graph's heading says: the repository, what is drawn of it, and who is at work. */
+export function selectGraphSummary(state: State) {
+  const nodes = state.graph?.nodes.filter((node) => !node.is_test) ?? [];
+  return {
+    repo: state.run?.workspace ?? null,
+    modules: nodes.filter((node) => node.kind === "module").length,
+    // Methods count as functions: the graph draws both the same way.
+    functions: nodes.filter((node) => node.kind === "function" || node.kind === "method").length,
+    working: Object.values(state.agents).filter(
+      (agent) =>
+        agent.state === "starting" || agent.state === "working" || agent.state === "revising",
+    ).length,
+  };
 }

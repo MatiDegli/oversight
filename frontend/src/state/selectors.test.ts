@@ -2,7 +2,7 @@ import type { AgentStatus, ChangeUpdated, ServerEvent } from "@contracts";
 import { describe, expect, it } from "vitest";
 
 import { appendEvent, panelEvents, through } from "./panels.fixture";
-import { selectAgentCard, selectLiveDiff, selectNodeMarks } from "./selectors";
+import { selectAgentCard, selectGraphSummary, selectLiveDiff, selectNodeMarks } from "./selectors";
 import { createChange, createInitialState } from "./types";
 
 describe("panel selectors over the level 1 fixture", () => {
@@ -26,6 +26,24 @@ describe("panel selectors over the level 1 fixture", () => {
     expect(selectAgentCard(through(19), "agent-1")?.readyForReview).toBe(false);
     expect(selectAgentCard(through(20), "agent-1")?.readyForReview).toBe(true);
     expect(selectAgentCard(through(23), "agent-1")?.readyForReview).toBe(false);
+  });
+
+  it("selects the card's model name, proposal and cost, each from its own event", () => {
+    const working = selectAgentCard(through(11), "agent-1");
+    expect(working?.modelLabel).toBe("Muse Spark");
+    expect(working?.proposal).toBeNull();
+    expect(working?.cost).toBeGreaterThan(0);
+    const ready = selectAgentCard(through(20), "agent-1");
+    expect(ready?.proposal?.tests.outcome).toBe("passed");
+    expect(ready?.proposal?.lines_added).toBe(2);
+    // No tick yet: nothing to say, which is not the same as unknown.
+    expect(selectAgentCard(through(4), "agent-1")?.cost).toBeUndefined();
+    // A model the run does not list shows its id.
+    const state = through(4);
+    const agent = state.agents["agent-1"];
+    if (!agent) throw new Error("Fixture needs agent-1");
+    state.agents["agent-1"] = { ...agent, model: "unlisted-model" };
+    expect(selectAgentCard(state, "agent-1")?.modelLabel).toBe("unlisted-model");
   });
 
   it("selects full contents by change and selected file as subsequent edits arrive", () => {
@@ -169,5 +187,39 @@ describe("selectNodeMarks", () => {
     ];
     const state = { ...createInitialState(), changes: { unknown: change } };
     expect(selectNodeMarks(state)).toEqual({ new: { pending: true, pendingSlots: [], focus: {} } });
+  });
+});
+
+describe("selectGraphSummary", () => {
+  it("counts modules and functions of main, tests left out, and the agents at work", () => {
+    expect(selectGraphSummary(createInitialState())).toEqual({
+      repo: null,
+      modules: 0,
+      functions: 0,
+      working: 0,
+    });
+    // The fixture's snapshot: 6 modules, 14 functions and 22 methods, 8 classes not counted.
+    expect(selectGraphSummary(through(2))).toEqual({
+      repo: "demo-repo",
+      modules: 6,
+      functions: 36,
+      working: 0,
+    });
+    expect(selectGraphSummary(through(4)).working).toBe(1);
+    expect(selectGraphSummary(through(20)).working).toBe(0);
+  });
+
+  it("leaves a test module and its functions out", () => {
+    const state = through(2);
+    const test = { path: "tests/t.py", start_line: 1, end_line: 2, parent_id: null, is_test: true };
+    const graph = {
+      ...state.graph,
+      nodes: [
+        ...(state.graph?.nodes ?? []),
+        { ...test, id: "tests.t", kind: "module", name: "t", qualname: "tests.t" },
+        { ...test, id: "tests.t:f", kind: "function", name: "f", qualname: "f" },
+      ],
+    } as NonNullable<typeof state.graph>;
+    expect(selectGraphSummary({ ...state, graph })).toEqual(selectGraphSummary(state));
   });
 });

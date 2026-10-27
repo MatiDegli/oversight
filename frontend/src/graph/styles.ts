@@ -1,9 +1,11 @@
-import type { StylesheetJson } from "cytoscape";
+import type { NodeSingular, StylesheetJson } from "cytoscape";
 import badgeFont from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-700-normal.woff2?inline";
 
 import type { getActiveTheme } from "../theme";
 
 import { nodeGeometry } from "./geometry";
+import { headerLayers, marksLayer, stackedHeaderLayers } from "./layers";
+import type { Layer, NodeMarks } from "./layers";
 
 export type EdgeShape = "bezier" | "taxi";
 // The product default. The dev-only query override lets make shots compare identical presets.
@@ -21,6 +23,13 @@ type Widen<T> = T extends string
     : { [K in keyof T]: Widen<T[K]> };
 type GraphTheme = Widen<ReturnType<typeof getActiveTheme>>;
 
+/**
+ * Draw order, low to high: frames, then edges, then leaf nodes. Edges run over a frame's fill but
+ * under every node's name and marks, so a line never crosses a label. (A frame's header is part of
+ * the frame, so a line can still cross it.)
+ */
+const LAYER = { frame: 1, edge: 2, leaf: 3 } as const;
+
 export function graphStyles(
   theme: GraphTheme,
   shape: EdgeShape = EDGE_CURVE_STYLE,
@@ -36,6 +45,63 @@ export function graphStyles(
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
   };
   const geometry = nodeGeometry(theme);
+  const distanceBadge = (node: NodeSingular): Layer => ({
+    image: badge(node.data("distance") as number),
+    width: badgeSize,
+    height: badgeSize,
+    x: "100%",
+    y: "0%",
+    offsetX: badgeSize / 2,
+    offsetY: -badgeSize / 2,
+    clip: "none",
+  });
+  const marks = (node: NodeSingular): Layer[] => {
+    const value = node.data("marks") as NodeMarks | undefined;
+    return value
+      ? [marksLayer(theme, value, { width: geometry.width, height: geometry.height })]
+      : [];
+  };
+  const cone = (node: NodeSingular): Layer[] =>
+    node.hasClass("cone") ? [distanceBadge(node)] : [];
+  const frameText = (node: NodeSingular) =>
+    [String(node.data("title") ?? ""), String(node.data("count") ?? "")] as const;
+  // A frame with children: its header row, which carries the agent's state word if one touches it.
+  // The row spans the frame's outer width: `width()` is its content, without the padding around it.
+  const frameLayers = (node: NodeSingular): Layer[] => [
+    ...headerLayers(
+      theme,
+      ...frameText(node),
+      node.outerWidth(),
+      node.data("marks") as NodeMarks | undefined,
+    ),
+    ...cone(node),
+  ];
+  // Everything without children: a leaf's state row, a childless frame's stacked header, and the
+  // distance badge when it is in the cone.
+  const leafLayers = (node: NodeSingular): Layer[] => [
+    ...(node.hasClass("module") || node.hasClass("class")
+      ? stackedHeaderLayers(
+          theme,
+          ...frameText(node),
+          { width: geometry.width, height: geometry.height },
+          node.data("marks") as NodeMarks | undefined,
+        )
+      : marks(node)),
+    ...cone(node),
+  ];
+  // One property per image: Cytoscape takes a list for each when a node carries several.
+  const layered = (layers: (node: NodeSingular) => Layer[]) => ({
+    "background-image": (node: NodeSingular) => layers(node).map((layer) => layer.image),
+    "background-width": (node: NodeSingular) => layers(node).map((layer) => layer.width),
+    "background-height": (node: NodeSingular) => layers(node).map((layer) => layer.height),
+    "background-position-x": (node: NodeSingular) => layers(node).map((layer) => layer.x),
+    "background-position-y": (node: NodeSingular) => layers(node).map((layer) => layer.y),
+    "background-offset-x": (node: NodeSingular) => layers(node).map((layer) => layer.offsetX),
+    "background-offset-y": (node: NodeSingular) => layers(node).map((layer) => layer.offsetY),
+    "background-clip": (node: NodeSingular) => layers(node).map((layer) => layer.clip),
+    "background-image-containment": (node: NodeSingular) =>
+      layers(node).map((layer) => (layer.clip === "none" ? "over" : "inside")),
+  });
   const pendingBorder = {
     "border-style": "dashed" as const,
     "border-width": theme["agent-border-width"],
@@ -64,6 +130,17 @@ export function graphStyles(
         // Keep the preset's proportions in units of the graph's body type.
         width: geometry.width,
         height: geometry.height,
+        "z-index-compare": "manual",
+        "z-index": LAYER.leaf,
+      },
+    },
+    {
+      // A leaf's name starts at the same left padding as the state word under it. The label sits
+      // outside the box's right edge, so a negative margin of the box's width brings it in.
+      selector: "node:childless",
+      style: {
+        "text-halign": "right",
+        "text-margin-x": -(geometry.width - px(theme["spacing-md"])),
       },
     },
     {
@@ -80,7 +157,29 @@ export function graphStyles(
     },
     {
       selector: "node.module:parent, node.class:parent",
-      style: { "text-valign": "top", padding: `${String(geometry.padding)}px` },
+      style: {
+        "text-valign": "top",
+        padding: `${String(geometry.padding)}px`,
+        "z-index": LAYER.frame,
+      },
+    },
+    {
+      // A frame's title and count are its header row, drawn as images; its label would sit above it.
+      selector: "node:parent",
+      style: { label: "", ...layered(frameLayers) },
+    },
+    {
+      // An empty module or class is a leaf-sized box; it still wears its frame's title and count.
+      selector: "node.module:childless, node.class:childless",
+      style: { label: "", ...layered(leafLayers) },
+    },
+    {
+      // The state word and badges take the bottom row, so the name moves up to make room.
+      selector: "node.marked:childless",
+      style: {
+        "text-margin-y": -geometry.height / 6,
+        ...layered(leafLayers),
+      },
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
       (["A", "B"] as const).map((slot) => {
@@ -140,19 +239,16 @@ export function graphStyles(
       style: { "outline-color": theme.text, "outline-width": theme["selected-ring-width"] },
     },
     {
+      // The distance badge hangs over the node's top-right corner, outside its box. A node that
+      // also carries other images gets the badge in its own layered list (frameLayers, leafLayers).
       selector: "node.cone",
       style: {
-        "background-image": (node) => badge(node.data("distance") as number),
-        "background-width": theme["distance-badge-size"],
-        "background-height": theme["distance-badge-size"],
-        "background-position-x": "100%",
-        "background-position-y": "0%",
-        "background-offset-x": badgeSize / 2,
-        "background-offset-y": -badgeSize / 2,
-        "background-image-containment": "over",
-        "background-clip": "none",
         "bounds-expansion": badgeSize / 2,
       },
+    },
+    {
+      selector: "node.cone:childless",
+      style: layered(leafLayers),
     },
     {
       selector: "edge",
@@ -164,6 +260,8 @@ export function graphStyles(
         "target-arrow-color": theme.edge,
         "target-arrow-shape": "triangle",
         width: theme["exact-edge-width"],
+        "z-index-compare": "manual",
+        "z-index": LAYER.edge,
       },
     },
     { selector: "edge.imports", style: { "target-arrow-shape": "chevron" } },
@@ -195,6 +293,9 @@ export function graphStyles(
         "target-arrow-color": theme["edge-possible"],
       },
     },
+    // Watch mode: an edge no agent touches steps back; one at a node the person selected comes back.
+    { selector: "edge.quiet", style: { opacity: theme["quiet-edge"] } },
+    { selector: "edge.touching", style: { opacity: 1 } },
     { selector: "node.dimmed, edge.dimmed", style: { opacity: theme["dim-node"] } },
     { selector: "node.module.dimmed", style: { opacity: theme["dim-module"] } },
     {
@@ -203,6 +304,7 @@ export function graphStyles(
       style: {
         opacity: 1,
         "background-opacity": theme["module-opacity"] * theme["dim-node"],
+        "background-image-opacity": theme["dim-node"],
         "border-opacity": theme["dim-node"],
         "text-opacity": theme["dim-node"],
       },
@@ -211,6 +313,7 @@ export function graphStyles(
       selector: "node.module:parent.dimmed",
       style: {
         "background-opacity": theme["module-opacity"] * theme["dim-module"],
+        "background-image-opacity": theme["dim-module"],
         "border-opacity": theme["dim-module"],
         "text-opacity": theme["dim-module"],
       },

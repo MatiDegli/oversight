@@ -123,6 +123,16 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
     run again on a fresh worker.
 - **The frontend's lint is type-aware** (`strictTypeChecked`), with the exhaustive-switch rule on,
   so a new event type fails the build until every switch handles it.
+- **Impeccable's scan reads the replay site, not the live page** (2026-10-27). The scan failed in
+  every `make shots` run with "Navigation timeout of 30000 ms exceeded". Cause, reproduced with a
+  page of one line: the detector's navigation finishes only when the page holds no connection, and
+  the live page keeps `/events` open for as long as it runs, so it never finishes (a page without
+  the stream finished in 2 s). A longer timeout would only have waited longer. The scan now loads a
+  second Vite server in replay mode, serving the same log: the static site judges open, which
+  opens nothing after load. Replay follows a log's own gaps, so `scan-log.ts` gives every event the
+  first one's time and the page is complete at load (seq 20 at network idle, checked). The captures
+  still use the live page. The scan stays optional when the detector is missing, and `make shots`
+  now prints the findings, not only where the file is.
 
 ## Contracts v1
 
@@ -183,6 +193,24 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   they are told why, and the merge stays a deliberate pointer act.
 - **Bezier edges kept over taxi (maintainer, 2026-10-26):** captures of both on the preset layout
   were compared; curves read better.
+- **Visual parity round 1 (maintainer, 2026-10-27).** Nothing moves; each answer below is built.
+  Edges draw under leaf nodes and quiet down (0.45) unless an agent is at them or the person
+  selects a node; frame headers can still be crossed by an edge (a frame is one node, and its fill
+  would hide the edges behind it). Search, history and settings are left out of the top bar until
+  each is built, with no logo mark or Ctrl K hint. The ready card shows the summary only. The Agents
+  heading counts slots in use and the task box is pinned to the panel's bottom. The legend names
+  "Editing or changed" (dashed and filled: editing is dashed here, solid only in the sketch). Each
+  step shows its age against the latest event's time, kept per step in the state, so a replay reads
+  as it did live. The budget is "US$150" when round. Module file names stay in Next. A touched frame
+  says its state in its header and gives up its count while it does; an empty module or class
+  stacks its title and count. If the person's focus was in what leaves a card (the step list, Live
+  diff), the card takes it, and only then.
+- **Review change takes its agent's color (2026-10-27, approved by the maintainer):** the sketches
+  fill the button with the agent's color and the dark on-agent letters, and DESIGN.md's button list
+  does not name it (primary is text-colored for Approve and merge, Send and Start agent). It
+  follows the sketch: it sits on that agent's own card, beside the lamp and the status pill that
+  already carry the color, and its label and eye icon say what it does. Cost: two primary looks on
+  the screen. Reverting is one class (`bg-text text-page`).
 
 - **Watch growth includes a new node only outside a panel and after navigation rests:** if an
   added node lands outside the viewport, the camera may widen to include it. It waits three seconds

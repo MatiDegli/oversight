@@ -24,10 +24,10 @@ export function applyEvent(state: State, event: ServerEvent): State {
   if (event.seq !== (newRun ? 1 : state.lastSeq + 1)) return { ...state, gap: true };
   if (!state.run && event.type !== "run.started") return { ...state, gap: true };
 
-  const next = { ...state, lastSeq: event.seq, gap: false };
+  const next = { ...state, lastSeq: event.seq, gap: false, clock: event.ts };
   switch (event.type) {
     case "run.started":
-      return { ...createInitialState(), run: event.payload, lastSeq: event.seq };
+      return { ...createInitialState(), run: event.payload, lastSeq: event.seq, clock: event.ts };
     case "graph.snapshot":
       return { ...next, graph: event.payload };
     case "graph.delta": {
@@ -78,6 +78,10 @@ export function applyEvent(state: State, event: ServerEvent): State {
         steps: {
           ...state.steps,
           [step.agent_id]: [...(state.steps[step.agent_id] ?? []), step],
+        },
+        stepTimes: {
+          ...state.stepTimes,
+          [step.agent_id]: { ...state.stepTimes[step.agent_id], [step.step]: event.ts },
         },
       };
     }
@@ -153,16 +157,19 @@ export function applyEvent(state: State, event: ServerEvent): State {
       };
     }
     case "usage.tick": {
+      const tick = event.payload;
+      const before = state.agentCosts[tick.agent_id];
+      // Unknown stays unknown: a later tick with a cost does not make the total known again.
+      const cost = tick.cost_usd === null || before === null ? null : (before ?? 0) + tick.cost_usd;
       // The status names a profile; the tick's model is the provider's reported API id.
-      const modelId = state.agents[event.payload.agent_id]?.model;
+      const modelId = state.agents[tick.agent_id]?.model;
       const profile = state.run?.models.find((model) => model.id === modelId);
       return {
         ...next,
-        usage: event.payload,
+        usage: tick,
+        agentCosts: { ...state.agentCosts, [tick.agent_id]: cost },
         spendUnknown:
-          !profile || profile.provider === "meta"
-            ? event.payload.cost_usd === null
-            : state.spendUnknown,
+          !profile || profile.provider === "meta" ? tick.cost_usd === null : state.spendUnknown,
       };
     }
     case "error":

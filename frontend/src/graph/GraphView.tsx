@@ -8,7 +8,13 @@ import type { RefObject } from "react";
 import { stateStore } from "../state";
 import { getActiveTheme } from "../theme";
 
-import { frameCamera, includeNewNodes, nodesInViewport, prefersReducedMotion } from "./camera";
+import {
+  frameCamera,
+  includeNewNodes,
+  nodesInViewport,
+  prefersReducedMotion,
+  zoomBy,
+} from "./camera";
 import type { Camera, Framing } from "./camera";
 import { graphElements } from "./elements";
 import { exposeProbe } from "./probe";
@@ -19,6 +25,16 @@ import { updateGraph } from "./updateGraph";
 cytoscape.use(fcose);
 
 const NAVIGATION_QUIET_MS = 3000;
+
+/** What the zoom buttons ask of the graph. Each call moves the camera and never a node. */
+export interface GraphApi {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  /** The whole graph in view, as at the start. */
+  fit: () => void;
+}
+
+const ZOOM_STEP = 1.25;
 
 export interface GraphViewProps {
   /** The node with the selected ring. The app owns it; taps only report. */
@@ -45,6 +61,8 @@ export interface GraphViewProps {
   onFramed?: (framing: Framing | null) => void;
   /** The actual overlay box, measured independently from the column used for fitting. */
   coneCardRef?: RefObject<HTMLDivElement | null>;
+  /** Filled while the graph exists, for the zoom buttons; empty before it is created and after. */
+  apiRef?: RefObject<GraphApi | null>;
 }
 
 function reportFraming(
@@ -90,6 +108,7 @@ export function GraphView({
   frameKey = null,
   onFramed,
   coneCardRef,
+  apiRef,
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
   const graph = useRef<Core | undefined>(undefined);
@@ -213,6 +232,19 @@ export function GraphView({
         latest.current.onNodeTap?.((event.target as NodeSingular).id());
       });
       graph.current = cy;
+      if (apiRef) {
+        apiRef.current = {
+          zoomIn: () => {
+            zoomBy(cy, ZOOM_STEP, prefersReducedMotion());
+          },
+          zoomOut: () => {
+            zoomBy(cy, 1 / ZOOM_STEP, prefersReducedMotion());
+          },
+          fit: () => {
+            frameCamera(cy, [], prefersReducedMotion());
+          },
+        };
+      }
       const unexpose = exposeProbe(host, cy);
       const unsubscribe = stateStore.subscribe(sync);
       sync();
@@ -248,6 +280,7 @@ export function GraphView({
       };
       observeCard.current();
       dispose = () => {
+        if (apiRef) apiRef.current = null;
         unsubscribe();
         unexpose();
         resize.disconnect();
@@ -269,7 +302,7 @@ export function GraphView({
       cancelled = true;
       dispose?.();
     };
-  }, []);
+  }, [apiRef]);
   return (
     <div
       ref={container}

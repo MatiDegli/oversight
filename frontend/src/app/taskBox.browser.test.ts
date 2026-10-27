@@ -304,3 +304,30 @@ it(
     });
   },
 );
+
+it(
+  "keeps the focus where it was when the card's step list goes at the proposal, and never takes it",
+  { timeout: 40_000 },
+  async () => {
+    await withPage(async (page) => {
+      await apply(page, 18);
+      const steps = page.getByRole("list", { name: /steps, newest first/ });
+      const card = page.getByRole("article", { name: "Agent A" });
+      // In the step list: it unmounts at the proposal, and the card, where the focus was, keeps it.
+      await steps.focus();
+      await browserExpect(steps).toBeFocused();
+      await apply(page, 20);
+      await browserExpect(steps).toHaveCount(0);
+      await browserExpect(card).toBeFocused();
+    });
+    await withPage(async (page) => {
+      await apply(page, 18);
+      // Typing in the task box when the list goes: the box keeps the focus.
+      await box(page).focus();
+      await apply(page, 20);
+      await browserExpect(page.getByRole("list", { name: /steps, newest first/ })).toHaveCount(0);
+      await browserExpect(box(page)).toBeFocused();
+      expect(await focused(page)).toBe("textarea");
+    });
+  },
+);

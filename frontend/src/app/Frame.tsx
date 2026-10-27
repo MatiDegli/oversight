@@ -1,19 +1,20 @@
 import type { AgentStatus, StartAgent } from "@contracts";
-import { GitBranch, Network, X } from "lucide-react";
+import { Network, X } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { AgentCard, TaskBox } from "../agents";
+import { AgentCard, slotUsage, TaskBox } from "../agents";
 import { FileView, LiveDiff } from "../editor";
 import type { FileAccess } from "../editor";
 import { GraphView } from "../graph";
-import type { Framing } from "../graph";
+import type { Framing, GraphApi } from "../graph";
 import { ImpactConeCard, ReviewPanel } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
-import { SpendMeter } from "./SpendMeter";
-import { changeNodeIds, litNodeIds, panelOpen, readyCount } from "./view";
+import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
+import { TopBar } from "./TopBar";
+import { changeNodeIds, litNodeIds, panelOpen } from "./view";
 import type { View } from "./view";
 
 type AgentState = AgentStatus["state"];
@@ -72,46 +73,6 @@ export interface FrameProps {
   notice?: ReactNode;
 }
 
-function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () => void }) {
-  const ready = readyCount(state);
-  const commit = state.graph?.commit ?? state.run?.base_commit;
-  return (
-    <header className="flex h-(--top-bar-height) shrink-0 items-center gap-3.5 border-b border-divider bg-shell px-4.5">
-      <span className="text-(length:--brand-size) font-bold">Oversight</span>
-      {state.run && (
-        <p className="flex min-w-0 items-center gap-2.5 text-sm text-muted">
-          <span className="truncate text-text">{state.run.workspace}</span>
-          <span className="inline-flex items-center gap-1.5">
-            <GitBranch aria-hidden="true" className="size-4" /> main
-          </span>
-          {commit && (
-            <span className="font-mono" title={commit}>
-              {commit.slice(0, 7)}
-            </span>
-          )}
-        </p>
-      )}
-      {/* Always mounted, so the counter's arrival is announced and nothing else moves. */}
-      <div role="status" aria-label="Review queue" className="ml-auto flex items-center">
-        {ready > 0 && (
-          <button
-            type="button"
-            disabled={onOpenQueue === undefined}
-            onClick={onOpenQueue}
-            title="Open the next change in review"
-            className={`inline-flex h-(--queue-counter-height) items-center gap-2 rounded-full bg-raised px-3.5 text-sm text-text enabled:hover:bg-page-raised ${focusRing}`}
-          >
-            <span aria-hidden="true" className="size-(--status-lamp-size) rounded-full bg-text" />
-            <span className="font-mono">{ready}</span>{" "}
-            {ready === 1 ? "change ready for review" : "changes ready for review"}
-          </button>
-        )}
-      </div>
-      <SpendMeter state={state} />
-    </header>
-  );
-}
-
 function LeftRail({ watching, onWatch }: { watching: boolean; onWatch: () => void }) {
   return (
     <nav
@@ -156,36 +117,43 @@ function AgentsPanel({
     const data = selectAgentCard(state, agent.agent_id);
     return data ? [data] : [];
   });
-  // One keyed list, so the new-agent box keeps its place in the tree (and the person's focus)
-  // when the first card appears above it.
-  const body = [
-    ...cards.map((data) => {
-      const review = canReview?.(data.agent.change_id) === true;
-      return (
-        <AgentCard
-          key={data.agent.agent_id}
-          data={data}
-          onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
-          onReview={review ? onReview : undefined}
-        />
-      );
-    }),
-    <TaskBox key="new-agent" state={state} onStart={onStartAgent} replayOf={replayOf} />,
-  ];
-  if (cards.length === 0) {
-    body.push(
-      <p key="empty" className="text-sm text-muted">
-        No agents yet. Each agent gets a card here when it starts.
-      </p>,
-    );
-  }
+  const slots = slotUsage(state);
   return (
     <aside
       aria-label="Agents"
-      className="flex w-(--agents-panel-width) shrink-0 flex-col gap-2.5 overflow-y-auto border-l border-divider bg-panel p-3.5"
+      className="flex w-(--agents-panel-width) shrink-0 flex-col border-l border-divider bg-panel"
     >
-      <h2 className="text-(length:--title-size) font-bold">Agents</h2>
-      {body}
+      <div className="flex items-baseline gap-2.5 px-3.5 pt-3.5 pb-2.5">
+        <h2 className="text-(length:--title-size) font-bold">Agents</h2>
+        {slots && (
+          <span className="text-sm text-muted">
+            {slots.held} of {slots.total} {slots.total === 1 ? "slot" : "slots"}
+          </span>
+        )}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 pb-3.5">
+        {cards.map((data) => {
+          const review = canReview?.(data.agent.change_id) === true;
+          return (
+            <AgentCard
+              key={data.agent.agent_id}
+              data={data}
+              onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
+              onReview={review ? onReview : undefined}
+            />
+          );
+        })}
+        {cards.length === 0 && (
+          <p className="text-sm text-muted">
+            No agents yet. Each agent gets a card here when it starts.
+          </p>
+        )}
+      </div>
+      {/* Pinned to the bottom, as in the sketch: a card appearing above never moves it, or the
+          person's focus in it. */}
+      <div className="shrink-0 border-t border-divider p-3.5">
+        <TaskBox state={state} onStart={onStartAgent} replayOf={replayOf} />
+      </div>
     </aside>
   );
 }
@@ -292,6 +260,7 @@ export function Frame(props: FrameProps) {
   const frameKey = view.review === null ? shown : `review:${view.review}`;
   const [framing, setFraming] = useState<{ key: string | null; outOfView: ReadonlySet<string> }>();
   const coneCardRef = useRef<HTMLDivElement>(null);
+  const graphApi = useRef<GraphApi | null>(null);
   const onFramed = useCallback(
     (result: Framing | null) => {
       setFraming({ key: frameKey, outOfView: result?.outOfView ?? new Set() });
@@ -334,25 +303,43 @@ export function Frame(props: FrameProps) {
             frameKey={frameKey}
             onFramed={onFramed}
             coneCardRef={coneCardRef}
+            apiRef={graphApi}
           />
-          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex max-w-(--cone-card-width) flex-col items-start gap-(--spacing-md)">
-            {cone && (
-              <div ref={coneCardRef} className="pointer-events-auto min-h-0 w-full overflow-auto">
-                <ImpactConeCard
-                  cone={cone}
-                  outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
-                  nodes={[...(state.graph?.nodes ?? []), ...(reviewed?.graph.nodes_added ?? [])]}
-                />
-              </div>
-            )}
-          </div>
-          {notice && (
-            <div
-              className={`absolute left-(--spacing-overlay) text-muted ${cone ? "bottom-(--spacing-overlay)" : "top-(--spacing-overlay)"}`}
-            >
-              {notice}
+          {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
+              review) top left, the legend bottom left, the zoom controls bottom right. */}
+          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col justify-between gap-(--spacing-md)">
+            <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
+              {cone ? (
+                <div
+                  ref={coneCardRef}
+                  className="pointer-events-auto min-h-0 w-full max-w-(--cone-card-width) overflow-auto"
+                >
+                  <ImpactConeCard
+                    cone={cone}
+                    outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
+                    nodes={[...(state.graph?.nodes ?? []), ...(reviewed?.graph.nodes_added ?? [])]}
+                  />
+                </div>
+              ) : (
+                // The narrower graph beside the editor panel is framed on its own nodes, so a
+                // heading there would sit on top of them: it is a watch-mode overlay.
+                !open && (
+                  <div className="pointer-events-auto">
+                    <GraphHeading state={state} />
+                  </div>
+                )
+              )}
+              {notice && <div className="pointer-events-auto text-muted">{notice}</div>}
             </div>
-          )}
+            <div className="flex items-end justify-between gap-(--spacing-lg)">
+              <div className="pointer-events-auto min-w-0">
+                <Legend state={state} />
+              </div>
+              <div className="pointer-events-auto shrink-0">
+                <ZoomControls api={graphApi} />
+              </div>
+            </div>
+          </div>
         </main>
         {open ? (
           <AgentsRail state={state} />

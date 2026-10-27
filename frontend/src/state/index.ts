@@ -1,16 +1,17 @@
 export { applyEvent } from "./applyEvent";
-export { selectSpend } from "./spend";
+export { formatBudget, formatUsd, selectSpend } from "./spend";
 export {
   selectAgentCard,
   selectLiveDiff,
   selectAgents,
   selectChangeForAgent,
+  selectGraphSummary,
   selectHasReadyForReview,
   selectLitNodes,
   selectNodeMarks,
   selectPendingChanges,
 } from "./selectors";
-export type { AgentCardData, LiveDiffData } from "./selectors";
+export type { AgentCardData, LiveDiffData, NodeMarks } from "./selectors";
 export { createStateStore, stateStore } from "./store";
 export type { StateStore } from "./store";
 export { createInitialState } from "./types";
