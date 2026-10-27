@@ -79,6 +79,42 @@ class _SplitTuple(ast.NodeTransformer):
         return node
 
 
+def _binding_values(
+    func: FuncNode, *, include_plain: bool = True
+) -> dict[str, list[tuple[str, str, str]]]:
+    """Track each name's sources and unpacking positions, independent of lines.
+
+    A type annotation does not change an assigned value. Iteration and context
+    manager targets receive different values from a plain assignment, even
+    when their source expressions agree.
+    """
+    result: dict[str, list[tuple[str, str, str]]] = {}
+
+    def bind(target: ast.expr, value: ast.expr, kind: str, position: str = "") -> None:
+        if isinstance(target, ast.Name):
+            result.setdefault(target.id, []).append((kind, ast.dump(value), position))
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for index, item in enumerate(target.elts):
+                bind(item, value, kind, f"{position}/{index}")
+        elif isinstance(target, ast.Starred):
+            bind(target.value, value, kind, f"{position}/*")
+
+    for node in walk_local(func):
+        if isinstance(node, ast.Assign):
+            if include_plain:
+                for target in node.targets:
+                    bind(target, node.value, "value")
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and node.value is not None:
+            bind(node.target, node.value, "value")
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            bind(node.target, node.iter, type(node).__name__)
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                if item.optional_vars is not None:
+                    bind(item.optional_vars, item.context_expr, type(node).__name__)
+    return result
+
+
 def align_local_names(before: FuncNode, after: FuncNode) -> None:
     """Align single-bound locals with identical values, even when setup grew."""
 
@@ -108,18 +144,6 @@ def align_local_names(before: FuncNode, after: FuncNode) -> None:
         for key, name in left.items()
         if key in right and (right[key] == name or right[key] not in existing)
     }
-    # Store contexts cover annotated/walrus assignments and destructured
-    # for/with targets too. Capture matters even if their values don't match
-    # the narrow plain-assignment patterns used for safe name alignment.
-    old_stores, new_stores = (
-        Counter(
-            n.id
-            for n in walk_local(func)
-            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
-        )
-        for func in (before, after)
-    )
-    captured = set(new_stores - old_stores) & existing
     # Nested scope bindings can shadow a local; don't rewrite across them.
     if any(
         isinstance(
@@ -129,11 +153,26 @@ def align_local_names(before: FuncNode, after: FuncNode) -> None:
         for n in ast.walk(stmt)
     ):
         return
+    # Apply safe renames to dependent binding values before comparing them.
     for node in walk_local(before):
         if isinstance(node, ast.Name):
+            node.id = mapping.get(node.id, node.id)
+    # Equal store counts can still replace a checked binding. Compare sources
+    # per name, including annotated/walrus assignments and for/with targets.
+    old_bindings, new_bindings = _binding_values(before), _binding_values(after)
+    nonplain = _binding_values(after, include_plain=False)
+    captured = {
+        name
+        for name in new_bindings
+        if name in existing
+        and new_bindings[name] != old_bindings.get(name)
+        and (name in nonplain or len(new_bindings[name]) > len(old_bindings.get(name, [])))
+    }
+    for node in walk_local(before):
+        if isinstance(node, ast.Name) and node.id in captured:
             # Keep a captured fixture/global distinct even if the assertion's
             # spelling is unchanged: it no longer checks the same binding.
-            node.id = f"@before:{node.id}" if node.id in captured else mapping.get(node.id, node.id)
+            node.id = f"@before:{node.id}"
 
 
 def normalize_assertions(source: Source) -> Source:

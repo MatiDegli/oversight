@@ -58,7 +58,7 @@ def _same_constraints(before: list[tuple[int, str]], after: list[tuple[int, str]
     old_text = " ".join(text for _, text in before).lower()
     new_text = " ".join(text for _, text in after).lower()
     numbers = Counter(re.findall(r"\b\d+(?:\.\d+)?\b", old_text))
-    words = set(re.findall(r"\w+", old_text)) & set(re.findall(r"\w+", new_text))
+    words = set(re.findall(r"[^\W\d_]+", old_text)) & set(re.findall(r"[^\W\d_]+", new_text))
     weaker = any(
         phrase in new_text and phrase not in old_text
         for phrase in (
@@ -76,7 +76,7 @@ def _same_constraints(before: list[tuple[int, str]], after: list[tuple[int, str]
     return bool(
         numbers
         and numbers == Counter(re.findall(r"\b\d+(?:\.\d+)?\b", new_text))
-        and len(words) >= 2
+        and words
         and not weaker
     )
 
@@ -89,8 +89,12 @@ def _direct_match(before: str, after: str) -> bool:
     """
     before, after = before.lower(), after.lower()
     numbers = Counter(re.findall(r"\b\d+(?:\.\d+)?\b", before))
-    words = set(re.findall(r"\w+", before)) & set(re.findall(r"\w+", after))
-    return len(words) >= 2 and numbers <= Counter(re.findall(r"\b\d+(?:\.\d+)?\b", after))
+    old_words = set(re.findall(r"[^\W\d_]+", before))
+    words = old_words & set(re.findall(r"[^\W\d_]+", after))
+    # One word can anchor punctuation-only wording or a numeric comparison
+    # with two explicit operands. A single number cannot replace a lost word.
+    anchored = len(words) >= 2 or bool(words and (words == old_words or sum(numbers.values()) >= 2))
+    return anchored and numbers <= Counter(re.findall(r"\b\d+(?:\.\d+)?\b", after))
 
 
 def cancel_reworded(
