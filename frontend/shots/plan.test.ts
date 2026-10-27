@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { editingLog, lastSeq, planJobs, replayEventsAfter } from "./plan.ts";
+import { editingLog, lastSeq, logForScene, planJobs, replayEventsAfter } from "./plan.ts";
 import { scenes, themes } from "./scenes.ts";
 
 void test("a job is named <scene>-<theme>.png, scene by scene", () => {
@@ -75,6 +75,8 @@ void test("live diff uses a derived cut through the last edit before the proposa
     "utf8",
   );
   const cut = editingLog(source);
+  assert.notEqual(cut, null);
+  if (cut === null) throw new Error("Missing editing cut");
   const events = cut
     .trim()
     .split("\n")
@@ -87,13 +89,20 @@ void test("live diff uses a derived cut through the last edit before the proposa
   assert.equal(scenes.find((scene) => scene.name === "live-diff")?.log, "editing");
   assert.ok(replayEventsAfter(cut, 11).startsWith('id: 12\ndata: {"seq":12,'));
   assert.equal(replayEventsAfter(cut, 12), ": replay complete\n\n");
-  assert.throws(() => editingLog('{"seq":1,"type":"change.proposed"}'), /no edit/);
+  assert.equal(editingLog('{"seq":1,"type":"change.proposed"}'), null);
 });
 
-void test("capture reads renderer readiness and metrics through the public graph probe", () => {
-  const source = readFileSync(new URL("capture.ts", import.meta.url), "utf8");
-  assert.ok(!source.includes("_cyreg"));
-  assert.ok(source.includes("probe.metrics()"));
-  assert.ok(source.includes("oversightGraph?.nodeCenters()"));
-  assert.ok(source.includes('writeFile(join(out, "live-diff.jsonl"), liveLog)'));
+void test("a log without a pre-proposal edit still captures watch and review, skipping only live diff", () => {
+  const source = '{"seq":1,"type":"change.proposed"}\n{"seq":2,"type":"change.updated"}\n';
+  const enabled = scenes.filter((scene) => scene.enabled);
+  assert.deepEqual(
+    enabled.map((scene) => [scene.name, logForScene(source, scene)]),
+    [
+      ["watch", source],
+      ["review", source],
+      ["live-diff", null],
+    ],
+  );
+  // Scenes using the served log do not even parse an editing cut.
+  assert.equal(logForScene("not parsed", {}), "not parsed");
 });

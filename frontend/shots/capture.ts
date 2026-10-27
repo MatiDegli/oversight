@@ -14,7 +14,7 @@ import { chromium } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph/probe.ts";
 
-import { editingLog, lastSeq, planJobs } from "./plan.ts";
+import { logForScene, lastSeq, planJobs } from "./plan.ts";
 import { streamReplay } from "./replay.ts";
 import { scenes, themes } from "./scenes.ts";
 
@@ -67,11 +67,10 @@ async function waitUntilReady(page: Page, seq: number): Promise<void> {
 
 async function main(): Promise<number> {
   const sourceLog = await readFile(resolve(log), "utf8");
-  const liveLog = editingLog(sourceLog);
+  let liveLog = "";
   const expectedSeq = lastSeq(sourceLog);
   stdout.write(`shots: waiting for fixture seq ${String(expectedSeq)} and the graph renderer\n`);
   await clearPreviousSet();
-  await writeFile(join(out, "live-diff.jsonl"), liveLog);
 
   // This tiny player serves only the derived cut. Keep SSE open so the live-diff scene has the
   // same healthy connection as the full player's scenes, including reconnects by cursor.
@@ -95,6 +94,17 @@ async function main(): Promise<number> {
         continue;
       }
       const scene = scenes.find((candidate) => candidate.name === job.scene);
+      const captureLog = logForScene(sourceLog, scene ?? {});
+      if (captureLog === null) {
+        stdout.write(
+          `shots: skipped ${job.file} (the event log has no edit before its first proposal)\n`,
+        );
+        continue;
+      }
+      if (scene?.log === "editing") {
+        liveLog = captureLog;
+        await writeFile(join(out, "live-diff.jsonl"), liveLog);
+      }
       const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
       context.setDefaultTimeout(TIMEOUT_MS);
       const page = await context.newPage();
@@ -113,7 +123,7 @@ async function main(): Promise<number> {
         const target = new URL(url);
         if (job.edgeShape) target.searchParams.set("edge-shape", job.edgeShape);
         await page.goto(target.href, { waitUntil: "load" });
-        await waitUntilReady(page, scene?.log === "editing" ? lastSeq(liveLog) : expectedSeq);
+        await waitUntilReady(page, lastSeq(captureLog));
         await scene?.prepare?.(page);
         await page.evaluate((theme) => {
           document.documentElement.dataset.theme = theme;

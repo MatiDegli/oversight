@@ -18,6 +18,8 @@ import { updateGraph } from "./updateGraph";
 
 cytoscape.use(fcose);
 
+const NAVIGATION_QUIET_MS = 3000;
+
 export interface GraphViewProps {
   /** The node with the selected ring. The app owns it; taps only report. */
   selectedId?: string | null;
@@ -167,11 +169,12 @@ export function GraphView({
       });
       cy.on("tapend", () => {
         interacting = false;
+        quietUntil = performance.now() + NAVIGATION_QUIET_MS;
       });
       cy.on("dragpan scrollzoom pinchzoom", () => {
         arriving.clear();
         cy.stop();
-        quietUntil = performance.now() + Number.parseFloat(theme["transition-duration"]);
+        quietUntil = performance.now() + NAVIGATION_QUIET_MS;
       });
       const sync = () => {
         // A second addition can arrive before the first ease ends. Include both targets when
