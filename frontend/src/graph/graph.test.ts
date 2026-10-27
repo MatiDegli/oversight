@@ -543,6 +543,78 @@ describe("graph mapping", () => {
     expect(decodeURIComponent(images[1] ?? "")).toContain(">1</text>");
   });
 
+  describe("frames an agent touches or leaves empty", () => {
+    const touch = (state: State, ids: string[], mode: "read" | "edit" = "read") =>
+      applyEvent(
+        state,
+        event(state.lastSeq + 1, "agent.focus", {
+          agent_id: a.agent_id,
+          mode,
+          node_ids: ids,
+          ranges: [],
+        }),
+      );
+    const images = (element: { style: (name: string) => unknown }) =>
+      String(element.style("background-image"))
+        .split(" ")
+        .map((image) => decodeURIComponent(image));
+
+    it("says the word and letter of an agent in a frame's header, in the count's place", () => {
+      const frame = render(touch(initial(), ["billing"], "edit")).getElementById("billing");
+      expect(frame.hasClass("marked")).toBe(true);
+      const [title, cluster] = images(frame);
+      expect(title).toContain(">billing.py</text>");
+      expect(cluster).toContain(">editing</text>");
+      expect(cluster).toContain(`fill="${theme["agent-a-text"]}"`);
+      expect(cluster).toContain(">A</text>");
+      expect(cluster).not.toContain("functions");
+      // A class frame inside it says it too, and the untouched frames keep their counts.
+      const bill = render(touch(initial(), ["billing:Bill"])).getElementById("billing:Bill");
+      expect(images(bill)[1]).toContain(">read</text>");
+      expect(images(render(initial()).getElementById("billing:Bill"))[1]).toContain(
+        ">1 method</text>",
+      );
+    });
+
+    it("gives an empty module its file name and count, stacked, instead of a bare name", () => {
+      const state = initial();
+      if (!state.graph) throw new Error("Missing graph");
+      state.graph = { ...state.graph, nodes: [...nodes, node("pkg", "module")], edges: [] };
+      const empty = render(state).getElementById("pkg");
+      expect(empty.style("label")).toBe("");
+      const [title, count] = images(empty);
+      expect(title).toContain(">billing.py</text>");
+      expect(count).toContain(">0 functions</text>");
+      // Touched, the state takes the count's row.
+      const touched = render(touch(state, ["pkg"])).getElementById("pkg");
+      const [, second] = images(touched);
+      expect(second).toContain(">read</text>");
+      expect(second).not.toContain("0 functions");
+    });
+
+    it("keeps an empty module's header and adds the distance badge in the cone", () => {
+      const state = initial();
+      if (!state.graph) throw new Error("Missing graph");
+      state.graph = { ...state.graph, nodes: [...nodes, node("pkg", "module")], edges: [] };
+      cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(theme) });
+      const cone: ImpactCone = {
+        seeds: [],
+        entries: [{ node_id: "pkg", distance: 2 }],
+        edges_followed: "exact",
+        max_depth: 3,
+        max_nodes: 20,
+        omitted_by_depth: 0,
+        omitted_by_limit: 0,
+        tests_reaching: 0,
+      };
+      updateGraph(cy, graphElements(state, false, new Set(["pkg"]), cone));
+      const [title, count, badge] = images(cy.getElementById("pkg"));
+      expect(title).toContain(">billing.py</text>");
+      expect(count).toContain(">0 functions</text>");
+      expect(badge).toContain(">2</text>");
+    });
+  });
+
   it.each(["A", "B"] as const)("prioritizes %s editing over the other agent reading", (slot) => {
     const other = slot === "A" ? "B" : "A";
     const target = render(initial()).getElementById("billing:fee");

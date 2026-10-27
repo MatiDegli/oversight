@@ -4,7 +4,7 @@ import badgeFont from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyp
 import type { getActiveTheme } from "../theme";
 
 import { nodeGeometry } from "./geometry";
-import { headerLayers, marksLayer } from "./layers";
+import { headerLayers, marksLayer, stackedHeaderLayers } from "./layers";
 import type { Layer, NodeMarks } from "./layers";
 
 export type EdgeShape = "bezier" | "taxi";
@@ -54,6 +54,33 @@ export function graphStyles(
       ? [marksLayer(theme, value, { width: geometry.width, height: geometry.height })]
       : [];
   };
+  const cone = (node: NodeSingular): Layer[] =>
+    node.hasClass("cone") ? [distanceBadge(node)] : [];
+  const frameText = (node: NodeSingular) =>
+    [String(node.data("title") ?? ""), String(node.data("count") ?? "")] as const;
+  // A frame with children: its header row, which carries the agent's state word if one touches it.
+  const frameLayers = (node: NodeSingular): Layer[] => [
+    ...headerLayers(
+      theme,
+      ...frameText(node),
+      node.width(),
+      node.data("marks") as NodeMarks | undefined,
+    ),
+    ...cone(node),
+  ];
+  // Everything without children: a leaf's state row, a childless frame's stacked header, and the
+  // distance badge when it is in the cone.
+  const leafLayers = (node: NodeSingular): Layer[] => [
+    ...(node.hasClass("module") || node.hasClass("class")
+      ? stackedHeaderLayers(
+          theme,
+          ...frameText(node),
+          { width: geometry.width, height: geometry.height },
+          node.data("marks") as NodeMarks | undefined,
+        )
+      : marks(node)),
+    ...cone(node),
+  ];
   // One property per image: Cytoscape takes a list for each when a node carries several.
   const layered = (layers: (node: NodeSingular) => Layer[]) => ({
     "background-image": (node: NodeSingular) => layers(node).map((layer) => layer.image),
@@ -125,19 +152,19 @@ export function graphStyles(
     {
       // A frame's title and count are its header row, drawn as images; its label would sit above it.
       selector: "node:parent",
-      style: {
-        label: "",
-        ...layered((node) =>
-          headerLayers(theme, String(node.data("title") ?? ""), String(node.data("count") ?? "")),
-        ),
-      },
+      style: { label: "", ...layered(frameLayers) },
+    },
+    {
+      // An empty module or class is a leaf-sized box; it still wears its frame's title and count.
+      selector: "node.module:childless, node.class:childless",
+      style: { label: "", ...layered(leafLayers) },
     },
     {
       // The state word and badges take the bottom row, so the name moves up to make room.
       selector: "node.marked:childless",
       style: {
         "text-margin-y": -geometry.height / 6,
-        ...layered(marks),
+        ...layered(leafLayers),
       },
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
@@ -198,24 +225,16 @@ export function graphStyles(
       style: { "outline-color": theme.text, "outline-width": theme["selected-ring-width"] },
     },
     {
+      // The distance badge hangs over the node's top-right corner, outside its box. A node that
+      // also carries other images gets the badge in its own layered list (frameLayers, leafLayers).
       selector: "node.cone",
       style: {
-        "background-image": (node) => badge(node.data("distance") as number),
-        "background-width": theme["distance-badge-size"],
-        "background-height": theme["distance-badge-size"],
-        "background-position-x": "100%",
-        "background-position-y": "0%",
-        "background-offset-x": badgeSize / 2,
-        "background-offset-y": -badgeSize / 2,
-        "background-image-containment": "over",
-        "background-clip": "none",
         "bounds-expansion": badgeSize / 2,
       },
     },
     {
-      // A pending node can also sit in the cone: its marks and the distance badge are two images.
-      selector: "node.cone.marked:childless",
-      style: layered((node) => [...marks(node), distanceBadge(node)]),
+      selector: "node.cone:childless",
+      style: layered(leafLayers),
     },
     {
       selector: "edge",

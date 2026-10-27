@@ -278,6 +278,8 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | --- | --- | --- | --- |
 | Border of a changed node | solid | dashed | AGENTS.md: a dashed border means a pending change, changed and new alike |
 | Module names on the graph | Mono | Next | AGENTS.md: graph labels use Next |
+| State word and letter badge on a node | on the name's row, at the right | a second row under the name | the preset's leaf is 150px wide, too narrow for a long name, the word and the badge on one row; widening it would move every node |
+| State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
 | Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
 | Code-dim (line numbers, comments) | `#6d6d68`, 3.8:1 on page | `#7d7d78`, 4.7:1 | quality floor: text at 4.5:1 |
 | Text-box placeholder | `#6d6d68` | faint `#85857f`, 5.3:1 on field | same |

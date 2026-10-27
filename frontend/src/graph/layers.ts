@@ -87,26 +87,20 @@ export interface LeafSize {
 }
 
 /**
- * The bottom row of a marked leaf: the state word at the left in its agent's text color, and the
- * letter badges at the right. A badge is a 20px square: filled in the agent's color with the letter
- * in on-agent when the agent changes the node, outlined in the agent's color when it only read it.
- * The name stays above, in the node's own label.
+ * The letter badges of a node, right-aligned at `right` on the row centred at `centerY`. A badge is
+ * a 20px square: filled in the agent's color with the letter in on-agent when the agent changes the
+ * node, outlined in the agent's color when it only read it.
  */
-export function marksLayer(theme: LayerTheme, marks: NodeMarks, leaf: LeafSize): Layer {
+function badgeShapes(theme: LayerTheme, marks: NodeMarks, right: number, centerY: number): string {
   const size = px(theme["letter-badge-size"]);
-  const pad = px(theme["spacing-md"]);
   const gap = px(theme["spacing-xs"]);
-  const centerY = leaf.height - pad - size / 2;
   const stroke = px(theme["agent-border-width"]);
-  const badges = marks.badges
+  return marks.badges
     .map(({ slot, filled }, index) => {
       const { color, text: ink } = slotColors(theme, slot);
-      // The last badge sits at the right padding; earlier ones step left of it.
+      // The last badge sits at the right edge; earlier ones step left of it.
       const x =
-        leaf.width -
-        pad -
-        size * (marks.badges.length - index) -
-        gap * (marks.badges.length - 1 - index);
+        right - size * (marks.badges.length - index) - gap * (marks.badges.length - 1 - index);
       const square = filled
         ? `<rect x="${String(x)}" y="${String(centerY - size / 2)}" width="${String(size)}" height="${String(size)}" rx="${theme["radius-label"]}" fill="${color}"/>`
         : `<rect x="${String(x + stroke / 2)}" y="${String(centerY - size / 2 + stroke / 2)}" width="${String(size - stroke)}" height="${String(size - stroke)}" rx="${theme["radius-label"]}" fill="none" stroke="${color}" stroke-width="${String(stroke)}"/>`;
@@ -121,14 +115,28 @@ export function marksLayer(theme: LayerTheme, marks: NodeMarks, leaf: LeafSize):
       return square + letter;
     })
     .join("");
-  const word = text(
+}
+
+const wordText = (theme: LayerTheme, marks: NodeMarks, attributes: string) =>
+  text(
     theme,
-    `x="${String(pad)}" y="${String(centerY)}" dy=".35em"`,
+    attributes,
     theme["caption-size"],
     theme["label-weight"],
     slotColors(theme, marks.slot).text,
     marks.word,
   );
+
+/**
+ * The bottom row of a marked leaf: the state word at the left in its agent's text color, and the
+ * letter badges at the right. The name stays above, in the node's own label.
+ */
+export function marksLayer(theme: LayerTheme, marks: NodeMarks, leaf: LeafSize): Layer {
+  const size = px(theme["letter-badge-size"]);
+  const pad = px(theme["spacing-md"]);
+  const centerY = leaf.height - pad - size / 2;
+  const word = wordText(theme, marks, `x="${String(pad)}" y="${String(centerY)}" dy=".35em"`);
+  const badges = badgeShapes(theme, marks, leaf.width - pad, centerY);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(leaf.width)}" height="${String(leaf.height)}">${fontFaces(theme)}${word}${badges}</svg>`;
   return {
     image: encode(svg),
@@ -143,50 +151,105 @@ export function marksLayer(theme: LayerTheme, marks: NodeMarks, leaf: LeafSize):
 }
 
 /** The room the title and the count each get on a frame's header row, in px. */
-const HEADER = { titleWidth: 240, countWidth: 180, height: 24 };
+const HEADER = { titleWidth: 240, countWidth: 180, height: 24, wordWidth: 64 };
+
+const escape = (value: string) =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** One header-row image: a `width` by header-height SVG that clips what overruns it. */
+function rowImage(theme: LayerTheme, width: number, body: string): string {
+  return encode(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(HEADER.height)}">${fontFaces(theme)}${body}</svg>`,
+  );
+}
+
+const rowBaseline = `y="${String(HEADER.height / 2)}" dy=".35em"`;
+
+function titleLayer(
+  theme: LayerTheme,
+  title: string,
+  width: number,
+  offsetX = px(theme["spacing-lg"]),
+): Layer {
+  return {
+    image: rowImage(
+      theme,
+      width,
+      text(
+        theme,
+        `x="0" ${rowBaseline}`,
+        theme["label-size"],
+        theme["label-weight"],
+        theme["module-label"],
+        escape(title),
+      ),
+    ),
+    width,
+    height: HEADER.height,
+    x: "0%",
+    y: "0%",
+    offsetX,
+    offsetY: px(theme["spacing-md"]),
+    clip: "node",
+  };
+}
 
 /**
  * A frame's header row, inside its top padding: the title at the left in the module-label color and
  * the count at the right in the faint one. Two images, so each hugs its own edge whatever the
  * frame's width; each is wider than its text and clipped by the frame.
+ *
+ * A frame an agent touches says so in the count's place: the state word in the agent's text color
+ * and its letter badges, right-aligned, with the count left out. The title then gets only the room
+ * the frame's `width` leaves it, so the two never overlap.
  */
-export function headerLayers(theme: LayerTheme, title: string, count: string): Layer[] {
+export function headerLayers(
+  theme: LayerTheme,
+  title: string,
+  count: string,
+  width: number,
+  marks?: NodeMarks,
+): Layer[] {
   const pad = px(theme["spacing-lg"]);
   const top = px(theme["spacing-md"]);
-  const baseline = `y="${String(HEADER.height / 2)}" dy=".35em"`;
-  const image = (width: number, body: string) =>
-    encode(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(HEADER.height)}">${fontFaces(theme)}${body}</svg>`,
-    );
-  const escape = (value: string) =>
-    value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return [
-    {
-      image: image(
-        HEADER.titleWidth,
-        text(
+  if (marks) {
+    const size = px(theme["letter-badge-size"]);
+    const gap = px(theme["spacing-xs"]);
+    const badges = marks.badges.length * size + (marks.badges.length - 1) * gap;
+    const cluster = HEADER.wordWidth + gap + badges;
+    const room = Math.max(0, Math.min(HEADER.titleWidth, width - 2 * pad - cluster - gap));
+    const centerY = HEADER.height / 2;
+    return [
+      titleLayer(theme, title, room),
+      {
+        image: rowImage(
           theme,
-          `x="0" ${baseline}`,
-          theme["label-size"],
-          theme["label-weight"],
-          theme["module-label"],
-          escape(title),
+          cluster,
+          wordText(
+            theme,
+            marks,
+            `x="${String(cluster - badges - gap)}" y="${String(centerY)}" dy=".35em" text-anchor="end"`,
+          ) + badgeShapes(theme, marks, cluster, centerY),
         ),
-      ),
-      width: HEADER.titleWidth,
-      height: HEADER.height,
-      x: "0%",
-      y: "0%",
-      offsetX: pad,
-      offsetY: top,
-      clip: "node",
-    },
+        width: cluster,
+        height: HEADER.height,
+        x: "100%",
+        y: "0%",
+        offsetX: -pad,
+        offsetY: top,
+        clip: "node",
+      },
+    ];
+  }
+  return [
+    titleLayer(theme, title, HEADER.titleWidth),
     {
-      image: image(
+      image: rowImage(
+        theme,
         HEADER.countWidth,
         text(
           theme,
-          `x="${String(HEADER.countWidth)}" ${baseline} text-anchor="end"`,
+          `x="${String(HEADER.countWidth)}" ${rowBaseline} text-anchor="end"`,
           theme["caption-size"],
           theme["caption-weight"],
           theme.faint,
@@ -202,4 +265,45 @@ export function headerLayers(theme: LayerTheme, title: string, count: string): L
       clip: "node",
     },
   ];
+}
+
+/**
+ * A module or class with nothing inside it is drawn as a leaf-sized box, so its header stacks: the
+ * title on the first row, and on the second its count, or, when an agent touches it, the state word
+ * and badges in the count's place. The title gets the box's width less its padding.
+ */
+export function stackedHeaderLayers(
+  theme: LayerTheme,
+  title: string,
+  count: string,
+  leaf: LeafSize,
+  marks?: NodeMarks,
+): Layer[] {
+  const pad = px(theme["spacing-md"]);
+  const second: Layer = marks
+    ? marksLayer(theme, marks, leaf)
+    : {
+        image: rowImage(
+          theme,
+          leaf.width,
+          text(
+            theme,
+            `x="${String(pad)}" ${rowBaseline}`,
+            theme["caption-size"],
+            theme["caption-weight"],
+            theme.faint,
+            escape(count),
+          ),
+        ),
+        width: leaf.width,
+        height: HEADER.height,
+        x: "0%",
+        y: "0%",
+        offsetX: 0,
+        // Centred on the row a leaf's state word takes.
+        offsetY: leaf.height - pad - px(theme["letter-badge-size"]) / 2 - HEADER.height / 2,
+        clip: "node",
+      };
+  // The title starts at the second row's padding, which is a leaf's, narrower than a frame's.
+  return [titleLayer(theme, title, leaf.width - 2 * pad, pad), second];
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { themes } from "../theme";
-import { headerLayers, marksLayer } from "./layers";
+import { headerLayers, marksLayer, stackedHeaderLayers } from "./layers";
 import type { NodeMarks } from "./layers";
 
 const theme = themes.dark;
@@ -61,7 +61,7 @@ describe("marksLayer", () => {
 
 describe("headerLayers", () => {
   it("draws the title at the left and the count at the right, in their own colors", () => {
-    const [title, count] = headerLayers(theme, "pricing.py", "6 functions · 1 new");
+    const [title, count] = headerLayers(theme, "pricing.py", "6 functions · 1 new", 214);
     expect(drawn(title?.image ?? "")).toContain(
       `fill="${theme["module-label"]}">pricing.py</text>`,
     );
@@ -74,7 +74,72 @@ describe("headerLayers", () => {
   });
 
   it("escapes a title that has markup characters in it", () => {
-    const [title] = headerLayers(theme, "a<b>&c", "1 function");
+    const [title] = headerLayers(theme, "a<b>&c", "1 function", 214);
     expect(drawn(title?.image ?? "")).toContain(">a&lt;b&gt;&amp;c</text>");
+  });
+});
+
+describe("headerLayers for a frame an agent touches", () => {
+  it("puts the state word and the badges in the count's place, right-aligned", () => {
+    const layers = headerLayers(theme, "pricing.py", "6 functions", 214, changed);
+    expect(layers).toHaveLength(2);
+    const cluster = drawn(layers[1]?.image ?? "");
+    expect(cluster).toContain(`fill="${theme["agent-a-text"]}">changed</text>`);
+    expect(cluster).toContain('text-anchor="end"');
+    expect(cluster).toContain(`rx="${theme["radius-label"]}" fill="${theme["agent-a"]}"/>`);
+    expect(cluster).toContain(`fill="${theme["on-agent"]}">A</text>`);
+    // The count gives way to the state; the title keeps its own look.
+    expect(cluster).not.toContain("6 functions");
+    expect(drawn(layers[0]?.image ?? "")).toContain(
+      `fill="${theme["module-label"]}">pricing.py</text>`,
+    );
+    expect([layers[1]?.x, layers[1]?.offsetX]).toEqual(["100%", -14]);
+  });
+
+  it("leaves the title only the room the cluster leaves in the frame, never overlapping it", () => {
+    const narrow = headerLayers(theme, "pricing.py", "", 214, changed);
+    const wide = headerLayers(theme, "pricing.py", "", 674, changed);
+    const cluster = narrow[1]?.width ?? 0;
+    // The frame's width, less both paddings, the cluster and the gap between.
+    expect(narrow[0]?.width).toBe(214 - 2 * 14 - cluster - 6);
+    expect(wide[0]?.width).toBe(240);
+    // Two badges make a wider cluster and so a narrower title.
+    const both: NodeMarks = {
+      word: "editing",
+      slot: "A",
+      badges: [
+        { slot: "A", filled: true },
+        { slot: "B", filled: false },
+      ],
+    };
+    const two = headerLayers(theme, "pricing.py", "", 214, both);
+    expect((two[1]?.width ?? 0) - cluster).toBe(20 + 6);
+    expect(two[0]?.width).toBe((narrow[0]?.width ?? 0) - 26);
+    // A frame too narrow for the cluster draws no title at all, not an overlap.
+    expect(headerLayers(theme, "x", "", 60, changed)[0]?.width).toBe(0);
+  });
+});
+
+describe("stackedHeaderLayers", () => {
+  it("shows the title and then the count, for an empty frame the size of a leaf", () => {
+    const [title, count] = stackedHeaderLayers(theme, "__init__.py", "0 functions", leaf);
+    expect(drawn(title?.image ?? "")).toContain(
+      `fill="${theme["module-label"]}">__init__.py</text>`,
+    );
+    expect(drawn(count?.image ?? "")).toContain(`fill="${theme.faint}">0 functions</text>`);
+    // A leaf's padding, not a frame's, and the title never wider than the box less it.
+    expect(title?.offsetX).toBe(10);
+    expect(title?.width).toBe(leaf.width - 20);
+    // The count sits on the row a leaf's state word takes: its centre is at 60 - 10 - 10.
+    expect((count?.offsetY ?? 0) + (count?.height ?? 0) / 2).toBe(40);
+  });
+
+  it("shows the state word and badges instead of the count when an agent touches it", () => {
+    const layers = stackedHeaderLayers(theme, "__init__.py", "0 functions", leaf, read);
+    expect(layers).toHaveLength(2);
+    const second = drawn(layers[1]?.image ?? "");
+    expect(second).toContain(`fill="${theme["agent-b-text"]}">read</text>`);
+    expect(second).toContain(`fill="${theme["agent-b-text"]}">B</text>`);
+    expect(second).not.toContain("0 functions");
   });
 });
