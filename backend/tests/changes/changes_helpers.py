@@ -18,8 +18,9 @@ from oversight.changes import ChangeManager
 from oversight.events import EventPayload, EventStore, StoredEvent
 from oversight.graph import WorkspaceGraph
 from oversight.workspace import Author, LockOrderError, ProcessResult, Tree, Workspace
-from oversight_contracts.events import Limits, ServerEvent
-from oversight_contracts.graph import GraphSnapshot
+from oversight_contracts.commands import FileSaved
+from oversight_contracts.events import ChangeResolved, ErrorReport, Limits, ServerEvent
+from oversight_contracts.graph import GraphDelta, GraphSnapshot
 
 TEMPLATE = {
     "pyproject.toml": "[tool.pytest.ini_options]\ntestpaths = ['tests']\npythonpath = ['.']\n",
@@ -35,11 +36,16 @@ VALUE = "shop.mod:value"
 TWICE = "shop.mod:twice"
 THRICE = "shop.mod:thrice"
 ADD_THRICE = ("shop/mod.py", "+ value()\n", "+ value()\n\n\ndef thrice() -> int:\n    return 3\n")
+PATH = "shop/mod.py"
+TESTS = "tests/test_mod.py"
+EDIT = ("shop/mod.py", "return 1", "return 3")
+LOOSER = ("assert value() > 0", "assert value() >= 0")
+"""An edit of the template's test that leaves it passing."""
 NOW = datetime(2026, 10, 26, 12, 0, tzinfo=UTC)
 GIT_TIMEOUT_S = 29.0
 SERVER_EVENT: TypeAdapter[Any] = TypeAdapter(ServerEvent)
 
-type Mode = Literal["fail", "timeout", "after", "cancel", "cut", "hold"]
+type Mode = Literal["fail", "timeout", "after", "cancel", "cut", "hold", "hold_after", "hold_fail"]
 
 
 @dataclass
@@ -64,7 +70,9 @@ class FaultyWorkspace(Workspace):
     """Records every git call, and fails or times out the armed ones: "fail" and "timeout" never
     run git, "after" runs it and then reports a timeout, "cancel" runs it and then cancels the
     calling task, which waits on an event that never comes, "cut" cancels the calling task
-    before git runs, and "hold" sets `entered`, waits for `resume`, then runs git."""
+    before git runs, "hold" sets `entered`, waits for `resume`, then runs git, "hold_after" runs
+    git, then sets `entered` and waits for `resume`, and "hold_fail" waits as "hold" does, then
+    fails without running git."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -105,6 +113,16 @@ class FaultyWorkspace(Workspace):
                     self.entered.set()
                     await self.resume.wait()
                     break  # then the real git
+                if fault.mode == "hold_after":
+                    real = await super().git(
+                        tree, *args, timeout_s=timeout_s, author=author, date=date
+                    )
+                    self.entered.set()
+                    await self.resume.wait()
+                    return real
+                if fault.mode == "hold_fail":
+                    self.entered.set()
+                    await self.resume.wait()
                 if fault.mode == "cut":
                     current = asyncio.current_task()
                     assert current is not None
@@ -337,3 +355,82 @@ async def start_harness(tmp_path: Path) -> Harness:
         git_timeout_s=GIT_TIMEOUT_S,
     )
     return harness
+
+
+# --- The person's edits on main ---------------------------------------------------------------
+
+
+async def edit_main(h: Harness, path: str, old: str, new: str) -> tuple[str, str]:
+    """What the person saves from main's version of `path`, and the hash they started from."""
+    read = await h.workspace.main.read_text(path)
+    assert read.content.count(old) == 1
+    return read.content.replace(old, new), read.hash
+
+
+async def commit_on_main(h: Harness, path: str, old: str, new: str) -> str:
+    """A commit on main the server did not make, as an earlier merge would be."""
+    async with h.workspace.locks(main=True):
+        read = await h.workspace.main.read_text(path)
+        text = read.content.replace(old, new)
+        await h.workspace.main.write_text(path, text, expected_hash=read.hash)
+        await h.workspace.git_ok(h.workspace.main, "commit", "-qam", f"Edit {path}")
+    return await h.main_head()
+
+
+async def assert_main_clean(h: Harness) -> None:
+    assert (await h.main_git("status", "--porcelain")).stdout == ""
+    assert (await h.main_git("rev-parse", "-q", "--verify", "MERGE_HEAD")).returncode == 1
+
+
+def deltas(h: Harness) -> list[GraphDelta]:
+    return h.payloads(GraphDelta)
+
+
+def errors(h: Harness, words: str) -> list[ErrorReport]:
+    return [e for e in h.payloads(ErrorReport) if words in e.message]
+
+
+async def approve(h: Harness, n: int = 1) -> None:
+    await h.manager.approve(f"change-{n}", None)
+    assert h.payloads(ChangeResolved)[-1].merge == "merged"
+
+
+async def spoil_main(h: Harness, how: str) -> None:
+    """Leave main with an untracked file ("dirty"), or in the middle of a merge ("merging")."""
+    if how == "dirty":
+        await h.workspace.main.write_text("scratch.txt", "not committed\n", expected_hash=None)
+    else:
+        await h.run_agent(1, EDIT)
+        async with h.workspace.locks(main=True):
+            merge = await h.workspace.git(
+                h.workspace.main, "merge", "--no-ff", "--no-commit", "agent-1"
+            )
+        assert merge.returncode == 0
+
+
+def start_save(h: Harness, content: str, base: str, path: str = PATH) -> asyncio.Task[FileSaved]:
+    """The save in its own task, as a request's, so a test can cancel it."""
+    return asyncio.get_running_loop().create_task(h.manager.save_main(path, content, base))
+
+
+async def hold_a_save_that_ends_suspect(h: Harness) -> asyncio.Task[FileSaved]:
+    """A save held at its commit, armed to fail with its restore: main turns suspect on release."""
+    content, base = await edit_main(h, TESTS, *LOOSER)
+    h.workspace.arm("commit", mode="hold_fail")
+    h.workspace.arm("add", skip=1)
+    save = start_save(h, content, base, TESTS)
+    await h.workspace.entered.wait()
+    return save
+
+
+def spy_drains(monkeypatch: pytest.MonkeyPatch) -> list[asyncio.Task[Any] | None]:
+    """The task that waits for a close-out publish in flight, for each `_drain` from now on."""
+    waited: list[asyncio.Task[Any] | None] = []
+    real = ChangeManager._drain  # pyright: ignore[reportPrivateUsage]
+
+    async def spy(rec: Any) -> None:
+        waited.append(asyncio.current_task())
+        await real(rec)
+
+    monkeypatch.setattr(ChangeManager, "_drain", staticmethod(spy))
+    return waited

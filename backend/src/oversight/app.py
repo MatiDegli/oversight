@@ -14,7 +14,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI
 
@@ -42,7 +42,7 @@ from oversight.agents import (
     load_script,
 )
 from oversight.api import ApiError, add_static, create_router, install_error_handlers
-from oversight.changes import ChangeManager
+from oversight.changes import ChangeManager, ChangeNotFound, Revision, WrongState
 from oversight.events import (
     EventPayload,
     EventStore,
@@ -56,7 +56,7 @@ from oversight.graph import WorkspaceGraph, read_layout
 from oversight.settings import REPO_ROOT, Settings
 from oversight.workspace import Tree, Workspace
 from oversight_contracts import CONTRACT_VERSION
-from oversight_contracts.commands import AgentCreated, StartAgent
+from oversight_contracts.commands import AgentCreated, FileContent, FileSaved, SaveFile, StartAgent
 from oversight_contracts.common import Slot
 from oversight_contracts.events import (
     AgentStatus,
@@ -140,9 +140,16 @@ def _metered(profile: ModelProfile) -> bool:
 class _Agent:
     """A started agent, kept for the server's life: a late tick or error always finds it."""
 
-    slot: Slot
-    change_id: str
+    task: AgentTask
     profile: ModelProfile
+
+    @property
+    def slot(self) -> Slot:
+        return self.task.slot
+
+    @property
+    def change_id(self) -> str:
+        return self.task.change_id
 
     @property
     def metered(self) -> bool:
@@ -181,6 +188,12 @@ class LiveRun:
         self._manager: ChangeManager | None = None
         self._venv: asyncio.Task[None] | None = None
         self._runs: dict[str, asyncio.Task[None]] = {}
+        self._kept: dict[str, AgentRun] = {}
+        """The `AgentRun` of each agent, and so its client, kept until its change is rejected or
+        merged: Request changes resumes it."""
+        self._decisions: dict[str, asyncio.Task[Revision | None]] = {}
+        """Each Request changes decision in flight, until its `_revise` has awaited it: a shutdown
+        settles those the run's own cancel cannot reach (R8)."""
         self._agents: dict[str, _Agent] = {}
         self._ledger_lost = False
         """Set once a model call could not be written to the ledger: the file is behind the real
@@ -296,17 +309,29 @@ class LiveRun:
             raise failure
 
     async def _stop_runs(self) -> None:
-        """Cancel each run and wait for it: its process group is killed and its change ended. A
-        task cancelled before its first step never runs `_run`'s `finally`, so this ends the
-        change itself: `run_ended` does nothing unless the change is still `working`."""
+        """Cancel each run and each Request changes decision, and wait for them: a process group
+        is killed and every change ended before the manager's drain.
+
+        A task cancelled before its first step never runs its body or its `finally`, so a decision
+        is cancelled and drained here too, from a snapshot taken first (R8): a `_revise` that wakes
+        as its decision ends pops it from `_decisions` meanwhile. A decision settles by itself
+        before its resolution is sent, or finishes the resolution and `working` together, and the
+        change is then ended here: `run_ended` does nothing unless it is still `working`."""
+        decisions = list(self._decisions.items())
         runs = dict(self._runs)
         for task in runs.values():
             task.cancel()
+        for _, decision in decisions:
+            decision.cancel()
+        for _, decision in decisions:
+            await asyncio.wait([decision])
         await asyncio.gather(*runs.values(), return_exceptions=True)
-        for agent_id in runs:
+        for agent_id in dict.fromkeys([*runs, *(agent_id for agent_id, _ in decisions)]):
             self._runs.pop(agent_id, None)
+            self._decisions.pop(agent_id, None)
             if self._manager is not None:
-                self._manager.run_ended(agent_id, None)
+                kept = self._kept.get(agent_id)
+                self._manager.run_ended(agent_id, None, steps=kept.steps if kept else None)
 
     async def _stop_venv(self) -> None:
         """Cancel the venv build and wait, so its subprocess is killed and reaped."""
@@ -377,6 +402,7 @@ class LiveRun:
         return agent is None or agent.metered
 
     def _release(self, agent_id: str) -> None:
+        self._kept.pop(agent_id, None)
         agent = self._agents.get(agent_id)
         if agent is not None and self._slots.get(agent.slot) == agent_id:
             self._slots[agent.slot] = None
@@ -576,6 +602,9 @@ class LiveRun:
             )
             client = self._client_factory(profile, slot)
             tree = await manager.open(task, profile.id)
+        except WrongState as error:
+            self._slots[slot] = None  # main turned suspect after the check: nothing was started
+            raise ApiError("wrong_state", str(error)) from None
         except Exception as error:
             self._slots[slot] = None
             await self._report("server", f"Starting an agent failed: {_describe(error)}")
@@ -587,7 +616,7 @@ class LiveRun:
             self._slots[slot] = None  # cancelled: the shutdown, or the request's task
             raise
         # No await from `open` to here: the run task exists as soon as the change does.
-        agent = _Agent(slot, task.change_id, profile)
+        agent = _Agent(task, profile)
         self._slots[slot] = task.agent_id
         self._agents[task.agent_id] = agent
         self._runs[task.agent_id] = asyncio.create_task(
@@ -616,27 +645,77 @@ class LiveRun:
                 ledger=self._usage,
                 pricing=self._pricing if agent.metered else None,
             )
+            self._kept[task.agent_id] = run
             end = await run.run()
         except asyncio.CancelledError:
-            # A run that already sent its own `halted` (the time limit's) keeps that reason.
-            if task.agent_id in self._ledger_lost_agents and not (run and run.halted):
-                await self._halt_for_ledger(task, agent, run.steps if run else 0)
+            await self._halt_if_ledger_lost(task, agent, run)
             raise
         except Exception as error:
-            await self._report(
-                "agent",
-                f"{task.agent_id}'s run failed: {_describe(error)}",
-                agent_id=task.agent_id,
-                change_id=task.change_id,
-                fatal=True,
-            )
+            await self._run_failed(task, error)
         finally:
             self._runs.pop(task.agent_id, None)
-            manager.run_ended(task.agent_id, end)
+            manager.run_ended(task.agent_id, end, steps=run.steps if run else None)
 
-    async def _halt_for_ledger(self, task: AgentTask, agent: _Agent, steps: int) -> None:
-        """A run stopped because the ledger was lost ends halted, as the card should say; a plain
-        cancel (a shutdown) says nothing. A store that cannot take it leaves a log line."""
+    async def _revise(
+        self,
+        manager: ChangeManager,
+        agent: _Agent,
+        run: AgentRun,
+        decision: asyncio.Task[Revision | None],
+    ) -> None:
+        """The run after Request changes: wait for the manager's decision, then resume the kept run
+        with the comment. This task is the agent's run in `_runs` from the request on, so Stop and
+        a shutdown cancel it like any run. A decision that moved no base (`None`) or was cancelled
+        leaves the change as the manager put it back, and `run_ended` then does nothing."""
+        task = agent.task
+        end: RunEnd | None = None
+        try:
+            try:
+                revision = await decision
+            finally:
+                self._forget(self._decisions, task.agent_id, decision)
+            if revision is not None:
+                end = await run.revise(revision.comment, revision.note)
+        except asyncio.CancelledError:
+            await self._halt_if_ledger_lost(task, agent, run)
+            raise
+        except Exception as error:
+            await self._run_failed(task, error)
+        finally:
+            self._forget(self._runs, task.agent_id, asyncio.current_task())
+            manager.run_ended(task.agent_id, end, steps=run.steps)
+
+    @staticmethod
+    def _forget(records: dict[str, Any], agent_id: str, mine: object) -> None:
+        """Drop the agent's record only if it is still `mine`. A Request changes taken while an
+        earlier `_revise` is ending (its decision is done, and it has not resumed) registers its
+        own, which the earlier one must leave: Stop and the shutdown find the run through it."""
+        if records.get(agent_id) is mine:
+            records.pop(agent_id)
+
+    async def _halt_if_ledger_lost(
+        self, task: AgentTask, agent: _Agent, run: AgentRun | None
+    ) -> None:
+        """A run that already sent its own `halted` (the time limit's) keeps that reason."""
+        if task.agent_id in self._ledger_lost_agents and not (run and run.halted):
+            steps, budget = (run.steps, run.max_steps) if run else (0, task.limits.max_steps)
+            await self._halt_for_ledger(task, agent, steps, budget)
+
+    async def _run_failed(self, task: AgentTask, error: Exception) -> None:
+        await self._report(
+            "agent",
+            f"{task.agent_id}'s run failed: {_describe(error)}",
+            agent_id=task.agent_id,
+            change_id=task.change_id,
+            fatal=True,
+        )
+
+    async def _halt_for_ledger(
+        self, task: AgentTask, agent: _Agent, steps: int, max_steps: int
+    ) -> None:
+        """A run stopped because the ledger was lost ends halted, as the card should say, at the
+        step budget it had reached (a revised run's has grown); a plain cancel (a shutdown) says
+        nothing. A store that cannot take it leaves a log line."""
         status = AgentStatus(
             agent_id=task.agent_id,
             slot=task.slot,
@@ -645,7 +724,7 @@ class LiveRun:
             model=agent.profile.id,
             state="halted",
             step=steps,
-            max_steps=task.limits.max_steps,
+            max_steps=max_steps,
             detail="The ledger could not record a model call: the run was stopped.",
         )
         try:
@@ -664,6 +743,63 @@ class LiveRun:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
         self._manager.reject(change_id, comment)
+
+    def request_changes(self, change_id: str, comment: str) -> None:
+        """Send the comment back to the agent, which resumes in its kept run. A revision spends
+        credits like a start, so a metered agent is refused while the brake is closed, and nothing
+        revises while main is suspect. The checks come before the manager's, so a refusal changes
+        nothing; `ChangeNotFound` and `WrongState` are the manager's, mapped by the route."""
+        manager = self._manager
+        if manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        if not comment.strip():
+            raise ApiError("invalid_request", "the comment is empty")
+        owner = next(
+            ((agent_id, a) for agent_id, a in self._agents.items() if a.change_id == change_id),
+            None,
+        )
+        if owner is None:
+            raise ChangeNotFound(change_id)
+        agent_id, agent = owner
+        if manager.main_suspect:
+            raise ApiError("wrong_state", MAIN_SUSPECT)
+        if agent.metered and (reason := self.brake_reason()) is not None:
+            raise ApiError("spend_brake", reason)
+        run = self._kept.get(agent_id)
+        if run is None:  # resolved, or its run never started: no state takes a request
+            raise ApiError("wrong_state", f"{change_id} has no run to resume")
+        decision = manager.request_changes(change_id, comment)
+        # No `await` from the manager's flip to the registration: a shutdown finds both.
+        self._decisions[agent_id] = decision
+        self._runs[agent_id] = asyncio.create_task(
+            self._revise(manager, agent, run, decision), name=f"revise-{agent_id}"
+        )
+
+    def stop(self, agent_id: str) -> None:
+        """Stop the agent and discard its change. Allowed while main is suspect, like Reject."""
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        self._manager.stop(agent_id, self._runs.get(agent_id))
+
+    async def get_file(self, path: str, agent_id: str | None) -> FileContent:
+        if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving
+            raise ApiError("internal", "the run has not started")
+        return await self._manager.read_file(agent_id, path)
+
+    async def save_file(self, request: SaveFile) -> FileSaved:
+        if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving
+            raise ApiError("wrong_state", "the run has not started")
+        return await self._manager.save_main(request.path, request.content, request.base_hash)
+
+    async def rescan(self) -> None:
+        if self._manager is None:
+            raise ApiError("internal", "the run has not started")
+        try:
+            await self._manager.rescan()
+        except Exception as error:  # the manager has sent the error event
+            raise ApiError(
+                "internal", f"rescanning failed ({type(error).__name__}); see the error events"
+            ) from error
 
 
 def create_app(
