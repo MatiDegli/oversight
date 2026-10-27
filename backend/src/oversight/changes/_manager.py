@@ -10,10 +10,11 @@ next decision or `open` sends the rest. Request changes takes `ready` or `confli
 `working` and discards nothing; from `conflict` it first merges main into the agent's branch, so
 the agent redoes its change on the new base. In `ready`, the person's save in review commits to the
 agent's worktree and re-proposes; Approve merges only the revision it was clicked on, with the
-worktree at that revision's head. Every git call is `Workspace.git`, async with a
-timeout; decisions hold main's lock, then the agent's, throughout. Once a change enters `broken`,
-`main_suspect` stays true until the process restarts; `check_main` reads main's state, and `aclose`
-drains the close-outs before the store closes.
+worktree at that revision's head. Stop takes what Reject takes, or a `working` change, whose run
+it cancels and waits for, then discards it as Reject does. Every git call is `Workspace.git`, async
+with a timeout; decisions hold main's lock, then the agent's, throughout. Once a change enters
+`broken`, `main_suspect` stays true until the process restarts; `check_main` reads main's state,
+and `aclose` drains the close-outs before the store closes.
 """
 
 import asyncio
@@ -58,11 +59,15 @@ APPROVABLE: frozenset[State] = frozenset({"ready"})
 REJECTABLE: frozenset[State] = frozenset({"ready", "conflict", "unproposed", "broken"})
 """`broken`: the merge failed and main's state is unknown; Reject still closes the change."""
 REVISABLE: frozenset[State] = frozenset({"ready", "conflict"})
+STOPPABLE: frozenset[State] = frozenset({*REJECTABLE, "working"})
+"""`working`: the run is cancelled first, and the change's outcome waits for its end."""
+STOPPED = "Stopped by the user."
 CLOSE_OUT_ATTEMPTS = 2
 """Tries per event on each occasion (a decision, a retry before the next decision or `open`, the
 drain)."""
 EVENT_TYPES = {
     "requested": "change.resolved changes_requested",
+    "stopped": "agent.status stopped",
     "resolved": "change.resolved",
     "delta": "graph.delta",
     "done": "agent.status done",
@@ -146,6 +151,8 @@ class _Change:
     """Counts the decisions taken; only the latest one's task may end `deciding`."""
     taken: int = 0
     """The revision Approve was clicked on (R1): a later one is reviewed before any merge."""
+    stopped: bool = False
+    """The decision is a Stop: its close-out sends `stopped` before the resolution, no `done`."""
 
     @property
     def agent_id(self) -> AgentId:
@@ -511,17 +518,24 @@ class ChangeManager:
 
     def run_ended(self, agent_id: AgentId, end: RunEnd | None, *, steps: int | None = None) -> None:
         """The run is over (`end` is `None` when it raised or was cancelled): `ready` if this run
-        proposed, else `unproposed`. `steps`, the run's own count, wins over `end.steps`."""
+        proposed, else `unproposed`. `steps`, the run's own count, wins over `end.steps`. A run
+        that a Stop cancelled finds its change `deciding`: that outcome becomes the Stop's
+        `fallback`, where a Stop that ends without settling leaves the change."""
         rec = self._agents.get(agent_id)
         if rec is None:
             raise ChangeNotFound(agent_id)
-        if rec.state != "working":
+        stopping = rec.state == "deciding" and rec.fallback == "working"
+        if rec.state != "working" and not stopping:
             return
         if steps is not None:
             rec.steps = steps
         elif end is not None:
             rec.steps = end.steps
-        rec.state = "ready" if rec.proposed_now else "unproposed"
+        outcome: State = "ready" if rec.proposed_now else "unproposed"
+        if stopping:
+            rec.fallback = outcome
+        else:
+            rec.state = outcome
 
     # --- The person's edits in review ---------------------------------------------------------
 
@@ -651,6 +665,19 @@ class ChangeManager:
         move, the change still `conflict` (or `broken`, when the worktree's state is unknown)."""
         rec = self._take(change_id, REVISABLE, "request changes")
         return self._decide(rec, self._request_changes(rec, comment))
+
+    def stop(self, agent_id: AgentId, run: asyncio.Task[None] | None) -> asyncio.Task[None]:
+        """Stop the agent and discard its change: from what Reject takes, or from `working`, whose
+        live `run` is cancelled in this same call. The task waits for the run's end, so the
+        resolution names the revision the store took (R7), then closes out as Reject does, with
+        `reason="stopped"`, `agent.status` `stopped` before the resolution, and no `done`."""
+        rec = self._agents.get(agent_id)
+        if rec is None:
+            raise ChangeNotFound(agent_id)
+        self._take(rec.change_id, STOPPABLE, "stop")
+        if run is not None:
+            run.cancel()
+        return self._decide(rec, self._stop(rec, run))
 
     async def check_main(self) -> bool | None:
         """Under main's lock: True when main has no `MERGE_HEAD` and `status --porcelain` is empty,
@@ -899,6 +926,21 @@ class ChangeManager:
             rec.resolution = self._resolution(rec, "rejected", comment)
             await self._finish(rec)  # main did not change: no rescan and no delta
 
+    async def _stop(self, rec: _Change, run: asyncio.Task[None] | None) -> None:
+        if run is not None:
+            # Its end calls `run_ended`, which records its steps and sets `fallback`; a run cut in
+            # its proposal's publish records the proposal first (R7).
+            await asyncio.wait([run])
+        if rec.fallback == "working":
+            # No run reported its end: none was passed, or it was cancelled before it started.
+            rec.fallback = "ready" if rec.proposed_now else "unproposed"
+        await self._finish_pending()
+        async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+            # Under the agent's lock: a save in review proposes first, and this closes its revision.
+            rec.resolution = self._resolution(rec, "rejected", None, reason="stopped")
+            rec.stopped = True
+            await self._finish(rec)
+
     def _resolution(
         self,
         rec: _Change,
@@ -907,6 +949,7 @@ class ChangeManager:
         *,
         merge_commit: str | None = None,
         conflict: Conflict | None = None,
+        reason: Literal["stopped"] | None = None,
     ) -> ChangeResolved:
         merge: Literal["merged", "conflict"] | None = None
         if decision == "approved":
@@ -916,7 +959,7 @@ class ChangeManager:
             agent_id=rec.agent_id,
             revision=rec.revision,
             decision=decision,
-            reason=None,
+            reason=reason,
             comment=comment,
             merge=merge,
             merge_commit=merge_commit,
@@ -1057,7 +1100,7 @@ class ChangeManager:
         rec.merged = True
         rec.resolution = self._resolution(rec, "approved", comment, merge_commit=post)
 
-    def _done(self, rec: _Change) -> AgentStatus:
+    def _status(self, rec: _Change, state: Literal["done", "stopped"]) -> AgentStatus:
         task = rec.task
         return AgentStatus(
             agent_id=task.agent_id,
@@ -1065,10 +1108,10 @@ class ChangeManager:
             change_id=task.change_id,
             task=task.task,
             model=rec.model_id,
-            state="done",
+            state=state,
             step=rec.steps,
             max_steps=task.limits.max_steps * (rec.requests + 1),
-            detail=None,
+            detail=STOPPED if state == "stopped" else None,
         )
 
     async def _finish(self, rec: _Change) -> None:
@@ -1117,13 +1160,22 @@ class ChangeManager:
 
     def _unsent(self, rec: _Change) -> list[tuple[str, EventPayload]]:
         """The close-out events not yet sent, in order: an unsent request for changes, the
-        resolution, the delta, `done`."""
-        events: list[tuple[str, EventPayload | None]] = [
-            ("requested", rec.requested),
-            ("resolved", rec.resolution),
-            ("delta", rec.delta),
-            ("done", self._done(rec)),
-        ]
+        resolution, the delta, `done`; for a Stop, the request, `stopped`, then the resolution, so
+        the agent's last status precedes the resolution that frees its slot."""
+        events: list[tuple[str, EventPayload | None]]
+        if rec.stopped:
+            events = [
+                ("requested", rec.requested),
+                ("stopped", self._status(rec, "stopped")),
+                ("resolved", rec.resolution),
+            ]
+        else:
+            events = [
+                ("requested", rec.requested),
+                ("resolved", rec.resolution),
+                ("delta", rec.delta),
+                ("done", self._status(rec, "done")),
+            ]
         return [(n, p) for n, p in events if p is not None and n not in rec.sent]
 
     async def _send_close_out(self, rec: _Change) -> str:
