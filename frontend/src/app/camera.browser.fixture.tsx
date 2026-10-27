@@ -1,6 +1,5 @@
 // Browser-only test harness; never imported by the application.
 import type { GraphSnapshot, ServerEvent } from "@contracts";
-// Browser-only component harness; never imported by the application.
 import { useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -8,7 +7,7 @@ import { createRoot } from "react-dom/client";
 import { GraphView } from "../graph";
 import type { Framing, GraphApi } from "../graph";
 import { applyEvent, createInitialState, stateStore } from "../state";
-import { ZoomControls } from "./GraphOverlays";
+import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import demoGraph from "../../../fixtures/graph/demo-repo.json";
 import demoPreset from "../../../fixtures/layouts/demo-repo.json";
@@ -26,12 +25,15 @@ const proposal = recorded.changes["change-1"]?.proposal;
 if (!proposal) throw new Error("The fixture has no cone");
 const cone = proposal.impact;
 const nodes = recorded.graph.nodes;
+let preview = cone;
 // A wide preset with the changed function far right and a caller below the initial review view.
 const positions = Object.fromEntries(
   nodes.map((node, index) => [node.id, { x: (index % 10) * 170, y: Math.floor(index / 10) * 90 }]),
 );
 positions[CHANGED] = { x: 1900, y: 200 };
-positions[CALLER] = { x: 1900, y: 1300 };
+for (const node of nodes.filter((n) => n.parent_id === "shop.cart:Cart")) {
+  positions[node.id] = { x: 1900, y: 2500 + node.start_line * 3 };
+}
 stateStore.setState({ state: { ...recorded, graph: { ...recorded.graph, positions } } });
 
 const host = document.createElement("div");
@@ -49,11 +51,12 @@ async function loadCone() {
 function Harness({ mode }: { mode: Mode }) {
   const api = useRef<GraphApi | null>(null);
   const card = useRef<HTMLDivElement>(null);
+  const startArea = useRef<HTMLDivElement>(null);
   const [framing, setFraming] = useState<Framing | null>(null);
   const impact = mode === "review" ? cone : null;
   const litIds = useMemo(
-    () => (impact ? [CHANGED, ...impact.entries.map((entry) => entry.node_id)] : null),
-    [impact],
+    () => (mode !== "watch" ? [CHANGED, ...cone.entries.map((entry) => entry.node_id)] : null),
+    [mode],
   );
   return (
     <div className="flex h-full bg-ground text-text">
@@ -64,23 +67,37 @@ function Harness({ mode }: { mode: Mode }) {
           frameIds={[CHANGED]}
           frameKey={mode}
           cone={impact}
+          liveCone={mode === "panel" ? preview : null}
           litIds={litIds}
           onFramed={setFraming}
           coneCardRef={card}
           apiRef={api}
+          startAreaRef={startArea}
         />
-        {impact && (
-          <div ref={card} className="absolute top-6 left-6 w-(--cone-card-width)">
-            <ImpactConeCard
-              cone={impact}
-              nodes={nodes}
-              outOfView={framing?.outOfView}
-              onReveal={(id) => api.current?.reveal(id)}
-            />
+        <div className="pointer-events-none absolute inset-6 flex flex-col gap-(--spacing-md)">
+          <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
+            {impact ? (
+              <div ref={card} className="pointer-events-auto w-(--cone-card-width)">
+                <ImpactConeCard
+                  cone={impact}
+                  nodes={nodes}
+                  outOfView={framing?.outOfView}
+                  onReveal={(id) => api.current?.reveal(id)}
+                />
+              </div>
+            ) : mode === "watch" ? (
+              <GraphHeading state={stateStore.getState().state} />
+            ) : null}
           </div>
-        )}
-        <div className="absolute right-6 bottom-6">
-          <ZoomControls api={api} />
+          <div data-graph-clear-area ref={startArea} className="min-h-0 flex-1" />
+          <div className="flex items-end justify-between gap-(--spacing-lg)">
+            <div className="pointer-events-auto min-w-0">
+              <Legend state={stateStore.getState().state} />
+            </div>
+            <div className="pointer-events-auto">
+              <ZoomControls api={api} />
+            </div>
+          </div>
         </div>
       </main>
     </div>
@@ -138,6 +155,11 @@ export const graphTest = {
   },
   close: () => {
     render("watch");
+  },
+  update() {
+    preview = { ...cone, entries: cone.entries.filter((entry) => entry.distance === 1) };
+    stateStore.setState({ state: { ...stateStore.getState().state } });
+    render("panel");
   },
   mountCone,
 };

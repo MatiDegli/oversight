@@ -115,7 +115,13 @@ function report(page: Page, ids: string[]) {
     const element = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
     const probe = element?.oversightGraph;
     if (!element || !probe) throw new Error("The graph is not mounted");
-    const centers = probe.nodeCenters();
+    const drawn = probe.nodeCenters();
+    const centers = wanted.length
+      ? wanted.flatMap((id) => {
+          const node = drawn.find((node) => node.id === probe.representative(id));
+          return node ? [{ ...node, id }] : [];
+        })
+      : drawn;
     const outside = (list: typeof centers) =>
       list
         .filter(({ x, y }) => x < 0 || y < 0 || x > element.clientWidth || y > element.clientHeight)
@@ -131,6 +137,7 @@ function report(page: Page, ids: string[]) {
       cutOffAnywhere: outside(centers),
       animating: probe.animating(),
       zoom: probe.zoom(),
+      pan: probe.pan(),
       positions: probe.positions(),
     };
   }, ids);
@@ -201,75 +208,136 @@ it.each(["after-mount", "at-mount"] as const)(
 /** The nodes the camera frames when the change opens: the change's own, in the recorded run. */
 const wanted = (page: Page) => page.evaluate(() => [window.graphTest.changed]);
 
-it("opening the panel centers the changed node at the same zoom; closing restores the camera", async () => {
-  await withPage("no-preference", async (page) => {
-    const ids = await wanted(page);
-    expect(ids).toHaveLength(1);
-    const wide = await report(page, ids);
-    // The graph starts at 100%: nothing is fitted, and what does not fit lies beyond the edge.
-    expect(wide.zoom).toBe(1);
-    expect(wide.cutOffAnywhere.length).toBeGreaterThan(0);
-    const everything = Object.keys(wide.positions);
-    const watch = (await report(page, everything)).centers;
-
-    // The panel narrows the graph; with the camera left alone the far right is cut off.
-    const eased = await page.evaluate(() => {
-      window.graphTest.open();
-      return document
-        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-        ?.oversightGraph?.animating();
-    });
-    expect(eased).toBe(true);
-    await settled(page);
-    const open = await report(page, ids);
-    await browserExpect(page.getByRole("region", { name: "Possibly affected" })).toHaveCount(0);
-    const callers = await page.evaluate(() =>
-      document
-        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-        ?.oversightGraph?.nodeCenters("node.cone:not(.dimmed)"),
+it.each(["open", "review"] as const)(
+  "%s eases the change and cone once; closing restores the personal camera",
+  async (mode) => {
+    await withPage(
+      "no-preference",
+      async (page) => {
+        const ids = await wanted(page);
+        const wide = await report(page, ids);
+        expect(wide.zoom).toBe(1);
+        const focus = page.getByRole("button", { name: "Zoom in", exact: true });
+        await focus.focus();
+        // Drive browser frames explicitly so renderer load cannot skip the entire 240ms move.
+        const clockStart = new Date("2026-10-27T15:00:00Z");
+        await page.clock.install({ time: clockStart });
+        await page.clock.pauseAt(new Date(clockStart.getTime() + 60_000));
+        const easing = await page.evaluate(async (mode) => {
+          await window.graphTest[mode]();
+          return document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating();
+        }, mode);
+        expect(easing).toBe(true);
+        await page.clock.runFor(16);
+        const start = await report(page, ids);
+        await page.clock.runFor(120);
+        const middle = await report(page, ids);
+        await page.clock.runFor(160);
+        const opened = await report(page, ids);
+        expect(opened.zoom).toBeGreaterThanOrEqual(0.4);
+        expect(opened.zoom).toBeLessThan(1);
+        expect(opened.cutOff).toEqual([]);
+        expect(opened.positions).toEqual(wide.positions);
+        expect(start.zoom).toBeGreaterThan(middle.zoom);
+        expect(middle.zoom).toBeGreaterThan(opened.zoom);
+        // cubic-bezier(0.2, 0.7, 0.2, 1) passes the linear midpoint by 120ms.
+        expect((1 - middle.zoom) / (1 - opened.zoom)).toBeGreaterThan(0.6);
+        expect(opened.animating).toBe(false);
+        await browserExpect(focus).toBeFocused();
+        if (mode === "open") {
+          await page.evaluate(() => {
+            window.graphTest.update();
+          });
+          await page.clock.runFor(32);
+          const afterEdit = await report(page, ids);
+          expect(afterEdit.pan).toEqual(opened.pan);
+          expect(afterEdit.zoom).toBe(opened.zoom);
+          expect(afterEdit.animating).toBe(false);
+        }
+        await page.evaluate(() => {
+          window.graphTest.close();
+        });
+        await page.clock.runFor(300);
+        await settled(page);
+        const closed = await report(page, ids);
+        expect(closed.positions).toEqual(wide.positions);
+        expect(closed.zoom).toBe(wide.zoom);
+        expect(closed.pan).toEqual(wide.pan);
+      },
+      "at-mount",
     );
-    expect(callers?.length).toBeGreaterThan(0);
-    expect(open.cutOff).toEqual([]);
-    expect(open.positions).toEqual(wide.positions);
-    // The labels keep their size: the zoom is the watch fit's, not a fit of the narrowed graph.
-    expect(open.zoom).toBeCloseTo(wide.zoom, 6);
-    // Live diff centers only the changed node, even with real callers beyond its frame.
-    const [center] = open.centers;
-    expect(center?.x).toBeCloseTo((open.leftInset + open.size.width) / 2, 0);
-    expect(center?.y).toBeCloseTo(open.size.height / 2, 0);
+  },
+  30_000,
+);
 
-    await page.evaluate(() => {
-      window.graphTest.close();
-    });
-    await settled(page);
-    const closed = await report(page, everything);
-    expect(closed.positions).toEqual(wide.positions);
-    expect(closed.zoom).toBeCloseTo(wide.zoom, 6);
-    // The person's own camera comes back, not a fit: every node is on screen where it was.
-    expect(closed.centers).toEqual(watch);
-  });
-}, 30_000);
+it.each(["open", "review"] as const)(
+  "%s jumps under reduced motion and restores without easing",
+  async (mode) => {
+    await withPage(
+      "reduce",
+      async (page) => {
+        const ids = await wanted(page);
+        const before = await report(page, ids);
+        await page.evaluate(async (mode) => window.graphTest[mode](), mode);
+        const opened = await report(page, ids);
+        expect(opened.animating).toBe(false);
+        expect(opened.cutOff).toEqual([]);
+        expect(opened.positions).toEqual(before.positions);
+        await page.evaluate(() => {
+          window.graphTest.close();
+        });
+        const closed = await report(page, ids);
+        expect(closed.animating).toBe(false);
+        expect(closed.zoom).toBe(before.zoom);
+        expect(closed.pan).toEqual(before.pan);
+      },
+      "at-mount",
+    );
+  },
+  30_000,
+);
 
-it("under reduced motion the camera jumps and nothing eases", async () => {
-  await withPage("reduce", async (page) => {
-    const ids = await wanted(page);
-    const jumped = await page.evaluate(() => {
-      window.graphTest.open();
-      return document
-        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-        ?.oversightGraph?.animating();
+it.each(["pan", "zoom"] as const)(
+  "a person's %s interrupts the opening move and keeps control",
+  async (gesture) => {
+    await withPage("no-preference", async (page) => {
+      const before = await report(page, []);
+      const graph = page.getByRole("img", { name: "Repository graph" });
+      await page.evaluate(() => {
+        window.graphTest.open();
+      });
+      const box = await graph.boundingBox();
+      if (!box) throw new Error("No graph box");
+      await page.mouse.move(box.x + box.width - 40, box.y + box.height / 2);
+      if (gesture === "pan") {
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width - 180, box.y + box.height / 2 + 60, { steps: 3 });
+        await page.mouse.up();
+      } else await page.mouse.wheel(0, -100);
+      await settled(page);
+      const manual = await report(page, []);
+      // Wait past the interrupted 240ms move using browser frames.
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            const start = performance.now();
+            const tick = () => {
+              if (performance.now() - start > 300) resolve();
+              else requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          }),
+      );
+      const after = await report(page, []);
+      expect(after.pan).toEqual(manual.pan);
+      expect(after.zoom).toBe(manual.zoom);
+      expect(after.positions).toEqual(before.positions);
     });
-    expect(jumped).toBe(false);
-    expect((await report(page, ids)).cutOff).toEqual([]);
-    await page.evaluate(() => {
-      window.graphTest.close();
-    });
-    // Closing jumps back to the camera the watch view had, with no animation.
-    const closed = await report(page, ids);
-    expect(closed.animating).toBe(false);
-    expect(closed.zoom).toBe(1);
-  });
-}, 30_000);
+  },
+  30_000,
+);
 
 it("refreshes a revealed cone row after pan, zoom and Fit without moving the camera itself", async () => {
   await withPage("reduce", async (page) => {

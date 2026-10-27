@@ -2,133 +2,75 @@ import assert from "node:assert/strict";
 
 import type { NodeBounds } from "../src/graph";
 
+type Box = Pick<NodeBounds, "x1" | "y1" | "x2" | "y2">;
 interface Frame {
   zoom: number;
   pan: { x: number; y: number };
   size: { width: number; height: number };
-  /** Measured right edge of the cone card relative to the graph's left edge. */
   leftInset?: number;
-  card?: { x1: number; y1: number; x2: number; y2: number };
+  card?: Box;
+  area?: Box;
   focus: NodeBounds[];
   cone: NodeBounds[];
   outOfView?: string[];
 }
 
-/** Review frames callers beside its card; live diff frames the change without review overlays. */
-export function assertPanelFrame(
-  watchZoom: number,
-  frame: Frame,
-  mode: "review" | "live-diff",
-): void {
+/** Both panels frame their opening cone; only review adds a card and out-of-view rows. */
+export function assertPanelFrame(frame: Frame, mode: "review" | "live-diff"): void {
   if (mode === "live-diff") {
     assert(!frame.card && !frame.leftInset, "live diff must not show the review card");
     assert(!frame.outOfView?.length, "live diff must not report review rows");
-    assertReadableFrame(watchZoom, { ...frame, cone: [] });
-  } else assertReadableFrame(watchZoom, frame);
+  }
+  assertReadableFrame(frame);
 }
 
-/** Independent acceptance oracle in model coordinates, shared by browser tests and make shots. */
-export function assertReadableFrame(watchZoom: number, frame: Frame): void {
-  const floor = 12 / 15;
-  const left = (frame.leftInset ?? 0) + 40;
-  const right = frame.size.width - 40;
-  const room = { width: right - left, height: frame.size.height - 80 };
+/** Independent geometry acceptance check, shared by capture scenes and their unit tests. */
+export function assertReadableFrame(frame: Frame): void {
+  const area = frame.area ?? {
+    x1: (frame.leftInset ?? 0) + 40,
+    y1: 40,
+    x2: frame.size.width - 40,
+    y2: frame.size.height - 40,
+  };
+  const room = { width: area.x2 - area.x1, height: area.y2 - area.y1 };
   assert(room.width > 0 && room.height > 0, "no unobscured fit area");
-  const bounds = (nodes: NodeBounds[]) => ({
-    x1: Math.min(...nodes.map((node) => node.x1)),
-    y1: Math.min(...nodes.map((node) => node.y1)),
-    x2: Math.max(...nodes.map((node) => node.x2)),
-    y2: Math.max(...nodes.map((node) => node.y2)),
-  });
-  const focusIds = new Set(frame.focus.map((node) => node.id));
-  const callers = frame.cone.filter((node) => !focusIds.has(node.id));
-  const lit = [...frame.focus, ...callers];
-  assert(lit.length > 0, "no lit nodes to frame");
-  const whole = bounds(lit);
-  const fullFit = Math.min(
-    room.width / Math.max(whole.x2 - whole.x1, 1),
-    room.height / Math.max(whole.y2 - whole.y1, 1),
-  );
-  const expectedZoom = Math.max(floor, Math.min(watchZoom, fullFit));
-  assert(frame.zoom >= floor - 1e-6, `labels below 12px: zoom ${String(frame.zoom)}`);
+  const fit = (nodes: NodeBounds[]) =>
+    Math.min(
+      room.width /
+        Math.max(1, Math.max(...nodes.map((n) => n.x2)) - Math.min(...nodes.map((n) => n.x1))),
+      room.height /
+        Math.max(1, Math.max(...nodes.map((n) => n.y2)) - Math.min(...nodes.map((n) => n.y1))),
+    );
+  let targets = [...frame.focus, ...frame.cone];
+  assert(targets.length > 0, "no nodes to frame");
+  if (fit(targets) < 0.4)
+    targets = [...frame.focus, ...frame.cone.filter((n) => (n.distance ?? 1) <= 1)];
+  const expectedZoom = Math.max(0.4, Math.min(1, fit(targets)));
   assert(
     Math.abs(frame.zoom - expectedZoom) < 1e-6,
-    `zoom ${String(frame.zoom)}; expected ${String(expectedZoom)} (watch ${String(watchZoom)}, lit fit ${String(fullFit)})`,
+    `zoom ${String(frame.zoom)}; expected ${String(expectedZoom)}`,
   );
-  // Represent the fit area as a model-space sliding window, independently of the product's pan sweep.
-  const width = room.width / frame.zoom;
-  const height = room.height / frame.zoom;
-  const actual = { x: (left - frame.pan.x) / frame.zoom, y: (40 - frame.pan.y) / frame.zoom };
-  const contains = (node: NodeBounds, origin: { x: number; y: number }) =>
-    node.x1 >= origin.x - 1e-6 &&
-    node.x2 <= origin.x + width + 1e-6 &&
-    node.y1 >= origin.y - 1e-6 &&
-    node.y2 <= origin.y + height + 1e-6;
-  const target = fullFit >= floor ? whole : bounds(frame.focus.length ? frame.focus : lit);
-  const preferred = {
-    x: (target.x1 + target.x2 - width) / 2,
-    y: (target.y1 + target.y2 - height) / 2,
-  };
-  if (fullFit >= floor || target.x2 - target.x1 > width || target.y2 - target.y1 > height) {
+  const inside = (node: NodeBounds, bounds: Box) =>
+    node.x1 * frame.zoom + frame.pan.x >= bounds.x1 - 1e-6 &&
+    node.x2 * frame.zoom + frame.pan.x <= bounds.x2 + 1e-6 &&
+    node.y1 * frame.zoom + frame.pan.y >= bounds.y1 - 1e-6 &&
+    node.y2 * frame.zoom + frame.pan.y <= bounds.y2 + 1e-6;
+  // If distance 1 is itself oversized, keep the change visible; the rows carry the rest.
+  if (fit(targets) < 0.4) targets = frame.focus;
+  if (targets.length && fit(targets) >= 0.4)
     assert(
-      Math.abs(actual.x - preferred.x) * frame.zoom <= 2 &&
-        Math.abs(actual.y - preferred.y) * frame.zoom <= 2,
-      "frame off center",
+      targets.every((node) => inside(node, area)),
+      "target outside the clear area",
     );
-  } else {
-    assert(
-      frame.focus.every((node) => contains(node, actual)),
-      "changed box outside fit area",
-    );
-    const distances = [...new Set(callers.map((node) => node.distance ?? Infinity))].sort(
-      (a, b) => a - b,
-    );
-    const score = (origin: { x: number; y: number }) =>
-      distances.map(
-        (distance) =>
-          callers.filter(
-            (node) => (node.distance ?? Infinity) === distance && contains(node, origin),
-          ).length,
-      );
-    const actualScore = score(actual);
-    const offset = (origin: { x: number; y: number }) =>
-      (origin.x - preferred.x) ** 2 + (origin.y - preferred.y) ** 2;
-    const axes = (axis: "x" | "y", start: "x1" | "y1", end: "x2" | "y2", span: number) => {
-      const low = frame.focus.length ? target[end] - span : -Infinity;
-      const high = frame.focus.length ? target[start] : Infinity;
-      return [
-        ...new Set(
-          [preferred[axis], ...lit.flatMap((node) => [node[start], node[end] - span])].map(
-            (value) => Math.min(high, Math.max(low, value)),
-          ),
-        ),
-      ];
-    };
-    for (const x of axes("x", "x1", "x2", width)) {
-      for (const y of axes("y", "y1", "y2", height)) {
-        const candidate = { x, y };
-        const otherScore = score(candidate);
-        const first = otherScore.findIndex((count, i) => count !== actualScore[i]);
-        assert(
-          first < 0 || (otherScore[first] ?? 0) < (actualScore[first] ?? 0),
-          "a pan shows more callers by distance",
-        );
-        if (first < 0) {
-          assert(
-            offset(actual) <= offset(candidate) + 1e-5,
-            "equal counts have a pan closer to centering the change",
-          );
-        }
-      }
-    }
-  }
   if (frame.outOfView) {
     const card = frame.card;
     const visible = (node: NodeBounds) =>
-      node.x1 * frame.zoom + frame.pan.x >= -1e-6 &&
-      node.x2 * frame.zoom + frame.pan.x <= frame.size.width + 1e-6 &&
-      node.y1 * frame.zoom + frame.pan.y >= -1e-6 &&
-      node.y2 * frame.zoom + frame.pan.y <= frame.size.height + 1e-6 &&
+      inside(node, {
+        x1: 0,
+        y1: 0,
+        x2: frame.size.width,
+        y2: frame.size.height,
+      }) &&
       (!card ||
         node.x2 * frame.zoom + frame.pan.x <= card.x1 + 1e-6 ||
         node.x1 * frame.zoom + frame.pan.x >= card.x2 - 1e-6 ||
@@ -140,7 +82,7 @@ export function assertReadableFrame(watchZoom: number, frame: Frame): void {
         .filter((node) => !visible(node))
         .map((node) => node.id)
         .sort(),
-      "out-of-view card marks must match the final viewport without fit padding",
+      "out-of-view card marks must match actual visibility",
     );
   }
 }

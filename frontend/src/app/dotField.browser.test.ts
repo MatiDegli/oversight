@@ -443,7 +443,8 @@ it.each(["review", "live-diff"] as const)(
       });
       expect(graph.cone).toBeGreaterThan(0);
       expect(graph.dimmed).toBeGreaterThan(0);
-      expect(graph.zoom).toBeGreaterThanOrEqual(0.8);
+      expect(graph.zoom).toBeGreaterThanOrEqual(0.4);
+      expect(graph.zoom).toBeLessThanOrEqual(1);
     });
   },
   30_000,

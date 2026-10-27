@@ -32,8 +32,7 @@ export interface Theme {
 /**
  * Clicks the center of the first node with a pending change, as the person would, waits for the
  * left panel (`panel`, its aria-label) to show the diff's inserted lines and for the camera to
- * settle, then checks the change framing (with the cone only in review) against watch zoom and
- * the 12px label floor.
+ * settle, then checks the change and cone framing between 100% and 40%.
  * Cytoscape draws on a canvas, so the node's place on screen comes from the graph element's own
  * probe (src/graph/probe.ts), which the app exposes for this. A proposed change opens review; one
  * still being edited opens the live diff.
@@ -48,10 +47,6 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
     return { id: node.id, x: box.left + node.x, y: box.top + node.y };
   }, graph);
   const { id, x, y } = (await handle.jsonValue()) as { id: string; x: number; y: number };
-  const zoomBefore = await page.evaluate(
-    (selector) => document.querySelector<GraphProbeHost>(selector)?.oversightGraph?.zoom(),
-    graph,
-  );
   await page.mouse.click(x, y);
   await page.locator(`[aria-label="${panel}"] .line-insert`).first().waitFor();
   await page.waitForFunction((selector) => {
@@ -59,14 +54,30 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
     return host?.oversightGraph?.animating() === false;
   }, graph);
   // Full lit bounds include labels and badges; the graph's position between panel and rail is its
-  // viewport. Distant cone nodes may be clipped once further shrinking would make labels unreadable.
+  // viewport. Distant cone nodes use the out-of-view rows when the full cone cannot fit at 40%.
   const framed = await page.evaluate(
-    ({ selector, nodeId }) => {
+    ({ selector }) => {
       const host = document.querySelector<GraphProbeHost>(selector);
       const view = host?.oversightGraph;
       return host && view
         ? {
             zoom: view.zoom(),
+            area: (() => {
+              const clear = document
+                .querySelector("[data-graph-clear-area]")
+                ?.getBoundingClientRect();
+              if (!clear) throw new Error("Missing graph clear area");
+              const graph = host.getBoundingClientRect();
+              const card = document
+                .querySelector('[aria-label="Possibly affected"]')
+                ?.getBoundingClientRect();
+              return {
+                x1: (card ? card.right - graph.left : 0) + 40,
+                y1: 40,
+                x2: host.clientWidth - 40,
+                y2: Math.min(host.clientHeight - 40, clear.bottom - graph.top),
+              };
+            })(),
             leftInset: (() => {
               const card = document.querySelector('[aria-label="Possibly affected"]');
               return card
@@ -98,19 +109,15 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
             ],
             pan: view.pan(),
             size: { width: host.clientWidth, height: host.clientHeight },
-            focus: view.nodeBounds().filter((node) => node.id === nodeId),
+            focus: view.nodeBounds("node.pending"),
             cone: view.nodeBounds("node.cone"),
           }
         : null;
     },
-    { selector: graph, nodeId: id },
+    { selector: graph },
   );
   if (!framed?.focus.length) throw new Error(`the clicked node ${id} is not on the graph`);
-  if (zoomBefore === undefined) throw new Error("the watch zoom is unavailable");
-  if (panel === "Review panel") {
-    assert(Math.abs(framed.zoom - 0.8) < 1e-6, "the demo cone must stay at the 12px floor");
-  }
-  assertPanelFrame(zoomBefore, framed, panel === "Review panel" ? "review" : "live-diff");
+  assertPanelFrame(framed, panel === "Review panel" ? "review" : "live-diff");
 }
 
 export const scenes: readonly Scene[] = [

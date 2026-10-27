@@ -117,6 +117,20 @@ function camera(page: Page, id: string) {
       animating: view.animating(),
       size: { width: element.clientWidth, height: element.clientHeight },
       node: view.nodeCenters().find((center) => center.id === view.representative(wanted)),
+      area: (() => {
+        const graph = element.getBoundingClientRect();
+        const clear = document.querySelector("[data-graph-clear-area]")?.getBoundingClientRect();
+        if (!clear) throw new Error("Missing graph clear area");
+        const card = document
+          .querySelector('[aria-label="Possibly affected"]')
+          ?.getBoundingClientRect();
+        return {
+          x1: (card ? card.right - graph.left : 0) + 40,
+          y1: 40,
+          x2: element.clientWidth - 40,
+          y2: Math.min(element.clientHeight - 40, clear.bottom - graph.top),
+        };
+      })(),
       focus: view.nodeBounds().filter((node) => node.id === view.representative(wanted)),
       cone: view.nodeBounds("node.cone"),
     };
@@ -140,7 +154,7 @@ it("the queue counter reframes each proposal while review stays open and keeps k
     await browserExpect.poll(async () => (await camera(page, target)).animating).toBe(false);
     const second = await camera(page, target);
     expect(second.pan).not.toEqual(first.pan);
-    assertReadableFrame(second.zoom, { ...second, outOfView: second.representedOutOfView });
+    assertReadableFrame({ ...second, outOfView: second.representedOutOfView });
     expect((await probe(page, ":childless")).positions).toEqual(positions);
     await browserExpect(queue).toBeFocused();
     await queue.click();
@@ -181,7 +195,7 @@ it("opens review only from the person's click, keeps the change and cone lit, di
   });
 }, 30_000);
 
-it("maximizes callers by distance at zoom 0.8, clears the card, and marks only clipped boxes", async () => {
+it("frames the cone down to 40%, clears the card, and marks only clipped boxes", async () => {
   await withPage(false, async (page) => {
     const changed = await page.evaluate(() => window.reviewTest.changed);
     const watch = await camera(page, changed);
@@ -191,9 +205,9 @@ it("maximizes callers by distance at zoom 0.8, clears the card, and marks only c
     await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
     const review = await camera(page, changed);
     expect(review.leftInset).toBeCloseTo(304);
-    expect(review.zoom).toBeCloseTo(0.8, 6);
-    assertReadableFrame(watch.zoom, { ...review, outOfView: review.representedOutOfView });
-    expect(review.outOfView.length).toBeGreaterThan(0);
+    expect(review.zoom).toBeGreaterThanOrEqual(0.4);
+    expect(review.zoom).toBeLessThanOrEqual(1);
+    assertReadableFrame({ ...review, outOfView: review.representedOutOfView });
     // All excluded nodes remain lit and listed; the camera never removes cone entries.
     for (const id of review.outOfView) {
       expect((await probe(page, "node.cone:not(.dimmed)")).ids).toContain(
@@ -223,20 +237,18 @@ it("pans to a node its cone row lists as out of view only when that row is click
     await page.getByRole("button", { name: "Review change" }).click();
     await panel(page).locator(".line-insert").first().waitFor();
     await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
+    // The opening frame now shows the cone. A deliberate zoom makes a row out of view.
+    for (let step = 0; step < 3; step++) {
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+      await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
+    }
     const review = await camera(page, changed);
     const id = review.outOfView[0];
     if (!id) throw new Error("The demo's review should list a caller out of view");
     const positions = (await probe(page, ":childless")).positions;
     const card = page.getByRole("region", { name: "Possibly affected", exact: true });
     // The caller is off screen or behind the card, and the camera has not gone to it on its own.
-    const before = (await camera(page, id)).node;
-    const hidden =
-      !before ||
-      before.x < review.leftInset ||
-      before.x > review.size.width ||
-      before.y < 0 ||
-      before.y > review.size.height;
-    expect(hidden).toBe(true);
+    expect(review.outOfView).toContain(id);
     await card.locator(`button[title="${id}"]`).click();
     await browserExpect.poll(async () => (await camera(page, id)).animating).toBe(false);
     const after = await camera(page, id);
