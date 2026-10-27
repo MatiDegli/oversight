@@ -163,6 +163,18 @@ function rowImage(theme: LayerTheme, width: number, body: string): string {
   );
 }
 
+/**
+ * The title cut to the room it has, with an ellipsis, so a narrow frame never shows half a letter.
+ * An SVG image cannot be measured here, so the width is an estimate of the type's average glyph;
+ * it errs on the short side, and the image's own clip stays as the backstop.
+ */
+const GLYPH_EM = 0.55;
+function fitTitle(theme: LayerTheme, title: string, room: number): string {
+  const fit = Math.floor(room / (px(theme["label-size"]) * GLYPH_EM));
+  if (title.length <= fit) return title;
+  return fit > 1 ? `${title.slice(0, fit - 1)}\u2026` : "";
+}
+
 const rowBaseline = `y="${String(HEADER.height / 2)}" dy=".35em"`;
 
 function titleLayer(
@@ -220,7 +232,7 @@ export function headerLayers(
     const room = Math.max(0, Math.min(HEADER.titleWidth, width - 2 * pad - cluster - gap));
     const centerY = HEADER.height / 2;
     return [
-      titleLayer(theme, title, room),
+      titleLayer(theme, fitTitle(theme, title, room), room),
       {
         image: rowImage(
           theme,

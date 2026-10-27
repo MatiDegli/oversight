@@ -120,6 +120,23 @@ describe("headerLayers for a frame an agent touches", () => {
   });
 });
 
+describe("headerLayers for a title the cluster leaves too little room", () => {
+  it("cuts it with an ellipsis rather than in the middle of a letter", () => {
+    const [title] = headerLayers(theme, "PremiumCustomer", "", 214, changed);
+    const text = />([^<]*)<\/text>/.exec(drawn(title?.image ?? ""))?.[1] ?? "";
+    expect(text.endsWith("\u2026")).toBe(true);
+    expect(text.length).toBeLessThan("PremiumCustomer".length);
+    expect("PremiumCustomer".startsWith(text.slice(0, -1))).toBe(true);
+  });
+
+  it("keeps a title that fits whole, and draws nothing where there is no room", () => {
+    const [fits] = headerLayers(theme, "pricing.py", "", 214, changed);
+    expect(drawn(fits?.image ?? "")).toContain(">pricing.py</text>");
+    const [none] = headerLayers(theme, "pricing.py", "", 60, changed);
+    expect(drawn(none?.image ?? "")).not.toContain("pricing");
+  });
+});
+
 describe("stackedHeaderLayers", () => {
   it("shows the title and then the count, for an empty frame the size of a leaf", () => {
     const [title, count] = stackedHeaderLayers(theme, "__init__.py", "0 functions", leaf);

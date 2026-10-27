@@ -66,11 +66,12 @@ export function graphStyles(
   const frameText = (node: NodeSingular) =>
     [String(node.data("title") ?? ""), String(node.data("count") ?? "")] as const;
   // A frame with children: its header row, which carries the agent's state word if one touches it.
+  // The row spans the frame's outer width: `width()` is its content, without the padding around it.
   const frameLayers = (node: NodeSingular): Layer[] => [
     ...headerLayers(
       theme,
       ...frameText(node),
-      node.width(),
+      node.outerWidth(),
       node.data("marks") as NodeMarks | undefined,
     ),
     ...cone(node),

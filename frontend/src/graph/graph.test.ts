@@ -578,6 +578,31 @@ describe("graph mapping", () => {
       );
     });
 
+    it("sizes a touched frame's title room by the frame's outer width, padding included", () => {
+      // One child, so the frame is as narrow as a frame gets: its padding is a large share of it.
+      const state = initial();
+      if (!state.graph) throw new Error("Missing graph");
+      state.graph = {
+        ...state.graph,
+        nodes: [...nodes, node("pkg", "module"), node("pkg:f", "function", "pkg")],
+        edges: [],
+      };
+      const frame = render(touch(state, ["pkg"], "edit")).getElementById("pkg");
+      const [title, cluster] = String(frame.style("background-width"))
+        .split(" ")
+        .map((width) => Number.parseFloat(width));
+      const pad = Number.parseFloat(theme["spacing-lg"]);
+      const gap = Number.parseFloat(theme["spacing-xs"]);
+      // The padding is in outerWidth() but not in width(): the room is what the outer width leaves.
+      expect(frame.outerWidth()).toBeGreaterThan(frame.width());
+      expect(cluster).toBeGreaterThan(0);
+      expect(title).toBeGreaterThan(0);
+      expect(title).toBeLessThan(240);
+      // Within a pixel or two: the mapper reads the width as the frame is first sized.
+      const room = frame.outerWidth() - 2 * pad - (cluster ?? 0) - gap;
+      expect(Math.abs((title ?? 0) - room)).toBeLessThan(3);
+    });
+
     it("gives an empty module its file name and count, stacked, instead of a bare name", () => {
       const state = initial();
       if (!state.graph) throw new Error("Missing graph");
