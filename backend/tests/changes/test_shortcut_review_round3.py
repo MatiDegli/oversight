@@ -192,8 +192,12 @@ def test_renamed_test_matching_is_bounded() -> None:
     assert result == []
 
 
-def test_expired_analysis_is_unknown() -> None:
-    result = detect_shortcuts([("tests/test_calc.py", "", "assert True")], timeout=0)
+def test_expired_analysis_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    ticks = iter(range(100))
+    monkeypatch.setattr("oversight.changes._shortcuts_common.time.monotonic", ticks.__next__)
+    result = detect_shortcuts(
+        [("tests/test_calc.py", "", "def test_f():\n    assert f() == 3\n")], timeout=3
+    )
     assert result and result.status == "unknown"
     assert "timeout" in " ".join(result.reasons).lower()
 

@@ -1,6 +1,7 @@
 # Shortcut detector hardening
 
-Baseline: `f377dd45648e0e45d85af6afd112aca8e12a3ccc`. Everything is uncommitted.
+Initial hardening baseline: `f377dd45648e0e45d85af6afd112aca8e12a3ccc`.
+The hardening and precision sections are historical; round 7 below is current.
 The detector remains pure, deterministic, stdlib only, and exported by
 `oversight.changes.detect_shortcuts`. No contracts or product integration changed.
 
@@ -13,11 +14,8 @@ represented as deletion plus addition. Blob decoding honors Python encoding
 cookies. JSONL has repo, commit, path, line, kind and message; sorting inside each
 commit is the detector's ordering. No network or API calls were made.
 
-Raw evidence is in `/tmp/shortcut-corpus/`: `before-*.jsonl`, `final-*.jsonl`,
-their `.summary.json` sidecars, `final-manifest.json`, `group-audit.jsonl`, `recall-before.jsonl`, `recall-final.jsonl`,
-`baseline-hashes.json`, and `pytest-gates.txt`. Nine saved baseline modules were
-compared byte-for-byte with the corresponding files at `f377dd4`. Intermediate
-`round*` and `after-*` files are exploratory; final measurements use `final-*`.
+The initial run compared nine saved baseline modules byte for byte with
+`f377dd4`. Intermediate scans were exploratory; the tables use final scans.
 No third-party source was copied into this repository. Seeded code exists only
 in memory; regression examples were written from scratch.
 
@@ -156,18 +154,17 @@ Seed runner: 268 lines.
 - Detector and new corpus/seed tests: **179 passed**.
 - Detector plus all tools tests: **335 passed, 11 failed**. Every failure is in
   `tools/tests/test_smoke.py`: the sandbox rejects local socket creation with
-  `PermissionError: [Errno 1] Operation not permitted`. Log:
-  `/tmp/shortcut-corpus/pytest-gates.txt`.
+  `PermissionError: [Errno 1] Operation not permitted`.
 - Detector plus tools excluding that socket-dependent file: **331 passed**.
 - `git diff --check`: passed. No git writes, commits, merges, installs, or changes
   to `.pnpm-store/` were performed.
 
 Reproduce a scan with `.venv/bin/python -W ignore tools/shortcut_corpus.py REPO
---revision HEAD --output /tmp/shortcut-corpus/new-NAME.jsonl`; use a distinct
+--revision HEAD --output .eval-output/shortcut-corpus/new-NAME.jsonl`; use a distinct
 output filename for each run. Run seeded recall with `.venv/bin/python -W ignore
-tools/shortcut_seed.py REPO... --output /tmp/shortcut-corpus/new-recall.jsonl`.
+tools/shortcut_seed.py REPO... --output .eval-output/shortcut-corpus/new-recall.jsonl`.
 
-## Precision round (current uncommitted result)
+## Precision round (historical)
 
 Baseline implementation: `26fc6250950a0eea3f079804900d29d95cf7c468`. The sections
 above describe the previous hardening round; this section supersedes its policy
@@ -346,15 +343,150 @@ conflict and socket-dependent smoke tests remain open.
 | `tools/tests/test_shortcut_precision.py` | 37 |
 | `tools/shortcut_corpus_report.md` | 360 |
 
-Raw evidence: `/tmp/shortcut-precision/delivered-*.jsonl`, their summary sidecars,
-`before-oversight.jsonl`, `before-recall.jsonl`, `before-precision-recall.jsonl`,
-`delivered-legacy-recall.jsonl`, `precision.json`, `batches.json`, `manifest.json`,
-and `*-gate.txt` / `pytest-gates.txt`. The manifest pins hashes and row counts.
-
 Reproduce a corpus scan with `.venv/bin/python -W ignore tools/shortcut_corpus.py
-REPO --revision REV --output /tmp/shortcut-precision/new-NAME.jsonl`.
+REPO --revision REV --output .eval-output/shortcut-precision/new-NAME.jsonl`.
 Reproduce labeled retention with `.venv/bin/python tools/shortcut_precision.py
-LABELS BEFORE AFTER --output /tmp/shortcut-precision/new-precision.json`.
+LABELS BEFORE AFTER --output .eval-output/shortcut-precision/new-precision.json`.
 Reproduce seeds with `.venv/bin/python -W ignore tools/shortcut_seed.py REPO...
---output /tmp/shortcut-precision/new-recall.jsonl`; add `--precision-branches`
+--output .eval-output/shortcut-precision/new-recall.jsonl`; add `--precision-branches`
 for the revised definition. Use distinct output names to preserve evidence.
+
+## Review round 7
+
+Baseline detector and corpus revision: `8826eb8`. Opaque imported calls now
+cancel old helper calls only when that helper has no matched destination.
+Removing run()/join() while retaining subprocess.run()/os.path.join() and the
+helper definition reports assertion_loosened; the unchanged cases stay no_facts.
+Validation inventories are computed once per old helper and once per visible
+imported target, shared by matched tests. Bare validation statements cannot
+preserve an extracted asserting helper merely by repeating its old validation.
+
+model_validate/model_validate_json count as helper checks when their results
+are returned or used in an expression, including an assignment; bare statements
+do not. This deliberately updates the round-6 return-value policy. Assignment
+counts even when never read: the detector does not verify schema types or follow
+dataflow. The existing 683fe05 extraction regression stays closed. raise
+AssertionError, pytest.fail and delegation alone remain untracked.
+
+### Pinned corpus by (commit, path)
+
+Both scans cover **321 non-merge commits, 160 with Python changes** through
+8826eb8, using baseline and round-7 implementations on exactly that history.
+Both contain **60 facts and 11 unknowns**, no parse errors, across **57 identities**.
+No (commit, path, kind) or multiplicity changed. Unlisted identities have zero
+facts and unknowns. The previous pinned cohorts remain 57 facts + 11 unknowns
+through 0df4629 and 58 facts + 11 unknowns through 8c355ed; the two additional
+facts in this cohort belong to 8826eb8, rather than a detector regression.
+
+| Commit | Path | Facts before | Facts after | Unknowns before | Unknowns after |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `0e4855c4018eeae2e644b1d129b097603c7b0b53` | `contracts/tests/test_contracts.py` | 1 | 1 | 1 | 1 |
+| `130e7ad95223c585d8fb7dae759872797741d5c6` | `backend/tests/graph/test_workspace.py` | 1 | 1 | 0 | 0 |
+| `14713717b402ee1d333a3cd45944f1e0c46f9ac0` | `tools/tests/test_eslint_boundaries.py` | 0 | 0 | 1 | 1 |
+| `20c0333fb0bcaedb0844f3cf5b6d7cde600e8c70` | `backend/tests/workspace/test_workspace.py` | 1 | 1 | 0 | 0 |
+| `23e388110ff5b6f4289cd55c60adc2cf2388aa59` | `backend/tests/graph/test_layout.py` | 3 | 3 | 0 | 0 |
+| `23e388110ff5b6f4289cd55c60adc2cf2388aa59` | `backend/tests/test_app.py` | 1 | 1 | 0 | 0 |
+| `28f08d38f295307c99b6f4b7ae2e6ead4be75923` | `contracts/tests/test_contracts.py` | 1 | 1 | 1 | 1 |
+| `2b5a9b4e281f47bac0ef98ca13e3891700bdf848` | `backend/tests/workspace/test_runner.py` | 1 | 1 | 0 | 0 |
+| `2ff6368407c92538a5c40f11189a64cc1f3fb5f0` | `tools/tests/test_e2e_run.py` | 1 | 1 | 0 | 0 |
+| `3841dee9228006bbe3c4cffdd2d607f63de906b1` | `backend/tests/changes/test_user_save.py` | 0 | 0 | 1 | 1 |
+| `38ce742400808473b0fbb73b263b4e612a404e7d` | `tools/tests/test_smoke.py` | 1 | 1 | 0 | 0 |
+| `407515a0082b1668ab2649e8af46e4411d2291c2` | `backend/tests/changes/test_request_changes.py` | 1 | 1 | 0 | 0 |
+| `5190fc7e9d8d26365fa03c305252b2b2817f001d` | `tools/tests/test_demo_check.py` | 1 | 1 | 0 | 0 |
+| `51b980321c95e5c5a34b55fe0bcb3646a7523136` | `contracts/tests/test_contracts.py` | 1 | 1 | 1 | 1 |
+| `6636a0509aeb09814115784d9fc9fba08518e69d` | `backend/tests/changes/test_shortcut_detector_fix2.py` | 1 | 1 | 0 | 0 |
+| `683fe05c8698ed428b2299f114e8eaae59b3f866` | `backend/tests/api/test_brake.py` | 1 | 1 | 0 | 0 |
+| `683fe05c8698ed428b2299f114e8eaae59b3f866` | `backend/tests/api/test_start.py` | 1 | 1 | 0 | 0 |
+| `6ba86744b165ad11204e48f144197a6d37aa6a8c` | `tools/tests/test_memwatch.py` | 1 | 1 | 0 | 0 |
+| `6f05291b46a57cefa27e39fb9fd6e3b1cfebd46a` | `tools/tests/test_memwatch.py` | 2 | 2 | 0 | 0 |
+| `7e00c5158d1248d5f5031d7f36ffeb5276742cb6` | `backend/tests/api/test_commands.py` | 1 | 1 | 0 | 0 |
+| `812ab678dfe28481626a423331db0097495ff9e2` | `tools/tests/test_check_commits.py` | 1 | 1 | 0 | 0 |
+| `835e90958a996e7bf1532552b95c4e12db307907` | `tools/tests/test_capped.py` | 1 | 1 | 0 | 0 |
+| `846d1936ec117ac91a0d5a082d2f32c9fa4829c9` | `backend/tests/events/test_fixtures.py` | 2 | 2 | 1 | 1 |
+| `8826eb8c3d0fd29bdd1ff4a8405ad86923229088` | `backend/tests/changes/test_shortcut_review_round4.py` | 1 | 1 | 0 | 0 |
+| `8826eb8c3d0fd29bdd1ff4a8405ad86923229088` | `backend/tests/changes/test_shortcut_review_round5.py` | 1 | 1 | 0 | 0 |
+| `8c355edc8045c9849e542e8e9c6a9d8fc8942947` | `backend/tests/changes/test_shortcut_review_round4.py` | 1 | 1 | 0 | 0 |
+| `8e3219ab9a21f4c88b29c0d43e39daa65f3bc192` | `tools/tests/test_shortcut_corpus.py` | 1 | 1 | 0 | 0 |
+| `8ed1869fa734d4ab8cd01b99a10fd78da6e64035` | `tools/eval/tests/test_lead_probe.py` | 1 | 1 | 1 | 1 |
+| `912a6b80a308a343115fb76394fe7c59acb28d4a` | `backend/tests/agents/test_loop_sink.py` | 2 | 2 | 0 | 0 |
+| `932e1c2ff9887da2d0d787257aa5ecd839fcfc10` | `backend/tests/api/test_slots.py` | 1 | 1 | 0 | 0 |
+| `942345911bb9c37e58282b2e0d0c506238bfce03` | `backend/tests/agents/test_client.py` | 1 | 1 | 0 | 0 |
+| `942345911bb9c37e58282b2e0d0c506238bfce03` | `backend/tests/agents/test_loop.py` | 1 | 1 | 0 | 0 |
+| `942345911bb9c37e58282b2e0d0c506238bfce03` | `backend/tests/api/test_commands.py` | 1 | 1 | 0 | 0 |
+| `942345911bb9c37e58282b2e0d0c506238bfce03` | `tools/tests/test_probe_api.py` | 1 | 1 | 0 | 0 |
+| `99f9e5982b725f827422950ed8a542270a19c5a5` | `backend/tests/api/test_setup.py` | 1 | 1 | 0 | 0 |
+| `99f9e5982b725f827422950ed8a542270a19c5a5` | `backend/tests/events/test_store.py` | 1 | 1 | 0 | 0 |
+| `a464e7047415a753542a8cfe5479880529cfa13b` | `backend/tests/agents/test_tools.py` | 1 | 1 | 0 | 0 |
+| `a5f0583e8b8c73c16585304709fd200442092b82` | `tools/tests/test_e2e_run.py` | 1 | 1 | 0 | 0 |
+| `a605a12fca1e11ddbcf33e34d0a98329b3d9efd7` | `tools/tests/test_check_commits.py` | 1 | 1 | 0 | 0 |
+| `a6765c87e5a31b7a758775198671ce3e02ba3247` | `backend/tests/agents/test_client.py` | 1 | 1 | 0 | 0 |
+| `aa0b401009189482d3c266ed667fd8524dd9ace5` | `tools/tests/test_demo_check.py` | 3 | 3 | 0 | 0 |
+| `ae67995ada3f40b93f3232b01bd0dfb708a2950a` | `tools/tests/test_e2e_run.py` | 1 | 1 | 0 | 0 |
+| `aedf4c45d6ec64fce998ef80d6724145e0b6e859` | `backend/tests/api/test_brake.py` | 1 | 1 | 0 | 0 |
+| `aedf4c45d6ec64fce998ef80d6724145e0b6e859` | `backend/tests/api/test_commands.py` | 1 | 1 | 0 | 0 |
+| `aedf4c45d6ec64fce998ef80d6724145e0b6e859` | `backend/tests/api/test_slots.py` | 1 | 1 | 0 | 0 |
+| `aedf4c45d6ec64fce998ef80d6724145e0b6e859` | `contracts/tests/test_contracts.py` | 2 | 2 | 1 | 1 |
+| `bc8abbe5a732c3055be9a836ceb2703a86cd0259` | `backend/tests/changes/test_shortcut_detector_fix2.py` | 1 | 1 | 0 | 0 |
+| `bc8abbe5a732c3055be9a836ceb2703a86cd0259` | `backend/tests/changes/test_shortcut_detector_round1.py` | 1 | 1 | 0 | 0 |
+| `c816df0fbbdd117010f5bf1dff43963538dcf007` | `backend/tests/test_app.py` | 1 | 1 | 0 | 0 |
+| `d0b0a51368d39a7a68b97f59b4b135710efb2793` | `backend/tests/e2e/test_two_agents.py` | 1 | 1 | 0 | 0 |
+| `d0cb438b527e4d78a4e44fbc828558b2c5fc8844` | `backend/tests/events/test_fixtures.py` | 0 | 0 | 1 | 1 |
+| `d7b5b163053f8c26d9383e196c5a9fee8c2724db` | `backend/tests/test_app.py` | 1 | 1 | 0 | 0 |
+| `d7b5b163053f8c26d9383e196c5a9fee8c2724db` | `tools/tests/test_smoke.py` | 1 | 1 | 0 | 0 |
+| `d94f4cdfec4be5093e58a7f7b362aecf893b90ce` | `tools/tests/test_capped.py` | 1 | 1 | 0 | 0 |
+| `db0de4a250640fec8c468a2eb75d44388958d31f` | `tools/tests/test_probe_api.py` | 1 | 1 | 0 | 0 |
+| `f431c99efbf2d230a170b60718c23b2d21467273` | `contracts/tests/test_reserved.py` | 0 | 0 | 1 | 1 |
+| `ff613d05059ec1a08a80ba6086d2eeb5866be14a` | `backend/tests/changes/test_beforeafter.py` | 0 | 0 | 1 | 1 |
+
+### Deadline mutation evidence
+
+Sources are parsed before patching the clock, which advances through integer
+reads. Each site below was removed independently and restored in a finally block;
+**10/10 named tests failed with exit 1**. Later passes are isolated where needed.
+Tests are in backend/tests/changes/test_shortcut_deadlines.py; source paths are
+relative to backend/src/oversight/changes. The round-3 end-to-end expiry test also
+uses a positive budget and advancing clock instead of timeout=0. The 20,000-call
+round-6 test guards the quadratic scan only, not individual deadline sites.
+
+| Removed site | Failing test |
+| --- | --- |
+| `_shortcuts_equivalence.py:121` | `test_body_key_crosses_deadline_in_each_pass[scope]` |
+| `_shortcuts_equivalence.py:131` | `test_body_key_crosses_deadline_in_each_pass[body]` |
+| `_shortcuts_normalize.py:210` | `test_normalize_entry_observes_clock_advancing` |
+| `_shortcuts_normalize.py:215` | `test_normalize_local_walk_crosses_deadline` |
+| `_shortcuts_wording.py:46` | `test_wording_components_cross_deadline` |
+| `_shortcuts_common.py:330` | `test_transformer_crosses_deadline_during_visit` |
+| `_shortcuts_tests.py:390` | `test_row_candidate_wrappers_cross_deadline_independently[cancel]` |
+| `_shortcuts_tests.py:405` | `test_row_candidate_wrappers_cross_deadline_independently[pair]` |
+| `_shortcuts_asserts.py:326` | `test_approx_candidates_cross_deadline` |
+| `_shortcuts_asserts.py:382` | `test_assertion_pair_loop_crosses_deadline` |
+
+### Retained measurements and reproduction
+
+Historical measurements from rounds 5 and 6 are retained here in place of their
+separate reports. They are wall times for fixed synthetic inputs on one machine,
+not portable performance thresholds or preemptive timeout guarantees.
+
+| Input | Baseline | Fixed | Status before → after |
+| --- | ---: | ---: | --- |
+| 150 parametrized methods (round 5) | 2.042 s | 0.166 s | unknown → no_facts |
+| 200 parametrized methods (round 5) | 2.009 s | 0.204 s | unknown → no_facts |
+| 590 parametrized methods (round 5) | 12.042 s | 0.809 s | unknown → no_facts |
+| 20,000 imported calls, 400 files (round 6) | 16.843 s | 2.059 s | unknown → unknown |
+| 300 tests, 299 one-assert helpers (round 7) | 1.583 s | 0.555 s | no_facts → no_facts |
+
+Round-5 input: a class with a module-level literal CASES table, changing only a
+trailing comment, timeout=2. Round-6 input: the retained regression test, under
+the 2 MB cap, timeout=2; the import suffix index is built once per analysis.
+Round-7 input: check_i asserts f(i)==3; each test_i calls check_0; only a trailing
+comment changes, timeout=120. The baseline helper module is from 8826eb8.
+The regression test verifies one validation inventory per helper, including
+repeated imported calls, without asserting machine-dependent benchmark times.
+
+Reproduce the corpus command with each detector checkout, keeping the history
+revision pinned and distinct outputs: `.venv/bin/python -W ignore
+tools/shortcut_corpus.py . --revision 8826eb8 --output
+.eval-output/shortcut/fix7-VERSION.jsonl`. Facts exclude unknown and parse_error;
+compare counters keyed by (commit, path, kind), not lines or wording.
+Required tip gates: `make check` and `.venv/bin/pytest
+backend/tests/changes/test_shortcut*.py tools/tests/test_shortcut*.py`.

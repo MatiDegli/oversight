@@ -26,8 +26,11 @@ are limited to literal rows and single-bound straight-line arithmetic; otherwise
 coefficient dominance proves widening/tightening, and crossed/dynamic tolerances
 are unknown. Removed parameter rows and helpers are facts, even for legitimate
 coverage reorganizations. Historical Python 2 syntax is a parse error. This
-module is not wired into the manager. Helper checks recognize assertions and
-assert-prefixed calls, not raise AssertionError, pytest.fail or delegation.
+module is not wired into the manager. Helper checks recognize assertions,
+assert-prefixed calls and model_validate/model_validate_json results used in an
+expression or returned, not bare validation statements, raise AssertionError,
+pytest.fail or delegation. Validation use is syntactic: assignment counts even
+if the assigned value is never read; schema types and dataflow are not verified.
 """
 
 import ast

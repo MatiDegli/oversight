@@ -58,7 +58,7 @@ def test_visible_reexport_is_unknown_instead_of_call_removed() -> None:
     "new", ["def test_f():\n    pass\n", "def test_f():\n    Event.VALIDATE(RAW)\n"]
 )
 def test_validation_alone_is_not_an_asserting_helper(validation: str, new: str) -> None:
-    old = f"def event():\n    return Event.{validation}(RAW)\ndef test_f():\n    event()\n"
+    old = f"def event():\n    Event.{validation}(RAW)\ndef test_f():\n    event()\n"
     result = detect_shortcuts([("tests/test_calc.py", old, new.replace("VALIDATE", validation))])
     assert result.status == "no_facts" and not result
 
@@ -67,7 +67,7 @@ def test_validation_does_not_replace_an_unrelated_asserting_helper() -> None:
     result = detect_shortcuts(
         [
             ("tests/test_calc.py", OLD, "from helpers import check\ndef test_f():\n    check()\n"),
-            ("tests/helpers.py", None, "def check():\n    return Event.model_validate(RAW)\n"),
+            ("tests/helpers.py", None, "def check():\n    Event.model_validate(RAW)\n"),
         ]
     )
     assert result.status == "findings"
@@ -75,6 +75,8 @@ def test_validation_does_not_replace_an_unrelated_asserting_helper() -> None:
 
 
 def test_twenty_thousand_imported_calls_over_four_hundred_files_are_bounded() -> None:
+    # Guards the quadratic all-files import scan only. Individual deadline
+    # checks have isolated patched-clock tests below; this cannot prove them.
     calls = "    check()\n" * 20_000
     old = "def check():\n    assert f() == 3\ndef test_f():\n" + calls
     new = "from helpers import check\ndef test_f():\n" + calls

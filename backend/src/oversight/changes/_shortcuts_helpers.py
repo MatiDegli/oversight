@@ -24,7 +24,6 @@ def _always_true(node: ast.expr) -> bool:
 
 
 def _has_checks(func: FuncNode, source: Source) -> bool:
-    # Schema validation alone is data preparation, not an asserting helper.
     return any(
         (isinstance(n, ast.Assert) and not _always_true(n.test))
         or (
@@ -36,10 +35,13 @@ def _has_checks(func: FuncNode, source: Source) -> bool:
 
 
 def _validations(func: FuncNode, source: Source) -> Counter[str]:
+    local = walk_local(func)
+    bare = {n.value for n in local if isinstance(n, ast.Expr)}
     return Counter(
         source.resolve(n.func) or ast.dump(n.func)
-        for n in walk_local(func)
+        for n in local
         if isinstance(n, ast.Call)
+        and n not in bare
         and isinstance(n.func, ast.Attribute)
         and n.func.attr in {"model_validate", "model_validate_json"}
     )
@@ -116,8 +118,10 @@ def _imported_calls(
     helpers: dict[str, str],
     path: str,
     index: dict[str, list[Source]],
-    validations: dict[str, Counter[str]],
+    target_checks: dict[FuncNode, tuple[bool, Counter[str]]] | None = None,
 ) -> tuple[Counter[str], Counter[str]]:
+    if target_checks is None:
+        target_checks = {}
     calls: Counter[str] = Counter()
     opaque: Counter[str] = Counter()
     for node in walk_local(func):
@@ -138,14 +142,15 @@ def _imported_calls(
             target = _imported_target(resolved, path, index, source.deadline)
             if target is None or target[1] is None:
                 opaque[helpers[name]] += 1
-            elif _has_checks(target[1], target[0]) or (
-                # Preserve the closed extraction case: validation already in an
-                # asserting helper may survive extraction (683fe05). Validation
-                # does not make an otherwise non-asserting helper into a check.
-                validations[helpers[name]]
-                and not (validations[helpers[name]] - _validations(target[1], target[0]))
-            ):
-                calls[helpers[name]] += 1
+            else:
+                if target[1] not in target_checks:
+                    target_checks[target[1]] = (
+                        _has_checks(target[1], target[0]),
+                        _validations(target[1], target[0]),
+                    )
+                checks, retained = target_checks[target[1]]
+                if checks or retained:
+                    calls[helpers[name]] += 1
     return calls, opaque
 
 
@@ -213,13 +218,15 @@ def detect_helpers(
     old: dict[str, Source], new: dict[str, Source], matches: dict[TestRef, TestRef]
 ) -> list[Finding]:
     findings: list[Finding] = []
-    helpers = [
+    candidates = [
         (p, q, f)
         for p, src in old.items()
         if is_test_file(p)
         for q, f in src.functions.items()
-        if _is_helper(q, src) and _has_checks(f, src)
+        if _is_helper(q, src)
     ]
+    validations = {(p, q): _validations(f, old[p]) for p, q, f in candidates}
+    helpers = [(p, q, f) for p, q, f in candidates if _has_checks(f, old[p]) or validations[p, q]]
     targets = [
         (p, q, f)
         for p, src in new.items()
@@ -229,6 +236,7 @@ def detect_helpers(
     ]
     deadline = min((s.deadline for s in new.values()), default=float("inf"))
     index = _module_index(new, deadline)
+    target_checks: dict[FuncNode, tuple[bool, Counter[str]]] = {}
     imported = {
         (np, nq): _imported_calls(
             new[np].tests[nq],
@@ -236,13 +244,14 @@ def detect_helpers(
             {f.name: q for p, q, f in helpers if p == op},
             np,
             index,
-            {q: _validations(f, old[p]) for p, q, f in helpers if p == op},
+            target_checks,
         )
         for (np, nq), (op, _oq) in matches.items()
         if nq in new[np].tests
     }
     identities, helper_findings = _match_helpers(helpers, targets, old, new, matches, imported)
     findings.extend(helper_findings)
+    matched_helpers = set(identities.values())
     for (np, nq), (op, oq) in matches.items():
         if nq not in new[np].tests:
             continue
@@ -252,8 +261,12 @@ def detect_helpers(
             for (p, q), (old_p, old_q) in identities.items()
             if p == np and old_p == op
         }
+        visible, opaque = imported.get((np, nq), (Counter(), Counter()))
+        # Opaque imports can stand in for an extracted helper, never for a
+        # removed call to a helper that still has a matched destination.
+        extracted = Counter({q: n for q, n in opaque.items() if (op, q) not in matched_helpers})
         if _calls(old[op].tests[oq], before) - (
-            _calls(new[np].tests[nq], after) + sum(imported.get((np, nq), ()), Counter[str]())
+            _calls(new[np].tests[nq], after) + visible + extracted
         ):
             findings.append(
                 Finding(
