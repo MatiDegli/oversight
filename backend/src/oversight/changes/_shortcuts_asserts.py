@@ -2,33 +2,35 @@
 
 import ast
 
+from oversight.changes._shortcuts_approx import approx_signature
 from oversight.changes._shortcuts_common import (
     Finding,
     FuncNode,
     ShortcutKind,
-    dotted_name,
+    Source,
     is_literal_like,
     walk_local,
 )
+from oversight.changes._shortcuts_normalize import inline_assertion_calls, normalize_assertions
 
 
-def is_assert_call(node: ast.AST) -> bool:
+def is_assert_call(node: ast.AST, source: Source) -> bool:
     if not isinstance(node, ast.Call):
         return False
-    name = dotted_name(node.func)
+    name = source.resolve(node.func)
     if name is None:
         return False
     return name.rsplit(".", 1)[-1].startswith("assert")
 
 
-def _assert_nodes(func: FuncNode) -> list[ast.Assert | ast.Call]:
+def _assert_nodes(func: FuncNode, source: Source) -> list[ast.Assert | ast.Call]:
     raises_ctx: set[int] = set()
     local = walk_local(func)
     for node in local:
         if isinstance(node, (ast.With, ast.AsyncWith)):
             for item in node.items:
                 if isinstance(item.context_expr, ast.Call):
-                    name = dotted_name(item.context_expr.func)
+                    name = source.resolve(item.context_expr.func)
                     if name is not None and name.rsplit(".", 1)[-1] in {
                         "raises",
                         "assertRaises",
@@ -39,77 +41,36 @@ def _assert_nodes(func: FuncNode) -> list[ast.Assert | ast.Call]:
     for node in local:
         if id(node) in raises_ctx:
             continue
-        if isinstance(node, ast.Assert) or (isinstance(node, ast.Call) and is_assert_call(node)):
+        if isinstance(node, ast.Assert) or (
+            isinstance(node, ast.Call) and is_assert_call(node, source)
+        ):
             nodes.append(node)
     nodes.sort(key=lambda n: (n.lineno, n.col_offset))
     return nodes
 
 
-def _const_number(node: ast.expr) -> float | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
-        if isinstance(node.value, bool):
-            return None
-        return float(node.value)
-    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
-        inner = _const_number(node.operand)
-        if inner is not None:
-            return -inner if isinstance(node.op, ast.USub) else inner
-    return None
-
-
-def _approx_tolerances(node: ast.AST) -> list[tuple[str, float, float]]:
-    out: list[tuple[str, float, float]] = []
-    for child in ast.walk(node):
-        if not isinstance(child, ast.Call):
-            continue
-        name = dotted_name(child.func)
-        if name is None or name.rsplit(".", 1)[-1] != "approx":
-            continue
-        if not child.args:
-            continue
-        expected = ast.dump(child.args[0])
-        rel = 1e-6
-        abs_tol = 1e-12
-        if len(child.args) > 1:
-            value = _const_number(child.args[1])
-            if value is not None:
-                rel = value
-        if len(child.args) > 2:
-            value = _const_number(child.args[2])
-            if value is not None:
-                abs_tol = value
-        for kw in child.keywords:
-            if kw.arg in {"rel", "abs"}:
-                value = _const_number(kw.value)
-                if value is not None:
-                    if kw.arg == "rel":
-                        rel = value
-                    else:
-                        abs_tol = value
-        out.append((expected, rel, abs_tol))
-    return out
-
-
 def _check_pair(
-    path: str, old_node: ast.Assert | ast.Call, new_node: ast.Assert | ast.Call
+    path: str,
+    old_node: ast.Assert | ast.Call,
+    new_node: ast.Assert | ast.Call,
+    old: Source,
+    new: Source,
 ) -> Finding | None:
-    old_approx = _approx_tolerances(old_node)
-    new_approx = _approx_tolerances(new_node)
-    if old_approx and new_approx:
-        new_by_expected = {exp: (rel, ab) for exp, rel, ab in new_approx}
-        for exp, rel, ab in old_approx:
-            if exp in new_by_expected:
-                new_rel, new_abs = new_by_expected[exp]
-                if new_rel > rel or new_abs > ab:
-                    return Finding(
-                        path=path,
-                        line=new_node.lineno,
-                        kind=ShortcutKind.ASSERTION_LOOSENED,
-                        message=(
-                            "Please review: a pytest.approx tolerance was widened, "
-                            "so this assertion checks less precisely than before."
-                        ),
-                    )
+    old_shape, old_tolerances = approx_signature(old_node, old)
+    new_shape, new_tolerances = approx_signature(new_node, new)
+    if old_shape == new_shape and any(
+        before is not None
+        and after is not None
+        and any(right > left for left, right in zip(before, after, strict=True))
+        for before, after in zip(old_tolerances, new_tolerances, strict=False)
+    ):
+        return Finding(
+            path,
+            new_node.lineno,
+            ShortcutKind.ASSERTION_LOOSENED,
+            "Please review: a pytest.approx tolerance was widened, "
+            "so this assertion checks less precisely than before.",
+        )
     if isinstance(old_node, ast.Assert) and isinstance(new_node, ast.Assert):
         old_test, new_test = old_node.test, new_node.test
         if (
@@ -168,8 +129,8 @@ def _check_pair(
                     ),
                 )
     if isinstance(old_node, ast.Call) and isinstance(new_node, ast.Call):
-        old_name = dotted_name(old_node.func)
-        new_name = dotted_name(new_node.func)
+        old_name = old.resolve(old_node.func)
+        new_name = new.resolve(new_node.func)
         old_last = old_name.rsplit(".", 1)[-1] if old_name else ""
         new_last = new_name.rsplit(".", 1)[-1] if new_name else ""
         if old_last == "assertEqual" and new_last == "assertTrue":
@@ -205,7 +166,7 @@ def _check_pair(
     return None
 
 
-def _raises_wrappers(func: FuncNode) -> list[tuple[str, int]]:
+def _raises_wrappers(func: FuncNode, source: Source) -> list[tuple[str, int]]:
     out: list[tuple[str, int]] = []
     for node in walk_local(func):
         if not isinstance(node, (ast.With, ast.AsyncWith)):
@@ -214,7 +175,7 @@ def _raises_wrappers(func: FuncNode) -> list[tuple[str, int]]:
             ctx = item.context_expr
             if not isinstance(ctx, ast.Call):
                 continue
-            name = dotted_name(ctx.func)
+            name = source.resolve(ctx.func)
             if name is None:
                 continue
             last = name.rsplit(".", 1)[-1]
@@ -230,16 +191,17 @@ def _assert_key(node: ast.Assert | ast.Call) -> str:
 
 def detect_assertions(
     path: str,
-    old_funcs: dict[str, FuncNode],
-    new_funcs: dict[str, FuncNode],
+    old: Source,
+    new: Source,
 ) -> list[Finding]:
+    old, new = normalize_assertions(old), normalize_assertions(new)
     findings: list[Finding] = []
-    for qual, old_func in old_funcs.items():
-        new_func = new_funcs.get(qual)
+    for qual, old_func in old.functions.items():
+        new_func = new.functions.get(qual)
         if new_func is None:
             continue
-        old_asserts = _assert_nodes(old_func)
-        new_asserts = _assert_nodes(new_func)
+        old_asserts = _assert_nodes(old_func, old)
+        new_asserts = _assert_nodes(new_func, new)
         # Match by content first: swapping asserts is clean.
         unmatched_new: list[ast.Assert | ast.Call] = list(new_asserts)
         remaining_old: list[ast.Assert | ast.Call] = []
@@ -254,17 +216,47 @@ def detect_assertions(
                 unmatched_new.pop(match_idx)
             else:
                 remaining_old.append(old_node)
+        # Inlining is a fallback: a call edited before an unchanged assertion
+        # does not mean that the assertion itself was removed.
+        inline_assertion_calls(old_func)
+        inline_assertion_calls(new_func)
         # Pair remaining by a loosening / expected-value relation.
         still_old: list[ast.Assert | ast.Call] = []
         for old_node in remaining_old:
+            equivalent = next(
+                (
+                    i
+                    for i, cand in enumerate(unmatched_new)
+                    if _assert_key(cand) == _assert_key(old_node)
+                ),
+                None,
+            )
+            if equivalent is not None:
+                unmatched_new.pop(equivalent)
+                continue
             paired: Finding | None = None
             paired_idx: int | None = None
             for idx, cand in enumerate(unmatched_new):
-                found = _check_pair(path, old_node, cand)
+                found = _check_pair(path, old_node, cand, old, new)
                 if found is not None:
                     paired = found
                     paired_idx = idx
                     break
+            # Same approx check with an equal, tighter or unknowable effective
+            # tolerance is preserved, rather than treated as an assertion removal.
+            if paired is None:
+                old_shape, tolerances = approx_signature(old_node, old)
+                approx_idx = next(
+                    (
+                        i
+                        for i, cand in enumerate(unmatched_new)
+                        if tolerances and approx_signature(cand, new)[0] == old_shape
+                    ),
+                    None,
+                )
+                if approx_idx is not None:
+                    unmatched_new.pop(approx_idx)
+                    continue
             if paired is not None and paired_idx is not None:
                 findings.append(paired)
                 unmatched_new.pop(paired_idx)
@@ -272,7 +264,7 @@ def detect_assertions(
             # A tightening (the reverse of a loosening) is clean.
             tight_idx: int | None = None
             for idx, cand in enumerate(unmatched_new):
-                reverse = _check_pair(path, cand, old_node)
+                reverse = _check_pair(path, cand, old_node, new, old)
                 if reverse is not None and reverse.kind == ShortcutKind.ASSERTION_LOOSENED:
                     tight_idx = idx
                     break
@@ -293,8 +285,8 @@ def detect_assertions(
                 )
             )
         # Removing a raises wrapper around a call.
-        old_wrappers = _raises_wrappers(old_func)
-        new_wrappers = _raises_wrappers(new_func)
+        old_wrappers = _raises_wrappers(old_func, old)
+        new_wrappers = _raises_wrappers(new_func, new)
         unmatched_wrappers: list[tuple[str, int]] = list(new_wrappers)
         for key, line in old_wrappers:
             match_idx = None

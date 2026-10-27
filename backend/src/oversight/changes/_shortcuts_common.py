@@ -42,17 +42,6 @@ def is_test_file(path: str) -> bool:
     )
 
 
-def dotted_name(node: ast.expr) -> str | None:
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        base = dotted_name(node.value)
-        return f"{base}.{node.attr}" if base is not None else None
-    if isinstance(node, ast.Call):
-        return dotted_name(node.func)
-    return None
-
-
 class _Bindings(ast.NodeVisitor):
     """Collect one scope's bindings; conflicting/rebound names are unknown.
 
@@ -85,7 +74,8 @@ class _Bindings(ast.NodeVisitor):
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         for alias in node.names:
             if alias.name != "*":
-                target = f"{node.module}.{alias.name}" if not node.level else None
+                module = "." * node.level + (node.module or "")
+                target = f"{module}.{alias.name}"
                 self.bind(alias.asname or alias.name, target)
 
     def visit_FunctionDef(self, node: FuncNode) -> None:
@@ -121,8 +111,8 @@ def _scope_bindings(body: list[ast.stmt], args: ast.arguments | None = None) -> 
     return visitor.names
 
 
-def _class_is_collectable(node: ast.ClassDef) -> bool:
-    if any((dotted_name(base) or "").rsplit(".", 1)[-1] == "TestCase" for base in node.bases):
+def _class_is_collectable(node: ast.ClassDef, source: "Source") -> bool:
+    if any(source.resolve(base) == "unittest.TestCase" for base in node.bases):
         return True
     return node.name.startswith("Test") and not any(
         isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == "__init__"
@@ -164,7 +154,9 @@ class Source:
                 suffix += 1
             if isinstance(node, ast.ClassDef):
                 self.classes[key] = node
-                child_collect = collect and _class_is_collectable(node)
+                for base in [*node.bases, *[kw.value for kw in node.keywords]]:
+                    self._visit(base, prefix, scope, False)
+                child_collect = collect and _class_is_collectable(node, self)
                 args = None
             else:
                 self.functions[key] = node
@@ -177,6 +169,16 @@ class Source:
             # Methods close over the surrounding lexical scope, not class locals.
             outer = closure if closure is not None else scope
             inner = {**outer, **_scope_bindings(node.body, args)}
+            if args is not None and closure is not None:
+                positional = [*args.posonlyargs, *args.args]
+                if (
+                    positional
+                    and positional[0].arg in {"self", "cls"}
+                    and positional[0].arg not in _scope_bindings(node.body)
+                ):
+                    # A method's receiver is bound even though its runtime value
+                    # is unknown. Keep attribute resolution in this resolver.
+                    inner[positional[0].arg] = prefix
             for stmt in node.body:
                 self._visit(
                     stmt,

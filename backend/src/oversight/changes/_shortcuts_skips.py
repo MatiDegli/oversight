@@ -26,14 +26,34 @@ def _decorators(source: Source, decorators: list[ast.expr]) -> list[tuple[str, i
     ]
 
 
+def _parameter_markers(source: Source, node: ast.AST) -> list[tuple[str, int]]:
+    markers: list[tuple[str, int]] = []
+    for call in ast.walk(node):
+        if not isinstance(call, ast.Call) or source.resolve(call.func) != "pytest.param":
+            continue
+        for kw in call.keywords:
+            if kw.arg == "marks":
+                values = (
+                    list(kw.value.elts)
+                    if isinstance(kw.value, (ast.List, ast.Tuple))
+                    else [kw.value]
+                )
+                markers.extend(_decorators(source, values))
+    return markers
+
+
 def _definition_markers(source: Source, qual: str) -> list[tuple[str, int]]:
     node = source.definitions[qual]
     markers = _decorators(source, node.decorator_list)
+    for dec in node.decorator_list:
+        markers.extend(_parameter_markers(source, dec))
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         for child in walk_local(node):
             if isinstance(child, ast.Call) and (name := source.resolve(child.func)) in CALL_SKIP:
                 markers.append((name, child.lineno))
-    return sorted(markers, key=lambda marker: marker[1])
+            if isinstance(child, ast.Call) and source.resolve(child.func) == "pytest.param":
+                markers.extend(_parameter_markers(source, child))
+    return sorted(set(markers), key=lambda marker: (marker[1], marker[0]))
 
 
 def _module_markers(source: Source) -> list[tuple[str, int]]:
@@ -43,6 +63,8 @@ def _module_markers(source: Source) -> list[tuple[str, int]]:
         node = stack.pop()
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
             continue
+        if isinstance(node, ast.Call) and source.resolve(node.func) == "pytest.param":
+            markers.update(_parameter_markers(source, node))
         if (
             isinstance(node, ast.Call)
             and (name := source.resolve(node.func)) in CALL_SKIP

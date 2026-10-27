@@ -14,7 +14,7 @@ from oversight.changes._shortcuts_asserts import detect_assertions
 from oversight.changes._shortcuts_common import Change, Source, is_test_file
 from oversight.changes._shortcuts_common import Finding as Finding
 from oversight.changes._shortcuts_common import ShortcutKind as ShortcutKind
-from oversight.changes._shortcuts_literals import detect_literal_branches, test_literals
+from oversight.changes._shortcuts_literals import collect_test_literals, detect_literal_branches
 from oversight.changes._shortcuts_skips import detect_skips
 from oversight.changes._shortcuts_stubs import detect_stubs
 from oversight.changes._shortcuts_tests import detect_parametrize_expected, match_tests
@@ -95,16 +95,15 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
     inputs: set[tuple[str, object]] = set()
     for path, source in new_sources.items():
         if is_test_file(path):
-            inputs.update(test_literals(source))
+            inputs.update(collect_test_literals(source))
 
     for path, new in new_sources.items():
         old = old_sources.get(moved.get(path, path))
         if old is not None and old.text == new.text:
             continue
-        old_funcs = old.functions if old else {}
         if is_test_file(path):
             if old:
-                findings.extend(detect_assertions(path, old_funcs, new.functions))
+                findings.extend(detect_assertions(path, old, new))
                 findings.extend(detect_parametrize_expected(path, old, new))
             findings.extend(detect_skips(path, old, new, old_sources, matches))
         else:
@@ -116,13 +115,5 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
                     inputs,
                 )
             )
-        findings.extend(
-            detect_stubs(
-                path,
-                old_funcs,
-                new.functions,
-                old.text if old else None,
-                new.text,
-            )
-        )
+        findings.extend(detect_stubs(path, old, new))
     return sorted(findings, key=lambda f: (f.path, f.line, f.kind, f.message))

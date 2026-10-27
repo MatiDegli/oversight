@@ -1,16 +1,11 @@
-"""Find placeholders and tokenized TODO/FIXME comments in touched functions."""
+"""Find newly introduced placeholders, excluding declared interface members."""
 
 import ast
 import io
 import tokenize
+from collections import Counter
 
-from oversight.changes._shortcuts_common import (
-    Finding,
-    FuncNode,
-    ShortcutKind,
-    dotted_name,
-    walk_local,
-)
+from oversight.changes._shortcuts_common import Finding, ShortcutKind, Source, walk_local
 
 
 def _todo_comments(source: str) -> list[tuple[int, str]]:
@@ -27,95 +22,100 @@ def _todo_comments(source: str) -> list[tuple[int, str]]:
     return out
 
 
-def detect_stubs(
-    path: str,
-    old_funcs: dict[str, FuncNode],
-    new_funcs: dict[str, FuncNode],
-    old_source: str | None,
-    new_source: str,
-) -> list[Finding]:
-    touched: dict[str, FuncNode] = {}
-    for qual, func in new_funcs.items():
-        old_func = old_funcs.get(qual)
-        if (
-            old_func is None
-            or ast.dump(old_func) != ast.dump(func)
-            or (
-                old_source is not None
-                and ast.get_source_segment(old_source, old_func)
-                != ast.get_source_segment(new_source, func)
+def _interfaces(source: Source) -> set[str]:
+    interfaces: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for qual, cls in source.classes.items():
+            bases = [base.value if isinstance(base, ast.Subscript) else base for base in cls.bases]
+            declared = any(
+                source.resolve(base) in {"typing.Protocol", "typing_extensions.Protocol", "abc.ABC"}
+                for base in bases
+            ) or any(
+                kw.arg == "metaclass" and source.resolve(kw.value) == "abc.ABCMeta"
+                for kw in cls.keywords
             )
-        ):
-            touched[qual] = func
-    findings: list[Finding] = []
-    for func in touched.values():
+            # Local class names resolve conservatively to unknown. Match them
+            # only against interface classes in the enclosing lexical scope.
+            parent = qual.rpartition(".")[0]
+            inherited = any(
+                isinstance(base, ast.Name)
+                and (f"{parent}.{base.id}" if parent else base.id) in interfaces
+                for base in bases
+            )
+            if qual not in interfaces and (declared or inherited):
+                interfaces.add(qual)
+                changed = True
+    return interfaces
+
+
+type Stub = tuple[str, int, str]
+
+
+def _inventory(source: Source) -> dict[str, list[Stub]]:
+    result: dict[str, list[Stub]] = {qual: [] for qual in source.functions}
+    for qual, func in source.functions.items():
         for node in walk_local(func):
+            label = None
             if isinstance(node, ast.Pass):
-                findings.append(
-                    Finding(
-                        path=path,
-                        line=node.lineno,
-                        kind=ShortcutKind.STUB_LEFT,
-                        message=(
-                            "Please review: a 'pass' placeholder was left "
-                            "in a function this change touched."
-                        ),
-                    )
-                )
+                label = "'pass'"
             elif (
                 isinstance(node, ast.Expr)
                 and isinstance(node.value, ast.Constant)
                 and node.value.value is Ellipsis
             ):
-                findings.append(
-                    Finding(
-                        path=path,
-                        line=node.lineno,
-                        kind=ShortcutKind.STUB_LEFT,
-                        message=(
-                            "Please review: a '...' placeholder was left "
-                            "in a function this change touched."
-                        ),
-                    )
-                )
-            elif isinstance(node, ast.Raise) and node.exc is not None:
-                exc = node.exc
-                name = dotted_name(exc.func if isinstance(exc, ast.Call) else exc)
-                if name is not None and name.rsplit(".", 1)[-1] == "NotImplementedError":
-                    findings.append(
-                        Finding(
-                            path=path,
-                            line=node.lineno,
-                            kind=ShortcutKind.STUB_LEFT,
-                            message=(
-                                "Please review: NotImplementedError was left "
-                                "in a function this change touched."
-                            ),
-                        )
-                    )
-    comments = _todo_comments(new_source)
-    if comments:
-        for line, text in comments:
-            enclosing: list[tuple[str, FuncNode]] = [
-                (qual, func)
-                for qual, func in new_funcs.items()
-                if func.lineno <= line <= (func.end_lineno or func.lineno)
-            ]
-            if not enclosing:
+                label = "'...'"
+            elif (
+                isinstance(node, ast.Raise)
+                and node.exc is not None
+                and source.resolve(node.exc)
+                in {"NotImplementedError", "builtins.NotImplementedError"}
+            ):
+                label = "NotImplementedError"
+            if label is not None and isinstance(node, ast.stmt):
+                result[qual].append((label, node.lineno, f"a {label} placeholder"))
+    for line, text in _todo_comments(source.text):
+        enclosing = [
+            (qual, func)
+            for qual, func in source.functions.items()
+            if func.lineno <= line <= (func.end_lineno or func.lineno)
+        ]
+        if enclosing:
+            qual, _ = min(
+                enclosing, key=lambda item: (item[1].end_lineno or item[1].lineno) - item[1].lineno
+            )
+            result[qual].append((text, line, f"a TODO/FIXME comment ('{text}')"))
+    return result
+
+
+def detect_stubs(path: str, old: Source | None, new: Source) -> list[Finding]:
+    before = _inventory(old) if old else {}
+    interfaces = _interfaces(new)
+    findings: list[Finding] = []
+    for qual, stubs in _inventory(new).items():
+        func = new.functions[qual]
+        if qual.rpartition(".")[0] in interfaces or any(
+            new.resolve(dec)
+            in {"typing.overload", "typing_extensions.overload", "abc.abstractmethod"}
+            for dec in func.decorator_list
+        ):
+            continue
+        previous = Counter(key for key, _, _ in before.get(qual, []))
+        reported: set[int] = set()
+        for key, line, description in sorted(stubs, key=lambda stub: stub[1]):
+            if previous[key]:
+                previous[key] -= 1
                 continue
-            enclosing.sort(key=lambda item: (item[1].end_lineno or item[1].lineno) - item[1].lineno)
-            innermost_qual, _innermost = enclosing[0]
-            if innermost_qual not in touched:
+            if line in reported:
                 continue
+            reported.add(line)
             findings.append(
                 Finding(
-                    path=path,
-                    line=line,
-                    kind=ShortcutKind.STUB_LEFT,
-                    message=(
-                        f"Please review: a TODO/FIXME comment ('{text}') was left "
-                        "in a function this change touched."
-                    ),
+                    path,
+                    line,
+                    ShortcutKind.STUB_LEFT,
+                    f"Please review: {description} was introduced in this function.",
                 )
             )
     return findings

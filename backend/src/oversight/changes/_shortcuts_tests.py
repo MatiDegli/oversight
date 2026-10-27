@@ -22,8 +22,25 @@ class _LocalNames(ast.NodeTransformer):
         return node
 
 
+def _callee_identity(source: Source, expr: ast.expr) -> str:
+    resolved = source.resolve(expr)
+    root = expr
+    while isinstance(root, ast.Attribute):
+        root = root.value
+    if isinstance(root, ast.Name) and root.id in {"self", "cls"}:
+        return ast.dump(expr)
+    imported = (
+        isinstance(root, ast.Name)
+        and root.id not in {"self", "cls"}
+        and source.scopes.get(root, {}).get(root.id) is not None
+    )
+    if imported and resolved is not None:
+        return f"@import:{resolved.rsplit('.', 1)[-1]}"
+    return resolved or ast.dump(expr)
+
+
 def _rename_key(source: Source, func: FuncNode) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Only alpha-equivalent bodies with identical called names are renames.
+    """Only alpha-equivalent bodies with identical final called names are renames.
 
     No similarity scores, extraction/inlining or call substitutions. Nested
     scopes are left exact: uncertain matches become a neutral removal finding.
@@ -46,14 +63,24 @@ def _rename_key(source: Source, func: FuncNode) -> tuple[tuple[str, ...], tuple[
     ):
         local = {}
     normalizer = _LocalNames(local)
-    body = tuple(ast.dump(normalizer.visit(copy.deepcopy(stmt))) for stmt in func.body)
+    body: list[str] = []
+    for stmt in func.body:
+        copied = copy.deepcopy(stmt)
+        # Import paths can change during a move. Preserve the final callee name
+        # (add versus sub still differs), rather than the module or import alias.
+        for original, clone in zip(list(ast.walk(stmt)), list(ast.walk(copied)), strict=True):
+            if isinstance(original, ast.Call) and isinstance(clone, ast.Call):
+                identity = _callee_identity(source, original.func)
+                if identity.startswith("@import:"):
+                    clone.func = ast.Name(id=identity, ctx=ast.Load())
+        body.append(ast.dump(normalizer.visit(copied)))
     calls = tuple(
-        source.resolve(node.func) or ast.dump(node.func)
+        _callee_identity(source, node.func)
         for stmt in func.body
         for node in ast.walk(stmt)
         if isinstance(node, ast.Call)
     )
-    return body, calls
+    return tuple(body), calls
 
 
 type TestRef = tuple[str, str]

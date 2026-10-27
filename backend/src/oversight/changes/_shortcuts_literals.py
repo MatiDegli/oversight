@@ -40,7 +40,7 @@ def _literal_value_of(node: ast.expr) -> tuple[str, object] | None:
     return None
 
 
-def test_literals(source: Source) -> set[tuple[str, object]]:
+def collect_test_literals(source: Source) -> set[tuple[str, object]]:
     literals: set[tuple[str, object]] = set()
     # Traverse calls on either side of comparisons. Literal expected values are
     # not call arguments, so they never need to hide a whole comparison side.
@@ -65,7 +65,7 @@ def test_literals(source: Source) -> set[tuple[str, object]]:
         ):
             excluded.update(ast.walk(node))
             continue
-        if is_assert_call(node):
+        if is_assert_call(node, source):
             # First argument to unittest assertions is the actual expression;
             # nested calls there are handled by this same traversal.
             for arg in node.args[1:]:
