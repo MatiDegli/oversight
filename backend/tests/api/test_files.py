@@ -109,21 +109,6 @@ async def test_get_file_for_a_closed_agent_is_not_found(tmp_path: Path) -> None:
             assert error_code(gone) == (404, "not_found"), agent
 
 
-async def test_agent_save_answers_501_until_the_review_front(tmp_path: Path) -> None:
-    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
-        created = await reviewed(s)
-        agent = await read(s, PRICING, agent=created.agent_id)
-        main = await read(s, PRICING)
-        shown = len(s.events())
-
-        response = await put(s, PRICING, agent.content + "# mine\n", agent.hash, created.agent_id)
-
-        assert error_code(response) == (501, "not_implemented")
-        assert await read(s, PRICING, agent=created.agent_id) == agent  # nothing written
-        assert await read(s, PRICING) == main
-        assert len(s.events()) == shown
-
-
 async def test_get_refusals_and_misses(tmp_path: Path) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         os.symlink(tmp_path, s.live.workspace.main.root / "link")

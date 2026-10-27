@@ -72,8 +72,8 @@ class Commands(Protocol):
         ...
 
     async def save_file(self, request: SaveFile) -> FileSaved:
-        """Main only. Raises `InvalidPath`, `StaleFile`, `WrongState`, and `WorkspaceError` for a
-        save that failed and was undone."""
+        """Raises `ChangeNotFound`, `InvalidPath`, `StaleFile`, `WrongState`, and
+        `WorkspaceError` for a save that failed and was undone."""
         ...
 
     async def rescan(self) -> None: ...
@@ -153,11 +153,12 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
 
     @router.put("/files")
     async def save_file(request: SaveFile) -> FileSaved:  # pyright: ignore[reportUnusedFunction]
-        if request.agent_id is not None:
-            # Until the request-changes front: nothing is read or written.
-            raise ApiError("not_implemented", "Saving to an agent's worktree is not built yet")
         try:
             return await commands.save_file(request)
+        except ChangeNotFound:
+            raise ApiError(
+                "not_found", f"there is no live worktree for {request.agent_id!r}"
+            ) from None
         except InvalidPath as error:
             raise ApiError("invalid_path", str(error)) from None
         except StaleFile as error:
