@@ -1,4 +1,4 @@
-import type { Collection, Core, Position } from "cytoscape";
+import type { Core, NodeCollection, Position } from "cytoscape";
 
 import { getActiveTheme } from "../theme";
 
@@ -35,7 +35,7 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
   // Cytoscape's bounding boxes are a little larger than the drawn shapes (strokes, rounding), so
   // the sizes come from a measured leaf and parent when the graph has them, and from the tokens
   // (the drawn size plus its border) when it does not.
-  const bounds = (collection: Collection) =>
+  const bounds = (collection: Pick<NodeCollection, "boundingBox">) =>
     collection.boundingBox({ includeLabels: false, includeOverlays: false });
   const leaf = cy.nodes(":childless").first();
   const frame = cy.nodes(":parent").first();

@@ -2,6 +2,8 @@ import type { StylesheetJson } from "cytoscape";
 
 import type { getActiveTheme } from "../theme";
 
+import { nodeGeometry } from "./geometry";
+
 export type EdgeShape = "bezier" | "taxi";
 // The product default. The dev-only query override lets make shots compare identical presets.
 export const EDGE_CURVE_STYLE: EdgeShape = "bezier";
@@ -24,6 +26,7 @@ export function graphStyles(
 ): StylesheetJson {
   const px = Number.parseFloat;
   const agents = { A: "agent-a", B: "agent-b" } as const;
+  const geometry = nodeGeometry(theme);
   const pendingBorder = {
     "border-style": "dashed" as const,
     "border-width": theme["agent-border-width"],
@@ -50,8 +53,8 @@ export function graphStyles(
         shape: "round-rectangle",
         "corner-radius": theme["radius-node"],
         // Keep the preset's proportions in units of the graph's body type.
-        width: px(theme["body-size"]) * 10,
-        height: px(theme["body-size"]) * 4,
+        width: geometry.width,
+        height: geometry.height,
       },
     },
     {
@@ -68,7 +71,7 @@ export function graphStyles(
     },
     {
       selector: "node.module:parent, node.class:parent",
-      style: { "text-valign": "top", padding: `${String(px(theme["spacing-md"]) * 3)}px` },
+      style: { "text-valign": "top", padding: `${String(geometry.padding)}px` },
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
       (["A", "B"] as const).map((slot) => {
@@ -169,6 +172,17 @@ export function graphStyles(
       },
     },
     { selector: "node.dimmed, edge.dimmed", style: { opacity: theme["dim-node"] } },
-    { selector: "node.module.dimmed", style: { opacity: theme["dim-module"] } },
+    {
+      // A frame dims through its own paint, never `opacity`: Cytoscape draws a child at its own
+      // opacity times its parent's, so a dimmed child in a dimmed frame would fall below the
+      // token, and a lit child (in the cone) would be dimmed with its frame.
+      selector: "node.module.dimmed, node.class:parent.dimmed",
+      style: {
+        opacity: 1,
+        "background-opacity": theme["module-opacity"] * theme["dim-module"],
+        "border-opacity": theme["dim-module"],
+        "text-opacity": theme["dim-module"],
+      },
+    },
   ];
 }

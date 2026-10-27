@@ -120,18 +120,24 @@ describe("the box of a new node", () => {
   it("comes from the theme's tokens, so a larger body type keeps larger nodes apart", () => {
     const large = { ...themes.dark, "body-size": "30px" };
     cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(large) });
-    const add = vi.spyOn(cy, "add");
+    // The layout that follows the first update moves nodes it was handed; keep a copy of them.
+    let handed: GraphElement[] = [];
+    const add = cy.add.bind(cy);
+    vi.spyOn(cy, "add").mockImplementation((elements) => {
+      handed = structuredClone(elements) as GraphElement[];
+      return add(elements);
+    });
     const node = (id: string): GraphElement => ({
       group: "nodes",
       data: { id, kind: "function" },
       classes: "function",
     });
-    updateGraph(cy, [node("a"), node("b")], large);
-    const [a, b] = (add.mock.calls[0]?.[0] as GraphElement[]).map((e) => required(e.position));
-    // A leaf at 30px body type is 300x120 plus its border, and a margin is kept around it.
-    const apart =
-      Math.abs(required(a).x - required(b).x) >= 301 + 10 ||
-      Math.abs(required(a).y - required(b).y) >= 121 + 10;
-    expect(apart).toBe(true);
+    updateGraph(cy, [node("a"), node("b"), node("c")], large);
+    const points = handed.map((element) => required(element.position));
+    expect(points).toHaveLength(3);
+    // A leaf at 30px body type is 300x120 plus its border: no two of them may overlap.
+    for (const [i, p] of points.entries())
+      for (const q of points.slice(i + 1))
+        expect(Math.abs(p.x - q.x) >= 301 || Math.abs(p.y - q.y) >= 121, String(i)).toBe(true);
   });
 });

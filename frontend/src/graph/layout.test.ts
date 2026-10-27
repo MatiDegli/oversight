@@ -22,6 +22,7 @@ import { applyEvent, createInitialState } from "../state";
 import { themes } from "../theme";
 
 import { graphElements } from "./elements";
+import { FIT_PADDING } from "./geometry";
 import { EDGE_CURVE_STYLE, edgeShape, graphStyles } from "./styles";
 
 const root = new URL("../../../", import.meta.url);
@@ -115,14 +116,20 @@ describe("demo preset", () => {
   it("sizes the preset for the watch viewport that DESIGN.md gives the graph", () => {
     // DESIGN.md, Layout: a 1920x1080 take has a 52px top bar, a 56px rail and a 400px agents panel
     // in watch mode, so the graph gets 1464x1028; the camera fits it with 40px of padding.
-    expect(watchViewport).toEqual({ width: 1464 - 80, height: 1028 - 80 });
+    expect(watchViewport).toEqual({
+      width: 1464 - FIT_PADDING * 2,
+      height: 1028 - FIT_PADDING * 2,
+    });
   });
 
   it("projects graph labels at design size at the watch viewport's fit", () => {
     const cy = renderedDemo(generated.positions);
     try {
       const bounds = cy.elements().boundingBox();
-      const zoom = Math.min((1464 - 80) / bounds.w, (1028 - 80) / bounds.h);
+      const zoom = Math.min(
+        (1464 - FIT_PADDING * 2) / bounds.w,
+        (1028 - FIT_PADDING * 2) / bounds.h,
+      );
       const label = Number.parseFloat(themes.dark["body-size"]) * zoom;
       // DESIGN.md sets graph labels at 15px; at fit the preset must not shrink them below that.
       expect(label).toBeGreaterThanOrEqual(15);
@@ -328,7 +335,7 @@ describe("demo preset", () => {
     [1e16, "1e+16"],
     [1.5e16, "1.5e+16"],
     [-1.5e17, "-1.5e+17"],
-    [123456789012345678.0, "1.2345678901234568e+17"],
+    [1.2345678901234568e17, "1.2345678901234568e+17"],
     [1e21, "1e+21"],
     [1e22, "1e+22"],
     [1e300, "1e+300"],

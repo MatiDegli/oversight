@@ -5,16 +5,16 @@ import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import type { GraphNode, GraphSnapshot, Point } from "../../contracts/generated/contracts.ts";
+import { FIT_PADDING, nodeGeometry } from "../src/graph/geometry.ts";
 import { themes } from "../src/theme/index.ts";
 
 const px = (token: string) => Number.parseFloat(token);
-const font = px(themes.dark["body-size"]);
-const gap = px(themes.dark["spacing-lg"]);
-const padding = px(themes.dark["spacing-md"]) * 3 + 1;
-const leafWidth = font * 10 + 2;
-const leafHeight = font * 4 + 2;
-/** GraphView fits the camera with this padding on every side (updateGraph.ts). */
-const fitPadding = 40;
+const geometry = nodeGeometry(themes.dark);
+const { font, gap } = geometry;
+// A frame's padding and its border; a leaf and a childless container reserve their border twice.
+const padding = geometry.inset;
+const leafWidth = geometry.width + geometry.border * 2;
+const leafHeight = geometry.height + geometry.border * 2;
 /**
  * The graph area of a 1920x1080 take in watch mode (DESIGN.md, Layout: a 52px top bar, a 56px left
  * rail and the 400px agents panel), less the fit padding. Review mode has less room, but it moves
@@ -25,8 +25,8 @@ export const watchViewport = {
     1920 -
     px(themes.dark["left-rail-width"]) -
     px(themes.dark["agents-panel-width"]) -
-    fitPadding * 2,
-  height: 1080 - px(themes.dark["top-bar-height"]) - fitPadding * 2,
+    FIT_PADDING * 2,
+  height: 1080 - px(themes.dark["top-bar-height"]) - FIT_PADDING * 2,
 };
 
 /**
