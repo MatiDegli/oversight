@@ -629,6 +629,8 @@ class ChangeManager:
             detail = "timed out" if result.timed_out else self._workspace.redact(result.stderr)
             raise WorkspaceError(f"git merge failed: {detail.strip()[-500:]}")
         if await self._yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+            if pre != rec.base_commit and not await self._combined_tests_pass(rec, comment, pre):
+                return
             await self._git(
                 main,
                 "commit",
@@ -651,10 +653,27 @@ class ChangeManager:
         await self._git(main, "merge", "--abort")
         if not (await self._facts(rec.head_commit or rec.base_commit)).unchanged(pre):
             raise WorkspaceError("main did not return to its HEAD after the conflict")
-        conflict = Conflict(kind="merge", paths=paths, tests=None)
+        await self._conflicted(rec, comment, Conflict(kind="merge", paths=paths, tests=None))
+        return True
+
+    async def _combined_tests_pass(self, rec: _Change, comment: str | None, pre: str) -> bool:
+        """R5: main moved since the change's base, so the merge, staged on main, is tested before
+        its commit. A failure or timeout aborts it and resolves as a tests conflict. A cancel
+        during the run is `_recover`'s, which aborts on `MERGE_HEAD`."""
+        main = self._workspace.main
+        run = await self._workspace.run_tests(main, timeout_s=rec.task.limits.test_timeout_s)
+        if run.result.outcome == "passed":
+            return True
+        await self._git(main, "merge", "--abort")
+        if not (await self._facts(rec.head_commit or rec.base_commit)).unchanged(pre):
+            raise WorkspaceError("main did not return to its HEAD after the combined tests")
+        await self._conflicted(rec, comment, Conflict(kind="tests", paths=[], tests=run.result))
+        return False
+
+    async def _conflicted(self, rec: _Change, comment: str | None, conflict: Conflict) -> None:
+        """Main is back at `pre`: send the approval's conflict and leave the change `conflict`."""
         await self._publish(self._resolution(rec, "approved", comment, conflict=conflict))
         rec.state = "conflict"
-        return True
 
     async def _facts(self, head_commit: str) -> _Facts:
         main = self._workspace.main
