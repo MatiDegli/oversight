@@ -728,6 +728,19 @@ describe("hubOf", () => {
     ).toBeNull();
     expect(hubOf(graphOf([]))).toBeNull();
   });
+
+  it("does not count an import that names a function, even when it outnumbers the calls", () => {
+    expect(
+      hubOf(
+        graphOf([
+          ["a", "b", "imports"],
+          ["c", "b", "imports"],
+          ["d", "b", "imports"],
+          ["a", "d"],
+        ]),
+      ),
+    ).toBe("d");
+  });
 });
 
 describe("startCamera", () => {
