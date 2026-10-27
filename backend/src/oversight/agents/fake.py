@@ -7,10 +7,13 @@ Every test and `make check` run agents through it, so nothing spends credits. A 
 
 `arguments` is an object, or a string sent as is (to script malformed JSON). A turn without `usage`
 reports none, so the run records it as unknown. Once the turns run out, the model answers with no
-tool call, as a real model that stops calling tools would.
+tool call, as a real model that stops calling tools would. Optional `turn_delay_s` delays each
+scripted turn asynchronously (0 to 5 seconds), for reproducible overlap and cancellation demos.
 """
 
+import asyncio
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +27,21 @@ from oversight_contracts.events import ModelProfile
 class Script:
     task: str
     turns: list[ModelReply]
+    turn_delay_s: float = 0.0
+
+    def __post_init__(self) -> None:
+        _delay(self.turn_delay_s)
+
+
+def _delay(raw: object) -> float:
+    if (
+        isinstance(raw, bool)
+        or not isinstance(raw, (int, float))
+        or not math.isfinite(raw)
+        or not 0 <= raw <= 5
+    ):
+        raise ValueError("turn_delay_s must be a finite number between 0 and 5 seconds")
+    return float(raw)
 
 
 def _usage(raw: object) -> Usage:
@@ -60,7 +78,9 @@ def parse_script(text: str) -> Script:
                 model=FAKE_MODEL.model,
             )
         )
-    return Script(task=str(data["task"]), turns=turns)
+    return Script(
+        task=str(data["task"]), turns=turns, turn_delay_s=_delay(data.get("turn_delay_s", 0))
+    )
 
 
 def load_script(path: Path) -> Script:
@@ -73,6 +93,7 @@ class ScriptedModel:
 
     def __init__(self, script: Script, profile: ModelProfile = FAKE_MODEL) -> None:
         self._turns = list(script.turns)
+        self._turn_delay_s = script.turn_delay_s
         self._profile = profile
         self.requests: list[list[Message]] = []
 
@@ -86,4 +107,6 @@ class ScriptedModel:
         self.requests.append([dict(message) for message in messages])
         if not self._turns:
             return ModelReply(text=None, tool_calls=[], model=self._profile.model)
+        if self._turn_delay_s:
+            await asyncio.sleep(self._turn_delay_s)
         return self._turns.pop(0)

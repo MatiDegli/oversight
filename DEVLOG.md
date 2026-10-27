@@ -14,3 +14,7 @@ One line per day, in Argentina time (ART).
   task box and Start agent; spend meter; layout and transport fixes; smoke test, screenshot tooling,
   test memory and time caps, parallel check groups and pytest workers; `make demo` and
   `make demo-check`.
+- **2026-10-27:** `make demo-check` extended to the level 2 API path: two paced fake agents, correlated
+  SSE waits, Request changes and a new revision, Stop and discard, file-view edits on main, usage;
+  the dot field, rings and breathing light behind the graph, with WebGL failure and context-loss
+  handling and the live diff's impact light.
