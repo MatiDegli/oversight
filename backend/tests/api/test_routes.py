@@ -61,7 +61,9 @@ async def serve(app: FastAPI | Settings) -> AsyncIterator[httpx.AsyncClient]:
     port = sock.getsockname()[1]
     if isinstance(app, Settings):
         app = create_app(replace(app, port=port), ReplayConfig(log=LOG, speed=0))
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_graceful_shutdown=1))
+    server = uvicorn.Server(
+        uvicorn.Config(app, log_level="warning", proxy_headers=False, timeout_graceful_shutdown=1)
+    )
     task = asyncio.create_task(server.serve(sockets=[sock]))
     try:
         async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as client:

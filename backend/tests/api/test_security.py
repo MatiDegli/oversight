@@ -3,7 +3,7 @@
 import asyncio
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
@@ -22,6 +22,7 @@ async def invoke(
     headers: list[tuple[bytes, bytes]],
     *,
     kind: str = "http",
+    scheme: str = "http",
     method: str = "GET",
     path: str = "/",
     extension: bool = False,
@@ -36,7 +37,7 @@ async def invoke(
 
     scope: Any = {
         "type": kind,
-        "scheme": "http",
+        "scheme": scheme,
         "method": method,
         "path": path,
         "headers": headers,
@@ -302,3 +303,35 @@ def test_port_precedence_unset_defaults_and_equal_port_failure(tmp_path, monkeyp
         Settings.load(env_file)
     with pytest.raises(ValueError, match="differ"):
         Settings(port=9003, vite_port=9003)
+
+
+async def test_forwarded_protocol_does_not_change_omitted_host_port() -> None:
+    sent, downstream = await invoke(
+        [(b"host", b"localhost"), (b"x-forwarded-proto", b"https")],
+        policy=AuthorityPolicy(443),
+    )
+    assert sent[0]["status"] == 403
+    downstream.assert_not_called()
+    sent, downstream = await invoke(
+        [(b"host", b"localhost"), (b"x-forwarded-proto", b"http")],
+        scheme="https",
+        policy=AuthorityPolicy(443),
+    )
+    assert not sent
+    downstream.assert_awaited_once()
+
+
+@pytest.mark.parametrize("command", ["serve", "replay"])
+def test_cli_keeps_transport_scheme_independent_of_proxy_headers(monkeypatch, command) -> None:
+    from oversight import __main__ as cli
+
+    # No listener or provider: intercept the process boundary, checking both production entries.
+    run = Mock()
+    monkeypatch.setattr(cli.uvicorn, "run", run)
+    monkeypatch.setattr(cli.Settings, "load", lambda: Settings())
+    monkeypatch.setattr(cli, "create_app", Mock())
+    args = ["oversight", command] + (["unused.jsonl"] if command == "replay" else [])
+    monkeypatch.setattr("sys.argv", args)
+    cli.main()
+    run.assert_called_once()
+    assert run.call_args.kwargs["proxy_headers"] is False

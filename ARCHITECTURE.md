@@ -27,7 +27,8 @@ routing. Its single policy admits only `localhost`, `127.0.0.1`, `[::1]` at P an
 exact `http://` Origins at those authorities. Missing/duplicate/malformed Host and supplied invalid,
 null, duplicate or foreign Origin receive typed `forbidden/403` without echoing header values.
 Absent Origin is allowed for HTTP CLI writes with the terminal off; Host is still checked. No CORS
-or forwarded headers widen admission. Omitted authority ports mean protocol defaults. Accepted IPv6
+or forwarded headers widen admission. Uvicorn disables proxy-header interpretation so the
+transport scheme, used for omitted Host ports, cannot be changed by forwarded headers. Omitted authority ports mean protocol defaults. Accepted IPv6
 authorities do not change listener binding. WebSockets are refused before acceptance (HTTP denial
 if supported, otherwise close). Lifespan and other scopes pass through; SSE is never buffered.
 

@@ -232,7 +232,9 @@ async def live_server(
     sock.listen()
     port = sock.getsockname()[1]
     app = create_app(replace(settings, port=port), client_factory=client_factory)
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_graceful_shutdown=1))
+    server = uvicorn.Server(
+        uvicorn.Config(app, log_level="warning", proxy_headers=False, timeout_graceful_shutdown=1)
+    )
     task = asyncio.create_task(server.serve(sockets=[sock]))
     try:
         async with httpx.AsyncClient(
