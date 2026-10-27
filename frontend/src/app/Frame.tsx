@@ -10,6 +10,7 @@ import { ReviewPanel } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
+import { SpendMeter } from "./SpendMeter";
 import { changeNodeIds, litNodeIds, panelOpen, readyCount } from "./view";
 import type { View } from "./view";
 
@@ -101,6 +102,7 @@ function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () => void
           </button>
         )}
       </div>
+      <SpendMeter state={state} />
     </header>
   );
 }
