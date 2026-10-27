@@ -205,12 +205,12 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   says its state in its header and gives up its count while it does; an empty module or class
   stacks its title and count. If the person's focus was in what leaves a card (the step list, Live
   diff), the card takes it, and only then.
-- **Review change takes its agent's color (2026-10-27, to confirm):** the sketches fill the button
-  with the agent's color and the dark on-agent letters, and DESIGN.md's button list does not name it
-  (primary is text-colored for Approve and merge, Send and Start agent). It follows the sketch: it
-  sits on that agent's own card, beside the lamp and the status pill that already carry the color,
-  and its label and eye icon say what it does. Cost: two primary looks on the screen. Reverting is
-  one class (`bg-text text-page`).
+- **Review change takes its agent's color (2026-10-27, approved by the maintainer):** the sketches
+  fill the button with the agent's color and the dark on-agent letters, and DESIGN.md's button list
+  does not name it (primary is text-colored for Approve and merge, Send and Start agent). It
+  follows the sketch: it sits on that agent's own card, beside the lamp and the status pill that
+  already carry the color, and its label and eye icon say what it does. Cost: two primary looks on
+  the screen. Reverting is one class (`bg-text text-page`).
 
 - **Watch growth includes a new node only outside a panel and after navigation rests:** if an
   added node lands outside the viewport, the camera may widen to include it. It waits three seconds
