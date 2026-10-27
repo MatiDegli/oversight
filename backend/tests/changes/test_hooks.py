@@ -2,6 +2,7 @@
 and `aclose` draining the close-outs before the store closes."""
 
 import asyncio
+import logging
 
 import pytest
 from changes_helpers import (
@@ -13,6 +14,7 @@ from changes_helpers import (
     cancel_twice,
     queued_callbacks_ran,
 )
+from pydantic import BaseModel
 
 from oversight.changes import WrongState
 from oversight_contracts.events import AgentStatus, ChangeResolved, ErrorReport
@@ -144,6 +146,28 @@ async def test_aclose_sends_a_failed_delta_in_order_once(h: Harness) -> None:
 
 
 @bounded
+async def test_aclose_gives_each_event_two_tries(h: Harness) -> None:
+    """The resolution fails twice in the approval, so nothing goes out. In the drain it fails once
+    and then the delta fails once: each event gets two tries, so everything is sent, in order,
+    with no second `error`."""
+    await h.run_agent(1, ADD_THRICE)
+    h.fail_once, h.fail_times = ChangeResolved, 2
+    await h.manager.approve("change-1", None)
+    assert h.types()[-1] == "error"
+    assert not {"change.resolved", "graph.delta", "agent.status"} & set(h.types())
+    h.fail_script = [ChangeResolved, GraphDelta]
+
+    await h.manager.aclose()
+
+    assert h.fail_script == []
+    # `types` checks each delta's `from_version`.
+    assert h.types()[-4:] == ["error", "change.resolved", "graph.delta", "agent.status"]
+    assert len(h.payloads(ErrorReport)) == 1
+    [delta] = h.payloads(GraphDelta)
+    assert h.manager.snapshot.version == delta.to_version
+
+
+@bounded
 async def test_aclose_waits_for_a_publish_left_running(h: Harness) -> None:
     """Cancelled twice while the store's receipt for the delta is on its way: the drain waits for
     that receipt, so it sends only `done`, never the delta the store took."""
@@ -166,15 +190,19 @@ async def test_aclose_waits_for_a_publish_left_running(h: Harness) -> None:
 
 
 @bounded
-async def test_aclose_reports_what_a_failing_store_never_took(h: Harness) -> None:
+async def test_aclose_reports_what_a_failing_store_never_took(
+    h: Harness, caplog: pytest.LogCaptureFixture
+) -> None:
     """The store refuses the delta in the approval, which is still in flight when the drain starts,
     and in the drain's two tries: one `error` names each event still unsent."""
     await h.run_agent(1, ADD_THRICE)
     h.fail_once, h.fail_times = GraphDelta, 4
     approval = h.manager.approve("change-1", None)
 
-    await h.manager.aclose()
+    with caplog.at_level(logging.DEBUG, logger="oversight.changes"):
+        await h.manager.aclose()
 
+    assert caplog.records == []  # the `error` went out, so nothing is left to log
     assert approval.done()
     assert "graph.delta" not in h.types()
     assert h.payloads(AgentStatus) == []
@@ -189,3 +217,31 @@ async def test_aclose_reports_what_a_failing_store_never_took(h: Harness) -> Non
     assert "graph.delta, agent.status done never sent" in shutdown.message
     assert "change.resolved" not in shutdown.message
     assert h.types()[-1] == "error"
+
+
+@bounded
+async def test_aclose_logs_what_a_refusing_store_never_took(
+    h: Harness, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The store refuses everything, the final `error` included: one log line per change names the
+    events it never took, by name and ids only, with no comment and no store message."""
+    await h.run_agent(1, EDIT)
+    await h.run_agent(2, ("shop/mod.py", "return 1", "return 4"))
+    h.fail_once, h.fail_times = BaseModel, 1_000  # every payload is a BaseModel
+    await h.manager.reject("change-1", "Not this.")
+    await h.manager.reject("change-2", "Nor this.")
+    assert h.payloads(ErrorReport) == []
+
+    with caplog.at_level(logging.DEBUG, logger="oversight.changes"):
+        await h.manager.aclose()
+
+    first, second = caplog.records
+    assert (first.levelno, second.levelno) == (logging.ERROR, logging.ERROR)
+    for record, n in ((first, 1), (second, 2)):
+        line = record.getMessage()
+        assert f"change-{n} (agent agent-{n})" in line
+        assert line.endswith("change.resolved, agent.status done")
+        assert "graph.delta" not in line
+        assert "this." not in line  # the decision's comment
+        assert "armed" not in line  # the store's message
+    assert h.payloads(ErrorReport) == []

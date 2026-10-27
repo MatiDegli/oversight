@@ -31,6 +31,22 @@ async def test_publish_cut_short_sends_the_rest_once(h: Harness) -> None:
 
 
 @bounded
+async def test_each_event_gets_two_tries(h: Harness) -> None:
+    """The resolution fails once and the delta fails once: each is tried twice, in order, so the
+    approval closes out whole, with no `error`, and nothing goes twice."""
+    await h.run_agent(1, ADD_THRICE)
+    h.fail_script = [ChangeResolved, GraphDelta]
+
+    await h.manager.approve("change-1", None)
+
+    assert h.fail_script == []
+    assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
+    assert h.payloads(ErrorReport) == []
+    assert h.types().count("change.resolved") == 1
+    assert not await h.has_branch("agent-1")
+
+
+@bounded
 async def test_cancel_during_a_publish_records_what_went_out(h: Harness) -> None:
     """Cancelled while the store's receipt for the delta is on its way: the delta counts as sent
     and the snapshot moves, so the next close-out sends only `done` and the chain holds."""

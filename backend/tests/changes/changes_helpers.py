@@ -167,6 +167,9 @@ class Harness:
     fail_once: type[BaseModel] | None = None
     """The next `fail_times` payloads of this type fail to publish, as a closing store would."""
     fail_times: int = 1
+    fail_script: list[type[BaseModel]] = field(default_factory=lambda: list[type[BaseModel]]())
+    """Publishes that fail in this order: one whose type is the head of the list fails and pops it,
+    any other goes through; for a store that fails a resolution once, then a delta once."""
     hold: type[BaseModel] | None = None
     """The next payload of this type is committed, then its receipt waits for `release`, with
     `held` set meanwhile, as a slow store's would."""
@@ -185,6 +188,9 @@ class Harness:
             if self.fail_times <= 0:
                 self.fail_once, self.fail_times = None, 1
             raise RuntimeError("an armed publish failure")
+        if self.fail_script and isinstance(payload, self.fail_script[0]):
+            self.fail_script.pop(0)
+            raise RuntimeError("a scripted publish failure")
         event = await self.store.publish(payload)
         self.log.append(event)
         if self.hold is not None and isinstance(payload, self.hold):

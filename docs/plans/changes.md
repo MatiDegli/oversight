@@ -1,6 +1,8 @@
 # Plan: the change manager, level 1 (front 15)
 
-Revision 7, front 15b, for the API plan's section 4: `main_suspect`, `check_main`, and an `aclose`
+Revision 8, front 15b, after its review: each close-out event gets its own two tries, in order,
+and an `error` the store refuses at shutdown is logged (section 4). Revision 7, front 15b, for the
+API plan's section 4: `main_suspect`, `check_main`, and an `aclose`
 that drains the close-outs before the store closes (sections 1, 4 and 5). Revision 6, after the
 second re-review: a close-out publish left running by a second cancel stays on the change, and the
 next close-out or merge waits for its outcome (section 4). Revision 5: only the latest decision's task may end `deciding`, and a
@@ -124,14 +126,17 @@ on, since the store may commit an event whose caller was cancelled. A second can
 but the publish stays on the record and a done-callback records its outcome when it ends; the next
 close-out on that change, and every approval before it merges, waits for it, so the event is never
 sent twice and a later delta starts from the graph the UI holds. It runs as soon as the decision is a fact and before cleanup, so no cleanup
-failure can hold back or repeat a resolution. A decision tries the missing events twice, in order;
-if one still fails, an `error` says so and the change stays `closing` and pending, with its
+failure can hold back or repeat a resolution. A decision tries each missing event twice, in order (an
+event that fails both tries stops the rest; one that needed a second try does not cost the next
+event its own two); if one still fails, an `error` says so and the change stays `closing` and pending, with its
 worktree and branch: cleanup runs only once `change.resolved` is out. The retry runs, under main's
 lock and the change's, before the next decision's work and in the next `open`, each trying twice
 again; approve and reject answer `WrongState` on a `closing` change. **Drain**: `aclose()` waits
 for every tracked task (decisions and publishes left running), then runs that retry once more, two
-tries, for each `closing` change in the order it entered, and sends one `error` (`server`, not
-fatal) per change naming each event still unsent. Cleanup is left to the next start's `reset`, and
+tries per event, for each `closing` change in the order it entered, and sends one `error` (`server`,
+not fatal) per change naming each event still unsent. If the store refuses that `error` too, one
+`logging` line (the module's logger, level error) per change names the change, its agent and the
+unsent events, with no payload, comment or store message. Cleanup is left to the next start's `reset`, and
 the caller closes the store only after `aclose()` returns. A pending delta that a later
 merge's delta overtakes is dropped, not sent: the later one starts from the graph the UI holds,
 `snapshot`, which the unsent delta never moved, so it covers both merges, and the older one would
@@ -264,7 +269,11 @@ failing with their change reverted.
   drain sends it, chained, then `done`; *`test_aclose_waits_for_a_publish_left_running`: after two
   cancels the drain waits for the delta's receipt and sends only `done`;
   *`test_aclose_reports_what_a_failing_store_never_took`: the approval is in flight when the drain
-  starts, the store refuses the delta four times, and one `error` names the delta and `done`.
+  starts, the store refuses the delta four times, and one `error` names the delta and `done`, with
+  nothing logged; (revision 8) *`test_aclose_gives_each_event_two_tries`: the drain's resolution
+  fails once and then its delta once, and both still go out; *`test_aclose_logs_what_a_refusing_store_never_took`:
+  the store refuses everything, and `caplog` holds one line per change naming its unsent events.
+  `test_close_out.py` gains *`test_each_event_gets_two_tries`, the same failures inside an approval.
 
 About 450 lines of code and 550 of tests, in two commits: live diff and propose, then decisions.
 

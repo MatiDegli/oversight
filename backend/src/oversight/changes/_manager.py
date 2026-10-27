@@ -14,6 +14,7 @@ drains the close-outs before the store closes.
 
 import asyncio
 import functools
+import logging
 import os
 from collections.abc import Coroutine
 from dataclasses import dataclass, field
@@ -40,6 +41,8 @@ from oversight_contracts.events import (
 )
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot
 
+_log = logging.getLogger(__name__)
+
 type State = Literal[
     "working", "ready", "unproposed", "deciding", "conflict", "closing", "closed", "broken"
 ]
@@ -49,7 +52,8 @@ APPROVABLE: frozenset[State] = frozenset({"ready"})
 REJECTABLE: frozenset[State] = frozenset({"ready", "conflict", "unproposed", "broken"})
 """`broken`: the merge failed and main's state is unknown; Reject still closes the change."""
 CLOSE_OUT_ATTEMPTS = 2
-"""Tries per occasion (a decision, a retry before the next decision or `open`, the drain)."""
+"""Tries per event on each occasion (a decision, a retry before the next decision or `open`, the
+drain)."""
 EVENT_TYPES = {"resolved": "change.resolved", "delta": "graph.delta", "done": "agent.status done"}
 """Close-out events by their names in `_Change.sent`, as an `error` names them."""
 
@@ -190,7 +194,8 @@ class ChangeManager:
 
     async def _error(
         self, source: Source, message: str, rec: _Change | None, *, fatal: bool
-    ) -> None:
+    ) -> bool:
+        """Publish an `error`; False when the store refused it: nowhere left to say so."""
         report = ErrorReport(
             source=source,
             message=self._workspace.redact(message)[:1000],
@@ -201,7 +206,8 @@ class ChangeManager:
         try:
             await self._publish(report)
         except Exception:
-            return  # nowhere left to report it
+            return False
+        return True
 
     def _spawn(self, work: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         task = asyncio.get_running_loop().create_task(work)
@@ -486,7 +492,8 @@ class ChangeManager:
     async def aclose(self) -> None:
         """Drain before the store closes, which the caller does only once this returns: wait for
         the decisions in flight, run the close-out retry once more for each change with unsent
-        events, then send one `error` per change naming each event still unsent. Cleanup is left
+        events, then send one `error` per change naming each event still unsent. If the store
+        refuses that `error` too, one log line per change names what was lost. Cleanup is left
         to the next start's `reset`."""
         while self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
@@ -497,13 +504,22 @@ class ChangeManager:
                 failure = await self._try_close_out(rec)
                 if failure:
                     unsent = ", ".join(EVENT_TYPES[name] for name, _ in self._unsent(rec))
-                    await self._error(
+                    reported = await self._error(
                         "server",
                         f"Shutting down with the close-out of {rec.change_id} incomplete "
                         f"({failure}): {unsent} never sent.",
                         rec,
                         fatal=False,
                     )
+                    if not reported:
+                        # Only the event names and ids: no payload, no store message.
+                        _log.error(
+                            "Shutting down with the close-out of %s (agent %s) incomplete; "
+                            "never sent, and the store refused the error that names them: %s",
+                            rec.change_id,
+                            rec.agent_id,
+                            unsent,
+                        )
 
     async def _approve(self, rec: _Change, comment: str | None) -> None:
         await self._finish_pending()
@@ -702,14 +718,11 @@ class ChangeManager:
             )
 
     async def _try_close_out(self, rec: _Change) -> str:
-        """Send what is missing, up to `CLOSE_OUT_ATTEMPTS` times; `closed` once all is out, else
-        the last failure. The caller holds main's lock and the change's."""
-        failure = ""
-        for _ in range(CLOSE_OUT_ATTEMPTS):
-            failure = await self._send_close_out(rec)
-            if not failure:
-                rec.state = "closed"
-                return ""
+        """Send what is missing, each event up to `CLOSE_OUT_ATTEMPTS` times; `closed` once all is
+        out, else the failure that stopped it. The caller holds main's lock and the change's."""
+        failure = await self._send_close_out(rec)
+        if not failure:
+            rec.state = "closed"
         return failure
 
     def _unsent(self, rec: _Change) -> list[tuple[str, EventPayload]]:
@@ -722,23 +735,33 @@ class ChangeManager:
         return [(n, p) for n, p in events if p is not None and n not in rec.sent]
 
     async def _send_close_out(self, rec: _Change) -> str:
-        """Send what is missing, in order; the first failure, or "" once everything is out. A
-        publish that a cancelled close-out left running is waited for first, so it is not resent."""
+        """Send what is missing, in order, each event up to `CLOSE_OUT_ATTEMPTS` times; the last
+        failure of the first event that never went out, or "" once everything is out. A publish
+        that a cancelled close-out left running is waited for first, so it is not resent."""
         await self._drain(rec)
         for name, payload in self._unsent(rec):
-            # The publish runs in its own task, kept on the record, and a done-callback records its
-            # outcome: the store may commit the event however many cancels the close-out gets, and
-            # the next close-out must not send it again.
-            sending = self._spawn(self._deliver(payload))
-            sending.add_done_callback(functools.partial(self._receipt, rec, name))
-            rec.sending = sending
-            cancelled = await self._settled(sending)
-            if cancelled or sending.cancelled():
-                raise asyncio.CancelledError
-            failure = sending.exception()
-            if failure is not None:
-                return f"{name}: {failure}"
+            failure = ""
+            for _ in range(CLOSE_OUT_ATTEMPTS):
+                failure = await self._send_event(rec, name, payload)
+                if not failure:
+                    break
+            if failure:
+                return failure  # later events wait: the resolution comes first
         return ""
+
+    async def _send_event(self, rec: _Change, name: str, payload: EventPayload) -> str:
+        """One try at one event: its failure, or "" once the store took it."""
+        # The publish runs in its own task, kept on the record, and a done-callback records its
+        # outcome: the store may commit the event however many cancels the close-out gets, and
+        # the next close-out must not send it again.
+        sending = self._spawn(self._deliver(payload))
+        sending.add_done_callback(functools.partial(self._receipt, rec, name))
+        rec.sending = sending
+        cancelled = await self._settled(sending)
+        if cancelled or sending.cancelled():
+            raise asyncio.CancelledError
+        failure = sending.exception()
+        return "" if failure is None else f"{name}: {failure}"
 
     async def _deliver(self, payload: EventPayload) -> None:
         """`_publish` as a tracked task's coroutine."""
