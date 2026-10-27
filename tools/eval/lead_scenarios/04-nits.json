@@ -1,0 +1,8 @@
+{
+  "id": "descriptions-and-revenue",
+  "task": "Split clearer product descriptions and a revenue-by-category regression suite into two useful subtasks with disjoint graph zones.",
+  "changes": [
+    {"change_id": "A", "summary": "Clarify product descriptions", "files": ["shop/models.py"], "review": {"verdict": "accept_with_nits", "findings": ["NIT shop/models.py:18: Consider a shorter label."]}},
+    {"change_id": "B", "summary": "Cover category revenue", "files": ["tests/test_orders.py"], "review": {"verdict": "accept_with_nits", "findings": ["NIT tests/test_orders.py:34: The fixture name could be clearer."]}}
+  ]
+}

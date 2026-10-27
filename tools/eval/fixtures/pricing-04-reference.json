@@ -1,0 +1,7 @@
+[
+  {
+    "path": "shop/pricing.py",
+    "old": "    base = unit_price * quantity",
+    "new": "    if quantity < 0:\n        raise ValueError(\"quantity must be nonnegative\")\n    base = unit_price * quantity"
+  }
+]

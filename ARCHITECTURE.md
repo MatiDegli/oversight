@@ -253,7 +253,8 @@ TypeScript and the generator are pinned in [package.json](frontend/package.json)
 
 [events.py](contracts/src/oversight_contracts/events.py) defines the event union:
 `run.started`, `graph.snapshot`, `graph.delta`, `agent.status`, `agent.step`, `agent.focus`,
-`change.updated`, `change.proposed`, `change.resolved`, `usage.tick`, `error`.
+`change.updated`, `change.proposed`, `change.resolved`, `change.assessed`, `merge_mode.changed`,
+`plan.updated`, `usage.tick`, `error`.
 Every envelope has `seq`, `ts`, `type` and `payload`. Graph payload models live in
 [graph.py](contracts/src/oversight_contracts/graph.py).
 
@@ -263,7 +264,9 @@ Every envelope has `seq`, `ts`, `type` and `payload`. Graph payload models live 
 `GET /graph`, `GET /health` and `GET /events` are in the API routes cited above.
 The remaining contract routes return 501: `POST /agents/{agent_id}/stop`,
 `POST /changes/{change_id}/request-changes`, `GET /impact`, `GET /files`, `PUT /files`,
-`POST /graph/rescan`, and `POST /agents/{agent_id}/message`, `/pause`, `/resume`.
+`POST /graph/rescan`, and `POST /agents/{agent_id}/message`, `/pause`, `/resume`,
+`GET /merge-mode`, `PUT /merge-mode`, `POST /plans`, `GET /plans/{plan_id}`,
+`PUT /plans/{plan_id}`, `POST /plans/{plan_id}/start`, `POST /plans/{plan_id}/reject`.
 Backend replay mode also refuses start, approve and reject with 501.
 
 ## Testing and gates

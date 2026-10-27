@@ -21,7 +21,9 @@ from starlette.types import Scope
 
 from oversight.api.errors import error_response
 
-API_PATHS = frozenset({"agents", "changes", "events", "files", "graph", "health", "impact"})
+API_PATHS = frozenset(
+    {"agents", "changes", "events", "files", "graph", "health", "impact", "merge-mode", "plans"}
+)
 """The first path segment of every API route: what the UI never answers."""
 INDEX = "index.html"
 ASSETS = "assets"

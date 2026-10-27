@@ -321,10 +321,26 @@ export function zoomBy(cy: Core, factor: number, reduceMotion: boolean): void {
   );
 }
 
+/**
+ * Moves the camera, never past the zoom range the instance was made with: a target outside it is
+ * brought to its edge about the middle of the view, so the view's middle stays where it was meant
+ * to be. The range is the person's navigation limit; no move changes it.
+ */
 function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
   cy.stop();
-  if (camera.zoom < cy.minZoom()) cy.minZoom(camera.zoom);
-  const viewport = { zoom: camera.zoom, pan: camera.pan };
+  const zoom = Math.min(cy.maxZoom(), Math.max(cy.minZoom(), camera.zoom));
+  const scale = zoom / camera.zoom;
+  const center = { x: cy.width() / 2, y: cy.height() / 2 };
+  const viewport = {
+    zoom,
+    pan:
+      scale === 1
+        ? camera.pan
+        : {
+            x: center.x + (camera.pan.x - center.x) * scale,
+            y: center.y + (camera.pan.y - center.y) * scale,
+          },
+  };
   if (reduceMotion) {
     cy.viewport(viewport);
     return;
@@ -337,7 +353,37 @@ function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
   });
 }
 
-/** Fit the lit nodes subject to the readable floor; the whole-graph watch fit has no floor. */
+/** The width the review's cone card takes at the graph's left, with its inset: not for nodes. */
+function coneInset(theme: ReturnType<typeof getActiveTheme>): number {
+  return Number.parseFloat(theme["cone-card-width"]) + Number.parseFloat(theme["spacing-overlay"]);
+}
+
+/**
+ * Pans, at the zoom the camera has, so the node lies in the middle of the part of the view that the
+ * cone card leaves free. It answers a click on a cone row that says "Out of view" and nothing else:
+ * no event, no review and no resize calls it. It moves no node and keeps the zoom range. Returns
+ * the camera it moves to, or null for a node that is not on the graph.
+ */
+export function revealNode(cy: Core, id: string, reduceMotion: boolean): Camera | null {
+  const node = cy.getElementById(id);
+  if (node.empty()) return null;
+  const box = node.boundingBox({ includeLabels: true, includeOverlays: false });
+  const zoom = cy.zoom();
+  const camera = {
+    zoom,
+    pan: {
+      x: (coneInset(getActiveTheme()) + cy.width()) / 2 - ((box.x1 + box.x2) / 2) * zoom,
+      y: cy.height() / 2 - ((box.y1 + box.y2) / 2) * zoom,
+    },
+  };
+  moveCamera(cy, camera, reduceMotion);
+  return camera;
+}
+
+/**
+ * Fit the lit nodes subject to the readable floor. The whole-graph fit has the floor of the zoom
+ * range: a graph too wide to fit above it is centered at its lower end, not fitted below it.
+ */
 function cameraFor(
   cy: Core,
   eles: CollectionReturnValue,
@@ -361,12 +407,10 @@ function cameraFor(
       padding: PADDING,
       occlusion,
       maxZoom: cy.maxZoom(),
-      leftInset: readable
-        ? Number.parseFloat(theme["cone-card-width"]) + Number.parseFloat(theme["spacing-overlay"])
-        : 0,
+      leftInset: readable ? coneInset(theme) : 0,
       minZoom: readable
         ? Number.parseFloat(theme["cursor-name-size"]) / Number.parseFloat(theme["body-size"])
-        : 0,
+        : cy.minZoom(),
     },
     cone ? bounds(cone) : [],
   );

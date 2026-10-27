@@ -10,6 +10,7 @@ import {
   includeNewNodes,
   nodesInViewport,
   prefersReducedMotion,
+  revealNode,
   startCamera,
   startingView,
   ZOOM_RANGE,
@@ -517,6 +518,112 @@ describe("zoomBy", () => {
   });
 });
 
+/** A graph far wider than the view, built as GraphView builds its instance: with the zoom range. */
+function wideGraph(spread: number): Core {
+  const cy = cytoscape({
+    headless: true,
+    styleEnabled: true,
+    layout: { name: "preset" },
+    minZoom: ZOOM_RANGE.min,
+    maxZoom: ZOOM_RANGE.max,
+    elements: [
+      { data: { id: "west" }, position: { x: 0, y: 100 } },
+      { data: { id: "east" }, position: { x: spread, y: 200 } },
+    ],
+  });
+  graphs.push(cy);
+  vi.spyOn(cy, "width").mockReturnValue(1000);
+  vi.spyOn(cy, "height").mockReturnValue(600);
+  vi.spyOn(cy, "resize").mockReturnValue(cy);
+  cy.viewport({ zoom: 1, pan: { x: 20, y: 40 } });
+  return cy;
+}
+
+describe("the zoom range after Fit", () => {
+  it("keeps the range when the graph is too wide to fit in it: Fit stops at the range's lower end", () => {
+    // 40,000 wide: fitted whole in 1,000px it would be about 2.5%.
+    const cy = wideGraph(40_000);
+    const framing = frameCamera(cy, [], true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+    // What Fit reports is what it did.
+    expect(framing?.zoom).toBe(ZOOM_RANGE.min);
+    // The middle of the graph is the middle of the view.
+    expect((500 - cy.pan().x) / cy.zoom()).toBeCloseTo(20_000, 0);
+  });
+
+  it("holds the range for the zoom buttons that follow Fit, however far they are pressed", () => {
+    const cy = wideGraph(40_000);
+    frameCamera(cy, [], true);
+    for (let press = 0; press < 20; press++) zoomBy(cy, 0.8, true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+    zoomBy(cy, 2, true);
+    expect(cy.zoom()).toBeCloseTo(ZOOM_RANGE.min * 2);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+  });
+
+  it("still fits a graph that fits inside the range, and zooms out from there", () => {
+    const cy = wideGraph(2_000);
+    frameCamera(cy, [], true);
+    expect(cy.zoom()).toBeGreaterThan(ZOOM_RANGE.min);
+    expect(cy.zoom()).toBeLessThan(1);
+    zoomBy(cy, 0.1, true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+  });
+
+  it("does not let growth in watch mode take the zoom below the range, and keeps the view's middle", () => {
+    const cy = wideGraph(40_000);
+    cy.viewport({ zoom: ZOOM_RANGE.min, pan: { x: 20, y: 40 } });
+    const middle = { x: (500 - 20) / ZOOM_RANGE.min, y: (300 - 40) / ZOOM_RANGE.min };
+    // Well past what the view shows at the lower end of the range.
+    cy.add({ data: { id: "far" }, position: { x: 400_000, y: 100 } });
+    includeNewNodes(cy, ["far"], true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+    expect((500 - cy.pan().x) / cy.zoom()).toBeCloseTo(middle.x);
+    expect((300 - cy.pan().y) / cy.zoom()).toBeCloseTo(middle.y);
+  });
+});
+
+describe("revealNode", () => {
+  const inset =
+    Number.parseFloat(theme["cone-card-width"]) + Number.parseFloat(theme["spacing-overlay"]);
+
+  it("pans to put a node in the middle of what the cone card leaves free, at the zoom it has", () => {
+    const cy = wideGraph(40_000);
+    cy.viewport({ zoom: 0.5, pan: { x: 20, y: 40 } });
+    const before = positions(cy);
+    const target = revealNode(cy, "east", true);
+    expect(target?.zoom).toBe(0.5);
+    expect(cy.zoom()).toBe(0.5);
+    const { x, y } = cy.getElementById("east").renderedPosition();
+    expect(x).toBeCloseTo((inset + 1000) / 2);
+    expect(y).toBeCloseTo(300);
+    expect(cy.pan()).toEqual(target?.pan);
+    expect(positions(cy)).toEqual(before);
+  });
+
+  it("eases under normal motion and does nothing for a node that is not on the graph", () => {
+    const cy = wideGraph(40_000);
+    const animate = vi.spyOn(cy, "animate").mockReturnValue(cy);
+    expect(revealNode(cy, "missing", false)).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+    revealNode(cy, "east", false);
+    expect(animate).toHaveBeenCalledOnce();
+    expect(animate.mock.calls[0]?.[0]).toMatchObject({ zoom: 1 });
+  });
+
+  it("is a move like any other: it keeps the zoom range", () => {
+    const cy = wideGraph(40_000);
+    cy.viewport({ zoom: ZOOM_RANGE.min, pan: { x: 0, y: 0 } });
+    revealNode(cy, "east", true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+  });
+});
+
 describe("startingView", () => {
   const graph = { x1: 0, y1: 0, x2: 4000, y2: 3000 };
   const size = { width: 1000, height: 800 };
@@ -620,6 +727,19 @@ describe("hubOf", () => {
       ),
     ).toBeNull();
     expect(hubOf(graphOf([]))).toBeNull();
+  });
+
+  it("does not count an import that names a function, even when it outnumbers the calls", () => {
+    expect(
+      hubOf(
+        graphOf([
+          ["a", "b", "imports"],
+          ["c", "b", "imports"],
+          ["d", "b", "imports"],
+          ["a", "d"],
+        ]),
+      ),
+    ).toBe("d");
   });
 });
 

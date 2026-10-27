@@ -116,6 +116,7 @@ const agent = (slot: "A" | "B", state: AgentStatus["state"] = "working"): AgentS
   step: 0,
   max_steps: 10,
   detail: null,
+  plan_id: null,
 });
 const focused = () => ({
   ...createInitialState(),

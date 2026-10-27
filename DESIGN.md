@@ -489,8 +489,10 @@ person is doing.
   at 100% on the module of the graph's hub (the function with the most callers), kept inside the
   graph's bounds and moved to the nearest gutter where an edge of the view would cut a frame in
   two. Dragging pans, the wheel and the +/- buttons zoom between 20% and 300%, and the fit button
-  shows everything. The camera moves on its own only where it already does by design (opening and
-  closing review, a node added while the person is not navigating); no node ever moves.
+  shows everything, or the middle of it at 20% when the graph is wider than that. The camera moves
+  on its own only where it already does by design (opening and closing review, a node added while
+  the person is not navigating); no node ever moves. A cone row that says "Out of view" pans the
+  camera to its node when clicked, and never otherwise.
 - **The preset's arrangement:** modules in columns, calls flowing from left to right, in two passes
   (blocks first, then each module's contents inside its block), so that a zoom view can later shrink
   a module to a dot at its center. Gutters of 120px between columns and 80px between stacked

@@ -1,0 +1,7 @@
+[
+  {
+    "path": "shop/inventory.py",
+    "old": "        if quantity > self.available(sku):",
+    "new": "        _check_quantity(quantity)\n        if quantity > self.available(sku):"
+  }
+]

@@ -1,0 +1,7 @@
+[
+  {
+    "path": "shop/pricing.py",
+    "old": "_COUPONS.get(code, 0)",
+    "new": "_COUPONS.get(code.strip().upper(), 0)"
+  }
+]

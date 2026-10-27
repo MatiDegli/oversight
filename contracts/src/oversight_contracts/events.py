@@ -13,12 +13,15 @@ from oversight_contracts.common import (
     ContractModel,
     FileStatus,
     NodeId,
+    PlanId,
     RunId,
     Slot,
     Timestamp,
     WorkspacePath,
 )
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot, ImpactCone
+from oversight_contracts.plans import Plan
+from oversight_contracts.policy import ChangeAssessment, MergeModeState
 
 # run.started
 
@@ -76,6 +79,8 @@ class RunStarted(ContractModel):
     slots: list[SlotInfo]
     limits: Limits
     budget: Budget
+    merge_mode: MergeModeState | None = None
+    """Initial server merge mode; null in recordings without mode metadata."""
 
 
 # agent.status, agent.step, agent.focus
@@ -101,6 +106,8 @@ class AgentStatus(ContractModel):
     """Grows when a revision starts."""
     detail: str | None
     """Why it halted or stopped, in one sentence."""
+    plan_id: PlanId | None = None
+    """The originating plan; null for standalone agents or older recordings."""
 
 
 class SuiteResult(ContractModel):
@@ -231,6 +238,31 @@ class ChangeResolved(ContractModel):
     conflict: Conflict | None
     """Set exactly when the merge is "conflict"."""
 
+    decided_by: Literal["person", "rules"] | None = None
+    """Decision provenance; null when it was not recorded."""
+    reasons: list[str] = Field(default_factory=list)
+    """Recorded server-authored reasons for this decision."""
+    assessment: ChangeAssessment | None = None
+    """The immutable assessment used for this decision, when available."""
+
+    @model_validator(mode="after")
+    def _rules_decision(self) -> Self:
+        if self.decided_by != "rules":
+            return self
+        assessment = self.assessment
+        if (
+            self.decision != "approved"
+            or assessment is None
+            or assessment.mode != "merge_when_safe"
+            or any(rule.result != "pass" for rule in assessment.rules)
+            or (self.change_id, self.agent_id, self.revision)
+            != (assessment.change_id, assessment.agent_id, assessment.revision)
+            or not self.reasons
+            or any(not reason.strip() for reason in self.reasons)
+        ):
+            raise ValueError("rules decisions require an approved matching assessment and reasons")
+        return self
+
     @model_validator(mode="after")
     def _merge_fields_agree(self) -> Self:
         if (self.decision == "approved") != (self.merge is not None):
@@ -336,6 +368,27 @@ class ErrorReportEvent(EventBase):
     payload: ErrorReport
 
 
+class ChangeAssessedEvent(EventBase):
+    """One recorded change assessment."""
+
+    type: Literal["change.assessed"]
+    payload: ChangeAssessment
+
+
+class MergeModeChangedEvent(EventBase):
+    """The new server merge mode."""
+
+    type: Literal["merge_mode.changed"]
+    payload: MergeModeState
+
+
+class PlanUpdatedEvent(EventBase):
+    """The complete new plan revision."""
+
+    type: Literal["plan.updated"]
+    payload: Plan
+
+
 type ServerEvent = Annotated[
     RunStartedEvent
     | GraphSnapshotEvent
@@ -347,7 +400,10 @@ type ServerEvent = Annotated[
     | ChangeProposedEvent
     | ChangeResolvedEvent
     | UsageTickEvent
-    | ErrorReportEvent,
+    | ErrorReportEvent
+    | ChangeAssessedEvent
+    | MergeModeChangedEvent
+    | PlanUpdatedEvent,
     Field(discriminator="type"),
 ]
 """Every event the server sends; validate one with `TypeAdapter(ServerEvent)`."""

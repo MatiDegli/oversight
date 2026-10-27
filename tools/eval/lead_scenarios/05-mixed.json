@@ -1,0 +1,8 @@
+{
+  "id": "discounts-and-cart-quote",
+  "task": "Split a clamp of combined discounts at 100 percent and tests of marginal cart quotes across bulk tiers between two agents with nonoverlapping zones.",
+  "changes": [
+    {"change_id": "A", "summary": "Clamp discounts", "files": ["shop/pricing.py"], "review": {"verdict": "accept", "findings": []}},
+    {"change_id": "B", "summary": "Cover bulk-tier cart quotes", "files": ["shop/cart.py", "tests/test_cart.py"], "review": {"verdict": "accept_with_nits", "findings": ["SHOULD-FIX tests/test_cart.py:42: Assert the marginal quote when the existing quantity is 9.", "NIT shop/cart.py:47: Rename the local variable."]}}
+  ]
+}

@@ -13,6 +13,7 @@ import {
   includeNewNodes,
   nodesInViewport,
   prefersReducedMotion,
+  revealNode,
   ZOOM_RANGE,
   zoomBy,
 } from "./camera";
@@ -35,6 +36,8 @@ export interface GraphApi {
   zoomOut: () => void;
   /** The whole graph in view, as at the start. */
   fit: () => void;
+  /** Pans to a node the cone card lists as out of view, at the zoom it has. Only on a click. */
+  reveal: (nodeId: string) => void;
 }
 
 const ZOOM_STEP = 1.25;
@@ -261,6 +264,14 @@ export function GraphView({
           },
           fit: () => {
             frameCamera(cy, [], prefersReducedMotion());
+          },
+          reveal: (nodeId) => {
+            const target = revealNode(cy, nodeId, prefersReducedMotion());
+            if (!target) return;
+            // The cone card lists what is out of view from the camera it is told of.
+            const framing = { ...target, framed: new Set<string>(), outOfView: new Set<string>() };
+            targetFrame.current = framing;
+            reportFraming(cy, host, latest.current, framing);
           },
         };
       }
