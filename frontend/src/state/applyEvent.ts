@@ -152,8 +152,19 @@ export function applyEvent(state: State, event: ServerEvent): State {
         },
       };
     }
-    case "usage.tick":
-      return { ...next, usage: event.payload };
+    case "usage.tick": {
+      // The status names a profile; the tick's model is the provider's reported API id.
+      const modelId = state.agents[event.payload.agent_id]?.model;
+      const profile = state.run?.models.find((model) => model.id === modelId);
+      return {
+        ...next,
+        usage: event.payload,
+        spendUnknown:
+          !profile || profile.provider === "meta"
+            ? event.payload.cost_usd === null
+            : state.spendUnknown,
+      };
+    }
     case "error":
       return { ...next, errors: [...state.errors, event.payload] };
     default: {

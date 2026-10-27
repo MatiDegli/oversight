@@ -533,6 +533,11 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 
 - **Style:** field fill, control-edge border, card radius, body text, faint placeholder.
 - **Focus:** the focus ring above.
+- **Task box slot choice:** show A and B with their model labels when both slots are offered.
+  The selected button has a text-token border (at least 3:1 on the panel and raised fill) and
+  a decorative Check icon (`aria-hidden`, no name); `aria-pressed` conveys the state. Keep
+  these marks visible when the automatic preselection changes. A held slot names its holder
+  and cannot be chosen.
 - **The comment box** serves Approve and Request changes alike, so no key in it triggers a
   decision: Approve has no shortcut, not even Ctrl+Enter.
 

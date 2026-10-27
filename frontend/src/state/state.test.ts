@@ -18,10 +18,13 @@ import {
   createInitialState,
   createStateStore,
   selectAgents,
+  selectAgentCard,
   selectChangeForAgent,
   selectHasReadyForReview,
   selectLitNodes,
   selectPendingChanges,
+  selectNodeMarks,
+  selectSpend,
 } from "./index";
 
 function event<K extends ServerEvent["type"]>(
@@ -185,6 +188,128 @@ function freeze(value: unknown): void {
 }
 
 describe("applyEvent", () => {
+  it("keeps two interleaved agents' cards, steps and graph marks separate (K14)", () => {
+    const b = {
+      ...agent,
+      agent_id: "agent-2",
+      change_id: "change-2",
+      slot: "B" as const,
+      task: "Fix order",
+    };
+    const step = {
+      agent_id: agent.agent_id,
+      step: 1,
+      tool: "read_file",
+      summary: "Read price",
+      result: "ok" as const,
+      error: null,
+      duration_ms: 1,
+      tests: null,
+    };
+    const log = [
+      event(1, "run.started", run),
+      event(2, "graph.snapshot", snapshot),
+      event(3, "agent.status", b),
+      event(4, "agent.status", agent),
+      event(5, "agent.step", step),
+      event(6, "agent.focus", {
+        agent_id: b.agent_id,
+        mode: "edit",
+        node_ids: [caller.id],
+        ranges: [],
+      }),
+      event(7, "agent.step", { ...step, agent_id: b.agent_id, summary: "Edit order" }),
+      event(8, "change.updated", update),
+      event(9, "change.updated", {
+        ...update,
+        agent_id: b.agent_id,
+        change_id: b.change_id,
+        graph: { ...overlay, nodes_added: [], nodes_modified: [caller.id] },
+        node_ids: [caller.id],
+      }),
+      event(10, "agent.focus", {
+        agent_id: agent.agent_id,
+        mode: "read",
+        node_ids: [node.id],
+        ranges: [],
+      }),
+    ];
+    const state = log.reduce(applyEvent, createInitialState());
+    expect(selectAgents(state).map((entry) => entry.slot)).toEqual(["A", "B"]);
+    expect(selectAgentCard(state, agent.agent_id)?.steps).toEqual([step]);
+    expect(selectAgentCard(state, b.agent_id)?.steps[0]?.summary).toBe("Edit order");
+    expect(selectAgentCard(state, b.agent_id)?.agent.task).toBe("Fix order");
+    expect(selectNodeMarks(state)[node.id]).toEqual({
+      pending: true,
+      pendingSlots: ["A"],
+      focus: { A: "read" },
+    });
+    expect(selectNodeMarks(state)[caller.id]).toEqual({
+      pending: true,
+      pendingSlots: ["B"],
+      focus: { B: "edit" },
+    });
+  });
+
+  it.each(["baseten", "fake"] as const)(
+    "replays the same spend knowledge and latest %s ledger as live batches (K18)",
+    (provider) => {
+      const profile = {
+        id: "meta",
+        label: "Meta",
+        provider: "meta" as const,
+        model: "meta-api",
+        reasoning: null,
+      };
+      const usage = {
+        agent_id: agent.agent_id,
+        model: "meta-api",
+        input_tokens: null,
+        output_tokens: null,
+        cached_tokens: null,
+        cost_usd: 0.02,
+        spent_usd: 3,
+        budget_usd: 10,
+        brake: "ok" as const,
+      };
+      const b = {
+        ...agent,
+        agent_id: "agent-2",
+        change_id: "change-2",
+        slot: "B" as const,
+        model: "other",
+      };
+      const log = [
+        event(1, "run.started", {
+          ...run,
+          models: [profile, { ...profile, id: "other", provider }],
+        }),
+        event(2, "agent.status", { ...agent, model: "meta" }),
+        event(3, "agent.status", b),
+        event(4, "usage.tick", usage),
+        event(5, "usage.tick", { ...usage, agent_id: b.agent_id, cost_usd: null }),
+        event(6, "usage.tick", { ...usage, cost_usd: null }),
+        event(7, "usage.tick", {
+          ...usage,
+          agent_id: b.agent_id,
+          cost_usd: null,
+          spent_usd: 3.5,
+          brake: "blocked",
+        }),
+      ];
+      const store = createStateStore();
+      let replay = createInitialState();
+      for (const entry of log) {
+        replay = applyEvent(replay, entry);
+        store.getState().applyEvents([entry]);
+        expect(store.getState().state).toEqual(replay);
+        if (entry.seq === 5) expect(selectSpend(replay)?.spentUsd).toBe(3);
+      }
+      expect(replay.spendUnknown).toBe(true);
+      expect(replay.usage?.spent_usd).toBe(3.5);
+      expect(selectSpend(replay)).toEqual({ spentUsd: null, budgetUsd: 10, brake: "blocked" });
+    },
+  );
   it("starts with fresh plain data and sets the main snapshot", () => {
     const state = withGraph();
     expect(state.run).toEqual(run);

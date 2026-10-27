@@ -72,8 +72,7 @@ async function main(): Promise<number> {
   stdout.write(`shots: waiting for fixture seq ${String(expectedSeq)} and the graph renderer\n`);
   await clearPreviousSet();
 
-  // This tiny player serves only the derived cut. Keep SSE open so the live-diff scene has the
-  // same healthy connection as the full player's scenes, including reconnects by cursor.
+  // This tiny player serves each scene's cut or fixture. Keep SSE open through reconnects.
   const player = createServer((request, response) => {
     const after = Number(
       new URL(request.url ?? "/", "http://localhost").searchParams.get("after") ?? 0,
@@ -94,16 +93,19 @@ async function main(): Promise<number> {
         continue;
       }
       const scene = scenes.find((candidate) => candidate.name === job.scene);
-      const captureLog = logForScene(sourceLog, scene ?? {});
+      const sceneSource = scene?.log?.endsWith(".jsonl")
+        ? await readFile(new URL(`../../fixtures/events/${scene.log}`, import.meta.url), "utf8")
+        : sourceLog;
+      const captureLog = logForScene(sceneSource, scene ?? {});
       if (captureLog === null) {
         stdout.write(
           `shots: skipped ${job.file} (the event log has no edit before its first proposal)\n`,
         );
         continue;
       }
-      if (scene?.log === "editing") {
+      if (scene?.log) {
         liveLog = captureLog;
-        await writeFile(join(out, "live-diff.jsonl"), liveLog);
+        await writeFile(join(out, `${scene.name}.jsonl`), liveLog);
       }
       const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
       context.setDefaultTimeout(TIMEOUT_MS);
@@ -111,9 +113,8 @@ async function main(): Promise<number> {
       const pageErrors: string[] = [];
       page.on("pageerror", (error) => pageErrors.push(error.message));
       try {
-        // Each live-diff capture replays the derived cut, independently of the served proposal log.
-        // Respect the transport cursor on reconnect so no later proposal can leak into the scene.
-        if (scene?.log === "editing") {
+        // Scene-specific logs replay independently of the served proposal log, including reconnects.
+        if (scene?.log) {
           await page.route("**/events?*", (route) =>
             route.continue({
               url: `http://127.0.0.1:${String(address.port)}/events${new URL(route.request().url()).search}`,

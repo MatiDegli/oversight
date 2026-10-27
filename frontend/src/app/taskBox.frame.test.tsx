@@ -49,7 +49,11 @@ describe("the agents panel's new-agent section", () => {
     expect(markup).not.toContain("No agents yet");
     expect(markup).toContain("Agent A is working.");
     // The recorded run announces slots A and B: B stays free while A works.
-    expect(render(4, live)).not.toContain("Agent A is working.");
+    const two = render(4, live);
+    expect(two).toContain("Agent A is working.");
+    // The holder is now named on its slot button; there is no global start block.
+    expect(two).toMatch(/<div role="status" id="[^"]+-line"[^>]*><\/div>/);
+    expect(two).toContain('aria-pressed="true" aria-disabled="false"');
   });
 
   it("offers no live control in a replay, which passes no command, and words it from the source", () => {

@@ -11,8 +11,8 @@ import { assertReadableFrame } from "./framing.ts";
 export interface Scene {
   name: string;
   enabled: boolean;
-  /** Use a tooling-derived editing cut instead of the served proposal log. */
-  log?: "editing";
+  /** Use a derived cut or a hand-written fixture instead of the served proposal log. */
+  log?: "editing" | "one-slot" | "handwritten-two-slots-braked.jsonl";
   edgeShapes?: readonly ("bezier" | "taxi")[];
   /** What enables a disabled scene. Printed next to "skipped". */
   needs?: string;
@@ -127,6 +127,29 @@ export const scenes: readonly Scene[] = [
     enabled: true,
     log: "editing",
     prepare: (page) => clickChangedNode(page, "Live diff panel"),
+  },
+  {
+    name: "task-one-slot",
+    enabled: true,
+    log: "one-slot",
+    prepare: async (page) => {
+      await page.getByLabel("Task for the new agent").fill("Cap the combined discount at 30%");
+      assert.equal(await page.getByRole("group", { name: "Agent slot" }).count(), 0);
+    },
+  },
+  {
+    name: "task-two-slots-braked",
+    enabled: true,
+    log: "handwritten-two-slots-braked.jsonl",
+    prepare: async (page) => {
+      await page
+        .getByLabel("Task for the new agent")
+        .fill("Add a second task with Muse Spark Open");
+      const a = page.getByRole("button", { name: "A Muse Spark", exact: true });
+      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      assert.equal(await a.getAttribute("aria-disabled"), "false");
+      assert.equal(await b.getAttribute("aria-pressed"), "true");
+    },
   },
   {
     name: "file-view",
