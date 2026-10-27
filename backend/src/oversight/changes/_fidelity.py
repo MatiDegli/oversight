@@ -12,6 +12,7 @@ by this check; a changed base requires redoing the move and rerunning comparison
 
 import ast
 import copy
+import inspect
 import json
 import re
 import sys
@@ -46,6 +47,8 @@ class Canonical(ast.NodeTransformer):
         if self.owner == "record":
             return self.generic_visit(node)
         path = ast.unparse(node)
+        if path == "self._ctx":
+            return ast.Name(id="ctx", ctx=node.ctx)
         dest: str | None = None
         if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)+", path):
             return self.generic_visit(node)
@@ -129,15 +132,30 @@ def normalized(node: Any, owner: str, methods: set[str]) -> str:
         if node.args.args and node.args.args[0].arg in ("self", "ctx"):
             node.args.args.pop(0)
         node.decorator_list = [d for d in node.decorator_list if ast.unparse(d) != "staticmethod"]
+    if isinstance(node, FUNCTIONS) and node.body:
+        doc = node.body[0]
+        if (
+            isinstance(doc, ast.Expr)
+            and isinstance(doc.value, ast.Constant)
+            and isinstance(doc.value.value, str)
+        ):
+            doc.value.value = inspect.cleandoc(doc.value.value)
     node = normalizer.visit(node)
     # Local calls within a stage use its declared function names.
     if owner in MAP["stages"]:
         names = {MAP["renames"][old]: old for old in MAP["stages"][owner]}
 
         class LocalCalls(ast.NodeTransformer):
-            def visit_Name(self, node: ast.Name) -> ast.AST:
-                if node.id in names:
-                    return ast.Name(id="operation_" + names[node.id], ctx=node.ctx)
+            def visit_Call(self, node: ast.Call) -> ast.AST:
+                visited = self.generic_visit(node)
+                assert isinstance(visited, ast.Call)
+                node = visited
+                if isinstance(node.func, ast.Name) and node.func.id in names:
+                    node.func.id = "operation_" + names[node.func.id]
+                if ast.unparse(node.func) == "functools.partial" and node.args:
+                    first = node.args[0]
+                    if isinstance(first, ast.Name) and first.id in names:
+                        first.id = "operation_" + names[first.id]
                 return node
 
         node = LocalCalls().visit(node)

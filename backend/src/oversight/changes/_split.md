@@ -55,7 +55,11 @@ module calls. Keep only `drain`, constructed as `lambda rec: self._drain(rec)`, 
 Update docs/plans/changes.md, ARCHITECTURE.md and DECISIONS.md; include residual file/revision
 inventory and size signals. Run make demo-check as well as make check and fidelity.
 
-All tips require make check and fidelity; Sonnet reviews lifecycle and authority code before
-advancing. Two unsuccessful fidelity/review repair rounds stop the sequence for the coordinator.
+All tips require make check and fidelity; Sonnet reviews lifecycle and authority code before integration; an unavailable reviewer leaves
+that review pending while the branches are prepared. Two unsuccessful fidelity/review repair rounds stop the sequence for the coordinator.
 `_save_main`, `_settle_save` and `_restore_save` stay on the facade: create-files is not in the
 base and must be redone over it later. No API run, push, merge, stash or rebase is part of this work.
+
+PR 2 checker correction: normalize local stage names only in function/callback positions. In
+`read_base`, the local parameter `commit` must not be mistaken for the moved `commit` function.
+No additional rename is needed and no product statement changes.

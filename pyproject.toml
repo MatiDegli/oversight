@@ -179,6 +179,7 @@ id = "changes-no-facade-backedge"
 name = "Changes helpers never import the manager, including typing imports"
 type = "forbidden"
 source_modules = [
+    "oversight.changes._proposal",
     "oversight.changes._state", "oversight.changes._support",
     "oversight.changes._diff", "oversight.changes._versions",
     "oversight.changes._policy", "oversight.changes._zones", "oversight.changes._beforeafter",
