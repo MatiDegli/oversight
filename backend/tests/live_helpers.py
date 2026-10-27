@@ -57,7 +57,7 @@ def live_settings(tmp_path: Path, **overrides: Any) -> Settings:
 
 
 def two_fakes(tmp_path: Path, **overrides: Any) -> Settings:
-    """Both slots on the fake model, each with its own script (slot B opens with `slot_b_open`)."""
+    """Both slots on the fake model, each with its own script."""
     return live_settings(tmp_path, fake_script_b=FAKE_SCRIPT_B, **overrides)
 
 

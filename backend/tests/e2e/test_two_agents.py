@@ -1,6 +1,6 @@
 """Two agents on the live app, end to end: their calls interleaved in one log, back-to-back
-approvals, and a shutdown with both mid-call. Slot B is closed by a constant until a merge on a
-moved main is tested; `slot_b_open` opens it."""
+approvals, a failing combination of two edits that are each green alone, and a shutdown with both
+mid-call."""
 
 import asyncio
 from pathlib import Path
@@ -10,7 +10,9 @@ from live_helpers import (
     DEADLINE_S,
     BySlot,
     GatedModel,
+    Scripts,
     Stepped,
+    error_code,
     is_type,
     live_server,
     script_json,
@@ -23,7 +25,7 @@ from oversight.agents import parse_script
 pytestmark = pytest.mark.anyio
 
 
-async def test_two_agents_interleave_in_one_log(tmp_path: Path, slot_b_open: None) -> None:
+async def test_two_agents_interleave_in_one_log(tmp_path: Path) -> None:
     listing = {"tool_calls": [{"name": "list_files", "arguments": {}}]}
     three = parse_script(script_json("Look around.", [listing, listing, listing]))
     models = {"A": Stepped(three), "B": Stepped(three)}
@@ -44,7 +46,7 @@ async def test_two_agents_interleave_in_one_log(tmp_path: Path, slot_b_open: Non
     assert statuses == {("agent-1", "A"), ("agent-2", "B")}
 
 
-async def test_back_to_back_approvals_chain_their_deltas(tmp_path: Path, slot_b_open: None) -> None:
+async def test_back_to_back_approvals_chain_their_deltas(tmp_path: Path) -> None:
     # A and B edit different files. Both approvals are sent at once: the second waits for main's
     # lock, merges on the moved main and starts its delta where the first one ended.
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path)) as s:
@@ -64,7 +66,94 @@ async def test_back_to_back_approvals_chain_their_deltas(tmp_path: Path, slot_b_
     assert len(deltas) == 2 and deltas[1].from_version == deltas[0].to_version
 
 
-async def test_shutdown_mid_two_runs_ends_both(tmp_path: Path, slot_b_open: None) -> None:
+TOTAL_TEMPLATE = {
+    "pyproject.toml": "[tool.pytest.ini_options]\ntestpaths = ['tests']\npythonpath = ['.']\n",
+    "shop/__init__.py": "",
+    "shop/pricing.py": "def price() -> int:\n    return 1\n",
+    "shop/stock.py": "def count() -> int:\n    return 1\n",
+    # Alone, each edit leaves the total at 3; both together make it 4.
+    "tests/test_total.py": (
+        "from shop.pricing import price\nfrom shop.stock import count\n\n\n"
+        "def test_total_stays_small() -> None:\n    assert price() + count() < 4\n"
+    ),
+}
+
+
+def raise_to_two(path: str) -> str:
+    """A script that reads `path`, turns its `return 1` into `return 2`, tests, and finishes."""
+    calls = [
+        {"name": "read_file", "arguments": {"path": path}},
+        {
+            "name": "edit_file",
+            "arguments": {"path": path, "old_text": "return 1", "new_text": "return 2"},
+        },
+        {"name": "run_tests", "arguments": {}},
+        {"name": "finish", "arguments": {"summary": f"Raised {path}."}},
+    ]
+    return script_json("Raise it.", [{"tool_calls": [call]} for call in calls])
+
+
+async def test_a_then_b_with_a_failing_combination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Each edit passes the suite alone. Approving A moves main; B's merge, staged on that main, runs
+    # the suite again and fails: B conflicts, main stays at A's merge and B keeps its slot.
+    template = tmp_path / "template"
+    for name, text in TOTAL_TEMPLATE.items():
+        (template / name).parent.mkdir(parents=True, exist_ok=True)
+        (template / name).write_text(text)
+    monkeypatch.setattr("oversight.app.TEMPLATE", template)
+    scripts = Scripts([raise_to_two("shop/pricing.py"), raise_to_two("shop/stock.py")])
+    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), scripts) as s:
+        assert (await start(s, slot="A")).status_code == 201
+        assert (await start(s, slot="B")).status_code == 201
+        for agent in ("agent-1", "agent-2"):
+            await s.until(is_type("agent.status", agent_id=agent, state="ready_for_review"))
+        assert (await s.client.post("/changes/change-1/approve")).status_code == 202
+        await s.until(is_type("change.resolved", change_id="change-1"))
+        workspace = s.live.workspace
+
+        async def main_state() -> tuple[str, str]:
+            async with workspace.locks(main=True):
+                head = await workspace.git_ok(workspace.main, "rev-parse", "HEAD")
+                status = await workspace.git_ok(workspace.main, "status", "--porcelain")
+            return head.strip(), status
+
+        after_a = await main_state()
+        assert after_a[1] == ""  # clean
+        assert (await s.client.post("/changes/change-2/approve")).status_code == 202
+        await s.until(is_type("change.resolved", change_id="change-2"))
+        assert await main_state() == after_a  # B's merge was aborted: same head, still clean
+        events = s.events()
+        refused = await start(s, slot="B")
+        main_files = {
+            path: (workspace.main.root / path).read_text()
+            for path in ("shop/pricing.py", "shop/stock.py")
+        }
+    proposed = [e.payload for e in events if e.type == "change.proposed"]
+    assert [(p.change_id, p.tests.outcome) for p in proposed] == [
+        ("change-1", "passed"),
+        ("change-2", "passed"),
+    ]
+    resolved = [e.payload for e in events if e.type == "change.resolved"]
+    assert [(r.change_id, r.decision, r.merge) for r in resolved] == [
+        ("change-1", "approved", "merged"),
+        ("change-2", "approved", "conflict"),
+    ]
+    assert resolved[0].merge_commit == after_a[0]
+    conflict = resolved[1].conflict
+    assert conflict is not None and conflict.tests is not None
+    assert (conflict.kind, conflict.paths, conflict.tests.outcome) == ("tests", [], "failed")
+    assert conflict.tests.failed_tests == ["tests/test_total.py::test_total_stays_small"]
+    assert len([e for e in events if e.type == "graph.delta"]) == 1  # A's merge, not B's
+    assert main_files["shop/pricing.py"] == "def price() -> int:\n    return 2\n"
+    assert main_files["shop/stock.py"] == "def count() -> int:\n    return 1\n"
+    # A's slot is free, B's is still held: it can ask the agent again or be rejected.
+    assert s.live._slots == {"A": None, "B": "agent-2"}  # pyright: ignore[reportPrivateUsage]
+    assert error_code(refused) == (409, "slot_busy")
+
+
+async def test_shutdown_mid_two_runs_ends_both(tmp_path: Path) -> None:
     gated = {"A": GatedModel(), "B": GatedModel()}
     clients = BySlot(lambda _profile, slot: gated[slot])
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), clients) as s:

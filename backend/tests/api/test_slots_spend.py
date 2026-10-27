@@ -1,8 +1,6 @@
 """Two agents and one ledger (docs/plans/two-slots.md, section 4): only a metered agent's calls are
 written to it, every tick carries the one shared total, and a lost write halts the agent whose call
-it was, on that agent's own profile.
-
-Slot B is closed by a constant until a merge on a moved main is tested; `slot_b_open` opens it."""
+it was, on that agent's own profile."""
 
 import asyncio
 import os
@@ -49,9 +47,7 @@ def model_for(profile: ModelProfile, script: str) -> ScriptedModel:
 
 @pytest.mark.usefixtures("baseten_verified")
 @pytest.mark.parametrize("unmetered", ["fake", "muse-spark-open"])
-async def test_only_metered_ticks_reach_the_ledger(
-    tmp_path: Path, slot_b_open: None, unmetered: str
-) -> None:
+async def test_only_metered_ticks_reach_the_ledger(tmp_path: Path, unmetered: str) -> None:
     # A on a profile that spends no Meta credits (the fake model, or Muse Spark Open on Baseten),
     # B on Muse Spark, both scripted with usage. A's ticks go out with no cost and no ledger
     # write; the file gains B's calls alone and records no unknown call.
@@ -82,7 +78,7 @@ async def test_only_metered_ticks_reach_the_ledger(
     }
 
 
-async def test_two_agents_share_one_growing_total(tmp_path: Path, slot_b_open: None) -> None:
+async def test_two_agents_share_one_growing_total(tmp_path: Path) -> None:
     # Both on Muse Spark, their calls interleaved A B A B. Each tick carries the one total, which
     # never goes down along `seq`, and the last one is the start plus every call of both.
     settings = meta_settings(tmp_path)
@@ -106,7 +102,7 @@ async def test_two_agents_share_one_growing_total(tmp_path: Path, slot_b_open: N
 
 
 async def test_a_lost_ledger_halts_b_with_its_own_profile(
-    tmp_path: Path, slot_b_open: None, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # A runs the fake model and stays working. B, on Muse Spark, makes a call the ledger cannot
     # record: B halts, and its card names Muse Spark and B's change, not A's model or change.
@@ -154,7 +150,7 @@ class ProbeLock(asyncio.Lock):
 
 @pytest.mark.parametrize("b_write_fails", [False, True], ids=["b-write-ok", "b-write-fails"])
 async def test_a_cancel_waiting_for_the_ledger_lock_keeps_the_spend(
-    tmp_path: Path, slot_b_open: None, monkeypatch: pytest.MonkeyPatch, b_write_fails: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, b_write_fails: bool
 ) -> None:
     # Two metered agents. A's call holds the ledger's lock in its write; B's call waits for the
     # lock, and B's run is cancelled meanwhile. B's call was paid for: it is written all the same,

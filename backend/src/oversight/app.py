@@ -87,9 +87,9 @@ LIMITS = Limits(
 GIT_TIMEOUT_S = 30
 WARN_AT = (0.5, 0.8)
 BLOCK_AT = 0.9
-OFFERED_SLOTS: tuple[Slot, ...] = ("A",)
-"""The slots this server offers, in the order a start with no slot tries them. B stays closed until
-the combined tests run before a merge on a moved main (docs/plans/two-slots.md, section 7)."""
+OFFERED_SLOTS: tuple[Slot, ...] = ("A", "B")
+"""The slots this server offers, in the order a start with no slot tries them. A fake B with no
+script of its own is left out (`LiveRun._offer`)."""
 PROFILES = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL)}
 PROVIDER_URLS = {"meta": META_BASE_URL, "baseten": BASETEN_BASE_URL}
 """The Chat Completions endpoint of each provider that has one; the key is `{provider}_api_key`."""
