@@ -37,9 +37,7 @@ through others. Nothing reaches main until you approve it.
   (`PUT /files` with `agent_id`). Smoke tests, screenshot tooling and test resource caps are merged.
 - Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
   start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
-  recorded two-agent replay. The maintainer's team also ran three real two-agent runs from a
-  clean start, both agents on Muse Spark, and each run merged both changes; a real recorded run
-  will be bundled for the static replay.
+  scripted two-agent replay. A real recorded run will be bundled for the static replay.
 - The static replay build currently plays a hand-written event log and labels it as a fixture.
 
 To bundle a finished real run, install gitleaks 8.30.1 and run `make record RUN=<id>` (or
