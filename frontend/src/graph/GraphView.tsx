@@ -18,6 +18,8 @@ import {
 } from "./camera";
 import type { Camera, Framing } from "./camera";
 import { graphElements } from "./elements";
+import { createBoxSource, DotField } from "./field";
+import type { FieldInput } from "./field";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
 import { edgeShape, graphStyles } from "./styles";
@@ -64,7 +66,11 @@ export interface GraphViewProps {
   coneCardRef?: RefObject<HTMLDivElement | null>;
   /** Filled while the graph exists, for the zoom buttons; empty before it is created and after. */
   apiRef?: RefObject<GraphApi | null>;
+  /** The lights of the dot field behind the graph and the mode that shapes them. */
+  field?: FieldInput;
 }
+
+const NO_LIGHTS: FieldInput = { mode: "watch", lights: [] };
 
 function reportFraming(
   cy: Core,
@@ -110,8 +116,11 @@ export function GraphView({
   onFramed,
   coneCardRef,
   apiRef,
+  field = NO_LIGHTS,
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
+  // What the dot field reads of the graph: the rendered boxes of the nodes it lights.
+  const boxes = useRef(createBoxSource());
   const graph = useRef<Core | undefined>(undefined);
   const latest = useRef<GraphViewProps>({});
   const resync = useRef<(() => void) | undefined>(undefined);
@@ -162,6 +171,7 @@ export function GraphView({
   useEffect(() => {
     const host = container.current;
     if (!host) return;
+    const source = boxes.current;
     const theme = getActiveTheme();
     let cancelled = false;
     let dispose: (() => void) | undefined;
@@ -255,6 +265,7 @@ export function GraphView({
         };
       }
       const unexpose = exposeProbe(host, cy);
+      source.attach(cy);
       const unsubscribe = stateStore.subscribe(sync);
       sync();
       if (latest.current.panelOpen) {
@@ -290,6 +301,7 @@ export function GraphView({
       observeCard.current();
       dispose = () => {
         if (apiRef) apiRef.current = null;
+        source.detach();
         unsubscribe();
         unexpose();
         resize.disconnect();
@@ -312,12 +324,17 @@ export function GraphView({
       dispose?.();
     };
   }, [apiRef]);
+  // The dot field is its own canvas under Cytoscape's transparent one: first in the tree, so
+  // everything the graph draws is painted over it.
   return (
-    <div
-      ref={container}
-      className="h-full w-full bg-ground"
-      role="img"
-      aria-label="Repository graph"
-    />
+    <div className="relative h-full w-full bg-ground">
+      <DotField source={boxes} mode={field.mode} lights={field.lights} />
+      <div
+        ref={container}
+        className="relative h-full w-full"
+        role="img"
+        aria-label="Repository graph"
+      />
+    </div>
   );
 }

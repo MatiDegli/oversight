@@ -14,6 +14,7 @@ import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
 import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import { TopBar } from "./TopBar";
+import { fieldInput } from "./fieldScope";
 import { changeNodeIds, litNodeIds, panelOpen } from "./view";
 import type { View } from "./view";
 
@@ -252,6 +253,8 @@ export function Frame(props: FrameProps) {
   // The cone and the change stay lit until the decision; events never open review themselves.
   const reviewed = view.review === null ? undefined : state.changes[view.review];
   const litIds = useMemo(() => litNodeIds(reviewed), [reviewed]);
+  // The dot field's light follows the same state and the same view, so it never needs an event.
+  const field = useMemo(() => fieldInput(state, view), [state, view]);
   const cone = litIds === null ? null : (reviewed?.proposal?.impact ?? null);
   // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
   const shown = view.review ?? view.diff?.changeId ?? null;
@@ -304,6 +307,7 @@ export function Frame(props: FrameProps) {
             onFramed={onFramed}
             coneCardRef={coneCardRef}
             apiRef={graphApi}
+            field={field}
           />
           {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
               review) top left, the legend bottom left, the zoom controls bottom right. */}
