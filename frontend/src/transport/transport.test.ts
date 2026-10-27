@@ -16,11 +16,15 @@ if (first?.type !== "run.started" || second?.type !== "graph.snapshot") {
 const run = first;
 const graph = second;
 class FakeSource implements EventStream {
+  onopen: EventStream["onopen"] = null;
   onmessage: EventStream["onmessage"] = null;
   onerror: EventStream["onerror"] = null;
   readyState = 1;
   close = vi.fn();
   constructor(readonly url: string) {}
+  open() {
+    this.onopen?.(new Event("open"));
+  }
   emit(event: ServerEvent) {
     this.raw(JSON.stringify(event));
   }
@@ -34,21 +38,16 @@ class FakeSource implements EventStream {
 }
 
 const stops: (() => void)[] = [];
-function setup(graphStatus = 200) {
+function setup() {
   const sources: FakeSource[] = [];
   const store = createStateStore();
   const onError = vi.fn();
-  // A valid graph response also lets reversion checks reach the original event handlers.
-  const request = vi
-    .fn<typeof fetch>()
-    .mockResolvedValue(
-      graphStatus === 200
-        ? Response.json({ run_id: run.payload.run_id, seq: 2, graph: graph.payload })
-        : new Response(null, { status: graphStatus }),
-    );
+  // The UI streams from seq 1; GET /graph is not on the connect path (proposal 4.6), so no
+  // fetch of any kind may happen. Failing loudly here also catches a request sent by mistake.
+  const request = vi.fn<typeof fetch>().mockRejectedValue(new Error("No network in this test"));
+  vi.stubGlobal("fetch", request);
   const transport = startLive({
     store,
-    request,
     onError,
     openStream: (url) => {
       const source = new FakeSource(url);
@@ -67,27 +66,84 @@ function setup(graphStatus = 200) {
 
 afterEach(() => {
   for (const stop of stops.splice(0)) stop();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
 describe("live transport", () => {
-  it.each([404, 502])(
-    "connects directly without GET /graph (HTTP %s) and matches replay at every event",
-    async (status) => {
-      const { transport, store, request, source } = setup(status);
-      await transport.ready;
-      expect(request).not.toHaveBeenCalled();
-      expect(source().url).toBe("/events?after=0");
-      expect(store.getState().state).toEqual(createInitialState());
-      let expected = createInitialState();
-      for (const event of log) {
-        source().emit(event);
-        expected = applyEvent(expected, event);
-        expect(store.getState().state).toEqual(expected);
-      }
-    },
-  );
+  it("connects directly without GET /graph and matches replay at every event", async () => {
+    const { transport, store, request, source } = setup();
+    await transport.ready;
+    expect(request).not.toHaveBeenCalled();
+    expect(source().url).toBe("/events?after=0");
+    expect(store.getState().state).toEqual(createInitialState());
+    let expected = createInitialState();
+    for (const event of log) {
+      source().emit(event);
+      expected = applyEvent(expected, event);
+      expect(store.getState().state).toEqual(expected);
+    }
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("has no request option: the stream is its only way to the server", () => {
+    const transport = startLive({
+      store: createStateStore(),
+      // @ts-expect-error `request` was dead: connecting never fetched anything.
+      request: vi.fn(),
+      openStream: (url) => new FakeSource(url),
+    });
+    stops.push(transport.stop);
+  });
+
+  it("clears the failure when the reopened stream is healthy, with nothing new to apply", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const { source, sources, transport, onError } = setup();
+    await transport.ready;
+    source().emit(run);
+    source().emit(graph);
+    source().fail();
+    expect(onError).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(sources).toHaveLength(2);
+    // Opening is not enough to clear anything the first time it is seen on the old stream.
+    sources[0]?.open();
+    expect(onError).toHaveBeenCalledOnce();
+    source().open();
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenLastCalledWith(null);
+    // Once per streak, and a later failure is a new streak that reports again.
+    source().open();
+    expect(onError).toHaveBeenCalledTimes(2);
+    source().fail();
+    expect(onError).toHaveBeenCalledTimes(3);
+    expect(onError).toHaveBeenLastCalledWith(expect.any(Error));
+  });
+
+  it("keeps a bad event's failure visible across reopens until an event applies", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const { source, sources, store, transport, onError } = setup();
+    await transport.ready;
+    source().emit(run);
+    source().raw("{");
+    expect(onError).toHaveBeenCalledOnce();
+    for (let reopen = 1; reopen <= 3; reopen++) {
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(sources).toHaveLength(reopen + 1);
+      // The reopened stream is healthy, then replays the event that broke the last one.
+      source().open();
+      source().raw("{");
+    }
+    expect(onError).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(30_000);
+    source().open();
+    source().emit(graph);
+    expect(store.getState().state.lastSeq).toBe(2);
+    expect(onError).toHaveBeenCalledOnce();
+  });
 
   it.each(["malformed JSON", "reducer exception", "sequence gap", "graph version"])(
     "backs off with jitter on repeated %s, reports once and resets on an applied event",
@@ -301,7 +357,6 @@ describe("command client", () => {
     [502, "null"],
     [500, "{}"],
     [500, '{"error":null}'],
-    [500, '{"error":{"code":"invented","message":"No"}}'],
     [500, '{"error":{"code":"wrong_state","message":42}}'],
   ])("keeps HTTP %s with a non-contract body as CommandError (%s)", async (status, body) => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status }));
@@ -310,6 +365,19 @@ describe("command client", () => {
       .catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(CommandError);
     expect(failure).toMatchObject({ status, code: undefined, message: `HTTP ${String(status)}` });
+  });
+
+  it.each([
+    ['{"error":{"code":"invented","message":"No room"}}', "No room"],
+    ['{"error":{"message":"No room"}}', "No room"],
+    ['{"error":{"code":42,"message":"No room"}}', "No room"],
+  ])("keeps the server's message when the code is not the contract's (%s)", async (body, text) => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status: 500 }));
+    const failure: unknown = await createCommandClient(request)
+      .getGraph()
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(CommandError);
+    expect(failure).toMatchObject({ status: 500, code: undefined, message: text });
   });
 
   it("maps the single error body to a typed error including status and code", async () => {

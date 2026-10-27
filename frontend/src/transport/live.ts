@@ -2,6 +2,7 @@ import { apply, parseEvent } from "./events";
 import type { Transport, TransportStore } from "./events";
 
 export interface EventStream {
+  onopen?: ((event: Event) => void) | null;
   onmessage: ((message: MessageEvent<string>) => void) | null;
   onerror: ((event: Event) => void) | null;
   readonly readyState: number;
@@ -9,8 +10,8 @@ export interface EventStream {
 }
 export interface LiveOptions {
   store: TransportStore;
-  request?: typeof fetch;
   openStream?: (url: string) => EventStream;
+  /** One failure per streak; `null` when a reopened stream is healthy again. */
   onError?: (error: unknown) => void;
 }
 
@@ -24,6 +25,9 @@ export function startLive({
   let timer: ReturnType<typeof setTimeout> | undefined;
   let retryWindow = 500;
   let reported = false;
+  // The last failure was a lost connection, which a healthy reopen ends. A bad event does not
+  // end that way: the reopened stream replays it, so only an applied event clears that failure.
+  let disconnected = false;
 
   function retry(error: unknown) {
     stream?.close();
@@ -47,6 +51,15 @@ export function startLive({
     try {
       const current = openStream(`/events?${params}`);
       stream = current;
+      current.onopen = () => {
+        if (stopped || current !== stream || !disconnected) return;
+        // A server with nothing new to send applies no event, so the shell would keep its alert.
+        disconnected = false;
+        if (reported) {
+          reported = false;
+          onError?.(null);
+        }
+      };
       current.onmessage = (message) => {
         if (stopped || current !== stream) return;
         try {
@@ -63,6 +76,7 @@ export function startLive({
         if (stopped || current !== stream) return;
         // Own all retries, including CLOSED after a non-200 response. Closing CONNECTING
         // also prevents native Last-Event-ID from advancing past an unapplied event.
+        disconnected = true;
         retry(
           new Error(`Live event stream disconnected (${String(current.readyState)}); retrying`),
         );
