@@ -1,0 +1,115 @@
+"""POST /agents, approve and reject over a real server on the live app, with the scripted model."""
+
+import asyncio
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from live_helpers import DEADLINE_S, GatedModel, is_type, live_server, live_settings, meta_settings
+
+from oversight.api.commands import NOT_BUILT
+from oversight.app import ReplayConfig, create_app
+from oversight.settings import REPO_ROOT
+from oversight_contracts.commands import AgentCreated, ErrorResponse
+
+pytestmark = pytest.mark.anyio
+
+
+def error_code(response: object) -> tuple[int, str]:
+    assert hasattr(response, "json")
+    body = ErrorResponse.model_validate(response.json())  # pyright: ignore[reportAttributeAccessIssue]
+    return response.status_code, body.error.code  # pyright: ignore[reportAttributeAccessIssue]
+
+
+async def test_unknown_and_malformed_change_ids_are_not_found(tmp_path: Path) -> None:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        assert error_code(await s.client.post("/changes/change-9/approve")) == (404, "not_found")
+        assert error_code(await s.client.post("/changes/not-an-id/reject")) == (404, "not_found")
+
+
+async def test_approve_before_the_proposal_is_wrong_state_and_a_racing_start_slot_busy(
+    tmp_path: Path,
+) -> None:
+    model = GatedModel()
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(live_settings(tmp_path), lambda _: model) as s,
+    ):
+        first, second = await asyncio.gather(
+            s.client.post("/agents", json={"task": "Do it."}),
+            s.client.post("/agents", json={"task": "Do it too."}),
+        )
+        codes = sorted([first.status_code, second.status_code])
+        assert codes == [201, 409]
+        busy = first if first.status_code == 409 else second
+        assert error_code(busy) == (409, "slot_busy")
+        created = AgentCreated.model_validate((second if busy is first else first).json())
+        assert created.slot == "A"
+        await model.entered.wait()  # the run is working: nothing is proposed yet
+        response = await s.client.post(f"/changes/{created.change_id}/approve")
+        assert error_code(response) == (409, "wrong_state")
+        assert error_code(await s.client.post("/agents", json={"task": "x"})) == (409, "slot_busy")
+
+
+async def test_a_second_decision_is_wrong_state_and_one_resolution_is_logged(
+    tmp_path: Path,
+) -> None:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        created = AgentCreated.model_validate(
+            (await s.client.post("/agents", json={"task": "t"})).json()
+        )
+        await s.until(is_type("agent.status", state="ready_for_review"))
+        approve = await s.client.post(
+            f"/changes/{created.change_id}/approve", json={"comment": "ok"}
+        )
+        assert approve.status_code == 202
+        assert approve.content == b""
+        again = await s.client.post(f"/changes/{created.change_id}/reject")
+        assert error_code(again) == (409, "wrong_state")
+        await s.until(is_type("agent.status", state="done"))
+        resolved = [e for e in s.events() if e.type == "change.resolved"]
+        assert [(e.payload.decision, e.payload.comment) for e in resolved] == [("approved", "ok")]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"task": "t", "slot": "B"},
+        {"task": ""},
+        {"task": "   "},
+        {"task": "t", "model": "muse-spark-open"},
+        {"task": "t", "model": "muse-spark"},
+        {"slot": "A"},
+    ],
+)
+async def test_bad_starts_are_invalid_request(tmp_path: Path, body: dict[str, str]) -> None:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        assert error_code(await s.client.post("/agents", json=body)) == (422, "invalid_request")
+
+
+async def test_a_meta_start_without_a_key_is_invalid_request_before_the_brake(
+    tmp_path: Path,
+) -> None:
+    settings = meta_settings(tmp_path, meta_api_key=None, budget_usd=None)
+    calls: list[object] = []
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, calls.append) as s:  # pyright: ignore[reportArgumentType]
+        response = await s.client.post("/agents", json={"task": "t"})
+        assert error_code(response) == (422, "invalid_request")
+        assert "META_API_KEY" in response.json()["error"]["message"]
+    assert calls == []
+
+
+async def test_unbuilt_commands_answer_501_without_reading_the_body(tmp_path: Path) -> None:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        for method, path, _ in NOT_BUILT:
+            url = path.replace("{agent_id}", "agent-1").replace("{change_id}", "change-1")
+            response = await s.client.request(method, url, content=b"not json")
+            assert error_code(response) == (501, "not_implemented"), url
+
+
+def test_a_replay_takes_no_commands(tmp_path: Path) -> None:
+    log = REPO_ROOT / "fixtures" / "events" / "handwritten-level1.jsonl"
+    app = create_app(live_settings(tmp_path), ReplayConfig(log=log))
+    client = TestClient(app)
+    for url in ("/agents", "/changes/change-1/approve", "/changes/change-1/reject"):
+        assert error_code(client.post(url, content=b"not json")) == (501, "not_implemented")

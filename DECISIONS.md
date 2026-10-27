@@ -180,3 +180,9 @@ Ours wins in every case below.
 - **Muse Spark in Contributor mode, not Standard:** it costs less, and the code the agents see is
   the demo repository or this repository, both public and shown to Meta anyway. The API probe ran in
   Standard mode (docs/api-probe.md); its findings on tools, reasoning and usage still hold.
+- **Muse Code for development (maintainer, 2026-10-26):** development agents may use Muse Code with
+  Muse Wonder on the maintainer's subscription, so the work splits across more providers and
+  Meta's frontier model helps build the product. It keeps its own stored credential: never the
+  product's `.env` key, which an exported variable would override, and never the hackathon
+  credits, so the spending brake's ledger and Meta's console total stay about the product alone.
+  The product's own agents still use only Muse Spark and Muse Spark Open.

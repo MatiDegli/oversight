@@ -1,11 +1,12 @@
-"""Command line: `python -m oversight serve [--reload]` and `python -m oversight replay <log>`."""
+"""Command line: `python -m oversight serve [--reload]`, `python -m oversight replay <log>` and
+`python -m oversight ledger [settle --spent-usd X]`."""
 
 import argparse
 from pathlib import Path
 
 import uvicorn
 
-from oversight.app import ReplayConfig, create_app
+from oversight.app import ReplayConfig, create_app, ledger_command
 from oversight.settings import Settings
 
 
@@ -22,6 +23,12 @@ def main() -> None:
         default=1.0,
         help="1: the log's gaps, each capped at 2 s (default); 2: twice as fast; 0: no pauses",
     )
+    ledger = commands.add_parser("ledger", help="print the spend ledger, or settle it")
+    ledger_commands = ledger.add_subparsers(dest="ledger_command")
+    settle = ledger_commands.add_parser(
+        "settle", help="set the spend to Meta's console total and clear unknown calls"
+    )
+    settle.add_argument("--spent-usd", type=float, required=True, help="US dollars spent so far")
     args = parser.parse_args()
     settings = Settings.load()
 
@@ -32,7 +39,14 @@ def main() -> None:
             host=settings.host,
             port=settings.port,
             reload=args.reload,
+            # Open streams never end by themselves: shutdown gives them a second, then closes them.
+            timeout_graceful_shutdown=1,
         )
+    elif args.command == "ledger":
+        spent = args.spent_usd if args.ledger_command == "settle" else None
+        if spent is not None and not (spent >= 0 and spent != float("inf")):
+            parser.error("--spent-usd must be a finite amount of 0 or more")
+        print(ledger_command(settings, spent))
     elif args.command == "replay":
         if args.speed < 0:
             parser.error("--speed must be 0 or more")

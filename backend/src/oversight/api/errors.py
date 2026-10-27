@@ -43,3 +43,11 @@ def install_error_handlers(app: FastAPI) -> None:
         if error.status_code == 404:
             return error_response("not_found", "no such resource")
         return error_response("invalid_request", str(error.detail))
+
+    @app.exception_handler(Exception)
+    async def _internal(_: Request, error: Exception) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        # Anything unexpected: the contract's internal (500), with no traceback in the body. The
+        # module that failed has sent an error event with the details it may show.
+        return error_response(
+            "internal", f"the server failed ({type(error).__name__}); see the error events"
+        )

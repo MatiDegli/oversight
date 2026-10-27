@@ -26,14 +26,9 @@ from oversight_contracts.commands import GraphResponse, Health
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOST = "127.0.0.1"
-# Today only replay mode mounts routes; the live `serve` mounts none until the API front wires
-# them. This tuple is the one place the command lives, so that front switches it to ("serve",).
-BACKEND_ARGS: tuple[str, ...] = (
-    "replay",
-    "fixtures/events/handwritten-level1.jsonl",
-    "--speed",
-    "0",
-)
+# The live server, on the scripted fake model, so the smoke test spends no credits.
+BACKEND_ARGS: tuple[str, ...] = ("serve",)
+FAKE_SCRIPT = "fixtures/fake-model/document-apply-coupon.json"
 START_DEADLINE = 15.0  # seconds /health and then /graph have to answer within
 REQUEST_TIMEOUT = 2.0  # seconds one HTTP attempt may take
 POLL_INTERVAL = 0.05  # seconds between attempts
@@ -143,8 +138,8 @@ def wait_for_health(
 def wait_for_graph(base: str, deadline_seconds: float) -> int:
     """GET /graph until it answers 200 within the deadline, then validate its body: the seq.
 
-    A 404 right after startup is the replay player still publishing the snapshot, so that status
-    is retried like no answer at all; any other wrong answer, and a body that fails validation,
+    A 404 right after startup is a snapshot not published yet, so that status is retried like no
+    answer at all; any other wrong answer, and a body that fails validation,
     fail at once.
     """
     deadline = time.monotonic() + deadline_seconds
@@ -180,8 +175,15 @@ def child_env(port: int, runtime_dir: Path) -> dict[str, str]:
     directory, so a running `make dev` or `make replay` on the usual port is not disturbed."""
     env = dict(os.environ)
     env.update(
-        OVERSIGHT_HOST=HOST, OVERSIGHT_PORT=str(port), OVERSIGHT_RUNTIME_DIR=str(runtime_dir)
+        OVERSIGHT_HOST=HOST,
+        OVERSIGHT_PORT=str(port),
+        OVERSIGHT_RUNTIME_DIR=str(runtime_dir),
+        OVERSIGHT_AGENT_MODEL="fake",
+        OVERSIGHT_FAKE_SCRIPT=FAKE_SCRIPT,
     )
+    # No provider key reaches the child: it never calls a model API.
+    for key in ("META_API_KEY", "BASETEN_API_KEY"):
+        env.pop(key, None)
     return env
 
 
@@ -189,7 +191,8 @@ def run_smoke() -> None:
     """One smoke run: start the backend, check it, stop it. Raises SmokeError with the reason."""
     port = free_port()
     with tempfile.TemporaryDirectory(prefix="oversight-smoke-") as scratch:
-        runtime_dir = Path(scratch) / "runtime"
+        # The workspace refuses a runtime directory with another name.
+        runtime_dir = Path(os.path.realpath(scratch)) / ".runtime"
         child = subprocess.Popen(
             [sys.executable, "-m", "oversight", *BACKEND_ARGS],
             cwd=REPO_ROOT,

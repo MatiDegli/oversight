@@ -1,9 +1,9 @@
-import type { AgentStatus } from "@contracts";
+import type { AgentStatus, StartAgent } from "@contracts";
 import { GitBranch, Network, X } from "lucide-react";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 
-import { AgentCard } from "../agents";
+import { AgentCard, TaskBox } from "../agents";
 import { LiveDiff } from "../editor";
 import { GraphView } from "../graph";
 import { ReviewPanel } from "../review";
@@ -51,6 +51,8 @@ export interface FrameProps {
   canOpenChange: (changeId: string) => boolean;
   onOpenChange: (changeId: string) => void;
   onClosePanel: () => void;
+  /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
+  onStartAgent?: (body: StartAgent) => Promise<unknown>;
   /** True for a proposed change: its card offers Review change instead of the live diff. */
   canReview?: (changeId: string) => boolean;
   onReview?: (changeId: string) => void;
@@ -129,35 +131,47 @@ function AgentsPanel({
   state,
   canOpenChange,
   onOpenChange,
+  onStartAgent,
   canReview,
   onReview,
-}: Pick<FrameProps, "state" | "canOpenChange" | "onOpenChange" | "canReview" | "onReview">) {
+}: Pick<
+  FrameProps,
+  "state" | "canOpenChange" | "onOpenChange" | "onStartAgent" | "canReview" | "onReview"
+>) {
   const cards = selectAgents(state).flatMap((agent) => {
     const data = selectAgentCard(state, agent.agent_id);
     return data ? [data] : [];
   });
+  // One keyed list, so the new-agent box keeps its place in the tree (and the person's focus)
+  // when the first card appears above it.
+  const body = [
+    ...cards.map((data) => {
+      const review = canReview?.(data.agent.change_id) === true;
+      return (
+        <AgentCard
+          key={data.agent.agent_id}
+          data={data}
+          onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
+          onReview={review ? onReview : undefined}
+        />
+      );
+    }),
+    <TaskBox key="new-agent" state={state} onStart={onStartAgent} />,
+  ];
+  if (cards.length === 0) {
+    body.push(
+      <p key="empty" className="text-sm text-muted">
+        No agents yet. Each agent gets a card here when it starts.
+      </p>,
+    );
+  }
   return (
     <aside
       aria-label="Agents"
       className="flex w-(--agents-panel-width) shrink-0 flex-col gap-2.5 overflow-y-auto border-l border-divider bg-panel p-3.5"
     >
       <h2 className="text-(length:--title-size) font-bold">Agents</h2>
-      {cards.map((data) => {
-        const review = canReview?.(data.agent.change_id) === true;
-        return (
-          <AgentCard
-            key={data.agent.agent_id}
-            data={data}
-            onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
-            onReview={review ? onReview : undefined}
-          />
-        );
-      })}
-      {cards.length === 0 && (
-        <p className="text-sm text-muted">
-          No agents yet. Each agent gets a card here when it starts.
-        </p>
-      )}
+      {body}
     </aside>
   );
 }
@@ -295,6 +309,7 @@ export function Frame(props: FrameProps) {
             state={state}
             canOpenChange={canOpenChange}
             onOpenChange={onOpenChange}
+            onStartAgent={props.onStartAgent}
             canReview={props.canReview}
             onReview={props.onReview}
           />

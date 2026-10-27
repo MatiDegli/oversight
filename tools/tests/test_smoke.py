@@ -73,10 +73,13 @@ def test_a_free_port_can_be_bound() -> None:
         sock.bind((smoke.HOST, port))
 
 
-def test_the_backend_command_replays_an_existing_log() -> None:
-    # The one place the command lives; its log path is read from the repository root.
-    assert smoke.BACKEND_ARGS[0] == "replay"
-    assert (smoke.REPO_ROOT / smoke.BACKEND_ARGS[1]).is_file()
+def test_the_backend_command_serves_live_on_the_fake_model(tmp_path: Path) -> None:
+    # The one place the command lives; the fake model's script is read from the repository root.
+    assert smoke.BACKEND_ARGS == ("serve",)
+    env = smoke.child_env(8000, tmp_path / ".runtime")
+    assert env["OVERSIGHT_AGENT_MODEL"] == "fake"
+    assert (smoke.REPO_ROOT / env["OVERSIGHT_FAKE_SCRIPT"]).is_file()
+    assert "META_API_KEY" not in env and "BASETEN_API_KEY" not in env
 
 
 def test_nothing_answering_fails_at_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:

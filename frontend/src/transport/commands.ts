@@ -65,14 +65,18 @@ export function createCommandClient(request: typeof fetch = fetch) {
           if (
             typeof error === "object" &&
             error !== null &&
-            "code" in error &&
-            typeof error.code === "string" &&
             "message" in error &&
             typeof error.message === "string" &&
-            Object.hasOwn(errorCodes, error.code)
+            error.message !== ""
           ) {
-            code = error.code as ErrorCode;
+            // The server's words are kept even when its code is not one the contract names.
             message = error.message;
+            if (
+              "code" in error &&
+              typeof error.code === "string" &&
+              Object.hasOwn(errorCodes, error.code)
+            )
+              code = error.code as ErrorCode;
           }
         }
       } catch {
