@@ -309,15 +309,26 @@ class LiveRun:
             raise failure
 
     async def _stop_runs(self) -> None:
-        """Cancel each run and wait for it: its process group is killed and its change ended. A
-        task cancelled before its first step never runs `_run`'s `finally`, so this ends the
-        change itself: `run_ended` does nothing unless the change is still `working`."""
+        """Cancel each run and each Request changes decision, and wait for them: a process group
+        is killed and every change ended before the manager's drain.
+
+        A task cancelled before its first step never runs its body or its `finally`, so a decision
+        is cancelled and drained here too, from a snapshot taken first (R8): a `_revise` that wakes
+        as its decision ends pops it from `_decisions` meanwhile. A decision settles by itself
+        before its resolution is sent, or finishes the resolution and `working` together, and the
+        change is then ended here: `run_ended` does nothing unless it is still `working`."""
+        decisions = list(self._decisions.items())
         runs = dict(self._runs)
         for task in runs.values():
             task.cancel()
+        for _, decision in decisions:
+            decision.cancel()
+        for _, decision in decisions:
+            await asyncio.wait([decision])
         await asyncio.gather(*runs.values(), return_exceptions=True)
-        for agent_id in runs:
+        for agent_id in dict.fromkeys([*runs, *(agent_id for agent_id, _ in decisions)]):
             self._runs.pop(agent_id, None)
+            self._decisions.pop(agent_id, None)
             if self._manager is not None:
                 kept = self._kept.get(agent_id)
                 self._manager.run_ended(agent_id, None, steps=kept.steps if kept else None)
