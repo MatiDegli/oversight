@@ -297,10 +297,12 @@ def test_moved_test_file_unchanged_is_clean() -> None:
     assert findings == []
 
 
-def test_rename_with_extracted_variable_is_clean() -> None:
+def test_rename_with_extracted_variable_requests_review() -> None:
     old = "def test_x():\n    assert add(1, 2) == 3\n"
     new = "def test_result():\n    result = add(1, 2)\n    assert result == 3\n"
-    assert detect_shortcuts([("test_calc.py", old, new)]) == []
+    # Extraction changes the body: the strict rename rule asks for review.
+    findings = detect_shortcuts([("test_calc.py", old, new)])
+    assert _kinds(findings) == [ShortcutKind.TEST_REMOVED]
 
 
 def test_duplicate_bodies_do_not_hide_a_removal() -> None:
