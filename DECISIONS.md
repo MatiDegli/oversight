@@ -283,8 +283,10 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   so each transition can be judged before its rules replace the current section.
 - **Shell zones accepted.** The top bar, left rail, sidebar, focus panel, graph stage,
   agents panel, bottom dock and status line give each feature a known home. DESIGN.md's Layout
-  section waits for the shell sketches. Focus panel tabs, the Files view and the proposed approve
-  key need the maintainer to reconcile AGENTS.md first.
+  section waits for the shell sketches. The maintainer updated AGENTS.md for focus panel tabs and
+  the Files view. Approve keeps no keyboard shortcut, so the shell's keyboard map has no approve
+  key, and Ctrl K offers no Approve command; the existing "Approve answers only a pointer click"
+  decision applies. Nothing else waits on AGENTS.md.
 - **Terminal placed now, built last.** Its home is the bottom dock. Implementation waits for an
   independently reviewed security plan: bind to 127.0.0.1, use a per-session token, check Origin
   and Host, and kill the terminal with the server. Agents never reach it. This reserves its place
