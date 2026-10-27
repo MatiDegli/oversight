@@ -41,7 +41,7 @@ void test("a disabled scene or theme is skipped with the reason, never dropped",
   assert.match(jobs[3]?.skip ?? "", /scene review: the review panel/);
 });
 
-void test("the real list: watch, review and live diff in dark run, every other entry is listed and skipped", () => {
+void test("the real list: watch, review, live diff, task slots and file view run in dark; light remains skipped", () => {
   const jobs = planJobs(scenes, themes);
   const running = jobs.filter((job) => job.skip === null).map((job) => job.file);
   assert.deepEqual(running, [
@@ -51,6 +51,7 @@ void test("the real list: watch, review and live diff in dark run, every other e
     "live-diff-dark.png",
     "task-one-slot-dark.png",
     "task-two-slots-braked-dark.png",
+    "file-view-dark.png",
   ]);
   assert.deepEqual(
     scenes.map((scene) => scene.name),
@@ -94,7 +95,7 @@ void test("live diff uses a derived cut through the last edit before the proposa
   assert.equal(editingLog('{"seq":1,"type":"change.proposed"}'), null);
 });
 
-void test("a log without a pre-proposal edit still captures watch and review, skipping only live diff", () => {
+void test("a log without a pre-proposal edit still captures watch, review and file view, skipping only live diff", () => {
   const source = '{"seq":1,"type":"change.proposed"}\n{"seq":2,"type":"change.updated"}\n';
   const enabled = scenes.filter(
     (scene) => scene.enabled && (!scene.log || scene.log === "editing"),
@@ -105,6 +106,7 @@ void test("a log without a pre-proposal edit still captures watch and review, sk
       ["watch", source],
       ["review", source],
       ["live-diff", null],
+      ["file-view", source],
     ],
   );
   // Scenes using the served log do not even parse an editing cut.

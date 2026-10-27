@@ -67,6 +67,7 @@ export const themes = {
     "label-size": "14px",
     "label-weight": 600,
     "caption-size": "13px",
+    "caption-line-height": "20px",
     "caption-weight": 400,
     "badge-size": "13px",
     "badge-weight": 700,
