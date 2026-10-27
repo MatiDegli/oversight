@@ -1,6 +1,6 @@
 import type { GraphNode } from "@contracts";
 import { Bot } from "lucide-react";
-import { useId } from "react";
+import { useId, useState } from "react";
 import { useStore } from "zustand";
 
 import type { State } from "../state";
@@ -19,32 +19,40 @@ export function StartAgentHere({
   const id = useId();
   const draft = useStore(taskBoxStore, (box) => box.draft);
   const pending = useStore(taskBoxStore, (box) => box.pending);
+  const [prefilled, setPrefilled] = useState<string | null>(null);
+  const [refused, setRefused] = useState(false);
+  if (draft === "" && (prefilled !== null || refused)) {
+    setPrefilled(null);
+    setRefused(false);
+  }
   if (node.kind !== "function" && node.kind !== "method") return null;
+  const occupied = "Task box is in use. Finish or clear the current task first.";
   const reason =
-    startBlock(state) ??
-    (pending
-      ? "Starting the agent."
-      : draft !== ""
-        ? "Task box is in use. Finish or clear the current task first."
-        : null);
+    startBlock(state) ?? (pending ? "Starting the agent." : draft !== "" ? occupied : null);
+  const note = reason === occupied && !refused ? null : reason;
   return (
     <div className="min-w-0">
       <button
         type="button"
         aria-disabled={reason !== null}
-        aria-describedby={reason ? id : undefined}
+        aria-label={reason ? `Start an agent here. ${reason}` : undefined}
+        aria-describedby={note ? id : undefined}
+        title={reason ?? undefined}
         className="inline-flex h-(--button-small-height) items-center gap-2 rounded-control px-3 text-sm text-muted not-aria-disabled:hover:bg-raised not-aria-disabled:hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text aria-disabled:cursor-not-allowed"
         onClick={() => {
+          if (reason === occupied && draft !== prefilled) setRefused(true);
           if (reason !== null || !taskBoxStore.getState().prefill(functionTask(node))) return;
+          setPrefilled(functionTask(node));
+          setRefused(false);
           onOpen();
         }}
       >
         <Bot aria-hidden="true" className="size-4 shrink-0" />
         Start an agent here
       </button>
-      {reason && (
+      {note && (
         <p id={id} role="status" className="text-sm text-muted">
-          {reason}
+          {note}
         </p>
       )}
     </div>

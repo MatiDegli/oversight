@@ -22,6 +22,7 @@ export function useFunctionTask(state: State, view: View, enabled: boolean) {
     action:
       enabled && node && view.file?.path === node.path ? (
         <StartAgentHere
+          key={node.id}
           node={node}
           state={state}
           onOpen={() => {
