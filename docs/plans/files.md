@@ -1,7 +1,7 @@
 # Plan: file editing on main, level 2 (GET /files, PUT /files, POST /graph/rescan, the file view)
 
-Revision 2 (revision 1 by Muse Wonder), plan only, for an independent review before any code. It
-answers plan review 1: each finding is marked B1 to B4 or S1 to S7 where it lands. Sources:
+Revision 3 (revision 1 by Muse Wonder), plan only, for an independent review before any code. It
+answers plan review 1 (B1 to B4, S1 to S7) and re-review 1 (F1 to F3), each marked where it lands. Sources:
 docs/proposal.md 4.3 to 4.9, `contracts/` 1.1.0, docs/plans/changes.md rev. 8, docs/plans/api.md,
 docs/plans/request-changes.md rev. 2 (806b495, sections 1, 3, 7), and the code at main 75a837e. No
 module, dependency or contract change; section 4 holds two contract proposals, neither settled. This
@@ -73,8 +73,13 @@ owner of main's graph, `snapshot` and lock order.
   fallback (`ready`), one `error` (`server`, not fatal) "main became suspect before this approval
   ran; reject the change or restart". `open` holds main's lock from that check through
   `create_worktree` (reentrant) and raises `WrongState`, which `start` maps to `wrong_state`. The
-  route-level checks stay as fast paths. Request-changes' phase A reads main only; that front
-  decides whether it rechecks (noted to it).
+  route-level checks stay as fast paths. **F1, dependency on the request-changes front (not a
+  note):** its phase A must do the same recheck. Phase A takes main's lock before it reads main
+  or merges it into a worktree, so it re-reads `main_suspect` there, before phase B; if set, it
+  aborts like a failed phase A: no base move, no phase B, no revision started, the change stays
+  `ready` or `conflict`, one `error`, the task returns `None`. The app-level suspect check before
+  the task spawns stays only a fast path, exactly as here. Request changes is not enabled
+  alongside main saves until that front lands this recheck and its test (3.1).
 
 ### 1.4 PUT /files on main (`ChangeManager.save_main(path, content, base_hash) -> FileSaved`)
 
@@ -189,7 +194,8 @@ getActiveTheme())`, and `EditorDiff`'s font gate. Colors from theme tokens only.
   command plus a `keydown` on the panel element, both removed on unmount. It cannot fire in review:
   `FileView` is unmounted while `View.review` is set. Approve keeps its pointer-only rule.
 - **Answers**: `FileSaved` adopts the returned hash and the sent text as loaded (edits typed in
-  flight stay dirty against it). `stale_file` shows "This file changed on the server since you
+  flight stay dirty against it). The PUT itself is App's, not the component's (F2, 2.3): an
+  unmount settles nothing and drops nothing. `stale_file` shows "This file changed on the server since you
   started editing. Your edits are still here." with **Reload** (refetch, replace the model, drop
   the draft); no "save anyway". Other errors show the server's message in `role="alert"`, keep the
   edits, and leave Save retryable.
@@ -209,13 +215,28 @@ getActiveTheme())`, and `EditorDiff`'s font gate. Colors from theme tokens only.
 - **Discard edits** (a labeled header button, while dirty, destructive token) restores the fetched
   content and deletes the draft, as a successful save or Reload does. No confirm dialog: nothing is
   lost without that explicit click.
+- **F2, an in-flight save outlives the view.** `App` also keeps `inFlightSaves: Map<string,
+  Promise<FileSaved>>` in a ref, one per path (Save is disabled while one runs). `FileView`
+  registers the PUT there synchronously when it sends, and `App`, not the component, owns its
+  settlement: on the 200 it reconciles that path's draft, mounted or not. If the draft's content
+  is the sent text, the draft is deleted (clean); if the person typed past it, the draft keeps
+  that text and its `baseHash` becomes the returned hash, so on return the draft is dirty against
+  the just-saved content, not stuck on `stale_file`. Any error leaves the draft untouched (the
+  `stale_file` banner or a retry on return). Reopening a path with a save still in flight shows
+  `saving`, sends no second PUT, and adopts the same settlement when it lands.
 
 ### 2.4 Refreshes never overwrite typing (S5)
 
-- Each GET records its target and `model.getVersionId()` (it grows on every edit) when issued. Its
-  answer replaces the model only if the target, that version id and the clean state all hold.
-  Otherwise the text is kept and only the server hash is noted: if it differs from the base, the
-  stale banner shows. A slow GET for file A never writes file B's model; an unmount drops all.
+- **F3, the GET guard.** Each GET records, when issued: its target, the model instance itself
+  (identity, not just its path: A → B → A creates a new one), a request generation (a counter
+  `App`/`FileView` bumps on every GET issued and on every model change, so only the latest GET
+  for a target is current), and `model.getVersionId()` (it grows on every edit). Its answer
+  replaces the model only if all hold: same target, same model instance, its generation still
+  the latest, that version id, and the clean state. `getVersionId` alone is not trusted: a
+  recreated model can repeat it, so an old GET of A that passes target, version and clean still
+  fails identity or generation. Otherwise the text is kept and only the server hash is noted:
+  if it differs from the base, the stale banner shows. A slow GET for file A never writes file
+  B's model; an unmount drops all, and invalidates the generation.
 - A clean open file refetches when a `graph.delta` arrives whose `commit` differs from the last one
   it saw; M3 makes every main commit send one, a non-Python save or a body-only merge included.
 
@@ -256,6 +277,11 @@ are a `threading.Event`. * = shown failing with its change reverted.
 - B4: *test_approve_queued_behind_a_failing_save_does_not_merge*: the save is held at a commit
   armed to fail with its restore; Approve queues; on release main is suspect, nothing merges, the
   change is `ready` with one `error`. *test_open_queued_behind_a_failing_save_refuses*.
+- F1 (owned by the request-changes front, in its `test_request_changes.py`):
+  *test_request_changes_queued_behind_a_failing_save_starts_no_revision*: the save is held at a
+  commit armed to fail as above; Request changes passes its app-level check and queues on main's
+  lock; on release main is suspect, phase A aborts, the change stays `ready` or `conflict`, no
+  revision task runs, one `error`. Shown failing without phase A's recheck.
 - S1: *test_cancelled_approval_scan_holds_main_until_its_thread_ends*: the approval's scan waits on
   a gate, the approval is cancelled, a save queues; its first git call follows the thread's end.
 - S2: *test_get_main_waits_for_a_held_merge*: a conflicting merge held after `merge`; the GET
@@ -283,7 +309,12 @@ are a `threading.Event`. * = shown failing with its change reverted.
   target read-only; never focuses. S4: *a draft survives a switch, a review and Escape* (remount on
   the same map: text and `baseHash` back); *a draft over a moved file shows the banner*; *Discard
   deletes the draft*. S5: *a refresh answering after typing keeps the text*; *a clean file refetches
-  on a delta with a new commit*.
+  on a delta with a new commit*. F2: *save v1, type v2, open a review before the 200, then return*
+  (the PUT held on a deferred promise: on release the unmounted draft's `baseHash` is the saved
+  hash, v2 is still the text, and saving v2 answers 200, not `stale_file`); *reopening while the
+  PUT is still in flight sends no second PUT*. F3: *A → B → A with the two GETs of A answering out
+  of order* (the Monaco double repeats `getVersionId` on the recreated model: the newer answer
+  lands first, the older one is dropped, the model keeps the newer text).
 - `app/fileView.browser.test.ts` (`review.browser.fixture` pattern): click an untouched node → file
   view at its lines, graph unmoved; Ctrl+S → one save; `stale_file` → banner, Reload; edit, open a
   review, Ctrl+S sends nothing, close it → the edits are back.
