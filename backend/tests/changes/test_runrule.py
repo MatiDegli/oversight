@@ -264,6 +264,54 @@ def test_truncated_missing_id_is_unknown_and_complete_run_can_resolve_it() -> No
     assert result.findings[0].later_run == passed(seq=5, step=8)
 
 
+@pytest.mark.parametrize("complete", [True, False])
+def test_later_listed_failure_resolves_truncated_missing_id(complete: bool) -> None:
+    entries = (
+        failed(),
+        Edit(2, PATH),
+        Run(3, 7, (OTHER,), 21, False),
+        Run(4, 8, (ID,), 1 if complete else 21, complete),
+    )
+    assert evaluate(trace(*entries), [fact()]) == RunRuleResult("none")
+    assert evaluate(trace(*entries, Run(5, 9, (), 21, False)), [fact()]).status == "unknown"
+
+
+@pytest.mark.parametrize("earlier_uncertainty", [True, False])
+def test_proven_chain_resolves_same_tests_other_edit_uncertainty(
+    earlier_uncertainty: bool,
+) -> None:
+    before, edit, after = failed(seq=3), Edit(4, PATH), passed(seq=5)
+    extra = (Run(1, 1, (OTHER,), 21, False), Edit(2, PATH))
+    entries = (
+        (*extra, before, edit, after)
+        if earlier_uncertainty
+        else (before, edit, after, Edit(6, PATH))
+    )
+    assert evaluate(trace(*entries), [fact()]) == RunRuleResult(
+        "findings", (RunRuleFinding(ID, "loosened", before, edit, after),)
+    )
+
+
+@pytest.mark.parametrize("other_parameter", [True, False])
+def test_proven_finding_does_not_clear_another_tests_uncertainty(other_parameter: bool) -> None:
+    one, two = (ID + "[one]", ID + "[two]") if other_parameter else (ID, OTHER)
+    facts = [fact()] if other_parameter else [fact(), fact(test_id=OTHER)]
+    result = evaluate(
+        trace(failed(one), Edit(2, PATH), passed(seq=3), failed(two, seq=4), Edit(5, PATH)),
+        facts,
+    )
+    assert result.status == "unknown"
+    assert tuple(f.test_id for f in result.findings) == (one,)
+
+
+def test_detector_unknown_for_proven_test_survives_other_edit_resolution() -> None:
+    result = evaluate(
+        trace(failed(), Edit(2, PATH), passed(), Edit(5, PATH)), [fact(), fact("unknown")]
+    )
+    assert result.status == "unknown"
+    assert tuple(f.test_id for f in result.findings) == (ID,)
+
+
 def test_incomplete_first_run_still_proves_a_listed_test_failed() -> None:
     before = replace(failed(), failed_count=21, complete=False)
     assert evaluate(trace(before, Edit(2, PATH), passed()), [fact()]).status == "findings"

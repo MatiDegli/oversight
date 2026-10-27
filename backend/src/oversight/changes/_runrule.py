@@ -154,6 +154,7 @@ def _witness(
     later = tuple(run for run in runs if run.seq > edit.seq)
     for run in later:
         if test_id in run.failed_ids:
+            unknown = False
             continue
         if run.complete:
             return RunRuleFinding(test_id, kind, failed, edit, run), False
@@ -167,12 +168,15 @@ def evaluate(trace: RunTrace, weakenings: Iterable[Weakening]) -> RunRuleResult:
     A missing later run or truncated/unfinished runs can leave a comparison
     unknown. A later complete run resolves earlier uncertainty about absence.
     A known failure after the edit needs no complete list to remain a failure.
+    A proven chain resolves other edit comparisons for that concrete test;
+    detector uncertainty and uncertainty about other tests remain independent.
     Diff facts identify tests, not individual edit revisions: the edit witness
     proves only that the agent edited that test's file between the two runs.
     """
     runs = tuple(entry for entry in trace.entries if isinstance(entry, TestRun))
     edits = tuple(entry for entry in trace.entries if isinstance(entry, Edit))
     findings: dict[str, RunRuleFinding] = {}
+    uncertain_ids: set[str] = set()
     unknown = False
     facts = sorted(set(weakenings), key=lambda fact: (fact.target_id or "", fact.kind))
     for fact in facts:
@@ -182,24 +186,28 @@ def evaluate(trace: RunTrace, weakenings: Iterable[Weakening]) -> RunRuleResult:
         target = fact.target_id
         assert target is not None  # guaranteed by Weakening's per-test identity
         path = target.split("::", 1)[0]
+        test_ids = tuple(
+            dict.fromkeys(
+                test_id for run in runs for test_id in run.failed_ids if _matches(target, test_id)
+            )
+        ) or (target,)
         for edit in edits:
             if edit.path != path:
                 continue
             before = tuple(run for run in runs if run.seq < edit.seq)
             # An omitted failure before the edit cannot establish or disprove a chain.
             uncertain_before = any(not run.complete for run in before)
-            matched = False
-            for failed in before:
-                for test_id in failed.failed_ids:
-                    if not _matches(target, test_id):
-                        continue
-                    matched = True
+            for test_id in test_ids:
+                failed_runs = tuple(run for run in before if test_id in run.failed_ids)
+                if not failed_runs and uncertain_before:
+                    uncertain_ids.add(test_id)
+                for failed in failed_runs:
                     finding, uncertain = _witness(failed, edit, runs, test_id, fact.kind)
-                    unknown |= uncertain
+                    if uncertain:
+                        uncertain_ids.add(test_id)
                     if finding is not None:
                         findings.setdefault(test_id, finding)
-            if not matched:
-                unknown |= uncertain_before
+    unknown |= bool(uncertain_ids.difference(findings))
     status: RunRuleStatus = "unknown" if unknown else "findings" if findings else "none"
     return RunRuleResult(status, tuple(findings.values()))
 
