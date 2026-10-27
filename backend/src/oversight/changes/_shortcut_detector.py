@@ -26,7 +26,8 @@ are limited to literal rows and single-bound straight-line arithmetic; otherwise
 coefficient dominance proves widening/tightening, and crossed/dynamic tolerances
 are unknown. Removed parameter rows and helpers are facts, even for legitimate
 coverage reorganizations. Historical Python 2 syntax is a parse error. This
-module is not wired into the manager.
+module is not wired into the manager. Helper checks recognize assertions and
+assert-prefixed calls, not raise AssertionError, pytest.fail or delegation.
 """
 
 import ast

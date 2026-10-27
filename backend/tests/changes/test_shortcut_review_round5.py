@@ -87,13 +87,17 @@ def test_many_method_decorators_share_the_scope_index(count: int) -> None:
     assert result.status == "no_facts" and not result
 
 
-def test_table_index_observes_the_analysis_deadline() -> None:
-    source = Source("CASES = [(1, 3)]\n", deadline=0)
-    with pytest.raises(TimeoutError, match="analysis timeout"):
-        _ = source.table_shadows
+def test_table_index_observes_the_analysis_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    source = Source("CASES = [(1, 3)]\n")
+    # Warm the index; subsequent lookup checks must observe time advancing.
+    _ = source.table_shadows
+    source.deadline = 3
     node = next(n for n in ast.walk(source.tree) if isinstance(n, ast.Name))
+    ticks = iter(range(20))
+    monkeypatch.setattr("oversight.changes._shortcuts_common.time.monotonic", ticks.__next__)
     with pytest.raises(TimeoutError, match="analysis timeout"):
-        source.table_value(node)
+        for _ in range(6):
+            source.table_value(node)
 
 
 @pytest.mark.parametrize("validation", ["model_validate", "model_validate_json"])

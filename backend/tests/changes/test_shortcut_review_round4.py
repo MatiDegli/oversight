@@ -1,10 +1,17 @@
 """Named-table comparisons, helper extraction and resource bounds from re-review."""
 
-import time
+import ast
 
 import pytest
 
 from oversight.changes import ShortcutKind, detect_shortcuts
+from oversight.changes._shortcuts_asserts import (
+    _compare_assertions,
+    _compare_raises,
+    _unmatched_assertions,
+)
+from oversight.changes._shortcuts_common import Source
+from oversight.changes._shortcuts_tests import _Case, _collect_parametrize, _compare_rows
 
 TEST = (
     "@pytest.mark.parametrize('x,expected', CASES)\n"
@@ -177,24 +184,102 @@ def test_extraction_does_not_hide_another_removed_helper_call() -> None:
     assert "a call to an asserting helper was removed" in result[0].message
 
 
-@pytest.mark.parametrize("shape", ["rows", "assertions"])
-def test_comparison_loops_respect_short_deadline(shape: str) -> None:
-    if shape == "rows":
-        rows = ",".join(f"({i}, {i})" for i in range(6000))
-        changed = ",".join(f"({i}, {i + 1})" for i in range(6000))
-        template = (
-            "import pytest\n@pytest.mark.parametrize('x,expected', [{}])\n"
-            "def test_f(x,expected):\n    assert f(x) == expected\n"
-        )
-        old, new = template.format(rows), template.format(changed)
+@pytest.mark.parametrize("shape", ["collect", "outer", "pair", "inner"])
+def test_row_loops_cross_deadline_after_reads(monkeypatch: pytest.MonkeyPatch, shape: str) -> None:
+    source = Source(
+        "import pytest\n@pytest.mark.parametrize('x,expected', "
+        "[(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7)])\n"
+        "def test_f(x,expected):\n    assert f(x) == expected\n"
+    )
+    cases = [_Case((str(i),), (str(i),), str(i), 1) for i in range(6)]
+    ticks = iter(range(100))
+    monkeypatch.setattr("oversight.changes._shortcuts_common.time.monotonic", ticks.__next__)
+    with pytest.raises(TimeoutError, match="analysis timeout"):
+        if shape == "collect":
+            _collect_parametrize(source, deadline=3)
+        elif shape == "outer":
+            # No candidates: only the two outer loops read the clock.
+            _compare_rows("test_calc.py", cases, [], deadline=3)
+        elif shape == "pair":
+            # Six cancellation reads, then expire during the pairing loop.
+            _compare_rows("test_calc.py", cases, [], deadline=9)
+        else:
+            _compare_rows("test_calc.py", cases[:1], cases[1:], deadline=3)
+
+
+@pytest.mark.parametrize("shape", ["outer", "inner"])
+def test_assertion_matching_crosses_deadline_after_reads(
+    monkeypatch: pytest.MonkeyPatch, shape: str
+) -> None:
+    count = 6 if shape == "outer" else 1
+    old = Source("def test_f():\n" + "    assert f() == 0\n" * count)
+    new = Source(
+        "def test_f():\n" + ("    pass\n" if shape == "outer" else "    assert g() == 1\n" * 6)
+    )
+    # Isolate matching from the later wording pass: a later timeout must not
+    # conceal removal of either matching-loop check.
+    monkeypatch.setattr(
+        "oversight.changes._shortcuts_asserts.cancel_reworded", lambda a, b, **kw: (a, b)
+    )
+    ticks = iter(range(100))
+    monkeypatch.setattr("oversight.changes._shortcuts_common.time.monotonic", ticks.__next__)
+    with pytest.raises(TimeoutError, match="analysis timeout"):
+        _unmatched_assertions(old.tests["test_f"], new.tests["test_f"], old, new, 3)
+
+
+@pytest.mark.parametrize("shape", ["outer", "equivalent", "forward", "reverse"])
+def test_assertion_comparison_crosses_deadline_after_reads(
+    monkeypatch: pytest.MonkeyPatch, shape: str
+) -> None:
+    old = Source("def test_f():\n" + "    assert f() == 0\n" * 6)
+    new = Source("def test_f():\n" + "    assert g() == 1\n" * 6)
+    left: list[ast.Assert | ast.Call] = [
+        n for n in old.tests["test_f"].body if isinstance(n, ast.Assert)
+    ]
+    right: list[ast.Assert | ast.Call] = [
+        n for n in new.tests["test_f"].body if isinstance(n, ast.Assert)
+    ]
+    monkeypatch.setattr("oversight.changes._shortcuts_asserts._approx_match", lambda *args: None)
+    if shape == "equivalent":
+
+        def unexpected_pair(*args: object) -> None:
+            pytest.fail("Comparison reached pairing before the equivalence loop timed out")
+
+        monkeypatch.setattr("oversight.changes._shortcuts_asserts._check_pair", unexpected_pair)
     else:
-        old = "def test_f():\n" + "".join(f"    assert f({i}) == {i}\n" for i in range(2000))
-        new = "def test_f():\n" + "".join(f"    assert f({i}) == {i + 1}\n" for i in range(2000))
-    started = time.monotonic()
-    result = detect_shortcuts([("test_calc.py", old, new)], timeout=0.000001)
-    elapsed = time.monotonic() - started
-    assert result.status == "unknown" and "timeout" in " ".join(result.reasons).lower()
-    assert elapsed < 3, (shape, elapsed)
+
+        def no_pair(path: str, before: object, *args: object) -> None:
+            if shape == "forward" and before in right:
+                pytest.fail("Comparison reached reverse pairing before the forward loop timed out")
+
+        monkeypatch.setattr("oversight.changes._shortcuts_asserts._check_pair", no_pair)
+        monkeypatch.setattr(
+            "oversight.changes._shortcuts_asserts.within_deadline", lambda items, _: items
+        )
+    if shape == "outer":
+        right = []
+    else:
+        left = left[:1]
+    ticks = iter(range(100))
+    monkeypatch.setattr("oversight.changes._shortcuts_common.time.monotonic", ticks.__next__)
+    with pytest.raises(TimeoutError, match="analysis timeout"):
+        _compare_assertions("test_calc.py", left, right, old, new, 9 if shape == "reverse" else 3)
+
+
+@pytest.mark.parametrize("shape", ["outer", "inner"])
+def test_raises_comparison_crosses_deadline_after_reads(
+    monkeypatch: pytest.MonkeyPatch, shape: str
+) -> None:
+    before = "    with pytest.raises(ValueError):\n        f()\n"
+    after = "    with pytest.raises(TypeError):\n        f()\n"
+    old = Source("import pytest\ndef test_f():\n" + before * (6 if shape == "outer" else 1))
+    new = Source(
+        "import pytest\ndef test_f():\n" + ("    pass\n" if shape == "outer" else after * 6)
+    )
+    ticks = iter(range(100))
+    monkeypatch.setattr("oversight.changes._shortcuts_common.time.monotonic", ticks.__next__)
+    with pytest.raises(TimeoutError, match="analysis timeout"):
+        _compare_raises("test_calc.py", old.tests["test_f"], new.tests["test_f"], old, new, 3)
 
 
 def test_two_megabyte_source_cap_has_its_own_unknown_reason() -> None:
