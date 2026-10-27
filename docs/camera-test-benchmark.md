@@ -338,3 +338,13 @@ passed: 2318 general Python tests (including the new connection regression),
 Across completed loaded samples, camera passed 68/68 cases; three checks passed
 and the pre-fix failed check remains recorded above. No test retry or raised
 timeout was introduced.
+
+### Final browser gate follow-up
+
+The first final full-suite gate on `69d7e0c` passed 71/72 cases and exposed a
+Monaco theme gap: the disabled find widget used its bundled `#333` surface while
+closing. A dedicated browser regression reproduces that state without relying
+on sampling the closing animation. The application stylesheet maps the disabled
+surface to `--field`, with enough specificity to override Monaco's bundled CSS.
+The original color audit and its assertions are retained; this adds one browser
+case, bringing the full suite to 73 cases.

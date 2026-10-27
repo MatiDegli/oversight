@@ -222,6 +222,35 @@ it("shows a recoverable font failure without creating Monaco", async () => {
   });
 }, 60_000);
 
+it("keeps disabled find inputs on the field token after closing the widget", async () => {
+  await withPage(async (page) => {
+    await render(page);
+    await expectDiff(page, 8);
+    await page.evaluate(() => {
+      window.panelTest.current()?.getModifiedEditor().focus();
+    });
+    await page.keyboard.press("Control+f");
+    await browserExpect(page.locator(".find-widget.visible")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await browserExpect(page.locator(".find-widget.visible")).toHaveCount(0);
+    const colors = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.style.backgroundColor = "var(--field)";
+      document.body.append(probe);
+      const field = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return {
+        field,
+        disabled: [...document.querySelectorAll(".find-widget .monaco-findInput.disabled")].map(
+          (element) => getComputedStyle(element).backgroundColor,
+        ),
+      };
+    });
+    expect(colors.disabled.length).toBeGreaterThan(0);
+    expect(new Set(colors.disabled)).toEqual(new Set([colors.field]));
+  });
+});
+
 it("uses only token colors in rendered Monaco, at rest and while reading, finding and scrolling", async () => {
   await withPage(async (page) => {
     const filler = Array.from({ length: 80 }, (_, i) => `value_${String(i)} = price()`).join("\n");

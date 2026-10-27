@@ -308,6 +308,12 @@ body {
   background-color: var(--page);
 }
 
+/* Monaco disables the find input while its widget closes; its bundled disabled surface is
+   hardcoded, so keep that transition on the same field token as the enabled input. */
+.monaco-editor .find-widget .monaco-findInput.disabled {
+  background-color: var(--field);
+}
+
 /* The file's selected source span uses the same neutral token as Monaco's range highlight. */
 .file-span {
   background-color: var(--file-span);
