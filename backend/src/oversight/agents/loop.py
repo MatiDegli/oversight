@@ -137,6 +137,7 @@ class AgentRun:
         self._monotonic = monotonic
         self._tools = Toolbox(workspace, tree, test_timeout_s=task.limits.test_timeout_s)
         self._step = 0
+        self._halted = False
         self._turns = 0
         """Model calls so far. Bounded on their own, so the run ends even if a stop rule fails."""
         self._failures = 0
@@ -147,8 +148,16 @@ class AgentRun:
         """Tool calls finished so far."""
         return self._step
 
+    @property
+    def halted(self) -> bool:
+        """Whether the run has handed its own `halted` status to the publisher, which queues it
+        before it first waits. A cancel after that leaves the event on its way, and a second
+        `halted` would overwrite the first one's reason."""
+        return self._halted
+
     async def _status(self, state: AgentState, detail: str | None = None) -> None:
         task = self._task
+        self._halted = self._halted or state == "halted"  # no await before the publish queues it
         await self._publish(
             AgentStatus(
                 agent_id=task.agent_id,

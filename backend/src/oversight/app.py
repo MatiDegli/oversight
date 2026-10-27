@@ -479,7 +479,8 @@ class LiveRun:
             )
             end = await run.run()
         except asyncio.CancelledError:
-            if task.agent_id in self._ledger_lost_agents:
+            # A run that already sent its own `halted` (the time limit's) keeps that reason.
+            if task.agent_id in self._ledger_lost_agents and not (run and run.halted):
                 await self._halt_for_ledger(task, run.steps if run else 0)
             raise
         except Exception as error:
