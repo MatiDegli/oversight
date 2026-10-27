@@ -58,6 +58,8 @@ SUITE = {
     "skipped": 0,
     "duration_ms": 900,
     "failed_tests": [],
+    "cases": None,
+    "cases_complete": None,
 }
 CONE = {
     "seeds": [NODE["id"]],
@@ -220,7 +222,17 @@ def event(event_type: str, seq: int = 1, **payload_changes: Any) -> dict[str, An
 def test_the_event_types_include_the_approved_level3_reservations() -> None:
     union = get_args(get_args(ServerEvent.__value__)[0])
     types = {get_args(model.model_fields["type"].annotation)[0] for model in union}
-    assert types == set(PAYLOADS) | {"change.assessed", "merge_mode.changed", "plan.updated"}
+    assert types == set(PAYLOADS) | {
+        "change.assessed",
+        "merge_mode.changed",
+        "plan.updated",
+        "change.reviewed",
+        "change.facts_recorded",
+        "tests.executed",
+        "revert.resolved",
+        "queue.updated",
+        "lead.status",
+    }
 
 
 @pytest.mark.parametrize("event_type", sorted(PAYLOADS))
@@ -230,8 +242,22 @@ def test_every_event_round_trips_with_every_key_present_in_order(event_type: str
     original = event(event_type)
     defaults = {
         "run.started": {"merge_mode": None},
-        "agent.status": {"plan_id": None},
-        "change.resolved": {"decided_by": None, "reasons": [], "assessment": None},
+        "agent.status": {
+            "plan_id": None,
+            "zone": None,
+            "started_by": None,
+            "queued_task_id": None,
+            "base_commit": None,
+        },
+        "change.resolved": {
+            "decided_by": None,
+            "review_seq": None,
+            "requested_by": None,
+            "head_commit": None,
+            "reasons": [],
+            "assessment": None,
+        },
+        "usage.tick": {"role": None, "change_id": None, "plan_id": None},
     }
     original["payload"].update(defaults.get(event_type, {}))
     parsed = EVENTS.validate_python(original)
@@ -353,6 +379,9 @@ def test_every_error_code_has_the_status_of_section_4_7() -> None:
 def test_the_schema_forbids_extra_keys_and_requires_every_response_key() -> None:
     schema = json.loads((GENERATED / "oversight.schema.json").read_text())
     requests = {"StartAgent", "AgentMessage", "ApproveChange", "RequestChanges", "RejectChange"}
+    requests.update(
+        {"EnqueueTask", "StartLead", "QueueRevision", "StopLead", "ReviewChange", "RevertChange"}
+    )
     requests.update(
         {"SaveFile", "SetMergeMode", "CreatePlan", "UpdatePlan", "PlanRevision", "RejectPlan"}
     )
