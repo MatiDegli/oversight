@@ -2,6 +2,8 @@
 // scene's `enabled` to true and give it a `prepare` step if the page must be put in that state.
 // A disabled entry prints "skipped" with its `needs` text and never fails the run.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 import type { Page } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
@@ -130,10 +132,46 @@ export const scenes: readonly Scene[] = [
   },
   {
     name: "file-view",
-    enabled: false,
-    // Enabled by: the editor panel's file view. Then `prepare` clicks a node with no pending
-    // change and waits for the file's text to show.
-    needs: "the editor panel's file view (not on main yet)",
+    enabled: true,
+    // The replay API has no file contents. This scene reads the demo template through a GET
+    // double; it is a capture of the file view, not a saved edit reconstructed from the log.
+    prepare: async (page) => {
+      const path = "shop/cart.py";
+      const content = await readFile(new URL(`../../demo-repo/${path}`, import.meta.url), "utf8");
+      await page.route("**/files?*", (route) =>
+        route.fulfill({
+          json: {
+            path,
+            content,
+            hash: createHash("sha256").update(content).digest("hex"),
+            agent_id: null,
+          },
+        }),
+      );
+      const point = await page.evaluate(() => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        const node = host?.oversightGraph
+          ?.nodeCenters()
+          .find(({ id }) => id === "shop.cart:Cart.add");
+        if (!host || !node) throw new Error("The untouched cart node is missing");
+        const box = host.getBoundingClientRect();
+        return { x: box.left + node.x, y: box.top + node.y };
+      });
+      await page.mouse.click(point.x, point.y);
+      const panel = page.getByRole("complementary", { name: "File view" });
+      await panel.locator(".monaco-editor .view-lines").waitFor();
+      await page.waitForFunction(
+        () =>
+          document.querySelector('[aria-label="File view"]')?.getAttribute("data-state") ===
+          "clean",
+      );
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating() === false,
+      );
+    },
   },
 ];
 

@@ -73,7 +73,12 @@ describe("the frame over the level 1 fixture", () => {
   });
 
   it("opens the live diff on the left and folds the agents panel into the rail", () => {
-    const markup = render(14, { selected: "shop.pricing:compute_price", diff, review: null });
+    const markup = render(14, {
+      selected: "shop.pricing:compute_price",
+      diff,
+      review: null,
+      file: null,
+    });
     expect(tag(markup, "Live diff panel")).toContain("w-[min(var(--review-panel-width),46vw)]");
     expect(markup).toContain('aria-label="Live diff"');
     expect(markup).toContain("shop/pricing.py");
@@ -84,14 +89,19 @@ describe("the frame over the level 1 fixture", () => {
     expect(tag(markup, "Watch")).not.toContain("aria-current");
     // The graph region is the same element in both modes, so it is never remounted.
     expect(tag(markup, "Repository graph")).toBe(tag(render(14), "Repository graph"));
-    expect(render(20, { selected: null, diff, review: null })).toContain(
+    expect(render(20, { selected: null, diff, review: null, file: null })).toContain(
       'aria-label="Agent A: Ready for review"',
     );
   });
 });
 
 describe("review mode over the level 1 fixture", () => {
-  const review: View = { selected: "shop.pricing:compute_price", diff: null, review: "change-1" };
+  const review: View = {
+    selected: "shop.pricing:compute_price",
+    diff: null,
+    review: "change-1",
+    file: null,
+  };
   const decide = vi.fn();
   const reviewing = (seq: number, props: Partial<FrameProps> = {}) =>
     render(seq, review, { onDecide: decide, ...props });
@@ -185,4 +195,30 @@ describe("review mode over the level 1 fixture", () => {
       "Replay of a real recorded run: this is the decision the log holds.",
     );
   });
+});
+
+it("puts the file view in the same panel slot, folds the rail, and gives review and diff priority", () => {
+  const files = {
+    drafts: new Map(),
+    inFlightSaves: new Map(),
+    saved: new Map(),
+    readFile: vi.fn(),
+    saveFile: vi.fn(),
+  };
+  const view: View = {
+    ...initialView,
+    file: { path: "shop/cart.py", agentId: null, startLine: 5, endLine: 9 },
+  };
+  const markup = render(20, view, { files });
+  expect(tag(markup, "File view")).toContain("w-[min(var(--review-panel-width),46vw)]");
+  expect(tag(markup, "Agents")).toContain("w-(--agents-rail-width)");
+  expect(tag(markup, "Repository graph")).toBe(tag(render(20), "Repository graph"));
+  expect(markup).not.toContain("Live diff panel");
+  expect(markup).not.toContain("Review panel");
+  const reviewing = render(20, { ...view, review: "change-1" }, { files });
+  expect(reviewing).toContain('aria-label="Review panel"');
+  expect(reviewing).not.toContain('aria-label="File view"');
+  const live = render(14, { ...view, diff }, { files });
+  expect(live).toContain('aria-label="Live diff panel"');
+  expect(live).not.toContain('aria-label="File view"');
 });

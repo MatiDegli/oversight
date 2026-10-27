@@ -7,20 +7,29 @@ export interface DiffTarget {
   path: string;
 }
 
+export interface FileTarget {
+  path: string;
+  agentId: string | null;
+  startLine: number;
+  endLine: number;
+}
+
 /**
  * What the person has opened. The graph's selected ring follows `selected`; the left panel shows the
- * live diff while `diff` is set and review while `review` (a change id) is set, never both. Only the
+ * live diff, review or file, with exactly one open at a time. Only the
  * person's actions change it, never an event.
  */
 export interface View {
   selected: string | null;
   diff: DiffTarget | null;
   review: string | null;
+  file: FileTarget | null;
 }
 
-export const initialView: View = { selected: null, diff: null, review: null };
+export const initialView: View = { selected: null, diff: null, review: null, file: null };
 
-export const panelOpen = (view: View) => view.diff !== null || view.review !== null;
+export const panelOpen = (view: View) =>
+  view.diff !== null || view.review !== null || view.file !== null;
 
 /** Proposed and not yet decided: what review opens on. A revising change shows its live diff. */
 export function isProposed(change: ChangeState): boolean {
@@ -86,14 +95,31 @@ export function diffForNode(state: State, nodeId: string): DiffTarget | null {
 
 /**
  * A click on a node selects it. When a pending change touches it, the panel shows that change:
- * review once it is proposed, its live diff before. Otherwise the panel stays as it was.
+ * review once it is proposed, its live diff before. Other existing nodes open their file when
+ * file commands are available. An open review survives clicks on nodes with no pending diff.
  */
-export function clickNode(state: State, view: View, nodeId: string): View {
+export function clickNode(state: State, view: View, nodeId: string, filesEnabled = false): View {
   const diff = diffForNode(state, nodeId);
-  if (!diff) return { ...view, selected: nodeId };
+  if (!diff) {
+    if (view.review !== null) return { ...view, selected: nodeId };
+    const node = state.graph?.nodes.find((candidate) => candidate.id === nodeId);
+    if (!filesEnabled || !node) return { ...view, selected: nodeId };
+    return {
+      selected: nodeId,
+      diff: null,
+      review: null,
+      file: {
+        path: node.path,
+        agentId: null,
+        startLine: node.kind === "module" ? 1 : node.start_line,
+        endLine: node.end_line,
+      },
+    };
+  }
   const change = state.changes[diff.changeId];
-  if (change && isProposed(change)) return { selected: nodeId, diff: null, review: diff.changeId };
-  return { selected: nodeId, diff, review: null };
+  if (change && isProposed(change))
+    return { selected: nodeId, diff: null, review: diff.changeId, file: null };
+  return { selected: nodeId, diff, review: null, file: null };
 }
 
 /**
@@ -108,6 +134,7 @@ export function openChange(state: State, view: View, changeId: string): View | n
     selected: change.files[path]?.node_ids[0] ?? view.selected,
     diff: { changeId, path },
     review: null,
+    file: null,
   };
 }
 
@@ -121,7 +148,7 @@ export function openReview(state: State, view: View, changeId: string): View | n
   const path = Object.keys(change.files).sort()[0];
   const node =
     (path === undefined ? undefined : change.files[path]?.node_ids[0]) ?? changeNodeIds(change)[0];
-  return { selected: node ?? view.selected, diff: null, review: changeId };
+  return { selected: node ?? view.selected, diff: null, review: changeId, file: null };
 }
 
 /** Cycle proposed changes in slot order; start with agent A when no review is open. */
@@ -133,7 +160,7 @@ export function nextReview(state: State, current: string | null = null): string 
 }
 
 export function closePanel(view: View): View {
-  return { ...view, diff: null, review: null };
+  return { ...view, diff: null, review: null, file: null };
 }
 
 /** Escape closes the panel unless something inside it, such as Monaco's find box, took the key. */

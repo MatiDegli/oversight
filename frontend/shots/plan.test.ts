@@ -41,7 +41,7 @@ void test("a disabled scene or theme is skipped with the reason, never dropped",
   assert.match(jobs[3]?.skip ?? "", /scene review: the review panel/);
 });
 
-void test("the real list: watch, review and live diff in dark run, every other entry is listed and skipped", () => {
+void test("the real list: watch, review, live diff and file view run in dark; light remains skipped", () => {
   const jobs = planJobs(scenes, themes);
   const running = jobs.filter((job) => job.skip === null).map((job) => job.file);
   assert.deepEqual(running, [
@@ -49,6 +49,7 @@ void test("the real list: watch, review and live diff in dark run, every other e
     "watch-dark-taxi.png",
     "review-dark.png",
     "live-diff-dark.png",
+    "file-view-dark.png",
   ]);
   assert.deepEqual(
     scenes.map((scene) => scene.name),
