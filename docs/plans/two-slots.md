@@ -118,13 +118,21 @@ self._agents: dict[str, _Agent]                 # replaces _change_ids
   names its holder; a braked one stays selectable and the server's `spend_brake` message shows.
   With one slot offered the box is as today. So the person reaches B by the preselection when A
   is braked, or by clicking it.
-- **Meter fix** (`applyEvent.ts`, `usage.tick`). `selectSpend` shows "unknown" when the latest
-  tick has `cost_usd` null, which is right for a Meta call without usage, wrong for a Baseten or
-  fake tick, which never write the ledger and always carry null: it would hide Meta's known total.
-  `usage` takes a tick only from an agent not known to run a non-`meta` profile (its latest
-  `agent.status.model`, looked up in `run.models`; an agent not yet in state counts as `meta`, so
-  an odd order shows "unknown", never a wrong total). Replay uses the same function. Per-agent
-  usage of unmetered agents waits for level 3's usage panel.
+- **Meter fix** (`applyEvent.ts`, `usage.tick`, `spend.ts`). Every tick, from any agent, carries
+  the shared ledger's `spent_usd` and `brake`, and the latest one is the freshest: if A's Meta
+  spend reached the file but A was cancelled before publishing its tick, a later Baseten or fake
+  tick is the only one that tells the meter the new total and the brake, and the slot
+  preselection (`nextSlot`) reads that brake. So `usage` takes every tick, as today, and the
+  total and brake come from it whoever sent it. What changes is when the total reads "unknown":
+  `selectSpend` showed it whenever the latest tick had `cost_usd` null, which is right for a Meta
+  call without usage and wrong for a Baseten or fake tick, whose per-call cost is always null and
+  says nothing about the total. A new state field, `spendUnknown`, is set by each tick of an agent
+  that is not known to run a non-`meta` profile (its latest `agent.status.model`, looked up in
+  `run.models`; an agent not yet in state counts as `meta`, so an odd order shows "unknown",
+  never a wrong total) to `cost_usd === null`; a tick of a non-`meta` agent leaves it as it was.
+  `selectSpend` reads the total and brake from `usage` and `spentUsd` is null only when
+  `spendUnknown` is set. Replay uses the same function. Per-agent usage of unmetered agents waits
+  for level 3's usage panel.
 
 ## 7. How this lines up with the request-changes plan in `app.py`
 
@@ -200,9 +208,13 @@ could say "the first free slot that can start, A before B", the rule the task bo
   marks (`state.test.ts`), B's token classes, the latest total.
 - K15 B opens before R5: *`test_slot_b_is_closed_until_r5` (`run.started.slots` is `[A]`, `slot:
   "B"` is 422, with the real constant), then the e2e above in the opening commit.
-- K18 the meter hides Meta's total: *`selectSpend` in `spend.test.ts` and `state.test.ts`: a Meta
-  tick (cost 0.02, spent 3.0), then a Baseten tick (cost null): 3.0, not unknown; a Meta tick with
-  cost null: unknown; replay of the same events gives the same.
+- K18 the meter hides or loses Meta's total: *`selectSpend` in `spend.test.ts` and
+  `state.test.ts`: a Meta tick (cost 0.02, spent 3.0), then a Baseten tick (cost null, spent
+  3.0): 3.0, not unknown; a Meta tick skipped (never published), then a Baseten tick with spent
+  3.5 and brake `blocked`: the total reads 3.5 and `selectSpend(...).brake` is `blocked`, so
+  `nextSlot` leaves a Meta slot A and takes B; same through a fake tick; a Meta tick with cost
+  null: unknown, and a later non-Meta tick keeps it unknown with its new total held; replay of
+  the same events gives the same.
 - K19 the automatic pick fails on a braked A: *`test_an_omitted_slot_skips_a_braked_one` (A and B
   Meta through the factory, ledger past the block: both braked, 403 with A's reason; with B fake:
   201 in B; explicit `slot="A"` while braked: 403, not rerouted). The box's side is K14's table.
@@ -219,8 +231,8 @@ could say "the first free slot that can start, A before B", the rule the task bo
    needs a third start; those needing B use the fixture. B's fake script (a demo-repo function
    other than A's, 40 lines) comes with (a).
 2. `frontend/two-slots`, after 1 (it needs no gate: the choice shows only when `run.slots` has
-   two entries): the box's choice and `nextSlot` about 70 lines, the meter guard 10, tests 200,
-   then `make shots` (the box with one slot and with two, A braked).
+   two entries): the box's choice and `nextSlot` about 70 lines, the meter's unknown mark 15,
+   tests 220, then `make shots` (the box with one slot and with two, A braked).
 3. `agents/two-slots-open`, cut from main once `changes/request` (R5) has merged: the constant,
    the fixture's removal, the e2e of section 7. About 20 lines and 120 of tests.
 
@@ -228,7 +240,8 @@ could say "the first free slot that can start, A before B", the rule the task bo
 
 1. Muse Spark Open on Baseten, metered against Meta's ledger? Proposed: no, as the review agreed;
    the brake guards Meta's credits, Baseten ticks carry `cost_usd` null and never write the file,
-   and its own limit waits for its quota. The meter ignores them (section 6, K18).
+   and its own limit waits for its quota. The meter keeps their total and brake, and only
+   their null per-call cost is not read as unknown (section 6, K18).
 2. Who picks the slot. Proposed: the person, with two buttons that name each slot's model,
    preselected by the server's rule (first free slot that can start); the API's omitted slot
    follows the same rule. The alternative, a server-only pick with a line under the box, cannot
