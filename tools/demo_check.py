@@ -13,9 +13,14 @@ what the one before left, as `make demo` does):
      long cache header; a client route falls back to index.html; an unknown API path is the API's
      404, not the UI;
   3. the graph is the same as the first run's: the workspace really started clean;
-  4. POST /agents with the fake script's task, then on /events wait for change.proposed;
-  5. POST approve, then wait for change.resolved (merged) and graph.delta (cause merge);
-  6. stop the server (SIGTERM, with STOP_DEADLINE to exit before SIGKILL), then check it exited 0,
+  4. start fake A/B concurrently with explicit scripts; require first steps before each other's
+     proposals, pending overlays, passing tests, impact and usage.tick (unknown cost, brake ok);
+  5. request changes on A with a comment; require revising and the same change's next revision;
+  6. resume B and stop it during work; require stopped/rejected, no pending overlay or worktree;
+  7. approve A's revision: require merged and its graph.delta from the clean graph;
+  8. PUT /files on main adding a function: require user_edit graph.delta containing that node;
+     TODO_EDITABLE_REVIEW_SAVE is explicitly skipped (parallel front: PUT with agent_id);
+  9. stop the server (SIGTERM, with STOP_DEADLINE to exit before SIGKILL), then check it exited 0,
      no process of its tree is left, and the runtime lock is free.
 The server runs in a session of its own, and this check is a child subreaper (prctl): whatever the
 server's tree leaves behind, in its session or out of it (a child that started a session of its own
@@ -35,7 +40,6 @@ timeout, plus that parent-death signal, promises that no process is left behind.
 import contextlib
 import ctypes
 import fcntl
-import json
 import os
 import signal
 import subprocess
@@ -45,8 +49,6 @@ import time
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-
-from pydantic import ValidationError
 
 import smoke
 from demo_check_io import (
@@ -100,11 +102,13 @@ from demo_check_io import (
 from demo_check_io import (
     request as request,
 )
-from oversight_contracts.commands import AgentCreated, GraphResponse
+from demo_check_phases import BUDGET_USD, SCRIPTS, check_level2
+from demo_check_phases import graph_of as graph_of
+from demo_check_phases import start_agent as start_agent
+from oversight_contracts.commands import GraphResponse
 
 REPO_ROOT = smoke.REPO_ROOT
 DIST = REPO_ROOT / "frontend" / "dist"
-FAKE_TASK = json.loads((REPO_ROOT / smoke.FAKE_SCRIPT).read_text(encoding="utf-8"))["task"]
 PR_SET_PDEATHSIG = 1  # linux/prctl.h
 PR_SET_CHILD_SUBREAPER = 36  # linux/prctl.h
 GRACEFUL_EXITS = (0, -signal.SIGTERM)
@@ -223,20 +227,15 @@ def lock_is_free(runtime_dir: Path) -> bool:
 def server_env(port: int, runtime_dir: Path) -> dict[str, str]:
     """The smoke test's child environment, on the fake model, with the provider keys set to empty:
     an empty variable beats a value in .env, so no key reaches the child from anywhere."""
-    return smoke.child_env(port, runtime_dir) | {"META_API_KEY": "", "BASETEN_API_KEY": ""}
-
-
-def start_agent(base: str, clock: OverallClock | None = None) -> AgentCreated:
-    """POST /agents with the fake script's task. The server answers only after the demo venv is
-    built, which the first run waits for, so the request has START_AGENT_DEADLINE."""
-    reply = expect(
-        request(
-            base, "/agents", post={"task": FAKE_TASK}, timeout=START_AGENT_DEADLINE, clock=clock
-        ),
-        "POST /agents",
-        201,
-    )
-    return AgentCreated.model_validate(json.loads(reply.body))
+    return smoke.child_env(port, runtime_dir) | {
+        "META_API_KEY": "",
+        "BASETEN_API_KEY": "",
+        "OVERSIGHT_AGENT_MODEL": "fake",
+        "OVERSIGHT_AGENT_MODEL_B": "fake",
+        "OVERSIGHT_FAKE_SCRIPT": SCRIPTS["A"],
+        "OVERSIGHT_FAKE_SCRIPT_B": SCRIPTS["B"],
+        "OVERSIGHT_BUDGET_USD": str(BUDGET_USD),
+    }
 
 
 def _die_with_parent(expected_parent: int) -> None:
@@ -286,23 +285,10 @@ def stop_server(child: subprocess.Popen[Any], clock: OverallClock | None = None)
             child.wait(timeout=max(end - time.monotonic(), 0.0))
 
 
-def graph_of(base: str, clock: OverallClock | None = None) -> GraphResponse:
-    timeout = REQUEST_TIMEOUT if clock is None else clock.bounded(REQUEST_TIMEOUT)
-    status, body = smoke.fetch_json(f"{base}/graph", time.monotonic() + timeout)
-    if status != 200:
-        if clock is not None:
-            clock.check()
-        raise smoke.SmokeError(f"GET /graph answered {status}, not 200")
-    try:
-        return GraphResponse.model_validate(body)
-    except ValidationError as error:
-        raise smoke.SmokeError(f"/graph does not validate: {error.errors()[0]['msg']}") from error
-
-
 def serve_and_decide(
-    base: str, first: GraphResponse | None, clock: OverallClock, run: int
+    base: str, first: GraphResponse | None, clock: OverallClock, run: int, runtime_dir: Path
 ) -> GraphResponse:
-    """Steps 1 to 5 against a server that is up: the UI, the clean graph, one approved change."""
+    """The served UI, clean initial graph and all implemented level 2 API phases."""
     clock.set_phase(f"run {run}: wait for /graph")
     try:
         smoke.wait_for_graph(base, clock.bounded(START_DEADLINE))
@@ -323,32 +309,7 @@ def serve_and_decide(
         )
     stream = EventStream(base, clock=clock)
     try:
-        clock.set_phase(f"run {run}: POST /agents (venv build)")
-        mine = start_agent(base, clock).change_id
-        clock.set_phase(f"run {run}: wait for change.proposed")
-        stream.wait(
-            lambda e: e.type == "change.proposed" and e.payload.change_id == mine,
-            PROPOSE_DEADLINE,
-            "change.proposed",
-        )
-        clock.set_phase(f"run {run}: POST approve")
-        expect(request(base, f"/changes/{mine}/approve", post={}, clock=clock), "POST approve", 202)
-        clock.set_phase(f"run {run}: wait for change.resolved")
-        resolved = stream.wait(
-            lambda e: e.type == "change.resolved" and e.payload.change_id == mine,
-            DECIDE_DEADLINE,
-            "change.resolved",
-        )
-        if resolved.payload.merge != "merged":
-            raise smoke.SmokeError(f"the change was {resolved.payload.merge}, not merged")
-        clock.set_phase(f"run {run}: wait for graph.delta")
-        delta = stream.wait(
-            lambda e: e.type == "graph.delta" and e.payload.cause == "merge",
-            DECIDE_DEADLINE,
-            "graph.delta",
-        )
-        if delta.payload.from_version != graph.graph.version:
-            raise smoke.SmokeError("the merge's graph.delta does not start at the clean graph")
+        check_level2(base, graph, stream, clock, runtime_dir)
     finally:
         stream.close()
     return first if first is not None else graph
@@ -362,6 +323,7 @@ def run_once(
     clock: OverallClock,
 ) -> GraphResponse:
     """One full run; the first run's graph, which the later runs must match."""
+    started = time.monotonic()
     port = smoke.free_port()
     base = smoke.base_url(port)
     log = scratch / f"server-{number}.log"
@@ -374,7 +336,7 @@ def run_once(
         except smoke.SmokeError:
             clock.check()  # raises, naming this phase, if the overall deadline bound the wait
             raise
-        graph = serve_and_decide(base, first, clock, number)
+        graph = serve_and_decide(base, first, clock, number, runtime_dir)
     except smoke.SmokeError as error:
         raise smoke.SmokeError(f"run {number}: {error}\n{_tail(log)}") from error
     finally:
@@ -392,7 +354,7 @@ def run_once(
         raise smoke.SmokeError(f"run {number}: processes left after the server stopped: {left}")
     if not lock_is_free(runtime_dir):
         raise smoke.SmokeError(f"run {number}: the runtime lock is still held after the stop")
-    print(f"demo-check: run {number}: ok on port {port}")
+    print(f"demo-check: run {number}: ok in {time.monotonic() - started:.2f} s on port {port}")
     return graph
 
 

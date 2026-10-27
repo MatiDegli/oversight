@@ -8,6 +8,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from bisect import bisect_right
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -26,17 +27,16 @@ START_AGENT_DEADLINE = 480.0
 PROPOSE_DEADLINE = 240.0  # the agent's run: from the answer to POST /agents to change.proposed
 DECIDE_DEADLINE = 60.0  # approve to change.resolved and graph.delta
 STOP_DEADLINE = 20.0  # seconds the server gets after SIGTERM before SIGKILL
-# Plain requests in one run (GET /, its assets, the fallback, an API 404, GET /graph, POST
-# approve, plus headroom for more assets), each allowed REQUEST_TIMEOUT.
-REQUESTS_PER_RUN = 10
+# UI assets, command boundaries (GET /graph), decisions, files and cleanup probes.
+REQUESTS_PER_RUN = 30
 OVERALL_MARGIN = 60.0  # slack over the worst-case sum, for process start and cleanup
 # Worst case: every phase in every run takes its full deadline. START_AGENT_DEADLINE (the cold
 # 480 s venv build, once in practice but allowed per run here) and PROPOSE_DEADLINE drive it.
 PER_RUN_DEADLINE = (
     2 * START_DEADLINE
-    + START_AGENT_DEADLINE
-    + PROPOSE_DEADLINE
-    + 2 * DECIDE_DEADLINE
+    + 2 * START_AGENT_DEADLINE
+    + 3 * PROPOSE_DEADLINE  # initial A/B proposals and A's revision
+    + 20 * DECIDE_DEADLINE  # correlated steps, usage, decisions, deltas and discard
     + 2 * STOP_DEADLINE  # SIGTERM wait, then the SIGKILL wait in smoke.stop_child
     + REQUESTS_PER_RUN * REQUEST_TIMEOUT
 )
@@ -94,14 +94,18 @@ def request(
     path: str,
     *,
     post: object | None = None,
+    put: object | None = None,
     timeout: float = REQUEST_TIMEOUT,
     clock: OverallClock | None = None,
 ) -> Reply:
-    """GET, or POST with a JSON body when `post` is given. An error status is a reply, not an
+    """GET, POST or PUT with a JSON body. An error status is a reply, not an
     exception; no answer at all within `timeout` seconds is SmokeError. The timeout bounds the
     reply in total, not just idleness between bytes, and never outlives `clock`."""
-    method = "GET" if post is None else "POST"
-    data = None if post is None else json.dumps(post).encode("utf-8")
+    if post is not None and put is not None:
+        raise ValueError("choose either post or put")
+    method = "PUT" if put is not None else "GET" if post is None else "POST"
+    body = put if put is not None else post
+    data = None if body is None else json.dumps(body).encode("utf-8")
     headers = {} if data is None else {"Content-Type": "application/json"}
     call = urllib.request.Request(base + path, data=data, headers=headers, method=method)
     timeout = timeout if clock is None else clock.bounded(timeout)
@@ -223,18 +227,38 @@ class EventStream:
             self._queue.put(error)
         self._queue.put(None)  # the stream ended
 
-    def wait(self, match: Callable[[Any], bool], deadline_s: float, what: str) -> Any:
-        """The first event `match` accepts, among those already seen and then those that arrive,
-        within the deadline, and within the overall deadline when this stream has a clock. An
-        `error` event, or the stream ending, ends the wait at once."""
+    def wait(
+        self,
+        match: Callable[[Any], bool],
+        deadline_s: float,
+        what: str,
+        *,
+        after_seq: int,
+        agent_id: str | None = None,
+        change_id: str | None = None,
+        revision: int | None = None,
+    ) -> Any:
+        """Match strictly after a command's server seq, including queued or already read events.
+
+        Correlation filters apply before the predicate; an earlier revision or another agent can
+        never satisfy a wait. `after_seq` is required, so callers cannot silently reuse history.
+        """
         clock = self._clock
         end = time.monotonic() + (deadline_s if clock is None else clock.bounded(deadline_s))
-        index = 0
+        index = bisect_right(self.seen, after_seq, key=lambda e: e.seq)
         while True:
             while index < len(self.seen):
                 event = self.seen[index]
                 index += 1
-                if match(event):
+                if (
+                    event.seq > after_seq
+                    and (agent_id is None or getattr(event.payload, "agent_id", None) == agent_id)
+                    and (
+                        change_id is None or getattr(event.payload, "change_id", None) == change_id
+                    )
+                    and (revision is None or getattr(event.payload, "revision", None) == revision)
+                    and match(event)
+                ):
                     return event
             try:
                 item = self._queue.get(timeout=max(end - time.monotonic(), 0.0))
@@ -250,6 +274,9 @@ class EventStream:
                 raise smoke.SmokeError(
                     f"an event does not validate: {error.errors()[0]}"
                 ) from error
+            expected_seq = self.seen[-1].seq + 1 if self.seen else 1
+            if event.seq != expected_seq:
+                raise smoke.SmokeError(f"/events seq {event.seq}, expected {expected_seq}")
             self.seen.append(event)
             if event.type == "error":
                 raise smoke.SmokeError(
