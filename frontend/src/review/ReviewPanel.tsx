@@ -17,6 +17,7 @@ import type { ChangeState, State } from "../state";
 import { decisionView } from "./decisions";
 import type { DecisionAction, DecisionAttempt, DecisionView } from "./decisions";
 import { impactSummary } from "./ImpactCone";
+import { ReviewFacts } from "./ReviewFacts";
 
 const statusWords: Record<ChangeState["status"], string> = {
   editing: "Editing",
@@ -372,6 +373,7 @@ export function ReviewPanel({
           <p className="text-(length:--data-size) text-muted">{impactSummary(proposal.impact)}</p>
         )}
       </header>
+      {proposal && <ReviewFacts state={state} proposal={proposal} />}
       <div className="flex min-h-0 flex-1 flex-col">
         <p className="border-b border-page-border px-4.5 py-3.5 text-(length:--body-size)">
           {proposal?.summary ?? "The agent left no note."}
