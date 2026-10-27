@@ -41,7 +41,7 @@ manager and a `Starter` protocol `api` defines and `app` implements. Errors: `Ap
 | Route | Success | Errors |
 | --- | --- | --- |
 | `POST /agents` `StartAgent` | 201 `AgentCreated` once `open` returned | `invalid_request` 422, `spend_brake` 403, `wrong_state` 409, `slot_busy` 409 |
-| `POST /changes/{id}/approve` or `reject`, `{comment?}` | 202, empty; results as events | `not_found` 404, `wrong_state` 409 |
+| `POST /changes/{id}/approve` or `reject`, `{revision, head_commit, comment?}` | 202, empty; results as events | `not_found` 404, `wrong_state` 409 |
 | `GET /graph`, `/events`, `/health` | as today, `mode="live"` | as today |
 | stop, request-changes, impact, files, rescan, message, pause, resume | 501 `not_implemented`, body not parsed | |
 
@@ -57,7 +57,7 @@ manager and a `Starter` protocol `api` defines and `app` implements. Errors: `Ap
   unexpected failure, `open` included, as `ErrorResponse` `internal`, no traceback. Without it, that
   handler answers `wrong_state` 409, "the server failed: ...; see the error event". Waits for him.
 - **Decisions.** `ChangeNotFound` (a malformed id too) is `not_found`; `WrongState`, or approve with
-  main suspect, is `wrong_state` with the reason; otherwise 202. No body means no comment.
+  main suspect, is `wrong_state` with the reason; otherwise 202. All three review decisions require the observed revision and head; an omitted body is invalid_request (422).
 
 ## 3. Spending brake (`settings.py`, `agents/usage.py`, `app.py`, `__main__.py`, `.env.example`)
 
@@ -159,3 +159,30 @@ About 450 lines of code and 600 of tests, four commits: startup, brake, routes, 
 2. **Prices** US$0.10 / 0.20 per million: the coordinator's figures, to be confirmed. Limits too.
 3. **Manager additions** (`main_suspect`, `check_main`, the drain): this front waits for them.
 4. **Files the first brief did not list**: root `conftest.py`, `.env.example`, `agents/usage.py`.
+
+## Contracts 1.4.0 delivery A
+
+Approve and Request changes take a positive `revision` and a nonempty `head_commit`.
+Reject accepts revision zero for a never-proposed change and checks the published agent base.
+Request changes also requires a nonblank comment. The route validates the body before lookup;
+stale targets or incompatible states return 409 without effects. The manager captures the
+observed target before reserving a decision and rechecks under main and worktree locks.
+Stop keeps its existing body and resolves the latest persisted target as a person.
+
+The following routes are reservations in live and replay. They return 501 before interpreting
+any body or query, including malformed JSON:
+
+| Routes | Reserved request / eventual response |
+| --- | --- |
+| `POST /changes/{id}/review`, `/revert` | `ReviewChange`, `RevertChange` / 202 |
+| `GET /changes/{id}`, `GET /history` | `ChangeView`, `HistoryPage` |
+| `POST /queue`, `GET /queue`, `GET /queue/{id}`, `POST /queue/{id}/cancel` | `EnqueueTask`, `QueueSnapshot`, `QueuedTask`, `QueueRevision` |
+| `POST /leads`, `GET /leads/{id}`, `POST /leads/{id}/stop` | `StartLead`, `LeadCreated`, `LeadStatus`, `StopLead` |
+| `GET /agents/{id}` | Coding-agent `AgentStatus` |
+| `GET /tree?agent=` | `TreeResponse`; no body or path query |
+
+`TreeResponse` requires run_id, nullable agent_id, sorted unique directories and files,
+nullable graph_version and truncated. Each `TreeFile` requires path and nullable hash.
+The two arrays share a 2,000-entry cap; truncated requires exactly 2,000 retained entries.
+Traversal and the 8 MiB hashing budget are future implementation, with the selected tree locked.
+FastAPI and Vite reserve tree, history, queue and leads as API prefixes.
