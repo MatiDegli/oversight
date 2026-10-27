@@ -154,12 +154,14 @@ it.each(["resolved", "rejected"] as const)(
     expect(cy.getElementById("billing:fee").style("font-family")).toBe(theme["text-font"]);
     expect(observer.observe).toHaveBeenCalledTimes(1);
 
+    // Cytoscape's own bounding boxes read the stylesheet through cy.style(); only a call that
+    // passes one sets it again.
     const style = vi.spyOn(cy, "style");
     setLabel("After loading");
     expect(cy.getElementById("billing:fee").data("label")).toBe("After loading");
     await Promise.resolve();
     expect(mocks.instances).toHaveLength(1);
-    expect(style).not.toHaveBeenCalled();
+    expect(style.mock.calls.filter((call) => call.length > 0)).toEqual([]);
 
     cleanup?.();
     cleanup = undefined;
@@ -232,6 +234,8 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   const cy = mocks.instances[0];
   if (!cy) throw new Error("Graph was not created");
   cy.zoom(0.5);
+  // Whatever the starting camera was, the person's watch camera is the one to come back to.
+  const watchCamera = { zoom: cy.zoom(), pan: { ...cy.pan() } };
   const frame = vi.spyOn(camera, "frameCamera").mockImplementation(() => null);
   const result = {
     zoom: 0.8,
@@ -286,7 +290,7 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, [], false, {
     coneIds: undefined,
     watchZoom: 0.5,
-    restoreCamera: { zoom: 0.5, pan: { x: 0.5, y: 0.5 } },
+    restoreCamera: watchCamera,
   });
 });
 
@@ -446,4 +450,63 @@ it("measures the card's real height and refreshes marks when that height changes
   bottom = 300;
   resize();
   expect(onFramed).toHaveBeenLastCalledWith(expect.objectContaining({ outOfView: new Set() }));
+});
+
+it("limits the zoom to the buttons' range, and routes a call again when a node it joins is moved", async () => {
+  const fn = (id: string, parent: string | null, line: number) => ({
+    id,
+    kind: "function" as const,
+    parent_id: parent,
+    name: id,
+    qualname: id,
+    path: `${parent ?? id}.py`,
+    start_line: line,
+    end_line: line + 1,
+    is_test: false,
+  });
+  stateStore.setState({
+    state: {
+      ...createInitialState(),
+      graph: {
+        version: "v1",
+        commit: "base",
+        nodes: [
+          { ...fn("a", null, 1), kind: "module" as const },
+          { ...fn("b", null, 1), kind: "module" as const },
+          fn("a:f", "a", 2),
+          fn("b:g", "b", 2),
+        ],
+        edges: [
+          {
+            id: "call",
+            kind: "calls",
+            src: "a:f",
+            dst: "b:g",
+            confidence: "exact",
+            reason: null,
+          },
+        ],
+        positions: {
+          a: { x: 0, y: 0 },
+          b: { x: 700, y: 0 },
+          "a:f": { x: 0, y: 0 },
+          "b:g": { x: 700, y: 300 },
+        },
+        parse_errors: [],
+      },
+    },
+  });
+  const { settle } = mount();
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Graph was not created");
+  expect([cy.minZoom(), cy.maxZoom()]).toEqual([camera.ZOOM_RANGE.min, camera.ZOOM_RANGE.max]);
+  const route = () => JSON.stringify(cy.getElementById("call").data("route"));
+  const before = route();
+  expect(before).not.toBeUndefined();
+  // Drag the callee to the same height as its caller, and let go.
+  cy.getElementById("b:g").position({ x: 700, y: 0 });
+  expect(route()).toBe(before);
+  cy.getElementById("b:g").emit("free");
+  expect(route()).not.toBe(before);
 });

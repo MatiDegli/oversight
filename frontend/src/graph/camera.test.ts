@@ -6,9 +6,12 @@ import { getActiveTheme } from "../theme";
 import {
   frameBox,
   frameCamera,
+  hubOf,
   includeNewNodes,
   nodesInViewport,
   prefersReducedMotion,
+  startCamera,
+  startingView,
   ZOOM_RANGE,
   zoomBy,
 } from "./camera";
@@ -511,5 +514,177 @@ describe("zoomBy", () => {
     expect(cy.zoom()).toBe(ZOOM_RANGE.max);
     for (let press = 0; press < 80; press++) zoomBy(cy, 0.8, true);
     expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+  });
+});
+
+describe("startingView", () => {
+  const graph = { x1: 0, y1: 0, x2: 4000, y2: 3000 };
+  const size = { width: 1000, height: 800 };
+
+  it("is 100% and centers the focus where the graph is larger than the view", () => {
+    const camera = startingView(graph, { x1: 1900, y1: 1400, x2: 2100, y2: 1600 }, size, 40);
+    expect(camera.zoom).toBe(1);
+    // The focus's middle (2000, 1500) is the middle of the view.
+    expect(camera.pan).toEqual({ x: -(2000 - 500), y: -(1500 - 400) });
+  });
+
+  it("stays inside the graph, with the padding to spare, at its edges", () => {
+    const corner = startingView(graph, { x1: 0, y1: 0, x2: 100, y2: 100 }, size, 40);
+    expect(corner.pan).toEqual({ x: 40, y: 40 });
+    const far = startingView(graph, { x1: 3900, y1: 2900, x2: 4000, y2: 3000 }, size, 40);
+    expect(far.pan).toEqual({ x: -(4040 - 1000), y: -(3040 - 800) });
+  });
+
+  it("leaves out a frame the view's edge would cut, when the focus stays in view", () => {
+    const frames = [
+      { x1: 0, y1: 0, x2: 300, y2: 500 },
+      { x1: 420, y1: 0, x2: 720, y2: 500 },
+      { x1: 840, y1: 0, x2: 1140, y2: 500 },
+    ];
+    const wide = { x1: 0, y1: 0, x2: 1140, y2: 500 };
+    const narrow = { width: 900, height: 800 };
+    // Clamped at the right, the view would start at 280, 20px into the first frame.
+    const clamped = startingView(wide, frames[2] as never, narrow, 40);
+    expect(clamped.pan.x).toBe(-(1180 - 900));
+    const snapped = startingView(wide, frames[2] as never, narrow, 40, frames);
+    // The first frame goes whole, and the view starts 40px past it.
+    expect(snapped.pan.x).toBe(-340);
+    // A focus that the move would push out of view keeps its centered camera, cut or not.
+    const focus = { x1: 100, y1: 0, x2: 1100, y2: 100 };
+    expect(startingView(wide, focus, narrow, 40, frames).pan.x).toBe(-150);
+  });
+
+  it("centers the graph on an axis where it is smaller than the view, and never zooms", () => {
+    const small = { x1: 0, y1: 0, x2: 400, y2: 3000 };
+    const camera = startingView(small, { x1: 0, y1: 0, x2: 100, y2: 100 }, size, 40);
+    expect(camera.zoom).toBe(1);
+    expect(camera.pan.x).toBe(-(400 - 1000) / 2);
+    expect(camera.pan.y).toBe(40);
+  });
+});
+
+describe("hubOf", () => {
+  const graphOf = (edges: [string, string, string?][]) => {
+    const cy = cytoscape({
+      headless: true,
+      layout: { name: "preset" },
+      elements: [
+        ...["a", "b", "c", "d"].map((id) => ({
+          data: { id },
+          classes: "function",
+          position: { x: 0, y: 0 },
+        })),
+        { data: { id: "m" }, classes: "module", position: { x: 0, y: 0 } },
+        ...edges.map(([source, target, kind], i) => ({
+          data: { id: `e${String(i)}`, source, target },
+          classes: kind ?? "calls",
+        })),
+      ],
+    });
+    graphs.push(cy);
+    return cy;
+  };
+
+  it("is the function that the most calls reach, the first by id on a tie", () => {
+    expect(
+      hubOf(
+        graphOf([
+          ["a", "c"],
+          ["b", "c"],
+          ["d", "c"],
+          ["a", "b"],
+          ["c", "d"],
+        ]),
+      ),
+    ).toBe("c");
+    expect(
+      hubOf(
+        graphOf([
+          ["a", "d"],
+          ["b", "d"],
+          ["a", "c"],
+          ["b", "c"],
+        ]),
+      ),
+    ).toBe("c");
+  });
+
+  it("counts calls only, and says nothing when nothing is called", () => {
+    expect(
+      hubOf(
+        graphOf([
+          ["a", "m", "imports"],
+          ["b", "m", "imports"],
+          ["a", "b", "inherits"],
+        ]),
+      ),
+    ).toBeNull();
+    expect(hubOf(graphOf([]))).toBeNull();
+  });
+});
+
+describe("startCamera", () => {
+  it("shows the graph at 100% on the module of its hub, clamped inside the graph", () => {
+    const cy = cytoscape({
+      headless: true,
+      styleEnabled: true,
+      layout: { name: "preset" },
+      style: [{ selector: "node", style: { width: 100, height: 40, shape: "rectangle" } }],
+      elements: [
+        { data: { id: "m1" }, classes: "module" },
+        { data: { id: "m2" }, classes: "module" },
+        { data: { id: "m3" }, classes: "module" },
+        { data: { id: "a", parent: "m1" }, classes: "function", position: { x: 0, y: 0 } },
+        { data: { id: "hub", parent: "m2" }, classes: "function", position: { x: 3000, y: 2000 } },
+        { data: { id: "z", parent: "m3" }, classes: "function", position: { x: 6000, y: 4000 } },
+        { data: { id: "e1", source: "a", target: "hub" }, classes: "calls" },
+        { data: { id: "e2", source: "z", target: "hub" }, classes: "calls" },
+      ],
+    });
+    graphs.push(cy);
+    vi.spyOn(cy, "width").mockReturnValue(1000);
+    vi.spyOn(cy, "height").mockReturnValue(800);
+    cy.zoom(0.3);
+    startCamera(cy);
+    expect(cy.zoom()).toBe(1);
+    // The hub's module is at the middle of the view.
+    const box = cy.getElementById("m2").renderedBoundingBox({ includeLabels: false });
+    expect((box.x1 + box.x2) / 2).toBeCloseTo(500, 0);
+    expect((box.y1 + box.y2) / 2).toBeCloseTo(400, 0);
+    // No node moved.
+    expect(cy.getElementById("hub").position()).toEqual({ x: 3000, y: 2000 });
+  });
+
+  it("starts between frames: no outermost frame is cut by the view's left or right edge", () => {
+    const module = (id: string, x: number) => [
+      { data: { id }, classes: "module" },
+      { data: { id: `${id}:f`, parent: id }, classes: "function", position: { x, y: 0 } },
+    ];
+    const cy = cytoscape({
+      headless: true,
+      styleEnabled: true,
+      layout: { name: "preset" },
+      style: [{ selector: "node", style: { width: 100, height: 40, shape: "rectangle" } }],
+      elements: [
+        ...module("m1", 0),
+        ...module("m2", 400),
+        ...module("m3", 800),
+        { data: { id: "e", source: "m1:f", target: "m3:f" }, classes: "calls" },
+        { data: { id: "e2", source: "m2:f", target: "m3:f" }, classes: "calls" },
+      ],
+    });
+    graphs.push(cy);
+    vi.spyOn(cy, "width").mockReturnValue(560);
+    vi.spyOn(cy, "height").mockReturnValue(400);
+    startCamera(cy);
+    for (const id of ["m1", "m2", "m3"]) {
+      const box = cy.getElementById(id).renderedBoundingBox({ includeLabels: false });
+      for (const edge of [0, 560])
+        expect(box.x1 < edge && box.x2 > edge, `${id} at ${String(edge)}`).toBe(false);
+    }
+    // The hub's own frame is whole and in view.
+    const hub = cy.getElementById("m3").renderedBoundingBox({ includeLabels: false });
+    expect(hub.x1).toBeGreaterThanOrEqual(0);
+    expect(hub.x2).toBeLessThanOrEqual(560);
   });
 });

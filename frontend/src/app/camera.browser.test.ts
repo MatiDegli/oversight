@@ -105,13 +105,16 @@ async function settled(page: Page) {
 /** The nodes the camera frames when the change opens: the change's own, in the recorded run. */
 const wanted = (page: Page) => page.evaluate(() => [window.graphTest.changed]);
 
-it("opening the panel centers the changed node at the same zoom; closing refits the graph", async () => {
+it("opening the panel centers the changed node at the same zoom; closing restores the camera", async () => {
   await withPage("no-preference", async (page) => {
     const ids = await wanted(page);
     expect(ids).toHaveLength(1);
     const wide = await report(page, ids);
-    // The first layout fitted the whole graph into the wide picture.
-    expect(wide.cutOffAnywhere).toEqual([]);
+    // The graph starts at 100%: nothing is fitted, and what does not fit lies beyond the edge.
+    expect(wide.zoom).toBe(1);
+    expect(wide.cutOffAnywhere.length).toBeGreaterThan(0);
+    const everything = Object.keys(wide.positions);
+    const watch = (await report(page, everything)).centers;
 
     // The panel narrows the graph; with the camera left alone the far right is cut off.
     const eased = await page.evaluate(() => {
@@ -136,12 +139,13 @@ it("opening the panel centers the changed node at the same zoom; closing refits 
       window.graphTest.close();
     });
     await settled(page);
-    const closed = await report(page, ids);
-    expect(closed.cutOffAnywhere).toEqual([]);
+    const closed = await report(page, everything);
     expect(closed.positions).toEqual(wide.positions);
-    expect(closed.zoom).toBeCloseTo(wide.zoom, 1);
+    expect(closed.zoom).toBeCloseTo(wide.zoom, 6);
+    // The person's own camera comes back, not a fit: every node is on screen where it was.
+    expect(closed.centers).toEqual(watch);
   });
-});
+}, 30_000);
 
 it("under reduced motion the camera jumps and nothing eases", async () => {
   await withPage("reduce", async (page) => {
@@ -157,6 +161,9 @@ it("under reduced motion the camera jumps and nothing eases", async () => {
     await page.evaluate(() => {
       window.graphTest.close();
     });
-    expect((await report(page, ids)).cutOffAnywhere).toEqual([]);
+    // Closing jumps back to the camera the watch view had, with no animation.
+    const closed = await report(page, ids);
+    expect(closed.animating).toBe(false);
+    expect(closed.zoom).toBe(1);
   });
-});
+}, 30_000);

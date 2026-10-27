@@ -13,6 +13,7 @@ import {
   includeNewNodes,
   nodesInViewport,
   prefersReducedMotion,
+  ZOOM_RANGE,
   zoomBy,
 } from "./camera";
 import type { Camera, Framing } from "./camera";
@@ -20,7 +21,7 @@ import { graphElements } from "./elements";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
 import { edgeShape, graphStyles } from "./styles";
-import { updateGraph } from "./updateGraph";
+import { settle, updateGraph } from "./updateGraph";
 
 cytoscape.use(fcose);
 
@@ -169,6 +170,9 @@ export function GraphView({
         container: host,
         layout: { name: "preset" },
         boxSelectionEnabled: false,
+        // The wheel and the pinch stay within the range the zoom buttons use.
+        minZoom: ZOOM_RANGE.min,
+        maxZoom: ZOOM_RANGE.max,
       });
       cy.style(
         graphStyles(
@@ -189,6 +193,11 @@ export function GraphView({
       cy.on("tapend", () => {
         interacting = false;
         quietUntil = performance.now() + NAVIGATION_QUIET_MS;
+      });
+      // A node the person moved changes its frame's header and its edges' routes: settle them
+      // when it lands, not on every pixel of the drag.
+      cy.on("free", () => {
+        settle(cy);
       });
       cy.on("dragpan scrollzoom pinchzoom", () => {
         arriving.clear();

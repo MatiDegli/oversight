@@ -55,7 +55,8 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
       viewport: { width: cy.width(), height: cy.height() },
       zoom: cy.zoom(),
       minLabelPx: Math.min(...cy.nodes().map((node) => node.numericStyle("font-size") * cy.zoom())),
-      edgeShape: String(cy.edges().first().style("curve-style")),
+      // A call's shape: imports are not drawn.
+      edgeShape: String(cy.edges().not(".imports").first().style("curve-style")),
     }),
   };
   return () => {
