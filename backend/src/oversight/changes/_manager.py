@@ -903,7 +903,8 @@ class ChangeManager:
         """Send the comment back to the agent; its worktree, branch, base and files stay. From
         `conflict`, main is merged into the agent's branch first. The task returns what the agent
         resumes with, the change `working`; or `None` after an `error` when the base could not
-        move, the change still `conflict` (or `broken`, when the worktree's state is unknown)."""
+        move, the change still `conflict` (or `broken`, when the worktree's state is unknown), or
+        when main turned suspect while the request queued, the change still as it was taken."""
         rec = self._take(change_id, REVISABLE, "request changes")
         return self._decide(rec, self._request_changes(rec, comment))
 
@@ -1010,15 +1011,7 @@ class ChangeManager:
         if rec.fallback == "conflict":
             # Phase A, cancellable: a cancel before phase B leaves the change as it was.
             async with self._workspace.locks(main=True, agent_id=rec.agent_id):
-                if self._suspect:
-                    # F1: main turned suspect while this queued. No base move and no revision; the
-                    # decision's end puts the change back to `conflict`.
-                    await self._error(
-                        "server",
-                        "Main became suspect before this request ran; reject it or restart.",
-                        rec,
-                        fatal=False,
-                    )
+                if await self._refused_as_suspect(rec):
                     return None
                 move = _Move()
                 try:
@@ -1034,7 +1027,23 @@ class ChangeManager:
         # lock until its revision is proposed, so the request names that revision and precedes
         # the revision run.
         async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+            if await self._refused_as_suspect(rec):
+                return None
             return await self._whole(self._requested(rec, comment, note))
+
+    async def _refused_as_suspect(self, rec: _Change) -> bool:
+        """F1, under main's lock: main turned suspect while the request queued, so it is refused
+        with one `error`, no base move, no `changes_requested` and no revision; the decision's end
+        puts the change back to `ready` or `conflict`, where it was taken from."""
+        if not self._suspect:
+            return False
+        await self._error(
+            "server",
+            "Main became suspect before this request ran; reject it or restart.",
+            rec,
+            fatal=False,
+        )
+        return True
 
     async def _move_base(self, rec: _Change, move: _Move) -> str:
         """Merge main's HEAD into the agent's branch, committing as the agent; unmerged paths are

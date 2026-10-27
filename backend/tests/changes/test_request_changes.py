@@ -489,15 +489,20 @@ async def test_redo_keeps_mains_callers(h: Harness) -> None:
     assert [f.path for f in second.files] == ["shop/mod.py"]
 
 
+@pytest.mark.parametrize("taken_from", ["ready", "conflict"])
 @bounded
 async def test_request_changes_queued_behind_a_failing_save_starts_no_revision(
-    h: Harness,
+    h: Harness, taken_from: str
 ) -> None:
-    """F1: a save on main fails and makes main suspect while Request changes from a conflict waits
-    for main's lock. Phase A finds main suspect: no base move, no revision, the change still
-    `conflict`, one `error`."""
-    await conflicted(h)
+    """F1: a save on main fails and makes main suspect while Request changes, from `ready` or a
+    conflict, waits for main's lock. It finds main suspect under the lock: no base move, no
+    `changes_requested`, no revision, the change as it was taken, one `error`."""
+    if taken_from == "conflict":
+        await conflicted(h)
+    else:
+        await h.run_agent(1, EDIT)
     before = (await worktree_git(h, "rev-parse", "HEAD")).strip()
+    resolved = [r.decision for r in h.payloads(ChangeResolved)]
     save = await hold_a_save_that_ends_suspect(h)
     request = h.manager.request_changes("change-1", "Redo it.")  # the app's check passed
     await queued_callbacks_ran()
@@ -512,5 +517,5 @@ async def test_request_changes_queued_behind_a_failing_save_starts_no_revision(
         e for e in h.payloads(ErrorReport) if "became suspect before this request" in e.message
     ]
     assert (error.source, error.fatal, error.change_id) == ("server", False, "change-1")
-    assert [r.decision for r in h.payloads(ChangeResolved)] == ["approved"]  # no request sent
-    assert await h.manager.request_changes("change-1", "Again.") is None  # `conflict`, not stuck
+    assert [r.decision for r in h.payloads(ChangeResolved)] == resolved  # no request was sent
+    assert await h.manager.request_changes("change-1", "Again.") is None  # not stuck deciding
