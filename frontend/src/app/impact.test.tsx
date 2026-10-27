@@ -13,6 +13,8 @@ vi.mock("../graph", () => ({
     graph.render(props);
     return <div>Graph</div>;
   },
+  // The frame also derives the dot field's lights; these tests are about the cone.
+  selectLights: () => [],
 }));
 vi.mock("../editor", () => ({
   EditorDiff: () => <div>Diff</div>,
