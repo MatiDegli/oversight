@@ -100,9 +100,6 @@ export async function withPage(
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
     );
-    // Setup navigation is not under test. Skip only its transitions, then restore motion so
-    // file-view assertions still exercise the normal camera and panel behavior.
-    await page.emulateMedia({ reducedMotion: "reduce" });
     // Cart is outside the hub-centered start view; navigate to it with the real fit control.
     await page.getByRole("button", { name: "Fit the graph to the view" }).click();
     // These tests begin after the person opens Cart; opening a file itself must move no rows.
@@ -113,7 +110,6 @@ export async function withPage(
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.animating() === false,
     );
-    await page.emulateMedia({ reducedMotion: "no-preference" });
     await test(page, calls, serverFile);
     expect(errors).toEqual([]);
   } finally {
