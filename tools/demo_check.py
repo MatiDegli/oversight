@@ -15,13 +15,17 @@ what the one before left, as `make demo` does):
   3. the graph is the same as the first run's: the workspace really started clean;
   4. POST /agents with the fake script's task, then on /events wait for change.proposed;
   5. POST approve, then wait for change.resolved (merged) and graph.delta (cause merge);
-  6. stop the server (SIGTERM), then check it exited 0, no process is left in its session, and the
-     runtime lock is free.
-The server runs in a session of its own, so a leftover is found by session, and the check ends it by
-PID, never by name. Exit 0 when all runs pass; 1 with a one-line reason on stderr otherwise.
+  6. stop the server (SIGTERM, with STOP_DEADLINE to exit before SIGKILL), then check it exited 0,
+     no process of its tree is left, and the runtime lock is free.
+The server runs in a session of its own, and this check is a child subreaper (prctl): whatever the
+server's tree leaves behind, in its session or out of it (a child that started a session of its own
+and was orphaned long before the end), is adopted by this check, so it is found after the stop.
+The check ends a leftover by PID, never by name. Exit 0 when all runs pass; 1 with a one-line
+reason on stderr otherwise.
 """
 
 import contextlib
+import ctypes
 import fcntl
 import http.client
 import json
@@ -36,7 +40,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -53,11 +57,15 @@ FAKE_TASK = json.loads((REPO_ROOT / smoke.FAKE_SCRIPT).read_text(encoding="utf-8
 RUNS = 3
 REQUEST_TIMEOUT = 10.0  # seconds one HTTP request may take
 START_DEADLINE = 30.0  # seconds /health and /graph have to answer within
-PROPOSE_DEADLINE = 240.0  # POST /agents to change.proposed: the first run builds the demo venv
+# POST /agents answers only once the demo venv is built, which the first run does: up to the
+# server's own bounds for it (a 60 s probe, 120 s to create the venv, 300 s to install pytest).
+START_AGENT_DEADLINE = 480.0
+PROPOSE_DEADLINE = 240.0  # the agent's run: from the answer to POST /agents to change.proposed
 DECIDE_DEADLINE = 60.0  # approve to change.resolved and graph.delta
 STOP_DEADLINE = 20.0  # seconds the server gets after SIGTERM before SIGKILL
 GRACEFUL_EXITS = (0, -signal.SIGTERM)  # uvicorn ends a SIGTERM stop by raising the signal again
 STREAM_IDLE = 120.0  # seconds a read on /events may wait: the server pings every 15
+PR_SET_CHILD_SUBREAPER = 36  # linux/prctl.h
 ASSET = re.compile(r'(?:src|href)="(/assets/[^"]+)"')
 EVENTS: TypeAdapter[Any] = TypeAdapter(ServerEvent)
 
@@ -73,15 +81,17 @@ class Reply:
         return self.body.decode("utf-8", errors="replace")
 
 
-def request(base: str, path: str, *, post: object | None = None) -> Reply:
+def request(
+    base: str, path: str, *, post: object | None = None, timeout: float = REQUEST_TIMEOUT
+) -> Reply:
     """GET, or POST with a JSON body when `post` is given. An error status is a reply, not an
-    exception; no answer at all is SmokeError."""
+    exception; no answer at all within `timeout` seconds is SmokeError."""
     method = "GET" if post is None else "POST"
     data = None if post is None else json.dumps(post).encode("utf-8")
     headers = {} if data is None else {"Content-Type": "application/json"}
     call = urllib.request.Request(base + path, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(call, timeout=REQUEST_TIMEOUT) as response:
+        with urllib.request.urlopen(call, timeout=timeout) as response:
             return Reply(response.status, _lower(response.headers.items()), response.read())
     except urllib.error.HTTPError as error:
         with error:
@@ -224,9 +234,8 @@ def proc_table() -> dict[int, tuple[str, int, int, int]]:
     return table
 
 
-def descendants(root: int) -> set[int]:
-    """The processes below `root` now: its children, theirs, and so on."""
-    table = proc_table()
+def descendants(root: int, table: dict[int, tuple[str, int, int, int]]) -> set[int]:
+    """The processes below `root` in `table`: its children, theirs, and so on."""
     found: set[int] = set()
     frontier = [root]
     while frontier:
@@ -238,13 +247,31 @@ def descendants(root: int) -> set[int]:
     return found
 
 
-def stragglers(session: int, earlier: set[int]) -> set[int]:
-    """Live processes of the server's session or process group, and any of `earlier` (its
-    descendants seen while it ran) that is still alive. A zombie is dead, only not reaped yet."""
+@contextlib.contextmanager
+def adopting_orphans() -> Generator[None]:
+    """Make this process a child subreaper for the block: a process whose parent dies is adopted by
+    it, not by init, wherever its session went. What the server's tree leaves behind is then below
+    this process when the server is gone, and `stragglers` finds it."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(PR_SET_CHILD_SUBREAPER, ctypes.c_ulong(1), 0, 0, 0) != 0:
+        error = os.strerror(ctypes.get_errno())
+        raise smoke.SmokeError(f"this check cannot become a child subreaper: {error}")
+    try:
+        yield
+    finally:
+        libc.prctl(PR_SET_CHILD_SUBREAPER, ctypes.c_ulong(0), 0, 0, 0)
+
+
+def stragglers(session: int, reaper: int | None = None) -> set[int]:
+    """Live processes of the server's session or process group, and every live process below
+    `reaper`, the subreaper that adopts what the server's tree left (see `adopting_orphans`). A
+    zombie is dead, only not reaped yet."""
+    table = proc_table()
+    adopted: set[int] = descendants(reaper, table) if reaper is not None else set()
     return {
         pid
-        for pid, (state, _, group, sid) in proc_table().items()
-        if state != "Z" and (sid == session or group == session or pid in earlier)
+        for pid, (state, _, group, sid) in table.items()
+        if state != "Z" and (sid == session or group == session or pid in adopted)
     }
 
 
@@ -267,6 +294,23 @@ def server_env(port: int, runtime_dir: Path) -> dict[str, str]:
     """The smoke test's child environment, on the fake model, with the provider keys set to empty:
     an empty variable beats a value in .env, so no key reaches the child from anywhere."""
     return smoke.child_env(port, runtime_dir) | {"META_API_KEY": "", "BASETEN_API_KEY": ""}
+
+
+def start_agent(base: str) -> AgentCreated:
+    """POST /agents with the fake script's task. The server answers only after the demo venv is
+    built, which the first run waits for, so the request has START_AGENT_DEADLINE."""
+    reply = expect(
+        request(base, "/agents", post={"task": FAKE_TASK}, timeout=START_AGENT_DEADLINE),
+        "POST /agents",
+        201,
+    )
+    return AgentCreated.model_validate(json.loads(reply.body))
+
+
+def stop_server(child: subprocess.Popen[Any]) -> None:
+    """SIGTERM, then SIGKILL only after STOP_DEADLINE: a slow but valid shutdown is not killed at
+    smoke's shorter deadline."""
+    smoke.stop_child(child, STOP_DEADLINE)
 
 
 def graph_of(base: str) -> GraphResponse:
@@ -294,9 +338,7 @@ def serve_and_decide(base: str, first: GraphResponse | None) -> GraphResponse:
         )
     stream = EventStream(base)
     try:
-        reply = expect(request(base, "/agents", post={"task": FAKE_TASK}), "POST /agents", 201)
-        created = AgentCreated.model_validate(json.loads(reply.body))
-        mine = created.change_id
+        mine = start_agent(base).change_id
         stream.wait(
             lambda e: e.type == "change.proposed" and e.payload.change_id == mine,
             PROPOSE_DEADLINE,
@@ -337,19 +379,17 @@ def run_once(
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=subprocess.STDOUT,
-            start_new_session=True,  # its own session: what is left of it is found by session
+            start_new_session=True,  # its own session: most of what is left is found by session
         )
-    seen: set[int] = set()
     try:
         smoke.wait_for_health(base, START_DEADLINE, child)
         graph = serve_and_decide(base, first)
-        seen = descendants(child.pid)
     except smoke.SmokeError as error:
         raise smoke.SmokeError(f"run {number}: {error}\n{_tail(log)}") from error
     finally:
-        smoke.stop_child(child)
-        left = stragglers(child.pid, seen)
-        for pid in left:  # ours: the server's session, started by this check
+        stop_server(child)
+        left = stragglers(child.pid, os.getpid())
+        for pid in left:  # ours: the server's tree, started by this check, or adopted by it
             _kill(pid)
     if child.returncode not in GRACEFUL_EXITS:
         raise smoke.SmokeError(f"run {number}: the server exited {child.returncode}\n{_tail(log)}")
@@ -381,7 +421,7 @@ def run_checks(runs: int = RUNS) -> None:
             "frontend/dist/index.html is missing: build it first (make demo-check)"
         )
     first: GraphResponse | None = None
-    with tempfile.TemporaryDirectory(prefix="oversight-demo-check-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="oversight-demo-check-") as scratch, adopting_orphans():
         # One runtime directory for every run, so each run starts over what the last one left. The
         # workspace refuses a directory with another name.
         runtime_dir = Path(os.path.realpath(scratch)) / ".runtime"
