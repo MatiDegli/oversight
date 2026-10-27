@@ -60,7 +60,6 @@ UI_BUILD := $(PNPM) build
 demo-setup-check: ## check offered agents' keys, budget and prices in .env before the demo
 	uv run --frozen python -m oversight.setup --check
 
-demo: export OVERSIGHT_VITE_PORT :=
 demo: demo-setup-check ## build the UI, then serve it and the API on one port (DEMO_PORT) from .env; Start agent spends credits
 	$(UI_BUILD)
 	@echo ""

@@ -79,7 +79,7 @@ url="http://127.0.0.1:$vite_port/"
 # environment is the caller's (the Makefile drops the API keys); OVERSIGHT_PORT moves the backend
 # and Vite's proxy target together.
 OVERSIGHT_PORT=$backend_port OVERSIGHT_RUNTIME_DIR="$out/runtime" \
-  uv run --frozen python -m oversight replay "$log" --allow-fake-provider --speed 0 \
+  uv run --frozen python -m oversight replay "$log" --speed 0 \
   >"$out/backend.log" 2>&1 &
 pids+=("$!")
 # Vite keeps all its state under .shots/, so `make dev` shares none of it: its cache through

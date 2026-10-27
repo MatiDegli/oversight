@@ -8,7 +8,7 @@ from starlette.websockets import WebSocket
 
 from oversight.api.errors import error_response
 
-_AUTHORITY = re.compile(rb"(localhost|127\.0\.0\.1|\[::1\])(?::([0-9]{1,5}))?")
+_AUTHORITY = re.compile(rb"(localhost|127\.0\.0\.1|\[::1\])(?::([1-9][0-9]{0,4}))?")
 
 
 def _authority(value: bytes, default_port: int) -> tuple[bytes, int] | None:

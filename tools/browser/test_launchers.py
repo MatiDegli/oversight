@@ -118,6 +118,8 @@ def launcher(
             "FIXTURE": str(tmp_path),
             "UV_PROJECT": str(ROOT),
             "UV_OFFLINE": "1",
+            "META_API_KEY": "",
+            "BASETEN_API_KEY": "",
             "OVERSIGHT_HOST": "127.0.0.1",
             "OVERSIGHT_RUNTIME_DIR": str(tmp_path / ".runtime"),
             "OVERSIGHT_VITE_CACHE_DIR": str(tmp_path / "vite-cache"),
