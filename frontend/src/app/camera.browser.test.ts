@@ -41,7 +41,7 @@ afterAll(async () => {
 async function withPage(
   reducedMotion: "reduce" | "no-preference",
   test: (page: Page) => Promise<void>,
-  demo = false,
+  demo: false | "after-mount" | "at-mount" = false,
 ) {
   if (!browser) throw new Error("Browser was not started");
   const page = await browser.newPage({
@@ -61,10 +61,11 @@ async function withPage(
     await page.goto(url);
     await page.waitForFunction(() => "graphTest" in window);
     await page.evaluate((demo) => {
-      if (demo) window.graphTest.mountEmpty();
+      if (demo === "at-mount") window.graphTest.loadDemo();
+      else if (demo) window.graphTest.mountEmpty();
       else window.graphTest.mount();
     }, demo);
-    if (demo) {
+    if (demo === "after-mount") {
       await page.waitForFunction(
         () =>
           !!document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
@@ -128,57 +129,61 @@ async function settled(page: Page) {
     .toBe(false);
 }
 
-it("starts the demo preset without splitting frames at canvas, heading or footer edges", async () => {
-  await withPage(
-    "reduce",
-    async (page) => {
-      const view = await page.evaluate(() => {
-        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
-        const probe = host?.oversightGraph;
-        const overlays = document.querySelector("main")?.lastElementChild;
-        if (!host || !probe || !overlays) throw new Error("Missing watch graph");
-        const screen = host.getBoundingClientRect();
-        const top = overlays.firstElementChild?.getBoundingClientRect();
-        const bottom = overlays.lastElementChild?.getBoundingClientRect();
-        const bounds = overlays.getBoundingClientRect();
-        if (!top || !bottom) throw new Error("Missing watch overlays");
-        const gap = Number.parseFloat(getComputedStyle(overlays).rowGap);
-        const area = {
-          x1: bounds.left - screen.left,
-          y1: top.bottom + gap - screen.top,
-          x2: bounds.right - screen.left,
-          y2: bottom.top - gap - screen.top,
-        };
-        const pan = probe.pan();
-        return {
-          area,
-          size: { width: host.clientWidth, height: host.clientHeight },
-          zoom: probe.zoom(),
-          frames: probe.nodeBounds(".module, .class").map((b) => ({
-            id: b.id,
-            x1: b.x1 + pan.x,
-            y1: b.y1 + pan.y,
-            x2: b.x2 + pan.x,
-            y2: b.y2 + pan.y,
-          })),
-        };
-      });
-      expect(view.zoom).toBe(1);
-      expect(view.area.y1).toBeGreaterThan(0);
-      for (const b of view.frames) {
-        const a = view.area;
-        const contained = b.x1 >= a.x1 && b.y1 >= a.y1 && b.x2 <= a.x2 && b.y2 <= a.y2;
-        const excluded =
-          b.x2 <= 0 || b.y2 <= 0 || b.x1 >= view.size.width || b.y1 >= view.size.height;
-        expect(contained || excluded, `${b.id}: ${JSON.stringify(b)}`).toBe(true);
-      }
-      const hub = view.frames.find((b) => b.id === "shop.pricing");
-      expect(hub?.y1).toBeGreaterThanOrEqual(view.area.y1);
-      expect(hub?.y2).toBeLessThanOrEqual(view.area.y2);
-    },
-    true,
-  );
-}, 30_000);
+it.each(["after-mount", "at-mount"] as const)(
+  "starts the demo preset without splitting frames at canvas, heading or footer edges (%s)",
+  async (demo) => {
+    await withPage(
+      "reduce",
+      async (page) => {
+        const view = await page.evaluate(() => {
+          const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+          const probe = host?.oversightGraph;
+          const overlays = document.querySelector("main")?.lastElementChild;
+          if (!host || !probe || !overlays) throw new Error("Missing watch graph");
+          const screen = host.getBoundingClientRect();
+          const top = overlays.firstElementChild?.getBoundingClientRect();
+          const bottom = overlays.lastElementChild?.getBoundingClientRect();
+          const bounds = overlays.getBoundingClientRect();
+          if (!top || !bottom) throw new Error("Missing watch overlays");
+          const gap = Number.parseFloat(getComputedStyle(overlays).rowGap);
+          const area = {
+            x1: bounds.left - screen.left,
+            y1: top.bottom + gap - screen.top,
+            x2: bounds.right - screen.left,
+            y2: bottom.top - gap - screen.top,
+          };
+          const pan = probe.pan();
+          return {
+            area,
+            size: { width: host.clientWidth, height: host.clientHeight },
+            zoom: probe.zoom(),
+            frames: probe.nodeBounds(".module, .class").map((b) => ({
+              id: b.id,
+              x1: b.x1 + pan.x,
+              y1: b.y1 + pan.y,
+              x2: b.x2 + pan.x,
+              y2: b.y2 + pan.y,
+            })),
+          };
+        });
+        expect(view.zoom).toBe(1);
+        expect(view.area.y1).toBeGreaterThan(0);
+        for (const b of view.frames) {
+          const a = view.area;
+          const contained = b.x1 >= a.x1 && b.y1 >= a.y1 && b.x2 <= a.x2 && b.y2 <= a.y2;
+          const excluded =
+            b.x2 <= 0 || b.y2 <= 0 || b.x1 >= view.size.width || b.y1 >= view.size.height;
+          expect(contained || excluded, `${b.id}: ${JSON.stringify(b)}`).toBe(true);
+        }
+        const hub = view.frames.find((b) => b.id === "shop.pricing");
+        expect(hub?.y1).toBeGreaterThanOrEqual(view.area.y1);
+        expect(hub?.y2).toBeLessThanOrEqual(view.area.y2);
+      },
+      demo,
+    );
+  },
+  30_000,
+);
 
 /** The nodes the camera frames when the change opens: the change's own, in the recorded run. */
 const wanted = (page: Page) => page.evaluate(() => [window.graphTest.changed]);

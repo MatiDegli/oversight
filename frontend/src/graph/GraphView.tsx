@@ -325,7 +325,6 @@ export function GraphView({
         if (card === observedCard) return;
         observedCard = card;
         resize.disconnect();
-        if (startFrame !== undefined) cancelAnimationFrame(startFrame);
         resize.observe(host);
         if (card) resize.observe(card);
       };
@@ -335,6 +334,8 @@ export function GraphView({
         unsubscribe();
         unexpose();
         resize.disconnect();
+        // Card observation must leave the initial overlay-aware camera scheduled until unmount.
+        if (startFrame !== undefined) cancelAnimationFrame(startFrame);
         resync.current = undefined;
         observeCard.current = undefined;
         graph.current = undefined;

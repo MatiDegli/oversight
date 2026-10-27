@@ -97,6 +97,8 @@ async function withPage(
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
     );
+    // Cart is outside the hub-centered start view; navigate to it with the real fit control.
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
     // These tests begin after the person opens Cart; opening a file itself must move no rows.
     await clickGraphNode(page, "shop.cart:Cart");
     await page.waitForFunction(
