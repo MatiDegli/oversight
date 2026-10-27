@@ -1,4 +1,5 @@
-"""The read routes: the event stream, the graph and the health check (sections 4.6 and 4.7)."""
+"""The routes: the event stream, the graph and the health check (sections 4.6 and 4.7), and the
+commands, from `commands.py`."""
 
 import re
 from collections.abc import AsyncIterator
@@ -7,6 +8,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
+from oversight.api.commands import Commands, add_command_routes
 from oversight.api.errors import ApiError
 from oversight.events import EventStore
 from oversight_contracts import CONTRACT_VERSION
@@ -28,8 +30,12 @@ def _seq(value: str, name: str) -> int:
     return int(value)
 
 
-def create_router(store: EventStore, mode: Literal["live", "replay"]) -> APIRouter:
+def create_router(
+    store: EventStore, mode: Literal["live", "replay"], commands: Commands | None = None
+) -> APIRouter:
+    """Live mode passes `commands`; without it, as in a replay, every command answers 501."""
     router = APIRouter()
+    add_command_routes(router, commands)
 
     def resume_point(
         after: Annotated[str | None, Query()] = None,
