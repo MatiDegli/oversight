@@ -9,7 +9,6 @@ import contextlib
 from pathlib import Path
 from typing import Any, ClassVar
 
-import httpx
 import pytest
 from live_helpers import (
     DEADLINE_S,
@@ -17,13 +16,14 @@ from live_helpers import (
     FAKE_SCRIPT_B,
     BySlot,
     GatedModel,
-    LiveServer,
     error_code,
     is_type,
     live_server,
     live_settings,
     meta_settings,
     script_json,
+    start,
+    two_fakes,
     write_ledger,
 )
 
@@ -37,7 +37,6 @@ from oversight.agents import (
 from oversight.api import ApiError
 from oversight.app import LIMITS, OFFERED_SLOTS, LiveRun
 from oversight.changes import ChangeManager
-from oversight.settings import Settings
 from oversight_contracts.commands import AgentCreated, StartAgent
 from oversight_contracts.common import Slot
 from oversight_contracts.events import ChangeResolved, Conflict, ModelProfile
@@ -47,15 +46,6 @@ pytestmark = pytest.mark.anyio
 FINISH = script_json(
     "Finish at once.", [{"tool_calls": [{"name": "finish", "arguments": {"summary": "Done."}}]}]
 )
-
-
-def two_fakes(tmp_path: Path, **overrides: Any) -> Settings:
-    """Both slots on the fake model, each with its own script."""
-    return live_settings(tmp_path, fake_script_b=FAKE_SCRIPT_B, **overrides)
-
-
-async def start(s: LiveServer, **body: Any) -> httpx.Response:
-    return await s.client.post("/agents", json={"task": "t", **body})
 
 
 def gated_clients() -> tuple[GatedModel, GatedModel, BySlot]:

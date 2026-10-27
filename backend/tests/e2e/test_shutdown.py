@@ -21,6 +21,7 @@ from oversight.app import MAIN_LEFT, TEMPLATE
 from oversight.changes import ChangeManager
 from oversight.events import StoreClosedError, read_store
 from oversight.workspace import ProcessResult, Tree, Workspace
+from oversight_contracts.commands import StartAgent
 from oversight_contracts.events import ErrorReport
 from oversight_contracts.graph import GraphDelta
 
@@ -64,6 +65,20 @@ async def test_shutdown_mid_run_ends_the_run_closes_the_store_and_frees_the_lock
             if e.type == "agent.status"
         ]
         assert states == ["starting", "working"]
+
+
+async def test_shutdown_before_a_run_starts_ends_the_change(tmp_path: Path) -> None:
+    # `start` returns with no suspension after it creates the run's task, so stopping the runs at
+    # once cancels a task that never took its first step: its `finally`, which ends the change,
+    # never runs. The change must still not stay `working`, which no decision can leave.
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        created = await s.live.start(StartAgent(task="t"))
+        run = s.live._runs[created.agent_id]  # pyright: ignore[reportPrivateUsage]
+        await s.live._stop_runs()  # pyright: ignore[reportPrivateUsage]
+        assert run.cancelled()
+        assert s.live._runs == {}  # pyright: ignore[reportPrivateUsage]
+        s.live.reject(created.change_id, None)  # WrongState while the change is still working
+        await s.until(is_type("agent.status", agent_id=created.agent_id, state="done"))
 
 
 async def test_shutdown_reaps_a_blocked_venv_build_before_the_store_closes(

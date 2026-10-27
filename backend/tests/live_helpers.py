@@ -56,6 +56,11 @@ def live_settings(tmp_path: Path, **overrides: Any) -> Settings:
     return Settings(**(values | overrides))
 
 
+def two_fakes(tmp_path: Path, **overrides: Any) -> Settings:
+    """Both slots on the fake model, each with its own script (slot B opens with `slot_b_open`)."""
+    return live_settings(tmp_path, fake_script_b=FAKE_SCRIPT_B, **overrides)
+
+
 def meta_settings(tmp_path: Path, **overrides: Any) -> Settings:
     """The Meta profile with a fake key and the documented budget and prices. Tests pair it with a
     scripted client factory: nothing reaches Meta (and the root conftest blocks it anyway)."""
@@ -71,6 +76,11 @@ def meta_settings(tmp_path: Path, **overrides: Any) -> Settings:
 
 def script_json(task: str, turns: list[dict[str, Any]]) -> str:
     return json.dumps({"task": task, "turns": turns})
+
+
+async def start(s: "LiveServer", **body: Any) -> httpx.Response:
+    """POST /agents with the task "t" and `body`'s keys."""
+    return await s.client.post("/agents", json={"task": "t", **body})
 
 
 class Answer(Protocol):

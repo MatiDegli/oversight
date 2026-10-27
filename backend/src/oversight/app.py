@@ -296,11 +296,17 @@ class LiveRun:
             raise failure
 
     async def _stop_runs(self) -> None:
-        """Cancel each run and wait for it: its process group is killed and its change ended."""
-        tasks = list(self._runs.values())
-        for task in tasks:
+        """Cancel each run and wait for it: its process group is killed and its change ended. A
+        task cancelled before its first step never runs `_run`'s `finally`, so this ends the
+        change itself: `run_ended` does nothing unless the change is still `working`."""
+        runs = dict(self._runs)
+        for task in runs.values():
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*runs.values(), return_exceptions=True)
+        for agent_id in runs:
+            self._runs.pop(agent_id, None)
+            if self._manager is not None:
+                self._manager.run_ended(agent_id, None)
 
     async def _stop_venv(self) -> None:
         """Cancel the venv build and wait, so its subprocess is killed and reaped."""

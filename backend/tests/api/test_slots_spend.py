@@ -8,22 +8,21 @@ import asyncio
 import os
 import threading
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
-import httpx
 import pytest
 from live_helpers import (
     DEADLINE_S,
     FAKE_SCRIPT,
     BySlot,
     GatedModel,
-    LiveServer,
     Stepped,
     is_type,
     live_server,
     meta_settings,
     read_ledger,
     script_json,
+    start,
     write_ledger,
 )
 
@@ -42,10 +41,6 @@ LOOK_THEN_FINISH = script_json(
         {"tool_calls": [{"name": "finish", "arguments": {"summary": "Done."}}], "usage": USAGE},
     ],
 )
-
-
-async def start(s: LiveServer, **body: Any) -> httpx.Response:
-    return await s.client.post("/agents", json={"task": "t", **body})
 
 
 def model_for(profile: ModelProfile, script: str) -> ScriptedModel:
