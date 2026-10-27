@@ -256,6 +256,33 @@ def test_unrecoverable_identity_is_reported(attrs: dict[str, str]) -> None:
     assert parse_junit(report(case(**attrs))) == Run({}, (RunProblem("ambiguous_test_id"),))
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "../tests/test_core.py",
+        "/tests/test_core.py",
+        r"tests\test_core.py",
+        "C:/tests/test_core.py",
+        "tests/./test_core.py",
+        "tests/../test_core.py",
+        "tests//test_core.py",
+        "tests/test_core.txt",
+    ],
+)
+@pytest.mark.parametrize("collection", [False, True])
+def test_invalid_paths_are_rejected_even_when_module_matches(path: str, collection: bool) -> None:
+    module = path[:-3].replace("/", ".")
+    attrs = {"classname": "", "name": module} if collection else {"classname": module}
+    xml = case("<error/>" if collection else "", file=path, **attrs)
+    assert parse_junit(report(xml)) == Run({}, (RunProblem("ambiguous_test_id"),))
+
+
+@pytest.mark.parametrize("tag", ["error", "skipped"])
+def test_collection_file_must_match_dotted_name(tag: str) -> None:
+    xml = case(f"<{tag}/>", classname="", name="tests.test_other", file="tests/test_core.py")
+    assert parse_junit(report(xml)) == Run({}, (RunProblem("ambiguous_test_id"),))
+
+
 def test_xunit1_preserves_dotted_paths_and_custom_classes() -> None:
     xml = case(file="odd.dir/spec.v2.py", classname="odd.dir.spec.v2.Checks.Nested")
     assert parse_junit(report(xml)) == Run(
@@ -291,6 +318,11 @@ def test_call_failure_and_teardown_error_merge_in_either_order(reverse: bool) ->
     assert parse_junit(report("".join(cases[::-1] if reverse else cases))) == Run({ID: "error"})
     assert parse_junit(report(case("<skipped/><error/>"))) == Run({ID: "error"})
     assert parse_junit(report(case("<skipped/><failure/>"))) == Run({ID: "failed"})
+
+
+@pytest.mark.parametrize("body", ["<failure/><error/>", "<error/><failure/>"])
+def test_error_takes_priority_over_failure_in_one_testcase(body: str) -> None:
+    assert parse_junit(report(case(body))) == Run({ID: "error"})
 
 
 def test_other_duplicates_are_reported_and_do_not_prove_a_pass() -> None:
