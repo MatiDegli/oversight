@@ -309,3 +309,5 @@ Ours wins in every case below.
   exposing credentials. Keys are opaque nonempty strings without whitespace; authenticity is not
   checked by calling a provider. The optional error `missing` field is omitted for other codes,
   preserving their existing wire shape; recorded 1.0 and 1.1 events remain valid.
+
+- **Classes start folded (maintainer, 2026-10-27):** one row names the class and its method count; a click toggles it, and a new change adding or modifying a method opens it. Reads and cone membership project onto the folded row (nearest distance). Preset positions plus fold state determine all positions; only later rows and modules in that column slide for 240ms with cubic-bezier(0.2, 0.7, 0.2, 1), or jump under reduced motion. Incoming calls share a target trunk outside frames; endpoint taps alone traverse their own containing frame.

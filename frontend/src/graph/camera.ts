@@ -2,6 +2,7 @@ import type { AnimationOptions, Core, CollectionReturnValue } from "cytoscape";
 
 import { getActiveTheme } from "../theme";
 
+import { visibleId } from "./foldVisibility";
 import { FIT_PADDING } from "./geometry";
 
 /** The padding the camera keeps around what it frames, in screen px. */
@@ -365,7 +366,7 @@ function coneInset(theme: ReturnType<typeof getActiveTheme>): number {
  * the camera it moves to, or null for a node that is not on the graph.
  */
 export function revealNode(cy: Core, id: string, reduceMotion: boolean): Camera | null {
-  const node = cy.getElementById(id);
+  const node = cy.getElementById(visibleId(cy, id));
   if (node.empty()) return null;
   const box = node.boundingBox({ includeLabels: true, includeOverlays: false });
   const zoom = cy.zoom();
@@ -444,8 +445,12 @@ export function frameCamera(
 ): Framing | null {
   // The container just changed size; Cytoscape only learns it when told.
   cy.resize();
-  const focus = focusIds.reduce((nodes, id) => nodes.union(cy.getElementById(id)), cy.collection());
-  const cone = cy.nodes().filter((node) => coneIds?.includes(node.id()) ?? false);
+  const focus = focusIds.reduce(
+    (nodes, id) => nodes.union(cy.getElementById(visibleId(cy, id))),
+    cy.collection(),
+  );
+  const shownCone = coneIds?.map((id) => visibleId(cy, id));
+  const cone = cy.nodes().filter((node) => shownCone?.includes(node.id()) ?? false);
   // Empty review cones still reserve their card and use the label floor.
   const camera: Framing | null = restoreCamera
     ? { ...restoreCamera, framed: new Set(), outOfView: new Set() }
@@ -455,10 +460,12 @@ export function frameCamera(
         ? cameraFor(cy, cy.nodes().filter("node"), Number.POSITIVE_INFINITY)
         : null;
   if (!camera) return null;
-  camera.outOfView = new Set([
-    ...camera.outOfView,
-    ...[...focusIds, ...(coneIds ?? [])].filter((id) => cy.getElementById(id).empty()),
-  ]);
+  camera.outOfView = new Set(
+    [...focusIds, ...(coneIds ?? [])].filter(
+      (id) =>
+        camera.outOfView.has(visibleId(cy, id)) || cy.getElementById(visibleId(cy, id)).empty(),
+    ),
+  );
   moveCamera(cy, camera, reduceMotion);
   return camera;
 }

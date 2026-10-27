@@ -19,10 +19,12 @@ import {
 } from "./camera";
 import type { Camera, Framing } from "./camera";
 import { graphElements } from "./elements";
+import { foldController } from "./foldController";
+import { visibleId } from "./foldVisibility";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
 import { edgeShape, graphStyles } from "./styles";
-import { settle, updateGraph } from "./updateGraph";
+import { settle } from "./updateGraph";
 
 cytoscape.use(fcose);
 
@@ -82,7 +84,8 @@ function reportFraming(
   const graphBox = host.getBoundingClientRect();
   const card = props.coneCardRef?.current?.getBoundingClientRect();
   const ids = [...(props.frameIds ?? []), ...props.cone.entries.map((entry) => entry.node_id)];
-  const nodes = cy.nodes().filter((node) => ids.includes(node.id()));
+  const shown = ids.map((id) => visibleId(cy, id));
+  const nodes = cy.nodes().filter((node) => shown.includes(node.id()));
   const visible = nodesInViewport(
     nodes.map((node) => ({
       id: node.id(),
@@ -99,7 +102,10 @@ function reportFraming(
         }
       : undefined,
   );
-  props.onFramed?.({ ...framing, outOfView: new Set(ids.filter((id) => !visible.has(id))) });
+  props.onFramed?.({
+    ...framing,
+    outOfView: new Set(ids.filter((id) => !visible.has(visibleId(cy, id)))),
+  });
 }
 
 export function GraphView({
@@ -207,14 +213,15 @@ export function GraphView({
         cy.stop();
         quietUntil = performance.now() + NAVIGATION_QUIET_MS;
       });
+      const folding = foldController(cy);
       const sync = () => {
         // A second addition can arrive before the first ease ends. Include both targets when
         // replacing that animation, rather than leaving the first addition outside the view.
         if (!cy.animated() || latest.current.panelOpen) arriving.clear();
         const existing = new Set(cy.nodes().map((node) => node.id()));
         const lit = latest.current.litIds;
-        updateGraph(
-          cy,
+        const foldsChanged = folding.render(
+          stateStore.getState().state,
           graphElements(
             stateStore.getState().state,
             false,
@@ -225,6 +232,7 @@ export function GraphView({
         showSelection(cy, latest.current.selectedId ?? null);
         if (
           existing.size > 0 &&
+          !foldsChanged &&
           !latest.current.panelOpen &&
           !interacting &&
           performance.now() >= quietUntil
@@ -241,7 +249,9 @@ export function GraphView({
       };
       resync.current = sync;
       cy.on("tap", "node", (event) => {
-        latest.current.onNodeTap?.((event.target as NodeSingular).id());
+        const id = (event.target as NodeSingular).id();
+        if (folding.toggle(id)) sync();
+        else latest.current.onNodeTap?.(id);
       });
       graph.current = cy;
       if (apiRef) {

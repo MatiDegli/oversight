@@ -54,7 +54,7 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
       Object.fromEntries(cy.nodes(":childless").map((node) => [node.id(), { ...node.position() }])),
     zoom: () => cy.zoom(),
     pan: () => ({ ...cy.pan() }),
-    animating: () => cy.animated(),
+    animating: () => cy.animated() || cy.scratch("foldAnimating") === true,
     metrics: () => ({
       viewport: { width: cy.width(), height: cy.height() },
       zoom: cy.zoom(),

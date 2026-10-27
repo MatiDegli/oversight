@@ -100,9 +100,6 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
   );
   if (!framed?.focus.length) throw new Error(`the clicked node ${id} is not on the graph`);
   if (zoomBefore === undefined) throw new Error("the watch zoom is unavailable");
-  if (panel === "Review panel") {
-    assert(Math.abs(framed.zoom - 0.8) < 1e-6, "the demo cone must stay at the 12px floor");
-  }
   assertReadableFrame(zoomBefore, framed);
 }
 
@@ -183,6 +180,23 @@ export const scenes: readonly Scene[] = [
           },
         }),
       );
+      const folded = await page.evaluate(() => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        const row = host?.oversightGraph
+          ?.nodeCenters(".folded")
+          .find(({ id }) => id === "shop.cart:Cart");
+        const box = host?.getBoundingClientRect();
+        return row && box ? { x: box.left + row.x, y: box.top + row.y } : null;
+      });
+      if (folded) {
+        await page.mouse.click(folded.x, folded.y);
+        await page.waitForFunction(
+          () =>
+            document
+              .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+              ?.oversightGraph?.animating() === false,
+        );
+      }
       const point = await page.evaluate(() => {
         const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
         const node = host?.oversightGraph
