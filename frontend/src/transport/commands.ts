@@ -99,11 +99,11 @@ export function createCommandClient(request: typeof fetch = fetch) {
       send<undefined>(agent(id, "message"), "POST", body),
     pauseAgent: (id: string) => send<undefined>(agent(id, "pause"), "POST"),
     resumeAgent: (id: string) => send<undefined>(agent(id, "resume"), "POST"),
-    approveChange: (id: string, body: ApproveChange = {}) =>
+    approveChange: (id: string, body: ApproveChange) =>
       send<undefined>(change(id, "approve"), "POST", body),
     requestChanges: (id: string, body: RequestChanges) =>
       send<undefined>(change(id, "request-changes"), "POST", body),
-    rejectChange: (id: string, body: RejectChange = {}) =>
+    rejectChange: (id: string, body: RejectChange) =>
       send<undefined>(change(id, "reject"), "POST", body),
     getGraph: (signal?: AbortSignal) => send<GraphResponse>("/graph", "GET", undefined, signal),
     rescanGraph: () => send<undefined>("/graph/rescan", "POST"),

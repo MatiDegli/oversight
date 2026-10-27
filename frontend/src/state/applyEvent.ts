@@ -176,6 +176,12 @@ export function applyEvent(state: State, event: ServerEvent): State {
     case "change.assessed":
     case "merge_mode.changed":
     case "plan.updated":
+    case "change.reviewed":
+    case "change.facts_recorded":
+    case "tests.executed":
+    case "revert.resolved":
+    case "queue.updated":
+    case "lead.status":
       return next;
     case "error":
       return { ...next, errors: [...state.errors, event.payload] };

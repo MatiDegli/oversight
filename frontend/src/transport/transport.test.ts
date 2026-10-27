@@ -1,6 +1,7 @@
 import type { GraphSnapshotEvent, ServerEvent } from "@contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import reservedA from "../../../fixtures/contracts/reserved-1.4.json";
 import reserved from "../../../fixtures/contracts/reserved-1.3.json";
 import fixture from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import { applyEvent, createInitialState, createStateStore } from "../state";
@@ -78,14 +79,17 @@ describe("live transport", () => {
     await transport.ready;
     for (const event of log) source().emit(event);
     const before = store.getState().state;
-    for (const [index, example] of reserved.entries()) {
+    for (const [index, example] of [
+      ...reserved,
+      ...reservedA.filter((e) => e.type !== "change.resolved"),
+    ].entries()) {
       source().raw(JSON.stringify({ ...example, seq: before.lastSeq + index + 1 }));
     }
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
-      lastSeq: before.lastSeq + reserved.length,
-      clock: reserved.at(-1)?.ts,
+      lastSeq: before.lastSeq + reserved.length + reservedA.length - 1,
+      clock: reservedA.at(-1)?.ts,
     });
   });
 
@@ -438,7 +442,7 @@ describe("command client", () => {
       );
     const client = createCommandClient(request);
     const failure = await client
-      .approveChange("change-1", { comment: "Looks good" })
+      .approveChange("change-1", { revision: 1, head_commit: "head", comment: "Looks good" })
       .catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(CommandError);
     expect(failure).toMatchObject({
@@ -464,9 +468,9 @@ describe("command client", () => {
     await client.messageAgent("a/b", { text: "Hello" });
     await client.pauseAgent("a/b");
     await client.resumeAgent("a/b");
-    await client.approveChange("c/d", { comment: "Fine" });
-    await client.requestChanges("c/d", { comment: "Try again" });
-    await client.rejectChange("c/d");
+    await client.approveChange("c/d", { revision: 1, head_commit: "head", comment: "Fine" });
+    await client.requestChanges("c/d", { revision: 1, head_commit: "head", comment: "Try again" });
+    await client.rejectChange("c/d", { revision: 0, head_commit: "base" });
     await client.getGraph();
     await client.rescanGraph();
     await client.getImpact("shop:price", 3, "c/d");
@@ -479,9 +483,17 @@ describe("command client", () => {
       ["/agents/a%2Fb/message", "POST", JSON.stringify({ text: "Hello" })],
       ["/agents/a%2Fb/pause", "POST", undefined],
       ["/agents/a%2Fb/resume", "POST", undefined],
-      ["/changes/c%2Fd/approve", "POST", JSON.stringify({ comment: "Fine" })],
-      ["/changes/c%2Fd/request-changes", "POST", JSON.stringify({ comment: "Try again" })],
-      ["/changes/c%2Fd/reject", "POST", "{}"],
+      [
+        "/changes/c%2Fd/approve",
+        "POST",
+        JSON.stringify({ revision: 1, head_commit: "head", comment: "Fine" }),
+      ],
+      [
+        "/changes/c%2Fd/request-changes",
+        "POST",
+        JSON.stringify({ revision: 1, head_commit: "head", comment: "Try again" }),
+      ],
+      ["/changes/c%2Fd/reject", "POST", JSON.stringify({ revision: 0, head_commit: "base" })],
       ["/graph", "GET", undefined],
       ["/graph/rescan", "POST", undefined],
       ["/impact?node=shop%3Aprice&depth=3&change=c%2Fd", "GET", undefined],
