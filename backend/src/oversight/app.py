@@ -42,7 +42,7 @@ from oversight.agents import (
     load_script,
 )
 from oversight.api import ApiError, add_static, create_router, install_error_handlers
-from oversight.changes import ChangeManager
+from oversight.changes import ChangeManager, WrongState
 from oversight.events import (
     EventPayload,
     EventStore,
@@ -56,7 +56,7 @@ from oversight.graph import WorkspaceGraph, read_layout
 from oversight.settings import REPO_ROOT, Settings
 from oversight.workspace import Tree, Workspace
 from oversight_contracts import CONTRACT_VERSION
-from oversight_contracts.commands import AgentCreated, StartAgent
+from oversight_contracts.commands import AgentCreated, FileContent, FileSaved, SaveFile, StartAgent
 from oversight_contracts.common import Slot
 from oversight_contracts.events import (
     AgentStatus,
@@ -576,6 +576,9 @@ class LiveRun:
             )
             client = self._client_factory(profile, slot)
             tree = await manager.open(task, profile.id)
+        except WrongState as error:
+            self._slots[slot] = None  # main turned suspect after the check: nothing was started
+            raise ApiError("wrong_state", str(error)) from None
         except Exception as error:
             self._slots[slot] = None
             await self._report("server", f"Starting an agent failed: {_describe(error)}")
@@ -664,6 +667,26 @@ class LiveRun:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
         self._manager.reject(change_id, comment)
+
+    async def get_file(self, path: str, agent_id: str | None) -> FileContent:
+        if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving
+            raise ApiError("internal", "the run has not started")
+        return await self._manager.read_file(agent_id, path)
+
+    async def save_file(self, request: SaveFile) -> FileSaved:
+        if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving
+            raise ApiError("wrong_state", "the run has not started")
+        return await self._manager.save_main(request.path, request.content, request.base_hash)
+
+    async def rescan(self) -> None:
+        if self._manager is None:
+            raise ApiError("internal", "the run has not started")
+        try:
+            await self._manager.rescan()
+        except Exception as error:  # the manager has sent the error event
+            raise ApiError(
+                "internal", f"rescanning failed ({type(error).__name__}); see the error events"
+            ) from error
 
 
 def create_app(
