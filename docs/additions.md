@@ -150,9 +150,10 @@ is stricter than the process that builds it. This idea brings that process into 
 - **Ideas 1 to 3 are still not approved.** Approving ideas 7 to 9 does not approve them. The first
   version of 7 works without them: the rules above that come from them (the detector's facts from
   idea 3, the zone and the protected areas from idea 2, the other model's review from idea 1) are
-  added only as each of those ideas is approved and lands. Until a rule exists, the case it would
-  cover goes to "needs you", never through. For tests: until idea 3's detector lands, any change
-  that edits or deletes an existing test file needs you; added tests are fine.
+  added only as each of those ideas is approved and lands. The maintainer will set the initial
+  required rules in a separate plan. An unavailable required check means "needs you". For tests:
+  until idea 3's detector lands, any change that edits or deletes an existing test file needs you;
+  added tests are fine.
 - **A model can call the person in; only code lets a change through without them.** A model's
   output can add a reason to wait, never remove one.
 - **Every merge by rules is in the history with its reasons**, and has a one-click Revert while it
