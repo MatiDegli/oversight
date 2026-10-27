@@ -163,8 +163,20 @@ describe("theme", () => {
       (match) => !required(match[1]).startsWith("day-"),
     );
     expect(entries.length).toBeGreaterThan(0);
+    // Approved shell-frame brief supersedes these DESIGN.md values; docs front updates it.
+    const approved: Record<string, string> = {
+      shell: "#09090a",
+      panel: "#0d0d0f",
+      page: "#101012",
+      card: "#151518",
+      raised: "#1b1b1f",
+      divider: "rgba(255, 255, 255, 0.06)",
+      border: "rgba(255, 255, 255, 0.1)",
+    };
     for (const [, name, value] of entries) {
-      expect(tokens[name as keyof typeof tokens], name).toEqual(cssValue(required(value)));
+      expect(tokens[name as keyof typeof tokens], name).toEqual(
+        cssValue(approved[required(name)] ?? required(value)),
+      );
     }
     expect(tokens["dim-node"]).toBe(0.16);
     expect(tokens["dim-module"]).toBe(0.6);
@@ -192,4 +204,45 @@ describe("theme", () => {
     root.dataset.theme = "dark";
     expect(getActiveTheme(root)).toBe(themes.dark);
   });
+});
+
+// WCAG 2.x relative luminance, using the lighter gradient end as well as its dark end.
+function luminance(hex: string): number {
+  const channels = [1, 3, 5].map(
+    (offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255,
+  );
+  const linear = channels.map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  return (linear[0] ?? 0) * 0.2126 + (linear[1] ?? 0) * 0.7152 + (linear[2] ?? 0) * 0.0722;
+}
+function contrast(a: string, b: string) {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+}
+const surfaces = ["shell", "panel", "page", "card", "card-end", "raised", "inset"] as const;
+const bodyText = [
+  "text",
+  "muted",
+  "faint",
+  "agent-a-text",
+  "agent-b-text",
+  "passed",
+  "failed",
+  "failed-text",
+] as const;
+it.each(surfaces)("meets body contrast for every shell text token on %s", (surface) => {
+  for (const text of bodyText)
+    expect(contrast(tokens[text], tokens[surface]), `${text} on ${surface}`).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  for (const mark of ["agent-a", "agent-b", "text", "passed", "failed"] as const)
+    expect(
+      contrast(tokens[mark], tokens[surface]),
+      `${mark} UI mark on ${surface}`,
+    ).toBeGreaterThanOrEqual(3);
+});
+it("checks WCAG reference pairs so a broken calculation cannot pass", () => {
+  expect(contrast("#000000", "#ffffff")).toBe(21);
+  expect(contrast("#777777", "#ffffff")).toBeLessThan(4.5);
 });
