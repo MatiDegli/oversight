@@ -18,9 +18,12 @@ from live_helpers import (
     live_server,
     live_settings,
     meta_settings,
+    read_ledger,
     script_json,
+    write_ledger,
 )
 
+from oversight import app as app_module
 from oversight.agents import (
     MUSE_SPARK,
     LedgerFile,
@@ -57,16 +60,6 @@ TWO_CALLS = script_json(
 NO_USAGE = script_json(
     "Finish at once.", [{"tool_calls": [{"name": "finish", "arguments": {"summary": "Done."}}]}]
 )
-
-
-def write_ledger(settings: Settings, body: object) -> None:
-    settings.runtime_dir.mkdir(parents=True, exist_ok=True)
-    text = body if isinstance(body, str) else json.dumps(body)
-    (settings.runtime_dir / "ledger.json").write_text(text)
-
-
-def read_ledger(settings: Settings) -> dict[str, Any]:
-    return json.loads((settings.runtime_dir / "ledger.json").read_text())
 
 
 async def start_code(settings: Settings, scripts: Scripts) -> tuple[int, str | None]:
@@ -273,7 +266,7 @@ async def test_a_tick_the_ledger_cannot_record_stops_the_run_and_closes_the_brak
     write_ledger(settings, {"spent_usd": 1.0, "unknown": []})
     model = CountingModel(ScriptedModel(parse_script(TWO_CALLS), MUSE_SPARK))
     client: ModelClient = model
-    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _: client) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _p, _s: client) as s:
         with monkeypatch.context() as patch:
             fail_ledger_writes(patch, step)
             created = (await s.client.post("/agents", json={"task": "t"})).json()
@@ -301,7 +294,7 @@ async def test_a_tick_the_ledger_cannot_record_stops_the_run_and_closes_the_brak
         rejected = await s.client.post(f"/changes/{created['change_id']}/reject")
         assert rejected.status_code == 202
         await s.until(is_type("agent.status", state="done"))
-        assert s.live._slot is None  # pyright: ignore[reportPrivateUsage]
+        assert s.live._slots["A"] is None  # pyright: ignore[reportPrivateUsage]
     assert model.calls == 1
 
 
@@ -321,7 +314,8 @@ class GatedWrites:
         self.release = threading.Event()
         self.trace: list[str] = []
         self.draining = asyncio.Event()
-        """Set when a cancelled `record` starts waiting for its write (`watch_drain`)."""
+        """Set when a cancelled `record` starts waiting for its write (`watch_drain`), or a
+        cancelled run starts waiting for the write the server keeps going (`watch_wait`)."""
         real_write = ledger.write
 
         def write(state: LedgerState) -> None:
@@ -344,6 +338,21 @@ class GatedWrites:
             return await real_drain(write, new)
 
         monkeypatch.setattr(ledger, "_drain", drain)
+
+    def watch_wait(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The server waits for a write with `asyncio.wait`, which a cancel interrupts without
+        stopping the write: `draining` is set when such a wait is cancelled."""
+        real_wait = asyncio.wait
+
+        async def wait(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return await real_wait(*args, **kwargs)
+            except asyncio.CancelledError:
+                self.draining.set()
+                raise
+
+        swapped = SimpleNamespace(**{**vars(asyncio), "wait": wait})
+        monkeypatch.setattr(app_module, "asyncio", swapped)
 
     async def wait_entered(self) -> None:
         assert await asyncio.to_thread(self.entered.wait, DEADLINE_S)
@@ -377,7 +386,7 @@ async def expect_lost_ledger(
     # The change stays rejectable, and rejecting it frees the slot.
     assert (await s.client.post(f"/changes/{created['change_id']}/reject")).status_code == 202
     await s.until(is_type("agent.status", state="done"))
-    assert s.live._slot is None  # pyright: ignore[reportPrivateUsage]
+    assert s.live._slots["A"] is None  # pyright: ignore[reportPrivateUsage]
 
 
 async def test_a_cancel_during_a_ledger_write_that_then_fails_closes_the_brake(
@@ -388,9 +397,9 @@ async def test_a_cancel_during_a_ledger_write_that_then_fails_closes_the_brake(
     settings = lost_run_settings(tmp_path)
     model = CountingModel(ScriptedModel(parse_script(TWO_CALLS), MUSE_SPARK))
     client: ModelClient = model
-    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _: client) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _p, _s: client) as s:
         gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
-        gate.watch_drain(s.live.ledger, monkeypatch)
+        gate.watch_wait(monkeypatch)
         created = (await s.client.post("/agents", json={"task": "t"})).json()
         await gate.wait_entered()
         run = s.live._runs[created["agent_id"]]  # pyright: ignore[reportPrivateUsage]
@@ -455,9 +464,9 @@ async def test_the_run_timeout_during_a_failing_ledger_write_closes_the_brake(
     model = CountingModel(ScriptedModel(parse_script(TWO_CALLS), MUSE_SPARK))
     client: ModelClient = model
     expiry = Expiry(monkeypatch)
-    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _: client) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _p, _s: client) as s:
         gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
-        gate.watch_drain(s.live.ledger, monkeypatch)
+        gate.watch_wait(monkeypatch)
         created = (await s.client.post("/agents", json={"task": "t"})).json()
         await gate.wait_entered()
         expiry.expire()
@@ -480,9 +489,9 @@ async def test_a_cancel_while_the_timeouts_halt_is_committing_adds_no_second_hal
     model = CountingModel(ScriptedModel(parse_script(TWO_CALLS), MUSE_SPARK))
     client: ModelClient = model
     expiry = Expiry(monkeypatch)
-    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _: client) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _p, _s: client) as s:
         gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
-        gate.watch_drain(s.live.ledger, monkeypatch)
+        gate.watch_wait(monkeypatch)
         commit = HeldCommit(s.store, monkeypatch)
         created = (await s.client.post("/agents", json={"task": "t"})).json()
         await gate.wait_entered()

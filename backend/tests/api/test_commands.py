@@ -9,6 +9,7 @@ from live_helpers import (
     DEADLINE_S,
     GatedModel,
     Scripts,
+    error_code,
     is_type,
     live_server,
     live_settings,
@@ -18,15 +19,9 @@ from live_helpers import (
 from oversight.api.commands import NOT_BUILT
 from oversight.app import ReplayConfig, create_app
 from oversight.settings import REPO_ROOT
-from oversight_contracts.commands import AgentCreated, ErrorResponse
+from oversight_contracts.commands import AgentCreated
 
 pytestmark = pytest.mark.anyio
-
-
-def error_code(response: object) -> tuple[int, str]:
-    assert hasattr(response, "json")
-    body = ErrorResponse.model_validate(response.json())  # pyright: ignore[reportAttributeAccessIssue]
-    return response.status_code, body.error.code  # pyright: ignore[reportAttributeAccessIssue]
 
 
 async def test_unknown_and_malformed_change_ids_are_not_found(tmp_path: Path) -> None:
@@ -41,7 +36,7 @@ async def test_approve_before_the_proposal_is_wrong_state_and_a_racing_start_slo
     model = GatedModel()
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(live_settings(tmp_path), lambda _: model) as s,
+        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
     ):
         first, second = await asyncio.gather(
             s.client.post("/agents", json={"task": "Do it."}),
@@ -99,7 +94,7 @@ async def test_a_start_on_muse_spark_open_is_a_model_this_server_does_not_run(
     tmp_path: Path, configured: str
 ) -> None:
     # Muse Spark Open is verified (docs/api-probe.md), so it is no longer refused as unverified; but
-    # this level has one slot, on the configured profile, and no Baseten client is wired in.
+    # only slot A is offered, on the configured profile: slot B, which could run it, is closed.
     settings = live_settings(tmp_path) if configured == "fake" else meta_settings(tmp_path)
     scripts = Scripts()
     async with asyncio.timeout(DEADLINE_S), live_server(settings, scripts) as s:

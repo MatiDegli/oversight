@@ -41,6 +41,12 @@ class Settings:
     fake_script: Path | None = None
     """The fake model's script, for `fake`; a relative path starts at the repository root.
     OVERSIGHT_FAKE_SCRIPT."""
+    agent_model_b: str | None = None
+    """The profile agent B runs on, one of the same ids; unset, agent A's model.
+    OVERSIGHT_AGENT_MODEL_B."""
+    fake_script_b: Path | None = None
+    """Agent B's own script when it runs `fake`: reusing A's would propose the same edit twice, so a
+    fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
     # The spending brake: no defaults. A value that is missing, not a number or not positive is
     # `None`, and every start on a Meta profile is then refused (spend_brake).
     budget_usd: float | None = None
@@ -71,6 +77,8 @@ class Settings:
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,
             agent_model=merged.get("OVERSIGHT_AGENT_MODEL") or cls.agent_model,
             fake_script=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT")),
+            agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
+            fake_script_b=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_B")),
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
             input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
             output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
