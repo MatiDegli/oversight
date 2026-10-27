@@ -46,6 +46,15 @@ def main_delta(
     )
 
 
+def rescan_delta(old: GraphSnapshot, new: GraphSnapshot, commit: str) -> GraphDelta | None:
+    """The delta of a rescan, or None when nothing moved: nodes, edges, parse errors, the version
+    and the commit all equal."""
+    same = old.version == new.version and old.commit == commit
+    if same and graph_delta(old, new, "rescan", commit) is None:
+        return None
+    return main_delta(old, new, commit, "rescan")
+
+
 def with_positions(new: GraphSnapshot, old: GraphSnapshot) -> GraphSnapshot:
     """`new` with the preset layout of `old`, less the nodes that are gone, as the fold keeps it."""
     ids = {node.id for node in new.nodes}

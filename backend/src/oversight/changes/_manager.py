@@ -16,8 +16,9 @@ with a timeout; decisions hold main's lock, then the agent's, throughout. Once a
 `broken`, `main_suspect` stays true until the process restarts; `check_main` reads main's state,
 and `aclose` drains the close-outs before the store closes.
 
-The person's edit on main (docs/plans/files.md): `save_main` commits one file as the user, one
-`_whole` step under main's lock, and publishes one `graph.delta`.
+The person's edits on main (docs/plans/files.md): `save_main` commits one file as the user and
+`rescan` re-reads main, each one `_whole` step under main's lock, each publishing one
+`graph.delta`; `read_file` reads main under that lock, or an agent's worktree under its own.
 """
 
 import asyncio
@@ -35,11 +36,13 @@ from oversight.changes._versions import (
     main_delta,
     nodes_in_path,
     parse,
+    rescan_delta,
     with_positions,
 )
 from oversight.events import Clock, EventPayload, system_clock
 from oversight.graph import (
     CodeVersion,
+    DeltaCause,
     WorkspaceGraph,
     change_cone,
     change_graph,
@@ -53,7 +56,7 @@ from oversight.workspace import (
     Workspace,
     WorkspaceError,
 )
-from oversight_contracts.commands import FileSaved
+from oversight_contracts.commands import FileContent, FileSaved
 from oversight_contracts.common import AgentId, ChangeId, FileStatus
 from oversight_contracts.events import (
     AgentStatus,
@@ -663,6 +666,26 @@ class ChangeManager:
 
     # --- The person's edits on main -----------------------------------------------------------
 
+    async def read_file(self, agent_id: AgentId | None, path: str) -> FileContent:
+        """GET /files. Main is read under main's lock, which every mutation of main holds from its
+        first git call to its last publish, so a read sees a whole commit, never the tree of a merge
+        waiting for its tests, nor conflict markers before the abort; a suspect main is read as it
+        stands. An agent's worktree is read under its own lock, in any state until its cleanup.
+        `ChangeNotFound` for no live worktree, `FileNotFoundError` for a missing file, `InvalidPath`
+        for a path the workspace refuses and for a file that is not UTF-8 text."""
+        if agent_id is None:
+            async with self._workspace.locks(main=True):
+                read = await self._read_text(self._workspace.main, path)
+        else:
+            rec = self._agents.get(agent_id)
+            if rec is None:
+                raise ChangeNotFound(agent_id)
+            async with self._workspace.locks(agent_id=agent_id):
+                if rec.cleaned:  # read under the lock a cleanup holds
+                    raise ChangeNotFound(agent_id)
+                read = await self._read_text(rec.tree, path)
+        return FileContent(path=path, content=read.content, hash=read.hash, agent_id=agent_id)
+
     @staticmethod
     async def _read_text(tree: Tree, path: str) -> FileRead:
         """`tree.read_text`, with what a person's request can meet as `InvalidPath`: a path through
@@ -715,7 +738,7 @@ class ChangeManager:
                 await self._settle_save(path, pre, original, saved, failure)
             try:
                 head = (await self._git(main, "rev-parse", "HEAD")).strip()
-                await self._publish_main(head)
+                await self._publish_main(head, "user_edit")
             except Exception as error:
                 # The snapshot stays: the next merge, save or rescan covers this commit.
                 message = f"Main's graph was not updated after saving {path}: {error}"
@@ -777,6 +800,29 @@ class ChangeManager:
         except Exception:
             return False
 
+    async def rescan(self) -> None:
+        """POST /graph/rescan: read main again and publish one delta (`rescan`) if anything moved:
+        a commit made behind the server's back, or one whose scan raised. One `_whole` step. Main
+        that is suspect, mid-merge or dirty is not main's graph at any commit: refused with an
+        `error` event and nothing published, until the contract lists `wrong_state` for it (P1).
+        A scan or publish that raises sends an `error`, keeps `snapshot` and re-raises."""
+        await self._whole(self._rescan())
+
+    async def _rescan(self) -> None:
+        await self._finish_pending()
+        async with self._workspace.locks(main=True):
+            await self._drain_pending()
+            blocked = await self._main_blocked()
+            if blocked is not None:
+                await self._report("graph", f"{blocked}; nothing was rescanned.", fatal=False)
+                return
+            try:
+                head = (await self._git(self._workspace.main, "rev-parse", "HEAD")).strip()
+                await self._publish_main(head, "rescan")
+            except Exception as error:
+                await self._report("graph", f"Main's graph was not rescanned: {error}", fatal=False)
+                raise
+
     async def _main_blocked(self) -> str | None:
         """Why main cannot take a commit or a rescan now, or None: M5's check, then `check_main`'s
         facts. The caller holds main's lock, and `check_main` takes it again."""
@@ -787,12 +833,16 @@ class ChangeManager:
             return "Main's state could not be read"
         return None if clean else "Main has uncommitted edits or a merge in progress"
 
-    async def _publish_main(self, head: str) -> None:
+    async def _publish_main(self, head: str, cause: DeltaCause) -> None:
         """M3: scan main at `head` and send the one delta from the graph the UI holds, then move
-        `snapshot` to it with no await between."""
+        `snapshot` to it with no await between. A rescan sends none when nothing moved."""
         new = await self._scan(head)
         old = self.snapshot
-        delta = main_delta(old, new, head, "user_edit")
+        delta = (
+            rescan_delta(old, new, head) if cause == "rescan" else main_delta(old, new, head, cause)
+        )
+        if delta is None:
+            return
         self._supersede_pending()
         await self._publish(delta)
         self.snapshot = with_positions(new, old)
