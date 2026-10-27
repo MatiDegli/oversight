@@ -765,9 +765,10 @@ class ChangeManager:
                     await self._settle_move(rec, move, error)
                     return None
             return await self._whole(self._requested(rec, comment, note))
-        # From `ready`: a save in review holds the agent's lock until its revision is proposed, so
-        # waiting for the lock makes the request name that revision and precede the revision run.
-        async with self._workspace.locks(agent_id=rec.agent_id):
+        # From `ready`, under both locks as every decision: a save in review holds the agent's
+        # lock until its revision is proposed, so the request names that revision and precedes
+        # the revision run.
+        async with self._workspace.locks(main=True, agent_id=rec.agent_id):
             return await self._whole(self._requested(rec, comment, note))
 
     async def _move_base(self, rec: _Change, move: _Move) -> str:

@@ -377,3 +377,21 @@ async def test_decision_during_a_save_names_its_revision(h: Harness, decision: s
         h.manager.run_ended("agent-1", None, steps=5)
         with pytest.raises(WrongState, match="is unproposed"):
             h.manager.approve("change-1", None)
+
+
+@bounded
+async def test_request_cancelled_while_waiting_for_the_locks(h: Harness) -> None:
+    """Request changes from `ready` waits for main's lock, as every decision does; cancelled
+    there, it sends nothing and leaves the change `ready`."""
+    await h.run_agent(1, EDIT)
+    async with h.workspace.locks(main=True):
+        request = h.manager.request_changes("change-1", "Make it 4.")
+        await queued_callbacks_ran()
+        assert not request.done()  # it waits for main's lock
+        request.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await request
+
+    assert h.payloads(ChangeResolved) == []
+    await h.manager.approve("change-1", None)  # still `ready`
+    assert h.payloads(ChangeResolved)[-1].merge == "merged"
