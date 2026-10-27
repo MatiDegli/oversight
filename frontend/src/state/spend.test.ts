@@ -17,6 +17,9 @@ const tick: ServerEvent & { type: "usage.tick" } = {
   ts: "2026-10-27T14:03:13.000Z",
   type: "usage.tick",
   payload: {
+    role: null,
+    change_id: null,
+    plan_id: null,
     agent_id: "agent-1",
     model: "muse-spark",
     input_tokens: 100,
@@ -77,7 +80,11 @@ describe("spend events and selection", () => {
           brake: "blocked",
         },
       });
-      expect(selectSpend(other)).toEqual({ spentUsd: 3.5, budgetUsd: 150, brake: "blocked" });
+      expect(selectSpend(other)).toEqual({
+        spentUsd: 3.5,
+        budgetUsd: 150,
+        brake: "blocked",
+      });
       expect(nextSlot(other)).toBe("B");
     },
   );
@@ -128,7 +135,11 @@ describe("spend events and selection", () => {
       const state = applyEvent(before, event);
       expect(state.usage).toEqual(event.payload);
       expect(before.usage).toBeNull();
-      expect(selectSpend(state)).toEqual({ spentUsd: 12.4, budgetUsd: 150, brake });
+      expect(selectSpend(state)).toEqual({
+        spentUsd: 12.4,
+        budgetUsd: 150,
+        brake,
+      });
       expect(state.lastSeq).toBe(2);
     },
   );
@@ -140,7 +151,11 @@ describe("spend events and selection", () => {
     });
     expect(state.usage?.cost_usd).toBeNull();
     expect(state.usage?.spent_usd).toBe(12.4);
-    expect(selectSpend(state)).toEqual({ spentUsd: null, budgetUsd: 150, brake: "blocked" });
+    expect(selectSpend(state)).toEqual({
+      spentUsd: null,
+      budgetUsd: 150,
+      brake: "blocked",
+    });
   });
 
   it("uses the latest tick across agents, including a known zero cost", () => {
@@ -233,7 +248,11 @@ describe("spend events and selection", () => {
         ...state.run,
         budget: { budget_usd: 150, spent_usd: spent, warn_at: [0.5, 0.8], block_at: 0.9 },
       };
-      expect(selectSpend(state)).toEqual({ spentUsd: spent, budgetUsd: 150, brake });
+      expect(selectSpend(state)).toEqual({
+        spentUsd: spent,
+        budgetUsd: 150,
+        brake,
+      });
     },
   );
 

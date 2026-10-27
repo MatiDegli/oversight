@@ -17,7 +17,9 @@ REPLAY_LOG = REPO_ROOT / "fixtures" / "events" / "handwritten-level1.jsonl"
 
 
 def test_the_live_app_has_no_graph_before_its_run_starts(tmp_path: Path) -> None:
-    client = TestClient(create_app(Settings(runtime_dir=tmp_path / ".runtime")))
+    client = TestClient(
+        create_app(Settings(runtime_dir=tmp_path / ".runtime")), base_url="http://127.0.0.1:8710"
+    )
     assert client.get("/graph").status_code == 404
 
 
@@ -141,8 +143,11 @@ async def test_the_live_run_starts_with_run_started_then_the_snapshot(tmp_path: 
 
 def test_a_second_server_on_the_same_runtime_fails_to_start(tmp_path: Path) -> None:
     settings = live_settings(tmp_path)
-    second = TestClient(create_app(settings))
-    with TestClient(create_app(settings)), pytest.raises(Exception, match="another Oversight"):
+    second = TestClient(create_app(settings), base_url="http://127.0.0.1:8710")
+    with (
+        TestClient(create_app(settings), base_url="http://127.0.0.1:8710"),
+        pytest.raises(Exception, match="another Oversight"),
+    ):
         second.__enter__()
 
 

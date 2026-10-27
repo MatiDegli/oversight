@@ -86,7 +86,7 @@ class GraphDelta(ContractModel):
     from_version: str
     to_version: str
     commit: str
-    cause: Literal["merge", "user_edit", "rescan"]
+    cause: Literal["merge", "user_edit", "rescan", "revert"]
     nodes_added: list[GraphNode]
     nodes_changed: list[GraphNode]
     """Same id, other fields."""

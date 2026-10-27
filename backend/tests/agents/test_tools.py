@@ -285,6 +285,8 @@ async def test_suite_summary_precedes_large_output(
     monkeypatch.setattr(Workspace, "run_tests", run_tests)
     result = await call(await toolbox(small_tree), "run_tests")
     assert result.ok  # running the tool succeeded even when the suite failed
+    assert result.suite_run is not None and result.suite_run.result == result.tests
+    assert result.suite_run.output.startswith("early traceback\n")
     assert result.content.startswith(f"Suite outcome: {outcome}; 3 passed, 2 failed, 1 skipped")
     assert result.content.index("tests/test_a.py::test_first") < result.content.index(
         "Output truncated"
@@ -342,3 +344,38 @@ async def test_advertised_types_and_required_fields_are_enforced(
 ) -> None:
     result = await call(await toolbox(small_tree), name, **args)
     assert not result.ok and "expected " + name + "(" in result.content
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        {"files": ["shop/mod.py"], "tests_run": True, "tests": ["tests/test_mod.py::test_value"]},
+        {"files": [], "tests_run": False, "tests": []},
+        {"files": None, "tests_run": None, "tests": None},
+    ],
+)
+async def test_finish_accepts_advertised_declaration_types(
+    small_tree: Opened, declaration: dict[str, object]
+) -> None:
+    result = await call(await toolbox(small_tree), "finish", summary="Done.", **declaration)
+    assert result.ok and result.finish_summary == "Done."
+    assert result.declaration is not None and result.declaration.model_dump() == declaration
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        {"files": "shop/mod.py"},
+        {"files": [123]},
+        {"tests_run": 1},
+        {"tests_run": "true"},
+        {"tests": "tests/test_mod.py::test_value"},
+        {"tests": [123]},
+    ],
+)
+async def test_finish_rejects_invalid_declaration_types(
+    small_tree: Opened, declaration: dict[str, object]
+) -> None:
+    result = await call(await toolbox(small_tree), "finish", summary="Done.", **declaration)
+    assert not result.ok and result.content.startswith("Error:")
+    assert result.finish_summary is None and result.declaration is None

@@ -5,6 +5,7 @@ import asyncio
 
 import pytest
 from changes_helpers import ADD_THRICE, Harness, bounded
+from decision_helpers import observed_target
 
 from oversight.changes import WrongState
 from oversight_contracts.events import AgentStatus, ChangeProposed, ChangeResolved, ErrorReport
@@ -35,7 +36,7 @@ async def test_conflict_is_reported_and_main_left_clean(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     pre = await commit_on_main(h)
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     await assert_main_clean_at(h, pre)
     [resolved] = h.payloads(ChangeResolved)
@@ -44,8 +45,8 @@ async def test_conflict_is_reported_and_main_left_clean(h: Harness) -> None:
         ["shop/mod.py"],
     )
     with pytest.raises(WrongState):
-        h.manager.approve("change-1", None)
-    await h.manager.reject("change-1", None)
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     assert [r.decision for r in h.payloads(ChangeResolved)] == ["approved", "rejected"]
     assert "graph.delta" not in h.types()
 
@@ -56,13 +57,13 @@ async def test_merge_timeout_leaves_main_unchanged_and_a_retry_merges(h: Harness
     pre = await h.main_head()
     h.workspace.arm("merge", mode="timeout")
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     await assert_main_clean_at(h, pre)
     [error] = h.payloads(ErrorReport)
     assert "main is unchanged" in error.message
     assert h.payloads(ChangeResolved) == []
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert [r.merge for r in h.payloads(ChangeResolved)] == ["merged"]
 
 
@@ -71,7 +72,7 @@ async def test_commit_reported_as_timeout_counts_as_merged(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     h.workspace.arm("commit", mode="after")
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     [resolved] = h.payloads(ChangeResolved)
     assert (resolved.merge, resolved.merge_commit) == ("merged", await h.main_head())
@@ -86,12 +87,14 @@ async def test_commit_failure_aborts_to_pre(h: Harness) -> None:
     pre = await h.main_head()
     h.workspace.arm("commit")
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     await assert_main_clean_at(h, pre)
     assert h.payloads(ChangeResolved) == []
     assert "main is unchanged" in h.payloads(ErrorReport)[0].message
-    await h.manager.approve("change-1", None)  # back to ready, so a retry merges
+    await h.manager.approve(
+        "change-1", None, **observed_target(h.manager, "change-1")
+    )  # back to ready, so a retry merges
     parents = (await h.main_git("rev-list", "--parents", "-n", "1", "HEAD")).stdout.split()[1:]
     assert parents == [pre, proposal.head_commit]
 
@@ -103,7 +106,7 @@ async def test_cleanup_failure_still_closes(h: Harness, decision: str) -> None:
     h.workspace.arm("branch")
     decide = h.manager.approve if decision == "approve" else h.manager.reject
 
-    await decide("change-1", None)
+    await decide("change-1", None, **observed_target(h.manager, "change-1"))
 
     kinds = h.types()
     assert kinds.count("change.resolved") == 1
@@ -114,7 +117,7 @@ async def test_cleanup_failure_still_closes(h: Harness, decision: str) -> None:
     assert not h.worktree_dir("agent-1").exists()
     assert await h.has_branch("agent-1")
     with pytest.raises(WrongState):
-        decide("change-1", None)
+        decide("change-1", None, **observed_target(h.manager, "change-1"))
 
     await h.open(2)  # runs the pending cleanup first
 
@@ -134,8 +137,8 @@ async def test_failed_propose(h: Harness) -> None:
     assert (error.fatal, error.source, error.change_id) == (True, "git", "change-1")
     assert "change.proposed" not in h.types()
     with pytest.raises(WrongState):
-        h.manager.approve("change-1", None)
-    await h.manager.reject("change-1", None)
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     [resolved] = h.payloads(ChangeResolved)
     assert (resolved.decision, resolved.revision) == ("rejected", 0)
     assert not await h.has_branch("agent-1")
@@ -148,12 +151,14 @@ async def test_reject_from_broken(h: Harness) -> None:
     h.workspace.arm("merge", mode="timeout")
     h.workspace.arm("status")  # the facts cannot be read
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert "state is unknown" in h.payloads(ErrorReport)[0].message
     with pytest.raises(WrongState):
-        h.manager.approve("change-1", None)
-    await h.manager.reject("change-1", "Main looked wrong.")
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    await h.manager.reject(
+        "change-1", "Main looked wrong.", **observed_target(h.manager, "change-1")
+    )
 
     [resolved] = h.payloads(ChangeResolved)
     assert (resolved.decision, resolved.revision, resolved.comment) == (
@@ -174,7 +179,7 @@ async def test_decision_cancelled_before_it_starts(h: Harness, decision: str) ->
     await h.run_agent(1, EDIT)
     pre = await h.main_head()
     decide = h.manager.approve if decision == "approve" else h.manager.reject
-    task = decide("change-1", None)
+    task = decide("change-1", None, **observed_target(h.manager, "change-1"))
     task.cancel()
 
     with pytest.raises(asyncio.CancelledError):
@@ -182,7 +187,9 @@ async def test_decision_cancelled_before_it_starts(h: Harness, decision: str) ->
 
     assert task.cancelled()
     await assert_main_clean_at(h, pre)
-    await h.manager.reject("change-1", "After the cancel.")  # ready again, so Reject works
+    await h.manager.reject(
+        "change-1", "After the cancel.", **observed_target(h.manager, "change-1")
+    )  # ready again, so Reject works
     [resolved] = h.payloads(ChangeResolved)
     assert (resolved.decision, resolved.comment) == ("rejected", "After the cancel.")
     assert h.types()[-1] == "agent.status"
@@ -195,16 +202,18 @@ async def test_stale_decision_leaves_a_retry_deciding(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     h.workspace.arm("merge", mode="timeout")
     h.hold = ErrorReport
-    first = h.manager.approve("change-1", None)
+    first = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     await h.held.wait()  # back in ready, its `error` not yet out
-    second = h.manager.approve("change-1", None)
+    second = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     h.release.set()
 
     await first
 
     assert not second.done()
     with pytest.raises(WrongState, match="is deciding"):
-        h.manager.reject("change-1", "While the retry merges.")
+        h.manager.reject(
+            "change-1", "While the retry merges.", **observed_target(h.manager, "change-1")
+        )
     await second
     assert [r.merge for r in h.payloads(ChangeResolved)] == ["merged"]
     assert not await h.has_branch("agent-1")
@@ -219,13 +228,13 @@ async def test_cancel_mid_merge_aborts_to_pre(h: Harness) -> None:
     h.workspace.arm("merge", mode="cancel")
 
     with pytest.raises(asyncio.CancelledError):
-        await h.manager.approve("change-1", None)
+        await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     await assert_main_clean_at(h, pre)
     [error] = h.payloads(ErrorReport)
     assert "was cancelled. main is unchanged" in error.message
     assert h.payloads(ChangeResolved) == []
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert [r.merge for r in h.payloads(ChangeResolved)] == ["merged"]
 
 
@@ -237,7 +246,7 @@ async def test_cancel_after_the_merge_commit_records_it(h: Harness) -> None:
     h.workspace.arm("commit", mode="cancel")
 
     with pytest.raises(asyncio.CancelledError):
-        await h.manager.approve("change-1", None)
+        await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     [resolved] = h.payloads(ChangeResolved)
     assert (resolved.merge, resolved.merge_commit) == ("merged", await h.main_head())
@@ -260,12 +269,12 @@ async def test_reject_from_broken_after_an_unconfirmed_merge(h: Harness) -> None
     h.workspace.arm("commit", mode="after")
     h.workspace.arm("status")
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert "state is unknown" in h.payloads(ErrorReport)[0].message
     landed = await h.main_head()
     assert landed != pre
-    await h.manager.reject("change-1", None)
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
 
     await assert_main_clean_at(h, landed)
     [resolved] = h.payloads(ChangeResolved)

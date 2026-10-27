@@ -5,6 +5,8 @@ import { createRoot } from "react-dom/client";
 import type { LiveDiffData } from "../state";
 import { getActiveTheme } from "../theme";
 import { LiveDiff } from "./LiveDiff";
+import { ReviewEditor } from "./ReviewEditor";
+import { createFileSession } from "../app";
 import { monaco } from "./monaco";
 import { editorTokens } from "./theme";
 
@@ -14,6 +16,7 @@ document.body.replaceChildren(host);
 const root = createRoot(host);
 let current: monaco.editor.IStandaloneDiffEditor | undefined;
 let mounts = 0;
+const reveals: { line: number; immediate: boolean }[] = [];
 const fontLoad = document.fonts.load.bind(document.fonts);
 const pendingFonts: (() => void)[] = [];
 
@@ -80,10 +83,40 @@ export const panelTest = {
           onMount={(editor) => {
             current = editor;
             mounts += 1;
+            const modified = editor.getModifiedEditor();
+            const reveal = modified.revealLineNearTop.bind(modified);
+            modified.revealLineNearTop = (line, scrollType) => {
+              reveals.push({ line, immediate: scrollType === monaco.editor.ScrollType.Immediate });
+              reveal(line, scrollType);
+            };
           }}
         />,
       );
     });
+  },
+  renderReview(data: LiveDiffData) {
+    const files = createFileSession({
+      getFile: () =>
+        Promise.resolve({
+          path: data.path,
+          agent_id: data.agentId,
+          content: data.modified,
+          hash: "test-hash",
+        }),
+      saveFile: () => Promise.reject(new Error("This test does not save")),
+    });
+    flushSync(() => {
+      root.render(
+        <ReviewEditor data={data} files={files} editable revision={1} onBlocked={() => {}} />,
+      );
+    });
+  },
+  resize(width: number, height: number) {
+    host.style.width = `${String(width)}px`;
+    host.style.height = `${String(height)}px`;
+  },
+  reveals() {
+    return reveals;
   },
   gateFonts(fail = false) {
     document.fonts.load = (font) =>
@@ -102,7 +135,7 @@ export const panelTest = {
     return pendingFonts.length;
   },
   current() {
-    return current;
+    return current ?? monaco.editor.getDiffEditors()[0];
   },
   mounts() {
     return mounts;

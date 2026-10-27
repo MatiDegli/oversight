@@ -6,7 +6,14 @@ from oversight.changes._state import SUSPECT, ChangeNotFound, ChangeRecord, Wron
 from oversight.changes._support import ChangeContext
 from oversight.changes._versions import main_delta, rescan_delta, with_positions
 from oversight.graph import DeltaCause
-from oversight.workspace import FileRead, InvalidPath, StaleFile, Tree, WorkspaceError
+from oversight.workspace import (
+    FileRead,
+    InvalidPath,
+    StaleFile,
+    Tree,
+    WorkspaceError,
+    check_content,
+)
 from oversight_contracts.commands import FileContent, FileSaved
 from oversight_contracts.common import AgentId
 
@@ -20,13 +27,15 @@ async def save_for_review(
     holds throughout (`WrongState`); `StaleFile` when the file is not the one `base_hash` names.
     R9: with nothing to commit and HEAD still the last proposal's, nothing is sent. A save cut
     short after its write is re-proposed by the next Approve (R1)."""
+    check_content(content)
     rec = ctx.state.agents.get(agent_id)
     if rec is None:
         raise ChangeNotFound(agent_id)
     check_editable(ctx, rec)
-    async with ctx.workspace.locks(agent_id=agent_id):
+    async with ctx.workspace.locks(main=True, agent_id=agent_id):
         check_editable(ctx, rec)  # a decision may have taken it while the save waited
         saved = await rec.tree.write_text(path, content, expected_hash=base_hash)
+        rec.observed_paths.add(path)
         rec.touched.add(path)
         head, files = await proposal.commit(ctx, rec, "user")
         if head != rec.head_commit:
@@ -90,6 +99,12 @@ async def save_main_transaction(
 ) -> FileSaved:
     # M4: a pending close-out usually sends its delta here, moving `snapshot`, before the
     # save's delta is built from it.
+    check_content(content)
+    # Refuse oversized existing files before pending events or git operations as well.
+    try:
+        await read_text(ctx, ctx.workspace.main, path)
+    except FileNotFoundError:
+        raise StaleFile(f"{path} no longer exists") from None
     await delivery.finish_pending(ctx)
     main = ctx.workspace.main
     async with ctx.workspace.locks(main=True):

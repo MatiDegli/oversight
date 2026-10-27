@@ -70,4 +70,4 @@ jobs:
       - name: Playwright over the static replay build
         run: make e2e
       - name: Monaco and graph tests in Chromium
-        run: pnpm -C frontend test:browser
+        run: make test-browser

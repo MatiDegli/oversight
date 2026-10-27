@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
+from decision_helpers import observed_body
 from fastapi.testclient import TestClient
 from live_helpers import (
     DEADLINE_S,
@@ -98,7 +99,11 @@ async def test_get_file_for_a_closed_agent_is_not_found(tmp_path: Path) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         created = await reviewed(s)
         assert (await read(s, PRICING, agent=created.agent_id)).agent_id == created.agent_id
-        assert (await s.client.post(f"/changes/{created.change_id}/reject")).status_code == 202
+        assert (
+            await s.client.post(
+                f"/changes/{created.change_id}/reject", json=observed_body(s, created.change_id)
+            )
+        ).status_code == 202
         await s.until(is_type("agent.status", agent_id=created.agent_id, state="done"))
         await read(s, PATH)  # waits for main's lock, which the close-out holds through its cleanup
 
@@ -259,7 +264,9 @@ async def test_a_start_refused_by_open_is_wrong_state_and_frees_the_slot(
 
 def test_a_replay_answers_501_to_the_file_routes_without_reading_the_body(tmp_path: Path) -> None:
     log = REPO_ROOT / "fixtures" / "events" / "handwritten-level1.jsonl"
-    client = TestClient(create_app(live_settings(tmp_path), ReplayConfig(log=log)))
+    client = TestClient(
+        create_app(live_settings(tmp_path), ReplayConfig(log=log)), base_url="http://127.0.0.1:8710"
+    )
     assert error_code(client.get("/files")) == (501, "not_implemented")  # no path asked
     assert error_code(client.put("/files", content=b"not json")) == (501, "not_implemented")
     assert error_code(client.post("/graph/rescan", content=b"not json")) == (501, "not_implemented")

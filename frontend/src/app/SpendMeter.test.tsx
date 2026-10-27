@@ -24,6 +24,9 @@ function metered(usage: Partial<UsageTick> = {}): State {
       budget: { budget_usd: 150, spent_usd: 10, warn_at: [0.5, 0.8], block_at: 0.9 },
     },
     usage: {
+      role: null,
+      change_id: null,
+      plan_id: null,
       agent_id: "agent-1",
       model: "muse-spark",
       input_tokens: 100,
@@ -53,7 +56,7 @@ describe("the top bar spend meter", () => {
     ["warn_80", "80% of the budget used"],
     ["blocked", "New Meta runs are blocked: the budget is nearly spent"],
   ] as const)("labels %s in words and an icon, using neutral tokens", (brake, caption) => {
-    const markup = render(metered({ brake }));
+    const markup = render(metered({ role: null, change_id: null, plan_id: null, brake }));
     expect(words(markup)).toContain("Spent US$12.40 of US$150");
     expect(markup).toContain('role="group" aria-label="Spend"');
     expect(markup).toContain("font-mono text-(length:--data-size)");
@@ -79,19 +82,25 @@ describe("the top bar spend meter", () => {
 
   it("keeps the total's markup the same at every brake, with the caption before it", () => {
     const total = (brake: UsageTick["brake"]) =>
-      /<p>Spent.*?<\/p>/.exec(render(metered({ brake })))?.[0];
+      /<p>Spent.*?<\/p>/.exec(
+        render(metered({ role: null, change_id: null, plan_id: null, brake })),
+      )?.[0];
     const ok = total("ok");
     expect(ok).toContain("Spent");
     for (const brake of ["warn_50", "warn_80", "blocked"] as const) expect(total(brake)).toBe(ok);
     // The status region is always mounted and never wraps, so a caption never moves the total.
-    const blocked = render(metered({ brake: "blocked" }));
+    const blocked = render(
+      metered({ role: null, change_id: null, plan_id: null, brake: "blocked" }),
+    );
     expect(blocked.indexOf("New runs are blocked")).toBeLessThan(blocked.indexOf("Spent"));
     expect(blocked).toContain("whitespace-nowrap");
     expect(blocked).not.toContain("h-lh");
   });
 
   it("shows unknown rather than a zero or the known ledger subtotal for a null cost", () => {
-    const markup = render(metered({ cost_usd: null, brake: "blocked" }));
+    const markup = render(
+      metered({ role: null, change_id: null, plan_id: null, cost_usd: null, brake: "blocked" }),
+    );
     expect(words(markup)).toContain("Spent unknown of US$150");
     expect(words(markup)).not.toMatch(/Spent US\$/);
     expect(markup).toContain("New Meta runs are blocked: the budget is nearly spent");
@@ -136,7 +145,9 @@ describe("the top bar spend meter", () => {
   });
 
   it("plays the shared replay log with its recorded totals and no backend", async () => {
-    const store = createStateStore(metered({ brake: "blocked" }));
+    const store = createStateStore(
+      metered({ role: null, change_id: null, plan_id: null, brake: "blocked" }),
+    );
     const request = vi.fn<typeof fetch>();
     const replay = startReplay({ store, source: { text: fixture }, speed: 0, request });
     try {

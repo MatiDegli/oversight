@@ -90,7 +90,7 @@ function Harness({ recorded }: { recorded: boolean }) {
           ? undefined
           : (changeId, action, comment) => {
               decisions.push({ changeId, action, comment });
-              void sendDecision(client, now(), changeId, action, comment, (attempt) => {
+              void sendDecision(client, state, changeId, action, comment, (attempt) => {
                 setAttempts((current) => ({ ...current, [changeId]: attempt }));
               });
             }

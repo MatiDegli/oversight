@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from decision_helpers import observed_body
 from live_helpers import (
     DEADLINE_S,
     SERVER_EVENT,
@@ -21,7 +22,7 @@ from oversight.app import MAIN_LEFT, TEMPLATE
 from oversight.changes import ChangeManager
 from oversight.events import StoreClosedError, read_store
 from oversight.workspace import ProcessResult, Tree, Workspace
-from oversight_contracts.commands import StartAgent
+from oversight_contracts.commands import RejectChange, StartAgent
 from oversight_contracts.events import ErrorReport
 from oversight_contracts.graph import GraphDelta
 
@@ -77,7 +78,11 @@ async def test_shutdown_before_a_run_starts_ends_the_change(tmp_path: Path) -> N
         await s.live._stop_runs()  # pyright: ignore[reportPrivateUsage]
         assert run.cancelled()
         assert s.live._runs == {}  # pyright: ignore[reportPrivateUsage]
-        s.live.reject(created.change_id, None)  # WrongState while the change is still working
+        manager = s.live._manager  # pyright: ignore[reportPrivateUsage]
+        assert manager is not None
+        base = manager.agent_base(created.agent_id)
+        assert base is not None
+        s.live.reject(created.change_id, RejectChange(revision=0, head_commit=base))
         await s.until(is_type("agent.status", agent_id=created.agent_id, state="done"))
 
 
@@ -126,7 +131,15 @@ async def test_shutdown_waits_for_a_merge_in_flight_and_logs_its_resolution(
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         change = (await s.client.post("/agents", json={"task": "t"})).json()["change_id"]
         await s.until(is_type("agent.status", state="ready_for_review"))
-        assert (await s.client.post(f"/changes/{change}/approve")).status_code == 202
+        assert (
+            await s.client.post(
+                f"/changes/{change}/approve",
+                json={
+                    **observed_body(s, change),
+                    "revision": max(1, observed_body(s, change)["revision"]),
+                },
+            )
+        ).status_code == 202
         await merging.wait()
         stopping = asyncio.create_task(s.stop())
         await closing.wait()  # the shutdown reached the manager with the merge still held
@@ -157,7 +170,15 @@ async def test_shutdown_drains_a_delta_whose_publish_failed(
         monkeypatch.setattr(store, "publish", publish)
         change = (await s.client.post("/agents", json={"task": "t"})).json()["change_id"]
         await s.until(is_type("agent.status", state="ready_for_review"))
-        assert (await s.client.post(f"/changes/{change}/approve")).status_code == 202
+        assert (
+            await s.client.post(
+                f"/changes/{change}/approve",
+                json={
+                    **observed_body(s, change),
+                    "revision": max(1, observed_body(s, change)["revision"]),
+                },
+            )
+        ).status_code == 202
         await s.until(is_type("error", change_id=change))  # both tries failed: incomplete
         assert len(refused) == CLOSE_OUT_TRIES
         await s.stop()
@@ -186,15 +207,31 @@ async def test_a_merge_left_half_done_holds_main_suspect_until_restart(
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         change = (await s.client.post("/agents", json={"task": "t"})).json()["change_id"]
         await s.until(is_type("agent.status", state="ready_for_review"))
-        assert (await s.client.post(f"/changes/{change}/approve")).status_code == 202
+        assert (
+            await s.client.post(
+                f"/changes/{change}/approve",
+                json={
+                    **observed_body(s, change),
+                    "revision": max(1, observed_body(s, change)["revision"]),
+                },
+            )
+        ).status_code == 202
         await s.until(is_type("error", change_id=change))
         assert s.live._manager is not None and s.live._manager.main_suspect  # pyright: ignore[reportPrivateUsage]
-        again = await s.client.post(f"/changes/{change}/approve")
+        again = await s.client.post(
+            f"/changes/{change}/approve",
+            json={
+                **observed_body(s, change),
+                "revision": max(1, observed_body(s, change)["revision"]),
+            },
+        )
         assert (again.status_code, again.json()["error"]["code"]) == (409, "wrong_state")
         # Main suspect is checked before the slot, which the broken change still holds.
         start = await s.client.post("/agents", json={"task": "t"})
         assert (start.status_code, start.json()["error"]["code"]) == (409, "wrong_state")
-        assert (await s.client.post(f"/changes/{change}/reject")).status_code == 202
+        assert (
+            await s.client.post(f"/changes/{change}/reject", json=observed_body(s, change))
+        ).status_code == 202
         await s.until(is_type("agent.status", state="done"))
         later = await s.client.post("/agents", json={"task": "t"})
         assert (later.status_code, later.json()["error"]["code"]) == (409, "wrong_state")

@@ -19,6 +19,7 @@ const log = readFileSync(
   .map((line) => JSON.parse(line) as ServerEvent);
 const through = (seq: number) =>
   log.filter((event) => event.seq <= seq).reduce(applyEvent, createInitialState());
+const guard = { revision: 1, head_commit: through(20).changes["change-1"]?.proposal?.head_commit };
 const ts = "2026-10-27T14:03:40.000Z";
 const resolved = (state: State, payload: Partial<ChangeResolved>) =>
   applyEvent(state, {
@@ -26,6 +27,9 @@ const resolved = (state: State, payload: Partial<ChangeResolved>) =>
     ts,
     type: "change.resolved",
     payload: {
+      review_seq: null,
+      requested_by: null,
+      head_commit: null,
       change_id: "change-1",
       agent_id: "agent-1",
       revision: 1,
@@ -183,7 +187,7 @@ describe("sending a decision", () => {
     expect(records).toEqual([startAttempt(through(20), "change-1", "approve")]);
     await sent;
     expect(records).toHaveLength(1);
-    expect(accepted.approveChange).toHaveBeenCalledWith("change-1", {});
+    expect(accepted.approveChange).toHaveBeenCalledWith("change-1", guard);
     expect(accepted.rejectChange).not.toHaveBeenCalled();
   });
 
@@ -193,7 +197,10 @@ describe("sending a decision", () => {
     await sendDecision(refused, through(20), "change-1", "reject", " too broad \n", (attempt) => {
       records.push(attempt);
     });
-    expect(refused.rejectChange).toHaveBeenCalledWith("change-1", { comment: "too broad" });
+    expect(refused.rejectChange).toHaveBeenCalledWith("change-1", {
+      ...guard,
+      comment: "too broad",
+    });
     expect(records.map((attempt) => attempt.phase)).toEqual(["pending", "failed"]);
     expect(records[1]).toEqual({
       phase: "failed",
@@ -211,10 +218,40 @@ it("requires a comment for Request changes and sends the trimmed text", async ()
   expect(record).not.toHaveBeenCalled();
   expect(client.requestChanges).not.toHaveBeenCalled();
   await sendDecision(client, through(20), "change-1", "request-changes", " Add tests ", record);
-  expect(client.requestChanges).toHaveBeenCalledWith("change-1", { comment: "Add tests" });
+  expect(client.requestChanges).toHaveBeenCalledWith("change-1", {
+    ...guard,
+    comment: "Add tests",
+  });
   expect(record).toHaveBeenCalledWith(
     expect.objectContaining({ phase: "pending", action: "request-changes" }),
   );
   const revised = resolved(through(20), { decision: "changes_requested", comment: "Add tests" });
   expect(view(revised).kind).toBe("revising");
+});
+
+it("rejects a never-proposed change using the base in the observed agent status", async () => {
+  const state = through(18);
+  const agent = state.agents["agent-1"];
+  if (!agent) throw new Error("Missing agent");
+  const observed = {
+    ...state,
+    agents: { ...state.agents, "agent-1": { ...agent, base_commit: "observed-base" } },
+  };
+  const client = { approveChange: vi.fn(), rejectChange: vi.fn(), requestChanges: vi.fn() };
+  await sendDecision(client, observed, "change-1", "reject", "", vi.fn());
+  expect(client.rejectChange).toHaveBeenCalledWith("change-1", {
+    revision: 0,
+    head_commit: "observed-base",
+  });
+});
+
+it("keeps the captured proposal when recording pending causes a newer state to arrive", async () => {
+  const observed = through(20);
+  const client = { approveChange: vi.fn(), rejectChange: vi.fn(), requestChanges: vi.fn() };
+  let latest = observed;
+  await sendDecision(client, observed, "change-1", "approve", "", () => {
+    latest = through(21);
+  });
+  expect(latest.lastSeq).toBe(21);
+  expect(client.approveChange).toHaveBeenCalledWith("change-1", guard);
 });

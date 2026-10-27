@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 from oversight.events.store import StoredEvent, read_store
+from oversight.limits import MAX_BODY_BYTES
 from oversight_contracts.events import ServerEvent
 
 SERVER_EVENT: TypeAdapter[ServerEvent] = TypeAdapter(ServerEvent)
@@ -18,13 +19,18 @@ class LogError(ValueError):
 def read_jsonl(path: Path) -> list[ServerEvent]:
     """Every event of a log, each validated against the contract. Blank lines are skipped."""
     events: list[ServerEvent] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            events.append(SERVER_EVENT.validate_json(line))
-        except ValueError as error:
-            raise LogError(f"{path.name}, line {number}: {error}") from error
+    with path.open("rb") as handle:
+        number = 0
+        while line := handle.readline(MAX_BODY_BYTES + 1):
+            number += 1
+            if len(line) > MAX_BODY_BYTES:
+                raise LogError(f"{path.name}, line {number}: event exceeds size limit")
+            if not line.strip():
+                continue
+            try:
+                events.append(SERVER_EVENT.validate_json(line))
+            except ValueError as error:
+                raise LogError(f"{path.name}, line {number}: {error}") from error
     return events
 
 

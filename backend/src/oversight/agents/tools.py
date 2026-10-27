@@ -14,9 +14,20 @@ from functools import partial
 from pathlib import PurePosixPath
 from typing import Literal, cast
 
+from pydantic import ValidationError
+
 from oversight.graph import WorkspaceGraph
-from oversight.workspace import FileRead, Tree, Workspace, WorkspaceError
+from oversight.workspace import (
+    FileRead,
+    FileTooLarge,
+    SuiteRun,
+    SuiteUnavailable,
+    Tree,
+    Workspace,
+    WorkspaceError,
+)
 from oversight_contracts.events import FocusRange, SuiteResult
+from oversight_contracts.review import FinishDeclaration
 
 MAX_READ_LINES = 400
 MAX_READ_CHARS = 40_000
@@ -24,6 +35,7 @@ MAX_SEARCH_MATCHES = 50
 MAX_SEARCH_LINE = 200
 SEARCH_FOCUS_NODES = 5
 MAX_TEST_OUTPUT = 4_000
+_JSON_TYPES = {"string": str, "integer": int, "boolean": bool, "array": list, "null": type(None)}
 
 TOOL_NAMES = ("list_files", "read_file", "search", "edit_file", "run_tests", "finish")
 
@@ -77,7 +89,12 @@ TOOL_SCHEMAS: list[dict[str, object]] = [
     _function(
         "finish",
         "Finish the task and hand the change to the reviewer, with a short note on what changed.",
-        {"summary": {"type": "string"}},
+        {
+            "summary": {"type": "string"},
+            "files": {"type": ["array", "null"], "items": {"type": "string"}},
+            "tests_run": {"type": ["boolean", "null"]},
+            "tests": {"type": ["array", "null"], "items": {"type": "string"}},
+        },
         ["summary"],
     ),
 ]
@@ -98,7 +115,9 @@ class ToolOutcome:
     node_ids: list[str] = field(default_factory=lambda: list[str]())
     edited_path: str | None = None
     tests: SuiteResult | None = None
+    suite_run: SuiteRun | None = None
     finish_summary: str | None = None
+    declaration: FinishDeclaration | None = None
 
 
 def _name(path: str) -> str:
@@ -129,7 +148,7 @@ def _validate(name: str, arguments: dict[str, object]) -> None:
         if function["name"] != name:
             continue
         schema = cast(dict[str, object], function["parameters"])
-        properties = cast(dict[str, dict[str, str]], schema["properties"])
+        properties = cast(dict[str, dict[str, object]], schema["properties"])
         required = cast(list[str], schema["required"])
         signature = f"{name}({', '.join(properties)})"
         unknown = arguments.keys() - properties.keys()
@@ -140,8 +159,9 @@ def _validate(name: str, arguments: dict[str, object]) -> None:
                 f"missing: {', '.join(sorted(missing)) or 'none'}); expected {signature}"
             )
         for key, value in arguments.items():
-            kind = properties[key]["type"]
-            valid = isinstance(value, str) if kind == "string" else type(value) is int
+            kind = cast(str | list[str], properties[key]["type"])
+            kinds = [kind] if isinstance(kind, str) else kind
+            valid = any(type(value) is _JSON_TYPES.get(item) for item in kinds)
             if not valid:
                 raise ToolError(f"argument {key!r} must be {kind}; expected {signature}")
         return
@@ -230,6 +250,14 @@ class Toolbox:
             message = "arguments are not valid JSON"
         except (ToolError, WorkspaceError) as error:
             message = self._workspace.redact(str(error))
+        except SuiteUnavailable as error:
+            message = f"cannot access the file: {error.strerror or type(error.cause).__name__}"
+            return ToolOutcome(
+                content=f"Error: {message}",
+                ok=False,
+                summary=_failed(name, raw_arguments),
+                suite_run=error.run,
+            )
         except OSError as error:
             message = f"cannot access the file: {error.strerror or type(error).__name__}"
         return ToolOutcome(
@@ -243,10 +271,26 @@ class Toolbox:
     async def _read_file(self, arguments: dict[str, object]) -> ToolOutcome:
         path = cast(str, _string(arguments, "path"))
         start, end = _line(arguments, "start_line"), _line(arguments, "end_line")
-        file = await self._read(path)
-        lines = file.content.splitlines()
-        total = len(lines)
         first = start or 1
+        try:
+            file = await self._read(path)
+        except FileTooLarge:
+            if start is None and end is None:
+                raise ToolError(
+                    "file exceeds size limit; read by start_line and end_line"
+                ) from None
+            ranged = await self._tree.read_range(
+                path,
+                first,
+                min(end or first + MAX_READ_LINES - 1, first + MAX_READ_LINES - 1),
+                MAX_READ_CHARS,
+            )
+            lines, lengths, total = ranged.lines, ranged.lengths, ranged.total
+            digest, offset = ranged.hash, first
+        else:
+            lines = file.content.splitlines()
+            lengths, total = [len(line) for line in lines], len(lines)
+            digest, offset = file.hash, 1
         if total and first > total:
             raise ToolError(f"{path} has {total} lines")
         last = min(end or total, total, first + MAX_READ_LINES - 1)
@@ -255,11 +299,13 @@ class Toolbox:
         shown: list[str] = []
         size = 0
         for number in range(first, last + 1):
-            row = f"{number:>5}| {lines[number - 1]}"
-            if size + len(row) + 1 > MAX_READ_CHARS:
+            row = f"{number:>5}| {lines[number - offset]}"
+            if size + len(row) + 1 > MAX_READ_CHARS or lengths[number - offset] > len(
+                lines[number - offset]
+            ):
                 if number == first:
                     # One line over the cap: show its start, so no line is ever out of reach.
-                    note = f" [line {number} cut, {len(lines[number - 1])} characters in all]"
+                    note = f" [line {number} cut, {lengths[number - offset]} characters in all]"
                     shown.append(row[: MAX_READ_CHARS - len(note) - 1] + note)
                     last = number
                 else:
@@ -267,7 +313,7 @@ class Toolbox:
                 break
             size += len(row) + 1
             shown.append(row)
-        self._read_hashes[path] = file.hash
+        self._read_hashes[path] = digest
         whole = first == 1 and last >= total
         if not whole:
             shown.append(f"[lines {first} to {last} of {total}; read more with start_line]")
@@ -398,15 +444,29 @@ class Toolbox:
         if len(run.output) > MAX_TEST_OUTPUT:
             content += f"\nOutput truncated: showing the last {MAX_TEST_OUTPUT} characters."
         return ToolOutcome(
-            content=f"{content}\n\n{output}", ok=True, summary=headline, tests=result
+            content=f"{content}\n\n{output}",
+            ok=True,
+            summary=headline,
+            tests=result,
+            suite_run=run,
         )
 
     def _finish(self, arguments: dict[str, object]) -> ToolOutcome:
         note = cast(str, _string(arguments, "summary"))
         if not note.strip():
             raise ToolError("summary must not be blank; expected finish(summary: nonblank string)")
+        try:
+            declaration = FinishDeclaration.model_validate(
+                {key: value for key, value in arguments.items() if key != "summary"}
+            )
+        except ValidationError as error:
+            raise ToolError("invalid finish declaration") from error
         return ToolOutcome(
-            content="Finished.", ok=True, summary="Finished the task", finish_summary=note
+            declaration=declaration,
+            content="Finished.",
+            ok=True,
+            summary="Finished the task",
+            finish_summary=note,
         )
 
 

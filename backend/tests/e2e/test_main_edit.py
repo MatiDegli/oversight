@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from decision_helpers import observed_body
 from live_helpers import DEADLINE_S, error_code, is_type, live_server, live_settings, start
 
 from oversight.workspace import Tree
@@ -36,7 +37,13 @@ async def test_a_save_on_main_then_an_approval_merges_on_its_commit(
 
         monkeypatch.setattr(workspace, "run_tests", recording)
 
-        approve = await s.client.post(f"/changes/{created.change_id}/approve")
+        approve = await s.client.post(
+            f"/changes/{created.change_id}/approve",
+            json={
+                **observed_body(s, created.change_id),
+                "revision": max(1, observed_body(s, created.change_id)["revision"]),
+            },
+        )
         assert approve.status_code == 202
         await s.until(is_type("agent.status", agent_id=created.agent_id, state="done"))
 
