@@ -395,7 +395,7 @@ class Toolbox:
         counts = f"{result.passed} passed, {result.failed} failed, {result.skipped} skipped"
         failed = ", ".join(result.failed_tests) or "none reported"
         content = f"Suite outcome: {result.outcome}; {counts}\nFailed tests: {failed}"
-        if len(run.output) >= MAX_TEST_OUTPUT:
+        if len(run.output) > MAX_TEST_OUTPUT:
             content += f"\nOutput truncated: showing the last {MAX_TEST_OUTPUT} characters."
         return ToolOutcome(
             content=f"{content}\n\n{output}", ok=True, summary=headline, tests=result

@@ -229,6 +229,28 @@ async def test_wait_past_deadline_halts_without_sleeping_or_retrying() -> None:
     assert sleeps == [] and len(api.bodies) == 1 and recorded == []
 
 
+async def test_retry_wait_ending_exactly_at_deadline_is_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api = FakeApi(status(429, {"retry-after": "75"}), ok())
+    sleeps: list[float] = []
+    recorded: list[ModelReply] = []
+
+    async def record(reply: ModelReply) -> None:
+        recorded.append(reply)
+
+    loop = asyncio.get_running_loop()
+    with monkeypatch.context() as clock:
+        clock.setattr(loop, "time", lambda: 100.0)
+        token = CALL_SCOPE.set(CallScope(175.0, record))
+        try:
+            reply = await client(api, sleeps).complete(USER, TOOLS)
+        finally:
+            CALL_SCOPE.reset(token)
+    assert sleeps == [75.0] and len(api.bodies) == 2 and recorded == []
+    assert reply.usage == Usage(700, 100, 600)
+
+
 @pytest.mark.parametrize("error", [httpx.ReadTimeout("timeout"), httpx.ConnectError("offline")])
 async def test_transport_errors_retry_and_record_uncertain_usage(error: Exception) -> None:
     api = FakeApi(error, ok())

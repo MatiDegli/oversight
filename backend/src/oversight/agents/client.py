@@ -271,7 +271,7 @@ class OpenAIClient:
                 scope = CALL_SCOPE.get()
                 if scope is not None and scope.deadline is not None:
                     remaining = scope.deadline - asyncio.get_running_loop().time()
-                    if delay >= remaining:
+                    if delay > remaining:
                         raise ModelAPIError(
                             f"model API retry wait of {delay:g} s exceeds the task deadline"
                         ) from error

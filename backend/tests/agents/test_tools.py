@@ -170,7 +170,9 @@ async def test_unknown_tools_and_bad_arguments_are_errors(small_tree: Opened) ->
     broken = await tools.call("read_file", '{"path": ')
     assert broken.content == "Error: arguments are not valid JSON"
     typed = await tools.call("read_file", '{"path": 3}')
-    assert "argument 'path' must be string; expected read_file(" in typed.content
+    assert typed.content == (
+        "Error: argument 'path' must be string; expected read_file(path, start_line, end_line)"
+    )
 
 
 # --- paths -------------------------------------------------------------------------------------
@@ -289,6 +291,33 @@ async def test_suite_summary_precedes_large_output(
     )
     assert "tests/test_b.py::test_second" in result.content
     assert "early traceback" not in result.content and result.content.endswith("end of traceback")
+
+
+@pytest.mark.parametrize("output_size, truncated", [(3999, False), (4000, False), (4001, True)])
+async def test_suite_output_truncation_boundary(
+    small_tree: Opened,
+    monkeypatch: pytest.MonkeyPatch,
+    output_size: int,
+    truncated: bool,
+) -> None:
+    from oversight.workspace import SuiteRun
+    from oversight_contracts.events import SuiteResult
+
+    async def run_tests(self: Workspace, tree: Tree, *, timeout_s: float) -> SuiteRun:
+        return SuiteRun(
+            result=SuiteResult(
+                outcome="passed", passed=1, failed=0, skipped=0, duration_ms=5, failed_tests=[]
+            ),
+            output="x" * output_size,
+        )
+
+    monkeypatch.setattr(Workspace, "run_tests", run_tests)
+    result = await call(await toolbox(small_tree), "run_tests")
+    expected = "Suite outcome: passed; 1 passed, 0 failed, 0 skipped\nFailed tests: none reported"
+    if truncated:
+        expected += "\nOutput truncated: showing the last 4000 characters."
+    expected += "\n\n" + "x" * min(output_size, 4000)
+    assert result.ok and result.content == expected
 
 
 async def test_zero_match_error_explains_exact_text_recovery(small_tree: Opened) -> None:
