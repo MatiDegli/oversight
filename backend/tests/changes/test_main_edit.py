@@ -31,6 +31,7 @@ from changes_helpers import (
     spy_drains,
     start_save,
 )
+from decision_helpers import observed_target
 
 from oversight.changes import WrongState
 from oversight.workspace import InvalidPath, StaleFile, WorkspaceError, content_hash
@@ -195,7 +196,7 @@ async def test_save_supersedes_a_failed_merge_delta(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     before = h.manager.snapshot.version
     h.fail_once, h.fail_times = GraphDelta, 4
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert errors(h, "close-out of change-1 is incomplete")
     content, base = await edit_main(h, PATH, "return 3", "return 4")
 
@@ -213,7 +214,7 @@ async def test_save_supersedes_a_failed_merge_delta(h: Harness) -> None:
 async def test_save_sends_a_pending_merge_delta_first(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     h.fail_once, h.fail_times = GraphDelta, 2
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert deltas(h) == []
     content, base = await edit_main(h, PATH, "return 3", "return 4")
 
@@ -288,7 +289,9 @@ async def test_restore_failure_makes_main_suspect(h: Harness) -> None:
     assert deltas(h) == []
     with pytest.raises(WrongState, match="state is unknown"):
         await h.manager.save_main(PATH, content, base)
-    await h.manager.reject("change-1", None)  # still closes the change
+    await h.manager.reject(
+        "change-1", None, **observed_target(h.manager, "change-1")
+    )  # still closes the change
     assert h.payloads(ChangeResolved)[-1].decision == "rejected"
 
 
@@ -346,7 +349,9 @@ async def test_approve_queued_behind_a_failing_save_does_not_merge(h: Harness) -
     await h.run_agent(1, EDIT)
     pre = await h.main_head()
     save = await hold_a_save_that_ends_suspect(h)
-    approval = h.manager.approve("change-1", None)  # the app's check passed: main is still trusted
+    approval = h.manager.approve(
+        "change-1", None, **observed_target(h.manager, "change-1")
+    )  # the app's check passed: main is still trusted
     await queued_callbacks_ran()
     assert not approval.done()  # it waits for main's lock
     h.workspace.resume.set()
@@ -359,9 +364,11 @@ async def test_approve_queued_behind_a_failing_save_does_not_merge(h: Harness) -
     assert h.payloads(ChangeResolved) == []
     [error] = errors(h, "became suspect before this approval ran")
     assert (error.source, error.fatal, error.change_id) == ("server", False, "change-1")
-    await h.manager.approve("change-1", None)  # `ready` again, not stuck deciding
+    await h.manager.approve(
+        "change-1", None, **observed_target(h.manager, "change-1")
+    )  # `ready` again, not stuck deciding
     assert len(errors(h, "became suspect before this approval ran")) == 2
-    await h.manager.reject("change-1", None)
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     assert h.payloads(ChangeResolved)[-1].decision == "rejected"
 
 
@@ -410,7 +417,7 @@ async def test_cancelled_approval_scan_holds_main_until_its_thread_ends(
 
     monkeypatch.setattr(h.main_graph, "scan", scan)
     monkeypatch.setattr(h.workspace, "git", git)
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     try:
         await inside.wait()  # the merge is committed; its scan thread is running
         order.append("cancelled")
@@ -438,7 +445,7 @@ async def test_a_close_out_publish_a_cancel_left_running_is_waited_for(
     content, base = await edit_main(h, TESTS, *LOOSER)
     waited = spy_drains(monkeypatch)
     h.hold = GraphDelta
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     save = start_save(h, content, base, TESTS)  # past its `_finish_pending`: nothing was pending
     await h.held.wait()  # the store took the merge's delta; its receipt is on its way
     await cancel_twice(approval)  # the approval ends, its publish still held
@@ -459,7 +466,7 @@ async def test_save_waits_for_a_held_merge_then_saves_on_the_merge_commit(h: Har
     await h.run_agent(1, EDIT)
     content, base = await edit_main(h, TESTS, *LOOSER)
     h.workspace.arm("merge", mode="hold_after")
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     await h.workspace.entered.wait()  # main is mid-merge, which a save must not see as dirty
     save = start_save(h, content, base, TESTS)
     await queued_callbacks_ran()
@@ -502,7 +509,7 @@ async def test_combined_tests_after_a_save_moved_main(h: Harness) -> None:
     await h.manager.save_main(TESTS, content, base)  # passes alone on main, where value() is 1
     pre = await h.main_head()
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert await h.main_head() == pre
     await assert_main_clean(h)

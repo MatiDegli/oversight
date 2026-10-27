@@ -1,7 +1,6 @@
 """Boundary and missing-evidence checks for the isolated safe-merge evaluator."""
 
 from dataclasses import FrozenInstanceError, replace
-from typing import get_args
 
 import pytest
 
@@ -9,9 +8,14 @@ from oversight.changes._policy import PolicyInputs, SpendSnapshot, assess, merge
 from oversight_contracts.common import RuleId
 from oversight_contracts.events import SuiteResult
 from oversight_contracts.graph import ImpactCone, ImpactEntry
-from oversight_contracts.policy import ChangeAssessment, EvidenceRef, RuleAssessment
+from oversight_contracts.policy import (
+    SAFE_MERGE_V1_RULES,
+    ChangeAssessment,
+    EvidenceRef,
+    RuleAssessment,
+)
 
-RULES = get_args(RuleId.__value__)
+RULES = SAFE_MERGE_V1_RULES
 
 
 @pytest.fixture
