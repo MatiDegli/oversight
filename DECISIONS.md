@@ -352,3 +352,11 @@ Ours wins in every case below.
   remains over 500 lines to keep the residual file and revision transactions within this agreed
   scope; no function exceeds 80 lines. Two unsuccessful fidelity/review repair rounds stop the
   sequence for a coordinator decision.
+
+## Level 2 closed on Tue Oct 27
+
+Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
+start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
+scripted two-agent replay. A real recorded run will be bundled for the static replay.
+
+Level 3 wiring starts now. Contracts 1.4.0 await the maintainer's approval.
