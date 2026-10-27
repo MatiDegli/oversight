@@ -32,7 +32,15 @@ from oversight.agents.loop import (
 )
 from oversight.agents.sink import ChangeSink
 from oversight.agents.tools import TOOL_NAMES, TOOL_SCHEMAS
-from oversight.agents.usage import Brake, Pricing, UsageLedger
+from oversight.agents.usage import (
+    Brake,
+    LedgerError,
+    LedgerFile,
+    LedgerState,
+    Pricing,
+    UnknownUsage,
+    UsageLedger,
+)
 
 __all__ = [
     "BASETEN_BASE_URL",
@@ -49,6 +57,9 @@ __all__ = [
     "AgentTask",
     "Brake",
     "ChangeSink",
+    "LedgerError",
+    "LedgerFile",
+    "LedgerState",
     "Message",
     "ModelAPIError",
     "ModelClient",
@@ -62,6 +73,7 @@ __all__ = [
     "ScriptedModel",
     "ToolCall",
     "ToolSchema",
+    "UnknownUsage",
     "UnverifiedProfile",
     "Usage",
     "UsageLedger",
