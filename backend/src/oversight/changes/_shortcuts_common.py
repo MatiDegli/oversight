@@ -1,9 +1,14 @@
 """Shared syntax inventory and lexical name resolution for the pure detector."""
 
 import ast
+import time
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
+from functools import cached_property
 from pathlib import PurePosixPath
+
+from oversight.changes._shortcuts_tables import ModuleTables
 
 type Change = tuple[str, str | None, str | None]
 type FuncNode = ast.FunctionDef | ast.AsyncFunctionDef
@@ -245,6 +250,26 @@ class Source:
             return f"{base}.{node.attr}" if base is not None else None
         return None
 
+    @cached_property
+    def tables(self) -> ModuleTables:
+        return ModuleTables(self.tree, self.resolve)
+
+    def table_value(self, node: ast.Name) -> ast.List | ast.Tuple | None:
+        if self.scopes.get(node) is not self.scopes[self.tree]:
+            # Decorators execute in their enclosing scope. A module table also
+            # works on a method unless an enclosing class/function hides it.
+            for definition in self.definitions.values():
+                args = (
+                    definition.args
+                    if isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    else None
+                )
+                if node.id in _scope_bindings(definition.body, args) and any(
+                    child is node for stmt in definition.body for child in ast.walk(stmt)
+                ):
+                    return None
+        return self.tables.values.get(node.id)
+
     @property
     def definitions(self) -> dict[str, Definition]:
         return {**self.functions, **self.classes}
@@ -269,3 +294,14 @@ def is_literal_like(node: ast.expr) -> bool:
     except (ValueError, TypeError, SyntaxError):
         return False
     return True
+
+
+def check_deadline(deadline: float) -> None:
+    if time.monotonic() >= deadline:
+        raise TimeoutError("analysis timeout")
+
+
+def within_deadline[T](items: Iterable[T], deadline: float) -> Iterator[T]:
+    for item in items:
+        check_deadline(deadline)
+        yield item

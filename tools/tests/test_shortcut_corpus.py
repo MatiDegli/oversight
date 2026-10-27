@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from tools import shortcut_corpus as corpus
 
 
@@ -39,12 +40,22 @@ def test_raw_history_keeps_add_delete_and_odd_paths() -> None:
 def test_scan_readonly_history(tmp_path: Path) -> None:
     # Root is real project history; no temporary Git initialization or commits.
     repo = Path(__file__).resolve().parents[2]
+    if not (repo / ".git").exists():
+        pytest.skip("Corpus history scan requires .git; source archives have no Git history")
     root = corpus.git(repo, "rev-list", "--max-parents=0", "HEAD").decode().strip()
     output = tmp_path / "findings.jsonl"
     result = corpus.scan(repo, root, output)
     assert result["commits"] == 1
     assert output.exists()
     assert json.loads(output.with_suffix(".summary.json").read_text()) == result
+
+
+def test_scan_without_git_skips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(
+        globals(), "__file__", str(tmp_path / "tools/tests/test_shortcut_corpus.py")
+    )
+    with pytest.raises(pytest.skip.Exception, match=r"requires \.git"):
+        test_scan_readonly_history(tmp_path)
 
 
 def test_original_seed_functions_hit_the_requested_kinds() -> None:

@@ -11,10 +11,12 @@ from oversight.changes._shortcuts_common import (
     FuncNode,
     ShortcutKind,
     Source,
+    check_deadline,
     is_collected_file,
     is_literal_like,
     is_test_file,
     walk_local,
+    within_deadline,
 )
 
 
@@ -258,6 +260,11 @@ def parametrize_parts(call: ast.Call, source: Source) -> Parameters | None:
     if source.resolve(call.func) != "pytest.mark.parametrize" or len(call.args) < 2:
         return None
     names_node, cases = call.args[:2]
+    if isinstance(cases, ast.Name):
+        resolved = source.table_value(cases)
+        if resolved is None:
+            return None
+        cases = resolved
     single_string = False
     if isinstance(names_node, ast.Constant) and isinstance(names_node.value, str):
         names = tuple(n.strip() for n in names_node.value.split(",") if n.strip())
@@ -298,7 +305,9 @@ class _Case:
     line: int
 
 
-def _collect_parametrize(source: Source) -> dict[tuple[str, tuple[str, ...]], list[_Case]]:
+def _collect_parametrize(
+    source: Source, deadline: float
+) -> dict[tuple[str, tuple[str, ...]], list[_Case]]:
     result: dict[tuple[str, tuple[str, ...]], list[_Case]] = {}
     for owner, definition in source.definitions.items():
         for dec in definition.decorator_list:
@@ -307,6 +316,7 @@ def _collect_parametrize(source: Source) -> dict[tuple[str, tuple[str, ...]], li
                 continue
             entries = result.setdefault((owner, parts.names), [])
             for case in parts.cases.elts:
+                check_deadline(deadline)
                 values = parts.elements(case, source)
                 entries.append(
                     _Case(
@@ -366,15 +376,18 @@ def single_case_inlined(old: Source, before: str, new: Source, after: str) -> bo
     return False
 
 
-def _compare_rows(path: str, old_entries: list[_Case], new_entries: list[_Case]) -> list[Finding]:
+def _compare_rows(
+    path: str, old_entries: list[_Case], new_entries: list[_Case], deadline: float
+) -> list[Finding]:
     remaining = list(new_entries)
     unmatched: list[_Case] = []
     # Cancel the complete multiset first, including duplicate inputs/rows.
     for entry in old_entries:
+        check_deadline(deadline)
         idx = next(
             (
                 i
-                for i, c in enumerate(remaining)
+                for i, c in enumerate(within_deadline(remaining, deadline))
                 if (c.inputs, c.expected) == (entry.inputs, entry.expected)
             ),
             None,
@@ -385,7 +398,15 @@ def _compare_rows(path: str, old_entries: list[_Case], new_entries: list[_Case])
             unmatched.append(entry)
     findings: list[Finding] = []
     for entry in unmatched:
-        idx = next((i for i, c in enumerate(remaining) if c.inputs == entry.inputs), None)
+        check_deadline(deadline)
+        idx = next(
+            (
+                i
+                for i, c in enumerate(within_deadline(remaining, deadline))
+                if c.inputs == entry.inputs
+            ),
+            None,
+        )
         if idx is None:
             findings.append(
                 Finding(
@@ -414,8 +435,10 @@ def detect_parametrize_expected(
     old: Source,
     new: Source,
     pairs: list[tuple[str, str]] | None = None,
+    *,
+    deadline: float = float("inf"),
 ) -> list[Finding]:
-    old_map, new_map = _collect_parametrize(old), _collect_parametrize(new)
+    old_map, new_map = _collect_parametrize(old, deadline), _collect_parametrize(new, deadline)
     owners = dict(pairs) if pairs is not None else None
     if owners is not None:
         for before, after in pairs or []:
@@ -453,5 +476,5 @@ def detect_parametrize_expected(
                 for dec in definition.decorator_list
             ):
                 continue  # The table is opaque: detect_unknown supplies the reason.
-        findings.extend(_compare_rows(path, old_entries, new_map.get((owner, names), [])))
+        findings.extend(_compare_rows(path, old_entries, new_map.get((owner, names), []), deadline))
     return findings

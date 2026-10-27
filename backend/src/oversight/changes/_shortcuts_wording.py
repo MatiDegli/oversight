@@ -4,6 +4,8 @@ import ast
 import re
 from collections import Counter
 
+from oversight.changes._shortcuts_common import check_deadline
+
 
 def _groups(nodes: list[ast.Assert | ast.Call]) -> dict[str, list[tuple[int, str]]]:
     result: dict[str, list[tuple[int, str]]] = {}
@@ -22,7 +24,7 @@ def _groups(nodes: list[ast.Assert | ast.Call]) -> dict[str, list[tuple[int, str
 
 
 def _components(
-    left: list[tuple[int, str]], right: list[tuple[int, str]]
+    left: list[tuple[int, str]], right: list[tuple[int, str]], deadline: float
 ) -> list[tuple[list[tuple[int, str]], list[tuple[int, str]]]]:
     """Join only checks sharing words across versions, never just a receiver.
 
@@ -41,6 +43,7 @@ def _components(
         before: list[tuple[int, str]] = []
         after: list[tuple[int, str]] = []
         for current in queue:
+            check_deadline(deadline)
             side, index, text = entries[current]
             (before if side == 0 else after).append((index, text))
             neighbors = sorted(
@@ -98,13 +101,16 @@ def _direct_match(before: str, after: str) -> bool:
 
 
 def cancel_reworded(
-    before: list[ast.Assert | ast.Call], after: list[ast.Assert | ast.Call]
+    before: list[ast.Assert | ast.Call],
+    after: list[ast.Assert | ast.Call],
+    *,
+    deadline: float = float("inf"),
 ) -> tuple[list[ast.Assert | ast.Call], list[ast.Assert | ast.Call]]:
     left, right = _groups(before), _groups(after)
     matched_old: set[int] = set()
     matched_new: set[int] = set()
     for key in sorted(left.keys() & right.keys()):
-        for old_entries, new_entries in _components(left[key], right[key]):
+        for old_entries, new_entries in _components(left[key], right[key], deadline):
             old_entries = [
                 entry
                 for entry in old_entries

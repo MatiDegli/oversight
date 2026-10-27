@@ -8,8 +8,10 @@ from oversight.changes._shortcuts_common import (
     FuncNode,
     ShortcutKind,
     Source,
+    check_deadline,
     is_literal_like,
     walk_local,
+    within_deadline,
 )
 from oversight.changes._shortcuts_control import detect_control
 from oversight.changes._shortcuts_equivalence import (
@@ -208,7 +210,7 @@ def _assert_key(node: ast.Assert | ast.Call) -> str:
 
 
 def _unmatched_assertions(
-    old_func: FuncNode, new_func: FuncNode, old: Source, new: Source
+    old_func: FuncNode, new_func: FuncNode, old: Source, new: Source, deadline: float
 ) -> tuple[list[ast.Assert | ast.Call], list[ast.Assert | ast.Call]]:
     old_asserts = _assert_nodes(old_func, old)
     new_asserts = _assert_nodes(new_func, new)
@@ -216,9 +218,11 @@ def _unmatched_assertions(
     unmatched_new: list[ast.Assert | ast.Call] = list(new_asserts)
     remaining_old: list[ast.Assert | ast.Call] = []
     for old_node in old_asserts:
+        check_deadline(deadline)
         dump = _assert_key(old_node)
         match_idx: int | None = None
         for idx, cand in enumerate(unmatched_new):
+            check_deadline(deadline)
             if _assert_key(cand) == dump:
                 match_idx = idx
                 break
@@ -230,7 +234,7 @@ def _unmatched_assertions(
     # does not mean that the assertion itself was removed.
     inline_assertion_calls(old_func)
     inline_assertion_calls(new_func)
-    return cancel_reworded(remaining_old, unmatched_new)
+    return cancel_reworded(remaining_old, unmatched_new, deadline=deadline)
 
 
 def _compare_assertions(
@@ -239,14 +243,16 @@ def _compare_assertions(
     unmatched_new: list[ast.Assert | ast.Call],
     old: Source,
     new: Source,
+    deadline: float,
 ) -> list[Finding]:
     findings: list[Finding] = []
     still_old: list[ast.Assert | ast.Call] = []
     for old_node in remaining_old:
+        check_deadline(deadline)
         equivalent = next(
             (
                 i
-                for i, cand in enumerate(unmatched_new)
+                for i, cand in enumerate(within_deadline(unmatched_new, deadline))
                 if _assert_key(cand) == _assert_key(old_node)
             ),
             None,
@@ -257,6 +263,7 @@ def _compare_assertions(
         paired: Finding | None = None
         paired_idx: int | None = None
         for idx, cand in enumerate(unmatched_new):
+            check_deadline(deadline)
             found = _check_pair(path, old_node, cand, old, new)
             if found is not None:
                 paired = found
@@ -265,15 +272,7 @@ def _compare_assertions(
         # Same approx check with an equal, tighter or unknowable effective
         # tolerance is preserved, rather than treated as an assertion removal.
         if paired is None:
-            old_shape, tolerances = approx_signature(old_node, old)
-            approx_idx = next(
-                (
-                    i
-                    for i, cand in enumerate(unmatched_new)
-                    if tolerances and approx_signature(cand, new)[0] == old_shape
-                ),
-                None,
-            )
+            approx_idx = _approx_match(old_node, unmatched_new, old, new, deadline)
             if approx_idx is not None:
                 if symbolic_relation(old_node, unmatched_new[approx_idx], old, new) == "unknown":
                     findings.append(
@@ -288,6 +287,7 @@ def _compare_assertions(
         # A tightening (the reverse of a loosening) is clean.
         tight_idx: int | None = None
         for idx, cand in enumerate(unmatched_new):
+            check_deadline(deadline)
             reverse = _check_pair(path, cand, old_node, new, old)
             if (
                 reverse is not None and reverse.kind == ShortcutKind.ASSERTION_LOOSENED
@@ -312,8 +312,26 @@ def _compare_assertions(
     return findings
 
 
+def _approx_match(
+    old_node: ast.Assert | ast.Call,
+    candidates: list[ast.Assert | ast.Call],
+    old: Source,
+    new: Source,
+    deadline: float,
+) -> int | None:
+    old_shape, tolerances = approx_signature(old_node, old)
+    return next(
+        (
+            i
+            for i, cand in enumerate(within_deadline(candidates, deadline))
+            if tolerances and approx_signature(cand, new)[0] == old_shape
+        ),
+        None,
+    )
+
+
 def _compare_raises(
-    path: str, old_func: FuncNode, new_func: FuncNode, old: Source, new: Source
+    path: str, old_func: FuncNode, new_func: FuncNode, old: Source, new: Source, deadline: float
 ) -> list[Finding]:
     findings: list[Finding] = []
     # Removing a raises wrapper around a call.
@@ -321,8 +339,10 @@ def _compare_raises(
     new_wrappers = _raises_wrappers(new_func, new)
     unmatched_wrappers: list[tuple[str, int]] = list(new_wrappers)
     for key, line in old_wrappers:
+        check_deadline(deadline)
         match_idx = None
         for idx, cand in enumerate(unmatched_wrappers):
+            check_deadline(deadline)
             if cand[0] == key or (key.endswith(":") and cand[0].startswith(key)):
                 match_idx = idx
                 break
@@ -348,12 +368,15 @@ def detect_assertions(
     old: Source,
     new: Source,
     pairs: list[tuple[str, str]] | None = None,
+    *,
+    deadline: float = float("inf"),
 ) -> list[Finding]:
     old, new = normalize_assertions(old), normalize_assertions(new)
     findings: list[Finding] = []
     if pairs is None:
         pairs = [(qual, qual) for qual in old.functions if qual in new.functions]
     for old_qual, new_qual in pairs:
+        check_deadline(deadline)
         old_func = old.functions[old_qual]
         new_func = new.functions.get(new_qual)
         if new_func is None:
@@ -367,7 +390,7 @@ def detect_assertions(
         if body_key(old_func) == body_key(new_func):
             continue
         findings.extend(detect_control(path, old_func, new_func, old, new))
-        remaining_old, unmatched_new = _unmatched_assertions(old_func, new_func, old, new)
-        findings.extend(_compare_assertions(path, remaining_old, unmatched_new, old, new))
-        findings.extend(_compare_raises(path, old_func, new_func, old, new))
+        remaining_old, unmatched_new = _unmatched_assertions(old_func, new_func, old, new, deadline)
+        findings.extend(_compare_assertions(path, remaining_old, unmatched_new, old, new, deadline))
+        findings.extend(_compare_raises(path, old_func, new_func, old, new, deadline))
     return findings

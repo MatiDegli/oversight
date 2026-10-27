@@ -53,6 +53,26 @@ def _is_helper(qual: str, source: Source) -> bool:
     )
 
 
+def _imported_calls(func: FuncNode, source: Source, helpers: dict[str, str]) -> Counter[str]:
+    calls: Counter[str] = Counter()
+    for node in walk_local(func):
+        if not isinstance(node, ast.Call):
+            continue
+        root = node.func
+        while isinstance(root, ast.Attribute):
+            root = root.value
+        resolved = source.resolve(node.func)
+        if (
+            isinstance(root, ast.Name)
+            and root.id not in {"self", "cls"}
+            and source.scopes.get(root, {}).get(root.id) is not None
+            and resolved is not None
+            and (name := resolved.rsplit(".", 1)[-1]) in helpers
+        ):
+            calls[helpers[name]] += 1
+    return calls
+
+
 def detect_helpers(
     old: dict[str, Source], new: dict[str, Source], matches: dict[TestRef, TestRef]
 ) -> list[Finding]:
@@ -73,6 +93,13 @@ def detect_helpers(
     ]
     identities: dict[TestRef, TestRef] = {}
     consumed: set[TestRef] = set()
+    imported = {
+        (np, nq): _imported_calls(
+            new[np].tests[nq], new[np], {f.name: q for p, q, f in helpers if p == op}
+        )
+        for (np, nq), (op, _oq) in matches.items()
+        if nq in new[np].tests
+    }
     for p, q, func in helpers:
         target = next(((np, nq) for np, nq, _ in targets if (np, nq) == (p, q)), None)
         if target is None:
@@ -85,6 +112,11 @@ def detect_helpers(
                 None,
             )
         if target is None:
+            if any(
+                old_path == p and imported.get(ref, Counter())[q]
+                for ref, (old_path, _old_qual) in matches.items()
+            ):
+                continue  # The helper is still imported and called after extraction.
             findings.append(
                 Finding(
                     p,
@@ -105,7 +137,9 @@ def detect_helpers(
             for (p, q), (old_p, old_q) in identities.items()
             if p == np and old_p == op
         }
-        if _calls(old[op].tests[oq], before) - _calls(new[np].tests[nq], after):
+        if _calls(old[op].tests[oq], before) - (
+            _calls(new[np].tests[nq], after) + imported.get((np, nq), Counter())
+        ):
             findings.append(
                 Finding(
                     np,

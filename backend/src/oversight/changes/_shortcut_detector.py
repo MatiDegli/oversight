@@ -11,7 +11,7 @@ Known limits: syntax review is not semantic equivalence or pytest execution.
 Plain binding value changes under an intact assertion are not generally tracked:
 only binding capture and direct literal tautologies are recognized. The broad
 rule flagged four legitimate setup changes in the repository history. Fixture
-return values, added mocks, stable opaque parameter tables/aliases, nested-scope
+return values, added mocks, stable opaque framework aliases, nested-scope
 parameter renames and arbitrary helper extraction/inlining remain untracked.
 Expected columns are inferred only from a direct call == name assertion (or a
 column name containing "expected"); more complex expected expressions are a limit.
@@ -122,19 +122,26 @@ def _compare_file(
     matches: dict[TestRef, TestRef],
     inputs: list[TestCase],
     old_compares: set[str],
+    deadline: float,
 ) -> list[Finding]:
     findings: list[Finding] = []
     if is_test_file(path):
         if old:
-            findings.extend(detect_assertions(path, old, new))
-            findings.extend(detect_parametrize_expected(path, old, new))
+            findings.extend(detect_assertions(path, old, new, deadline=deadline))
+            findings.extend(detect_parametrize_expected(path, old, new, deadline=deadline))
         grouped: dict[str, list[tuple[str, str]]] = {}
         for (new_path, new_qual), (old_path, old_qual) in matches.items():
             if new_path == path and (old_path, old_qual) != (path, new_qual):
                 grouped.setdefault(old_path, []).append((old_qual, new_qual))
         for old_path, pairs in grouped.items():
-            findings.extend(detect_assertions(path, old_sources[old_path], new, pairs))
-            findings.extend(detect_parametrize_expected(path, old_sources[old_path], new, pairs))
+            findings.extend(
+                detect_assertions(path, old_sources[old_path], new, pairs, deadline=deadline)
+            )
+            findings.extend(
+                detect_parametrize_expected(
+                    path, old_sources[old_path], new, pairs, deadline=deadline
+                )
+            )
         findings.extend(detect_skips(path, old, new, old_sources, matches))
     else:
         findings.extend(
@@ -175,13 +182,23 @@ def _detect(changes: Iterable[Change], deadline: float) -> list[Finding]:
     if sum(len(text) for _, a, b in change_list for text in (a, b) if text) > 2_000_000:
         raise TimeoutError("analysis source size cap (2 MB)")
     old_sources, new_sources, failed, findings = _parse_sources(change_list)
+    moved = _exact_moves(change_list, old_sources, new_sources)
+    removed, matches = match_tests(old_sources, new_sources, deadline=deadline)
+    compared: dict[str, set[str]] = {}
+    for refs in matches.items():
+        for path, qual in refs:
+            while qual:
+                compared.setdefault(path, set()).add(qual)
+                qual = qual.rpartition(".")[0]
     for path, before, after in change_list:
         if time.monotonic() >= deadline:
             raise TimeoutError("analysis timeout")
         if before != after:
-            findings.extend(detect_unknown(path, old_sources.get(path), new_sources.get(path)))
-    moved = _exact_moves(change_list, old_sources, new_sources)
-    removed, matches = match_tests(old_sources, new_sources, deadline=deadline)
+            findings.extend(
+                detect_unknown(
+                    path, old_sources.get(path), new_sources.get(path), compared.get(path, set())
+                )
+            )
     findings.extend(removed)
     findings.extend(detect_helpers(old_sources, new_sources, matches))
     for path, old, new in change_list:
@@ -223,7 +240,9 @@ def _detect(changes: Iterable[Change], deadline: float) -> list[Finding]:
         old = old_sources.get(moved.get(path, path))
         if old is not None and old.text == new.text:
             continue
-        findings.extend(_compare_file(path, old, new, old_sources, matches, inputs, old_compares))
+        findings.extend(
+            _compare_file(path, old, new, old_sources, matches, inputs, old_compares, deadline)
+        )
         if time.monotonic() >= deadline:
             raise TimeoutError("analysis timeout")
     return _combine_findings(findings)
