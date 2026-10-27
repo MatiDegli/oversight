@@ -14,3 +14,5 @@ One line per day, in Argentina time (ART).
   task box and Start agent; spend meter; layout and transport fixes; smoke test, screenshot tooling,
   test memory and time caps, parallel check groups and pytest workers; `make demo` and
   `make demo-check`.
+
+- **2026-10-27:** Graph cleanup: call-depth preset columns, shared incoming trunks with frame avoidance, folded class rows and deterministic 240ms column slides; pure geometry and reduced-motion browser coverage.

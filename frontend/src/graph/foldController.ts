@@ -32,6 +32,7 @@ export function foldController(cy: Core) {
       const changed = signature !== previous;
       previous = signature;
       const initial = cy.nodes().empty();
+      const previousFrames = new Set(cy.nodes(":parent").map((node) => node.id()));
       const projected = foldElements(full, folds.expanded);
       cy.scratch("foldAliases", projected.visible);
       if (changed) {
@@ -48,7 +49,7 @@ export function foldController(cy: Core) {
         // A class becoming a row gets its own original top; rows below it are what slide.
         for (const node of cy.nodes(".class:childless")) {
           const position = targets.get(node.id());
-          if (position) node.position(position);
+          if (position && previousFrames.has(node.id())) node.position(position);
         }
         slideRows(cy, targets, prefersReducedMotion());
       }

@@ -103,6 +103,7 @@ for (const motion of ["no-preference", "reduce"] as const) {
       expect(open.zoom).toBe(before.zoom);
       if (motion === "no-preference") {
         expect(first.positions.after?.y).not.toBe(open.positions.after?.y);
+        expect(first.positions.Tail?.y).not.toBe(open.positions.Tail?.y);
         expect(elapsed).toBeGreaterThanOrEqual(220);
         expect(elapsed).toBeLessThan(1000);
       } else expect(first.positions).toEqual(open.positions);

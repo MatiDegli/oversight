@@ -52,19 +52,7 @@ export function foldPositions(
   const roots = children.get("") ?? [];
   roots.forEach(measure);
   const positions = new Map<string, Point>();
-  const visible = new Map<string, string>();
-  const byId = new Map(nodes.map((node) => [node.data.id, node]));
-  for (const node of nodes) {
-    let ancestor = node;
-    let id = node.data.id;
-    while (ancestor.data.parent) {
-      const parent = byId.get(ancestor.data.parent);
-      if (!parent) break;
-      if (parent.data.kind === "class" && !expanded.has(parent.data.id)) id = parent.data.id;
-      ancestor = parent;
-    }
-    visible.set(node.data.id, id);
-  }
+  const visible = representatives(nodes, expanded);
   const place = (node: GraphElement, dy: number, hiddenBy?: string): number => {
     const box = full.get(node.data.id);
     if (!box) return 0;
@@ -93,4 +81,21 @@ export function foldPositions(
     for (const root of column) removed += place(root, -removed);
   }
   return { positions, visible };
+}
+
+function representatives(nodes: readonly GraphElement[], expanded: ReadonlySet<string>) {
+  const visible = new Map<string, string>();
+  const byId = new Map(nodes.map((node) => [node.data.id, node]));
+  for (const node of nodes) {
+    let ancestor = node;
+    let id = node.data.id;
+    while (ancestor.data.parent) {
+      const parent = byId.get(ancestor.data.parent);
+      if (!parent) break;
+      if (parent.data.kind === "class" && !expanded.has(parent.data.id)) id = parent.data.id;
+      ancestor = parent;
+    }
+    visible.set(node.data.id, id);
+  }
+  return visible;
 }
