@@ -5,27 +5,29 @@ import type { State } from "../state";
 
 export interface FoldState {
   expanded: ReadonlySet<string>;
-  seen: ReadonlySet<string>;
+  seen: ReadonlyMap<string, string>;
 }
-export const initialFolds = (): FoldState => ({ expanded: new Set(), seen: new Set() });
+export const initialFolds = (): FoldState => ({ expanded: new Set(), seen: new Map() });
 export type FoldAction =
   | { type: "toggle"; id: string }
   | {
       type: "change";
       revision: string;
+      changeId?: string;
       classes: readonly string[];
     };
 
 /** Clicks always toggle. Only a fresh edit revision can reopen a class the person folded again. */
 export function reduceFolds(state: FoldState, action: FoldAction): FoldState {
-  if (action.type === "change" && state.seen.has(action.revision)) return state;
+  if (action.type === "change" && state.seen.get(action.changeId ?? "") === action.revision)
+    return state;
   const expanded = new Set(state.expanded);
-  const seen = new Set(state.seen);
+  const seen = new Map(state.seen);
   if (action.type === "toggle") {
     if (expanded.has(action.id)) expanded.delete(action.id);
     else expanded.add(action.id);
   } else {
-    seen.add(action.revision);
+    seen.set(action.changeId ?? "", action.revision);
     for (const id of action.classes) expanded.add(id);
   }
   return { expanded, seen };
@@ -60,7 +62,7 @@ export function observeEdits(folds: FoldState, state: State): FoldState {
         .sort(([a], [b]) => (a < b ? -1 : 1))
         .map(([path, entry]) => [path, entry.file.modified]),
     ]);
-    folds = reduceFolds(folds, { type: "change", revision, classes });
+    folds = reduceFolds(folds, { type: "change", revision, classes, changeId: change.change_id });
   }
   return folds;
 }

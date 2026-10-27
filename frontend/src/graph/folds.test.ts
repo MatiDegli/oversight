@@ -35,7 +35,11 @@ describe("fold state", () => {
     folds = reduceFolds(folds, { type: "toggle", id: cart });
     expect(reduceFolds(folds, edit)).toBe(folds);
     expect(folds.expanded.has(cart)).toBe(false);
-    expect(reduceFolds(folds, { ...edit, revision: "edit-2" }).expanded.has(cart)).toBe(true);
+    folds = reduceFolds(folds, { ...edit, revision: "edit-2" });
+    expect(folds.expanded.has(cart)).toBe(true);
+    folds = reduceFolds(folds, { type: "toggle", id: cart });
+    // Restoring earlier contents is a fresh edit too, not a replay of the current revision.
+    expect(reduceFolds(folds, edit).expanded.has(cart)).toBe(true);
   });
 
   it("observes added and modified methods, but not a read or unrelated events", () => {
@@ -165,7 +169,7 @@ describe("fold projection", () => {
         source: "shop.pricing:compute_price",
         target: `${cart}.${name}`,
       },
-      classes: "calls exact",
+      classes: name === "add" ? "calls exact quiet" : "calls exact",
     }));
     const projected = foldElements([...full, ...extra], new Set());
     expect(
@@ -176,5 +180,10 @@ describe("fold projection", () => {
           e.data.target === cart,
       ),
     ).toHaveLength(1);
+    expect(
+      projected.elements.find(
+        (e) => e.data.source === "shop.pricing:compute_price" && e.data.target === cart,
+      )?.classes,
+    ).not.toContain("quiet");
   });
 });

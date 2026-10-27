@@ -77,6 +77,8 @@ export function foldElements(elements: GraphElement[], expanded: ReadonlySet<str
     const classes = new Set([...(previous?.classes.split(" ") ?? []), ...edge.classes.split(" ")]);
     if (previous && (!previous.classes.includes("dimmed") || !edge.classes.includes("dimmed")))
       classes.delete("dimmed");
+    if (previous && (!previous.classes.includes("quiet") || !edge.classes.includes("quiet")))
+      classes.delete("quiet");
     merged.set(id, {
       ...edge,
       data: { ...edge.data, id, source, target },

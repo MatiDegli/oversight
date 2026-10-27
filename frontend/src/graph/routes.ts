@@ -9,7 +9,7 @@
 // across it), which the stylesheet reads from the edge's data.
 import type { Core } from "cytoscape";
 
-import { orthogonalPath, simplify } from "./orthogonal";
+import { crosses, orthogonalPath, simplify } from "./orthogonal";
 import type { XY } from "./orthogonal";
 
 /** A node's box, in graph units, and the line an edge meets it on. */
@@ -120,9 +120,11 @@ export function routeEdges(
     // every module, including both endpoints, as an obstacle for the rest of the path.
     const exit = { x: source.x2 + tuning.laneGap, y: start.y };
     const trunk = { x: lane, y: end.y };
-    const path = orthogonalPath(exit, trunk, tops, tuning.laneGap);
+    const entry = { x: lane, y: start.y };
+    if (tops.some((box) => crosses(entry, trunk, box))) continue;
+    const path = orthogonalPath(exit, entry, tops, tuning.laneGap);
     if (!path) continue;
-    routes.set(edge.id, encode(simplify([start, ...path, end]), from, to));
+    routes.set(edge.id, encode(simplify([start, ...path, trunk, end]), from, to));
   }
   return routes;
 }

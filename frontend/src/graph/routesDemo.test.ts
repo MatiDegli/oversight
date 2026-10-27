@@ -40,6 +40,7 @@ for (const expanded of [
     try {
       settle(cy);
       const frames = cy.nodes(".module, .class").toArray();
+      const trunks = new Map<string, Set<string>>();
       for (const edge of cy.edges(".calls")) {
         if (edge.source().id() === edge.target().id()) continue;
         const route = edge.data("route") as Route | undefined;
@@ -60,6 +61,12 @@ for (const expanded of [
           })),
           end,
         ];
+        if (line.length > 2) {
+          const target = to.id();
+          const lanes = trunks.get(target) ?? new Set<string>();
+          lanes.add((line.at(-2)?.x ?? 0).toFixed(5));
+          trunks.set(target, lanes);
+        }
         const family = new Set([
           from.id(),
           to.id(),
@@ -74,6 +81,7 @@ for (const expanded of [
           }
         }
       }
+      for (const [id, lanes] of trunks) expect(lanes.size, `trunks into ${id}`).toBe(1);
     } finally {
       cy.destroy();
     }
