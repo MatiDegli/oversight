@@ -61,8 +61,9 @@ async def test_shutdown_during_revise_finishes_the_request_with_the_revision(
     async with (
         asyncio.timeout(DEADLINE_S),
         live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+        HeldRequests(s.store, monkeypatch) as held,
     ):
-        held, live = HeldRequests(s.store, monkeypatch), s.live
+        live = s.live
         await start(s)
         await ready(s)
         live.request_changes("change-1", "Shorter, please.")
@@ -124,8 +125,9 @@ async def test_shutdown_before_revise_starts_ends_the_change_itself(
     async with (
         asyncio.timeout(DEADLINE_S),
         live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+        HeldRequests(s.store, monkeypatch) as held,
     ):
-        held, live = HeldRequests(s.store, monkeypatch), s.live
+        live = s.live
         manager = live._manager  # pyright: ignore[reportPrivateUsage]
         assert manager is not None
         await start(s)
@@ -159,8 +161,12 @@ async def test_shutdown_drains_decisions_that_pop_meanwhile(
         "B": ScriptedModel(parse_script(revisable_b())),
     }
     clients = BySlot(lambda _profile, slot: models[slot])
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), clients) as s:
-        held, live = HeldRequests(s.store, monkeypatch), s.live
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path), clients) as s,
+        HeldRequests(s.store, monkeypatch) as held,
+    ):
+        live = s.live
         await start(s, slot="A")
         await start(s, slot="B")
         for agent in ("agent-1", "agent-2"):
