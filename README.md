@@ -38,6 +38,14 @@ through others. Nothing reaches main until you approve it.
 - The static replay build currently plays a hand-written event log and labels it as a fixture. A
   real recorded run for the judges has not been bundled yet.
 
+To bundle a finished real run, install gitleaks 8.30.1 and run `make record RUN=<id>` (or
+`make record` for the latest run). This reads the SQLite log without model calls or credits and
+writes `fixtures/events/recorded-demo.jsonl` with a `.provenance.json` sidecar. Keep both files
+together: the static replay build verifies the exporter marker, SHA-256, run id, real model
+profiles and every event against the contracts, and scans for secrets again before bundling.
+Fake runs, unmarked fixtures, invalid events, secrets and absolute paths are refused. Without a
+recording the build uses the hand-written fixture and labels it as such.
+
 ## Next
 
 ### Zoom levels
