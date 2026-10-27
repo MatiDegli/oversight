@@ -231,12 +231,15 @@ getActiveTheme())`, and `EditorDiff`'s font gate. Colors from theme tokens only.
   (identity, not just its path: A → B → A creates a new one), a request generation (a counter
   `App`/`FileView` bumps on every GET issued and on every model change, so only the latest GET
   for a target is current), and `model.getVersionId()` (it grows on every edit). Its answer
-  replaces the model only if all hold: same target, same model instance, its generation still
-  the latest, that version id, and the clean state. `getVersionId` alone is not trusted: a
-  recreated model can repeat it, so an old GET of A that passes target, version and clean still
-  fails identity or generation. Otherwise the text is kept and only the server hash is noted:
-  if it differs from the base, the stale banner shows. A slow GET for file A never writes file
-  B's model; an unmount drops all, and invalidates the generation.
+  is **current** only if its target, its model instance and its generation all still hold. A
+  response that is not current is discarded entirely: no text, no server hash, no banner, so an
+  old GET of A can never raise a false `stale_file`. A current response replaces the model's text
+  only if, besides, the version id is the recorded one and the state is clean; otherwise the text
+  is kept and only the server hash is noted: if it differs from the base, the stale banner shows.
+  `getVersionId` alone is not trusted: a recreated model can repeat it, so an old GET of A that
+  passes version and clean still fails identity or generation and is discarded. A slow GET for
+  file A never writes file B's model or hash; an unmount drops all, and invalidates the
+  generation.
 - A clean open file refetches when a `graph.delta` arrives whose `commit` differs from the last one
   it saw; M3 makes every main commit send one, a non-Python save or a body-only merge included.
 
@@ -308,13 +311,16 @@ are a `threading.Event`. * = shown failing with its change reverted.
   base hash and adopts the new one; `stale_file` and Reload; other errors keep the edits; agent
   target read-only; never focuses. S4: *a draft survives a switch, a review and Escape* (remount on
   the same map: text and `baseHash` back); *a draft over a moved file shows the banner*; *Discard
-  deletes the draft*. S5: *a refresh answering after typing keeps the text*; *a clean file refetches
-  on a delta with a new commit*. F2: *save v1, type v2, open a review before the 200, then return*
+  deletes the draft*. S5: *a current refresh answering after typing keeps the text, notes the new
+  hash and shows the banner*; *a clean file refetches on a delta with a new commit*. F2: *save v1, type v2, open a review before the 200, then return*
   (the PUT held on a deferred promise: on release the unmounted draft's `baseHash` is the saved
   hash, v2 is still the text, and saving v2 answers 200, not `stale_file`); *reopening while the
   PUT is still in flight sends no second PUT*. F3: *A → B → A with the two GETs of A answering out
-  of order* (the Monaco double repeats `getVersionId` on the recreated model: the newer answer
-  lands first, the older one is dropped, the model keeps the newer text).
+  of order* (the Monaco double repeats `getVersionId` on the recreated model; the two answers
+  carry different hashes and the older one's differs from the base: the newer answer lands first,
+  the older one is discarded entirely, so the model keeps the newer text, the stored server hash
+  is the newer one and no banner shows); *a GET of A answering after a switch to B* leaves B's
+  text, hash and banner untouched.
 - `app/fileView.browser.test.ts` (`review.browser.fixture` pattern): click an untouched node → file
   view at its lines, graph unmoved; Ctrl+S → one save; `stale_file` → banner, Reload; edit, open a
   review, Ctrl+S sends nothing, close it → the edits are back.
