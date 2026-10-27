@@ -67,7 +67,7 @@ async def test_a_start_cancelled_during_the_venv_build_does_not_cancel_the_build
         # Started eagerly, the start runs at once up to its first await: the wait for the build.
         loop = asyncio.get_running_loop()
         start = asyncio.Task(s.live.start(StartAgent(task="t")), loop=loop, eager_start=True)
-        assert s.live._slot == "starting"  # pyright: ignore[reportPrivateUsage]
+        assert s.live._slots["A"] == "starting"  # pyright: ignore[reportPrivateUsage]
         start.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await start

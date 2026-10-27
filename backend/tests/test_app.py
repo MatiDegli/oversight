@@ -207,3 +207,20 @@ def test_the_brake_settings_load_from_the_env_file(
     )
     assert settings.agent_model == "fake"
     assert settings.fake_script == REPO_ROOT / "fixtures" / "fake-model" / "x.json"
+
+
+def test_agent_b_settings_load_from_the_env_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("OVERSIGHT_AGENT_MODEL_B", "OVERSIGHT_FAKE_SCRIPT_B"):
+        monkeypatch.delenv(name, raising=False)
+    env = tmp_path / ".env"
+    env.write_text("OVERSIGHT_AGENT_MODEL_B=\nOVERSIGHT_FAKE_SCRIPT_B=\n")
+    unset = Settings.load(env)
+    assert (unset.agent_model_b, unset.fake_script_b) == (None, None)
+    env.write_text(
+        "OVERSIGHT_AGENT_MODEL_B=muse-spark-open\nOVERSIGHT_FAKE_SCRIPT_B=fixtures/fake-model/b.json\n"
+    )
+    settings = Settings.load(env)
+    assert settings.agent_model_b == "muse-spark-open"
+    assert settings.fake_script_b == REPO_ROOT / "fixtures" / "fake-model" / "b.json"

@@ -5,20 +5,22 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from live_helpers import DEADLINE_S, GatedModel, is_type, live_server, live_settings, meta_settings
+from live_helpers import (
+    DEADLINE_S,
+    GatedModel,
+    error_code,
+    is_type,
+    live_server,
+    live_settings,
+    meta_settings,
+)
 
 from oversight.api.commands import NOT_BUILT
 from oversight.app import ReplayConfig, create_app
 from oversight.settings import REPO_ROOT
-from oversight_contracts.commands import AgentCreated, ErrorResponse
+from oversight_contracts.commands import AgentCreated
 
 pytestmark = pytest.mark.anyio
-
-
-def error_code(response: object) -> tuple[int, str]:
-    assert hasattr(response, "json")
-    body = ErrorResponse.model_validate(response.json())  # pyright: ignore[reportAttributeAccessIssue]
-    return response.status_code, body.error.code  # pyright: ignore[reportAttributeAccessIssue]
 
 
 async def test_unknown_and_malformed_change_ids_are_not_found(tmp_path: Path) -> None:
@@ -33,7 +35,7 @@ async def test_approve_before_the_proposal_is_wrong_state_and_a_racing_start_slo
     model = GatedModel()
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(live_settings(tmp_path), lambda _: model) as s,
+        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
     ):
         first, second = await asyncio.gather(
             s.client.post("/agents", json={"task": "Do it."}),

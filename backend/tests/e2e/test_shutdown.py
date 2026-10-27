@@ -41,7 +41,7 @@ async def test_shutdown_mid_run_ends_the_run_closes_the_store_and_frees_the_lock
 ) -> None:
     model = GatedModel()
     settings = live_settings(tmp_path)
-    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _: model) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _p, _s: model) as s:
         assert (await s.client.post("/agents", json={"task": "t"})).status_code == 201
         await model.entered.wait()
         await s.stop()

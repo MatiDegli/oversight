@@ -10,7 +10,7 @@ import sys
 from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 import pytest
@@ -31,11 +31,14 @@ from oversight.agents import (
 from oversight.app import ClientFactory, LiveRun, create_app
 from oversight.events import EventStore
 from oversight.settings import REPO_ROOT, Settings
+from oversight_contracts.commands import ErrorResponse
+from oversight_contracts.common import Slot
 from oversight_contracts.events import ModelProfile, ServerEvent
 
 DEADLINE_S = 60
 SERVER_EVENT: TypeAdapter[Any] = TypeAdapter(ServerEvent)
 FAKE_SCRIPT = REPO_ROOT / "fixtures" / "fake-model" / "document-apply-coupon.json"
+FAKE_SCRIPT_B = REPO_ROOT / "fixtures" / "fake-model" / "document-restock.json"
 LAYOUT = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
 
 
@@ -69,18 +72,57 @@ def script_json(task: str, turns: list[dict[str, Any]]) -> str:
     return json.dumps({"task": task, "turns": turns})
 
 
+class Answer(Protocol):
+    """What `error_code` reads: an httpx response, or the test client's."""
+
+    status_code: int
+
+    def json(self) -> Any: ...
+
+
+def error_code(response: Answer) -> tuple[int, str]:
+    """The status and the contract's error code of a refused request."""
+    return response.status_code, ErrorResponse.model_validate(response.json()).error.code
+
+
+def write_ledger(settings: Settings, body: object) -> None:
+    settings.runtime_dir.mkdir(parents=True, exist_ok=True)
+    text = body if isinstance(body, str) else json.dumps(body)
+    (settings.runtime_dir / "ledger.json").write_text(text)
+
+
+def read_ledger(settings: Settings) -> dict[str, Any]:
+    return json.loads((settings.runtime_dir / "ledger.json").read_text())
+
+
 class Scripts:
-    """A client factory that hands out one scripted model per start, in order, and counts calls."""
+    """A client factory that hands out one scripted model per start, in order, and counts calls.
+    `built` lists what each start asked for: the profile's id and the slot."""
 
     def __init__(self, scripts: Sequence[str] = (), profile: ModelProfile = FAKE_MODEL) -> None:
         self._scripts = [parse_script(text) for text in scripts] or [load_script(FAKE_SCRIPT)]
         self._profile = profile
         self.calls = 0
+        self.built: list[tuple[str, Slot]] = []
 
-    def __call__(self, profile: ModelProfile) -> ModelClient:
+    def __call__(self, profile: ModelProfile, slot: Slot) -> ModelClient:
         script = self._scripts[min(self.calls, len(self._scripts) - 1)]
         self.calls += 1
+        self.built.append((profile.id, slot))
         return ScriptedModel(script, self._profile)
+
+
+class BySlot:
+    """A client factory that hands each slot its own client, built at the start by `make`; `built`
+    lists what each start asked for, as `Scripts.built` does."""
+
+    def __init__(self, make: Callable[[ModelProfile, Slot], ModelClient]) -> None:
+        self._make = make
+        self.built: list[tuple[str, Slot]] = []
+
+    def __call__(self, profile: ModelProfile, slot: Slot) -> ModelClient:
+        self.built.append((profile.id, slot))
+        return self._make(profile, slot)
 
 
 @dataclass
