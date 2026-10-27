@@ -175,6 +175,23 @@ def test_fixed_threshold_values_are_checked(index: int) -> None:
         RuleAssessment.model_validate(rule)
 
 
+@pytest.mark.parametrize(
+    "rule_id,field,key,value",
+    [
+        ("small_change", "observed", "files", True),
+        ("small_cone", "observed", "nodes", "1"),
+        ("combined_tests", "observed", "passed", True),
+        ("known_spend", "threshold", "ledger_ok", 1),
+        ("combined_tests", "threshold", "passed_min", 1.0),
+    ],
+)
+def test_rule_inputs_reject_coercible_types(rule_id: str, field: str, key: str, value: Any) -> None:
+    rule = next(rule for rule in assessment()["rules"] if rule["rule"] == rule_id)
+    rule[field][key] = value
+    with pytest.raises(ValidationError):
+        RuleAssessment.model_validate(rule)
+
+
 @pytest.mark.parametrize("result", ["pass", "fail"])
 def test_missing_evidence_cannot_produce_a_known_result(result: str) -> None:
     rule = {**assessment()["rules"][0], "evidence": [], "result": result}
