@@ -21,6 +21,23 @@ const untouched = "shop.cart:Cart.add";
 const diff = { changeId: "change-1", path: "shop/pricing.py" };
 
 describe("panel switching over the level 1 fixture", () => {
+  it("opens A's pending change first even when B arrived first and has a lower change id (K14)", () => {
+    const state = through(20);
+    const a = state.agents["agent-1"];
+    const change = state.changes["change-1"];
+    if (!a || !change) throw new Error("Missing proposal fixture");
+    state.agents = {
+      "agent-2": { ...a, agent_id: "agent-2", change_id: "change-0", slot: "B" },
+      ...state.agents,
+    };
+    state.changes = {
+      "change-0": { ...change, change_id: "change-0", agent_id: "agent-2" },
+      ...state.changes,
+    };
+    expect(diffForNode(state, edited)).toEqual(diff);
+    expect(nextReview(state)).toBe("change-1");
+    expect(nextReview(state, "change-1")).toBe("change-0");
+  });
   it("opens a node's live diff only while a pending change touches it", () => {
     expect(diffForNode(through(11), edited)).toBeNull();
     expect(diffForNode(through(12), edited)).toEqual(diff);
