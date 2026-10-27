@@ -62,6 +62,8 @@ export interface FrameProps {
   attempts?: Readonly<Record<string, DecisionAttempt>>;
   /** Absent in a recorded run, which sends no commands: review then shows the recorded decision. */
   onDecide?: (changeId: string, action: DecisionAction, comment: string) => void;
+  /** What the replay plays, from its source: review words its decision area with it. */
+  replayOf?: string;
   /** Overlay lines on the graph, such as the replay label and a transport failure. */
   notice?: ReactNode;
 }
@@ -287,6 +289,7 @@ export function Frame(props: FrameProps) {
             changeId={view.review}
             attempt={props.attempts?.[view.review]}
             onDecide={props.onDecide}
+            replayOf={props.replayOf}
             onClose={onClosePanel}
           />
         ) : (

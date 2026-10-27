@@ -248,7 +248,9 @@ it("Escape in the comment box only leaves it; Escape elsewhere closes review", a
 it("in a recorded run offers no decision and shows the recorded one when it arrives", async () => {
   await withPage(true, async (page) => {
     await page.getByRole("button", { name: /change ready for review/ }).click();
-    await browserExpect(panel(page).getByText(/Recorded run: nothing here sends/)).toBeVisible();
+    await browserExpect(
+      panel(page).getByText(/Replay of a hand-written demo fixture: nothing here sends/),
+    ).toBeVisible();
     await browserExpect(panel(page).getByRole("textbox", { name: /Comment/ })).toHaveCount(0);
     await browserExpect(
       panel(page).getByRole("button", { name: "Approve and merge" }),
