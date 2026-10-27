@@ -699,6 +699,13 @@ change is proposed.
 - **File view:** the file in main with the function's lines marked as a highlighted span; from level
   2 it is editable and edits go to main. On the graph the selected node and its direct callers and
   callees stay lit; the rest dims.
+- **Start from a function (level 3):** a quiet Bot icon and "Start an agent here" in the file
+  header, only for functions and methods in a live run. Clicking opens the existing agents panel
+  beside the file, prefills `In {path}, {qualified name}: ` and focuses the task box at its end.
+  The file, local edits and graph selection stay in place. Slot choice, model and Start agent
+  stay as they are; this action sends no command. With no free slot, show the task box's reason.
+  An occupied or starting task box keeps its text and explains why the action is unavailable.
+  Events and later mounts never repeat the click's focus request.
 
 ### Dot field and rings (signature component)
 

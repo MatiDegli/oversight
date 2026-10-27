@@ -1,6 +1,7 @@
 import type { Slot, StartAgent } from "@contracts";
 import { Check, Cpu, X } from "lucide-react";
 import { useId } from "react";
+import type { Ref } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand";
 
@@ -26,6 +27,7 @@ const modifier =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent) ? "Cmd" : "Ctrl";
 
 export interface TaskBoxViewProps {
+  inputRef?: Ref<HTMLTextAreaElement>;
   draft: string;
   pending: boolean;
   failure: string | null;
@@ -48,6 +50,7 @@ export interface TaskBoxViewProps {
  * moves focus by itself.
  */
 export function TaskBoxView({
+  inputRef,
   draft,
   pending,
   failure,
@@ -71,6 +74,7 @@ export function TaskBoxView({
       </h3>
       <div className="flex flex-col gap-3 rounded-card border border-control-edge bg-field p-3 has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-offset-2 has-[textarea:focus-visible]:outline-text">
         <textarea
+          ref={inputRef}
           aria-label="Task for the new agent"
           value={draft}
           rows={3}
@@ -163,6 +167,8 @@ export function TaskBoxView({
 }
 
 export interface TaskBoxProps {
+  /** Only an explicit action requests focus through this ref. */
+  inputRef?: Ref<HTMLTextAreaElement>;
   state: State;
   /** Absent in a replay, which has no backend and starts nothing. */
   onStart?: (body: StartAgent) => Promise<unknown>;
@@ -173,7 +179,13 @@ export interface TaskBoxProps {
 }
 
 /** The agents panel's "New agent" section: a task box and a Start agent button. */
-export function TaskBox({ state, onStart, replayOf, store = taskBoxStore }: TaskBoxProps) {
+export function TaskBox({
+  state,
+  onStart,
+  replayOf,
+  inputRef,
+  store = taskBoxStore,
+}: TaskBoxProps) {
   const draft = useStore(store, (model) => model.draft);
   const pending = useStore(store, (model) => model.pending);
   const failure = useStore(store, (model) => model.failure);
@@ -202,6 +214,7 @@ export function TaskBox({ state, onStart, replayOf, store = taskBoxStore }: Task
   }
   return (
     <TaskBoxView
+      inputRef={inputRef}
       draft={draft}
       pending={pending}
       failure={failure}

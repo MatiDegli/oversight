@@ -13,6 +13,13 @@ const events = log
 
 export const fileViewTest = {
   untouched: "shop.cart:Cart.add",
+  holdSlots() {
+    const { state } = stateStore.getState();
+    if (state.run)
+      stateStore.setState({
+        state: { ...state, run: { ...state.run, slots: state.run.slots.slice(0, 1) } },
+      });
+  },
   mount() {
     stateStore.setState({
       state: events.filter((event) => event.seq <= 20).reduce(applyEvent, createInitialState()),

@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { AgentCard, slotUsage, TaskBox } from "../agents";
+import type { TaskBoxProps } from "../agents";
 import { FileView, LiveDiff } from "../editor";
 import type { FileAccess } from "../editor";
 import { GraphView } from "../graph";
@@ -18,6 +19,7 @@ import { fieldInput } from "./fieldScope";
 import { graphScope } from "./graphScope";
 import { changeNodeIds, panelOpen } from "./view";
 import type { View } from "./view";
+import { useFunctionTask } from "./useFunctionTask";
 
 type AgentState = AgentStatus["state"];
 
@@ -107,6 +109,7 @@ function AgentsPanel({
   canReview,
   onReview,
   replayOf,
+  inputRef,
 }: Pick<
   FrameProps,
   | "state"
@@ -117,7 +120,8 @@ function AgentsPanel({
   | "canReview"
   | "onReview"
   | "replayOf"
->) {
+> &
+  Pick<TaskBoxProps, "inputRef">) {
   const cards = selectAgents(state).flatMap((agent) => {
     const data = selectAgentCard(state, agent.agent_id);
     return data ? [data] : [];
@@ -158,7 +162,7 @@ function AgentsPanel({
       {/* Pinned to the bottom, as in the sketch: a card appearing above never moves it, or the
           person's focus in it. */}
       <div className="shrink-0 border-t border-divider p-3.5">
-        <TaskBox state={state} onStart={onStartAgent} replayOf={replayOf} />
+        <TaskBox state={state} onStart={onStartAgent} replayOf={replayOf} inputRef={inputRef} />
       </div>
     </aside>
   );
@@ -255,6 +259,7 @@ function LeftPanel({ state, view, onClose }: { state: State; view: View; onClose
 export function Frame(props: FrameProps) {
   const { state, view, onNodeTap, canOpenChange, onOpenChange, onClosePanel, notice } = props;
   const open = panelOpen(view);
+  const functionTask = useFunctionTask(state, view, props.onStartAgent !== undefined);
   // The cone and the change stay lit until the decision; events never open review themselves.
   const { cone, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
   // The dot field's light follows the same state and the same view, so it never needs an event.
@@ -295,6 +300,7 @@ export function Frame(props: FrameProps) {
         ) : view.file && props.files ? (
           <FileView
             target={view.file}
+            startAgentAction={functionTask.action}
             files={props.files}
             commit={state.graph?.commit ?? ""}
             onClose={onClosePanel}
@@ -358,10 +364,11 @@ export function Frame(props: FrameProps) {
             </div>
           </div>
         </main>
-        {open ? (
+        {open && !functionTask.expanded ? (
           <AgentsRail state={state} />
         ) : (
           <AgentsPanel
+            inputRef={functionTask.inputRef}
             state={state}
             canOpenChange={canOpenChange}
             onOpenChange={onOpenChange}
