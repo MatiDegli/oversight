@@ -240,3 +240,101 @@ median wall: **15.015 s**. Slowest individual case across all 17: **1.572 s**.
 cases and their shared browser/frame/input helpers in one test file. Keeping the
 shared setup together preserves the measured one-browser-per-process method;
 the file-size signal remains for coordinator review.
+
+## Fix round: isolated browser fixture caches
+
+Measured 2026-10-27 ART (UTC-3), starting from `bab4490`. This round changes
+fixture infrastructure only. Camera, dot-field and task-box fixtures now use
+`.shots/camera-vite-cache`, `.shots/dot-field-vite-cache` and
+`.shots/task-box-vite-cache`, respectively. The browser project has `maxWorkers: 2`.
+
+Before changing either setting, two fresh `pnpm test:browser` processes each
+passed all 72 cases across nine files: **2/2 runs, 144/144 cases, zero failures**.
+They used the shared `.shots/app-vite-cache` and the uncapped browser project.
+The cache collision did not reproduce in these runs; isolation removes concurrent
+writes to the same dependency cache rather than claiming a measured speedup.
+
+Two new checks in `frontend/shots/vite-config.test.ts`, included in `pnpm test`
+and `make check`, guard the distinct fixture cache paths and the browser project's
+two-worker limit. Before the fix, both failed (one unique cache instead of three;
+`maxWorkers` undefined instead of 2). With the fix, all four config checks pass.
+
+The camera remeasurement uses the same JSON-reporter and monotonic wall-time
+method above: ten fresh isolated processes and three more each alongside its own
+fresh `make check`. Full-suite runs are separate from those camera measurements.
+No timeout, assertion, retry or input-driving behavior changes in this round.
+
+### Full browser suite before and after isolation
+
+Each row aggregates two fresh full-suite processes. All nine files ran each
+time, so camera, dot-field and task-box were tested alongside the other fixture
+families rather than only in a camera-only process. Caches were not deleted
+between runs; the first post-fix run populated the three new cache directories.
+
+| Configuration | Passing runs | Passing cases | Failed cases |
+| --- | --- | --- | --- |
+| Shared cache, no project worker cap | 2/2 | 144/144 | 0 |
+| Separate caches, `maxWorkers: 2` | 2/2 | 144/144 | 0 |
+
+Post-fix full-suite wall times were 149.589 s and 125.225 s. These two samples
+establish passing coverage with isolation; they are not evidence of a lower
+failure rate. The two-worker cap intentionally limits concurrent fixture servers
+and Chromium instances, which can increase whole-suite wall time.
+
+### Camera alone after fixture isolation
+
+| Run | Passing cases | All 17 (s) | Wall (s) | Slowest case (s) |
+| --- | --- | --- | --- | --- |
+| 1 | 17/17 | 19.646 | 21.885 | 2.301 |
+| 2 | 17/17 | 19.368 | 21.149 | 1.978 |
+| 3 | 17/17 | 26.915 | 29.655 | 2.661 |
+| 4 | 17/17 | 29.870 | 35.910 | 3.823 |
+| 5 | 17/17 | 22.739 | 26.271 | 3.051 |
+| 6 | 17/17 | 18.799 | 20.998 | 2.160 |
+| 7 | 17/17 | 24.057 | 26.292 | 2.588 |
+| 8 | 17/17 | 27.668 | 31.302 | 3.139 |
+| 9 | 17/17 | 25.497 | 28.960 | 2.474 |
+| 10 | 17/17 | 36.516 | 42.192 | 3.839 |
+
+Median all-17 sum: **24.777 s**; median wall: **27.626 s**.
+Ten of ten runs passed, 170/170 cases. Slowest individual case: **3.839 s**,
+within the unchanged 5 s limit.
+
+### Camera alongside make check after fixture isolation
+
+| Run | Passing cases | All 17 (s) | Wall (s) | Slowest case (s) | Check exit |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 17/17 | 39.585 | 46.264 | 4.723 | 0 |
+| 2 | 17/17 | 16.582 | 18.433 | 1.814 | 0 |
+| 3 | 17/17 | 32.064 | 38.396 | 3.782 | 2 |
+
+The check process was still running when each camera process finished. All
+three camera runs passed, 51/51 cases. Median all-17 sum: **32.064 s**; median
+wall: **38.396 s**. Slowest individual camera case: **4.723 s**, below 5 s.
+
+The third check failed in the unrelated live HTTP API test
+`test_stop_an_idle_agent`: its reused connection closed before the Stop response
+(`httpx.RemoteProtocolError`). The other 2316 Python cases passed, as did all
+frontend checks. This failure is retained here rather than counted as a passing
+loaded check. The API fixture now opens a fresh HTTP connection per command,
+avoiding reuse across long event waits and Uvicorn's idle connection expiry.
+A new socket-port regression fails with connection reuse and passes with fresh
+connections; all five existing Stop cases also pass with the fixture fix.
+
+### Validation after the HTTP fixture fix
+
+The first additional validation was interrupted by a machine restart; its
+temporary logs were lost and it is not counted as a completed run. A fresh
+camera/check pair was started after the restart at 19:11 ART (UTC-3), using
+the same commands and measurement method.
+
+| Passing cases | All 17 (s) | Wall (s) | Slowest case (s) | Check exit |
+| --- | --- | --- | --- | --- |
+| 17/17 | 26.487 | 29.776 | 2.787 | 0 |
+
+The check was still running when the camera process finished and subsequently
+passed: 2318 general Python tests (including the new connection regression),
+17 frontend-boundary tests, 646 frontend unit tests and 42 tooling tests.
+Across completed loaded samples, camera passed 68/68 cases; three checks passed
+and the pre-fix failed check remains recorded above. No test retry or raised
+timeout was introduced.

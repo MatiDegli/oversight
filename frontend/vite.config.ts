@@ -51,7 +51,14 @@ export default defineConfig({
           exclude: ["src/**/*.browser.test.{ts,tsx}"],
         },
       },
-      { extends: true, test: { name: "browser", include: ["src/**/*.browser.test.{ts,tsx}"] } },
+      {
+        extends: true,
+        test: {
+          name: "browser",
+          include: ["src/**/*.browser.test.{ts,tsx}"],
+          maxWorkers: 2,
+        },
+      },
     ],
   },
 });
