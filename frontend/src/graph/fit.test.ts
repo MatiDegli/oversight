@@ -12,24 +12,25 @@ vi.mock("./geometry", async (importOriginal) => ({
 import { watchViewport } from "../../tools/layout.ts";
 import { themes } from "../theme";
 
+import type { GraphElement } from "./elements";
 import { graphStyles } from "./styles";
 import { updateGraph } from "./updateGraph";
 
 cytoscape.use(fcose);
 
-it("fits the camera and sizes the preset with the same padding", () => {
+const leaf = (id: string, position?: { x: number; y: number }): GraphElement => ({
+  group: "nodes",
+  data: { id, kind: "function" },
+  classes: "function",
+  ...(position ? { position } : {}),
+});
+
+it("fits a graph without a preset with the camera's padding, and sizes the preset with the same", () => {
   const cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(themes.dark) });
   try {
     const layout = vi.spyOn(cy, "layout");
-    updateGraph(cy, [
-      {
-        group: "nodes",
-        data: { id: "a", kind: "function" },
-        classes: "function",
-        position: { x: 0, y: 0 },
-      },
-    ]);
-    expect(layout).toHaveBeenCalledWith({ name: "preset", fit: true, padding: 55 });
+    updateGraph(cy, [leaf("a"), leaf("b")]);
+    expect(layout).toHaveBeenCalledWith({ name: "fcose", animate: false, fit: true, padding: 55 });
     const themeTokens = themes.dark;
     expect(watchViewport.width).toBe(
       1920 -
@@ -40,6 +41,19 @@ it("fits the camera and sizes the preset with the same padding", () => {
     expect(watchViewport.height).toBe(
       1080 - Number.parseFloat(themeTokens["top-bar-height"]) - 110,
     );
+  } finally {
+    cy.destroy();
+  }
+});
+
+it("starts a preset at 100%, fitting nothing", () => {
+  const cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(themes.dark) });
+  try {
+    const layout = vi.spyOn(cy, "layout");
+    cy.zoom(0.3);
+    updateGraph(cy, [leaf("a", { x: 0, y: 0 }), leaf("b", { x: 4000, y: 3000 })]);
+    expect(layout).toHaveBeenCalledWith({ name: "preset", fit: false });
+    expect(cy.zoom()).toBe(1);
   } finally {
     cy.destroy();
   }

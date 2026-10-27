@@ -2,10 +2,14 @@ import type { Core, NodeCollection, Position } from "cytoscape";
 
 import { getActiveTheme } from "../theme";
 
+import { startCamera } from "./camera";
 import type { GraphElement } from "./elements";
 import { FIT_PADDING, nodeGeometry } from "./geometry";
+import { applyFrames } from "./frames";
+import { applyRoutes } from "./routes";
+import type { RouteTheme } from "./routes";
 
-type GeometryTheme = Parameters<typeof nodeGeometry>[0];
+type GeometryTheme = Parameters<typeof nodeGeometry>[0] & RouteTheme;
 
 interface Box {
   x1: number;
@@ -49,21 +53,60 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
   // (the drawn size plus its border) when it does not.
   const bounds = (collection: Pick<NodeCollection, "boundingBox">) =>
     collection.boundingBox({ includeLabels: false, includeOverlays: false });
-  const leaf = cy.nodes(":childless").first();
-  const frame = cy.nodes(":parent").first();
-  const halfWidth = leaf.nonempty() ? bounds(leaf).w / 2 : (g.width + g.border) / 2;
-  const halfHeight = leaf.nonempty() ? bounds(leaf).h / 2 : (g.height + g.border) / 2;
-  const inset = frame.nonempty() ? bounds(frame.children()).x1 - bounds(frame).x1 : g.inset;
-  const boxAt = ({ x, y }: Position, padding = 0): Box => ({
-    x1: x - halfWidth - padding,
-    x2: x + halfWidth + padding,
-    y1: y - halfHeight - padding,
-    y2: y + halfHeight + padding,
+  // A row is a function or method; frames with nothing in them are boxes of their own size.
+  const leaf = cy.nodes(".function, .method").first();
+  const measured = {
+    width: leaf.nonempty() ? bounds(leaf).w / 2 : g.rowWidth / 2,
+    height: leaf.nonempty() ? bounds(leaf).h / 2 : g.rowHeight / 2,
+  };
+  /** Half the box a node takes: its own size when elements.ts gave it one, a row's otherwise. */
+  const halfOf = (element: GraphElement) => {
+    const { w, h } = element.data;
+    return {
+      width: w === undefined ? measured.width : w / 2 + g.border,
+      height: h === undefined ? measured.height : h / 2 + g.border,
+    };
+  };
+  type Half = ReturnType<typeof halfOf>;
+  const boxAt = ({ x, y }: Position, half: Half, padding = 0): Box => ({
+    x1: x - half.width - padding,
+    x2: x + half.width + padding,
+    y1: y - half.height - padding,
+    y2: y + half.height + padding,
   });
-  /** The box an ancestor `depth` levels up needs to hold a leaf at `point`, with its label. */
-  const reach = (point: Position, depth: number): Box => {
-    const box = boxAt(point, (depth + 1) * inset);
-    return { ...box, y1: box.y1 - g.label };
+  /** What a frame of this kind holds around its children: a module's, or a class's. */
+  const padOf = (kind: string | undefined) => (kind === "class" ? g.outer.class : g.outer.module);
+  /**
+   * The padding the ancestors up to `depth` levels up add around a row, side by side: the first
+   * ancestor's, then the next one's, and so on. Each frame's drawn border adds its width to every
+   * side, which Cytoscape's bounding box counts and the padding tokens do not.
+   */
+  const around = (kinds: readonly (string | undefined)[], depth: number) => {
+    const sum = { top: 0, left: 0, right: 0, bottom: 0 };
+    for (const kind of kinds.slice(0, depth + 1)) {
+      const pad = padOf(kind);
+      sum.top += pad.top + g.border;
+      sum.left += pad.left + g.border;
+      sum.right += pad.right + g.border;
+      sum.bottom += pad.bottom + g.border;
+    }
+    return sum;
+  };
+  /** The box an ancestor `depth` levels up needs to hold a row at `point`, with its header band. */
+  const reach = (
+    point: Position,
+    half: Half,
+    kinds: readonly (string | undefined)[],
+    depth: number,
+  ): Box => {
+    const pad = around(kinds, depth);
+    const box = boxAt(point, half);
+    return {
+      x1: box.x1 - pad.left,
+      x2: box.x2 + pad.right,
+      y1: box.y1 - pad.top,
+      y2: box.y2 + pad.bottom,
+    };
   };
   const nodes = new Map(elements.filter((e) => e.group === "nodes").map((e) => [e.data.id, e]));
   const boxes = new Map<string, Box>();
@@ -90,12 +133,14 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
     if (cached) return cached;
     if (element.group === "edges" || cy.getElementById(id).nonempty()) return element;
     const parents = ancestorsOf(id);
+    const kinds = parents.map((parentId) => nodes.get(parentId)?.data.kind);
     const parent = nodes.get(parents[0] ?? "");
     if (parent) place(parent);
+    const half = halfOf(element);
     /** An ancestor's box once it holds a leaf at `point`. */
     const grownAt = (parentId: string, depth: number, point: Position): Box => {
       const current = boxes.get(parentId);
-      const reached = reach(point, depth);
+      const reached = reach(point, half, kinds, depth);
       return current && !childless.has(parentId) ? union(current, reached) : reached;
     };
     // What each ancestor, once grown, must keep clear of: every node it neither contains nor sits
@@ -113,10 +158,10 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
         )
         .map(([, box]) => box);
     });
-    const anchor = boxes.get(parent?.data.id ?? "") ?? boxAt({ x: 0, y: 0 });
+    const anchor = boxes.get(parent?.data.id ?? "") ?? boxAt({ x: 0, y: 0 }, half);
     const center = { x: (anchor.x1 + anchor.x2) / 2, y: (anchor.y1 + anchor.y2) / 2 };
     const fits = (point: Position): boolean => {
-      const own = boxAt(point, g.margin);
+      const own = boxAt(point, half, g.margin);
       for (const [otherId, box] of boxes)
         if (!parents.includes(otherId) && intersects(own, box)) return false;
       return parents.every(
@@ -132,17 +177,25 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
     let position = element.position;
     if (!position) {
       // Prefer free space inside the parent's box, then grow around its perimeter, ring by ring.
-      const edgeX = halfWidth + inset;
-      const edgeY = halfHeight + inset;
+      const pad = around(kinds, 0);
       const inside: Position[] = [];
-      for (let x = anchor.x1 + edgeX; x <= anchor.x2 - edgeX; x += g.gap)
-        for (let y = anchor.y1 + edgeY; y <= anchor.y2 - edgeY; y += g.gap) inside.push({ x, y });
+      for (
+        let x = anchor.x1 + half.width + pad.left;
+        x <= anchor.x2 - half.width - pad.right;
+        x += g.gap
+      )
+        for (
+          let y = anchor.y1 + half.height + pad.top;
+          y <= anchor.y2 - half.height - pad.bottom;
+          y += g.gap
+        )
+          inside.push({ x, y });
       position = nearest(inside).find(fits);
       // Search below first, then beside the module, and above last to spare its heading.
       const module = parents.find((id) => nodes.get(id)?.data.kind === "module");
       const boundary = boxes.get(module ?? "") ?? anchor;
       const direction = (point: Position) => {
-        const box = boxAt(point);
+        const box = boxAt(point, half);
         return box.y1 > boundary.y2 ? 0 : box.x2 < boundary.x1 || box.x1 > boundary.x2 ? 1 : 2;
       };
       // A grid can miss a narrow opening. Clearance boundaries give a finite exact search,
@@ -151,29 +204,44 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
       const exactCandidates = () => {
         const xs = new Set([center.x]);
         const ys = new Set([center.y]);
-        const boundaries = (box: Box, x: number, y: number, label = 0) => {
-          xs.add(box.x1 - x);
-          xs.add(box.x2 + x);
-          ys.add(box.y1 - y);
-          ys.add(box.y2 + y + label);
+        const boundaries = (box: Box, left: number, right: number, top: number, bottom: number) => {
+          xs.add(box.x1 - left);
+          xs.add(box.x2 + right);
+          ys.add(box.y1 - top);
+          ys.add(box.y2 + bottom);
         };
         for (const box of boxes.values())
-          boundaries(box, halfWidth + g.margin, halfHeight + g.margin);
-        for (const [depth, obstacles] of avoid.entries())
+          boundaries(
+            box,
+            half.width + g.margin,
+            half.width + g.margin,
+            half.height + g.margin,
+            half.height + g.margin,
+          );
+        for (const [depth, obstacles] of avoid.entries()) {
+          const pad = around(kinds, depth);
           for (const box of obstacles)
             boundaries(
               box,
-              halfWidth + (depth + 1) * inset,
-              halfHeight + (depth + 1) * inset,
-              g.label,
+              half.width + pad.right,
+              half.width + pad.left,
+              half.height + pad.bottom,
+              half.height + pad.top,
             );
+        }
         return [...xs].flatMap((x) => [...ys].map((y) => ({ x, y })));
       };
       for (let preferred = 0; !position && preferred < 3; preferred++) {
         for (let ring = 0; !position && ring < 100; ring++) {
           const far = ring * g.gap;
-          const [x1, x2] = [anchor.x1 - edgeX - far, anchor.x2 + edgeX + far];
-          const [y1, y2] = [anchor.y1 - edgeY - far, anchor.y2 + edgeY + far];
+          const [x1, x2] = [
+            anchor.x1 - half.width - pad.left - far,
+            anchor.x2 + half.width + pad.right + far,
+          ];
+          const [y1, y2] = [
+            anchor.y1 - half.height - pad.top - far,
+            anchor.y2 + half.height + pad.bottom + far,
+          ];
           const candidates: Position[] = [];
           for (let x = x1; x <= x2; x += g.gap) candidates.push({ x, y: y1 }, { x, y: y2 });
           for (let y = y1 + g.gap; y < y2; y += g.gap) candidates.push({ x: x1, y }, { x: x2, y });
@@ -198,9 +266,9 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
           x: center.x,
           y:
             (boxes.get(root ?? "")?.y2 ?? bottom) +
-            halfHeight +
-            (parents.length + 1) * inset +
-            g.label +
+            half.height +
+            around(kinds, parents.length - 1).bottom +
+            around(kinds, parents.length - 1).top +
             g.margin,
         };
         if (root) {
@@ -241,7 +309,7 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
     }
     const result = { ...element, position };
     placed.set(id, result);
-    boxes.set(id, boxAt(position));
+    boxes.set(id, boxAt(position, half));
     childless.add(id);
     for (const [depth, parentId] of parents.entries()) {
       boxes.set(parentId, grownAt(parentId, depth, position));
@@ -331,12 +399,21 @@ export function updateGraph(
   });
   if (initial && cy.nodes().nonempty()) {
     const preset = elements.some((element) => element.position !== undefined);
-    const fallback = {
-      name: "fcose",
-      animate: false,
-      fit: true,
-      padding: FIT_PADDING,
-    };
-    cy.layout(preset ? { name: "preset", fit: true, padding: FIT_PADDING } : fallback).run();
+    // The preset shows the graph at 100% on its hub; nothing is fitted. Without one, the layout
+    // places the nodes and the camera fits them, as before.
+    if (preset) {
+      cy.layout({ name: "preset", fit: false }).run();
+      startCamera(cy);
+    } else {
+      const fallback = { name: "fcose", animate: false, fit: true, padding: FIT_PADDING };
+      cy.layout(fallback).run();
+    }
   }
+  settle(cy, theme);
+}
+
+/** After nodes are placed or moved: the frames' header bands and the edges' routes, in that order. */
+export function settle(cy: Core, theme: GeometryTheme = getActiveTheme()): void {
+  applyFrames(cy, theme);
+  applyRoutes(cy, theme);
 }
