@@ -537,6 +537,13 @@ class ChangeManager:
         else:
             rec.state = outcome
 
+    def _unreported(self, rec: _Change) -> None:
+        """Settle a run that will never report its end, as `run_ended` does for one that did: none
+        was passed to a Stop, or the one passed was cancelled before its first step and so never
+        ran its `finally`. Without it a Stop cancelled before its body, or in its wait for the run,
+        leaves the change `working` with no run. A no-op once a run has reported."""
+        self.run_ended(rec.agent_id, None)
+
     # --- The person's edits in review ---------------------------------------------------------
 
     async def save_for_review(
@@ -675,8 +682,13 @@ class ChangeManager:
         if rec is None:
             raise ChangeNotFound(agent_id)
         self._take(rec.change_id, STOPPABLE, "stop")
-        if run is not None:
+        if run is None:
+            self._unreported(rec)
+        else:
             run.cancel()
+            # Registered here, not in the Stop's task, which a cancel can end before its body or in
+            # its wait for the run. Before the wait's own callback, so it settles first.
+            run.add_done_callback(lambda _: self._unreported(rec))
         return self._decide(rec, self._stop(rec, run))
 
     async def check_main(self) -> bool | None:
@@ -930,11 +942,10 @@ class ChangeManager:
     async def _stop(self, rec: _Change, run: asyncio.Task[None] | None) -> None:
         if run is not None:
             # Its end calls `run_ended`, which records its steps and sets `fallback`; a run cut in
-            # its proposal's publish records the proposal first (R7).
+            # its proposal's publish records the proposal first (R7). A run that never started
+            # reports nothing: `stop` settled it with a done-callback, which ran before this wait
+            # returned, so `fallback` is ready or unproposed from here on.
             await asyncio.wait([run])
-        if rec.fallback == "working":
-            # No run reported its end: none was passed, or it was cancelled before it started.
-            rec.fallback = "ready" if rec.proposed_now else "unproposed"
         await self._finish_pending()
         async with self._workspace.locks(main=True, agent_id=rec.agent_id):
             # Under the agent's lock: a save in review proposes first, and this closes its revision.

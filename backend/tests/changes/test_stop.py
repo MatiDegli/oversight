@@ -263,6 +263,35 @@ async def test_stop_during_a_save(h: Harness) -> None:
 
 
 @bounded
+async def test_stop_cancelled_while_it_waits_for_the_agents_lock(h: Harness) -> None:
+    """The Stop is cancelled in its wait for the lock a save holds, before it sets anything for its
+    close-out: the change is `ready`, and the Approve that follows merges it as any other, with
+    `done` and a delta, never as a stop."""
+    await h.run_agent(1, EDIT)
+    read = await h.workspace.worktree("agent-1").read_text("shop/mod.py")
+    h.gate = ChangeProposed
+    save = start(
+        h.manager.save_for_review(
+            "agent-1", "shop/mod.py", read.content.replace("return 3", "return 4"), read.hash
+        )
+    )
+    await h.at_gate.wait()
+    stopping = h.manager.stop("agent-1", None)
+    await queued_callbacks_ran()  # the Stop waits for the agent's lock
+
+    stopping.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await stopping
+    h.open_gate.set()
+    await save
+    await h.manager.approve("change-1", None)
+    assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
+    assert [s.state for s in h.payloads(AgentStatus)] == ["done"]
+    assert resolutions(h) == [("approved", None, 2)]
+
+
+@bounded
 async def test_stop_during_the_proposal_publish(h: Harness) -> None:
     """R7: the store took revision 1 and the run has not heard when Stop cancels it. The run
     finishes that step first, so the Stop closes revision 1, and `stopped` follows the proposal."""
@@ -311,6 +340,55 @@ async def test_stop_cancelled_while_the_run_ends(h: Harness) -> None:
     await h.manager.stop("agent-1", run)  # `ready` now, with its run over
     await assert_stopped(h, 1, step=4)
     assert resolutions(h) == [("rejected", "stopped", 1)]
+
+
+async def assert_unproposed_then_rejected(h: Harness) -> None:
+    """A Stop cancelled with no run left to report its end leaves the change as a run that ended
+    without proposing does: `unproposed`, which Reject closes, never `working` with no run."""
+    with pytest.raises(WrongState, match="is unproposed"):
+        h.manager.approve("change-1", None)
+    await h.manager.reject("change-1", None)
+    assert resolutions(h) == [("rejected", None, 0)]
+    assert h.types()[-2:] == ["change.resolved", "agent.status"]
+    assert h.payloads(AgentStatus)[-1].state == "done"  # a Reject, not a Stop
+    assert not h.worktree_dir("agent-1").exists() and not await h.has_branch("agent-1")
+
+
+@pytest.mark.parametrize("passed", ["a run that never started", "no run"])
+@bounded
+async def test_stop_cancelled_before_its_body(h: Harness, passed: str) -> None:
+    """The Stop task is cancelled before its first step, which runs none of its code, so it
+    settles nothing itself. No run will report its end: the one passed was cancelled before its
+    first step, or none was passed. The change must not stay `working` with no run."""
+    await h.open(1)
+    run = start(fake_run(h, 1, steps=0)) if passed == "a run that never started" else None
+    stopping = h.manager.stop("agent-1", run)
+
+    stopping.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await stopping
+    assert run is None or run.cancelled()
+    assert h.payloads(ChangeResolved) == []
+    await assert_unproposed_then_rejected(h)
+
+
+@bounded
+async def test_stop_cancelled_while_it_waits_for_a_run_that_never_started(h: Harness) -> None:
+    """The Stop is cancelled in its wait for the run, which was cancelled before its first step and
+    so never reports its end: the wait's cancel must not leave the change `working` with no run."""
+    await h.open(1)
+    run = start(fake_run(h, 1, steps=0))  # created, never started
+    stopping = h.manager.stop("agent-1", run)
+    await queued_callbacks_ran()  # the Stop is in its wait, and the run is over
+
+    stopping.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await stopping
+    assert run.cancelled()
+    assert h.payloads(ChangeResolved) == []
+    await assert_unproposed_then_rejected(h)
 
 
 @bounded
