@@ -54,6 +54,9 @@ const resolved = (state: State, payload: Partial<ChangeResolved>) =>
       merge: null,
       merge_commit: null,
       conflict: null,
+      decided_by: null,
+      reasons: [],
+      assessment: null,
       ...payload,
     },
   });

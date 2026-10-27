@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import type { Page } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
 
-import { assertReadableFrame } from "./framing.ts";
+import { assertPanelFrame } from "./framing.ts";
 
 export interface Scene {
   name: string;
@@ -32,7 +32,8 @@ export interface Theme {
 /**
  * Clicks the center of the first node with a pending change, as the person would, waits for the
  * left panel (`panel`, its aria-label) to show the diff's inserted lines and for the camera to
- * settle, then checks the change and cone framing against watch zoom and the 12px label floor.
+ * settle, then checks the change framing (with the cone only in review) against watch zoom and
+ * the 12px label floor.
  * Cytoscape draws on a canvas, so the node's place on screen comes from the graph element's own
  * probe (src/graph/probe.ts), which the app exposes for this. A proposed change opens review; one
  * still being edited opens the live diff.
@@ -106,7 +107,10 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
   );
   if (!framed?.focus.length) throw new Error(`the clicked node ${id} is not on the graph`);
   if (zoomBefore === undefined) throw new Error("the watch zoom is unavailable");
-  assertReadableFrame(zoomBefore, framed);
+  if (panel === "Review panel") {
+    assert(Math.abs(framed.zoom - 0.8) < 1e-6, "the demo cone must stay at the 12px floor");
+  }
+  assertPanelFrame(zoomBefore, framed, panel === "Review panel" ? "review" : "live-diff");
 }
 
 export const scenes: readonly Scene[] = [

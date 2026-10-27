@@ -101,7 +101,17 @@ const atDecision = holdBefore(resolvedAt, 1777);
 const MIN_PAINTED_PIXELS = 150;
 
 // The backend's paths: the replay site must never ask for one (vite.config.ts proxies the same).
-const API_PATHS = ["/agents", "/changes", "/events", "/files", "/graph", "/health", "/impact"];
+const API_PATHS = [
+  "/agents",
+  "/changes",
+  "/events",
+  "/files",
+  "/graph",
+  "/health",
+  "/impact",
+  "/merge-mode",
+  "/plans",
+];
 
 /**
  * A pause in the replay before one event. The replay waits min(gap, 2000) ms before each event, and

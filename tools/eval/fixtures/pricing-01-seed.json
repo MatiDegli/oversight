@@ -1,0 +1,7 @@
+[
+  {
+    "path": "shop/pricing.py",
+    "old": "if quantity >= minimum:",
+    "new": "if quantity >= minimum + (minimum == 10):"
+  }
+]

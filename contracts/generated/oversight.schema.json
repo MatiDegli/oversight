@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.2.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.3.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AgentCreated": {
@@ -161,6 +161,18 @@
             }
           ],
           "description": "Why it halted or stopped, in one sentence."
+        },
+        "plan_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The originating plan; null for standalone agents or older recordings."
         }
       },
       "required": [
@@ -172,7 +184,8 @@
         "state",
         "step",
         "max_steps",
-        "detail"
+        "detail",
+        "plan_id"
       ],
       "title": "AgentStatus",
       "type": "object"
@@ -345,6 +358,102 @@
         "block_at"
       ],
       "title": "Budget",
+      "type": "object"
+    },
+    "ChangeAssessedEvent": {
+      "additionalProperties": false,
+      "description": "One recorded change assessment.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "change.assessed",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ChangeAssessment"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "ChangeAssessedEvent",
+      "type": "object"
+    },
+    "ChangeAssessment": {
+      "additionalProperties": false,
+      "description": "One evaluation of an exact change revision against current main.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "base_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "main_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "candidate_tree": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "policy_version": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "mode": {
+          "$ref": "#/$defs/MergeMode"
+        },
+        "mode_revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleAssessment"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "change_id",
+        "agent_id",
+        "revision",
+        "base_commit",
+        "head_commit",
+        "main_commit",
+        "candidate_tree",
+        "policy_version",
+        "mode",
+        "mode_revision",
+        "rules"
+      ],
+      "title": "ChangeAssessment",
       "type": "object"
     },
     "ChangeGraph": {
@@ -581,6 +690,41 @@
             }
           ],
           "description": "Set exactly when the merge is \"conflict\"."
+        },
+        "decided_by": {
+          "anyOf": [
+            {
+              "enum": [
+                "person",
+                "rules"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decision provenance; null when it was not recorded."
+        },
+        "reasons": {
+          "description": "Recorded server-authored reasons for this decision.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "assessment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeAssessment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The immutable assessment used for this decision, when available."
         }
       },
       "required": [
@@ -592,7 +736,10 @@
         "comment",
         "merge",
         "merge_commit",
-        "conflict"
+        "conflict",
+        "decided_by",
+        "reasons",
+        "assessment"
       ],
       "title": "ChangeResolved",
       "type": "object"
@@ -751,6 +898,20 @@
       "title": "Conflict",
       "type": "object"
     },
+    "CreatePlan": {
+      "additionalProperties": false,
+      "description": "Request a proposed split without starting coding agents.",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "title": "CreatePlan",
+      "type": "object"
+    },
     "EdgeId": {
       "type": "string"
     },
@@ -903,6 +1064,53 @@
         "error"
       ],
       "title": "ErrorResponse",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "An event or Git object in this run, optionally narrowed to a workspace path.",
+      "properties": {
+        "event_seq": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "git_object": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "path": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspacePath"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "event_seq",
+        "git_object",
+        "path"
+      ],
+      "title": "EvidenceRef",
       "type": "object"
     },
     "FileContent": {
@@ -1499,6 +1707,7 @@
       "title": "ImpactEntry",
       "type": "object"
     },
+    "JsonValue": {},
     "Limits": {
       "additionalProperties": false,
       "properties": {
@@ -1533,6 +1742,67 @@
         "cone_max_nodes"
       ],
       "title": "Limits",
+      "type": "object"
+    },
+    "MergeMode": {
+      "enum": [
+        "ask_me",
+        "merge_when_safe"
+      ],
+      "type": "string"
+    },
+    "MergeModeChangedEvent": {
+      "additionalProperties": false,
+      "description": "The new server merge mode.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "merge_mode.changed",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/MergeModeState"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "MergeModeChangedEvent",
+      "type": "object"
+    },
+    "MergeModeState": {
+      "additionalProperties": false,
+      "description": "Server-owned merge mode and its monotonically increasing revision.",
+      "properties": {
+        "mode": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/MergeMode"
+            }
+          ],
+          "default": "ask_me"
+        },
+        "revision": {
+          "default": 0,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "revision"
+      ],
+      "title": "MergeModeState",
       "type": "object"
     },
     "MissingSetting": {
@@ -1653,6 +1923,197 @@
       "title": "ParseError",
       "type": "object"
     },
+    "Plan": {
+      "additionalProperties": false,
+      "description": "The complete versioned state of a two-agent plan.",
+      "properties": {
+        "plan_id": {
+          "$ref": "#/$defs/PlanId"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "graph_version": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "state": {
+          "default": "planning",
+          "enum": [
+            "planning",
+            "proposed",
+            "starting",
+            "running",
+            "completed",
+            "rejected",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "subtasks": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/PlanSubtask"
+                },
+                {
+                  "$ref": "#/$defs/PlanSubtask"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "plan_id",
+        "revision",
+        "task",
+        "graph_version",
+        "state",
+        "subtasks",
+        "detail"
+      ],
+      "title": "Plan",
+      "type": "object"
+    },
+    "PlanCreated": {
+      "additionalProperties": false,
+      "description": "The created plan identifier; generation continues through events.",
+      "properties": {
+        "plan_id": {
+          "$ref": "#/$defs/PlanId"
+        }
+      },
+      "required": [
+        "plan_id"
+      ],
+      "title": "PlanCreated",
+      "type": "object"
+    },
+    "PlanId": {
+      "pattern": "^plan-[1-9]\\d*$",
+      "type": "string"
+    },
+    "PlanRevision": {
+      "additionalProperties": false,
+      "description": "The expected revision for a plan command.",
+      "properties": {
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "PlanRevision",
+      "type": "object"
+    },
+    "PlanSubtask": {
+      "additionalProperties": false,
+      "description": "A subtask and the agent assigned when the plan starts.",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "zone": {
+          "$ref": "#/$defs/PlanZone"
+        },
+        "agent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "task",
+        "zone",
+        "agent_id"
+      ],
+      "title": "PlanSubtask",
+      "type": "object"
+    },
+    "PlanUpdatedEvent": {
+      "additionalProperties": false,
+      "description": "The complete new plan revision.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "plan.updated",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Plan"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "PlanUpdatedEvent",
+      "type": "object"
+    },
+    "PlanZone": {
+      "additionalProperties": false,
+      "description": "Explicit graph nodes and workspace files selected for a subtask.",
+      "properties": {
+        "node_ids": {
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        },
+        "paths": {
+          "items": {
+            "$ref": "#/$defs/WorkspacePath"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "node_ids",
+        "paths"
+      ],
+      "title": "PlanZone",
+      "type": "object"
+    },
     "Point": {
       "additionalProperties": false,
       "properties": {
@@ -1699,6 +2160,32 @@
       "title": "RejectChange",
       "type": "object"
     },
+    "RejectPlan": {
+      "additionalProperties": false,
+      "description": "Refuse a proposed plan without starting its agents.",
+      "properties": {
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "RejectPlan",
+      "type": "object"
+    },
     "RequestChanges": {
       "additionalProperties": false,
       "description": "`POST /changes/{id}/request-changes`: the comment goes back to the agent.",
@@ -1712,6 +2199,68 @@
       ],
       "title": "RequestChanges",
       "type": "object"
+    },
+    "RuleAssessment": {
+      "additionalProperties": false,
+      "description": "One rule's recorded inputs, limit, outcome and evidence.",
+      "properties": {
+        "rule": {
+          "$ref": "#/$defs/RuleId"
+        },
+        "observed": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/JsonValue"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "threshold": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        "result": {
+          "enum": [
+            "pass",
+            "fail",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "rule",
+        "observed",
+        "threshold",
+        "result",
+        "evidence"
+      ],
+      "title": "RuleAssessment",
+      "type": "object"
+    },
+    "RuleId": {
+      "enum": [
+        "combined_tests",
+        "small_cone",
+        "small_change",
+        "known_spend",
+        "existing_tests_untouched"
+      ],
+      "type": "string"
     },
     "RunId": {
       "pattern": "^run-\\d{8}-\\d{6}$",
@@ -1755,6 +2304,18 @@
         },
         "budget": {
           "$ref": "#/$defs/Budget"
+        },
+        "merge_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MergeModeState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Initial server merge mode; null in recordings without mode metadata."
         }
       },
       "required": [
@@ -1766,7 +2327,8 @@
         "models",
         "slots",
         "limits",
-        "budget"
+        "budget",
+        "merge_mode"
       ],
       "title": "RunStarted",
       "type": "object"
@@ -1839,12 +2401,15 @@
           "agent.focus": "#/$defs/AgentFocusEvent",
           "agent.status": "#/$defs/AgentStatusEvent",
           "agent.step": "#/$defs/AgentStepEvent",
+          "change.assessed": "#/$defs/ChangeAssessedEvent",
           "change.proposed": "#/$defs/ChangeProposedEvent",
           "change.resolved": "#/$defs/ChangeResolvedEvent",
           "change.updated": "#/$defs/ChangeUpdatedEvent",
           "error": "#/$defs/ErrorReportEvent",
           "graph.delta": "#/$defs/GraphDeltaEvent",
           "graph.snapshot": "#/$defs/GraphSnapshotEvent",
+          "merge_mode.changed": "#/$defs/MergeModeChangedEvent",
+          "plan.updated": "#/$defs/PlanUpdatedEvent",
           "run.started": "#/$defs/RunStartedEvent",
           "usage.tick": "#/$defs/UsageTickEvent"
         },
@@ -1883,8 +2448,36 @@
         },
         {
           "$ref": "#/$defs/ErrorReportEvent"
+        },
+        {
+          "$ref": "#/$defs/ChangeAssessedEvent"
+        },
+        {
+          "$ref": "#/$defs/MergeModeChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/PlanUpdatedEvent"
         }
       ]
+    },
+    "SetMergeMode": {
+      "additionalProperties": false,
+      "description": "Select a merge mode using the last observed server revision.",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/MergeMode"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "revision"
+      ],
+      "title": "SetMergeMode",
+      "type": "object"
     },
     "SettingName": {
       "enum": [
@@ -1959,6 +2552,24 @@
       "title": "StartAgent",
       "type": "object"
     },
+    "SubtaskDraft": {
+      "additionalProperties": false,
+      "description": "An editable subtask before the server assigns its agent.",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "zone": {
+          "$ref": "#/$defs/PlanZone"
+        }
+      },
+      "required": [
+        "task",
+        "zone"
+      ],
+      "title": "SubtaskDraft",
+      "type": "object"
+    },
     "SuiteResult": {
       "additionalProperties": false,
       "description": "A test run's result. Not \"TestResult\", which pytest would try to collect.",
@@ -2007,6 +2618,39 @@
     "Timestamp": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
       "type": "string"
+    },
+    "UpdatePlan": {
+      "additionalProperties": false,
+      "description": "Replace both proposed subtasks using the expected plan revision.",
+      "properties": {
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "graph_version": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "subtasks": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/SubtaskDraft"
+            },
+            {
+              "$ref": "#/$defs/SubtaskDraft"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "revision",
+        "graph_version",
+        "subtasks"
+      ],
+      "title": "UpdatePlan",
+      "type": "object"
     },
     "UsageTick": {
       "additionalProperties": false,

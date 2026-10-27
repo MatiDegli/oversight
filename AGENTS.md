@@ -51,7 +51,7 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 - Signal identity: the graph is the machines' surface, the panels are the person's. Panels are dark and plain; Monaco uses a dark theme with low-chroma syntax colors. The review header is matte: flat dark with a still grain.
 - Color is an agent (A orange #ff5c1f, B blue #4f7dff) or a state (green passed or added, red failed, removed or destructive), nothing else, and never alone: letters A and B, + and - in diffs, icons on tests. No amber warnings; counters across agents are neutral.
 - Type: Atkinson Hyperlegible Next for text and graph labels, Atkinson Hyperlegible Mono for code, hashes and numbers, both from Fontsource packages; sentence case. Monaco is created after the fonts load, or calls monaco.editor.remeasureFonts().
-- The dot-field light behind the graph is its own canvas under a transparent Cytoscape canvas. It comes after level 1; until then the background is plain black.
+- The dot-field light behind the graph is its own canvas under a transparent Cytoscape canvas. It was brought forward from after level 1 (DECISIONS.md) and never blocks a level; without WebGL the background is plain black.
 - DESIGN.md, with PRODUCT.md, is the design reference; Impeccable 4.5.2 is the design skill. Its allowed commands: shape, harden, onboard, audit, critique, polish, clarify, typeset, layout. Forbidden: bolder, colorize, delight, overdrive, animate, live, generate and document.
 - shape plans a screen inside DESIGN.md and never opens a new visual world.
 - Where Impeccable clashes with DESIGN.md or AGENTS.md, ours wins, and DECISIONS.md records the clash.
@@ -133,6 +133,8 @@ A level is done when its demo runs three times in a row from a clean start, with
 
 ## Out of scope for these 9 days
 A persistent incremental engine, more languages, runtime traces, embeddings, a sandbox, undo, and a worktree pool.
+One bounded exception to undo, in level 3: a one-click Revert of a merge made by rules, only while it applies
+without conflict; otherwise the change goes to "needs you".
 
 ## Environment
 Develop in WSL, on the Linux filesystem. The UI is opened and recorded in the Windows browser, which shares localhost with WSL.

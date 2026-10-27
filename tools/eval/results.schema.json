@@ -1,0 +1,141 @@
+{
+  "$defs": {
+    "Tests": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ],
+          "title": "Baseline",
+          "type": "string"
+        },
+        "hidden": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ],
+          "title": "Hidden",
+          "type": "string"
+        },
+        "policy": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ],
+          "title": "Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "baseline",
+        "hidden",
+        "policy"
+      ],
+      "title": "Tests",
+      "type": "object"
+    },
+    "Tokens": {
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "const": "unknown",
+              "type": "string"
+            }
+          ],
+          "title": "Input"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "const": "unknown",
+              "type": "string"
+            }
+          ],
+          "title": "Output"
+        }
+      },
+      "required": [
+        "input",
+        "output"
+      ],
+      "title": "Tokens",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "title": "Task Id",
+      "type": "string"
+    },
+    "agent_model": {
+      "title": "Agent Model",
+      "type": "string"
+    },
+    "outcome": {
+      "enum": [
+        "solved",
+        "failed",
+        "stopped"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "steps": {
+      "minimum": 0,
+      "title": "Steps",
+      "type": "integer"
+    },
+    "duration_s": {
+      "minimum": 0,
+      "title": "Duration S",
+      "type": "number"
+    },
+    "tokens": {
+      "$ref": "#/$defs/Tokens"
+    },
+    "cost_usd": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "const": "unknown",
+          "type": "string"
+        }
+      ],
+      "title": "Cost Usd"
+    },
+    "test_result": {
+      "$ref": "#/$defs/Tests"
+    }
+  },
+  "required": [
+    "task_id",
+    "agent_model",
+    "outcome",
+    "steps",
+    "duration_s",
+    "tokens",
+    "cost_usd",
+    "test_result"
+  ],
+  "title": "Result",
+  "type": "object"
+}

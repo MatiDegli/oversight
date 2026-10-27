@@ -344,7 +344,7 @@ The maintainer approved the recommended answer to each question below. On questi
 and accepted the reason: creating a file needs a contract change (a null `base_hash` meaning "create,
 and fail if the file exists"), a "New file" action, and a new module placed in the preset layout
 without moving the rest. It is a separate small front right after editing works, with that contract
-change proposed in the contracts 1.2 PR.
+change proposed in the contracts 1.4.0 PR.
 
 
 1. Agent saves answer 501 until request-changes step 2 lands `save_for_review`? **Recommended:

@@ -21,7 +21,7 @@ from pydantic import BaseModel, TypeAdapter
 from pydantic.json_schema import GenerateJsonSchema, JsonSchemaMode
 from pydantic_core import CoreSchema
 
-from oversight_contracts import CONTRACT_VERSION, commands, events
+from oversight_contracts import CONTRACT_VERSION, commands, events, plans, policy
 
 HERE = Path(__file__).resolve().parent
 GENERATED = HERE / "generated"
@@ -34,6 +34,11 @@ REQUESTS: list[type[BaseModel]] = [
     commands.RequestChanges,
     commands.RejectChange,
     commands.SaveFile,
+    commands.SetMergeMode,
+    commands.CreatePlan,
+    commands.UpdatePlan,
+    commands.PlanRevision,
+    commands.RejectPlan,
 ]
 RESPONSES: list[type[BaseModel]] = [
     commands.AgentCreated,
@@ -42,6 +47,9 @@ RESPONSES: list[type[BaseModel]] = [
     commands.FileSaved,
     commands.Health,
     commands.ErrorResponse,
+    commands.PlanCreated,
+    policy.MergeModeState,
+    plans.Plan,
 ]
 
 ROOT = "OversightContracts"
@@ -62,14 +70,15 @@ class Schema(GenerateJsonSchema):
 
 
 def without_ref_siblings(node: Any) -> Any:
-    """Drop the description beside each `$ref`: json2ts would declare a second type for every such
-    reference (`ChangeGraph1`). Any other key beside a `$ref` is a constraint: refuse to drop it."""
+    """Drop ref descriptions that duplicate named types; preserve ref defaults via allOf."""
     if isinstance(node, dict):
         mapping = cast(dict[str, Any], node)
         if "$ref" in mapping:
-            others = set(mapping) - {"$ref", "description"}
+            others = set(mapping) - {"$ref", "description", "default"}
             if others:
                 raise ValueError(f"keys beside {mapping['$ref']}: {sorted(others)}")
+            if "default" in mapping:
+                return {"allOf": [{"$ref": mapping["$ref"]}], "default": mapping["default"]}
             return {"$ref": mapping["$ref"]}
         return {key: without_ref_siblings(value) for key, value in mapping.items()}
     if isinstance(node, list):
@@ -92,17 +101,39 @@ def build_schema() -> dict[str, Any]:
     }
 
 
+def for_typescript(node: Any) -> Any:
+    """Translate 2020-12 tuple syntax for the pinned json2ts converter, keeping the wire schema."""
+    if isinstance(node, dict):
+        mapping = cast(dict[str, Any], node)
+        converted = {key: for_typescript(value) for key, value in mapping.items()}
+        if "prefixItems" in converted:
+            if "items" in converted:
+                raise ValueError("json2ts conversion requires a fixed tuple without trailing items")
+            converted["items"] = converted.pop("prefixItems")
+        return converted
+    if isinstance(node, list):
+        return [for_typescript(value) for value in cast(list[Any], node)]
+    return node
+
+
 def to_typescript(schema_text: str) -> str:
     pnpm = shutil.which("pnpm")
     if pnpm is None:
         sys.exit("pnpm is needed to generate the TypeScript types: run `make install`")
     done = subprocess.run(
         [
-            *[pnpm, "exec", "json2ts", "--unreachableDefinitions", "--no-additionalProperties"],
+            *[
+                pnpm,
+                "--offline",
+                "exec",
+                "json2ts",
+                "--unreachableDefinitions",
+                "--no-additionalProperties",
+            ],
             *["--bannerComment", ""],
         ],
         cwd=FRONTEND,
-        input=schema_text,
+        input=json.dumps(for_typescript(json.loads(schema_text))),
         capture_output=True,
         text=True,
         timeout=120,

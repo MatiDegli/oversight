@@ -249,7 +249,7 @@ async def test_replay_streams_the_whole_log_and_serves_its_final_graph(tmp_path:
         _, messages = await read_messages(client, len(events))
         graph = GraphResponse.model_validate((await client.get("/graph")).json())
         health = Health.model_validate((await client.get("/health")).json())
-    lines = LOG.read_text(encoding="utf-8").splitlines()
+    lines = [event.model_dump_json() for event in events]
     assert [m[0].removeprefix("data: ") for m in messages] == lines
     assert (health.mode, health.run_id) == ("replay", RUN_ID)
     # The graph the log reached: the snapshot with the merge's delta applied.

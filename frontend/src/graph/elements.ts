@@ -95,6 +95,7 @@ export function graphElements(
   showTests = false,
   lit: ReadonlySet<string> | null = null,
   cone: ImpactCone | null = null,
+  preserveReads = false,
 ): GraphElement[] {
   const nodes = new Map(state.graph?.nodes.map((node) => [node.id, node]));
   const edges = new Map(state.graph?.edges.map((edge) => [edge.id, edge]));
@@ -171,7 +172,7 @@ export function graphElements(
     if (distance !== undefined) classes.push("cone");
     const touch = nodeMarks[node.id];
     // Review's read history must not color the cone; only pending changes keep agent marks.
-    const focus = lit !== null && !touch?.pending ? {} : (touch?.focus ?? {});
+    const focus = lit !== null && !preserveReads && !touch?.pending ? {} : (touch?.focus ?? {});
     for (const [slot, mode] of Object.entries(focus)) classes.push(`focus-${slot}-${mode}`);
     if (focus.A && focus.B) classes.push("focus-both");
     if (touch?.pending) {
@@ -179,7 +180,7 @@ export function graphElements(
       if (touch.pendingSlots.length === 2) classes.push("pending-both");
     }
     const newFor = (addedNodeSlots.get(node.id) ?? []).map((cls) => cls.slice(-1) as Slot);
-    const marks = marksOf(touch, newFor, lit !== null);
+    const marks = marksOf(touch, newFor, lit !== null && !preserveReads);
     if (marks) classes.push("marked");
     const frame = node.kind === "module" || node.kind === "class";
     const held = below.get(node.id) ?? { callables: 0, classes: 0, added: 0, children: 0 };

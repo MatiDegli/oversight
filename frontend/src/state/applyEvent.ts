@@ -172,6 +172,11 @@ export function applyEvent(state: State, event: ServerEvent): State {
           !profile || profile.provider === "meta" ? tick.cost_usd === null : state.spendUnknown,
       };
     }
+    // Reserved contracts: consume the sequence without enabling level 3 behavior.
+    case "change.assessed":
+    case "merge_mode.changed":
+    case "plan.updated":
+      return next;
     case "error":
       return { ...next, errors: [...state.errors, event.payload] };
     default: {
