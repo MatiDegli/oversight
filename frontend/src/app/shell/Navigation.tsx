@@ -99,8 +99,12 @@ export function ShortcutsSheet({ onClose }: { onClose: () => void }) {
       aria-label="Keyboard shortcuts"
       onClose={onClose}
       onKeyDown={(event) => {
+        // Consume Escape before window listeners can close the active focus tab.
         // Native dialog cancellation also treats Meta+Escape as Escape.
-        if (event.metaKey && event.key === "Escape") event.preventDefault();
+        if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+          event.preventDefault();
+          if (!event.metaKey) onClose();
+        }
       }}
       className="shortcuts-sheet"
     >

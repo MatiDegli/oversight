@@ -165,7 +165,7 @@ describe("theme", () => {
       (match) => !required(match[1]).startsWith("day-"),
     );
     expect(entries.length).toBeGreaterThan(0);
-    // Approved shell-frame brief supersedes these DESIGN.md values; docs front updates it.
+    // DECISIONS.md: Shell-frame docs front (DESIGN.md parity) removes these on landing.
     const approved: Record<string, string> = {
       shell: "#09090a",
       panel: "#0d0d0f",
@@ -176,6 +176,10 @@ describe("theme", () => {
       border: "rgba(255, 255, 255, 0.1)",
     };
     for (const [, name, value] of entries) {
+      if (approved[required(name)])
+        expect(value, `Remove the landed DESIGN.md override for ${required(name)}`).not.toBe(
+          approved[required(name)],
+        );
       expect(tokens[name as keyof typeof tokens], name).toEqual(
         cssValue(approved[required(name)] ?? required(value)),
       );
@@ -183,6 +187,23 @@ describe("theme", () => {
     expect(tokens["dim-node"]).toBe(0.16);
     expect(tokens["dim-module"]).toBe(0.6);
     expect(tokens["quiet-edge"]).toBe(0.45);
+  });
+
+  it("removes the obsolete pre-M8 overlay opacity tokens from both token sets", () => {
+    for (const name of ["shell-opacity", "cone-card-opacity"]) {
+      expect(tokens).not.toHaveProperty(name);
+      expect(shared).not.toHaveProperty(name);
+    }
+  });
+
+  it("ties temporary DESIGN.md overrides to the shell-frame docs front", () => {
+    const decisions = readFileSync(new URL("../../../DECISIONS.md", import.meta.url), "utf8");
+    const note = required(
+      decisions.split("Approved shell frame and Chrome close-tab key")[1],
+    ).split("At 1920 px")[0];
+    expect(note).toContain("Shell-frame docs front (DESIGN.md parity)");
+    expect(note).toContain("remove the seven-token `approved` override");
+    expect(note).toContain("frontend/src/theme/theme.test.ts");
   });
 
   it("loads the documented font weights from the installed packages", () => {
@@ -255,6 +276,13 @@ it.each(surfaces)("meets body contrast for every shell text token on %s", (surfa
       contrast(tokens[mark], tokens[surface]),
       `${mark} UI mark on ${surface}`,
     ).toBeGreaterThanOrEqual(3);
+});
+
+it.each([
+  ["module-label", "ground"],
+  ["text-hover", "raised"],
+] as const)("meets body contrast for %s on %s", (text, surface) => {
+  expect(contrast(tokens[text], tokens[surface])).toBeGreaterThanOrEqual(4.5);
 });
 
 // CSS alpha compositing happens in sRGB before relative luminance is calculated.

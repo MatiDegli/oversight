@@ -369,7 +369,13 @@ raised `#1b1b1f`, inset `#09090b`, translucent dividers and borders, a top highl
 soft card shadow. Graph overlays use the translucent panel token with 12 px backdrop blur.
 Group labels use uppercase 11.5 px text with tracking. Agent accents stay unchanged.
 The contrast matrix covers every requested text token on all seven surfaces and both card
-ends at 4.5:1; no text token needed adjustment. The docs front owns the DESIGN.md update.
+ends at 4.5:1; no text token needed adjustment.
+
+Follow-up: **Shell-frame docs front (DESIGN.md parity)** owns this supersession. When it
+lands, update DESIGN.md to these approved surface values and M8's bounded-blur rules, then
+remove the seven-token `approved` override in `frontend/src/theme/theme.test.ts` in the same
+change, restoring direct parity with DESIGN.md. The parity test rejects overrides once the
+documented value matches, so landing the docs update cannot silently retain a stale override.
 
 At 1920 px the fixed zones are a 52 px header, 56 px view rail, optional 280 px sidebar,
 880 px focus panel, graph of at least 560 px, 400 px agents panel or 56 px agents rail,
@@ -380,6 +386,8 @@ The start-from-function task panel keeps its expanded exception, overlaying when
 
 Focus tabs are person-owned reducer state: file, live diff and review retain their own
 camera scope, six-tab cap, oldest inactive eviction and previous-active close behavior.
+The rail's Watch button closes only the active tab, like Escape; other tabs remain open.
+Closing the last tab returns to watch.
 Events update tab contents and review state but never navigate. The dock and sidebar
 contain honest placeholders until their owning fronts land. Replay provenance and connection
 failures belong to the status line, with a retry that restarts only the transport session.
@@ -389,7 +397,8 @@ keyboard dispatch (which bypasses browser accelerators). Native Ctrl+W closes th
 without delivering W to the page; native Alt+W reaches it. Therefore Alt+W closes an Oversight
 focus tab. Ctrl+B toggles the sidebar, Ctrl+backquote the dock, and Escape closes the active
 tab. Shell shortcuts are ignored in text fields, task boxes and Monaco. Review's existing
-keys remain local; Approve has no shortcut or command.
+keys remain local; Approve has no shortcut or command. While the shortcuts sheet is open,
+all shell shortcuts pause except Escape, which dismisses only the sheet.
 
 ## 2026-10-27 — M8: bounded backdrop blur
 
@@ -407,3 +416,19 @@ per version. The runner verifies identical camera paths, layout positions and fi
 Raw Chromium traces and JSON reports stay in `.shots/`. Its metric is the union of top-level
 task durations on renderer Compositor and VizCompositorThread, summed across threads, in ms;
 it is compositor task occupancy, not GPU execution time or a frame-latency measurement.
+
+Measured results (Chromium 156.0.8078.4, ANGLE SwiftShader software renderer):
+
+| Version | Commit | Samples | Median compositor occupancy (ms) |
+| --- | --- | --- | --- |
+| before | `16842be` | 3 | 2189.663 |
+| after | `b1c2a82` | 3 | 1816.517 |
+
+Delta (after − before): -373.146 ms (-17.041%). The sample totals were
+2613.844, 2083.882, 2189.663 ms before and 1199.853, 2270.919, 1816.517 ms after.
+Each sample has 180 camera frames and 177 field draws, with identical motion across all six.
+`frontend/shots/compositor-evidence.json` preserves the totals, commit ids, renderer and motion
+hashes; its test checks the medians, delta and sample counts against this entry. During the
+review fix, the totals were recalculated from all six raw traces and matched these reports.
+The measured median improved, but three samples with this dispersion and a software renderer
+do not establish a hardware-GPU speedup or a frame-latency improvement.

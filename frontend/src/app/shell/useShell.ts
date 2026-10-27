@@ -27,15 +27,14 @@ export function useShell(open: boolean, onClose: () => void) {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.metaKey || isTyping(event.target))
         return;
-      if (event.key === "Escape" && shortcuts) {
-        event.preventDefault();
-        setShortcuts(false);
-      } else if (
-        event.ctrlKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        event.key.toLowerCase() === "b"
-      ) {
+      if (shortcuts) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setShortcuts(false);
+        }
+        return;
+      }
+      if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "b") {
         event.preventDefault();
         setSidebar((current) => (current ? null : "Files"));
       } else if (event.ctrlKey && !event.altKey && event.code === "Backquote") {

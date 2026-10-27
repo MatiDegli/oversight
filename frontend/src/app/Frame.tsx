@@ -67,10 +67,7 @@ export function Frame(props: FrameProps) {
           watching={!open}
           sidebar={shell.sidebar}
           onSidebar={shell.openSidebar}
-          onWatch={() => {
-            if (props.onTabAction) props.onTabAction({ type: "watch" });
-            else onClosePanel();
-          }}
+          onWatch={onClosePanel}
           onShortcuts={() => {
             shell.setShortcuts(true);
           }}

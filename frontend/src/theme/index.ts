@@ -172,8 +172,6 @@ export const themes = {
     "pending-dash-gap": "4px",
     "focus-ring-width": "2px",
     "focus-ring-offset": "2px",
-    "shell-opacity": 0.9,
-    "cone-card-opacity": 0.94,
     "module-opacity": 0.9,
     "node-opacity": 0.94,
     "dim-node": 0.16,

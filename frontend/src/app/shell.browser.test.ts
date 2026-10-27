@@ -223,6 +223,57 @@ it.each(["Meta+Control+b", "Meta+Control+Backquote", "Meta+Alt+w", "Meta+Escape"
   30_000,
 );
 
+it("Watch closes only the active tab and retains the other tabs", async () => {
+  await withPage(1920, 1080, async (page) => {
+    await page.evaluate(() => {
+      window.shellTest.open("file");
+      window.shellTest.open("diff");
+      window.shellTest.update();
+      window.shellTest.open("review");
+    });
+    const tabs = page.getByRole("tablist", { name: "Open files and changes" }).getByRole("tab");
+    await check(tabs).toHaveCount(3);
+    await page.getByRole("button", { name: "Watch", exact: true }).click();
+    await check(tabs).toHaveCount(2);
+    await check(tabs.last()).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("button", { name: "Watch", exact: true }).click();
+    await check(tabs).toHaveCount(1);
+    await check(tabs.first()).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("button", { name: "Watch", exact: true }).click();
+    await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(0);
+    await check(page.getByRole("button", { name: "Watch", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+}, 30_000);
+
+it.each(["Control+b", "Control+Backquote", "Alt+w"])(
+  "pauses %s while the shortcuts sheet is open, then resumes it",
+  async (key) => {
+    await withPage(1920, 1080, async (page) => {
+      await page.evaluate(() => {
+        window.shellTest.open("file");
+      });
+      await page.getByRole("button", { name: "Keyboard shortcuts", exact: true }).click();
+      const sheet = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+      await page.keyboard.press(key);
+      await check(sheet).toBeVisible();
+      await check(page.locator(".shell-sidebar, .bottom-dock")).toHaveCount(0);
+      await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await check(sheet).toHaveCount(0);
+      await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(1);
+      await page.getByRole("button", { name: "Close file", exact: true }).focus();
+      await page.keyboard.press(key);
+      if (key === "Alt+w")
+        await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(0);
+      else await check(page.locator(".shell-sidebar, .bottom-dock")).toHaveCount(1);
+    });
+  },
+  30_000,
+);
+
 it("ignores Meta+Escape in the shortcuts sheet", async () => {
   await withPage(1920, 1080, async (page) => {
     await page.getByRole("button", { name: "Keyboard shortcuts", exact: true }).click();
