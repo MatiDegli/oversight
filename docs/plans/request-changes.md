@@ -144,15 +144,27 @@ async def _whole(self, work: Coroutine[Any, Any, T]) -> T: ...
 - `Commands` gains `request_changes(change_id, comment)` and `stop(agent_id)`, synchronous like
   `approve`, so the flip precedes the 202; both move to `LIVE_ONLY` (501 in replay).
 - **App `request_changes`**: `wrong_state` while main is suspect or the brake refuses new runs;
-  `manager.request_changes`; then, with no `await`, `self._runs[agent] = create_task(
-  self._revise(...))`: it waits for the decision and on a `Revision` runs `revise`, its `finally`
-  calling `run_ended(..., steps=...)` once the change is `working`. The app keeps each `AgentRun`
-  and its client until the change is rejected or merged.
-- **R8: shutdown ends the decision too.** `_stop_runs` cancels `_revise`, which on that cancel
-  cancels the decision task and waits for it. Cancelled in phase A, the change returns to `ready`
-  or `conflict` with nothing sent; inside phase B, `_whole` finishes it, the change is `working`,
-  and `_revise` calls `run_ended(agent, None, steps=)` with the kept run's steps: `unproposed`, as
-  for any run a shutdown cuts. No decision outlives `_stop_runs`.
+  `decision = manager.request_changes(...)`; then, with no `await`, `self._decisions[agent] =
+  decision` and `self._runs[agent] = create_task(self._revise(decision, ...))`: it waits for the
+  decision and on a `Revision` runs `revise`, its `finally` calling `run_ended(..., steps=...)`
+  once the change is `working`; `_revise` does `self._decisions.pop(agent, None)` once it has
+  awaited the decision. The app keeps each `AgentRun` and its client until the change is
+  rejected or merged.
+- **R8: shutdown owns the decision too.** `_stop_runs` does not rely on `_revise`'s cancel
+  handler, which a task cancelled before its first step never runs. It first snapshots
+  `decisions = list(self._decisions.items())`, then cancels the run/`_revise` tasks, then
+  cancels each decision in the snapshot and drains it (awaits it, swallowing `CancelledError`)
+  before `manager.aclose()` and the store close. A `_revise` waking as its decision ends pops
+  during that drain: the snapshot is unaffected, and `pop(agent, None)` tolerates the entry
+  already gone. That settles it by section 1: before phase B, phase A's recovery and
+  `_decide`'s `_restore` return `ready`/`conflict` with nothing sent; inside phase B, `_whole`
+  finishes the resolution and `working` together despite the cancel. After draining,
+  `_stop_runs` awaits the cancelled `_revise` tasks (swallowing `CancelledError`) before its
+  own `run_ended`, so `_revise`'s `finally` `run_ended` finishes first and the two cannot
+  interleave. If the drained change is then `working`, `_stop_runs` itself calls
+  `run_ended(agent, None, steps=)` with the kept run's steps: `unproposed`, as for any run a
+  shutdown cuts (the state guard makes it a no-op if `_revise`'s `finally` already ran). No
+  `deciding` change, and no unended `working` one, reaches `aclose`.
 - **App `stop`**: an unknown or malformed id is `not_found`; `manager.stop(agent,
   self._runs.get(agent))`; allowed while main is suspect, like Reject.
 - **Front 17 (interface notes only).** Request changes needs a trimmed comment, on
@@ -223,6 +235,22 @@ store took it, the caller has not heard). * marks those shown failing with their
     the test cancels `_revise` as `_stop_runs` does, then opens the gate: one resolution, the
     change `unproposed`, nothing after it, no task alive. With main's lock held by the test
     instead: no resolution, `ready`.
+  - *`test_shutdown_before_revise_starts` (R8): `held_publish` holds `changes_requested` before
+    the store and signals when held. The test drives the decision to that hold, registered in
+    `_decisions` as `request_changes` registers it, and only then creates the `_revise` task,
+    cancelling it with no `await` between `create_task` and `cancel()`, so its body and handler
+    provably never run (a counting `revise` stays at zero). It then starts `_stop_runs`, opens
+    the gate and awaits it: one resolution, `working` settled to `unproposed` by `_stop_runs`'
+    own `run_ended`, nothing after it, no task alive.
+  - *`test_shutdown_decision_pops_during_drain` (R8): `held_publish` holds `changes_requested`
+    before the store for two changes, each on its own gate. The test first swaps `_decisions`
+    for a `dict` subclass whose `pop` sets a per-agent event (test-only, no production hook),
+    registers both decisions there, and starts each `_revise`, which signals it is awaiting
+    its decision. It then starts `_stop_runs`, opens only the first gate, and waits for that
+    agent's `pop` event, so the first entry is gone while the drain is still between the two
+    decisions; only then does it open the second gate: no `RuntimeError`, every decision in
+    the snapshot drained, one resolution each, no task alive. Without the snapshot the
+    drain's next step raises `RuntimeError` and the second decision never drains.
 
 ## Level 3, kept out
 
