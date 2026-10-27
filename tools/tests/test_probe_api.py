@@ -621,7 +621,9 @@ def test_the_report_has_the_answers_the_sources_and_no_key_or_path() -> None:
     assert "Calls made: 8 of at most 8" in text
     assert "https://dev.meta.ai/docs/tool-calling" in text
     assert "Skipped: BASETEN_API_KEY is not set." in text
-    assert "Still unknown for agent B" in text
+    assert "Not probed in this report: whether `meta-models/muse-spark-open-1026`" in text
+    assert "still unknown" not in text.lower() and "which slug" not in text
+    assert "tools/probe_api.py baseten` once `BASETEN_API_KEY` is set" in text
     assert KEY not in text and "/home" not in text and "Authorization" not in text
 
 

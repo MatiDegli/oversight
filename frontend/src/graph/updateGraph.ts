@@ -32,9 +32,11 @@ const leafPositions = new WeakMap<Core, Map<string, Position>>();
  * nodes that ancestor does not contain. A class with no children is drawn at leaf size among
  * tightly packed siblings; with its first child it becomes a frame around that child, with
  * padding and a label, which no longer fits its old slot. The child therefore goes to the nearest
- * free space and the frame moves with it. Existing leaves never move.
+ * free space and the frame moves with it. Leaves stay put whenever their root can grow; an
+ * impossible fit relocates only that root, preserving the relative layout of all its leaves.
  */
-function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme): GraphElement[] {
+function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme) {
+  const relocated = new Map<string, Position>();
   const g = nodeGeometry(theme);
   // Cytoscape's bounding boxes are a little larger than the drawn shapes (strokes, rounding), so
   // the sizes come from a measured leaf and parent when the graph has them, and from the tokens
@@ -137,6 +139,30 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
         const box = boxAt(point);
         return box.y1 > boundary.y2 ? 0 : box.x2 < boundary.x1 || box.x1 > boundary.x2 ? 1 : 2;
       };
+      // A grid can miss a narrow opening. Clearance boundaries give a finite exact search,
+      // run within each direction so an available side still wins over space above the heading.
+      let exact: Position[] | undefined;
+      const exactCandidates = () => {
+        const xs = new Set([center.x]);
+        const ys = new Set([center.y]);
+        const boundaries = (box: Box, x: number, y: number, label = 0) => {
+          xs.add(box.x1 - x);
+          xs.add(box.x2 + x);
+          ys.add(box.y1 - y);
+          ys.add(box.y2 + y + label);
+        };
+        for (const box of boxes.values())
+          boundaries(box, halfWidth + g.margin, halfHeight + g.margin);
+        for (const [depth, obstacles] of avoid.entries())
+          for (const box of obstacles)
+            boundaries(
+              box,
+              halfWidth + (depth + 1) * inset,
+              halfHeight + (depth + 1) * inset,
+              g.label,
+            );
+        return [...xs].flatMap((x) => [...ys].map((y) => ({ x, y })));
+      };
       for (let preferred = 0; !position && preferred < 3; preferred++) {
         for (let ring = 0; !position && ring < 100; ring++) {
           const far = ring * g.gap;
@@ -149,27 +175,67 @@ function placeAdditions(cy: Core, elements: GraphElement[], theme: GeometryTheme
             fits,
           );
         }
+        if (!position) {
+          exact ??= exactCandidates();
+          position = nearest(exact.filter((point) => direction(point) === preferred)).find(fits);
+        }
       }
-      // Beyond the bounded search, put the new leaf and its frames below every occupied box.
-      // Unlike the parent's centre, this spot cannot overlap the surrounding nodes.
+
       if (!position) {
+        // Sometimes an anchored frame cannot grow at all (e.g. a new nested class is wider than
+        // the corridor between its neighbours). Move only that root's subtree to clear space,
+        // retaining all relative positions; placing just the leaf below would stretch its frame
+        // across the neighbours. Other roots and their leaves keep their exact positions.
+        const root = parents.at(-1);
         const bottom = Math.max(0, ...[...boxes.values()].map((box) => box.y2));
         position = {
           x: center.x,
           y: bottom + halfHeight + (parents.length + 1) * inset + g.label + g.margin,
         };
+        if (root) {
+          position.y =
+            (boxes.get(root)?.y2 ?? bottom) +
+            halfHeight +
+            (parents.length + 1) * inset +
+            g.label +
+            g.margin;
+          const grown = grownAt(root, parents.length - 1, position);
+          const dy = bottom + g.margin - grown.y1;
+          const family = [...boxes.keys()].filter(
+            (other) => other === root || ancestorsOf(other).includes(root),
+          );
+          for (const other of family) {
+            const box = boxes.get(other);
+            if (box) boxes.set(other, { ...box, y1: box.y1 + dy, y2: box.y2 + dy });
+            const definition = placed.get(other);
+            if (definition?.position)
+              placed.set(other, {
+                ...definition,
+                position: { ...definition.position, y: definition.position.y + dy },
+              });
+            const node = cy.getElementById(other);
+            if (node.nonempty() && node.isChildless()) {
+              const previous = relocated.get(other) ?? node.position();
+              relocated.set(other, { x: previous.x, y: previous.y + dy });
+            }
+          }
+          position.y += dy;
+        }
       }
     }
     const result = { ...element, position };
     placed.set(id, result);
     boxes.set(id, boxAt(position));
+    childless.add(id);
     for (const [depth, parentId] of parents.entries()) {
       boxes.set(parentId, grownAt(parentId, depth, position));
       childless.delete(parentId);
     }
     return result;
   };
-  return elements.filter((e) => cy.getElementById(e.data.id).empty()).map(place);
+  const pending = elements.filter((e) => cy.getElementById(e.data.id).empty());
+  pending.forEach(place);
+  return { additions: pending.map((element) => placed.get(element.data.id) ?? element), relocated };
 }
 
 /** Update by id, retaining dragged positions and the viewport after the first layout. */
@@ -189,7 +255,7 @@ export function updateGraph(
   const restore = cy
     .nodes(":parent")
     .filter((node) => byId.has(node.id()) && !parents.has(node.id()) && remembered.has(node.id()));
-  const added = placeAdditions(cy, elements, theme);
+  const { additions, relocated } = placeAdditions(cy, elements, theme);
   cy.batch(() => {
     // Detach survivors before removing a parent (which would remove its children too).
     for (const node of cy.nodes()) {
@@ -205,7 +271,8 @@ export function updateGraph(
       const position = remembered.get(node.id());
       if (position) node.position(position);
     }
-    cy.add(added);
+    for (const [id, point] of relocated) cy.getElementById(id).position(point);
+    cy.add(additions);
     for (const definition of elements) {
       const element = cy.getElementById(definition.data.id);
       if (definition.group === "nodes") {

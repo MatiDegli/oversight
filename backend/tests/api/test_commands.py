@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from live_helpers import (
     DEADLINE_S,
     GatedModel,
+    Scripts,
     error_code,
     is_type,
     live_server,
@@ -79,7 +80,6 @@ async def test_a_second_decision_is_wrong_state_and_one_resolution_is_logged(
         {"task": "t", "slot": "B"},
         {"task": ""},
         {"task": "   "},
-        {"task": "t", "model": "muse-spark-open"},
         {"task": "t", "model": "muse-spark"},
         {"slot": "A"},
     ],
@@ -87,6 +87,36 @@ async def test_a_second_decision_is_wrong_state_and_one_resolution_is_logged(
 async def test_bad_starts_are_invalid_request(tmp_path: Path, body: dict[str, str]) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         assert error_code(await s.client.post("/agents", json=body)) == (422, "invalid_request")
+
+
+@pytest.mark.parametrize("configured", ["fake", "muse-spark"])
+async def test_a_start_on_muse_spark_open_is_a_model_this_server_does_not_run(
+    tmp_path: Path, configured: str
+) -> None:
+    # Muse Spark Open is verified (docs/api-probe.md), so it is no longer refused as unverified; but
+    # only slot A is offered, on the configured profile: slot B, which could run it, is closed.
+    settings = live_settings(tmp_path) if configured == "fake" else meta_settings(tmp_path)
+    scripts = Scripts()
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, scripts) as s:
+        response = await s.client.post("/agents", json={"task": "t", "model": "muse-spark-open"})
+        assert error_code(response) == (422, "invalid_request")
+        assert response.json()["error"]["message"] == f"this server runs agents on {configured}"
+    assert scripts.calls == 0  # no client of any provider was made
+
+
+async def test_a_start_on_an_unverified_profile_is_refused_and_takes_no_slot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No shipped profile is unverified now: the test marks the configured fake one.
+    monkeypatch.setattr("oversight.app.UNVERIFIED_PROFILES", frozenset({"fake"}))
+    scripts = Scripts()
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path), scripts) as s:
+        response = await s.client.post("/agents", json={"task": "t"})
+        assert error_code(response) == (422, "invalid_request")
+        assert response.json()["error"]["message"] == "fake cannot run agents yet: unverified"
+        assert scripts.calls == 0
+        monkeypatch.undo()
+        assert (await s.client.post("/agents", json={"task": "t"})).status_code == 201
 
 
 async def test_a_meta_start_without_a_key_is_invalid_request_before_the_brake(

@@ -8,7 +8,7 @@ import type { RefObject } from "react";
 import { stateStore } from "../state";
 import { getActiveTheme } from "../theme";
 
-import { frameCamera, nodesInViewport, prefersReducedMotion } from "./camera";
+import { frameCamera, includeNewNodes, nodesInViewport, prefersReducedMotion } from "./camera";
 import type { Camera, Framing } from "./camera";
 import { graphElements } from "./elements";
 import { exposeProbe } from "./probe";
@@ -114,7 +114,7 @@ export function GraphView({
     if (relit) resync.current?.();
     else if (graph.current) showSelection(graph.current, selectedId);
   }, [selectedId, onNodeTap, panelOpen, litIds, frameIds, cone, frameKey, onFramed, coneCardRef]);
-  // Only opening/closing a panel or choosing another review moves the camera, never an event.
+  // Panel framing follows the person's choice; watch growth has its own guarded expansion.
   useEffect(() => {
     if (framedFor.current === panelOpen && framedKey.current === frameKey) return;
     const wasOpen = framedFor.current;
@@ -157,7 +157,27 @@ export function GraphView({
           ),
         ),
       );
+      let interacting = false;
+      let quietUntil = 0;
+      const arriving = new Set<string>();
+      cy.on("tapstart", () => {
+        interacting = true;
+        arriving.clear();
+        cy.stop();
+      });
+      cy.on("tapend", () => {
+        interacting = false;
+      });
+      cy.on("dragpan scrollzoom pinchzoom", () => {
+        arriving.clear();
+        cy.stop();
+        quietUntil = performance.now() + Number.parseFloat(theme["transition-duration"]);
+      });
       const sync = () => {
+        // A second addition can arrive before the first ease ends. Include both targets when
+        // replacing that animation, rather than leaving the first addition outside the view.
+        if (!cy.animated() || latest.current.panelOpen) arriving.clear();
+        const existing = new Set(cy.nodes().map((node) => node.id()));
         const lit = latest.current.litIds;
         updateGraph(
           cy,
@@ -169,6 +189,21 @@ export function GraphView({
           ),
         );
         showSelection(cy, latest.current.selectedId ?? null);
+        if (
+          existing.size > 0 &&
+          !latest.current.panelOpen &&
+          !interacting &&
+          performance.now() >= quietUntil
+        ) {
+          const added = cy
+            .nodes()
+            .filter((node) => !existing.has(node.id()))
+            .map((node) => node.id());
+          if (added.length > 0) {
+            for (const id of added) arriving.add(id);
+            includeNewNodes(cy, [...arriving], prefersReducedMotion());
+          }
+        }
       };
       resync.current = sync;
       cy.on("tap", "node", (event) => {
