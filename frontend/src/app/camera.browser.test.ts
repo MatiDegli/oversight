@@ -220,7 +220,10 @@ it("live diff lights its callers and dims unrelated nodes, then clears that scop
       window.graphTest.open();
     });
     const live = await scope();
-    expect(live.callers).toContain(await page.evaluate(() => window.graphTest.caller));
+    const caller = await page.evaluate(() => window.graphTest.caller);
+    const visibleCaller = (await report(page, [caller])).centers;
+    expect(visibleCaller).toHaveLength(1);
+    expect(live.callers).toContain(visibleCaller[0]?.id);
     expect(live.dimmed.length).toBeGreaterThan(0);
     await browserExpect(page.getByRole("region", { name: "Possibly affected" })).toHaveCount(0);
     await page.evaluate(() => {
@@ -252,13 +255,9 @@ it("opening the panel centers the changed node at the same zoom; closing restore
     await settled(page);
     const open = await report(page, ids);
     await browserExpect(page.getByRole("region", { name: "Possibly affected" })).toHaveCount(0);
-    const callers = await page.evaluate(() =>
-      document
-        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-        ?.oversightGraph?.nodeCenters()
-        .filter((node) => node.id === window.graphTest.caller),
-    );
-    expect(callers?.length).toBeGreaterThan(0);
+    const caller = await page.evaluate(() => window.graphTest.caller);
+    const callers = (await report(page, [caller])).centers;
+    expect(callers).toHaveLength(1);
     expect(open.cutOff).toEqual([]);
     expect(open.positions).toEqual(wide.positions);
     // The labels keep their size: the zoom is the watch fit's, not a fit of the narrowed graph.
