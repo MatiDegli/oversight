@@ -401,6 +401,22 @@ describe("browser replay", () => {
 });
 
 describe("command client", () => {
+  it("keeps too_large as a typed HTTP 413 error", async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          { error: { code: "too_large", message: "File exceeds the server size limit" } },
+          { status: 413 },
+        ),
+      );
+    await expect(createCommandClient(request).getGraph()).rejects.toMatchObject({
+      status: 413,
+      code: "too_large",
+      message: "File exceeds the server size limit",
+    });
+  });
+
   it.each([
     [502, "<html>Bad gateway</html>"],
     [500, "Internal server error"],

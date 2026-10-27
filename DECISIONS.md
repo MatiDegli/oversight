@@ -432,3 +432,5 @@ The guard precedes all routing in live and server replay, including static, unkn
 routes. Pure ASGI preserves unbuffered SSE. A future terminal consumes this same policy and adds
 same-authority checks for unsafe HTTP and every WebSocket, authentication and its stricter IPv4
 listener requirement. See guard decisions G1–G3; their defaults and decline outcomes apply.
+
+too_large (413) rides in 1.4.0; limits come with the API guard front (maintainer, M6, 2026-10-27)

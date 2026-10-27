@@ -582,8 +582,8 @@ the single error format.
 
 - Every error is `ErrorResponse {error: {code, message}}`. The codes are `not_found`,
   `wrong_state`, `slot_busy`, `not_configured`, `spend_brake`, `invalid_path`, `stale_file`,
-  `not_implemented`, `invalid_request`, `internal` and `forbidden`. They map to 404, 409, 409, 503, 403, 422,
-  409, 501, 422, 500 and 403. Only `not_configured` adds `missing: list[MissingSetting]`, where
+  `not_implemented`, `invalid_request`, `internal`, `forbidden` and `too_large`. They map to 404, 409, 409, 503, 403, 422,
+  409, 501, 422, 500, 403 and 413. Only `not_configured` adds `missing: list[MissingSetting]`, where
   `MissingSetting {name: SettingName, problem: "missing" | "invalid", slots: list[Slot]}`.
   `SettingName` is `META_API_KEY`, `BASETEN_API_KEY`, `OVERSIGHT_BUDGET_USD`,
   `MUSE_SPARK_INPUT_USD_PER_M` or `MUSE_SPARK_OUTPUT_USD_PER_M`; values are never sent.

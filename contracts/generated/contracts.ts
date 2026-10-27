@@ -46,7 +46,8 @@ export type ErrorCode =
   | "not_implemented"
   | "invalid_request"
   | "internal"
-  | "forbidden";
+  | "forbidden"
+  | "too_large";
 export type SettingName =
   | "META_API_KEY"
   | "BASETEN_API_KEY"
