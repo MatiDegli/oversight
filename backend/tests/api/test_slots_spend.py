@@ -47,11 +47,20 @@ def model_for(profile: ModelProfile, script: str) -> ScriptedModel:
     return ScriptedModel(parse_script(script), profile)
 
 
-async def test_only_metered_ticks_reach_the_ledger(tmp_path: Path, slot_b_open: None) -> None:
-    # A on the fake model, B on Muse Spark, both scripted with usage. The fake model's tick goes out
-    # with no cost and no ledger write; the file gains B's calls alone and records no unknown call.
+@pytest.mark.usefixtures("baseten_verified")
+@pytest.mark.parametrize("unmetered", ["fake", "muse-spark-open"])
+async def test_only_metered_ticks_reach_the_ledger(
+    tmp_path: Path, slot_b_open: None, unmetered: str
+) -> None:
+    # A on a profile that spends no Meta credits (the fake model, or Muse Spark Open on Baseten),
+    # B on Muse Spark, both scripted with usage. A's ticks go out with no cost and no ledger
+    # write; the file gains B's calls alone and records no unknown call.
     settings = meta_settings(
-        tmp_path, agent_model="fake", agent_model_b="muse-spark", fake_script=FAKE_SCRIPT
+        tmp_path,
+        agent_model=unmetered,
+        agent_model_b="muse-spark",
+        fake_script=FAKE_SCRIPT,
+        baseten_api_key="test-key",
     )
     write_ledger(settings, {"spent_usd": 1.0, "unknown": []})
     clients = BySlot(lambda profile, _slot: model_for(profile, LOOK_THEN_FINISH))
