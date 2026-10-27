@@ -7,14 +7,19 @@ transaction commits, so what a client sees is always in the file.
 """
 
 import asyncio
+import json
 import re
 import sqlite3
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+from pydantic import TypeAdapter
 
 from oversight.events.clock import Clock, format_ts, system_clock
 from oversight.events.graph_fold import apply_delta
+from oversight.events.references import validate_references
 from oversight_contracts.events import (
     AgentFocus,
     AgentStatus,
@@ -23,12 +28,18 @@ from oversight_contracts.events import (
     ChangeResolved,
     ChangeUpdated,
     ErrorReport,
+    LeadStatus,
+    RevertResult,
     RunStarted,
+    ServerEvent,
+    SuiteExecution,
     UsageTick,
 )
 from oversight_contracts.graph import GraphDelta, GraphSnapshot
 from oversight_contracts.plans import Plan
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
+from oversight_contracts.queue import QueuedTask
+from oversight_contracts.review import ChangeFacts, CrossReview
 
 type EventPayload = (
     RunStarted
@@ -45,6 +56,12 @@ type EventPayload = (
     | ChangeAssessment
     | MergeModeState
     | Plan
+    | CrossReview
+    | ChangeFacts
+    | SuiteExecution
+    | RevertResult
+    | QueuedTask
+    | LeadStatus
 )
 
 EVENT_TYPES: dict[type[EventPayload], str] = {
@@ -62,6 +79,12 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     ChangeAssessment: "change.assessed",
     MergeModeState: "merge_mode.changed",
     Plan: "plan.updated",
+    CrossReview: "change.reviewed",
+    ChangeFacts: "change.facts_recorded",
+    SuiteExecution: "tests.executed",
+    RevertResult: "revert.resolved",
+    QueuedTask: "queue.updated",
+    LeadStatus: "lead.status",
 }
 """The event type each payload travels under; the store derives `type` from the payload."""
 
@@ -86,6 +109,10 @@ class StoredEvent:
     ts: str
     type: str
     envelope: str
+
+
+class EventRejected(ValueError):
+    """A semantic rejection of one event; retrying it cannot succeed."""
 
 
 class StoreClosedError(RuntimeError):
@@ -127,8 +154,17 @@ class EventStore:
     """
 
     def __init__(
-        self, path: Path, run_id: str, clock: Clock = system_clock, max_batch: int = 256
+        self,
+        path: Path,
+        run_id: str,
+        clock: Clock = system_clock,
+        max_batch: int = 256,
+        *,
+        mode: Literal["live", "replay"] = "live",
+        allow_fake_provider: bool = False,
     ) -> None:
+        self.mode = mode
+        self.allow_fake_provider = allow_fake_provider
         self.path = path
         self.run_id = run_id
         self._clock = clock
@@ -198,14 +234,37 @@ class EventStore:
         """
         if self._closing or self._writer is None:
             raise StoreClosedError("the event store is not accepting events")
-        if ts is not None and not _TS_FORMAT.match(ts):
-            raise ValueError(f"ts must look like 2026-10-27T14:03:12.345Z, got {ts!r}")
-        if isinstance(payload, RunStarted) and payload.run_id != self.run_id:
-            raise ValueError(f"run.started names {payload.run_id}, but this log is {self.run_id}")
+        try:
+            if ts is not None and not _TS_FORMAT.match(ts):
+                raise ValueError(f"ts must look like 2026-10-27T14:03:12.345Z, got {ts!r}")
+            if isinstance(payload, RunStarted) and payload.run_id != self.run_id:
+                raise ValueError(
+                    f"run.started names {payload.run_id}, but this log is {self.run_id}"
+                )
+            kind = EVENT_TYPES[type(payload)]
+            payload_json = payload.model_dump_json()
+            # Validate serialized data, not trusted or model_construct'ed instances. This also
+            # freezes nested mutable lists before a producer can change them behind the writer.
+            frozen = (
+                TypeAdapter(ServerEvent)
+                .validate_json(
+                    json.dumps(
+                        {
+                            "seq": 1,
+                            "ts": ts or "2000-01-01T00:00:00.000Z",
+                            "type": kind,
+                            "payload": json.loads(payload_json),
+                        }
+                    )
+                )
+                .payload
+            )
+        except (ValueError, TypeError, KeyError) as error:
+            raise EventRejected(str(error)) from error
         pending = _Pending(
-            type=EVENT_TYPES[type(payload)],
-            payload=payload,
-            payload_json=payload.model_dump_json(),
+            type=kind,
+            payload=frozen,
+            payload_json=frozen.model_dump_json(),
             ts=ts,
             done=asyncio.get_running_loop().create_future(),
         )
@@ -240,47 +299,88 @@ class EventStore:
         committed.set()
 
     async def _write_loop(self) -> None:
-        stopping = False
-        while not stopping:
-            first = await self._queue.get()
-            if first is None:
-                return
-            batch = [first]
-            while len(batch) < self._max_batch:
-                try:
-                    item = self._queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
-                if item is None:
-                    stopping = True
-                    break
-                batch.append(item)
-            await self._commit(batch)
+        batch: list[_Pending] = []
+        try:
+            stopping = False
+            while not stopping:
+                first = await self._queue.get()
+                if first is None:
+                    return
+                batch = [first]
+                while len(batch) < self._max_batch:
+                    try:
+                        item = self._queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    if item is None:
+                        stopping = True
+                        break
+                    batch.append(item)
+                await self._commit(batch)
+                batch = []
+        except BaseException as error:
+            self._closing = True
+            while not self._queue.empty():
+                pending = self._queue.get_nowait()
+                if pending is not None:
+                    batch.append(pending)
+            for pending in batch:
+                if not pending.done.done():
+                    pending.done.set_exception(StoreClosedError(f"event writer stopped: {error}"))
+            self._closed = True
+            self._notify()
+
+    def _validate_provider_mode(self, event: ServerEvent) -> None:
+        if (
+            event.type == "change.reviewed"
+            and event.payload.reviewer_provider == "fake"
+            and not self.allow_fake_provider
+        ):
+            raise ValueError("fake review provider requires explicit server authorization")
 
     async def _commit(self, batch: list[_Pending]) -> None:
         rows: list[StoredEvent] = []
-        for offset, pending in enumerate(batch):
-            seq = len(self._events) + offset + 1
-            ts = pending.ts or format_ts(self._clock())
-            envelope = (
-                f'{{"seq":{seq},"ts":"{ts}","type":"{pending.type}",'
-                f'"payload":{pending.payload_json}}}'
-            )
-            rows.append(StoredEvent(seq, ts, pending.type, envelope))
+        accepted: list[tuple[_Pending, ServerEvent]] = []
+        prior = [TypeAdapter(ServerEvent).validate_json(row.envelope) for row in self._events]
+        for pending in batch:
+            try:
+                seq = len(prior) + 1
+                ts = pending.ts or format_ts(self._clock())
+                event = TypeAdapter(ServerEvent).validate_python(
+                    {
+                        "seq": seq,
+                        "ts": ts,
+                        "type": pending.type,
+                        "payload": json.loads(pending.payload_json),
+                    },
+                    context={"live": True} if self.mode == "live" else None,
+                )
+                self._validate_provider_mode(event)
+                validate_references(event, prior)
+                row = StoredEvent(seq, ts, pending.type, event.model_dump_json())
+            except (ValueError, TypeError, KeyError) as error:
+                if not pending.done.done():
+                    pending.done.set_exception(EventRejected(str(error)))
+                continue
+            rows.append(row)
+            accepted.append((pending, event))
+            prior.append(event)
+        if not rows:
+            return
         try:
             await asyncio.to_thread(self._insert, rows)
         except Exception as error:
-            # Nothing was committed, so the next batch reuses these seq numbers: still no gaps.
-            for pending in batch:
+            # SQL failure belongs to the accepted transaction, not to rejected candidates.
+            for pending, _ in accepted:
                 if not pending.done.done():
                     pending.done.set_exception(error)
             return
-        for pending, row in zip(batch, rows, strict=True):
+        for (pending, event), row in zip(accepted, rows, strict=True):
             self._events.append(row)
-            if isinstance(pending.payload, GraphSnapshot):
-                self._graph = pending.payload
-            elif isinstance(pending.payload, GraphDelta) and self._graph is not None:
-                self._graph = apply_delta(self._graph, pending.payload)
+            if event.type == "graph.snapshot":
+                self._graph = event.payload
+            elif event.type == "graph.delta" and self._graph is not None:
+                self._graph = apply_delta(self._graph, event.payload)
             if not pending.done.done():
                 pending.done.set_result(row)
         self._notify()

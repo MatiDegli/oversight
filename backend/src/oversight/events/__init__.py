@@ -12,6 +12,7 @@ from oversight.events.player import MAX_GAP_S, Sleep, play, replay_delays
 from oversight.events.store import (
     EVENT_TYPES,
     EventPayload,
+    EventRejected,
     EventStore,
     StoreClosedError,
     StoredEvent,
@@ -29,6 +30,7 @@ __all__ = [
     "MAX_GAP_S",
     "Clock",
     "EventPayload",
+    "EventRejected",
     "EventStore",
     "LogError",
     "Sleep",
