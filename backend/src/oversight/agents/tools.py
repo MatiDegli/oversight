@@ -123,6 +123,30 @@ def _line(arguments: dict[str, object], key: str) -> int | None:
     return value
 
 
+def _validate(name: str, arguments: dict[str, object]) -> None:
+    for tool in TOOL_SCHEMAS:
+        function = cast(dict[str, object], tool["function"])
+        if function["name"] != name:
+            continue
+        schema = cast(dict[str, object], function["parameters"])
+        properties = cast(dict[str, dict[str, str]], schema["properties"])
+        required = cast(list[str], schema["required"])
+        signature = f"{name}({', '.join(properties)})"
+        unknown = arguments.keys() - properties.keys()
+        missing = set(required) - arguments.keys()
+        if unknown or missing:
+            raise ToolError(
+                f"invalid arguments (unknown: {', '.join(sorted(unknown)) or 'none'}; "
+                f"missing: {', '.join(sorted(missing)) or 'none'}); expected {signature}"
+            )
+        for key, value in arguments.items():
+            kind = properties[key]["type"]
+            valid = isinstance(value, str) if kind == "string" else type(value) is int
+            if not valid:
+                raise ToolError(f"argument {key!r} must be {kind}; expected {signature}")
+        return
+
+
 async def _in_thread_to_the_end[T](fn: Callable[[], T]) -> T:
     """Run `fn` in a thread. If the caller is cancelled, wait for the thread to end before the
     cancellation goes on, so a lock taken around the call is held until the thread is done."""
@@ -186,6 +210,7 @@ class Toolbox:
             if not isinstance(parsed, dict):
                 raise ToolError("arguments must be a JSON object")
             arguments = cast(dict[str, object], parsed)
+            _validate(name, arguments)
             match name:
                 case "list_files":
                     return await self._list_files()
@@ -329,7 +354,10 @@ class Toolbox:
             raise ToolError(f"{path} changed since you last read it; read it again")
         index = current.content.find(old)
         if index == -1:
-            raise ToolError(f"old_text does not appear in {path}; it must appear exactly once")
+            raise ToolError(
+                f"old_text does not appear in {path}; read the file again and copy the exact "
+                "text without line numbers; it must appear exactly once"
+            )
         # From index + 1, not past the match: "ana" appears twice in "banana".
         if current.content.find(old, index + 1) != -1:
             raise ToolError(
@@ -364,12 +392,19 @@ class Toolbox:
         else:
             headline = f"Ran tests: {result.passed} of {result.passed + result.failed} pass"
         output = run.output[-MAX_TEST_OUTPUT:]
+        counts = f"{result.passed} passed, {result.failed} failed, {result.skipped} skipped"
+        failed = ", ".join(result.failed_tests) or "none reported"
+        content = f"Suite outcome: {result.outcome}; {counts}\nFailed tests: {failed}"
+        if len(run.output) >= MAX_TEST_OUTPUT:
+            content += f"\nOutput truncated: showing the last {MAX_TEST_OUTPUT} characters."
         return ToolOutcome(
-            content=f"{headline}\n\n{output}", ok=True, summary=headline, tests=result
+            content=f"{content}\n\n{output}", ok=True, summary=headline, tests=result
         )
 
     def _finish(self, arguments: dict[str, object]) -> ToolOutcome:
         note = cast(str, _string(arguments, "summary"))
+        if not note.strip():
+            raise ToolError("summary must not be blank; expected finish(summary: nonblank string)")
         return ToolOutcome(
             content="Finished.", ok=True, summary="Finished the task", finish_summary=note
         )

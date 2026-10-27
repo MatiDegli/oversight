@@ -15,7 +15,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal, cast
 
+from oversight.agents._replies import ReplyError, ReplyRecovery
 from oversight.agents.client import (
+    CALL_SCOPE,
+    CallScope,
     Message,
     ModelAPIError,
     ModelClient,
@@ -149,6 +152,7 @@ class AgentRun:
         self._halted = False
         self._turns = 0
         """Model calls so far. Bounded on their own, so the run ends even if a stop rule fails."""
+        self._recovery = ReplyRecovery()
         self._failures = 0
         self._seen: Counter[tuple[str, str, str]] = Counter()
         self._messages: list[Message] | None = None
@@ -228,6 +232,7 @@ class AgentRun:
             )
             self._max_steps += self._task.limits.max_steps
             self._max_turns += self._task.limits.max_steps
+            self._recovery = ReplyRecovery()
             self._failures = 0
             self._seen.clear()
             return await self._drive("revising")
@@ -265,7 +270,7 @@ class AgentRun:
         root_lost = False
         try:
             # The clock starts before the scan, so a slow scan cannot spend the budget unseen.
-            async with asyncio.timeout(self._task.limits.max_wall_clock_s):
+            async with asyncio.timeout(self._task.limits.max_wall_clock_s) as deadline:
                 try:
                     await self._tools.refresh_graph()
                 except WorkspaceError as error:
@@ -273,7 +278,11 @@ class AgentRun:
                     raise _RootLost(f"The worktree cannot be used: {reason}.") from error
                 if first_status == "starting":
                     await self._status("working")
-                summary = await self._loop(messages)
+                token = CALL_SCOPE.set(CallScope(deadline.when(), self._usage))
+                try:
+                    summary = await self._loop(messages)
+                finally:
+                    CALL_SCOPE.reset(token)
         except _Halt as halt:
             detail = halt.detail
             root_lost = isinstance(halt, _RootLost)
@@ -342,6 +351,13 @@ class AgentRun:
             self._turns += 1
             reply = await self._model.complete(messages, TOOL_SCHEMAS)
             await self._usage(reply)
+            try:
+                recovering = self._recovery.recover(reply, messages)
+            except ReplyError as error:
+                raise _Halt(str(error)) from error
+            if recovering:
+                self._fail_or_halt(ok=False)
+                continue
             messages.append(_assistant(reply))
             if not reply.tool_calls:
                 self._fail_or_halt(ok=False)
@@ -357,6 +373,7 @@ class AgentRun:
                     stopped = interrupted(call.name, call.arguments)
                     await self._report(call.name, stopped, self._since(started))
                     raise
+
                 duration_ms = self._since(started)
                 self._step += 1
                 messages.append(
