@@ -1,7 +1,7 @@
 # Architecture
 
 This document describes main at the level 2 close on Tue Oct 27, 2026,
-and the validation updates merged after `f5ea871`.
+and the current validation tooling.
 
 ## Startup and serving
 
@@ -33,8 +33,8 @@ and the separate demo test environment survive this reset.
    A slot stays held until its change is merged or rejected, including Stop/discard.
 3. `AgentRun` drives `ModelClient`. Muse Spark uses the official OpenAI SDK at Meta's
    endpoint in Contributor mode. Muse Spark Open uses the same interface at Baseten's
-   endpoint. Each slot has its own configured profile. Both slots used Muse Spark in
-   the real level 2 close runs. Tests use scripted fake clients; fake B needs its own script.
+   endpoint. Each slot has its own configured profile. Tests use scripted fake clients;
+   fake B needs its own script.
 4. The loop offers `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`.
    There is no shell tool. Paths stay within the worktree. Reads are bounded. An edit needs
    a unique old-text match and the hash from the agent's last read. Tests use the demo's

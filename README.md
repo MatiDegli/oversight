@@ -35,8 +35,8 @@ through others. Nothing reaches main until you approve it.
   agents, without API keys or credits: overlap, Request changes and a higher revision, merge,
   Stop/discard during work, a file edit on main, usage ticks and saving the editable new side
   (`PUT /files` with `agent_id`). Smoke tests, screenshot tooling and test resource caps are merged.
-- Level 2 closed on Tue Oct 27 at about 15:15 ART on `f5ea871`: `make demo-check` 3/3 (scripted fake, about 30 s/run), `make e2e` 2 passed.
-  Three real two-agent runs from clean starts also passed: A and B on Muse Spark, every change approved and merged; about US$0.016 total.
+- Level 2 closed on Tue Oct 27. Close-run logs, validation results and spending records are
+  not included in this repository.
 - The static replay build currently plays a hand-written event log and labels it as a fixture. A
   real recorded run for the judges has not been bundled yet.
 
