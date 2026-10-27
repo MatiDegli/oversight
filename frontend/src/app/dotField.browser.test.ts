@@ -426,13 +426,28 @@ it("moves with breathing and rings, and stops moving under reduced motion", asyn
   });
 }, 30_000);
 
-it("draws the review's light on its change", async () => {
-  await withPage({ reducedMotion: "reduce", scene: "review" }, async (page) => {
-    const seen = await look(page);
-    expect(seen.state).toBe("webgl");
-    expect(seen.near?.level).toBeGreaterThanOrEqual(2);
-  });
-}, 30_000);
+it.each(["review", "live-diff"] as const)(
+  "draws the %s light on its change and cone",
+  async (scene) => {
+    await withPage({ reducedMotion: "reduce", scene }, async (page) => {
+      const seen = await look(page);
+      expect(seen.state).toBe("webgl");
+      expect(seen.near?.level).toBeGreaterThanOrEqual(2);
+      const graph = await page.evaluate(() => {
+        const probe = window.fieldTest.elements().graph.oversightGraph;
+        return {
+          cone: probe?.nodeCenters("node.cone:not(.dimmed)").length ?? 0,
+          dimmed: probe?.nodeCenters("node.dimmed").length ?? 0,
+          zoom: probe?.zoom() ?? 0,
+        };
+      });
+      expect(graph.cone).toBeGreaterThan(0);
+      expect(graph.dimmed).toBeGreaterThan(0);
+      expect(graph.zoom).toBeGreaterThanOrEqual(0.8);
+    });
+  },
+  30_000,
+);
 
 it("measures a frame at 1920 by 1080", async () => {
   // The lamps are computed on the CPU and drawn on the GPU; headless Chromium's GPU is a software

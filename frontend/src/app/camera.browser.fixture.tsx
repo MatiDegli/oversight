@@ -27,7 +27,9 @@ const positions = Object.fromEntries(
   ]),
 );
 positions[CHANGED] = { x: 1900, y: 200 };
-stateStore.setState({ state: { ...recorded, graph: { ...recorded.graph, positions } } });
+// This camera case has a single changed node with no callers. The real live-cone case is
+// covered separately in dotField.browser.test.ts with the replay's original call edges.
+stateStore.setState({ state: { ...recorded, graph: { ...recorded.graph, positions, edges: [] } } });
 
 const host = document.createElement("div");
 host.style.height = "100vh";
