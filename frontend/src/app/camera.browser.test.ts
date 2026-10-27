@@ -97,6 +97,10 @@ function report(page: Page, ids: string[]) {
       cutOff: outside(centers.filter(({ id }) => wanted.includes(id))),
       centers: centers.filter(({ id }) => wanted.includes(id)),
       size: { width: element.clientWidth, height: element.clientHeight },
+      leftInset: (() => {
+        const card = document.querySelector('[aria-label="Possibly affected"]');
+        return card ? card.getBoundingClientRect().right - element.getBoundingClientRect().left : 0;
+      })(),
       cutOffAnywhere: outside(centers),
       animating: probe.animating(),
       zoom: probe.zoom(),
@@ -135,13 +139,20 @@ it("opening the panel centers the changed node at the same zoom; closing restore
     expect(eased).toBe(true);
     await settled(page);
     const open = await report(page, ids);
+    await browserExpect(page.getByRole("region", { name: "Possibly affected" })).toHaveCount(0);
+    const callers = await page.evaluate(() =>
+      document
+        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+        ?.oversightGraph?.nodeCenters("node.cone:not(.dimmed)"),
+    );
+    expect(callers?.length).toBeGreaterThan(0);
     expect(open.cutOff).toEqual([]);
     expect(open.positions).toEqual(wide.positions);
     // The labels keep their size: the zoom is the watch fit's, not a fit of the narrowed graph.
     expect(open.zoom).toBeCloseTo(wide.zoom, 6);
-    // And the node sits in the middle of the graph area between the panel and the rail.
+    // Live diff centers only the changed node, even with real callers beyond its frame.
     const [center] = open.centers;
-    expect(center?.x).toBeCloseTo(open.size.width / 2, 0);
+    expect(center?.x).toBeCloseTo((open.leftInset + open.size.width) / 2, 0);
     expect(center?.y).toBeCloseTo(open.size.height / 2, 0);
 
     await page.evaluate(() => {

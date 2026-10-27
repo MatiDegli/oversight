@@ -19,6 +19,8 @@ import {
 } from "./camera";
 import type { Camera, Framing } from "./camera";
 import { graphElements } from "./elements";
+import { createBoxSource, DotField } from "./field";
+import type { FieldInput } from "./field";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
 import { edgeShape, graphStyles } from "./styles";
@@ -57,8 +59,10 @@ export interface GraphViewProps {
   frameIds?: readonly string[] | null;
   /** The nodes that stay lit while everything else dims, as in review; null dims nothing. */
   litIds?: readonly string[] | null;
-  /** The proposal's bounded cone; live updates do not carry one in v1. */
+  /** The review proposal's cone, used for its card, framing and out-of-view report. */
   cone?: ImpactCone | null;
+  /** Live preview for node dimming and distance badges only; never moves the camera. */
+  liveCone?: ImpactCone | null;
   /** Changes only when the person opens a different panel target or enters review. */
   frameKey?: string | null;
   /** Reports the camera decision to the cone card without changing the lit set. */
@@ -67,7 +71,11 @@ export interface GraphViewProps {
   coneCardRef?: RefObject<HTMLDivElement | null>;
   /** Filled while the graph exists, for the zoom buttons; empty before it is created and after. */
   apiRef?: RefObject<GraphApi | null>;
+  /** The lights of the dot field behind the graph and the mode that shapes them. */
+  field?: FieldInput;
 }
+
+const NO_LIGHTS: FieldInput = { mode: "watch", lights: [] };
 
 function reportFraming(
   cy: Core,
@@ -109,12 +117,16 @@ export function GraphView({
   litIds = null,
   frameIds = null,
   cone = null,
+  liveCone = null,
   frameKey = null,
   onFramed,
   coneCardRef,
   apiRef,
+  field = NO_LIGHTS,
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
+  // What the dot field reads of the graph: the rendered boxes of the nodes it lights.
+  const boxes = useRef(createBoxSource());
   const graph = useRef<Core | undefined>(undefined);
   const latest = useRef<GraphViewProps>({});
   const resync = useRef<(() => void) | undefined>(undefined);
@@ -125,7 +137,11 @@ export function GraphView({
   const observeCard = useRef<(() => void) | undefined>(undefined);
   const reportViewport = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
-    const relit = latest.current.litIds !== litIds || latest.current.cone !== cone;
+    const relit =
+      latest.current.litIds !== litIds ||
+      latest.current.cone !== cone ||
+      latest.current.liveCone !== liveCone ||
+      latest.current.field?.mode !== field.mode;
     latest.current = {
       selectedId,
       onNodeTap,
@@ -133,13 +149,27 @@ export function GraphView({
       litIds,
       frameIds,
       cone,
+      liveCone,
       frameKey,
       onFramed,
       coneCardRef,
+      field,
     };
     if (relit) resync.current?.();
     else if (graph.current) showSelection(graph.current, selectedId);
-  }, [selectedId, onNodeTap, panelOpen, litIds, frameIds, cone, frameKey, onFramed, coneCardRef]);
+  }, [
+    selectedId,
+    onNodeTap,
+    panelOpen,
+    litIds,
+    frameIds,
+    cone,
+    liveCone,
+    frameKey,
+    onFramed,
+    coneCardRef,
+    field,
+  ]);
   // Panel framing follows the person's choice; watch growth has its own guarded expansion.
   useEffect(() => {
     if (framedFor.current === panelOpen && framedKey.current === frameKey) return;
@@ -165,6 +195,7 @@ export function GraphView({
   useEffect(() => {
     const host = container.current;
     if (!host) return;
+    const source = boxes.current;
     const theme = getActiveTheme();
     let cancelled = false;
     let dispose: (() => void) | undefined;
@@ -237,7 +268,8 @@ export function GraphView({
             stateStore.getState().state,
             false,
             lit ? new Set(lit) : null,
-            latest.current.cone,
+            latest.current.cone ?? latest.current.liveCone,
+            latest.current.field?.mode === "live-diff",
           ),
         );
         showSelection(cy, latest.current.selectedId ?? null);
@@ -285,6 +317,7 @@ export function GraphView({
         };
       }
       const unexpose = exposeProbe(host, cy);
+      source.attach(cy);
       const unsubscribe = stateStore.subscribe(sync);
       sync();
       if (latest.current.panelOpen) {
@@ -313,6 +346,7 @@ export function GraphView({
       observeCard.current();
       dispose = () => {
         if (apiRef) apiRef.current = null;
+        source.detach();
         unsubscribe();
         unexpose();
         resize.disconnect();
@@ -337,12 +371,17 @@ export function GraphView({
       dispose?.();
     };
   }, [apiRef]);
+  // The dot field is its own canvas under Cytoscape's transparent one: first in the tree, so
+  // everything the graph draws is painted over it.
   return (
-    <div
-      ref={container}
-      className="h-full w-full bg-ground"
-      role="img"
-      aria-label="Repository graph"
-    />
+    <div className="relative h-full w-full bg-ground">
+      <DotField source={boxes} mode={field.mode} lights={field.lights} />
+      <div
+        ref={container}
+        className="relative h-full w-full"
+        role="img"
+        aria-label="Repository graph"
+      />
+    </div>
   );
 }

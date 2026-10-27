@@ -19,6 +19,9 @@ import { streamReplay } from "./replay.ts";
 import { scenes, themes } from "./scenes.ts";
 
 const VIEWPORT = { width: 1920, height: 1080 };
+// The dot field's clock, held still (dev server only) so every capture shows the same breathing and
+// ring: a ring 110 px out and the light near its full weight.
+const FIELD_TIME = "2";
 const TIMEOUT_MS = 30_000;
 
 const { values } = parseArgs({
@@ -123,6 +126,7 @@ async function main(): Promise<number> {
         }
         const target = new URL(url);
         if (job.edgeShape) target.searchParams.set("edge-shape", job.edgeShape);
+        target.searchParams.set("field-time", FIELD_TIME);
         await page.goto(target.href, { waitUntil: "load" });
         await waitUntilReady(page, lastSeq(captureLog));
         await scene?.prepare?.(page);
