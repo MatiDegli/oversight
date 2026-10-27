@@ -12,7 +12,7 @@ PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-ci check-fast check-python lint-python check-frontend \
 	lint-frontend contracts check-contracts check-secrets demo-repo-check replay shots smoke layout \
-	test-browser
+	test-browser demo demo-check
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -41,6 +41,38 @@ replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with
 	@uv run --frozen python -m oversight replay "$(LOG)" --speed "$(SPEED)" & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
+
+# demo: the product as the judges and I run it. One origin: FastAPI serves the built frontend and the
+# API on DEMO_PORT, no Vite. It builds the UI (the normal build, not the replay one), then starts the
+# live server with the settings from .env (Muse Spark) on a fixed host and port; the workspace starts
+# clean every time (the server's reset). Starting it spends no credits: only Start agent does, and
+# without a key or a budget Start agent answers its 422 or 403 in the task box. The provider keys are
+# not stripped here, as they are for check. Ctrl+C stops it: uvicorn runs the server's shutdown.
+DEMO_PORT ?= 8710
+UI_BUILD := $(PNPM) build
+
+demo: ## build the UI, then serve it and the API on one port (DEMO_PORT) from .env; Start agent spends credits
+	$(UI_BUILD)
+	@echo ""
+	@echo "Oversight: open http://localhost:$(DEMO_PORT)/ in the browser (from Windows too: localhost is shared with WSL). Ctrl+C stops it."
+	@echo ""
+	@env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR \
+		-u GIT_PREFIX OVERSIGHT_HOST=127.0.0.1 OVERSIGHT_PORT=$(DEMO_PORT) \
+		uv run --frozen python -m oversight serve
+
+# demo-check: the demo's path three times in a row from a clean start, on the scripted fake model, so
+# no key and no credits (tools/demo_check.py says what each run checks). It builds the UI once, then
+# runs the check, which computes its own overall deadline (--print-deadline, the worst-case sum of
+# its phase deadlines plus a margin). Its in-process deadlines are best effort: in a normal failure
+# they fail naming the phase that ran out, but they cannot promise to fire. The hard bound is this
+# outer timeout, 60 s above that deadline and 30 s later killing what is left: it leaves no process
+# behind, because the server takes SIGTERM when the check's process dies (PR_SET_PDEATHSIG).
+demo-check: ## the demo path three times from a clean start, on the fake model; no credits; not in check
+	$(UI_BUILD)
+	@deadline=$$($(UV) python tools/demo_check.py --print-deadline); \
+	backstop=$$((deadline + 60)); \
+	echo "demo-check: overall deadline $${deadline}s, outer timeout $${backstop}s"; \
+	timeout --kill-after=30 $$backstop $(UV) python tools/demo_check.py
 
 # shots: screenshots of the UI from the recorded run LOG, 1920x1080, into .shots/ (gitignored), then
 # IMPECCABLE's detector on the served URL. It serves the player and Vite on free ports, so a running

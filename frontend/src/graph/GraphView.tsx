@@ -1,12 +1,15 @@
 import cytoscape from "cytoscape";
 import type { Core, NodeSingular } from "cytoscape";
+import type { ImpactCone } from "@contracts";
 import fcose from "cytoscape-fcose";
 import { useEffect, useRef } from "react";
+import type { RefObject } from "react";
 
 import { stateStore } from "../state";
 import { getActiveTheme } from "../theme";
 
-import { frameCamera, prefersReducedMotion } from "./camera";
+import { frameCamera, nodesInViewport, prefersReducedMotion } from "./camera";
+import type { Camera, Framing } from "./camera";
 import { graphElements } from "./elements";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
@@ -21,17 +24,58 @@ export interface GraphViewProps {
   onNodeTap?: (nodeId: string) => void;
   /**
    * Whether the left panel is open. The graph's width changes with it, so when this flips the
-   * camera moves (to the nodes in `frameIds` on open, to the whole graph on close).
+   * camera moves (to the nodes in `frameIds` on open, back to the saved watch camera on close).
    */
   panelOpen?: boolean;
   /**
-   * The nodes the camera centers when the panel opens, at the zoom the watch view had: the open
-   * change's nodes. Read only at that moment; changing it moves nothing. Empty falls back to the
+   * The change's nodes, framed with the cone at watch zoom or smaller down to the readable floor.
+   * Read only when the panel target changes; incoming events move nothing. Empty falls back to the
    * selected node, then to the whole graph.
    */
   frameIds?: readonly string[] | null;
   /** The nodes that stay lit while everything else dims, as in review; null dims nothing. */
   litIds?: readonly string[] | null;
+  /** The proposal's bounded cone; live updates do not carry one in v1. */
+  cone?: ImpactCone | null;
+  /** Changes only when the person opens a different panel target or enters review. */
+  frameKey?: string | null;
+  /** Reports the camera decision to the cone card without changing the lit set. */
+  onFramed?: (framing: Framing | null) => void;
+  /** The actual overlay box, measured independently from the column used for fitting. */
+  coneCardRef?: RefObject<HTMLDivElement | null>;
+}
+
+function reportFraming(
+  cy: Core,
+  host: HTMLElement,
+  props: GraphViewProps,
+  framing: Framing | null,
+) {
+  if (!framing || !props.cone) {
+    props.onFramed?.(framing);
+    return;
+  }
+  const graphBox = host.getBoundingClientRect();
+  const card = props.coneCardRef?.current?.getBoundingClientRect();
+  const ids = [...(props.frameIds ?? []), ...props.cone.entries.map((entry) => entry.node_id)];
+  const nodes = cy.nodes().filter((node) => ids.includes(node.id()));
+  const visible = nodesInViewport(
+    nodes.map((node) => ({
+      id: node.id(),
+      ...node.boundingBox({ includeLabels: true, includeOverlays: false }),
+    })),
+    framing,
+    { x1: 0, y1: 0, x2: cy.width(), y2: cy.height() },
+    card
+      ? {
+          x1: card.left - graphBox.left,
+          y1: card.top - graphBox.top,
+          x2: card.right - graphBox.left,
+          y2: card.bottom - graphBox.top,
+        }
+      : undefined,
+  );
+  props.onFramed?.({ ...framing, outOfView: new Set(ids.filter((id) => !visible.has(id))) });
 }
 
 export function GraphView({
@@ -40,29 +84,59 @@ export function GraphView({
   panelOpen = false,
   litIds = null,
   frameIds = null,
+  cone = null,
+  frameKey = null,
+  onFramed,
+  coneCardRef,
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
   const graph = useRef<Core | undefined>(undefined);
   const latest = useRef<GraphViewProps>({});
   const resync = useRef<(() => void) | undefined>(undefined);
   const framedFor = useRef(panelOpen);
+  const framedKey = useRef(frameKey);
+  const watchCamera = useRef<Camera | undefined>(undefined);
+  const targetFrame = useRef<Framing | null>(null);
+  const observeCard = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
-    const relit = latest.current.litIds !== litIds;
-    latest.current = { selectedId, onNodeTap, panelOpen, litIds, frameIds };
+    const relit = latest.current.litIds !== litIds || latest.current.cone !== cone;
+    latest.current = {
+      selectedId,
+      onNodeTap,
+      panelOpen,
+      litIds,
+      frameIds,
+      cone,
+      frameKey,
+      onFramed,
+      coneCardRef,
+    };
     if (relit) resync.current?.();
     else if (graph.current) showSelection(graph.current, selectedId);
-  }, [selectedId, onNodeTap, panelOpen, litIds, frameIds]);
-  // Only a change of the panel moves the camera, never a tap or an event; the first render keeps
-  // the fit the first layout made.
+  }, [selectedId, onNodeTap, panelOpen, litIds, frameIds, cone, frameKey, onFramed, coneCardRef]);
+  // Only opening/closing a panel or choosing another review moves the camera, never an event.
   useEffect(() => {
-    if (framedFor.current === panelOpen) return;
+    if (framedFor.current === panelOpen && framedKey.current === frameKey) return;
+    const wasOpen = framedFor.current;
     framedFor.current = panelOpen;
+    framedKey.current = frameKey;
     if (graph.current) {
-      const { frameIds: framed, selectedId: selected } = latest.current;
+      if (!wasOpen && panelOpen)
+        watchCamera.current = { zoom: graph.current.zoom(), pan: { ...graph.current.pan() } };
+      const { frameIds: framed, selectedId: selected, cone: impact } = latest.current;
       const focus = framed?.length ? framed : selected ? [selected] : [];
-      frameCamera(graph.current, panelOpen ? focus : [], prefersReducedMotion());
+      const framing = frameCamera(graph.current, panelOpen ? focus : [], prefersReducedMotion(), {
+        coneIds: panelOpen ? impact?.entries.map((entry) => entry.node_id) : undefined,
+        watchZoom: watchCamera.current?.zoom,
+        restoreCamera: panelOpen ? undefined : watchCamera.current,
+      });
+      targetFrame.current = framing;
+      if (container.current)
+        reportFraming(graph.current, container.current, latest.current, framing);
+      observeCard.current?.();
+      if (!panelOpen) watchCamera.current = undefined;
     }
-  }, [panelOpen]);
+  }, [panelOpen, frameKey]);
   useEffect(() => {
     const host = container.current;
     if (!host) return;
@@ -87,7 +161,12 @@ export function GraphView({
         const lit = latest.current.litIds;
         updateGraph(
           cy,
-          graphElements(stateStore.getState().state, false, lit ? new Set(lit) : null),
+          graphElements(
+            stateStore.getState().state,
+            false,
+            lit ? new Set(lit) : null,
+            latest.current.cone,
+          ),
         );
         showSelection(cy, latest.current.selectedId ?? null);
       };
@@ -99,13 +178,43 @@ export function GraphView({
       const unexpose = exposeProbe(host, cy);
       const unsubscribe = stateStore.subscribe(sync);
       sync();
-      const resize = new ResizeObserver(() => cy.resize());
+      if (latest.current.panelOpen) {
+        watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+        const framing = frameCamera(cy, latest.current.frameIds ?? [], true, {
+          coneIds: latest.current.cone?.entries.map((entry) => entry.node_id),
+          watchZoom: watchCamera.current.zoom,
+        });
+        targetFrame.current = framing;
+        reportFraming(cy, host, latest.current, framing);
+      }
+      const resize = new ResizeObserver(() => {
+        cy.resize();
+        const framing = targetFrame.current;
+        if (framing && latest.current.cone)
+          reportFraming(
+            cy,
+            host,
+            latest.current,
+            cy.animated() ? framing : { ...framing, zoom: cy.zoom(), pan: cy.pan() },
+          );
+      });
+      let observedCard: HTMLDivElement | null | undefined;
       resize.observe(host);
+      observeCard.current = () => {
+        const card = latest.current.coneCardRef?.current;
+        if (card === observedCard) return;
+        observedCard = card;
+        resize.disconnect();
+        resize.observe(host);
+        if (card) resize.observe(card);
+      };
+      observeCard.current();
       dispose = () => {
         unsubscribe();
         unexpose();
         resize.disconnect();
         resync.current = undefined;
+        observeCard.current = undefined;
         graph.current = undefined;
         cy.destroy();
       };
