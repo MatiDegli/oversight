@@ -1,0 +1,8 @@
+{
+  "id": "pricing-and-inventory",
+  "task": "Split a repair of the 10-unit pricing boundary and validation of nonpositive inventory reservations between two agents. Include suitable tests in their disjoint zones.",
+  "changes": [
+    {"change_id": "A", "summary": "Fixed the pricing boundary", "files": ["shop/pricing.py", "tests/test_pricing.py"], "review": {"verdict": "request_changes", "findings": ["BLOCKING shop/pricing.py:12: The 10-unit tier still excludes exactly 10 units.", "SHOULD-FIX tests/test_pricing.py:8: Add a regression at exactly 10 units."]}},
+    {"change_id": "B", "summary": "Reject nonpositive reservations", "files": ["shop/inventory.py"], "review": {"verdict": "accept", "findings": []}}
+  ]
+}
