@@ -1,11 +1,12 @@
 """Extraction targets must retain checks; named table lookups stay bounded."""
 
 import ast
-import time
+from functools import cached_property
 
 import pytest
 
 from oversight.changes import ShortcutKind, detect_shortcuts
+from oversight.changes import _shortcuts_common as common
 from oversight.changes._shortcuts_common import Source
 
 OLD = "def check():\n    assert f() == 3\ndef test_f():\n    check()\n"
@@ -75,15 +76,44 @@ def test_reachable_named_table_unknown_reasons(setup: str, names: str, reason: s
 
 
 @pytest.mark.parametrize("count", [150, 200, 590])
-def test_many_method_decorators_share_the_scope_index(count: int) -> None:
+def test_many_method_decorators_share_the_scope_index(
+    count: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
     source = "import pytest\nCASES = [(1, 3)]\nclass TestCalc:\n" + "".join(
         f"    @pytest.mark.parametrize('x,expected', CASES)\n"
         f"    def test_f_{i}(self,x,expected):\n        assert f(x) == expected\n"
         for i in range(count)
     )
-    start = time.monotonic()
+    binding_work = 0
+    index_builds = 0
+    scope_bindings = common._scope_bindings
+    build_index = Source.table_shadows.func
+
+    def counted_bindings(
+        body: list[ast.stmt], args: ast.arguments | None = None
+    ) -> common.Bindings:
+        nonlocal binding_work
+        binding_work += sum(1 for stmt in body for _ in ast.walk(stmt))
+        if args is not None:
+            binding_work += sum(1 for _ in ast.walk(args))
+        return scope_bindings(body, args)
+
+    def counted_index(parsed: Source) -> dict[ast.Name, bool]:
+        nonlocal index_builds
+        index_builds += 1
+        return build_index(parsed)
+
+    index = cached_property(counted_index)
+    index.__set_name__(Source, "table_shadows")
+    monkeypatch.setattr(Source, "table_shadows", index)
+    monkeypatch.setattr(common, "_scope_bindings", counted_bindings)
+    monkeypatch.setattr("oversight.changes._shortcuts_common.time.monotonic", lambda: 0.0)
     result = detect_shortcuts([("tests/test_calc.py", source, source + "# comment\n")], timeout=2)
-    assert time.monotonic() - start < 3
+    # Two parsed versions, one cached index each. Binding scans have a linear
+    # budget of four full AST walks per version, including method receivers.
+    # Rebuilding class bindings for every decorator would exceed this budget.
+    assert index_builds == 2
+    assert binding_work <= 4 * 2 * sum(1 for _ in ast.walk(ast.parse(source)))
     assert result.status == "no_facts" and not result
 
 
