@@ -623,8 +623,8 @@ node ("read", "editing", "changed", "new"):
 - **Editing:** the node is in the agent's current focus: the `node_ids` of its latest `agent.focus`
   event, when that event's mode is edit and the agent is working or revising. Only that latest
   focus counts; when the agent moves on, the previous nodes become "changed". Dashed 1.5px border
-  in the agent's color, the agent's node fill, a filled letter badge, the word "editing". After
-  level 1, rings spread from it.
+  in the agent's color, the agent's node fill, a filled letter badge, the word "editing". Rings
+  spread from it.
 - **Pending (changed or new):** the node carries the agent's change and is not its current edit
   focus. Dashed 1.5px border, dash 6px and gap 4px, in the agent's color; the agent's node fill
   (`-new` for a node the agent added); a filled badge; the word "changed" or "new". An edge the
