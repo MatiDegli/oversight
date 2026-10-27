@@ -1,8 +1,17 @@
 import type { ChangeResolved, Slot, SuiteResult } from "@contracts";
-import { Check, ChevronDown, ChevronRight, FileCode, GitMerge, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FileCode,
+  GitMerge,
+  MessageSquare,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 
-import { EditorDiff } from "../editor";
+import { EditorDiff, fileKey, ReviewEditor } from "../editor";
+import type { FileAccess } from "../editor";
 import { selectLiveDiff } from "../state";
 import type { ChangeState, State } from "../state";
 import { decisionView } from "./decisions";
@@ -30,6 +39,7 @@ const chip =
 
 export interface ReviewPanelProps {
   state: State;
+  files?: FileAccess;
   changeId: string;
   /** The person's last decision on this change, kept by the app across panel closes. */
   attempt?: DecisionAttempt;
@@ -95,6 +105,8 @@ function Resolution({ resolution }: { resolution: ChangeResolved }) {
       <p className="flex items-center gap-2">
         {ok ? (
           <Check aria-hidden="true" className="size-4 shrink-0 text-passed" />
+        ) : resolution.decision === "changes_requested" ? (
+          <MessageSquare aria-hidden="true" className="size-4 shrink-0 text-muted" />
         ) : (
           <X aria-hidden="true" className="size-4 shrink-0 text-failed-text" />
         )}
@@ -118,11 +130,13 @@ function Decisions({
   view,
   onDecide,
   replayOf,
+  blocked = false,
 }: {
   changeId: string;
   view: DecisionView;
   onDecide?: ReviewPanelProps["onDecide"];
   replayOf?: string;
+  blocked?: boolean;
 }) {
   const [comment, setComment] = useState("");
   // Set when Approve was activated without a pointer, so the person is told why nothing happened.
@@ -149,7 +163,8 @@ function Decisions({
     );
   }
   const pending = view.kind === "pending";
-  const approvable = view.kind === "open" && onDecide !== undefined;
+  const revising = view.kind === "revising";
+  const approvable = view.kind === "open" && onDecide !== undefined && !blocked;
   const rejectable = (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined;
   const failure = view.kind === "open" || view.kind === "conflict" ? view.failure : null;
   // No key in this section makes a decision. Approve answers only a pointer click: Enter and Space
@@ -167,11 +182,11 @@ function Decisions({
         </p>
       ) : (
         <label className="flex flex-col gap-1.5 text-sm text-muted">
-          Comment (optional)
+          Comment (required for Request changes)
           <textarea
             value={comment}
             rows={3}
-            readOnly={pending}
+            readOnly={pending || revising}
             onChange={(event) => {
               setComment(event.target.value);
             }}
@@ -182,7 +197,7 @@ function Decisions({
                 event.currentTarget.blur();
               }
             }}
-            placeholder="Why you approve or reject it"
+            placeholder="What should the agent change?"
             className={`resize-none rounded-card border border-control-edge bg-field p-(--input-padding) text-(length:--body-size) text-text placeholder:text-faint read-only:text-muted ${focusRing}`}
           />
         </label>
@@ -206,6 +221,16 @@ function Decisions({
         </button>
         <button
           type="button"
+          disabled={!rejectable || blocked || comment.trim() === ""}
+          onClick={() => {
+            onDecide?.(changeId, "request-changes", comment);
+          }}
+          className={`inline-flex h-(--button-secondary-height) items-center gap-2 rounded-control border border-control-edge px-3 text-(length:--label-size) font-semibold disabled:cursor-not-allowed disabled:text-faint ${focusRing}`}
+        >
+          <MessageSquare aria-hidden="true" className="size-4" /> Request changes
+        </button>
+        <button
+          type="button"
           disabled={!rejectable}
           onClick={() => {
             setKeyboardTried(false);
@@ -216,13 +241,29 @@ function Decisions({
           <X aria-hidden="true" className="size-4" /> Reject
         </button>
       </div>
+      <p className="text-sm text-muted">
+        Request changes keeps the worktree and sends your comment back.
+      </p>
+      {revising &&
+        (view.resolution ? (
+          <Resolution resolution={view.resolution} />
+        ) : (
+          <p role="status">The agent is revising. Decisions reopen when it proposes again.</p>
+        ))}
+      {blocked && (
+        <p role="status" className="text-sm text-muted">
+          Save or discard your review edits before approving or requesting changes.
+        </p>
+      )}
       {/* Always mounted, so what appears under the buttons is announced where it appears. */}
       <div role="status" className="text-sm text-muted">
         {pending ? (
           <p>
-            {view.action === "approve"
-              ? "Approving: waiting for the merge result."
-              : "Rejecting: waiting for the server."}
+            {view.action === "request-changes"
+              ? "Requesting changes: waiting for the agent."
+              : view.action === "approve"
+                ? "Approving: waiting for the merge result."
+                : "Rejecting: waiting for the server."}
           </p>
         ) : (
           keyboardTried && approvable && <p>Approve with a click: it merges into main</p>
@@ -249,6 +290,7 @@ function Decisions({
  */
 export function ReviewPanel({
   state,
+  files: fileAccess,
   changeId,
   attempt,
   onDecide,
@@ -259,6 +301,14 @@ export function ReviewPanel({
   const proposal = change?.proposal ?? null;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
+  const [editingBlocked, setEditingBlocked] = useState(false);
+  const decision = change
+    ? decisionView(change, state.errors, attempt, onDecide === undefined)
+    : undefined;
+  const editable =
+    agent?.state === "ready_for_review" &&
+    change?.status === "ready_for_review" &&
+    decision?.kind === "open";
   const [chosen, setChosen] = useState<string | null>(null);
   const openPath = chosen !== null && files.includes(chosen) ? chosen : (files[0] ?? null);
   const stats = new Map(proposal?.files.map((file) => [file.path, file]));
@@ -354,12 +404,32 @@ export function ReviewPanel({
                     <span className="text-removed">−{stat.lines_removed}</span>
                   </span>
                 )}
-                <span className="ml-auto text-sm text-muted">Read-only · Inline diff</span>
+                <span className="ml-auto text-sm text-muted">
+                  {fileAccess && editable ? "Editable · Inline diff" : "Read-only · Inline diff"}
+                </span>
               </button>
               {open && (
                 <div className="min-h-48 flex-1">
                   {data ? (
-                    <EditorDiff data={data} />
+                    fileAccess ? (
+                      <ReviewEditor
+                        key={path}
+                        data={data}
+                        files={fileAccess}
+                        editable={editable}
+                        revision={proposal?.revision ?? 0}
+                        onBlocked={(blocked) => {
+                          const hasDraft = Object.keys(change?.files ?? {}).some(
+                            (name) =>
+                              fileAccess.drafts.has(fileKey(name, data.agentId)) ||
+                              fileAccess.inFlightSaves.has(fileKey(name, data.agentId)),
+                          );
+                          setEditingBlocked(blocked || hasDraft);
+                        }}
+                      />
+                    ) : (
+                      <EditorDiff data={data} />
+                    )
                   ) : (
                     <p className="px-4.5 py-3.5 text-sm text-muted">
                       No contents were recorded for this file.
@@ -377,6 +447,7 @@ export function ReviewPanel({
           view={decisionView(change, state.errors, attempt, onDecide === undefined)}
           onDecide={onDecide}
           replayOf={replayOf}
+          blocked={editingBlocked}
         />
       )}
     </aside>

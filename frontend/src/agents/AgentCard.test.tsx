@@ -245,3 +245,30 @@ describe("AgentCard over the level 1 fixture", () => {
     expect(render(through(19), () => undefined)).not.toContain("Review change");
   });
 });
+
+it("offers Stop and discard only on working, revising and ready cards with a command", () => {
+  const data = selectAgentCard(through(20), "agent-1");
+  if (!data) throw new Error("Missing agent");
+  for (const state of [
+    "working",
+    "revising",
+    "ready_for_review",
+    "done",
+    "stopped",
+    "halted",
+    "paused",
+    "starting",
+  ] as const) {
+    const html = renderToStaticMarkup(
+      <AgentCard
+        data={{ ...data, agent: { ...data.agent, state } }}
+        onStop={() => Promise.resolve()}
+      />,
+    );
+    expect(html.includes("Stop and discard")).toBe(
+      ["working", "revising", "ready_for_review"].includes(state),
+    );
+    expect(html).not.toContain("Confirm stop and discard");
+  }
+  expect(renderToStaticMarkup(<AgentCard data={data} />)).not.toContain("Stop and discard");
+});

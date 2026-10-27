@@ -171,6 +171,7 @@ describe("sending a decision", () => {
   const client = (result: Promise<unknown>) => ({
     approveChange: vi.fn(() => result),
     rejectChange: vi.fn(() => result),
+    requestChanges: vi.fn(() => result),
   });
 
   it("records pending before the request and nothing more on 202", async () => {
@@ -201,4 +202,19 @@ describe("sending a decision", () => {
       message: "Not proposed.",
     });
   });
+});
+
+it("requires a comment for Request changes and sends the trimmed text", async () => {
+  const client = { approveChange: vi.fn(), rejectChange: vi.fn(), requestChanges: vi.fn() };
+  const record = vi.fn();
+  await sendDecision(client, through(20), "change-1", "request-changes", "  ", record);
+  expect(record).not.toHaveBeenCalled();
+  expect(client.requestChanges).not.toHaveBeenCalled();
+  await sendDecision(client, through(20), "change-1", "request-changes", " Add tests ", record);
+  expect(client.requestChanges).toHaveBeenCalledWith("change-1", { comment: "Add tests" });
+  expect(record).toHaveBeenCalledWith(
+    expect.objectContaining({ phase: "pending", action: "request-changes" }),
+  );
+  const revised = resolved(through(20), { decision: "changes_requested", comment: "Add tests" });
+  expect(view(revised).kind).toBe("revising");
 });
