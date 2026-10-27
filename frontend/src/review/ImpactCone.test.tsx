@@ -61,6 +61,37 @@ describe("the recorded impact cone", () => {
     }
   });
 
+  it("makes only a row that says Out of view a button that reveals it, and only given a handler", () => {
+    const away = cone.entries[0]?.node_id;
+    if (!away) throw new Error("Missing caller");
+    const rows = (html: string) => html.match(/<li .*?<\/li>/g) ?? [];
+    const withHandler = renderToStaticMarkup(
+      <ImpactConeCard
+        cone={cone}
+        nodes={nodes}
+        outOfView={new Set([away])}
+        onReveal={() => undefined}
+      />,
+    );
+    expect(withHandler.match(/<button /g)).toHaveLength(1);
+    for (const row of rows(withHandler)) {
+      expect(row.includes("<button ")).toBe(row.includes(`title="${away}"`));
+      if (row.includes("<button ")) {
+        expect(row).toContain('type="button"');
+        expect(row).toContain("Out of view");
+      }
+    }
+    // No handler, or nothing out of view: the card stays plain text.
+    const without = renderToStaticMarkup(
+      <ImpactConeCard cone={cone} nodes={nodes} outOfView={new Set([away])} />,
+    );
+    const inView = renderToStaticMarkup(
+      <ImpactConeCard cone={cone} nodes={nodes} onReveal={() => undefined} />,
+    );
+    expect(without).not.toContain("<button");
+    expect(inView).not.toContain("<button");
+  });
+
   it("shows each nonzero cut independently and preserves unknown entries by id", () => {
     for (const [depth, limit] of [
       [12, 3],

@@ -51,13 +51,9 @@ afterEach(() => {
 function grow(nodes: GraphNode[], baseSnapshot = snapshot) {
   const state = createInitialState();
   const base = { ...baseSnapshot, positions: preset };
-  cy = cytoscape({
-    headless: true,
-    styleEnabled: true,
-    style: graphStyles(themes.dark),
-    elements: graphElements({ ...state, graph: base }),
-    layout: { name: "preset" },
-  });
+  // The graph as the app holds it: placed from its preset, with its frames settled.
+  cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(themes.dark) });
+  updateGraph(cy, graphElements({ ...state, graph: base }));
   const graph = cy;
   // A compound has no position of its own: its frame follows its children.
   const before = new Map(graph.nodes(":childless").map((n) => [n.id(), { ...n.position() }]));
@@ -194,8 +190,8 @@ describe("the box of a new node", () => {
           expect(node.position()).toEqual(point);
       }
       if (id === "shop.pricing" && withMethod) {
-        // The new nested class is wider than pricing's corridor between models and cart.
-        // Only that module may shift, as a unit, when no anchored placement can fit.
+        // On the wide canvas pricing may have room beside it. Where it has none, only that module
+        // may shift, as a unit (the hemmed-in test below forces it).
         const shifts = [...before]
           .filter(([nodeId]) =>
             graph
@@ -206,7 +202,7 @@ describe("the box of a new node", () => {
           )
           .map(([nodeId, point]) => graph.getElementById(nodeId).position().y - point.y);
         expect(new Set(shifts).size).toBe(1);
-        expect(shifts[0]).toBeGreaterThan(0);
+        expect(shifts[0]).toBeGreaterThanOrEqual(0);
       }
     },
   );
@@ -250,7 +246,7 @@ describe("the box of a new node", () => {
         group: "nodes",
         data: { id: "below", kind: "module", label: "below" },
         classes: "module",
-        position: { x: 0, y: 200 },
+        position: { x: 0, y: 100 },
       },
     ];
     cy = cytoscape({
@@ -276,6 +272,69 @@ describe("the box of a new node", () => {
     expect(box.x1 > boundary.x2 || box.x2 < boundary.x1).toBe(true);
     expect(box.y1).toBeLessThan(boundary.y2);
     expect(box.y2).toBeGreaterThan(boundary.y1);
+  });
+
+  it("moves a hemmed-in module as a unit to free space below the graph, and brings it back", () => {
+    const node = (id: string, kind: "module" | "function", x: number, y: number, parent?: string) =>
+      ({
+        group: "nodes",
+        data: { id, kind, label: id, ...(parent ? { parent } : {}) },
+        classes: kind,
+        position: { x, y },
+      }) satisfies GraphElement;
+    // Four walls a few px from the module's frame, each far wider than the search's rings.
+    const base: GraphElement[] = [
+      { group: "nodes", data: { id: "m", kind: "module", label: "m" }, classes: "module" },
+      node("f", "function", 0, 0, "m"),
+      node("g", "function", 0, 57, "m"),
+      node("left", "module", -2200, 0),
+      node("right", "module", 2200, 0),
+      node("top", "module", 0, -2200),
+      node("bottom", "module", 0, 2200),
+    ];
+    cy = cytoscape({
+      headless: true,
+      styleEnabled: true,
+      style: [
+        ...graphStyles(themes.dark),
+        { selector: "#left, #right", style: { width: 4000, height: 8000 } },
+        { selector: "#top, #bottom", style: { width: 8000, height: 4000 } },
+      ],
+    });
+    const graph = cy;
+    updateGraph(graph, base);
+    // Walls fitted to the frame the module has now, 8px apart.
+    const frame = graph.getElementById("m").boundingBox({ includeLabels: false });
+    graph.getElementById("left").position({ x: frame.x1 - 8 - 2000, y: 0 });
+    graph.getElementById("right").position({ x: frame.x2 + 8 + 2000, y: 0 });
+    graph.getElementById("top").position({ x: 0, y: frame.y1 - 8 - 2000 });
+    graph.getElementById("bottom").position({ x: 0, y: frame.y2 + 8 + 2000 });
+    const before = new Map(graph.nodes(":childless").map((n) => [n.id(), { ...n.position() }]));
+    const graphBottom = graph.nodes().boundingBox({ includeLabels: false }).y2;
+    const withClass: GraphElement[] = [
+      ...base,
+      {
+        group: "nodes",
+        data: { id: "c", kind: "class", label: "c", parent: "m" },
+        classes: "class",
+      },
+    ];
+    updateGraph(graph, withClass);
+    // The class lands below the walls, and the module's rows go with it by one and the same shift.
+    expect(graph.getElementById("c").boundingBox({ includeLabels: false }).y1).toBeGreaterThan(
+      graphBottom,
+    );
+    const shifts = ["f", "g"].map(
+      (id) => graph.getElementById(id).position().y - required(before.get(id)).y,
+    );
+    expect(shifts[0]).toBeGreaterThan(0);
+    expect(shifts[1]).toBe(shifts[0]);
+    for (const id of ["left", "right", "top", "bottom"])
+      expect(graph.getElementById(id).position()).toEqual(required(before.get(id)));
+    // The class is withdrawn: every node goes back to where it was.
+    updateGraph(graph, base);
+    for (const [id, point] of before)
+      expect(graph.getElementById(id).position(), id).toEqual(point);
   });
 
   it("uses a free spot below the graph when all 100 rings are blocked", () => {
@@ -320,7 +379,8 @@ describe("the box of a new node", () => {
     ]);
     for (const id of ["class", "method"]) {
       const box = cy.getElementById(id).boundingBox({ includeLabels: true });
-      expect(box.y1).toBeGreaterThan(boundary.y2);
+      // Touching the graph's bottom edge is free space: nothing is under it.
+      expect(box.y1).toBeGreaterThanOrEqual(boundary.y2);
       for (const otherId of ["sibling", "left", "right", "top"]) {
         const other = cy.getElementById(otherId).boundingBox({ includeLabels: true });
         expect(
@@ -330,10 +390,14 @@ describe("the box of a new node", () => {
     }
     for (const [id, position] of before)
       if (id !== "class") expect(cy.getElementById(id).position()).toEqual(position);
+    // The method is withdrawn: the class goes back to the place it had.
+    updateGraph(cy, base);
+    for (const [id, position] of before)
+      expect(cy.getElementById(id).position(), id).toEqual(position);
   });
 
-  it("comes from the theme's tokens, so a larger body type keeps larger nodes apart", () => {
-    const large = { ...themes.dark, "body-size": "30px" };
+  it("comes from the theme's tokens, so larger rows keep larger nodes apart", () => {
+    const large = { ...themes.dark, "node-width": "400px", "node-height": "90px" };
     cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(large) });
     // The layout that follows the first update moves nodes it was handed; keep a copy of them.
     let handed: GraphElement[] = [];
@@ -350,9 +414,9 @@ describe("the box of a new node", () => {
     updateGraph(cy, [node("a"), node("b"), node("c")], large);
     const points = handed.map((element) => required(element.position));
     expect(points).toHaveLength(3);
-    // A leaf at 30px body type is 300x120 plus its border: no two of them may overlap.
+    // A row of 400x90 takes that much room: no two of them may overlap.
     for (const [i, p] of points.entries())
       for (const q of points.slice(i + 1))
-        expect(Math.abs(p.x - q.x) >= 301 || Math.abs(p.y - q.y) >= 121, String(i)).toBe(true);
+        expect(Math.abs(p.x - q.x) >= 400 || Math.abs(p.y - q.y) >= 90, String(i)).toBe(true);
   });
 });

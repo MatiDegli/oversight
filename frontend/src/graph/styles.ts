@@ -1,15 +1,17 @@
-import type { NodeSingular, StylesheetJson } from "cytoscape";
+import type { EdgeSingular, NodeSingular, StylesheetJson } from "cytoscape";
 import badgeFont from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-700-normal.woff2?inline";
 
 import type { getActiveTheme } from "../theme";
 
 import { nodeGeometry } from "./geometry";
-import { headerLayers, marksLayer, stackedHeaderLayers } from "./layers";
-import type { Layer, NodeMarks } from "./layers";
+import { headerLayers, marksClearance, marksLayer } from "./layers";
+import type { Band, Layer, NodeMarks } from "./layers";
+import type { Route } from "./routes";
 
 export type EdgeShape = "bezier" | "taxi";
-// The product default. The dev-only query override lets make shots compare identical presets.
-export const EDGE_CURVE_STYLE: EdgeShape = "bezier";
+// The product default: orthogonal edges routed through the gutters between frames (routes.ts). The
+// dev-only query override lets make shots compare identical presets.
+export const EDGE_CURVE_STYLE: EdgeShape = "taxi";
 
 export function edgeShape(search = ""): EdgeShape {
   const requested = new URLSearchParams(search).get("edge-shape");
@@ -55,11 +57,19 @@ export function graphStyles(
     offsetY: -badgeSize / 2,
     clip: "none",
   });
+  // A node's outer size, which elements.ts puts in its data: a row's, or a childless frame's.
+  const outer = (node: NodeSingular) => ({
+    width: (node.data("w") as number | undefined) ?? geometry.rowWidth,
+    height: (node.data("h") as number | undefined) ?? geometry.rowHeight,
+  });
+  // The box Cytoscape gives the node, which it draws a border wider.
+  const body = (node: NodeSingular) => {
+    const size = outer(node);
+    return { width: size.width - geometry.border, height: size.height - geometry.border };
+  };
   const marks = (node: NodeSingular): Layer[] => {
     const value = node.data("marks") as NodeMarks | undefined;
-    return value
-      ? [marksLayer(theme, value, { width: geometry.width, height: geometry.height })]
-      : [];
+    return value ? [marksLayer(theme, value, body(node))] : [];
   };
   const cone = (node: NodeSingular): Layer[] =>
     node.hasClass("cone") ? [distanceBadge(node)] : [];
@@ -71,24 +81,36 @@ export function graphStyles(
     ...headerLayers(
       theme,
       ...frameText(node),
-      node.outerWidth(),
+      { width: node.outerWidth(), height: node.outerHeight() },
+      node.hasClass("class") ? "class" : "module",
       node.data("marks") as NodeMarks | undefined,
     ),
     ...cone(node),
   ];
-  // Everything without children: a leaf's state row, a childless frame's stacked header, and the
+  // Everything without children: a row's state word, a childless frame's single header row, and the
   // distance badge when it is in the cone.
   const leafLayers = (node: NodeSingular): Layer[] => [
     ...(node.hasClass("module") || node.hasClass("class")
-      ? stackedHeaderLayers(
+      ? headerLayers(
           theme,
           ...frameText(node),
-          { width: geometry.width, height: geometry.height },
+          body(node),
+          "empty" satisfies Band,
           node.data("marks") as NodeMarks | undefined,
         )
       : marks(node)),
     ...cone(node),
   ];
+  // What the name may take of a row: its width less both paddings, and less the state word and
+  // badges when an agent touches it. Cytoscape cuts the name with an ellipsis at this width.
+  const nameRoom = (node: NodeSingular) => {
+    const value = node.data("marks") as NodeMarks | undefined;
+    const taken = value ? marksClearance(theme, value) + px(theme["node-word-gap"]) : 0;
+    return Math.max(
+      0,
+      outer(node).width - px(theme["node-pad-left"]) - px(theme["node-pad-right"]) - taken,
+    );
+  };
   // One property per image: Cytoscape takes a list for each when a node carries several.
   const layered = (layers: (node: NodeSingular) => Layer[]) => ({
     "background-image": (node: NodeSingular) => layers(node).map((layer) => layer.image),
@@ -102,6 +124,13 @@ export function graphStyles(
     "background-image-containment": (node: NodeSingular) =>
       layers(node).map((layer) => (layer.clip === "none" ? "over" : "inside")),
   });
+  const minimum = (key: "minW" | "minH") => (node: NodeSingular) =>
+    `${String((node.data(key) as number | undefined) ?? 0)}px`;
+  const routeOf = (edge: EdgeSingular) => edge.data("route") as Route;
+  const endpoint = (edge: EdgeSingular, end: "s" | "t") => {
+    const [x, y] = routeOf(edge)[end];
+    return `${String(x)}px ${String(y)}px`;
+  };
   const pendingBorder = {
     "border-style": "dashed" as const,
     "border-width": theme["agent-border-width"],
@@ -113,12 +142,13 @@ export function graphStyles(
       style: {
         label: "data(label)",
         "font-family": theme["text-font"],
-        "font-size": theme["body-size"],
-        "font-weight": theme["body-weight"],
+        "font-size": theme["node-name-size"],
+        "font-weight": theme["node-name-weight"],
         color: theme.text,
-        // Only the explicit newline separates the name from the marks.
-        "text-wrap": "wrap",
-        "text-max-width": `${String(px(theme["body-size"]) * 1000)}px`,
+        // The name is the whole label; the state word and badges are images beside it, so the name
+        // is cut with an ellipsis where it would meet them.
+        "text-wrap": "ellipsis",
+        "text-max-width": (node: NodeSingular) => `${String(nameRoom(node))}px`,
         "text-valign": "center",
         "background-color": theme.card,
         "background-opacity": theme["node-opacity"],
@@ -127,25 +157,27 @@ export function graphStyles(
         "border-style": "solid",
         shape: "round-rectangle",
         "corner-radius": theme["radius-node"],
-        // Keep the preset's proportions in units of the graph's body type.
-        width: geometry.width,
-        height: geometry.height,
+        // A row, or a childless frame, in the size elements.ts gives it; a parent takes its
+        // children's.
+        width: (node: NodeSingular) => body(node).width,
+        height: (node: NodeSingular) => body(node).height,
         "z-index-compare": "manual",
         "z-index": LAYER.leaf,
       },
     },
     {
-      // A leaf's name starts at the same left padding as the state word under it. The label sits
-      // outside the box's right edge, so a negative margin of the box's width brings it in.
+      // A row's name starts at the row's left padding. The label sits outside the box's right
+      // edge, so a negative margin of the box's width, less that padding, brings it in.
       selector: "node:childless",
       style: {
         "text-halign": "right",
-        "text-margin-x": -(geometry.width - px(theme["spacing-md"])),
+        "text-margin-x": (node: NodeSingular) =>
+          -(body(node).width - (px(theme["node-pad-left"]) - geometry.border / 2)),
       },
     },
     {
       // A module or class keeps its frame colors with or without children, so it still reads as a
-      // container; only a parent gets the padding and the label above it.
+      // container; only a parent gets the padding and the header band above its first row.
       selector: "node.module, node.class",
       style: {
         "background-color": theme.panel,
@@ -159,9 +191,32 @@ export function graphStyles(
       selector: "node.module:parent, node.class:parent",
       style: {
         "text-valign": "top",
-        padding: `${String(geometry.padding)}px`,
+        // Rows carry their own names: a frame's bounds are its children's boxes and its padding.
+        "compound-sizing-wrt-labels": "exclude",
         "z-index": LAYER.frame,
       },
+    },
+    {
+      // Even padding by the smallest side; frames.ts asks for the rest as a minimum size, with the
+      // extra at the top (the header band) and, for a module, at the left (the lane for edges).
+      selector: "node.module:parent, node.class:parent",
+      style: {
+        "min-width": minimum("minW"),
+        "min-height": minimum("minH"),
+        "min-width-bias-left": "100%",
+        "min-width-bias-right": "0%",
+        "min-height-bias-top": "100%",
+        // Cytoscape reads this; its type definitions leave it out.
+        ...({ "min-height-bias-bottom": "0%" } as object),
+      },
+    },
+    {
+      selector: "node.module:parent",
+      style: { padding: `${String(geometry.module.bottom)}px` },
+    },
+    {
+      selector: "node.class:parent",
+      style: { padding: `${String(geometry.class.bottom)}px` },
     },
     {
       // A frame's title and count are its header row, drawn as images; its label would sit above it.
@@ -169,17 +224,13 @@ export function graphStyles(
       style: { label: "", ...layered(frameLayers) },
     },
     {
-      // An empty module or class is a leaf-sized box; it still wears its frame's title and count.
+      // An empty module or class is a box of one header row; it wears its frame's title and count.
       selector: "node.module:childless, node.class:childless",
       style: { label: "", ...layered(leafLayers) },
     },
     {
-      // The state word and badges take the bottom row, so the name moves up to make room.
       selector: "node.marked:childless",
-      style: {
-        "text-margin-y": -geometry.height / 6,
-        ...layered(leafLayers),
-      },
+      style: layered(leafLayers),
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
       (["A", "B"] as const).map((slot) => {
@@ -253,18 +304,43 @@ export function graphStyles(
     {
       selector: "edge",
       style: {
-        "curve-style": shape,
-        "taxi-direction": "downward",
+        "curve-style": "bezier",
         "line-style": "solid",
         "line-color": theme.edge,
         "target-arrow-color": theme.edge,
         "target-arrow-shape": "triangle",
+        "arrow-scale": 0.8,
         width: theme["exact-edge-width"],
         "z-index-compare": "manual",
         "z-index": LAYER.edge,
       },
     },
-    { selector: "edge.imports", style: { "target-arrow-shape": "chevron" } },
+    // Orthogonal edges follow the route routes.ts computed and stored in the edge's data: each end
+    // a fixed point on its node's border, and the bends placed along the line between them.
+    ...(shape === "taxi"
+      ? [
+          {
+            selector: "edge[route]",
+            style: {
+              "curve-style": "round-segments" as const,
+              // Cytoscape accepts "endpoints" (distances along the line between the manual
+              // endpoints); its type definitions list only the other two.
+              "edge-distances": "endpoints" as unknown as "intersection",
+              "source-endpoint": (edge: EdgeSingular) => endpoint(edge, "s"),
+              "target-endpoint": (edge: EdgeSingular) => endpoint(edge, "t"),
+              "segment-weights": (edge: EdgeSingular) => routeOf(edge).w,
+              "segment-distances": (edge: EdgeSingular) => routeOf(edge).d,
+              "segment-radii": [px(theme["edge-radius"])],
+            },
+          },
+        ]
+      : []),
+    // The sketch draws calls only: a module's imports say which files it uses, not which functions
+    // a change may reach, so they stay in the graph's data and off its picture.
+    {
+      selector: "edge.imports",
+      style: { "target-arrow-shape": "chevron", display: "none" },
+    },
     { selector: "edge.inherits", style: { "target-arrow-shape": "triangle-tee" } },
     ...(["A", "B"] as const).map((slot) => ({
       selector: `edge.pending-${slot}`,

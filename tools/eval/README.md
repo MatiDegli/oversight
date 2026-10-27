@@ -140,3 +140,45 @@ without shortcut-detector claims. Confirm Baseten rates, Contributor-mode interp
 protected-path specifications, and both caps/billing semantics before the first paid run. A future
 contract proposal could add an exclusive bench lease and a complete workspace inventory; no
 contracts were changed here.
+
+## Lead-agent gate probe
+
+`lead_probe.py` is a separate, explicit paid probe; it needs no running server. It uses the
+product's Muse Spark client (`low` reasoning, no hidden retries) and `Settings.load()` for the Meta
+key and the spend meter's two prices. It never edits the runtime workspace, starts agents, or
+approves/merges. Its graph is scanned by the backend core from a temporary git copy of `demo-repo/`.
+The five fixed scenarios in `lead_scenarios/` cover findings on A, B, both, NITs only, and a
+should-fix finding despite an accepting verdict.
+
+```sh
+# Safe inspection: no settings/key are loaded and no client is constructed.
+uv run --offline --frozen python tools/eval/lead_probe.py --dry-run
+# Only the coordinator may execute this later with the configured key/prices:
+uv run --offline --frozen python tools/eval/lead_probe.py --runs 5 --out .eval-output/lead
+```
+
+Each run has independent plan/reaction conversations, at most six model calls per part. Plan
+arguments must parse as exactly two `SubtaskDraft`s and pass the product's `check_plan`. Reaction
+success requires exactly one request per change with blocking/should-fix findings, naming every
+such finding's path, and none for NIT-only/accepted changes. There is no approve/merge tool.
+
+Before each call, reserve its conservative input allowance (UTF-8 request bytes plus 4,096 tokens
+and 256 per message/tool for framing) and 1,536 output tokens, including reasoning, priced as
+uncached. Refuse a call whose allowance reaches $0.05/run or $0.50 overall. Provider usage is
+checked against that allowance; an overrun or unknown usage stops the whole probe for manual
+reconciliation. A run cap stops that run; a total cap stops the probe. No automatic retry/reset.
+`ledger.py` supplies the exclusive lock, durable reservations and accumulated charges. The CLI pins
+`--out` to `.eval-output/lead` under the repository root and refuses any other directory before
+loading settings or creating a client, so selecting a fresh output cannot reset the cumulative cap.
+Relative and absolute paths resolving to that directory are accepted; omitting `--out` uses it too.
+Unknown usage and interrupted reservations block reruns;
+changing the tariff is refused. `accounting.jsonl` is the ledger's reserved recovery filename;
+call charges live in `ledger.json`, and probe evidence in `run-<id>.json` and `summary.json`.
+
+Each run JSON retains its scenario, graph version, plan, validation problems, tool calls, reaction
+verdict, tokens and cost. The summary scores the current invocation out of five and includes
+cumulative ledger spend. PASS requires five runs, at least four valid plans and four correct
+reactions, all run costs at most $0.05, and known cumulative spend at most $0.50. `--runs 1..4`
+inspects a partial batch and cannot PASS. The package/main-readiness part of the Sunday gate is
+checked separately by the coordinator. This implementation has only been exercised with scripted
+clients; no paid gate result is claimed.

@@ -2,8 +2,10 @@ import type { AnimationOptions, Core, CollectionReturnValue } from "cytoscape";
 
 import { getActiveTheme } from "../theme";
 
-/** The first fit's padding in updateGraph, so closing the panel returns to the same picture. */
-const PADDING = 40;
+import { FIT_PADDING } from "./geometry";
+
+/** The padding the camera keeps around what it frames, in screen px. */
+const PADDING = FIT_PADDING;
 
 export interface Camera {
   zoom: number;
@@ -180,6 +182,93 @@ export function prefersReducedMotion(): boolean {
   return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/**
+ * The camera the graph starts in: 100%, the size the sketch is drawn at, on `focus` (the box to
+ * look at), kept inside the graph's own bounds. Where the graph is smaller than the view on an axis
+ * it is centered on that axis; where it is larger, the view stays inside it with `padding` to
+ * spare, so the screen never shows more emptiness than graph. Nothing is fitted: what does not fit
+ * lies beyond the edge, for the person to pan to.
+ *
+ * The view's left and right edges avoid cutting a frame in two where they can: a frame that would
+ * show only a sliver at an edge is left out whole, the view moving over to the next gutter, as long
+ * as the focus stays in view. `frames` are the outermost frames' boxes.
+ */
+export function startingView(
+  graph: Box,
+  focus: Box,
+  size: { width: number; height: number },
+  padding = PADDING,
+  frames: readonly Box[] = [],
+): Camera {
+  const axis = (from: number, to: number, focusFrom: number, focusTo: number, room: number) => {
+    const [lo, hi] = [from - padding, to + padding];
+    if (hi - lo <= room) return (lo + hi - room) / 2;
+    return Math.min(Math.max((focusFrom + focusTo - room) / 2, lo), hi - room);
+  };
+  let x = axis(graph.x1, graph.x2, focus.x1, focus.x2, size.width);
+  const y = axis(graph.y1, graph.y2, focus.y1, focus.y2, size.height);
+  if (graph.x2 - graph.x1 + 2 * padding > size.width) {
+    // The frames the left edge would cut: hide them, and the right edge's the same way.
+    const cutLeft = frames.filter((box) => box.x1 < x && box.x2 > x);
+    const left = cutLeft.length ? Math.max(...cutLeft.map((box) => box.x2)) + padding : x;
+    if (left + size.width >= focus.x2 + padding && left <= focus.x1 - padding) x = left;
+    const cutRight = frames.filter((box) => box.x1 < x + size.width && box.x2 > x + size.width);
+    const right = cutRight.length
+      ? Math.min(...cutRight.map((box) => box.x1)) - padding
+      : x + size.width;
+    if (right - size.width <= focus.x1 - padding && right >= focus.x2 + padding)
+      x = right - size.width;
+  }
+  return { zoom: 1, pan: { x: -x, y: -y } };
+}
+
+/**
+ * The graph's hub: the function or method that the most calls reach, its first by id when several
+ * tie. The demo repository has one central function with many callers, and the agents work around
+ * it, so the starting view looks at the module that holds it. Null when nothing is called.
+ */
+export function hubOf(cy: Core): string | null {
+  const callers = new Map<string, number>();
+  for (const edge of cy.edges().toArray()) {
+    if (edge.hasClass("imports") || edge.hasClass("inherits")) continue;
+    const target = edge.target();
+    if (!target.hasClass("function") && !target.hasClass("method")) continue;
+    callers.set(target.id(), (callers.get(target.id()) ?? 0) + 1);
+  }
+  let hub: string | null = null;
+  for (const [id, count] of callers) {
+    const best = hub === null ? 0 : (callers.get(hub) ?? 0);
+    if (count > best || (count === best && hub !== null && id < hub)) hub = id;
+  }
+  return hub;
+}
+
+/** Puts the camera at its starting view (see startingView), on the module of the graph's hub. */
+export function startCamera(cy: Core): void {
+  const nodes = cy.nodes();
+  if (nodes.empty()) return;
+  const hub = hubOf(cy);
+  const home = hub === null ? undefined : cy.getElementById(hub).ancestors().last();
+  const bounds = (collection: Pick<CollectionReturnValue, "boundingBox">): Box => {
+    const box = collection.boundingBox({ includeLabels: false, includeOverlays: false });
+    return { x1: box.x1, y1: box.y1, x2: box.x2, y2: box.y2 };
+  };
+  const whole = bounds(nodes);
+  const focus = home?.nonempty() ? bounds(home) : whole;
+  const frames = cy
+    .nodes(":parent")
+    .filter((frame) => frame.parent().empty())
+    .map((frame) => bounds(frame));
+  const camera = startingView(
+    whole,
+    focus,
+    { width: cy.width(), height: cy.height() },
+    PADDING,
+    frames,
+  );
+  cy.viewport(camera);
+}
+
 /** Expand around the current view's centre, retaining its context and every node's position. */
 export function includeNewNodes(cy: Core, ids: readonly string[], reduceMotion: boolean): void {
   const nodes = cy.nodes().filter((node) => ids.includes(node.id()));
@@ -232,10 +321,26 @@ export function zoomBy(cy: Core, factor: number, reduceMotion: boolean): void {
   );
 }
 
+/**
+ * Moves the camera, never past the zoom range the instance was made with: a target outside it is
+ * brought to its edge about the middle of the view, so the view's middle stays where it was meant
+ * to be. The range is the person's navigation limit; no move changes it.
+ */
 function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
   cy.stop();
-  if (camera.zoom < cy.minZoom()) cy.minZoom(camera.zoom);
-  const viewport = { zoom: camera.zoom, pan: camera.pan };
+  const zoom = Math.min(cy.maxZoom(), Math.max(cy.minZoom(), camera.zoom));
+  const scale = zoom / camera.zoom;
+  const center = { x: cy.width() / 2, y: cy.height() / 2 };
+  const viewport = {
+    zoom,
+    pan:
+      scale === 1
+        ? camera.pan
+        : {
+            x: center.x + (camera.pan.x - center.x) * scale,
+            y: center.y + (camera.pan.y - center.y) * scale,
+          },
+  };
   if (reduceMotion) {
     cy.viewport(viewport);
     return;
@@ -248,7 +353,37 @@ function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
   });
 }
 
-/** Fit the lit nodes subject to the readable floor; the whole-graph watch fit has no floor. */
+/** The width the review's cone card takes at the graph's left, with its inset: not for nodes. */
+function coneInset(theme: ReturnType<typeof getActiveTheme>): number {
+  return Number.parseFloat(theme["cone-card-width"]) + Number.parseFloat(theme["spacing-overlay"]);
+}
+
+/**
+ * Pans, at the zoom the camera has, so the node lies in the middle of the part of the view that the
+ * cone card leaves free. It answers a click on a cone row that says "Out of view" and nothing else:
+ * no event, no review and no resize calls it. It moves no node and keeps the zoom range. Returns
+ * the camera it moves to, or null for a node that is not on the graph.
+ */
+export function revealNode(cy: Core, id: string, reduceMotion: boolean): Camera | null {
+  const node = cy.getElementById(id);
+  if (node.empty()) return null;
+  const box = node.boundingBox({ includeLabels: true, includeOverlays: false });
+  const zoom = cy.zoom();
+  const camera = {
+    zoom,
+    pan: {
+      x: (coneInset(getActiveTheme()) + cy.width()) / 2 - ((box.x1 + box.x2) / 2) * zoom,
+      y: cy.height() / 2 - ((box.y1 + box.y2) / 2) * zoom,
+    },
+  };
+  moveCamera(cy, camera, reduceMotion);
+  return camera;
+}
+
+/**
+ * Fit the lit nodes subject to the readable floor. The whole-graph fit has the floor of the zoom
+ * range: a graph too wide to fit above it is centered at its lower end, not fitted below it.
+ */
 function cameraFor(
   cy: Core,
   eles: CollectionReturnValue,
@@ -272,12 +407,10 @@ function cameraFor(
       padding: PADDING,
       occlusion,
       maxZoom: cy.maxZoom(),
-      leftInset: readable
-        ? Number.parseFloat(theme["cone-card-width"]) + Number.parseFloat(theme["spacing-overlay"])
-        : 0,
+      leftInset: readable ? coneInset(theme) : 0,
       minZoom: readable
         ? Number.parseFloat(theme["cursor-name-size"]) / Number.parseFloat(theme["body-size"])
-        : 0,
+        : cy.minZoom(),
     },
     cone ? bounds(cone) : [],
   );

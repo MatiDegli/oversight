@@ -1,8 +1,9 @@
-// What a node draws besides its box and its name: on a leaf, the state word and the letter badges;
-// on a module or class frame, its title and its count. Cytoscape draws a label in one color and
-// font, so these are small SVG images on the node (as the distance badge is), each with its own
-// font embedded, since an image cannot see the page's @font-face. Every color and size comes from
-// the theme. Nothing here moves a node: the images sit inside boxes the preset already reserved.
+// What a node draws besides its box and its name: on a row, the state word and the letter badges,
+// at the right of the name's line; on a module or class frame, its title and its count. Cytoscape
+// draws a label in one color and font, so these are small SVG images on the node (as the distance
+// badge is), each with its own font embedded, since an image cannot see the page's @font-face.
+// Every color and size comes from the theme. Nothing here moves a node: the images sit inside boxes
+// the preset already reserved.
 import type { Slot } from "@contracts";
 import regular from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-400-normal.woff2?inline";
 import semibold from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-600-normal.woff2?inline";
@@ -29,18 +30,25 @@ export interface LayerTheme {
   "on-agent": string;
   "module-label": string;
   faint: string;
-  "label-size": string;
   "label-weight": number;
-  "caption-size": string;
-  "caption-weight": number;
-  "badge-size": string;
   "badge-weight": number;
   "agent-border-width": string;
-  "radius-label": string;
+  "border-width": string;
+  "radius-node": string;
   "letter-badge-size": string;
+  "letter-badge-font-size": string;
+  "node-word-size": string;
+  "node-word-gap": string;
+  "node-pad-left": string;
+  "node-pad-right": string;
+  "frame-title-size": string;
+  "frame-title-weight": number;
+  "frame-count-size": string;
+  "caption-weight": number;
+  "frame-title-inset": string;
+  "frame-header-center": string;
+  "class-pad-top": string;
   "spacing-xs": string;
-  "spacing-md": string;
-  "spacing-lg": string;
 }
 
 /** One image on a node, in the units of Cytoscape's background-* properties. */
@@ -80,16 +88,20 @@ const text = (
 ) =>
   `<text ${attributes} font-family='${theme["text-font"]}' font-size="${size}" font-weight="${String(weight)}" fill="${fill}">${body}</text>`;
 
-/** The size of a leaf node, which the image covers: the same box the stylesheet gives it. */
+/** The size of a row, which the image covers: the same box the stylesheet gives it. */
 export interface LeafSize {
   width: number;
   height: number;
 }
 
+/** The width the badges of one node take together, side by side. */
+const badgesWidth = (theme: LayerTheme, count: number) =>
+  count * px(theme["letter-badge-size"]) + Math.max(0, count - 1) * px(theme["spacing-xs"]);
+
 /**
  * The letter badges of a node, right-aligned at `right` on the row centred at `centerY`. A badge is
- * a 20px square: filled in the agent's color with the letter in on-agent when the agent changes the
- * node, outlined in the agent's color when it only read it.
+ * a square, 26px at the sketch's scale: filled in the agent's color with the letter in on-agent when
+ * the agent changes the node, outlined in the agent's color when it only read it.
  */
 function badgeShapes(theme: LayerTheme, marks: NodeMarks, right: number, centerY: number): string {
   const size = px(theme["letter-badge-size"]);
@@ -102,12 +114,12 @@ function badgeShapes(theme: LayerTheme, marks: NodeMarks, right: number, centerY
       const x =
         right - size * (marks.badges.length - index) - gap * (marks.badges.length - 1 - index);
       const square = filled
-        ? `<rect x="${String(x)}" y="${String(centerY - size / 2)}" width="${String(size)}" height="${String(size)}" rx="${theme["radius-label"]}" fill="${color}"/>`
-        : `<rect x="${String(x + stroke / 2)}" y="${String(centerY - size / 2 + stroke / 2)}" width="${String(size - stroke)}" height="${String(size - stroke)}" rx="${theme["radius-label"]}" fill="none" stroke="${color}" stroke-width="${String(stroke)}"/>`;
+        ? `<rect x="${String(x)}" y="${String(centerY - size / 2)}" width="${String(size)}" height="${String(size)}" rx="${theme["radius-node"]}" fill="${color}"/>`
+        : `<rect x="${String(x + stroke / 2)}" y="${String(centerY - size / 2 + stroke / 2)}" width="${String(size - stroke)}" height="${String(size - stroke)}" rx="${theme["radius-node"]}" fill="none" stroke="${color}" stroke-width="${String(stroke)}"/>`;
       const letter = text(
         theme,
         `x="${String(x + size / 2)}" y="${String(centerY)}" dy=".35em" text-anchor="middle"`,
-        theme["badge-size"],
+        theme["letter-badge-font-size"],
         theme["badge-weight"],
         filled ? theme["on-agent"] : ink,
         slot,
@@ -117,27 +129,44 @@ function badgeShapes(theme: LayerTheme, marks: NodeMarks, right: number, centerY
     .join("");
 }
 
+/** The state word, right-aligned so that it ends `gap` left of `right`. */
 const wordText = (theme: LayerTheme, marks: NodeMarks, attributes: string) =>
   text(
     theme,
     attributes,
-    theme["caption-size"],
+    theme["node-word-size"],
     theme["label-weight"],
     slotColors(theme, marks.slot).text,
     marks.word,
   );
 
 /**
- * The bottom row of a marked leaf: the state word at the left in its agent's text color, and the
- * letter badges at the right. The name stays above, in the node's own label.
+ * What the state word and the badges take at the right of a row: the width the name must leave
+ * free. The name's own room is the row's width less its two paddings and this.
+ */
+export function marksClearance(theme: LayerTheme, marks: NodeMarks): number {
+  // The word's width is an estimate of the type's average glyph, short of the real one; the name's
+  // own ellipsis keeps it from touching the word whatever its length.
+  const word = marks.word.length * px(theme["node-word-size"]) * GLYPH_EM;
+  return word + px(theme["node-word-gap"]) + badgesWidth(theme, marks.badges.length);
+}
+
+/**
+ * A marked row's right end, on the line of its name: the state word in its agent's text color, then
+ * the letter badges at the right padding. The name stays in the node's own label, at the left.
  */
 export function marksLayer(theme: LayerTheme, marks: NodeMarks, leaf: LeafSize): Layer {
-  const size = px(theme["letter-badge-size"]);
-  const pad = px(theme["spacing-md"]);
-  const centerY = leaf.height - pad - size / 2;
-  const word = wordText(theme, marks, `x="${String(pad)}" y="${String(centerY)}" dy=".35em"`);
-  const badges = badgeShapes(theme, marks, leaf.width - pad, centerY);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(leaf.width)}" height="${String(leaf.height)}">${fontFaces(theme)}${word}${badges}</svg>`;
+  // The image starts at the node's body, half a border inside its outer edge.
+  const right = leaf.width - (px(theme["node-pad-right"]) - px(theme["border-width"]) / 2);
+  const centerY = leaf.height / 2;
+  const badges = badgesWidth(theme, marks.badges.length);
+  const word = wordText(
+    theme,
+    marks,
+    `x="${String(right - badges - px(theme["node-word-gap"]))}" y="${String(centerY)}" dy=".35em" text-anchor="end"`,
+  );
+  const shapes = badgeShapes(theme, marks, right, centerY);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(leaf.width)}" height="${String(leaf.height)}">${fontFaces(theme)}${word}${shapes}</svg>`;
   return {
     image: encode(svg),
     width: leaf.width,
@@ -151,7 +180,7 @@ export function marksLayer(theme: LayerTheme, marks: NodeMarks, leaf: LeafSize):
 }
 
 /** The room the title and the count each get on a frame's header row, in px. */
-const HEADER = { titleWidth: 240, countWidth: 180, height: 24, wordWidth: 64 };
+const HEADER = { titleWidth: 240, countWidth: 180, height: 28, wordWidth: 70 };
 
 const escape = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -170,19 +199,25 @@ function rowImage(theme: LayerTheme, width: number, body: string): string {
  */
 const GLYPH_EM = 0.55;
 function fitTitle(theme: LayerTheme, title: string, room: number): string {
-  const fit = Math.floor(room / (px(theme["label-size"]) * GLYPH_EM));
+  const fit = Math.floor(room / (px(theme["frame-title-size"]) * GLYPH_EM));
   if (title.length <= fit) return title;
   return fit > 1 ? `${title.slice(0, fit - 1)}\u2026` : "";
 }
 
 const rowBaseline = `y="${String(HEADER.height / 2)}" dy=".35em"`;
 
-function titleLayer(
-  theme: LayerTheme,
-  title: string,
-  width: number,
-  offsetX = px(theme["spacing-lg"]),
-): Layer {
+/** Where a frame's header row sits: its centre's distance from the frame's top. */
+export type Band = "module" | "class" | "empty";
+
+function bandCenter(theme: LayerTheme, band: Band, height: number): number {
+  return band === "module"
+    ? px(theme["frame-header-center"])
+    : band === "class"
+      ? px(theme["class-pad-top"]) / 2
+      : height / 2;
+}
+
+function titleLayer(theme: LayerTheme, title: string, width: number, offsetY: number): Layer {
   return {
     image: rowImage(
       theme,
@@ -190,8 +225,8 @@ function titleLayer(
       text(
         theme,
         `x="0" ${rowBaseline}`,
-        theme["label-size"],
-        theme["label-weight"],
+        theme["frame-title-size"],
+        theme["frame-title-weight"],
         theme["module-label"],
         escape(title),
       ),
@@ -200,16 +235,17 @@ function titleLayer(
     height: HEADER.height,
     x: "0%",
     y: "0%",
-    offsetX,
-    offsetY: px(theme["spacing-md"]),
+    offsetX: px(theme["frame-title-inset"]) - px(theme["border-width"]) / 2,
+    offsetY,
     clip: "node",
   };
 }
 
 /**
- * A frame's header row, inside its top padding: the title at the left in the module-label color and
- * the count at the right in the faint one. Two images, so each hugs its own edge whatever the
- * frame's width; each is wider than its text and clipped by the frame.
+ * A frame's header row: the title at the left in the module-label color and the count at the right
+ * in the faint one, on the line of `band`: a module's header band, a class's, or the middle of a
+ * frame with nothing in it. Two images, so each hugs its own edge whatever the frame's width; each
+ * is wider than its text and clipped by the frame.
  *
  * A frame an agent touches says so in the count's place: the state word in the agent's text color
  * and its letter badges, right-aligned, with the count left out. The title then gets only the room
@@ -219,103 +255,54 @@ export function headerLayers(
   theme: LayerTheme,
   title: string,
   count: string,
-  width: number,
+  size: LeafSize,
+  band: Band,
   marks?: NodeMarks,
 ): Layer[] {
-  const pad = px(theme["spacing-lg"]);
-  const top = px(theme["spacing-md"]);
+  const inset = px(theme["frame-title-inset"]);
+  const top = bandCenter(theme, band, size.height) - HEADER.height / 2;
+  const trailing = (width: number, body: string, offsetX: number): Layer => ({
+    image: rowImage(theme, width, body),
+    width,
+    height: HEADER.height,
+    x: "100%",
+    y: "0%",
+    offsetX,
+    offsetY: top,
+    clip: "node",
+  });
   if (marks) {
-    const size = px(theme["letter-badge-size"]);
-    const gap = px(theme["spacing-xs"]);
-    const badges = marks.badges.length * size + (marks.badges.length - 1) * gap;
+    const badges = badgesWidth(theme, marks.badges.length);
+    const gap = px(theme["node-word-gap"]);
     const cluster = HEADER.wordWidth + gap + badges;
-    const room = Math.max(0, Math.min(HEADER.titleWidth, width - 2 * pad - cluster - gap));
+    const room = Math.max(0, Math.min(HEADER.titleWidth, size.width - 2 * inset - cluster - gap));
     const centerY = HEADER.height / 2;
     return [
-      titleLayer(theme, fitTitle(theme, title, room), room),
-      {
-        image: rowImage(
+      titleLayer(theme, fitTitle(theme, title, room), room, top),
+      trailing(
+        cluster,
+        wordText(
           theme,
-          cluster,
-          wordText(
-            theme,
-            marks,
-            `x="${String(cluster - badges - gap)}" y="${String(centerY)}" dy=".35em" text-anchor="end"`,
-          ) + badgeShapes(theme, marks, cluster, centerY),
-        ),
-        width: cluster,
-        height: HEADER.height,
-        x: "100%",
-        y: "0%",
-        offsetX: -pad,
-        offsetY: top,
-        clip: "node",
-      },
+          marks,
+          `x="${String(cluster - badges - gap)}" y="${String(centerY)}" dy=".35em" text-anchor="end"`,
+        ) + badgeShapes(theme, marks, cluster, centerY),
+        -inset,
+      ),
     ];
   }
   return [
-    titleLayer(theme, title, HEADER.titleWidth),
-    {
-      image: rowImage(
+    titleLayer(theme, title, HEADER.titleWidth, top),
+    trailing(
+      HEADER.countWidth,
+      text(
         theme,
-        HEADER.countWidth,
-        text(
-          theme,
-          `x="${String(HEADER.countWidth)}" ${rowBaseline} text-anchor="end"`,
-          theme["caption-size"],
-          theme["caption-weight"],
-          theme.faint,
-          escape(count),
-        ),
+        `x="${String(HEADER.countWidth)}" ${rowBaseline} text-anchor="end"`,
+        theme["frame-count-size"],
+        theme["caption-weight"],
+        theme.faint,
+        escape(count),
       ),
-      width: HEADER.countWidth,
-      height: HEADER.height,
-      x: "100%",
-      y: "0%",
-      offsetX: -pad,
-      offsetY: top,
-      clip: "node",
-    },
+      -inset,
+    ),
   ];
-}
-
-/**
- * A module or class with nothing inside it is drawn as a leaf-sized box, so its header stacks: the
- * title on the first row, and on the second its count, or, when an agent touches it, the state word
- * and badges in the count's place. The title gets the box's width less its padding.
- */
-export function stackedHeaderLayers(
-  theme: LayerTheme,
-  title: string,
-  count: string,
-  leaf: LeafSize,
-  marks?: NodeMarks,
-): Layer[] {
-  const pad = px(theme["spacing-md"]);
-  const second: Layer = marks
-    ? marksLayer(theme, marks, leaf)
-    : {
-        image: rowImage(
-          theme,
-          leaf.width,
-          text(
-            theme,
-            `x="${String(pad)}" ${rowBaseline}`,
-            theme["caption-size"],
-            theme["caption-weight"],
-            theme.faint,
-            escape(count),
-          ),
-        ),
-        width: leaf.width,
-        height: HEADER.height,
-        x: "0%",
-        y: "0%",
-        offsetX: 0,
-        // Centred on the row a leaf's state word takes.
-        offsetY: leaf.height - pad - px(theme["letter-badge-size"]) / 2 - HEADER.height / 2,
-        clip: "node",
-      };
-  // The title starts at the second row's padding, which is a leaf's, narrower than a frame's.
-  return [titleLayer(theme, title, leaf.width - 2 * pad, pad), second];
 }

@@ -154,7 +154,7 @@ describe("graph mapping", () => {
       ...theme,
       card: theme.raised,
       "text-font": theme["code-font"],
-      "body-size": theme["title-size"],
+      "node-name-size": theme["title-size"],
       "node-opacity": theme["module-opacity"],
       "agent-b-node": { color: theme.field, alpha: theme["dim-module"] },
     };
@@ -163,7 +163,7 @@ describe("graph mapping", () => {
     const target = cy.getElementById("billing:fee");
     expect(target.style("background-color")).toBe(rgb(custom.card));
     expect(target.style("font-family")).toBe(custom["text-font"]);
-    expect(target.style("font-size")).toBe(custom["body-size"]);
+    expect(target.style("font-size")).toBe(custom["node-name-size"]);
     expect(Number(target.style("background-opacity"))).toBe(custom["node-opacity"]);
     target.classes("function focus-B-edit");
     expect(target.style("background-color")).toBe(rgb(custom["agent-b-node"].color));
@@ -280,7 +280,13 @@ describe("graph mapping", () => {
     expect(possible.style("target-arrow-color")).toBe(possible.style("line-color"));
     for (const edge of graph.edges()) {
       expect(edge.style("line-style")).toBe("solid");
-      expect(edge.style("curve-style")).toBe(EDGE_CURVE_STYLE);
+      // The default is taxi: updateGraph routes every call, and a routed edge is drawn in rounded
+      // orthogonal segments. An import is not drawn at all, so it is not routed.
+      expect(EDGE_CURVE_STYLE).toBe("taxi");
+      expect(edge.style("curve-style")).toBe(
+        edge.hasClass("imports") ? "bezier" : "round-segments",
+      );
+      expect(edge.style("display")).toBe(edge.hasClass("imports") ? "none" : "element");
     }
   });
 
@@ -361,7 +367,15 @@ describe("graph mapping", () => {
     };
     const target = graphElements(state).find((e) => e.data.id === "billing:fee");
     if (!target) throw new Error("Missing fee");
-    expect(Object.keys(target.data).sort()).toEqual(["id", "kind", "label", "marks", "parent"]);
+    expect(Object.keys(target.data).sort()).toEqual([
+      "h",
+      "id",
+      "kind",
+      "label",
+      "marks",
+      "parent",
+      "w",
+    ]);
     // A edits and has the change pending (editing outranks changed); B only reads.
     expect(target.data.marks).toEqual({
       word: "editing",
@@ -478,8 +492,16 @@ describe("graph mapping", () => {
     const target = render(state).getElementById(source.id);
     expect(target.data("label")).toBe(source.name);
     expect(target.data("marks")).toMatchObject({ word: "editing", slot: "B" });
-    expect(target.style("text-wrap")).toBe("wrap");
-    expect(Number.parseFloat(String(target.style("text-max-width")))).toBeGreaterThan(1000);
+    // The name is cut with an ellipsis where it would meet the marks, never wrapped under them.
+    expect(target.style("text-wrap")).toBe("ellipsis");
+    const room = Number.parseFloat(String(target.style("text-max-width")));
+    const plain = Number.parseFloat(
+      String(render(initial()).getElementById("billing:fee").style("text-max-width")),
+    );
+    expect(plain).toBe(282 - 18 - 12);
+    // The word "editing" and two badges take the room the name gives up.
+    expect(room).toBeGreaterThan(0);
+    expect(room).toBeLessThan(plain - 2 * 26);
   });
 
   it("gives each frame its title and its count, and counts what a change adds as new", () => {
@@ -511,7 +533,8 @@ describe("graph mapping", () => {
     const marked = render(updated());
     const fee = marked.getElementById("billing:fee");
     expect(fee.hasClass("marked")).toBe(true);
-    expect(fee.numericStyle("text-margin-y")).toBeLessThan(0);
+    // The word shares the name's line: the name is not lifted above it.
+    expect(fee.numericStyle("text-margin-y")).toBe(0);
     const word = decodeURIComponent(String(fee.style("background-image")));
     expect(word).toContain(">changed</text>");
     expect(word).toContain(`fill="${theme["agent-a-text"]}"`);
@@ -593,8 +616,8 @@ describe("graph mapping", () => {
       const [title, cluster] = String(frame.style("background-width"))
         .split(" ")
         .map((width) => Number.parseFloat(width));
-      const pad = Number.parseFloat(theme["spacing-lg"]);
-      const gap = Number.parseFloat(theme["spacing-xs"]);
+      const pad = Number.parseFloat(theme["frame-title-inset"]);
+      const gap = Number.parseFloat(theme["node-word-gap"]);
       // The padding is in outerWidth() but not in width(): the room is what the outer width leaves.
       expect(frame.outerWidth()).toBeGreaterThan(frame.width());
       expect(cluster).toBeGreaterThan(0);
@@ -785,7 +808,9 @@ describe("graph updates and log entry point", () => {
       }),
     ]);
     updateGraph(graph, graphElements(stateStore.getState().state));
-    expect(batch).toHaveBeenCalledTimes(1);
+    // One batch for the elements, however many; one more for each level of frames (the class, then
+    // the module) and one for the routes.
+    expect(batch).toHaveBeenCalledTimes(4);
     expect(layout).not.toHaveBeenCalled();
     for (const { id, position } of positions)
       expect(graph.getElementById(id).position()).toEqual(position);
@@ -796,7 +821,9 @@ describe("graph updates and log entry point", () => {
     expect(graph.pan()).toEqual({ x: 20, y: 40 });
   });
 
-  it.each([0, 1200])(
+  // 1260 puts a's frame 30px from b's, at the width of a row: close enough that b cannot grow
+  // toward it.
+  it.each([0, 1260])(
     "places additions at b's box without growing b across another module at %s",
     (aX) => {
       const state = initial();

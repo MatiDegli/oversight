@@ -78,6 +78,7 @@ describe("the zoom controls", () => {
         zoomIn: () => calls.push("in"),
         zoomOut: () => calls.push("out"),
         fit: () => calls.push("fit"),
+        reveal: () => calls.push("reveal"),
       },
     });
     expect(calls).toEqual(["in", "out", "fit"]);
@@ -87,7 +88,7 @@ describe("the zoom controls", () => {
   });
 
   it("are three named buttons that ask the graph, and do nothing while it does not exist", () => {
-    const api = { zoomIn: vi.fn(), zoomOut: vi.fn(), fit: vi.fn() };
+    const api = { zoomIn: vi.fn(), zoomOut: vi.fn(), fit: vi.fn(), reveal: vi.fn() };
     const markup = renderToStaticMarkup(<ZoomControls api={{ current: api }} />);
     for (const label of ["Zoom in", "Zoom out", "Fit the graph to the view"])
       expect(markup).toContain(`aria-label="${label}"`);

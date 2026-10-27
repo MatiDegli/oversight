@@ -255,6 +255,7 @@ function installRecorder() {
     return found;
   };
   let font = 0;
+  const row = { width: 0, height: 0 };
   let last = "";
   const sample = () => {
     const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
@@ -262,6 +263,8 @@ function installRecorder() {
     if (host && probe) {
       if (font === 0) {
         font = Number.parseFloat(root().getPropertyValue("--body-size"));
+        row.width = Number.parseFloat(root().getPropertyValue("--node-width"));
+        row.height = Number.parseFloat(root().getPropertyValue("--node-height"));
         hues = { A: tokenHue("--agent-a"), B: tokenHue("--agent-b") };
         if (!(font > 0) || hues.A < 0 || hues.B < 0 || Math.abs(hues.A - hues.B) < 90)
           throw new Error(
@@ -285,12 +288,15 @@ function installRecorder() {
       }
       const current = samples[samples.length - 1];
       if (current) {
-        // A leaf is ten body-sized units wide and four high; a few pixels more take in its border.
-        const halfWidth = 5 * font * probe.zoom() + 4;
-        const halfHeight = 2 * font * probe.zoom() + 4;
+        // A row is the theme's node width by node height, 282 by 46; a few pixels more take in its
+        // border, where an agent's color is drawn.
+        const halfWidth = (row.width / 2) * probe.zoom() + 4;
+        const halfHeight = (row.height / 2) * probe.zoom() + 4;
         for (const slot of ["A", "B"] as const)
           for (const mode of ["read", "edit"])
             for (const { id, x, y } of probe.nodeCenters(`node.focus-${slot}-${mode}`)) {
+              // The canvas starts at 100% and is panned: a node beyond its edge draws nothing here.
+              if (x < 0 || y < 0 || x > host.clientWidth || y > host.clientHeight) continue;
               const found = count(host, x, y, halfWidth, halfHeight);
               current.paint[id] = Math.max(current.paint[id] ?? 0, found[slot]);
               current.stray = Math.max(current.stray, found[slot === "A" ? "B" : "A"]);
@@ -389,10 +395,15 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
       const lights = (await recorded(page)).filter((sample) =>
         Object.values(sample.lit).some((ids) => ids.length > 0),
       );
+      // Every lit node on the canvas shows the color; one beyond its edge is not on it to be read.
       const least = lights.flatMap((sample) =>
-        Object.values(sample.lit).flatMap((ids) => ids.map((id) => sample.paint[id] ?? 0)),
+        Object.values(sample.lit).flatMap((ids) =>
+          ids.filter((id) => id in sample.paint).map((id) => sample.paint[id] ?? 0),
+        ),
       );
-      return { lights: lights.length, least: Math.min(...least) };
+      // The node the agent edits is the hub, in the starting view: it is always one of them.
+      const edited = lights.some((sample) => changedNode in sample.paint);
+      return { lights: lights.length, least: edited ? Math.min(...least) : -1 };
     };
     await expect
       .poll(async () => (await painted()).least)

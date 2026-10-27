@@ -111,9 +111,21 @@ export const scenes: readonly Scene[] = [
   {
     name: "watch",
     enabled: true,
-    edgeShapes: ["bezier", "taxi"],
     prepare: async (page) => {
       await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
+    },
+  },
+  // The fit button: the whole graph in view, as the person gets it by asking. Watch starts at 100%.
+  {
+    name: "watch-fit",
+    enabled: true,
+    prepare: async (page) => {
+      await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+      await page.waitForFunction(() => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        return host?.oversightGraph?.animating() === false;
+      });
     },
   },
   // Review: the proposed change's node opens it, with Monaco's inline diff on the left and the graph

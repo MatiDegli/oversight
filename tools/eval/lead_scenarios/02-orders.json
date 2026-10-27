@@ -1,0 +1,8 @@
+{
+  "id": "orders-and-cart",
+  "task": "Split improvements to order cancellation idempotence and cart line copying between two agents, each with regression tests and a disjoint zone.",
+  "changes": [
+    {"change_id": "A", "summary": "Keep cancellation idempotent", "files": ["shop/orders.py"], "review": {"verdict": "accept_with_nits", "findings": ["NIT shop/orders.py:61: Shorten the docstring."]}},
+    {"change_id": "B", "summary": "Return independent cart lines", "files": ["shop/cart.py", "tests/test_cart.py"], "review": {"verdict": "request_changes", "findings": ["SHOULD-FIX shop/cart.py:32: The returned lines still alias internal state.", "BLOCKING tests/test_cart.py:20: The regression mutates a copy without checking the cart."]}}
+  ]
+}
