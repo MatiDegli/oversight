@@ -1,5 +1,5 @@
 import type { Slot, StartAgent } from "@contracts";
-import { Check, X } from "lucide-react";
+import { Check, Cpu, X } from "lucide-react";
 import { useId } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand";
@@ -19,6 +19,8 @@ const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 const primary = `inline-flex h-(--button-primary-height) items-center rounded-control bg-text px-4 text-(length:--label-size) font-semibold text-page not-aria-disabled:hover:bg-text-hover aria-disabled:cursor-not-allowed aria-disabled:bg-raised aria-disabled:text-faint ${focusRing}`;
 const heading = "text-(length:--label-size) font-semibold";
+const chip =
+  "inline-flex h-(--chip-height) items-center gap-1.5 rounded-control border border-page-border bg-page-raised px-2 text-(length:--data-size) whitespace-nowrap text-text";
 
 const modifier =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent) ? "Cmd" : "Ctrl";
@@ -34,6 +36,10 @@ export interface TaskBoxViewProps {
   slots?: { slot: Slot; label: string; holder: string | null }[];
   selected?: Slot | null;
   onSlot?: (slot: Slot) => void;
+  /** The one model on offer when there is no slot choice, such as "Muse Spark". */
+  model?: string;
+  /** The run's step limit, shown as "Up to 30 steps". */
+  maxSteps?: number;
 }
 
 /**
@@ -51,81 +57,98 @@ export function TaskBoxView({
   slots = [],
   selected = null,
   onSlot,
+  model,
+  maxSteps,
 }: TaskBoxViewProps) {
   const id = useId();
   const canStart = !pending && draft.trim() !== "" && block === null;
   const line = pending ? "Starting the agent." : block;
   return (
     <section aria-labelledby={`${id}-heading`} className="flex flex-col gap-2.5">
-      <h3 id={`${id}-heading`} className={heading}>
+      {/* The sketch names the box by its placeholder alone; the heading stays for screen readers. */}
+      <h3 id={`${id}-heading`} className={`${heading} sr-only`}>
         New agent
       </h3>
-      <textarea
-        aria-label="Task for the new agent"
-        value={draft}
-        rows={3}
-        readOnly={pending}
-        placeholder="Describe the change you want"
-        onChange={(event) => {
-          onDraft(event.target.value);
-        }}
-        onKeyDown={(event) => {
-          // Enter alone is a newline; Ctrl+Enter (Cmd+Enter on macOS) starts, except mid-composition.
-          if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey)) return;
-          if (event.nativeEvent.isComposing || event.repeat) return;
-          event.preventDefault();
-          if (canStart) onStart();
-        }}
-        className={`resize-none rounded-card border border-control-edge bg-field p-(--input-padding) text-(length:--body-size) text-text placeholder:text-faint read-only:text-muted ${focusRing}`}
-      />
-      {slots.length === 2 && (
-        <div role="group" aria-label="Agent slot" className="flex flex-wrap gap-2">
-          {slots.map(({ slot, label, holder }) => (
-            <button
-              key={slot}
-              type="button"
-              aria-pressed={selected === slot}
-              aria-disabled={pending || holder !== null}
-              onClick={() => {
-                if (!pending && holder === null) onSlot?.(slot);
-              }}
-              className={`min-w-0 flex-1 rounded-control border border-control-edge p-2 text-left text-(length:--caption-size) aria-pressed:bg-raised aria-disabled:cursor-not-allowed ${selected === slot ? "aria-pressed:border-text" : ""} ${focusRing}`}
-            >
-              <span className={slot === "A" ? "text-agent-a-text" : "text-agent-b-text"}>
-                {slot}
-              </span>{" "}
-              {label}
-              {selected === slot && (
-                <Check aria-hidden="true" className="ml-1 inline-block size-4 text-text" />
-              )}
-              {holder !== null && <span className="block text-muted">{holder}</span>}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
-        <button
-          type="button"
-          aria-disabled={!canStart}
-          aria-describedby={`${id}-line`}
-          onClick={() => {
+      <div className="flex flex-col gap-3 rounded-card border border-control-edge bg-field p-3 has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-offset-2 has-[textarea:focus-visible]:outline-text">
+        <textarea
+          aria-label="Task for the new agent"
+          value={draft}
+          rows={3}
+          readOnly={pending}
+          placeholder="Describe a task. Each agent works in its own worktree, and nothing reaches main without your approval."
+          onChange={(event) => {
+            onDraft(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            // Enter alone is a newline; Ctrl+Enter (Cmd+Enter on macOS) starts, except mid-composition.
+            if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey)) return;
+            if (event.nativeEvent.isComposing || event.repeat) return;
+            event.preventDefault();
             if (canStart) onStart();
           }}
-          className={primary}
-        >
-          Start agent
-        </button>
-        <p className="text-(length:--caption-size) text-muted">
-          <kbd className="rounded-keyboard-hint border border-control-edge px-1.5 font-mono">
-            {modifier}
-          </kbd>
-          +
-          <kbd className="rounded-keyboard-hint border border-control-edge px-1.5 font-mono">
-            Enter
-          </kbd>{" "}
-          to start
-        </p>
+          // The box around it draws the field and, with the keyboard, the focus ring.
+          className="resize-none bg-transparent p-1 text-(length:--body-size) text-text placeholder:text-faint read-only:text-muted focus:outline-none"
+        />
+        {slots.length === 2 && (
+          <div role="group" aria-label="Agent slot" className="flex flex-wrap gap-2">
+            {slots.map(({ slot, label, holder }) => (
+              <button
+                key={slot}
+                type="button"
+                aria-pressed={selected === slot}
+                aria-disabled={pending || holder !== null}
+                onClick={() => {
+                  if (!pending && holder === null) onSlot?.(slot);
+                }}
+                className={`min-w-0 flex-1 rounded-control border border-control-edge p-2 text-left text-(length:--caption-size) aria-pressed:bg-raised aria-disabled:cursor-not-allowed ${selected === slot ? "aria-pressed:border-text" : ""} ${focusRing}`}
+              >
+                <span className={slot === "A" ? "text-agent-a-text" : "text-agent-b-text"}>
+                  {slot}
+                </span>{" "}
+                {label}
+                {selected === slot && (
+                  <Check aria-hidden="true" className="ml-1 inline-block size-4 text-text" />
+                )}
+                {holder !== null && <span className="block text-muted">{holder}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {model !== undefined && (
+            <span aria-label={`Model: ${model}`} className={chip}>
+              <Cpu aria-hidden="true" className="size-4 shrink-0 text-muted" />
+              {model}
+            </span>
+          )}
+          {maxSteps !== undefined && (
+            <span className={chip}>
+              Up to {maxSteps} {maxSteps === 1 ? "step" : "steps"}
+            </span>
+          )}
+          <button
+            type="button"
+            aria-disabled={!canStart}
+            aria-describedby={`${id}-line`}
+            onClick={() => {
+              if (canStart) onStart();
+            }}
+            className={`${primary} ml-auto`}
+          >
+            Start agent
+          </button>
+        </div>
       </div>
+      <p className="text-(length:--caption-size) text-muted">
+        <kbd className="rounded-keyboard-hint border border-control-edge px-1.5 font-mono">
+          {modifier}
+        </kbd>
+        +
+        <kbd className="rounded-keyboard-hint border border-control-edge px-1.5 font-mono">
+          Enter
+        </kbd>{" "}
+        to start
+      </p>
       {/* Always mounted, so the reason is announced where it appears. */}
       <div role="status" id={`${id}-line`} className="text-sm text-muted">
         {line !== null && <p>{line}</p>}
@@ -183,6 +206,8 @@ export function TaskBox({ state, onStart, replayOf, store = taskBoxStore }: Task
       pending={pending}
       failure={failure}
       block={startBlock(state, selected)}
+      model={slots.length === 1 ? slots[0]?.label : undefined}
+      maxSteps={state.run?.limits.max_steps}
       slots={slots}
       selected={selected}
       onSlot={(slot) => {

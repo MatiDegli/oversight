@@ -113,6 +113,72 @@ describe("the new-agent box", () => {
       'aria-label="Agent slot"',
     );
   });
+  it("draws the field once, around the text and its chips, and names the box for screen readers", () => {
+    const markup = view({ draft: "x" });
+    const box = /<div class="[^"]*bg-field[^"]*">/.exec(markup)?.[0] ?? "";
+    expect(box).toContain("border-control-edge");
+    expect(box).toContain("rounded-card");
+    expect(box).toContain("has-[textarea:focus-visible]:outline-text");
+    // The textarea has no border or fill of its own and still shows nothing without a ring on its box.
+    const textarea = /<textarea [^>]*>/.exec(markup)?.[0] ?? "";
+    expect(textarea).not.toMatch(/class="[^"]*\b(border|bg-field)\b/);
+    expect(textarea).toContain("placeholder:text-faint");
+    expect(textarea).toContain("Each agent works in its own worktree");
+    expect(markup).toMatch(/<h3 [^>]*class="[^"]*sr-only[^"]*">New agent<\/h3>/);
+    expect(markup.indexOf("<h3")).toBeLessThan(markup.indexOf("<textarea"));
+  });
+
+  it("shows the model and the step limit as chips before Start agent, which is not a chip", () => {
+    const markup = view({ draft: "x", model: "Muse Spark", maxSteps: 30 });
+    const chips = [...markup.matchAll(/<span [^>]*bg-page-raised[^>]*>.*?<\/span>/g)].map(
+      (match) => match[0],
+    );
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toContain("Muse Spark");
+    expect(chips[0]).toMatch(/<svg[^>]*aria-hidden="true"/);
+    expect(chips[0]).toContain('aria-label="Model: Muse Spark"');
+    expect(chips[1]).toContain("Up to 30 steps");
+    for (const chip of chips) {
+      expect(chip).toContain("border-page-border");
+      expect(chip).toContain("h-(--chip-height)");
+      expect(chip).toContain("rounded-control");
+    }
+    expect(markup.indexOf("Up to 30 steps")).toBeLessThan(markup.indexOf(">Start agent<"));
+    expect(markup).not.toMatch(/<button[^>]*>[^<]*(Muse Spark|Up to 30 steps)/);
+    expect(button(markup)).toContain("ml-auto");
+  });
+
+  it("leaves out a chip it has no fact for", () => {
+    const markup = view({ draft: "x" });
+    expect(markup).not.toContain("bg-page-raised");
+    expect(markup).not.toContain("Up to");
+    expect(view({ draft: "x", maxSteps: 1 })).toContain("Up to 1 step<");
+  });
+
+  it("takes the chips' facts from the run: the only model's label, and the step limit", () => {
+    const state = through(2);
+    const run = state.run;
+    if (!run) throw new Error("Missing run fixture");
+    const one = { ...state, run: { ...run, slots: run.slots.slice(0, 1) } };
+    const oneMarkup = renderToStaticMarkup(
+      <TaskBox state={one} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    expect(oneMarkup).toContain('aria-label="Model: Muse Spark"');
+    expect(oneMarkup).toContain("Up to 30 steps");
+    // With two slots the picker's own buttons name each model, so there is no third chip for it.
+    const twoMarkup = renderToStaticMarkup(
+      <TaskBox state={state} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    expect(twoMarkup).not.toContain("Model:");
+    expect(twoMarkup).toContain("Up to 30 steps");
+    // Before the server's run.started there is nothing to say.
+    const waiting = renderToStaticMarkup(
+      <TaskBox state={createInitialState()} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    expect(waiting).not.toContain("Model:");
+    expect(waiting).not.toContain("Up to");
+  });
+
   it("is disabled while the task is blank or only whitespace, and enabled with a task", () => {
     for (const draft of ["", "   ", "\n\t\n"])
       expect(button(view({ draft }))).toContain('aria-disabled="true"');
