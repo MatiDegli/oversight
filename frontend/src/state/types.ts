@@ -35,6 +35,7 @@ export interface State {
   focus: Record<string, AgentFocus>;
   changes: Record<string, ChangeState>;
   usage: UsageTick | null;
+  spendUnknown: boolean;
   errors: ErrorReport[];
 }
 
@@ -49,6 +50,7 @@ export function createInitialState(): State {
     focus: {},
     changes: {},
     usage: null,
+    spendUnknown: false,
     errors: [],
   };
 }

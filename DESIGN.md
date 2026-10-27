@@ -468,8 +468,9 @@ person is doing.
   letter avatar 36px; status lamp 10px; distance badge 20px.
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
-  every take. Switching modes changes the camera, never node positions. Orthogonal ("taxi") edges
-  are tried on Tue Oct 27 and kept if they read better than curves.
+  every take. Switching modes changes the camera, never node positions. Edges are curves: orthogonal
+  ("taxi") edges were compared on the preset layout and curves read better (DECISIONS.md,
+  2026-10-26).
 
 ## Elevation & Depth
 
@@ -533,6 +534,11 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 
 - **Style:** field fill, control-edge border, card radius, body text, faint placeholder.
 - **Focus:** the focus ring above.
+- **Task box slot choice:** show A and B with their model labels when both slots are offered.
+  The selected button has a text-token border (at least 3:1 on the panel and raised fill) and
+  a decorative Check icon (`aria-hidden`, no name); `aria-pressed` conveys the state. Keep
+  these marks visible when the automatic preselection changes. A held slot names its holder
+  and cannot be chosen.
 - **The comment box** serves Approve and Request changes alike, so no key in it triggers a
   decision: Approve has no shortcut, not even Ctrl+Enter.
 

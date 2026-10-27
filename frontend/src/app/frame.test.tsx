@@ -36,6 +36,31 @@ const queue = (markup: string) =>
   /<div role="status" aria-label="Review queue"[^>]*>(.*?)<\/div>/.exec(markup)?.[1];
 
 describe("the frame over the level 1 fixture", () => {
+  it("keeps B's letter, model and token colors on its card and folded rail", () => {
+    const state = through(20);
+    const a = state.agents["agent-1"];
+    if (!a) throw new Error("Missing agent fixture");
+    state.agents = {
+      ...state.agents,
+      "agent-2": {
+        ...a,
+        agent_id: "agent-2",
+        change_id: "change-2",
+        slot: "B",
+        model: "muse-spark-open",
+      },
+    };
+    const markup = (view: View) => render(20, view, { state });
+    const card = markup(initialView);
+    const bCard = card.slice(card.indexOf('<article aria-label="Agent B"'));
+    expect(bCard).toContain("muse-spark-open");
+    for (const token of ["text-agent-b-text", "bg-agent-b-tint", "border-agent-b", "bg-agent-b"])
+      expect(bCard).toContain(token);
+    const rail = markup({ selected: null, diff, review: null, file: null });
+    const bRail = rail.slice(rail.indexOf('aria-label="Agent B: Ready for review"'));
+    expect(bRail).toContain("bg-agent-b-tint text-agent-b-text");
+    expect(bRail).toMatch(/>B<span aria-hidden="true"/);
+  });
   it("lays out watch mode: top bar, view rail, graph and the agents panel with one card", () => {
     const markup = render(14);
     for (const text of ["Oversight", "demo-repo", "main", ">8cbf753<", "Agent A"])

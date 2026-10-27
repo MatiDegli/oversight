@@ -10,7 +10,7 @@ import sys
 from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 import pytest
@@ -23,6 +23,7 @@ from oversight.agents import (
     Message,
     ModelClient,
     ModelReply,
+    Script,
     ScriptedModel,
     ToolSchema,
     load_script,
@@ -31,11 +32,14 @@ from oversight.agents import (
 from oversight.app import ClientFactory, LiveRun, create_app
 from oversight.events import EventStore
 from oversight.settings import REPO_ROOT, Settings
+from oversight_contracts.commands import ErrorResponse
+from oversight_contracts.common import Slot
 from oversight_contracts.events import ModelProfile, ServerEvent
 
 DEADLINE_S = 60
 SERVER_EVENT: TypeAdapter[Any] = TypeAdapter(ServerEvent)
 FAKE_SCRIPT = REPO_ROOT / "fixtures" / "fake-model" / "document-apply-coupon.json"
+FAKE_SCRIPT_B = REPO_ROOT / "fixtures" / "fake-model" / "document-restock.json"
 LAYOUT = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
 
 
@@ -50,6 +54,11 @@ def live_settings(tmp_path: Path, **overrides: Any) -> Settings:
         "demo_python": Path(sys.executable),
     }
     return Settings(**(values | overrides))
+
+
+def two_fakes(tmp_path: Path, **overrides: Any) -> Settings:
+    """Both slots on the fake model, each with its own script."""
+    return live_settings(tmp_path, fake_script_b=FAKE_SCRIPT_B, **overrides)
 
 
 def meta_settings(tmp_path: Path, **overrides: Any) -> Settings:
@@ -69,18 +78,62 @@ def script_json(task: str, turns: list[dict[str, Any]]) -> str:
     return json.dumps({"task": task, "turns": turns})
 
 
+async def start(s: "LiveServer", **body: Any) -> httpx.Response:
+    """POST /agents with the task "t" and `body`'s keys."""
+    return await s.client.post("/agents", json={"task": "t", **body})
+
+
+class Answer(Protocol):
+    """What `error_code` reads: an httpx response, or the test client's."""
+
+    status_code: int
+
+    def json(self) -> Any: ...
+
+
+def error_code(response: Answer) -> tuple[int, str]:
+    """The status and the contract's error code of a refused request."""
+    return response.status_code, ErrorResponse.model_validate(response.json()).error.code
+
+
+def write_ledger(settings: Settings, body: object) -> None:
+    settings.runtime_dir.mkdir(parents=True, exist_ok=True)
+    text = body if isinstance(body, str) else json.dumps(body)
+    (settings.runtime_dir / "ledger.json").write_text(text)
+
+
+def read_ledger(settings: Settings) -> dict[str, Any]:
+    return json.loads((settings.runtime_dir / "ledger.json").read_text())
+
+
 class Scripts:
-    """A client factory that hands out one scripted model per start, in order, and counts calls."""
+    """A client factory that hands out one scripted model per start, in order, and counts calls.
+    `built` lists what each start asked for: the profile's id and the slot."""
 
     def __init__(self, scripts: Sequence[str] = (), profile: ModelProfile = FAKE_MODEL) -> None:
         self._scripts = [parse_script(text) for text in scripts] or [load_script(FAKE_SCRIPT)]
         self._profile = profile
         self.calls = 0
+        self.built: list[tuple[str, Slot]] = []
 
-    def __call__(self, profile: ModelProfile) -> ModelClient:
+    def __call__(self, profile: ModelProfile, slot: Slot) -> ModelClient:
         script = self._scripts[min(self.calls, len(self._scripts) - 1)]
         self.calls += 1
+        self.built.append((profile.id, slot))
         return ScriptedModel(script, self._profile)
+
+
+class BySlot:
+    """A client factory that hands each slot its own client, built at the start by `make`; `built`
+    lists what each start asked for, as `Scripts.built` does."""
+
+    def __init__(self, make: Callable[[ModelProfile, Slot], ModelClient]) -> None:
+        self._make = make
+        self.built: list[tuple[str, Slot]] = []
+
+    def __call__(self, profile: ModelProfile, slot: Slot) -> ModelClient:
+        self.built.append((profile.id, slot))
+        return self._make(profile, slot)
 
 
 @dataclass
@@ -106,6 +159,24 @@ class GatedModel:
             tool_calls=[],
             model=self.profile.model,
         )
+
+
+class Stepped:
+    """A scripted model whose every call waits until the test lets one call through."""
+
+    def __init__(self, script: Script, profile: ModelProfile = FAKE_MODEL) -> None:
+        self._inner = ScriptedModel(script, profile)
+        self.permits = asyncio.Semaphore(0)
+
+    @property
+    def profile(self) -> ModelProfile:
+        return self._inner.profile
+
+    async def complete(
+        self, messages: Sequence[Message], tools: Sequence[ToolSchema]
+    ) -> ModelReply:
+        await self.permits.acquire()
+        return await self._inner.complete(messages, tools)
 
 
 @dataclass

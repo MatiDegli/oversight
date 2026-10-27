@@ -1,9 +1,24 @@
+import { readFileSync } from "node:fs";
+import type { ServerEvent } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { createInitialState } from "../state";
+import { applyEvent, createInitialState } from "../state";
+import { twoSlotState } from "../taskBox.fixture";
+
+import { createTaskBoxStore } from "./taskBox";
 import { TaskBox, TaskBoxView } from "./TaskBox";
 import type { TaskBoxViewProps } from "./TaskBox";
+
+const events = readFileSync(
+  new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
+  "utf8",
+)
+  .trim()
+  .split("\n")
+  .map((line) => JSON.parse(line) as ServerEvent);
+const through = (seq: number) =>
+  events.filter((event) => event.seq <= seq).reduce(applyEvent, createInitialState());
 
 const view = (props: Partial<TaskBoxViewProps> = {}) =>
   renderToStaticMarkup(
@@ -20,6 +35,84 @@ const view = (props: Partial<TaskBoxViewProps> = {}) =>
 const button = (markup: string) => /<button [^>]*>/.exec(markup)?.[0] ?? "";
 
 describe("the new-agent box", () => {
+  it("preselects A when both slots are free in the browser's normal two-slot setup", () => {
+    const markup = renderToStaticMarkup(
+      <TaskBox state={twoSlotState()} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    const slots = [...markup.matchAll(/<button [^>]*aria-pressed[^>]*>.*?<\/button>/g)].map(
+      (match) => match[0],
+    );
+    expect(slots).toHaveLength(2);
+    expect(slots[0]).toContain('aria-disabled="false"');
+    expect(slots[0]).toContain('aria-pressed="true"');
+    expect(slots[0]).toContain("aria-pressed:border-text");
+    expect(slots[0]).toMatch(/<svg[^>]*aria-hidden="true"/);
+    expect(slots[1]).toContain('aria-disabled="false"');
+    expect(slots[1]).toContain('aria-pressed="false"');
+  });
+
+  it.each(["A", "B", null] as const)(
+    "keeps slot names stable and marks only selected slot %s with a visible, decorative check and aria-pressed",
+    (selected) => {
+      const markup = view({
+        slots: [
+          { slot: "A", label: "Muse Spark", holder: null },
+          { slot: "B", label: "Muse Spark Open", holder: null },
+        ],
+        selected,
+      });
+      const buttons = [...markup.matchAll(/<button [^>]*aria-pressed[^>]*>.*?<\/button>/g)];
+      expect(buttons).toHaveLength(2);
+      for (const [index, slot] of ["A", "B"].entries()) {
+        const button = buttons[index]?.[0] ?? "";
+        expect(button).toContain(`aria-pressed="${String(selected === slot)}"`);
+        expect(button).not.toMatch(/aria-label=|aria-labelledby=|<title/);
+        expect(button.replace(/<[^>]*>/g, "").trim()).toBe(
+          slot === "A" ? "A Muse Spark" : "B Muse Spark Open",
+        );
+        if (selected === slot) {
+          expect(button).toContain("aria-pressed:border-text");
+          expect(button).toContain("lucide-check");
+          const check = /<svg[^>]*>/.exec(button)?.[0] ?? "";
+          expect(check).toContain('aria-hidden="true"');
+          expect(check).not.toContain('role="img"');
+          expect(check).toContain("inline-block size-4 text-text");
+          expect(check).not.toMatch(/class="[^"]*\b(hidden|invisible|sr-only)\b|style=/);
+        } else {
+          expect(button).not.toContain("aria-pressed:border-text");
+          expect(button).not.toContain("lucide-check");
+          expect(button).not.toContain('aria-label="Selected"');
+        }
+      }
+    },
+  );
+
+  it("shows the two offered letters and model labels, with B's token, and disables a named holder", () => {
+    const state = through(14);
+    const run = state.run;
+    if (!run) throw new Error("Missing run fixture");
+    const markup = renderToStaticMarkup(
+      <TaskBox state={state} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    expect(markup).toContain('aria-label="Agent slot"');
+    const slots = [...markup.matchAll(/<button [^>]*aria-pressed[^>]*>.*?<\/button>/g)].map(
+      (match) => match[0],
+    );
+    expect(slots).toHaveLength(2);
+    expect(slots[0]).toContain('aria-disabled="true"');
+    expect(slots[0]).toContain("Agent A is working.");
+    expect(slots[0]).toContain("text-agent-a-text");
+    expect(slots[1]).toContain('aria-disabled="false"');
+    expect(slots[1]).toContain('aria-pressed="true"');
+    expect(slots[1]).toContain("text-agent-b-text");
+    for (const info of run.slots) {
+      expect(markup).toContain(run.models.find((model) => model.id === info.default_model)?.label);
+    }
+    const one = { ...state, run: { ...run, slots: run.slots.slice(0, 1) } };
+    expect(renderToStaticMarkup(<TaskBox state={one} onStart={vi.fn()} />)).not.toContain(
+      'aria-label="Agent slot"',
+    );
+  });
   it("is disabled while the task is blank or only whitespace, and enabled with a task", () => {
     for (const draft of ["", "   ", "\n\t\n"])
       expect(button(view({ draft }))).toContain('aria-disabled="true"');

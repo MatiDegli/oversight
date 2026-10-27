@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { editingLog, lastSeq, planJobs, replayEventsAfter } from "./plan.ts";
+import { editingLog, lastSeq, logForScene, planJobs, replayEventsAfter } from "./plan.ts";
 import { scenes, themes } from "./scenes.ts";
 
 void test("a job is named <scene>-<theme>.png, scene by scene", () => {
@@ -41,7 +41,7 @@ void test("a disabled scene or theme is skipped with the reason, never dropped",
   assert.match(jobs[3]?.skip ?? "", /scene review: the review panel/);
 });
 
-void test("the real list: watch, review, live diff and file view run in dark; light remains skipped", () => {
+void test("the real list: watch, review, live diff, task slots and file view run in dark; light remains skipped", () => {
   const jobs = planJobs(scenes, themes);
   const running = jobs.filter((job) => job.skip === null).map((job) => job.file);
   assert.deepEqual(running, [
@@ -49,11 +49,13 @@ void test("the real list: watch, review, live diff and file view run in dark; li
     "watch-dark-taxi.png",
     "review-dark.png",
     "live-diff-dark.png",
+    "task-one-slot-dark.png",
+    "task-two-slots-braked-dark.png",
     "file-view-dark.png",
   ]);
   assert.deepEqual(
     scenes.map((scene) => scene.name),
-    ["watch", "review", "live-diff", "file-view"],
+    ["watch", "review", "live-diff", "task-one-slot", "task-two-slots-braked", "file-view"],
   );
   assert.ok(scenes.every((scene) => scene.enabled || (scene.needs ?? "") !== ""));
   assert.ok(themes.every((theme) => theme.enabled || (theme.needs ?? "") !== ""));
@@ -76,6 +78,8 @@ void test("live diff uses a derived cut through the last edit before the proposa
     "utf8",
   );
   const cut = editingLog(source);
+  assert.notEqual(cut, null);
+  if (cut === null) throw new Error("Missing editing cut");
   const events = cut
     .trim()
     .split("\n")
@@ -88,13 +92,73 @@ void test("live diff uses a derived cut through the last edit before the proposa
   assert.equal(scenes.find((scene) => scene.name === "live-diff")?.log, "editing");
   assert.ok(replayEventsAfter(cut, 11).startsWith('id: 12\ndata: {"seq":12,'));
   assert.equal(replayEventsAfter(cut, 12), ": replay complete\n\n");
-  assert.throws(() => editingLog('{"seq":1,"type":"change.proposed"}'), /no edit/);
+  assert.equal(editingLog('{"seq":1,"type":"change.proposed"}'), null);
 });
 
-void test("capture reads renderer readiness and metrics through the public graph probe", () => {
-  const source = readFileSync(new URL("capture.ts", import.meta.url), "utf8");
-  assert.ok(!source.includes("_cyreg"));
-  assert.ok(source.includes("probe.metrics()"));
-  assert.ok(source.includes("oversightGraph?.nodeCenters()"));
-  assert.ok(source.includes('writeFile(join(out, "live-diff.jsonl"), liveLog)'));
+void test("a log without a pre-proposal edit still captures watch, review and file view, skipping only live diff", () => {
+  const source = '{"seq":1,"type":"change.proposed"}\n{"seq":2,"type":"change.updated"}\n';
+  const enabled = scenes.filter(
+    (scene) => scene.enabled && (!scene.log || scene.log === "editing"),
+  );
+  assert.deepEqual(
+    enabled.map((scene) => [scene.name, logForScene(source, scene)]),
+    [
+      ["watch", source],
+      ["review", source],
+      ["live-diff", null],
+      ["file-view", source],
+    ],
+  );
+  // Scenes using the served log do not even parse an editing cut.
+  assert.equal(logForScene("not parsed", {}), "not parsed");
+});
+
+void test("task scenes replay one offered slot and two with a non-Meta tick carrying A's brake", () => {
+  const source = readFileSync(
+    new URL("../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
+    "utf8",
+  );
+  const one = logForScene(source, { log: "one-slot" });
+  assert.ok(one);
+  assert.equal(lastSeq(one), 2);
+  assert.deepEqual(
+    (
+      JSON.parse(one.split("\n")[0] ?? "") as { payload: { slots: { slot: string }[] } }
+    ).payload.slots.map((info) => info.slot),
+    ["A"],
+  );
+  const two = readFileSync(
+    new URL("../../fixtures/events/handwritten-two-slots-braked.jsonl", import.meta.url),
+    "utf8",
+  );
+  const events = two
+    .trim()
+    .split("\n")
+    .map(
+      (line) => JSON.parse(line) as { seq: number; type: string; payload: Record<string, unknown> },
+    );
+  assert.deepEqual(
+    events.map((event) => event.seq),
+    [1, 2, 3, 4, 5, 6],
+  );
+  assert.deepEqual(events[0]?.payload.slots, [
+    { slot: "A", default_model: "muse-spark" },
+    { slot: "B", default_model: "muse-spark-open" },
+  ]);
+  const tick = events.find((event) => event.type === "usage.tick");
+  assert.ok(tick);
+  assert.equal(tick.payload.brake, "blocked");
+  assert.equal(tick.payload.cost_usd, null);
+  // The shared Meta ledger was already spent before this Baseten agent started.
+  assert.equal(
+    (events[0].payload.budget as { spent_usd: number }).spent_usd,
+    tick.payload.spent_usd,
+  );
+  // B's change is resolved, so slot B is free and the preselection can reach it.
+  assert.equal(events.at(-1)?.type, "change.resolved");
+  assert.equal(events.at(-1)?.payload.change_id, "change-2");
+  assert.equal(
+    scenes.find((scene) => scene.name === "task-two-slots-braked")?.log,
+    "handwritten-two-slots-braked.jsonl",
+  );
 });

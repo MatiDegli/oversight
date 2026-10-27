@@ -36,11 +36,13 @@ async def test_revise_keeps_the_history(small_tree: Opened) -> None:
     run = make_run(small_tree, model, recorder, task="Change value.")
     first = await run.run()
     assert first.state == "ready_for_review" and first.steps == 2
+    assert run.max_steps == 20
 
     end = await run.revise("Make twice use the new value.", "Base moved: shop/mod.py has markers.")
 
     assert end.state == "ready_for_review" and end.summary == "Second version."
     assert end.steps == 4 and run.steps == 4
+    assert run.max_steps == 40  # the budget grows with each revision
     # The revision's first model call still sees the whole first run, then one user message.
     history = model.requests[2]
     assert [m["role"] for m in history] == [

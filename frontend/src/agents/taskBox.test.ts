@@ -3,10 +3,17 @@ import { readFileSync } from "node:fs";
 import type { AgentStatus, ChangeResolved, ServerEvent } from "@contracts";
 import { describe, expect, it, vi } from "vitest";
 
-import { applyEvent, createInitialState } from "../state";
+import { applyEvent, createInitialState, selectSpend } from "../state";
 import type { State } from "../state";
 import { createCommandClient } from "../transport";
-import { createTaskBoxStore, startBlock, startFailure } from "./taskBox";
+import {
+  createTaskBoxStore,
+  nextSlot,
+  selectedSlot,
+  slotChoice,
+  startBlock,
+  startFailure,
+} from "./taskBox";
 
 // The level 1 log: agent A starts at seq 3, proposes at 19, is ready at 20, approved and merged at
 // 21, done at 23.
@@ -60,6 +67,101 @@ function withSlots(state: State, slots: ("A" | "B")[]): State {
 }
 
 const levelOne = (seq: number) => withSlots(through(seq), ["A"]);
+
+describe("nextSlot (K14)", () => {
+  const bothHeld = () => {
+    const state = through(14);
+    const a = state.agents["agent-1"];
+    if (!a) throw new Error("Missing agent fixture");
+    return {
+      ...state,
+      agents: {
+        ...state.agents,
+        "agent-2": {
+          ...a,
+          agent_id: "agent-2",
+          change_id: "change-2",
+          slot: "B" as const,
+        },
+      },
+    };
+  };
+
+  it("takes B while A is held, none while both are held, and A after its merge", () => {
+    expect(nextSlot(createInitialState())).toBeNull();
+    expect(nextSlot(through(14))).toBe("B");
+    expect(nextSlot(bothHeld())).toBeNull();
+    expect(nextSlot(through(21))).toBe("A");
+    expect(startBlock(bothHeld(), "B")).toBe("Agent B is working.");
+  });
+
+  it.each(["baseten", "fake", "meta"] as const)(
+    "skips a braked Meta A for a %s B; if both are Meta it keeps A selectable",
+    (provider) => {
+      const state = through(2);
+      if (!state.run) throw new Error("Missing run fixture");
+      state.run = {
+        ...state.run,
+        budget: { ...state.run.budget, spent_usd: 149 },
+        models: [
+          { id: "meta", label: "Muse Spark", provider: "meta", model: "meta", reasoning: null },
+          { id: "b", label: "B model", provider, model: "b", reasoning: null },
+        ],
+        slots: [
+          { slot: "A", default_model: "meta" },
+          { slot: "B", default_model: "b" },
+        ],
+      };
+      expect(nextSlot(state)).toBe(provider === "meta" ? "A" : "B");
+      expect(startBlock(state, "A")).toBeNull();
+      expect(selectedSlot(state, slotChoice(state, "A"))).toBe("A");
+    },
+  );
+
+  it("keeps the person's override until that slot is taken, including while the box is folded", () => {
+    const free = through(2);
+    if (!free.run) throw new Error("Missing run fixture");
+    const choice = slotChoice(free, "B");
+    expect(selectedSlot(free, choice)).toBe("B");
+    expect(selectedSlot(through(14), choice)).toBe("B");
+    expect(selectedSlot(bothHeld(), choice)).toBeNull();
+    const b = bothHeld().agents["agent-2"];
+    const released = {
+      ...through(21),
+      agents: { ...through(21).agents, "agent-2": { ...b, state: "done" as const } },
+    };
+    expect(selectedSlot(released, choice)).toBe("A");
+    expect(selectedSlot(withSlots(free, ["A"]), choice)).toBe("A");
+    expect(selectedSlot({ ...free, run: { ...free.run, run_id: "new-run" } }, choice)).toBe("A");
+  });
+});
+
+// The recorded log behind the braked-A scene and browser test: B's tick, from a non-Meta model,
+// carries the shared ledger's total and brake; B's change resolves at seq 6.
+describe("the recorded braked log", () => {
+  const braked = readFileSync(
+    new URL("../../../fixtures/events/handwritten-two-slots-braked.jsonl", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as ServerEvent);
+  const upTo = (seq: number) =>
+    braked.filter((event) => event.seq <= seq).reduce(applyEvent, createInitialState());
+
+  it("preselects B once its change is resolved, with the ledger's total read from B's tick", () => {
+    const state = upTo(6);
+    expect(selectSpend(state)).toEqual({ spentUsd: 136, budgetUsd: 150, brake: "blocked" });
+    expect(startBlock(state, "B")).toBeNull();
+    expect(nextSlot(state)).toBe("B");
+    expect(selectedSlot(state, null)).toBe("B");
+  });
+
+  it("keeps B held, so A is preselected, while its change is unresolved", () => {
+    expect(startBlock(upTo(4), "B")).toBe("Agent B is working.");
+    expect(nextSlot(upTo(4))).toBe("A");
+  });
+});
 
 describe("why a start is blocked", () => {
   it("is free once the server is up and before any agent exists", () => {
@@ -142,6 +244,26 @@ function setup(answer: () => Promise<Response>) {
 }
 
 describe("starting an agent from the box", () => {
+  it("sends the person's chosen slot without a model override, and preserves the choice across a refusal", async () => {
+    const { request, store } = setup(() =>
+      Promise.resolve(refusal(403, "spend_brake", "Meta credits are blocked.")),
+    );
+    const choice = slotChoice(through(2), "A");
+    store.getState().choose(choice);
+    store.getState().setDraft("  Keep this task  ");
+    await store.getState().start(createCommandClient(request).startAgent, "A");
+    expect(JSON.parse(request.mock.calls[0]?.[1]?.body as string)).toEqual({
+      task: "Keep this task",
+      slot: "A",
+    });
+    expect(store.getState()).toMatchObject({
+      choice,
+      draft: "  Keep this task  ",
+      failure: "Meta credits are blocked.",
+    });
+    store.getState().choose(slotChoice(through(2), "B"));
+    expect(store.getState().failure).toBeNull();
+  });
   it("sends the trimmed task and nothing else, to POST /agents", async () => {
     const { request, store, start } = setup(() => Promise.resolve(reply(201, created)));
     store.getState().setDraft("  Cap the discount at 30%\n\n  ");

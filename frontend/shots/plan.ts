@@ -3,7 +3,7 @@
 import type { Scene, Theme } from "./scenes.ts";
 
 /** Keep the log through its last edit, before the first proposal; fixtures stay untouched. */
-export function editingLog(jsonl: string): string {
+export function editingLog(jsonl: string): string | null {
   const lines = jsonl.split("\n").filter((line) => line.trim() !== "");
   const proposal = lines.findIndex(
     (line) => (JSON.parse(line) as { type: string }).type === "change.proposed",
@@ -12,8 +12,30 @@ export function editingLog(jsonl: string): string {
   const lastEdit = before.findLastIndex(
     (line) => (JSON.parse(line) as { type: string }).type === "change.updated",
   );
-  if (lastEdit < 0) throw new Error("the event log has no edit before its first proposal");
+  if (lastEdit < 0) return null;
   return before.slice(0, lastEdit + 1).join("\n") + "\n";
+}
+
+/** Derive an editing cut only for a scene that needs it; null skips that scene alone. */
+export function logForScene(jsonl: string, scene: Pick<Scene, "log">): string | null {
+  if (scene.log === "one-slot") {
+    const events = jsonl
+      .trim()
+      .split("\n")
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            type: string;
+            payload: { slots: unknown[] };
+          },
+      );
+    const opening = events.slice(0, 2);
+    const run = opening.find((event) => event.type === "run.started");
+    if (!run) return null;
+    run.payload.slots = run.payload.slots.slice(0, 1);
+    return opening.map((event) => JSON.stringify(event)).join("\n") + "\n";
+  }
+  return scene.log === "editing" ? editingLog(jsonl) : jsonl;
 }
 
 /** The same SSE wire format as the player, without events beyond the selected scene's cut. */
