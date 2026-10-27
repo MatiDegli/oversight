@@ -158,6 +158,18 @@ describe("AgentCard over the level 1 fixture", () => {
     );
   });
 
+  it("colors a line count only when there is something added or removed", () => {
+    // The fixture adds 2 and removes 0: a zero removal is not a removal, so it is not red.
+    const html = render(through(20));
+    expect(html).toMatch(/font-bold text-passed">\+2</);
+    expect(html).toMatch(/text-muted">−0</);
+    expect(html).not.toMatch(/text-failed-text[^>]*>−0</);
+  });
+
+  it("titles the card one level under the panel's heading", () => {
+    expect(render(through(4))).toMatch(/<h3 [^>]*>Agent A<\/h3>/);
+  });
+
   it("pluralizes the files and shows a removal count", () => {
     const state = through(20);
     const change = state.changes["change-1"];

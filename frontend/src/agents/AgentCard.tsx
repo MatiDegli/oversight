@@ -90,9 +90,15 @@ function Summary({ data }: { data: AgentCardData }) {
           </Fact>
           <Fact label="Change">
             <span>
-              <span className="font-bold text-passed">+{proposal.lines_added}</span>{" "}
-              <span className="font-bold text-failed-text">−{proposal.lines_removed}</span> in{" "}
-              {proposal.files.length} {proposal.files.length === 1 ? "file" : "files"}
+              <span className={proposal.lines_added > 0 ? "font-bold text-passed" : "text-muted"}>
+                +{proposal.lines_added}
+              </span>{" "}
+              <span
+                className={proposal.lines_removed > 0 ? "font-bold text-failed-text" : "text-muted"}
+              >
+                −{proposal.lines_removed}
+              </span>{" "}
+              in {proposal.files.length} {proposal.files.length === 1 ? "file" : "files"}
             </span>
           </Fact>
         </>
@@ -132,7 +138,7 @@ export function AgentCard({ data, onOpenDiff, onReview }: AgentCardProps) {
           aria-hidden="true"
           className={`size-(--status-lamp-size) shrink-0 rounded-full border-(length:--agent-border-width) ${own.border} ${lamp}`}
         />
-        <h2 className="text-(length:--title-size) font-bold">Agent {agent.slot}</h2>
+        <h3 className="text-(length:--title-size) font-bold">Agent {agent.slot}</h3>
         <span className="text-sm text-muted">{modelLabel}</span>
         <span
           role={readyForReview ? "status" : undefined}

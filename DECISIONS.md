@@ -231,6 +231,11 @@ Ours wins in every case below.
 - **The detector's "colored glow on a dark background".** Ours: the dot field's light and the rings
   are agent-colored light on black, because the light says which agent works where; it is dithered
   dots on its own canvas, not a glow on an element, and comes after level 1.
+- **The detector's "flat type hierarchy" (advisory).** It asks for a 1.25 step between adjacent
+  sizes; the scan reports body 14px, h3 14px and h2 16px. Ours: the scale is deliberately close
+  (title 16, body 15, label 14, caption 13) because the agents panel is 400px wide and dense, the
+  detector's own message notes that weight separates the headings, and sizes are DESIGN.md's to
+  change. Kept; the advisory stays in the scan's output.
 - **document's process:** it extracts DESIGN.md from the code, asks before replacing one, and
   writes a sidecar (`.impeccable/design.json`). Ours: DESIGN.md is written by hand from the agreed
   design, document is forbidden, and no sidecar is committed.
