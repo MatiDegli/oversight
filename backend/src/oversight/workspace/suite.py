@@ -6,6 +6,7 @@ is called under the tree's lock, and the result is parsed from the plugin's repo
 pytest's text.
 """
 
+import asyncio
 import json
 import uuid
 from collections.abc import Callable, Iterable
@@ -13,9 +14,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
+from oversight.workspace.junit import MAX_XML_BYTES, parse_junit
 from oversight.workspace.locks import offload
-from oversight.workspace.runner import Spawn
-from oversight_contracts.events import SuiteResult
+from oversight.workspace.runner import ProcessResult, Spawn
+from oversight_contracts.events import CaseResult, SuiteExecution, SuiteResult
 
 OUTPUT_TAIL = 8192
 FAILED_CAP = 20
@@ -25,7 +27,27 @@ FAILED_CAP = 20
 class SuiteRun:
     result: SuiteResult
     output: str
+    cases: tuple[CaseResult, ...] = ()
+    problems: tuple[str, ...] = ("JUnit report unavailable",)
+    tested_tree: str | None = None
+    tested_commit: str | None = None
     """The tail of pytest's output, 8 KB at most, with the workspace's location removed."""
+
+
+class SuiteInterrupted(asyncio.CancelledError):
+    """Cancellation with the partial report, for publication before propagating Stop."""
+
+    def __init__(self, run: SuiteRun) -> None:
+        self.run = run
+
+
+class SuiteUnavailable(OSError):
+    """A failed spawn with its report and original error; model text stays unchanged."""
+
+    def __init__(self, run: SuiteRun, cause: OSError) -> None:
+        super().__init__(cause.errno, cause.strerror)
+        self.run = run
+        self.cause = cause
 
 
 @dataclass
@@ -110,6 +132,7 @@ async def run_suite(
     spawn: Spawn,
 ) -> SuiteRun:
     report = runtime_root / "tmp" / f"{uuid.uuid4().hex}.jsonl"
+    junit = report.with_suffix(".xml")
     env = {
         "HOME": str(runtime_root / "tmp" / "home"),
         "PYTHONPATH": str(plugin_dir),
@@ -128,11 +151,19 @@ async def run_suite(
         "no:cacheprovider",
         "-p",
         "oversight_report",
+        "-o",
+        "junit_family=xunit1",
+        f"--junitxml={junit}",
     ]
+    failure: OSError | asyncio.CancelledError | None = None
     try:
         process = await spawn(argv, cwd=tree_root, timeout_s=timeout_s, env=env)
+    except (OSError, asyncio.CancelledError) as error:
+        failure = error
+        process = ProcessResult(None, "", "", isinstance(error, asyncio.CancelledError), False, 0)
     finally:
         lines = await offload(lambda: _take_report(report))
+        cases, problems = await offload(lambda: _take_cases(junit))
     tally = parse_report(lines or [])
     result = summarize(
         tally,
@@ -144,7 +175,66 @@ async def run_suite(
     text = process.stdout
     if process.stderr.strip():
         text += "\n" + process.stderr
-    return SuiteRun(result=result, output=redact(text)[-OUTPUT_TAIL:])
+    # JUnit adds one terminal footer; keep the tool response in its existing format.
+    text = "\n".join(row for row in text.split("\n") if f"generated xml file: {junit}" not in row)
+    if process.timed_out:
+        problems += ("suite timed out",)
+    run = SuiteRun(result, redact(text)[-OUTPUT_TAIL:], cases, problems)
+    if isinstance(failure, asyncio.CancelledError):
+        raise SuiteInterrupted(run) from failure
+    if isinstance(failure, OSError):
+        raise SuiteUnavailable(run, failure) from failure
+    return run
+
+
+def _take_cases(path: Path) -> tuple[tuple[CaseResult, ...], tuple[str, ...]]:
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as report:
+            parsed = parse_junit(report.read(MAX_XML_BYTES + 1))
+    except FileNotFoundError:
+        return (), ("JUnit report unavailable",)
+    finally:
+        path.unlink(missing_ok=True)
+    return (
+        tuple(
+            CaseResult(test_id=key, outcome=value) for key, value in sorted(parsed.outcomes.items())
+        ),
+        tuple(p.code for p in parsed.problems),
+    )
+
+
+def validate_suite_execution(
+    execution: SuiteExecution,
+    run: SuiteRun,
+    *,
+    change_id: str,
+    agent_id: str,
+    revision: int | None,
+    phase: str,
+) -> None:
+    """Validate captured identity, tree and report before publishing a projection.
+
+    Counters count phases; they are never compared with the number of cases.
+    Retention may omit cases but cannot invent, alter or certify partial evidence.
+    """
+    if (execution.change_id, execution.agent_id, execution.revision, execution.phase) != (
+        change_id,
+        agent_id,
+        revision,
+        phase,
+    ):
+        raise ValueError("suite identity or phase differs from captured execution")
+    if (execution.tested_tree, execution.tested_commit) != (run.tested_tree, run.tested_commit):
+        raise ValueError("suite tree or commit differs from captured execution")
+    fields = {"cases", "cases_complete"}
+    if execution.suite.model_dump(exclude=fields) != run.result.model_dump(exclude=fields):
+        raise ValueError("suite counters differ from captured report")
+    full = {case.test_id: case for case in run.cases}
+    cases = execution.suite.cases
+    if cases is None or any(full.get(case.test_id) != case for case in cases):
+        raise ValueError("suite cases differ from captured report")
+    if execution.suite.cases_complete is not (not run.problems and len(cases) == len(full)):
+        raise ValueError("suite completeness differs from captured report")
 
 
 __all__ = ["SuiteRun", "Tally", "parse_report", "run_suite", "summarize"]
