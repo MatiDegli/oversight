@@ -1,11 +1,18 @@
-import type { StartAgent } from "@contracts";
-import { X } from "lucide-react";
+import type { Slot, StartAgent } from "@contracts";
+import { Check, X } from "lucide-react";
 import { useId } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand";
 
 import type { State } from "../state";
-import { startBlock, taskBoxStore } from "./taskBox";
+import {
+  holderReason,
+  selectedSlot,
+  slotChoice,
+  slotHolder,
+  startBlock,
+  taskBoxStore,
+} from "./taskBox";
 import type { TaskBoxModel } from "./taskBox";
 
 const focusRing =
@@ -24,6 +31,9 @@ export interface TaskBoxViewProps {
   block: string | null;
   onDraft: (text: string) => void;
   onStart: () => void;
+  slots?: { slot: Slot; label: string; holder: string | null }[];
+  selected?: Slot | null;
+  onSlot?: (slot: Slot) => void;
 }
 
 /**
@@ -38,6 +48,9 @@ export function TaskBoxView({
   block,
   onDraft,
   onStart,
+  slots = [],
+  selected = null,
+  onSlot,
 }: TaskBoxViewProps) {
   const id = useId();
   const canStart = !pending && draft.trim() !== "" && block === null;
@@ -65,6 +78,31 @@ export function TaskBoxView({
         }}
         className={`resize-none rounded-card border border-control-edge bg-field p-(--input-padding) text-(length:--body-size) text-text placeholder:text-faint read-only:text-muted ${focusRing}`}
       />
+      {slots.length === 2 && (
+        <div role="group" aria-label="Agent slot" className="flex flex-wrap gap-2">
+          {slots.map(({ slot, label, holder }) => (
+            <button
+              key={slot}
+              type="button"
+              aria-pressed={selected === slot}
+              aria-disabled={pending || holder !== null}
+              onClick={() => {
+                if (!pending && holder === null) onSlot?.(slot);
+              }}
+              className={`min-w-0 flex-1 rounded-control border border-control-edge p-2 text-left text-(length:--caption-size) aria-pressed:bg-raised aria-disabled:cursor-not-allowed ${selected === slot ? "aria-pressed:border-text" : ""} ${focusRing}`}
+            >
+              <span className={slot === "A" ? "text-agent-a-text" : "text-agent-b-text"}>
+                {slot}
+              </span>{" "}
+              {label}
+              {selected === slot && (
+                <Check aria-hidden="true" className="ml-1 inline-block size-4 text-text" />
+              )}
+              {holder !== null && <span className="block text-muted">{holder}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
         <button
           type="button"
@@ -116,6 +154,18 @@ export function TaskBox({ state, onStart, replayOf, store = taskBoxStore }: Task
   const draft = useStore(store, (model) => model.draft);
   const pending = useStore(store, (model) => model.pending);
   const failure = useStore(store, (model) => model.failure);
+  const choice = useStore(store, (model) => model.choice);
+  const selected = selectedSlot(state, choice);
+  const slots = (state.run?.slots ?? []).map((info) => {
+    const holder = slotHolder(state, info.slot);
+    return {
+      slot: info.slot,
+      label:
+        state.run?.models.find((model) => model.id === info.default_model)?.label ??
+        info.default_model,
+      holder: holder ? holderReason(holder) : null,
+    };
+  });
   if (!onStart) {
     return (
       <section aria-label="New agent" className="flex flex-col gap-2.5">
@@ -132,10 +182,15 @@ export function TaskBox({ state, onStart, replayOf, store = taskBoxStore }: Task
       draft={draft}
       pending={pending}
       failure={failure}
-      block={startBlock(state)}
+      block={startBlock(state, selected)}
+      slots={slots}
+      selected={selected}
+      onSlot={(slot) => {
+        store.getState().choose(slotChoice(state, slot));
+      }}
       onDraft={store.getState().setDraft}
       onStart={() => {
-        void store.getState().start(onStart);
+        void store.getState().start(onStart, slots.length === 2 ? selected : undefined);
       }}
     />
   );

@@ -8,7 +8,7 @@ const captions: Record<UsageTick["brake"], string | null> = {
   ok: null,
   warn_50: "50% of the budget used",
   warn_80: "80% of the budget used",
-  blocked: "New runs are blocked: the budget is nearly spent",
+  blocked: "New Meta runs are blocked: the budget is nearly spent",
 };
 /**
  * "Spent US$0.47 of US$150.00" on the bar's own line. The group is anchored to the bar's right

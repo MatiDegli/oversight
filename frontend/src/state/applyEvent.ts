@@ -157,10 +157,15 @@ export function applyEvent(state: State, event: ServerEvent): State {
       const before = state.agentCosts[tick.agent_id];
       // Unknown stays unknown: a later tick with a cost does not make the total known again.
       const cost = tick.cost_usd === null || before === null ? null : (before ?? 0) + tick.cost_usd;
+      // The status names a profile; the tick's model is the provider's reported API id.
+      const modelId = state.agents[tick.agent_id]?.model;
+      const profile = state.run?.models.find((model) => model.id === modelId);
       return {
         ...next,
         usage: tick,
         agentCosts: { ...state.agentCosts, [tick.agent_id]: cost },
+        spendUnknown:
+          !profile || profile.provider === "meta" ? tick.cost_usd === null : state.spendUnknown,
       };
     }
     case "error":

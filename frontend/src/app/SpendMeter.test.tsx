@@ -18,6 +18,7 @@ function metered(usage: Partial<UsageTick> = {}): State {
   if (!state.run) throw new Error("Missing run fixture");
   return {
     ...state,
+    spendUnknown: usage.cost_usd === null,
     run: {
       ...state.run,
       budget: { budget_usd: 150, spent_usd: 10, warn_at: [0.5, 0.8], block_at: 0.9 },
@@ -50,7 +51,7 @@ describe("the top bar spend meter", () => {
     ["ok", null],
     ["warn_50", "50% of the budget used"],
     ["warn_80", "80% of the budget used"],
-    ["blocked", "New runs are blocked: the budget is nearly spent"],
+    ["blocked", "New Meta runs are blocked: the budget is nearly spent"],
   ] as const)("labels %s in words and an icon, using neutral tokens", (brake, caption) => {
     const markup = render(metered({ brake }));
     expect(words(markup)).toContain("Spent US$12.40 of US$150.00");
@@ -67,7 +68,7 @@ describe("the top bar spend meter", () => {
     } else {
       expect(markup).not.toContain("<svg");
       expect(markup).not.toContain("budget used");
-      expect(markup).not.toContain("New runs");
+      expect(markup).not.toContain("New Meta runs");
     }
   });
 
@@ -93,7 +94,7 @@ describe("the top bar spend meter", () => {
     const markup = render(metered({ cost_usd: null, brake: "blocked" }));
     expect(words(markup)).toContain("Spent unknown of US$150.00");
     expect(words(markup)).not.toMatch(/Spent US\$/);
-    expect(markup).toContain("New runs are blocked: the budget is nearly spent");
+    expect(markup).toContain("New Meta runs are blocked: the budget is nearly spent");
     expect(words(render(metered({ cost_usd: 0, spent_usd: 0 })))).toContain(
       "Spent US$0.00 of US$150.00",
     );
@@ -136,7 +137,7 @@ describe("the top bar spend meter", () => {
       const state = store.getState().state;
       expect(state.usage?.spent_usd).toBe(0.009794);
       expect(words(render(state))).toContain("Spent US$0.01 of US$50.00");
-      expect(render(state)).not.toContain("New runs are blocked");
+      expect(render(state)).not.toContain("New Meta runs are blocked");
       expect(request).not.toHaveBeenCalled();
     } finally {
       replay.stop();
