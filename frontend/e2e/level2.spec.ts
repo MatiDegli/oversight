@@ -168,7 +168,12 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await expect(review.getByText("Editable · Inline diff")).toBeVisible();
     const signals = review.getByRole("region", { name: "Review signals" });
     await expect(signals).toContainText("Tests in this change: 0 recorded test changes");
-    await expect(signals).toContainText("added_tests producer unavailable (package 4)");
+    await expect(signals).not.toContainText("added_tests producer unavailable (package 4)");
+    await expect(signals.getByRole("list", { name: "Added test signals" })).toContainText(
+      "tests/test_pricing.py::test_unknown_coupon_keeps_total: passes before and after",
+    );
+    await expect(signals).toContainText("(base_probe): passed");
+    await expect(signals).toContainText("(head_probe): passed");
     await expect(signals).toContainText("run_findings producer unavailable (package 5)");
     await expect(signals).toContainText("Signals for your review. You decide.");
     await expect(signals).toContainText("(agent): passed");
