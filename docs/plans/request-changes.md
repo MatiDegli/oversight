@@ -256,13 +256,18 @@ store took it, the caller has not heard). * marks those shown failing with their
 
 Pause, resume and messages to a running agent stay 501; a running agent takes only Stop.
 
-## Open, for the maintainer
+## Decided by the maintainer (2026-10-27)
 
-1. Redo on the new base: merge main into the agent's branch with markers committed (proposed), a
-   fresh worktree from main (breaks "discards nothing"), or Reject only on a merge conflict.
-2. A save re-proposes and runs the tests (seconds) before Approve can take it (proposed), or
-   Approve merges untested edits.
-3. Request changes from `ready` after main moved: keep the base (proposed) or move it too.
-4. `spend_brake` on request-changes (section 6), and whether Stop asks to confirm (front 17).
-5. A worktree-only failure is `broken` without `main_suspect` (proposed), or suspect as today.
-6. The new side is editable on `ready_for_review` only, not on `conflict` (proposed).
+The maintainer approved the proposed answer to each open question:
+
+1. Redo on the new base merges main into the agent's branch and commits the conflict markers; the
+   agent resolves them in its kept worktree. No fresh worktree, so "discards nothing" holds.
+2. A save in review re-proposes the change and runs the tests (seconds) before Approve can take it.
+3. Request changes from `ready` after main moved keeps the agent's base; the combined tests at
+   Approve cover the move.
+4. Request changes answers `spend_brake` (403) when the brake refuses new runs, since a revision
+   spends credits: listed in 4.7's errors with the contracts 1.2 proposal. Stop asks to confirm
+   inline (a second click on the same button, no modal, no focus change), since it discards the
+   agent's work.
+5. A worktree-only failure marks the change `broken` without setting `main_suspect`.
+6. The new side is editable on `ready_for_review` only, not on `conflict`.
