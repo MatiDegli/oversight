@@ -468,7 +468,7 @@ code inside a panel stays Mono.
 
 ## Layout
 
-Being revised (Tue Oct 27): the shell and motion sketches will replace this section.
+Being revised (Tue Oct 27): the shell sketches will replace this section.
 
 One screen, two modes, no tabs. The graph is always visible; a side panel changes with what the
 person is doing.
@@ -638,8 +638,17 @@ node ("read", "editing", "changed", "new"):
   dashed" wins over every other edge rule: inside the cone it keeps its width and color at full
   opacity, and a possible call that a change adds is not dashed (its node already is).
 
-**Call visibility.** At rest, only module-to-module edges show. Function edges appear for the
-hovered or selected node and for the working agents' cones. Calls inside one file stay hidden.
+**Call visibility.** At rest, only module-to-module edges show. Hovering or selecting a node
+reveals both incoming and outgoing calls incident to that node. For each cone, reveal only calls
+where both endpoints are in the union of that change's nodes and its cone. This applies to every
+working or revising agent's cone, and in review or live diff to the displayed change's cone even
+when its agent is idle. The visible set is the union of these requests; a call appears once.
+Calls inside one file stay hidden. A call with a folded endpoint stays aggregated under the
+folding rule below.
+
+Hover edges hide on pointer leave; selection edges hide when selection clears or changes.
+Agent cone edges hide when the agent stops working or revising; displayed cone edges hide when
+its panel closes or shows another change. An edge stays visible while another request includes it.
 
 **Letter badges.** Agents are a letter and a color, nothing more: no avatars, beads or mascots. On
 a node: a 26px rounded square at the right end of the row, on the name's line, with A or B in badge
@@ -715,12 +724,17 @@ WebGL is missing, the graph's background is plain ground.
   zoom). Each cell is a square lamp covering 72% of it, about 5px. Each lamp shows one of four
   levels (off and three steps), chosen with an 8 by 8 ordered (Bayer) dither. An unlit lamp is
   lamp-off (about 2% brightness, close to shell); a 2px guide dot in guide-dot every 28px marks the
-  grid where nothing is lit. The ambient field is dimmer and masked under the legend, the title,
-  the zoom controls and the panels. The cells are large on purpose: they survive 720p compression.
-- **Light:** an agent lights a radius around the node it is on, never the whole module frame.
-  Intensity falls off from the node's center: about 72% a near term that decays quickly plus 28%
-  a far term that spreads wider, times the mode's gain and the node's weight. Overlapping lights
-  mix colors by intensity; at most 8 at once.
+  grid where nothing is lit. The ambient field uses a 0.25 gain on the lamp-off and guide-dot
+  tokens above ground. Under the title, legend, zoom controls and panels, masked lamps stay at
+  lamp-off, including guide dots and local light: neither can brighten those areas. The cells
+  are large on purpose: they survive 720p compression.
+- **Light:** Only the nodes listed in the mode's source table emit light, centered on their
+  rendered row or folded card, never across the whole module frame. Each source's radius is the
+  mode's Far distance; intensity is zero beyond that radius. Near is the inner falloff scale.
+  Inside the radius, intensity falls off from the node's center: about 72% a near term that
+  decays quickly plus 28% a far term that spreads wider, times the mode's gain and the node's
+  weight. Overlapping lights mix colors by intensity; at most 8 at once. In watch and live diff,
+  previous focus, other changed nodes and read history emit no light.
 
 | Mode | Near | Far | Gain | Why |
 | --- | --- | --- | --- | --- |
@@ -728,11 +742,11 @@ WebGL is missing, the graph's background is plain ground.
 | File view | 22px | 50px | 0.80 | one function and its neighbors |
 | Review | 16px | 34px | 0.70 | the cone carries the meaning, so the light is held in |
 
-| Mode | Lit nodes and weights |
+| Mode | Light source table: nodes and weights |
 | --- | --- |
-| Watch | per agent, in its color: the editing node (or, once the agent is done, its main changed node) 1.0, other changed nodes 0.72, read nodes 0.36 |
+| Watch | per agent, in its color: latest `agent.focus.node_ids` while working or revising, each 1.0; none while idle |
 | Review | the change in the agent's color: changed nodes 1.0, new nodes 0.8; the cone in work-light: distance 1 at 0.52, farther at 0.38. Read nodes are not lit. |
-| Live diff | in the agent's color: the editing node 1.0, read nodes 0.4; the cone so far in work-light at 0.48 |
+| Live diff | in the displayed agent's color: latest `agent.focus.node_ids` while working or revising, each 1.0; the cone so far in work-light at 0.48 |
 | File view | in work-light: the selected node 0.8, its direct callers and callees 0.32 |
 
 - **Breathing:** in watch and live diff, the editing node's light swings between 72% and 100% of
@@ -745,8 +759,12 @@ WebGL is missing, the graph's background is plain ground.
 ### Class and module folding
 
 Classes and modules fold. At start, every module is one folded card, such as
-"pricing.py · 6 functions". A module opens when an agent reads or edits inside it, or on click.
-Calls between folded modules merge into one edge per module pair, labeled with its count.
+"pricing.py · 6 functions". A module opens when an agent reads or edits inside it. Clicking a
+module's header toggles it open or folded, including after an agent opened it.
+Cross-file calls aggregate whenever either endpoint module is folded: one edge per directed
+module pair, labeled with its count. The count includes only calls in that direction;
+A → B and B → A keep separate arrows and counts. The aggregate attaches to each module's card
+or open frame, so this also applies when only one module is folded.
 
 Classes start as one header row with their method count. A click toggles the class; a fresh change
 adding or modifying a method opens it, and the person can fold it again. Reading a hidden method
@@ -762,7 +780,7 @@ on every animation frame during the drag, never only on drop.
 
 ### Motion
 
-Being revised (Tue Oct 27): the shell and motion sketches will replace this section.
+Being revised (Tue Oct 27): the motion sketches will replace this section.
 
 - Mode changes, dimming and highlights ease over 240ms (`cubic-bezier(0.2, 0.7, 0.2, 1)`).
 - **One exception on the person's surface:** a working agent's status lamp pulses (1.6s period),

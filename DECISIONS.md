@@ -267,8 +267,9 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 ### Design rethink (maintainer, Tue Oct 27, 2026)
 
 - **R1: module folding accepted.** Modules join classes as foldable groups. Every module starts
-  as one card and opens on a read, an edit inside it or a click. Calls between folded modules
-  share one counted edge per pair. This keeps labels readable as the repository grows.
+  as one card and opens on a read or an edit inside it; its header toggles it open or folded.
+  Calls share one counted edge per directed module pair when either module is folded.
+  This keeps labels readable as the repository grows without losing call direction.
 - **R2: drag module frames only.** Function rows keep their column. Edges re-route on every
   animation frame during a drag. This prevents stretched frames and routes that snap on drop.
 - **R3: function edges on demand.** Module edges show at rest. Function edges appear on hover,
@@ -280,7 +281,7 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 - **R5: motion that reports work accepted.** Events may cause motion that shows progress and
   state changes. Motion needs a cause. DESIGN.md's Motion section waits for the motion sketches,
   so each transition can be judged before its rules replace the current section.
-- **Shell zones accepted.** The top bar, left rail, sidebar, focus panel with tabs, graph stage,
+- **Shell zones accepted.** The top bar, left rail, sidebar, focus panel, graph stage,
   agents panel, bottom dock and status line give each feature a known home. DESIGN.md's Layout
   section waits for the shell sketches. Focus panel tabs, the Files view and the proposed approve
   key need the maintainer to reconcile AGENTS.md first.
