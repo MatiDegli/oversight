@@ -4,6 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import { recordedReplayPlugin } from "./tools/recorded-replay.ts";
+
 // One origin in development: Vite serves the UI and forwards the API and the SSE stream to FastAPI.
 // The proxy streams responses as they arrive, so SSE events are not buffered.
 const backend = `http://127.0.0.1:${process.env.OVERSIGHT_PORT ?? "8710"}`;
@@ -14,7 +16,7 @@ const apiPaths = ["/agents", "/changes", "/events", "/files", "/graph", "/health
 
 export default defineConfig({
   ...(cacheDir === undefined || cacheDir === "" ? {} : { cacheDir }),
-  plugins: [react(), tailwindcss()],
+  plugins: [recordedReplayPlugin(), react(), tailwindcss()],
   worker: { format: "es" },
   resolve: {
     alias: {
