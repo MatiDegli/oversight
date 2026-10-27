@@ -201,7 +201,7 @@ def python_packages() -> list[Package]:
         if name not in local:
             if name not in found:
                 texts = [
-                    (Path(str(p)).name, dist.locate_file(p).read_text().strip())
+                    (Path(str(p)).as_posix(), dist.locate_file(p).read_text().strip())
                     for p in sorted(dist.files or [], key=str)
                     if re.match(r"^(licen[cs]e|copying|notice)(\.|$)", Path(str(p)).name, re.I)
                 ]
@@ -239,7 +239,16 @@ def font_notice(packages: list[Package]) -> str:
     for package in packages:
         if package.name not in FONTS:
             continue
-        license_text = dict(package.texts)["LICENSE"]
+        license_text = next(
+            (
+                text
+                for filename, text in package.texts
+                if re.match(r"^(licen[cs]e|copying)(\.|$)", Path(filename).name, re.I)
+            ),
+            None,
+        )
+        if license_text is None or OFL_HEADER not in license_text:
+            raise ValueError(f"{package.name}@{package.version}: missing OFL 1.1 license text")
         header, body = license_text.split(OFL_HEADER, 1)
         # Retain each font's copyright and reserved-name statements, then the shared text once.
         headers.append(f"### {package.name} {package.version}\n\n{header.strip()}\n")

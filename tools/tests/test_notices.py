@@ -103,6 +103,77 @@ def test_python_runtime_closure_excludes_dev_and_handles_extras(python_environme
     assert packages["feature"].parents == {"shared@1"}
 
 
+def test_python_notice_headings_keep_distinct_relative_paths(python_environment: Path) -> None:
+    paths = ["shared-1.dist-info/licenses/LICENSE", "shared/vendor/LICENSE"]
+    for path, body in zip(paths, ["Apache license", "BSD notice"], strict=True):
+        installed = python_environment / path
+        installed.parent.mkdir(parents=True, exist_ok=True)
+        installed.write_text(body)
+    (python_environment / "shared-1.dist-info/RECORD").write_text(
+        "".join(f"{path},,\n" for path in paths)
+    )
+    packages = notices.python_packages()
+    shared = next(p for p in packages if p.name == "shared")
+    assert shared.texts == list(zip(sorted(paths), ["Apache license", "BSD notice"], strict=True))
+    generated = notices.render(packages + font_packages() + [monaco_package()])
+    for path in paths:
+        assert generated.count(f"### shared 1 — {path}\n") == 1
+    assert "### shared 1 — LICENSE\n" not in generated
+
+
+def font_packages(filename: str = "LICENSE") -> list[notices.Package]:
+    return [
+        notices.Package(
+            "Frontend",
+            name,
+            "1",
+            "OFL-1.1",
+            "https://example.org",
+            texts=[(filename, f"Copyright {name}\n{notices.OFL_HEADER}\nShared OFL body")],
+        )
+        for name in sorted(notices.FONTS)
+    ]
+
+
+def monaco_package() -> notices.Package:
+    return notices.Package("Frontend", "monaco-editor", "1", "MIT", "https://example.org")
+
+
+@pytest.mark.parametrize("filename", ["LICENSE.txt", "license.md", "COPYING"])
+def test_font_notice_accepts_alternate_license_filenames(filename: str) -> None:
+    generated = notices.font_notice(font_packages(filename))
+    assert generated.count(notices.OFL_HEADER) == 1
+    for name in notices.FONTS:
+        assert f"Copyright {name}" in generated
+
+
+def test_missing_font_license_is_a_clean_cli_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    packages = font_packages()
+    missing = packages[0]
+    missing.texts = []
+    monkeypatch.setattr(notices, "frontend_packages", lambda: [*packages, monaco_package()])
+    monkeypatch.setattr(notices, "python_packages", lambda: [])
+    monkeypatch.setattr("sys.argv", ["notices.py", "--check"])
+    assert notices.main() == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == f"Notices failed: {missing.name}@1: missing OFL 1.1 license text\n"
+
+
+def test_license_findings_records_the_approved_exception() -> None:
+    document = (notices.ROOT / "docs/license-findings.md").read_text()
+    opening = document.split("| Package |", 1)[0]
+    assert "maintainer" in opening and "2026-10-27" in opening
+    assert "`typing-extensions` / `PSF-2.0`" in opening
+    assert "[DECISIONS.md](../DECISIONS.md#dependency-licenses)" in opening
+    assert "`make check-notices` passes" in opening
+    assert "intentionally fails" not in opening
+    assert "No license exception" not in opening
+    assert "| typing-extensions | 4.16.0 | PSF-2.0 |" in document
+
+
 def test_python_rejects_stale_install(python_environment: Path) -> None:
     path = python_environment / "shared-1.dist-info/METADATA"
     path.write_text(path.read_text().replace("Version: 1", "Version: 2"))

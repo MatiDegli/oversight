@@ -778,7 +778,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### annotated-doc 0.0.5 — LICENSE
+### annotated-doc 0.0.5 — annotated_doc-0.0.5.dist-info/licenses/LICENSE
 
 ```text
 The MIT License (MIT)
@@ -804,7 +804,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### annotated-types 0.8.0 — LICENSE
+### annotated-types 0.8.0 — annotated_types-0.8.0.dist-info/licenses/LICENSE
 
 ```text
 The MIT License (MIT)
@@ -830,7 +830,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### anyio 4.15.1 — LICENSE
+### anyio 4.15.1 — anyio-4.15.1.dist-info/licenses/LICENSE
 
 ```text
 The MIT License (MIT)
@@ -855,7 +855,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### click 8.5.0 — LICENSE.txt
+### click 8.5.0 — click-8.5.0.dist-info/licenses/LICENSE.txt
 
 ```text
 Copyright 2014 Pallets
@@ -888,7 +888,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### fastapi 0.143.0 — LICENSE
+### fastapi 0.143.0 — fastapi-0.143.0.dist-info/licenses/LICENSE
 
 ```text
 The MIT License (MIT)
@@ -914,7 +914,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### h11 0.16.0 — LICENSE.txt
+### h11 0.16.0 — h11-0.16.0.dist-info/licenses/LICENSE.txt
 
 ```text
 The MIT License (MIT)
@@ -941,7 +941,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### httpcore2 2.13.1 — LICENSE.md
+### httpcore2 2.13.1 — httpcore2-2.13.1.dist-info/licenses/LICENSE.md
 
 ```text
 Copyright © 2026 to present Pydantic Services Inc. and individual contributors.
@@ -974,7 +974,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### httpx2 2.13.1 — LICENSE.md
+### httpx2 2.13.1 — httpx2-2.13.1.dist-info/licenses/LICENSE.md
 
 ```text
 Copyright © 2026 to present Pydantic Services Inc. and individual contributors.
@@ -992,7 +992,7 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### idna 3.20 — LICENSE.md
+### idna 3.20 — idna-3.20.dist-info/licenses/LICENSE.md
 
 ```text
 BSD 3-Clause License
@@ -1028,7 +1028,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### jiter 0.17.0 — LICENSE
+### jiter 0.17.0 — jiter-0.17.0.dist-info/licenses/LICENSE
 
 ```text
 The MIT License (MIT)
@@ -1054,7 +1054,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### openai 3.29.0 — LICENSE
+### openai 3.29.0 — openai-3.29.0.dist-info/licenses/LICENSE
 
 ```text
 Apache License
@@ -1260,7 +1260,7 @@ Apache License
    limitations under the License.
 ```
 
-### openai 3.29.0 — LICENSE
+### openai 3.29.0 — openai/_vendor/httpx_aiohttp/LICENSE
 
 ```text
 Copyright © 2025, Karen Petrosyan.
@@ -1292,7 +1292,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### opentelemetry-api 1.45.1 — LICENSE
+### opentelemetry-api 1.45.1 — opentelemetry_api-1.45.1.dist-info/licenses/LICENSE
 
 ```text
 Apache License
@@ -1498,7 +1498,7 @@ Apache License
    limitations under the License.
 ```
 
-### pydantic 2.14.1 — LICENSE
+### pydantic 2.14.1 — pydantic-2.14.1.dist-info/licenses/LICENSE
 
 ```text
 The MIT License (MIT)
@@ -1524,7 +1524,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### pydantic-core 2.50.1 — LICENSE
+### pydantic-core 2.50.1 — pydantic_core-2.50.1.dist-info/licenses/LICENSE
 
 ```text
 The MIT License (MIT)
@@ -1550,7 +1550,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### sniffio 1.3.1 — LICENSE
+### sniffio 1.3.1 — sniffio-1.3.1.dist-info/LICENSE
 
 ```text
 This software is made available under the terms of *either* of the
@@ -1558,7 +1558,7 @@ licenses found in LICENSE.APACHE2 or LICENSE.MIT. Contributions to are
 made under the terms of *both* these licenses.
 ```
 
-### sniffio 1.3.1 — LICENSE.APACHE2
+### sniffio 1.3.1 — sniffio-1.3.1.dist-info/LICENSE.APACHE2
 
 ```text
 Apache License
@@ -1764,7 +1764,7 @@ Apache License
    limitations under the License.
 ```
 
-### sniffio 1.3.1 — LICENSE.MIT
+### sniffio 1.3.1 — sniffio-1.3.1.dist-info/LICENSE.MIT
 
 ```text
 The MIT License (MIT)
@@ -1789,7 +1789,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### starlette 1.7.0 — LICENSE.md
+### starlette 1.7.0 — starlette-1.7.0.dist-info/licenses/LICENSE.md
 
 ```text
 Copyright © 2018, [Encode OSS Ltd](https://www.encode.io/).
@@ -1821,7 +1821,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### truststore 0.10.4 — LICENSE
+### truststore 0.10.4 — truststore-0.10.4.dist-info/licenses/LICENSE
 
 ```text
 The MIT License (MIT)
@@ -1847,7 +1847,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### typing-extensions 4.16.0 — LICENSE
+### typing-extensions 4.16.0 — typing_extensions-4.16.0.dist-info/licenses/LICENSE
 
 ```text
 A. HISTORY OF THE SOFTWARE
@@ -2131,7 +2131,7 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### typing-inspection 0.4.4 — LICENSE
+### typing-inspection 0.4.4 — typing_inspection-0.4.4.dist-info/licenses/LICENSE
 
 ```text
 MIT License
@@ -2157,7 +2157,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### uvicorn 0.54.0 — LICENSE.md
+### uvicorn 0.54.0 — uvicorn-0.54.0.dist-info/licenses/LICENSE.md
 
 ```text
 Copyright © 2017-present, [Encode OSS Ltd](https://www.encode.io/).

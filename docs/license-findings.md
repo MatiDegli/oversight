@@ -1,8 +1,10 @@
 # Runtime license findings on docs/notices
 
-`make check-notices` intentionally fails on the frozen runtime dependency below.
-No license exception or dependency change is included in this front. The architect
-must decide how to handle it before the license gate can pass.
+The maintainer approved the exact `typing-extensions` / `PSF-2.0` license exception
+on 2026-10-27, as recorded in [DECISIONS.md](../DECISIONS.md#dependency-licenses).
+The exception is implemented and `make check-notices` passes for the frozen runtime
+inventory. No dependency was changed; all other packages remain subject to the
+license policy. The package and its direct dependents are retained below for context.
 
 | Package | Version | Installed license metadata | Direct runtime dependents |
 | --- | --- | --- | --- |
