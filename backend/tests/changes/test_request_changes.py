@@ -4,7 +4,7 @@ from a conflict, main is merged into its branch first, so it redoes the change o
 import asyncio
 
 import pytest
-from changes_helpers import TEMPLATE, VALUE, Harness, bounded
+from changes_helpers import TEMPLATE, VALUE, Harness, bounded, queued_callbacks_ran
 
 from oversight.changes import ChangeNotFound, Revision, WrongState
 from oversight_contracts.events import (
@@ -360,6 +360,70 @@ async def test_cancel_after_worktree_merge(h: Harness, cut: str) -> None:
     assert "shop/mod.py" in revision.note
     parents = (await worktree_git(h, "rev-list", "--parents", "-n", "1", "HEAD")).split()[1:]
     assert parents == [old_head, main_head]
+    assert decisions(h) == ["approved", "changes_requested"]
+
+
+@bounded
+async def test_second_cancel_during_the_recovery_ends_broken(h: Harness) -> None:
+    """R3: a second cancel cuts the recovery before its `merge --abort` runs, so the worktree is
+    still mid-merge: the change is `broken`, never put back to `conflict`, and main is not suspect
+    (only the worktree's state is unknown)."""
+    await conflicted(h)
+    h.workspace.arm("merge", tree="agent-1", mode="cancel")  # the first cancel, after the merge
+    h.workspace.arm("merge", tree="agent-1", mode="cut")  # the recovery's `merge --abort`
+
+    with pytest.raises(asyncio.CancelledError):
+        await h.manager.request_changes("change-1", "Redo.")
+
+    assert not h.manager.main_suspect
+    assert await worktree_git(h, "rev-parse", "-q", "--verify", "MERGE_HEAD") != ""
+    [error] = errors(h, "Requesting changes on change-1 was cancelled")
+    assert "unknown" in error.message
+    with pytest.raises(WrongState):
+        h.manager.request_changes("change-1", "Redo.")  # broken
+    await h.manager.reject("change-1", None)
+    assert not h.worktree_dir("agent-1").exists() and not await h.has_branch("agent-1")
+    assert decisions(h) == ["approved", "rejected"]
+    assert not h.manager.main_suspect
+
+
+@pytest.mark.parametrize("kind", ["merge", "tests"])
+@bounded
+async def test_cancel_after_the_conflict_is_stored(h: Harness, kind: str) -> None:
+    """The store took the approval's conflict, then the decision was cancelled before the publish
+    returned: the record matches the store, so the change is `conflict`, not `ready`. A second
+    Approve is refused, and Request changes moves the base, with the conflict in its note."""
+    await h.run_agent(1, EDIT)
+    if kind == "merge":
+        main_mod = TEMPLATE["shop/mod.py"].replace("return 1", "return 5")
+        main_head = await commit_on_main(h, {"shop/mod.py": main_mod})
+    else:
+        main_head = await commit_on_main(h, {"tests/test_twice.py": STRICT})
+    h.hold = ChangeResolved
+    approval = h.manager.approve("change-1", None)
+    await h.held.wait()
+    approval.cancel()
+    await queued_callbacks_ran()
+    assert not approval.done()  # it waits for the publish's end
+    h.release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await approval
+
+    [resolved] = h.payloads(ChangeResolved)
+    assert (resolved.decision, resolved.merge) == ("approved", "conflict")
+    assert not h.manager.main_suspect
+    with pytest.raises(WrongState, match="is conflict"):
+        h.manager.approve("change-1", None)  # a second Approve would send a second resolution
+    revision = await h.manager.request_changes("change-1", "Redo.")
+
+    assert revision is not None and revision.note is not None
+    if kind == "merge":
+        assert "conflict markers" in revision.note and "shop/mod.py" in revision.note
+    else:
+        assert "tests failed" in revision.note
+        assert "tests/test_twice.py::test_twice" in revision.note
+    parents = (await worktree_git(h, "rev-list", "--parents", "-n", "1", "HEAD")).split()[1:]
+    assert parents[1] == main_head  # the base moved
     assert decisions(h) == ["approved", "changes_requested"]
 
 

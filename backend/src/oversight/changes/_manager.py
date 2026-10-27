@@ -728,9 +728,11 @@ class ChangeManager:
         """R3: a base move failed or was cancelled. Still under both locks, decide from the
         worktree's facts: abort an unfinished merge; clean at the old head is unchanged; clean at a
         merge of the old head and main's is a move that landed, recorded from those facts; anything
-        else, or git failing, is `broken`. Main was only read, so `main_suspect` stays as it was.
-        The change ends `conflict` or `broken`, with no resolution sent."""
+        else, git failing, or a second cancel cutting this recovery, is `broken`. Main was only
+        read, so `main_suspect` stays as it was. The change ends `conflict` or `broken`, with no
+        resolution sent; the second cancel is re-raised once the `error` is out."""
         tree = rec.tree
+        cut = False
         try:
             if await self._yes_no(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
                 await self._git(tree, "merge", "--abort")
@@ -745,13 +747,18 @@ class ChangeManager:
             else:
                 raise WorkspaceError("the worktree is neither unchanged nor merged")
             rec.state = "conflict"
-        except Exception:
+        except (Exception, asyncio.CancelledError) as failure:
+            # A second cancel may have cut the recovery before its abort ran, so the worktree can
+            # still be mid-merge; `_restore` would put such a change back to `conflict`.
+            cut = isinstance(failure, asyncio.CancelledError)
             rec.state = "broken"
             note = "its worktree's state is unknown; reject the change"
         what = "was cancelled" if error is None else f"failed: {error}"
         await self._error(
             "git", f"Requesting changes on {rec.change_id} {what}; {note}.", rec, fatal=False
         )
+        if cut:
+            raise asyncio.CancelledError
 
     async def _requested(self, rec: _Change, comment: str, note: str | None) -> Revision:
         """Phase B, one `_whole` step: the resolution and `working` go together whatever cancels
@@ -885,8 +892,16 @@ class ChangeManager:
         return False
 
     async def _conflicted(self, rec: _Change, comment: str | None, conflict: Conflict) -> None:
-        """Main is back at `pre`: send the approval's conflict and leave the change `conflict`."""
-        await self._publish(self._resolution(rec, "approved", comment, conflict=conflict))
+        """Main is back at `pre`: send the approval's conflict and leave the change `conflict`, as
+        one `_whole` step, so a cancel never leaves a resolution in the store that the record,
+        and so a second Approve or a Request changes, does not know."""
+        resolution = self._resolution(rec, "approved", comment, conflict=conflict)
+        await self._whole(self._record_conflict(rec, resolution, conflict))
+
+    async def _record_conflict(
+        self, rec: _Change, resolution: ChangeResolved, conflict: Conflict
+    ) -> None:
+        await self._publish(resolution)
         rec.conflict, rec.state = conflict, "conflict"
 
     async def _facts(self, head_commit: str) -> _Facts:
@@ -902,9 +917,9 @@ class ChangeManager:
         self, rec: _Change, comment: str | None, pre: str | None, error: Exception | None
     ) -> None:
         """Decide from git facts after a failed approval, or a cancelled one (`error` is `None`):
-        abort an unfinished merge, record a landed one. No `reset --hard`, no lock removal. A
-        cancelled approval always reports; a landed merge closes out first and leaves its cleanup
-        to the next decision or `open`."""
+        abort an unfinished merge, record a landed one; a conflict already sent stays `conflict`. No
+        `reset --hard`, no lock removal. A cancelled approval always reports; a landed merge closes
+        out first and leaves its cleanup to the next decision or `open`."""
         main = self._workspace.main
         facts: _Facts | None = None
         try:
@@ -920,8 +935,11 @@ class ChangeManager:
             await self._close_out(rec)
             note = "the merge landed and is recorded"
         elif facts is not None and facts.unchanged(pre):
-            rec.state = "ready"
-            note = "main is unchanged; approve again or reject"
+            if rec.state == "conflict":  # set only by `_record_conflict`: the store has it
+                note = "main is unchanged and the conflict is recorded; request changes or reject"
+            else:
+                rec.state = "ready"
+                note = "main is unchanged; approve again or reject"
         else:
             self._break(rec)
             note = "main's state is unknown; reject the change or restart"
