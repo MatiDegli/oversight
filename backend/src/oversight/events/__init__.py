@@ -7,6 +7,7 @@ from pathlib import Path
 
 from oversight.events.clock import Clock, format_ts, parse_ts, system_clock
 from oversight.events.jsonl import LogError, export_run, read_jsonl, write_jsonl
+from oversight.events.paths import absolute_paths
 from oversight.events.player import MAX_GAP_S, Sleep, play, replay_delays
 from oversight.events.store import (
     EVENT_TYPES,
@@ -33,6 +34,7 @@ __all__ = [
     "Sleep",
     "StoreClosedError",
     "StoredEvent",
+    "absolute_paths",
     "export_run",
     "format_ts",
     "parse_ts",
