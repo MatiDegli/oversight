@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from live_helpers import live_settings
 
+from oversight.api import error_response
 from oversight.api.commands import NOT_BUILT
 from oversight.app import ReplayConfig, create_app
 from oversight.settings import REPO_ROOT
@@ -72,3 +73,11 @@ def test_save_file_null_or_missing_hash_never_reaches_the_handler(
     response = TestClient(app).put("/files", json=body)
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_request"
+
+
+def test_too_large_maps_to_413_with_the_typed_error_body() -> None:
+    response = error_response("too_large", "File exceeds the server size limit")
+    assert response.status_code == 413
+    assert response.body == (
+        b'{"error":{"code":"too_large","message":"File exceeds the server size limit"}}'
+    )

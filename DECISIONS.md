@@ -410,3 +410,5 @@ The tuple gate compares all changed array constraints with the byte-exact 1.3.0 
 It discovers fields generically and checks generated TypeScript, including local references and
 nullable unions. Four independent negative controls cover small max, min-only, historical
 findings/evidence and a newly constrained existing field. Generator and TypeScript pins stay put.
+
+too_large (413) rides in 1.4.0; limits come with the API guard front (maintainer, M6, 2026-10-27)
