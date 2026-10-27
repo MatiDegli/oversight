@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -40,11 +41,33 @@ function expectPublishable(text: string) {
     encoding: "utf8",
     timeout: 30_000,
   });
-  expect(result.error).toBeUndefined();
+  if (result.error)
+    throw new Error("gitleaks unavailable: install gitleaks before checking the recording");
   expect(result.status).toBe(0);
 }
 
 describe("the public replay recording", () => {
+  it("documents the bundled recording and its provenance label", () => {
+    const readme = readFileSync(new URL("./README.md", import.meta.url), "utf8");
+    expect(readme).toContain("fixtures/events/recorded-demo.jsonl");
+    expect(readme).toMatch(/label.*provenance/);
+    expect(readme).not.toContain("Replace it");
+    expect(readme).not.toContain("bundle is explicitly labeled as a hand-written fixture");
+  });
+
+  it("names the missing scanner and how to restore the required leak gate", () => {
+    const before = process.env.PATH;
+    process.env.PATH = "";
+    try {
+      expect(() => {
+        expectPublishable(recorded);
+      }).toThrow("gitleaks unavailable: install gitleaks before checking the recording");
+    } finally {
+      if (before === undefined) delete process.env.PATH;
+      else process.env.PATH = before;
+    }
+  });
+
   it("defaults to the exact exported real run and its receipt", () => {
     expect(replaySource.text).toBe(recorded);
     expect(replaySource.kind).toBe("real recorded run");

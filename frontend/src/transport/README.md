@@ -30,8 +30,9 @@ gap is divided by speed and capped at 2 seconds, as in the backend player. Repla
 event application function as live transport, and rejects sequence/version inconsistencies.
 
 `pnpm -C frontend exec vite build --mode replay` chooses bundled replay at build time and makes no
-backend requests. The current bundle is explicitly labeled as a hand-written fixture. Replace it
-with a real recorded run and update the label before publishing the judges' demo.
+backend requests. The current bundle plays the real recorded run in
+`fixtures/events/recorded-demo.jsonl`. Its header label uses the date from the recording's provenance
+sidecar (`Recorded run · Oct 27, 2026` for the current export).
 
 `createCommandClient` exposes every JSON command in proposal 4.7. Accepted commands return no
 result; SSE provides their results. HTTP errors use `CommandError` with `status`, contract `code`
