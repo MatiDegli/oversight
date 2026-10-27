@@ -1,7 +1,11 @@
 # Plan: the change manager, level 1 (front 15)
 
-Revision 6, after the second re-review: a close-out publish left running by a second cancel stays
-on the change, and the next close-out or merge waits for its outcome (section 4). Revision 5: only the latest decision's task may end `deciding`, and a
+Revision 8, front 15b, after its review: each close-out event gets its own two tries, in order,
+and an `error` the store refuses at shutdown is logged (section 4). Revision 7, front 15b, for the
+API plan's section 4: `main_suspect`, `check_main`, and an `aclose`
+that drains the close-outs before the store closes (sections 1, 4 and 5). Revision 6, after the
+second re-review: a close-out publish left running by a second cancel stays on the change, and the
+next close-out or merge waits for its outcome (section 4). Revision 5: only the latest decision's task may end `deciding`, and a
 cancel during a close-out publish waits for the store's answer (sections 1 and 4). Revision 4,
 after the implementation review: a close-out stays pending until every event is sent, and a
 cancelled decision settles its state (sections 4 and 5). Revision 3: Reject accepts
@@ -28,7 +32,9 @@ class ChangeManager:                      # satisfies oversight.agents.ChangeSin
     def run_ended(self, agent_id: AgentId, end: RunEnd | None) -> None: ...
     def approve(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]: ...
     def reject(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]: ...
-    async def aclose(self) -> None: ...   # waits for decisions in flight
+    main_suspect: bool                    # read-only: True once a change entered `broken`
+    async def check_main(self) -> bool | None: ...  # main clean and not mid-merge; None: git failed
+    async def aclose(self) -> None: ...   # drains decisions and close-outs; the store closes after
 class ChangeNotFound(LookupError): ...    # route answers not_found
 class WrongState(Exception): ...          # route answers wrong_state
 ```
@@ -50,6 +56,11 @@ class WrongState(Exception): ...          # route answers wrong_state
   Each decision taken gets the next number, and the callback acts only if its number is still the
   latest: a failed Approve that went back to `ready` while its `error` is going out may be retried,
   and its end must leave the retry `deciding`, or a Reject would race the retry's merge.
+- **Hooks for the API (revision 7).** `main_suspect` turns true when a change enters `broken`, from
+  `_recover` or from the done-callback, and stays true until the process restarts, even after
+  Reject closes that change; the API then refuses new agents and approvals. `check_main()`, under
+  main's lock, answers True when `rev-parse -q --verify MERGE_HEAD` finds none and `status
+  --porcelain` is empty, False otherwise, and None when either call fails or times out.
 
 ## 2. Live diff
 
@@ -115,11 +126,18 @@ on, since the store may commit an event whose caller was cancelled. A second can
 but the publish stays on the record and a done-callback records its outcome when it ends; the next
 close-out on that change, and every approval before it merges, waits for it, so the event is never
 sent twice and a later delta starts from the graph the UI holds. It runs as soon as the decision is a fact and before cleanup, so no cleanup
-failure can hold back or repeat a resolution. A decision tries the missing events twice, in order;
-if one still fails, an `error` says so and the change stays `closing` and pending, with its
+failure can hold back or repeat a resolution. A decision tries each missing event twice, in order (an
+event that fails both tries stops the rest; one that needed a second try does not cost the next
+event its own two); if one still fails, an `error` says so and the change stays `closing` and pending, with its
 worktree and branch: cleanup runs only once `change.resolved` is out. The retry runs, under main's
 lock and the change's, before the next decision's work and in the next `open`, each trying twice
-again; approve and reject answer `WrongState` on a `closing` change. A pending delta that a later
+again; approve and reject answer `WrongState` on a `closing` change. **Drain**: `aclose()` waits
+for every tracked task (decisions and publishes left running), then runs that retry once more, two
+tries per event, for each `closing` change in the order it entered, and sends one `error` (`server`,
+not fatal) per change naming each event still unsent. If the store refuses that `error` too, one
+`logging` line (the module's logger, level error) per change names the change, its agent and the
+unsent events, with no payload, comment or store message. Cleanup is left to the next start's `reset`, and
+the caller closes the store only after `aclose()` returns. A pending delta that a later
 merge's delta overtakes is dropped, not sent: the later one starts from the graph the UI holds,
 `snapshot`, which the unsent delta never moved, so it covers both merges, and the older one would
 start from a graph the UI no longer holds.
@@ -147,7 +165,7 @@ Every git call is `Workspace.git`: asyncio, with a timeout that kills the proces
 - **A merge or commit timeout, another failure, or a bug** in the decision task: `merge --abort`
   if `MERGE_HEAD` exists, then the facts. Step 3 holds: close out as merged. Main clean at `pre`:
   `error` ("main is unchanged; approve again or reject"), back to `ready`. Otherwise, or if the
-  facts cannot be read: `error`, `broken`; approve answers `WrongState` until the next start,
+  facts cannot be read: `error`, `broken`, `main_suspect`; approve answers `WrongState` until the next start,
   and Reject still works: `broken` is among the states it accepts, so it closes out as usual
   (`rejected`, then `done`) and discards the worktree and branch, leaving main to the next start's
   `reset`, even when an unconfirmed merge landed. No `reset --hard`, no lock-file removal.
@@ -242,6 +260,20 @@ failing with their change reverted.
   agent-2's delta covers both merges and agent-1's is dropped, its `done` sent at the next `open`;
   a rescan that raises keeps the snapshot; tests that cannot start still propose; cleanup prunes a
   worktree directory already gone.
+- `test_hooks.py` (revision 7): *`test_broken_sets_main_suspect`: a merge timeout that leaves main
+  at `pre` keeps main trusted; unreadable facts, a failed `merge --abort`, or a second cancel during
+  the recovery make the change `broken` and `main_suspect` true, still true after Reject;
+  *`test_check_main` on clean main, mid-merge with a clean status, and an uncommitted edit, each
+  call under main's lock with the manager's timeout; *`test_check_main_is_unknown_when_git_fails`;
+  *`test_aclose_sends_a_failed_delta_in_order_once`: the delta failed twice in the approval, the
+  drain sends it, chained, then `done`; *`test_aclose_waits_for_a_publish_left_running`: after two
+  cancels the drain waits for the delta's receipt and sends only `done`;
+  *`test_aclose_reports_what_a_failing_store_never_took`: the approval is in flight when the drain
+  starts, the store refuses the delta four times, and one `error` names the delta and `done`, with
+  nothing logged; (revision 8) *`test_aclose_gives_each_event_two_tries`: the drain's resolution
+  fails once and then its delta once, and both still go out; *`test_aclose_logs_what_a_refusing_store_never_took`:
+  the store refuses everything, and `caplog` holds one line per change naming its unsent events.
+  `test_close_out.py` gains *`test_each_event_gets_two_tries`, the same failures inside an approval.
 
 About 450 lines of code and 550 of tests, in two commits: live diff and propose, then decisions.
 
