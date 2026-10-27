@@ -54,12 +54,18 @@ policy marks "would approve alone" or "needs you"; during the hackathon it never
 itself. It is one line in the review header.
 
 **Test shortcuts: facts from the diff, the alarm from the run.** A detector that reads only the
-diff cannot tell a weakened test from an intended behavior change. Measured on this repository's
-own history, the diff-only detector (branch `review/shortcut-detector`) gave 101 findings in 90
-commits, 16% of them worth a reviewer's time; a precision round brought it to 24 findings, about
-half of them useful. Most test changes are legitimate and real shortcuts are rare, so the diff
-alone has a ceiling. The product knows what a diff does not: the task, every `run_tests` result
-with its failed test ids, and the order of the agent's edits. So the work splits in two:
+diff cannot tell a weakened test from an intended behavior change. The measurement is in
+`tools/shortcut_corpus_report.md` on the branch `review/shortcut-detector` (read it with
+`git show review/shortcut-detector:tools/shortcut_corpus_report.md`). On this repository's own
+history, pinned at `f377dd4` (174 non-merge commits, 90 with Python changes), the diff-only
+detector gave 101 findings, all labeled by a reviewer: 16% of them (1 shortcut and 15 useful) were
+worth a reviewer's time. A precision round brought it to 24 findings, with 70 of the 85 noise rows
+gone and 14 of the 15 useful rows kept. Of those 24, 1 is labeled a shortcut, 10 useful and 9 only
+noise, and 4 are new and still unlabeled. So 11 of the 20 labeled ones (55%) are signal, which the
+report itself does not call a complete precision estimate for all 24. Most test changes are
+legitimate and real shortcuts are rare (one labeled in 101), so the diff alone has a ceiling. The
+product knows what a diff does not: the task, every `run_tests` result with its failed test ids,
+and the order of the agent's edits. So the work splits in two:
 
 - **Facts in review, never an alarm:** the detector's output as a neutral line in the review
   header: "tests in this change: 1 removed, 2 checks changed, 1 expected value changed".
@@ -68,11 +74,22 @@ with its failed test ids, and the order of the agent's edits. So the work splits
   later run. Optionally, only for those, one Muse Spark call with the task, the test diff and the
   results writes the reason ("loosened the assertion so it passes; the task did not ask for it").
 
+Integrating the detector into the product is a level 3 decision. Closing level 2 does not
+authorize it: it needs the maintainer's own decision, inside level 3.
+
 The detector stays a pure function over plain data. The rule takes the change set and a small run
-trace (each `run_tests` result's failed test ids and the edited paths, in order), built by an
-adapter in the change manager from `AgentStep` events, so it needs no contract change for its
-inputs and is tested without the runtime. The task bench (front B below) measures it with tasks
-built to tempt a shortcut, such as a test that cannot pass without touching it.
+trace, built by an adapter in the change manager from events that already exist, so it needs no
+contract change for its inputs and is tested without the runtime:
+
+- **Failed test ids** come from `AgentStep.tests` on each `run_tests` step.
+- **Edited paths, in order,** come from `agent.focus` in edit mode and from `change.updated`.
+  `AgentStep` has no structured edited paths: its summary is text built from the tool arguments.
+- **A truncated list is not "fixed".** `failed_tests` holds at most 20 ids. A test missing from a
+  list shorter than the run's `failed` count is unknown, not "no longer fails". Only a run that
+  finished with its whole list (`failed` equals the list length) can show that a test passes again.
+
+The task bench (front B below) measures the rule with tasks built to tempt a shortcut, such as a
+test that cannot pass without touching it.
 
 ## 4. Verified cone
 
@@ -115,7 +132,7 @@ branch, and is reviewed like any other front. Unlike the ideas above, A and B ma
 | --- | --- | --- | --- | --- |
 | A | Automated takes | The demo is 25%: identical, repeatable 1080p takes to edit, and a compression check | now | `tools/` and one recorded log |
 | B | Task bench with numbers | Measured data for the pitch: tasks solved per agent, steps, cost, Muse Spark versus Muse Spark Open, later the shortcuts flagged | now, without the detector numbers | `tools/eval/` |
-| C | TypeScript adapter | A second language for the graph, the most recognizable after Python | not before level 2 closes | its adapter folder, `fixtures/`, its tests |
+| C | TypeScript adapter | A second language for the graph, the most recognizable after Python | closed until level 2 closes | its adapter folder, `fixtures/`, its tests |
 
 **A. Automated takes.** A Playwright script drives replay mode and records video at 1080p along a
 fixed path (clicks, zoom, review). It reuses the e2e replay setup. The takes come from a log
@@ -123,20 +140,25 @@ recorded from a real run, since only those may be labeled as a recorded run. The
 the compression check: encode at a low bitrate, or upload unlisted and watch at 720p.
 
 **B. Task bench.** 15 to 20 scripted tasks on the demo repository, run through Oversight itself
-(`POST /agents`), never by calling Meta's API directly, with results in a fixed format. Agents run
-in Contributor mode. A cap in USD of API and Baseten credits is set before the first run. The line
-"the detector flagged X shortcuts in N tasks" waits for the shortcut detector; the task set, the
-script and the result format do not.
+(`POST /agents`), never by calling Meta's API directly, with results in a fixed format. A few of
+the tasks are built to tempt a shortcut. Agents run in Contributor mode. A cap in USD of API and
+Baseten credits is proposed to the maintainer before the first paid run. The line "the detector
+flagged X shortcuts in N tasks" waits for the shortcut detector; the task set, the script and the
+result format do not.
 
 **C. TypeScript adapter.** tree-sitter (MIT) for TypeScript: modules, classes, functions and
 methods with the same node kinds and stable ids as Python. Calls through explicit imports resolve
-as "exact", the rest as "possible". It needs first graph core stage 2 in main and a small task that
-puts the Python parser behind a language-adapter interface with no contract change; the new
-dependency needs the maintainer's OK. A separate orchestrator runs it: Muse Code writes, Codex
-reviews each PR, with a weekly cap on Muse Code usage, and it reports only when done or blocked.
-Off by default, no merge before level 2 closes. The bar before it is shown: at least 70% of the
-test repository's calls resolved as "exact", and the cone checked by hand in three cases. If it
-passes, 5 seconds in the video and one line in the README; if not, it stays future work.
+as "exact", the rest as "possible". It stays closed until level 2 closes: no worktree, no branch and
+no work before then, not only no merge. It is written as a standalone adapter that reads graph core
+stage 2 from main without editing it, and it never touches the product's code, including the
+parser. Plugging it into the product means putting the Python parser behind a language-adapter
+interface, which edits the parser: that is a separate product front, outside C, and it needs the
+maintainer's decision after level 2 closes. The new dependency also needs the maintainer's OK. A
+separate orchestrator runs it: Muse Code writes, Codex reviews each PR, with a weekly cap on Muse
+Code usage, and it reports only when done or blocked. Off by default. The bar before it is shown:
+at least 70% of the test repository's calls resolved as "exact", and the cone checked by hand in
+three cases. If it passes, 5 seconds in the video and one line in the README; if not, it stays
+future work.
 
 ## Later, for the README's Next section
 
