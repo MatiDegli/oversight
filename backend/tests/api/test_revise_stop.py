@@ -39,6 +39,7 @@ from oversight.agents import (
     Message,
     ModelReply,
     RunEnd,
+    Script,
     ScriptedModel,
     ToolSchema,
     parse_script,
@@ -158,18 +159,20 @@ async def test_unknown_and_malformed_ids_are_not_found(tmp_path: Path) -> None:
 async def test_request_changes_and_stop_need_a_state_that_takes_them(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    model = scripted_a()
+    model = Stepped(parse_script(revisable()))
     async with (
         asyncio.timeout(DEADLINE_S),
         live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
     ):
         held = HeldRequests(s.store, monkeypatch)
         await start(s)
+        # The first model call waits for a permit, so the change stays `working` until it is given.
         await s.until(is_type("agent.status", state="working"))
-        # Working: only Stop takes a change that is not proposed yet; Request changes needs one.
         working = await request(s)
         assert error_code(working) == (409, "wrong_state")
         assert "needs conflict or ready" in working.json()["error"]["message"]
+        for _ in range(MODEL_TURNS_A + 2):  # the first run, then the revision's two calls
+            model.permits.release()
         first = await ready(s)
         assert (await request(s)).status_code == 202
         await held.at["agent-1"].wait()  # deciding: its request is not in the log yet
@@ -231,15 +234,80 @@ async def test_the_brake_refuses_a_revision_of_the_metered_agent_only(
         assert states(events, "agent-2") == ["revising", "ready_for_review"]
 
 
+async def no_move(self: ChangeManager, rec: Any, comment: str) -> None:
+    """The manager's answer when a redo's base cannot move: `None`, the change as it was."""
+    return None
+
+
+class BlockedRevision(ScriptedModel):
+    """Plays its script for `after` calls, then waits for a cancel, which it records."""
+
+    def __init__(self, script: Script, after: int) -> None:
+        super().__init__(script)
+        self.after, self.calls = after, 0
+        self.entered, self.cancelled = asyncio.Event(), asyncio.Event()
+
+    async def complete(
+        self, messages: Sequence[Message], tools: Sequence[ToolSchema]
+    ) -> ModelReply:
+        if self.calls >= self.after:
+            self.entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                self.cancelled.set()
+                raise
+        self.calls += 1
+        return await super().complete(messages, tools)
+
+
+async def test_a_request_taken_as_an_earlier_revision_ends_keeps_its_own_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The first request ends at once with no revision (the base could not move). The second is
+    # taken from a done-callback on its decision, so before the first `_revise` resumes and
+    # clears its records: it must leave the second's, or Stop finds no run to cancel.
+    held, gate = asyncio.Event(), asyncio.Event()
+
+    async def held_no_move(self: ChangeManager, rec: Any, comment: str) -> None:
+        held.set()
+        await gate.wait()
+        return None
+
+    model = BlockedRevision(parse_script(revisable()), after=MODEL_TURNS_A)
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+    ):
+        live = s.live
+        await start(s)
+        first = await ready(s)
+        with monkeypatch.context() as patch:
+            patch.setattr(ChangeManager, "_request_changes", held_no_move)
+            live.request_changes("change-1", "First.")
+        revise = live._runs["agent-1"]  # pyright: ignore[reportPrivateUsage]
+        decision = live._decisions["agent-1"]  # pyright: ignore[reportPrivateUsage]
+        # Registered at once, so before `revise` first waits on the decision: it runs first.
+        decision.add_done_callback(lambda _: live.request_changes("change-1", "Second."))
+        await held.wait()  # the decision waits, and `revise` waits on it
+        gate.set()
+        await asyncio.wait({revise})
+        second_revise = live._runs.get("agent-1")  # pyright: ignore[reportPrivateUsage]
+        second_decision = live._decisions.get("agent-1")  # pyright: ignore[reportPrivateUsage]
+        assert second_revise not in (None, revise) and second_decision not in (None, decision)
+        await model.entered.wait()  # the second revision is running
+        assert (await s.client.post("/agents/agent-1/stop")).status_code == 202
+        await s.until(is_type("change.resolved", reason="stopped"), first[-1].seq)
+        assert model.cancelled.is_set()  # Stop reached the run it was meant for
+        assert live._runs == {} and live._decisions == {}  # pyright: ignore[reportPrivateUsage]
+
+
 async def test_a_request_that_moves_no_base_ends_with_no_run_and_the_change_ready(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The manager answers `None` when a redo's base cannot move, after an `error` and with the
     # change as it was (its own tests cover why). `_revise` then resumes nothing, and the kept run
     # serves the next request.
-    async def no_move(self: ChangeManager, rec: Any, comment: str) -> None:
-        return None
-
     model = scripted_a()
     async with (
         asyncio.timeout(DEADLINE_S),
@@ -273,7 +341,11 @@ def test_the_commands_before_the_run_starts_are_wrong_state(tmp_path: Path) -> N
 async def test_a_revision_that_fails_is_reported_and_leaves_the_change_unproposed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    entered, gate = asyncio.Event(), asyncio.Event()
+
     async def failing(self: AgentRun, comment: str, note: str | None) -> RunEnd:
+        entered.set()
+        await gate.wait()
         raise RuntimeError("the revision failed")
 
     model = scripted_a()
@@ -285,7 +357,9 @@ async def test_a_revision_that_fails_is_reported_and_leaves_the_change_unpropose
         await ready(s)
         monkeypatch.setattr(AgentRun, "revise", failing)
         assert (await request(s)).status_code == 202
+        await entered.wait()  # held in the revision, so its task is still registered
         revise = s.live._runs["agent-1"]  # pyright: ignore[reportPrivateUsage]
+        gate.set()
         await asyncio.wait({revise})
         [report] = [e.payload for e in s.events() if e.type == "error"]
         assert (report.source, report.fatal, report.agent_id) == ("agent", True, "agent-1")
@@ -318,6 +392,7 @@ async def test_a_lost_ledger_halts_a_revision_with_the_agents_own_profile(
         halted = last_status(events)
         assert (halted.agent_id, halted.model) == ("agent-1", "muse-spark")
         assert halted.detail == "The ledger could not record a model call: the run was stopped."
+        assert halted.max_steps == 2 * LIMITS.max_steps and halted.step <= halted.max_steps
         assert any(e.type == "error" and e.payload.fatal for e in events)
         assert s.live.brake_reason() is not None
 

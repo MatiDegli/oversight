@@ -14,7 +14,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI
 
@@ -670,7 +670,7 @@ class LiveRun:
             try:
                 revision = await decision
             finally:
-                self._decisions.pop(task.agent_id, None)
+                self._forget(self._decisions, task.agent_id, decision)
             if revision is not None:
                 end = await run.revise(revision.comment, revision.note)
         except asyncio.CancelledError:
@@ -679,15 +679,24 @@ class LiveRun:
         except Exception as error:
             await self._run_failed(task, error)
         finally:
-            self._runs.pop(task.agent_id, None)
+            self._forget(self._runs, task.agent_id, asyncio.current_task())
             manager.run_ended(task.agent_id, end, steps=run.steps)
+
+    @staticmethod
+    def _forget(records: dict[str, Any], agent_id: str, mine: object) -> None:
+        """Drop the agent's record only if it is still `mine`. A Request changes taken while an
+        earlier `_revise` is ending (its decision is done, and it has not resumed) registers its
+        own, which the earlier one must leave: Stop and the shutdown find the run through it."""
+        if records.get(agent_id) is mine:
+            records.pop(agent_id)
 
     async def _halt_if_ledger_lost(
         self, task: AgentTask, agent: _Agent, run: AgentRun | None
     ) -> None:
         """A run that already sent its own `halted` (the time limit's) keeps that reason."""
         if task.agent_id in self._ledger_lost_agents and not (run and run.halted):
-            await self._halt_for_ledger(task, agent, run.steps if run else 0)
+            steps, budget = (run.steps, run.max_steps) if run else (0, task.limits.max_steps)
+            await self._halt_for_ledger(task, agent, steps, budget)
 
     async def _run_failed(self, task: AgentTask, error: Exception) -> None:
         await self._report(
@@ -698,9 +707,12 @@ class LiveRun:
             fatal=True,
         )
 
-    async def _halt_for_ledger(self, task: AgentTask, agent: _Agent, steps: int) -> None:
-        """A run stopped because the ledger was lost ends halted, as the card should say; a plain
-        cancel (a shutdown) says nothing. A store that cannot take it leaves a log line."""
+    async def _halt_for_ledger(
+        self, task: AgentTask, agent: _Agent, steps: int, max_steps: int
+    ) -> None:
+        """A run stopped because the ledger was lost ends halted, as the card should say, at the
+        step budget it had reached (a revised run's has grown); a plain cancel (a shutdown) says
+        nothing. A store that cannot take it leaves a log line."""
         status = AgentStatus(
             agent_id=task.agent_id,
             slot=task.slot,
@@ -709,7 +721,7 @@ class LiveRun:
             model=agent.profile.id,
             state="halted",
             step=steps,
-            max_steps=task.limits.max_steps,
+            max_steps=max_steps,
             detail="The ledger could not record a model call: the run was stopped.",
         )
         try:

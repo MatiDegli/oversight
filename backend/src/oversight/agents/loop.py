@@ -166,6 +166,11 @@ class AgentRun:
         return self._step
 
     @property
+    def max_steps(self) -> int:
+        """The step budget so far: `limits.max_steps`, and the same again for each revision."""
+        return self._max_steps
+
+    @property
     def halted(self) -> bool:
         """Whether the run has handed its own `halted` status to the publisher, which queues it
         before it first waits. A cancel after that leaves the event on its way, and a second
