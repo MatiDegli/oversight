@@ -282,6 +282,12 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     });
     await release(page, holds.edit);
     await engaged(page, holds.saved);
+    // Monaco virtualizes off-screen lines; navigate to the saved footer explicitly.
+    await review
+      .locator(".editor.modified :is(.native-edit-context, textarea.inputarea)")
+      .last()
+      .focus();
+    await page.keyboard.press("Control+End");
     await expect(review.locator(".editor.modified .view-lines")).toContainText(
       "# Reviewed by the developer.",
     );
