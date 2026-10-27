@@ -47,6 +47,8 @@ type State = Literal[
     "working", "ready", "unproposed", "deciding", "conflict", "closing", "closed", "broken"
 ]
 type Source = Literal["git", "tests", "graph", "server"]
+type By = Literal["agent", "user"]
+"""Who wrote a file version that a `change.updated` shows."""
 
 APPROVABLE: frozenset[State] = frozenset({"ready"})
 REJECTABLE: frozenset[State] = frozenset({"ready", "conflict", "unproposed", "broken"})
@@ -80,6 +82,11 @@ class _Change:
     state: State = "working"
     revision: int = 0
     head_commit: str | None = None
+    """The head of the last revision the store took."""
+    proposed_now: bool = False
+    """The current run (the first, or a revision's) proposed; `run_ended` reads it."""
+    summary: str | None = None
+    """The agent's note on the last revision the store took."""
     steps: int = 0
     merged: bool = False
     touched: set[str] = field(default_factory=lambda: set[str]())
@@ -156,7 +163,7 @@ class ChangeManager:
         self._pending: dict[AgentId, _Change] = {}
         """Changes whose close-out or cleanup is unfinished; the next decision or `open` runs them
         again first."""
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._tasks: set[asyncio.Task[Any]] = set()
         self._suspect = False
 
     @property
@@ -209,11 +216,26 @@ class ChangeManager:
             return False
         return True
 
-    def _spawn(self, work: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+    def _spawn[T](self, work: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
         task = asyncio.get_running_loop().create_task(work)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return task
+
+    async def _whole[T](self, work: Coroutine[Any, Any, T]) -> T:
+        """Run `work` as a tracked task and wait for its end through every cancel, then re-raise
+        the first cancel. Only for a publish and the bookkeeping that must match what the store
+        took, so a cancel never leaves one without the other."""
+        task = self._spawn(work)
+        cancelled = False
+        while not task.done():
+            try:
+                await asyncio.wait([task])
+            except asyncio.CancelledError:
+                cancelled = True
+        if cancelled:
+            raise asyncio.CancelledError
+        return task.result()
 
     # --- Opening a change ---------------------------------------------------------------------
 
@@ -308,7 +330,7 @@ class ChangeManager:
                 files, added, removed = files + 1, added + plus, removed + minus
         return files, added, removed
 
-    async def _send_file(self, rec: _Change, path: str) -> None:
+    async def _send_file(self, rec: _Change, path: str, author: By = "agent") -> None:
         original, modified = rec.base_files.get(path), rec.head_files.get(path)
         status = file_status(original, modified)
         if status is None:  # in neither version: nothing to show
@@ -320,7 +342,7 @@ class ChangeManager:
             ChangeUpdated(
                 change_id=rec.change_id,
                 agent_id=rec.agent_id,
-                author="agent",
+                author=author,
                 file=FileDiff(
                     path=path,
                     status=status,
@@ -349,51 +371,67 @@ class ChangeManager:
                 raise WrongState(f"{agent_id} has no change in progress")
             async with self._workspace.locks(agent_id=agent_id):
                 head_commit, files = await self._commit(rec)
-                await self._refresh(rec, set(files) | rec.touched)
-                for path in sorted(set(files) | rec.touched):
-                    modified = rec.head_files.get(path)
-                    if path not in rec.published or rec.published[path] != modified:
-                        await self._send_file(rec, path)
-                tests = await self._run_tests(rec)
-                limits = rec.task.limits
-                impact = change_cone(
-                    rec.graph,
-                    rec.head.graph,
-                    max_depth=limits.cone_max_depth,
-                    max_nodes=limits.cone_max_nodes,
-                )
-                stats = [
-                    FileStat(path=path, status=status, lines_added=plus, lines_removed=minus)
-                    for path, status in sorted(files.items())
-                    for plus, minus in [
-                        count_lines(rec.base_files.get(path), rec.head_files.get(path))
-                    ]
-                ]
-                await self._publish(
-                    ChangeProposed(
-                        change_id=rec.change_id,
-                        agent_id=agent_id,
-                        revision=rec.revision + 1,
-                        task=rec.task.task,
-                        summary=summary,
-                        base_commit=rec.base_commit,
-                        head_commit=head_commit,
-                        files=stats,
-                        lines_added=sum(s.lines_added for s in stats),
-                        lines_removed=sum(s.lines_removed for s in stats),
-                        graph=rec.graph,
-                        tests=tests,
-                        impact=impact,
-                    )
-                )
-                rec.revision += 1
-                rec.head_commit = head_commit
+                await self._proposal(rec, head_commit, files, "agent", summary)
             return True
         except Exception as error:
             source: Source = "git" if isinstance(error, WorkspaceError) else "server"
             change = rec.change_id if rec else agent_id
             await self._error(source, f"{change} could not be proposed: {error}", rec, fatal=True)
             return False
+
+    async def _proposal(
+        self,
+        rec: _Change,
+        head: str,
+        files: dict[str, FileStatus],
+        author: By,
+        summary: str | None,
+    ) -> None:
+        """Republish what differs from what the UI holds, test the worktree, take the cone on the
+        agent's version, then publish `change.proposed` (revision n + 1) and record it in one
+        `_whole` step. The caller holds the agent's lock and has committed `head`."""
+        paths = set(files) | rec.touched | rec.unpublished
+        await self._refresh(rec, paths)
+        for path in sorted(paths):
+            modified = rec.head_files.get(path)
+            fresh = path in rec.published and rec.published[path] == modified
+            if path in rec.unpublished or not fresh:
+                await self._send_file(rec, path, author)
+        tests = await self._run_tests(rec)
+        limits = rec.task.limits
+        impact = change_cone(
+            rec.graph,
+            rec.head.graph,
+            max_depth=limits.cone_max_depth,
+            max_nodes=limits.cone_max_nodes,
+        )
+        stats = [
+            FileStat(path=path, status=status, lines_added=plus, lines_removed=minus)
+            for path, status in sorted(files.items())
+            for plus, minus in [count_lines(rec.base_files.get(path), rec.head_files.get(path))]
+        ]
+        proposal = ChangeProposed(
+            change_id=rec.change_id,
+            agent_id=rec.agent_id,
+            revision=rec.revision + 1,
+            task=rec.task.task,
+            summary=summary,
+            base_commit=rec.base_commit,
+            head_commit=head,
+            files=stats,
+            lines_added=sum(s.lines_added for s in stats),
+            lines_removed=sum(s.lines_removed for s in stats),
+            graph=rec.graph,
+            tests=tests,
+            impact=impact,
+        )
+        await self._whole(self._record_proposal(rec, proposal))
+
+    async def _record_proposal(self, rec: _Change, proposal: ChangeProposed) -> None:
+        """R7: a run cancelled during this publish still finds the record matching the store."""
+        await self._publish(proposal)
+        rec.revision, rec.head_commit = proposal.revision, proposal.head_commit
+        rec.proposed_now, rec.summary = True, proposal.summary
 
     async def _commit(self, rec: _Change) -> tuple[str, dict[str, FileStatus]]:
         """Commit the worktree as the agent; HEAD, and the files that differ from the base."""
@@ -420,16 +458,19 @@ class ChangeManager:
             )
         return run.result
 
-    def run_ended(self, agent_id: AgentId, end: RunEnd | None) -> None:
-        """The run is over (`None`: it raised): `ready` if it was proposed, else `unproposed`."""
+    def run_ended(self, agent_id: AgentId, end: RunEnd | None, *, steps: int | None = None) -> None:
+        """The run is over (`end` is `None` when it raised or was cancelled): `ready` if this run
+        proposed, else `unproposed`. `steps`, the run's own count, wins over `end.steps`."""
         rec = self._agents.get(agent_id)
         if rec is None:
             raise ChangeNotFound(agent_id)
         if rec.state != "working":
             return
-        if end is not None:
+        if steps is not None:
+            rec.steps = steps
+        elif end is not None:
             rec.steps = end.steps
-        rec.state = "ready" if rec.head_commit is not None else "unproposed"
+        rec.state = "ready" if rec.proposed_now else "unproposed"
 
     # --- Decisions ----------------------------------------------------------------------------
 
@@ -446,7 +487,7 @@ class ChangeManager:
         rec.decision += 1
         return rec
 
-    def _decide(self, rec: _Change, work: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+    def _decide[T](self, rec: _Change, work: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
         """Run a decision in a tracked task. A decision that ends still `deciding`, such as a task
         cancelled before its first step, which runs none of its code, goes back to `fallback`
         through a done-callback, which runs before anyone awaiting the task resumes. The callback

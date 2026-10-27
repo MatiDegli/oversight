@@ -1,9 +1,11 @@
 """The proposal: a commit on the base, the tests on it, the cone on the change's version."""
 
-import pytest
-from changes_helpers import TWICE, VALUE, Harness, bounded
+import asyncio
 
-from oversight_contracts.events import ChangeProposed, ChangeUpdated
+import pytest
+from changes_helpers import TWICE, VALUE, Harness, bounded, queued_callbacks_ran
+
+from oversight_contracts.events import AgentStatus, ChangeProposed, ChangeResolved, ChangeUpdated
 
 pytestmark = pytest.mark.anyio
 
@@ -62,3 +64,27 @@ async def test_halted_run_proposes_too(h: Harness) -> None:
     assert proposal.summary is None
     await h.manager.approve("change-1", None)
     assert "change.resolved" in h.types()
+
+
+@bounded
+async def test_cancel_during_the_proposal_publish(h: Harness) -> None:
+    """R7: the store took revision 1, then the run was cancelled before the publish returned; the
+    record still matches the store, so the change is ready and approves as revision 1."""
+    await h.open(1)
+    assert await h.edit(1, "shop/mod.py", "return 1", "return 3")
+    h.hold = ChangeProposed
+    run = asyncio.create_task(h.manager.proposed("agent-1", "Done."))
+    await h.held.wait()
+    run.cancel()
+    await queued_callbacks_ran()
+    assert not run.done()  # it waits for the publish's end
+    h.release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await run
+    h.manager.run_ended("agent-1", None, steps=4)
+
+    [proposal] = h.payloads(ChangeProposed)
+    await h.manager.approve("change-1", None)
+    [resolved] = h.payloads(ChangeResolved)
+    assert (resolved.revision, resolved.merge) == (proposal.revision, "merged") == (1, "merged")
+    assert h.payloads(AgentStatus)[-1].step == 4
