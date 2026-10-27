@@ -15,12 +15,6 @@ function port(name: string, raw: string): number {
   }
   return value;
 }
-const backendPort = port("OVERSIGHT_PORT", process.env.OVERSIGHT_PORT ?? "8710");
-const vitePort = port("OVERSIGHT_VITE_PORT", process.env.OVERSIGHT_VITE_PORT || "5710");
-if (vitePort === backendPort) {
-  throw new Error("OVERSIGHT_VITE_PORT must differ from OVERSIGHT_PORT");
-}
-const backend = `http://127.0.0.1:${String(backendPort)}`;
 // `make shots` keeps Vite's cache under .shots/ through this variable, so it never shares state with
 // `make dev`. Without it, Vite's default (node_modules/.vite) applies.
 const cacheDir = process.env.OVERSIGHT_VITE_CACHE_DIR;
@@ -40,34 +34,51 @@ const apiPaths = [
   "/leads",
 ];
 
-export default defineConfig({
-  ...(cacheDir === undefined || cacheDir === "" ? {} : { cacheDir }),
-  plugins: [recordedReplayPlugin(), react(), tailwindcss()],
-  worker: { format: "es" },
-  resolve: {
-    alias: {
-      "@contracts": fileURLToPath(new URL("../contracts/generated/contracts.ts", import.meta.url)),
-    },
-  },
-  server: {
-    host: "127.0.0.1",
-    port: vitePort,
-    strictPort: true,
-    proxy: Object.fromEntries(apiPaths.map((path) => [path, { target: backend }])),
-  },
-  // `pnpm test` runs the unit project, which needs no browser, so make check and CI stay runnable
-  // without one. `pnpm test:browser` runs the tests that drive Monaco in Playwright's Chromium.
-  test: {
-    projects: [
-      {
-        extends: true,
-        test: {
-          name: "unit",
-          include: ["src/**/*.test.{ts,tsx}"],
-          exclude: ["src/**/*.browser.test.{ts,tsx}"],
-        },
+export default defineConfig(({ command }) => {
+  // A static build opens no listeners. Port validation belongs to development startup.
+  const backendPort = port(
+    "OVERSIGHT_PORT",
+    command === "serve" ? (process.env.OVERSIGHT_PORT ?? "8710") : "8710",
+  );
+  const vitePort = port(
+    "OVERSIGHT_VITE_PORT",
+    command === "serve" ? process.env.OVERSIGHT_VITE_PORT || "5710" : "5710",
+  );
+  if (vitePort === backendPort) {
+    throw new Error("OVERSIGHT_VITE_PORT must differ from OVERSIGHT_PORT");
+  }
+  const backend = `http://127.0.0.1:${String(backendPort)}`;
+  return {
+    ...(cacheDir === undefined || cacheDir === "" ? {} : { cacheDir }),
+    plugins: [recordedReplayPlugin(), react(), tailwindcss()],
+    worker: { format: "es" },
+    resolve: {
+      alias: {
+        "@contracts": fileURLToPath(
+          new URL("../contracts/generated/contracts.ts", import.meta.url),
+        ),
       },
-      { extends: true, test: { name: "browser", include: ["src/**/*.browser.test.{ts,tsx}"] } },
-    ],
-  },
+    },
+    server: {
+      host: "127.0.0.1",
+      port: vitePort,
+      strictPort: true,
+      proxy: Object.fromEntries(apiPaths.map((path) => [path, { target: backend }])),
+    },
+    // `pnpm test` runs the unit project, which needs no browser, so make check and CI stay runnable
+    // without one. `pnpm test:browser` runs the tests that drive Monaco in Playwright's Chromium.
+    test: {
+      projects: [
+        {
+          extends: true,
+          test: {
+            name: "unit",
+            include: ["src/**/*.test.{ts,tsx}"],
+            exclude: ["src/**/*.browser.test.{ts,tsx}"],
+          },
+        },
+        { extends: true, test: { name: "browser", include: ["src/**/*.browser.test.{ts,tsx}"] } },
+      ],
+    },
+  };
 });
