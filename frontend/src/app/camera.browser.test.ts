@@ -121,8 +121,9 @@ function report(page: Page, ids: string[]) {
         .filter(({ x, y }) => x < 0 || y < 0 || x > element.clientWidth || y > element.clientHeight)
         .map(({ id }) => id);
     return {
-      cutOff: outside(centers.filter(({ id }) => wanted.includes(id))),
-      centers: centers.filter(({ id }) => wanted.includes(id)),
+      // Hidden methods are drawn and revealed through their folded class row.
+      cutOff: wanted.filter((id) => outside(centers).includes(probe.representative(id))),
+      centers: centers.filter(({ id }) => wanted.some((node) => probe.representative(node) === id)),
       size: { width: element.clientWidth, height: element.clientHeight },
       leftInset: (() => {
         const card = document.querySelector('[aria-label="Possibly affected"]');
