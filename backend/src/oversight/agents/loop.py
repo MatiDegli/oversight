@@ -289,7 +289,7 @@ class AgentRun:
         except TimeoutError:
             detail = f"Ran past the time limit of {self._task.limits.max_wall_clock_s} s."
         except ModelAPIError as error:
-            detail = "The model API failed."
+            detail = f"The model API failed: {error}."
             await self._publish(
                 ErrorReport(
                     source="model_api",
