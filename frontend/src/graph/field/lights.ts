@@ -27,6 +27,8 @@ export interface FieldLight {
   weight: number;
   /** Breathes and sends rings: only the editing node of an agent at work, in watch and live diff. */
   pulses: boolean;
+  /** Rendering envelope during an eased transition; pure selectors leave this unset. */
+  pulseWeight?: number;
 }
 
 /** The weights the tables give, from the theme. */

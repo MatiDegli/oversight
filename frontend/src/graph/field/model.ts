@@ -23,6 +23,7 @@ export interface PlacedLight {
   color: Rgb;
   weight: number;
   pulses: boolean;
+  pulseWeight?: number;
 }
 
 /** How far a mode's light reaches: the near and far decay lengths in px, and the mode's gain. */
@@ -114,7 +115,15 @@ export function placeLights(
   return lights.flatMap((light) => {
     const box = boxes.get(light.id);
     return box
-      ? [{ box, color: parseHex(theme[light.source]), weight: light.weight, pulses: light.pulses }]
+      ? [
+          {
+            box,
+            color: parseHex(theme[light.source]),
+            weight: light.weight,
+            pulses: light.pulses,
+            pulseWeight: light.pulseWeight,
+          },
+        ]
       : [];
   });
 }
@@ -192,7 +201,7 @@ function reach(config: FieldConfig, amplitude: number): number {
 function amplitudeOf(config: FieldConfig, light: PlacedLight, time: number | null): number {
   const { motion, profile } = config;
   const breath = !light.pulses ? 1 : time === null ? motion.breathingMax : breathing(motion, time);
-  return light.weight * profile.gain * breath;
+  return light.weight * profile.gain * (1 + (breath - 1) * (light.pulseWeight ?? 1));
 }
 
 /** The box of pixels a light can touch: its glow around its box, and its ring around its center. */
@@ -266,7 +275,9 @@ function addLight(
       let intensity = distance <= glow ? amplitude * falloff(config, distance) : 0;
       if (ring) {
         const rx = ringX[col] ?? 0;
-        intensity += ringIntensity(config.motion, radius, Math.sqrt(rx * rx + ry * ry));
+        intensity +=
+          (light.pulseWeight ?? 1) *
+          ringIntensity(config.motion, radius, Math.sqrt(rx * rx + ry * ry));
       }
       if (intensity <= 0) continue;
       const k = row * cols + col;

@@ -315,6 +315,36 @@ it("gives up quietly when a draw fails: the graph stays and the ground is plain"
   });
 }, 30_000);
 
+it("falls back to plain ground after a real WebGL context loss", async () => {
+  await withPage({}, async (page) => {
+    await page.evaluate(() => {
+      const { field } = window.fieldTest.elements();
+      const gl = field.getContext("webgl2");
+      const extension = gl?.getExtension("WEBGL_lose_context");
+      if (!extension) throw new Error("No context-loss test extension");
+      extension.loseContext();
+    });
+    await browserExpect
+      .poll(() =>
+        page.evaluate(() => {
+          const { field } = window.fieldTest.elements();
+          return {
+            state: field.oversightField?.state(),
+            hidden: field.hidden,
+            animating: field.oversightField?.animating(),
+            lamp: field.oversightField?.lamp(0, 0),
+          };
+        }),
+      )
+      .toEqual({ state: "plain", hidden: true, animating: false, lamp: null });
+    expect(
+      await page.evaluate(
+        () => window.fieldTest.elements().graph.oversightGraph?.nodeCenters().length ?? 0,
+      ),
+    ).toBeGreaterThan(0);
+  });
+}, 30_000);
+
 it("moves with breathing and rings, and stops moving under reduced motion", async () => {
   // With motion, frames run and what the lamps show changes: a ring spreads from the node.
   await withPage({ reducedMotion: "no-preference" }, async (page) => {

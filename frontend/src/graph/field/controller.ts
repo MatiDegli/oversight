@@ -6,10 +6,11 @@ import { getActiveTheme } from "../../theme";
 
 import type { BoxSource } from "./boxSource";
 import { createLampField, fieldConfig, parseHex, placeLights } from "./model";
-import type { FieldConfig, FieldTheme, LampGrid } from "./model";
+import type { LampGrid } from "./model";
 import { fieldClock, shouldAnimate } from "./motion";
 import { createLampRenderer } from "./renderer";
 import type { LampLook, LampRenderer } from "./renderer";
+import { FieldTransition } from "./transition";
 import { sameLights } from "./lights";
 import type { FieldLight, FieldMode } from "./lights";
 
@@ -67,176 +68,206 @@ export interface FieldController {
   dispose(): void;
 }
 
-type Theme = FieldTheme & LookTheme;
-
+/** All rendering and lifecycle operations are bounded methods; the public factory only mounts. */
 export function createFieldController(canvas: FieldHost, source: BoxSource): FieldController {
-  const lamps = createLampField();
-  // The dev override holds the clock still, so captures of the motion repeat.
-  const frozen =
+  return new FieldRuntime(canvas, source);
+}
+
+class FieldRuntime implements FieldController {
+  private readonly lamps = createLampField();
+  private readonly frozen =
     import.meta.env.DEV && typeof location !== "undefined" ? fieldClock(location.search) : null;
-  const query =
+  private readonly query =
     typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
-  let renderer: LampRenderer | null = createLampRenderer(canvas);
-  let input: FieldInput = { mode: "watch", lights: [] };
-  let reducedMotion = query?.matches ?? false;
-  let grid: LampGrid | null = null;
-  let cached: { theme: Theme; mode: FieldMode; config: FieldConfig; look: LampLook } | null = null;
-  let frame = 0;
-  let draws = 0;
-  // A draw made on a Cytoscape render stands for this frame's, so the frame does not draw again.
-  let fresh = false;
+  private renderer: LampRenderer | null;
+  private input: FieldInput = { mode: "watch", lights: [] };
+  private reducedMotion = this.query?.matches ?? false;
+  private grid: LampGrid | null = null;
+  private frame = 0;
+  private draws = 0;
+  private fresh = false;
+  private theme = getActiveTheme();
+  private look = lampLook(this.theme);
+  private readonly transition = new FieldTransition({
+    lights: [],
+    config: fieldConfig(this.theme, "watch"),
+  });
+  private readonly unsubscribe: () => void;
+  private readonly observer: MutationObserver;
 
-  // Frames are for lamps that get drawn: with no renderer there is nothing to animate.
-  const animating = () =>
-    renderer !== null &&
-    !renderer.lost() &&
-    shouldAnimate({
-      reducedMotion,
-      hidden: typeof document !== "undefined" && document.hidden,
-      frozen: frozen !== null,
-      lights: input.lights,
+  constructor(
+    private readonly canvas: FieldHost,
+    private readonly source: BoxSource,
+  ) {
+    this.renderer = createLampRenderer(canvas);
+    canvas.hidden = this.renderer === null;
+    this.unsubscribe = source.subscribe(this.onGraph);
+    this.observer = new MutationObserver(this.onTheme);
+    this.observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
     });
-
-  function settings() {
-    const theme: Theme = getActiveTheme();
-    if (!cached || cached.theme !== theme || cached.mode !== input.mode) {
-      cached = {
-        theme,
-        mode: input.mode,
-        config: fieldConfig(theme, input.mode),
-        look: lampLook(theme),
-      };
-    }
-    return { theme, config: cached.config, look: cached.look };
+    this.query?.addEventListener("change", this.onMotion);
+    document.addEventListener("visibilitychange", this.onVisibility);
+    window.addEventListener("resize", this.redraw);
+    canvas.addEventListener("webglcontextlost", this.onLost);
+    canvas.oversightField = this.probe();
+    this.redraw();
+    this.schedule();
   }
 
-  // A field that fails must not take the graph with it: Cytoscape calls this from its own render,
-  // so the error is caught here, the renderer is dropped and the ground stays plain.
-  function stop(error: unknown) {
-    console.error("The dot field stopped drawing", error);
-    renderer?.dispose();
-    renderer = null;
-    grid = null;
-    schedule();
+  private animating() {
+    return (
+      this.renderer !== null &&
+      !this.renderer.lost() &&
+      !document.hidden &&
+      !this.reducedMotion &&
+      (this.transition.active(performance.now()) ||
+        shouldAnimate({
+          reducedMotion: false,
+          hidden: false,
+          frozen: this.frozen !== null,
+          lights: this.input.lights,
+        }))
+    );
   }
 
-  function draw(now: number) {
-    if (!renderer || renderer.lost()) return;
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
+  private stop() {
+    this.renderer?.dispose();
+    this.renderer = null;
+    this.grid = null;
+    // Hide even a preserved/partially drawn buffer: the graph must show plain ground.
+    this.canvas.hidden = true;
+    this.schedule();
+  }
+
+  private draw(now: number) {
+    if (this.renderer?.lost()) this.stop();
+    if (!this.renderer) return;
+    const { clientWidth: width, clientHeight: height } = this.canvas;
     if (width === 0 || height === 0) return;
     try {
-      const { theme, config, look } = settings();
-      renderer.resize(width, height, window.devicePixelRatio || 1);
+      const { lights, config } = this.transition.sample(now);
+      this.renderer.resize(width, height, window.devicePixelRatio || 1);
       const placed = placeLights(
-        theme,
-        input.lights,
-        source.boxes(input.lights.map((light) => light.id)),
+        this.theme,
+        lights,
+        this.source.boxes(lights.map((light) => light.id)),
       );
-      grid = lamps(config, width, height, placed, reducedMotion ? null : (frozen ?? now / 1000));
-      renderer.draw(grid, look);
-      draws += 1;
+      this.grid = this.lamps(
+        config,
+        width,
+        height,
+        placed,
+        this.reducedMotion ? null : (this.frozen ?? now / 1000),
+      );
+      this.renderer.draw(this.grid, this.look);
+      this.draws += 1;
     } catch (error) {
-      stop(error);
+      console.error("The dot field stopped drawing", error);
+      this.stop();
     }
   }
 
-  function schedule() {
-    if (animating()) {
-      if (frame === 0) frame = requestAnimationFrame(tick);
-    } else if (frame !== 0) {
-      cancelAnimationFrame(frame);
-      frame = 0;
+  private schedule() {
+    if (this.animating()) {
+      if (this.frame === 0) this.frame = requestAnimationFrame(this.tick);
+    } else if (this.frame !== 0) {
+      cancelAnimationFrame(this.frame);
+      this.frame = 0;
     }
   }
 
-  function tick(now: number) {
-    frame = 0;
-    if (!fresh) draw(now);
-    fresh = false;
-    schedule();
+  private tick = (now: number) => {
+    this.frame = 0;
+    if (!this.fresh || !this.animating()) this.draw(now);
+    this.fresh = false;
+    this.schedule();
+  };
+
+  redraw = () => {
+    this.draw(performance.now());
+  };
+  private onGraph = () => {
+    this.redraw();
+    this.fresh = true;
+  };
+  private onMotion = () => {
+    this.reducedMotion = this.query?.matches ?? false;
+    if (this.reducedMotion) this.transition.finish();
+    this.schedule();
+    this.redraw();
+  };
+  private onVisibility = () => {
+    this.redraw();
+    this.schedule();
+  };
+  private onTheme = () => {
+    this.theme = getActiveTheme();
+    this.look = lampLook(this.theme);
+    this.setTarget();
+    this.redraw();
+    this.schedule();
+  };
+  private onLost = () => {
+    this.stop();
+  };
+
+  private setTarget() {
+    this.transition.set(
+      this.input,
+      fieldConfig(this.theme, this.input.mode),
+      performance.now(),
+      this.theme["transition-duration"],
+      this.theme["transition-easing"],
+      this.reducedMotion,
+    );
   }
 
-  const redraw = () => {
-    draw(performance.now());
-  };
-  const onGraph = () => {
-    redraw();
-    fresh = true;
-  };
-  const onMotion = () => {
-    reducedMotion = query?.matches ?? false;
-    schedule();
-    redraw();
-  };
-  const onVisibility = () => {
-    schedule();
-    redraw();
-  };
-  const onLost = (event: Event) => {
-    event.preventDefault();
-  };
-  const onRestored = () => {
-    renderer = createLampRenderer(canvas);
-    schedule();
-    redraw();
-  };
+  update(next: FieldInput) {
+    if (next.mode === this.input.mode && sameLights(next.lights, this.input.lights)) return;
+    this.input = next;
+    this.setTarget();
+    this.redraw();
+    this.schedule();
+  }
 
-  const unsubscribe = source.subscribe(onGraph);
-  const theme = new MutationObserver(redraw);
-  theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  query?.addEventListener("change", onMotion);
-  document.addEventListener("visibilitychange", onVisibility);
-  window.addEventListener("resize", redraw);
-  canvas.addEventListener("webglcontextlost", onLost);
-  canvas.addEventListener("webglcontextrestored", onRestored);
+  private lamp(x: number, y: number): ReturnType<FieldProbe["lamp"]> {
+    if (!this.grid) return null;
+    const col = Math.floor(x / this.look.cell);
+    const row = Math.floor(y / this.look.cell);
+    if (col < 0 || row < 0 || col >= this.grid.cols || row >= this.grid.rows) return null;
+    const at = (row * this.grid.cols + col) * 4;
+    const top = this.transition.sample(performance.now()).config.levels - 1;
+    return {
+      level: Math.round(((this.grid.data[at + 3] ?? 0) / 255) * top),
+      color: [this.grid.data[at] ?? 0, this.grid.data[at + 1] ?? 0, this.grid.data[at + 2] ?? 0],
+    };
+  }
 
-  canvas.oversightField = {
-    state: () => (renderer && !renderer.lost() ? "webgl" : "plain"),
-    animating: () => frame !== 0,
-    draws: () => draws,
-    lamp: (x, y) => {
-      if (!grid) return null;
-      const { cell } = settings().look;
-      const col = Math.floor(x / cell);
-      const row = Math.floor(y / cell);
-      if (col < 0 || row < 0 || col >= grid.cols || row >= grid.rows) return null;
-      const at = (row * grid.cols + col) * 4;
-      const top = settings().config.levels - 1;
-      return {
-        level: Math.round(((grid.data[at + 3] ?? 0) / 255) * top),
-        color: [grid.data[at] ?? 0, grid.data[at + 1] ?? 0, grid.data[at + 2] ?? 0],
-      };
-    },
-    pixel: (x, y) => {
-      redraw();
-      return renderer?.pixel(x, y) ?? null;
-    },
-  };
+  private probe(): FieldProbe {
+    return {
+      state: () => (this.renderer && !this.renderer.lost() ? "webgl" : "plain"),
+      animating: () => this.frame !== 0,
+      draws: () => this.draws,
+      lamp: (x, y) => this.lamp(x, y),
+      pixel: (x, y) => {
+        this.redraw();
+        return this.renderer?.pixel(x, y) ?? null;
+      },
+    };
+  }
 
-  redraw();
-  schedule();
-
-  return {
-    update(next) {
-      if (next.mode === input.mode && sameLights(next.lights, input.lights)) return;
-      input = next;
-      schedule();
-      redraw();
-    },
-    redraw,
-    dispose() {
-      if (frame !== 0) cancelAnimationFrame(frame);
-      frame = 0;
-      unsubscribe();
-      theme.disconnect();
-      query?.removeEventListener("change", onMotion);
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("resize", redraw);
-      canvas.removeEventListener("webglcontextlost", onLost);
-      canvas.removeEventListener("webglcontextrestored", onRestored);
-      renderer?.dispose();
-      delete canvas.oversightField;
-    },
-  };
+  dispose() {
+    if (this.frame !== 0) cancelAnimationFrame(this.frame);
+    this.frame = 0;
+    this.unsubscribe();
+    this.observer.disconnect();
+    this.query?.removeEventListener("change", this.onMotion);
+    document.removeEventListener("visibilitychange", this.onVisibility);
+    window.removeEventListener("resize", this.redraw);
+    this.canvas.removeEventListener("webglcontextlost", this.onLost);
+    this.renderer?.dispose();
+    delete this.canvas.oversightField;
+  }
 }
