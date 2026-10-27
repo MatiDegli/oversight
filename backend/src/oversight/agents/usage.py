@@ -4,6 +4,7 @@ ledger file that keeps the spend across runs."""
 import asyncio
 import contextlib
 import json
+import logging
 import math
 import os
 import tempfile
@@ -12,6 +13,8 @@ from pathlib import Path
 from typing import Literal, cast
 
 from oversight.agents.client import Usage
+
+_log = logging.getLogger(__name__)
 
 type Brake = Literal["ok", "warn_50", "warn_80", "blocked"]
 
@@ -49,11 +52,15 @@ class UsageLedger:
         *,
         warn_at: tuple[float, float] = (0.5, 0.8),
         block_at: float = 0.9,
+        braked: bool = True,
     ) -> None:
         self.budget_usd = budget_usd
         self.spent_usd = spent_usd
         self._warn_at = warn_at
         self._block_at = block_at
+        self._braked = braked
+        """`False` for a profile the server never brakes (the fake model): its brake reads `ok`
+        whatever the budget, since nothing is refused."""
 
     def record(self, cost_usd: float | None) -> float:
         if cost_usd is not None:
@@ -62,6 +69,8 @@ class UsageLedger:
 
     @property
     def brake(self) -> Brake:
+        if not self._braked:
+            return "ok"
         if self.budget_usd <= 0:
             return "blocked"
         share = self.spent_usd / self.budget_usd
@@ -174,7 +183,9 @@ class LedgerFile:
     async def record(self, cost_usd: float | None, unknown: UnknownUsage) -> LedgerState:
         """One call, written before it returns: a known cost adds to `spent_usd`, an unknown one
         (`None`) appends `unknown`. A failed write raises and leaves `state` as `None`, so the
-        caller refuses further metered starts: the spend on disk is behind."""
+        caller refuses further metered starts: the spend on disk is behind. The write runs to its
+        end before the lock is released, also when this call is cancelled: a thread cannot be
+        stopped, and a late `os.replace` must not land on a file someone else has written since."""
         async with self._lock:
             state = self.state
             if state is None:
@@ -184,6 +195,26 @@ class LedgerFile:
             else:
                 new = LedgerState(state.spent_usd + cost_usd, state.unknown)
             self.state = None
-            await asyncio.to_thread(self.write, new)
+            write = asyncio.ensure_future(asyncio.to_thread(self.write, new))
+            try:
+                await asyncio.shield(write)
+            except asyncio.CancelledError:
+                await self._drain(write, new)
+                raise
             self.state = new
             return new
+
+    async def _drain(self, write: "asyncio.Future[None]", new: LedgerState) -> None:
+        """Wait for a write in flight however often this task is cancelled again. `state` is `new`
+        only if the write succeeded; otherwise it stays `None`, and the next metered start is
+        refused."""
+        while not write.done():
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.wait({write})
+        if write.cancelled():
+            return
+        error = write.exception()
+        if error is None:
+            self.state = new
+        else:
+            _log.error("a cancelled ledger write failed: %s", error.__class__.__name__)

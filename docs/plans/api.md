@@ -73,7 +73,17 @@ manager and a `Starter` protocol `api` defines and `app` implements. Errors: `Ap
   `UsageLedger` starts from it, so ticks count across restarts.
 - **Each tick** of a Meta run is persisted by the publish wrapper before it passes on: a known
   `cost_usd` adds to `spent_usd`; null (usage not reported) appends the run to `unknown`. A hard
-  kill between a reply and its write loses at most that call, inside the 10% margin.
+  kill between a reply and its write loses at most that call, inside the 10% margin. A write, once
+  started, runs to its end before the lock is released, also when its caller is cancelled (the
+  thread cannot be stopped; a late `os.replace` must not land on a file settled since).
+- **A tick the ledger cannot record fails closed.** If `fsync` or `os.replace` fails, the tick is
+  not published as recorded: a fatal `error` (source `server`, the agent and change) names the
+  ledger and says to settle with Meta's console total before the next run; the agent's run is
+  cancelled as a shutdown cancels it (`run_ended`, the change rejected the usual way, which frees
+  the slot); and every Meta start in this process answers `spend_brake` until a restart.
+  **Residual risk**: the file stays at its last good state, so after a restart the brake reads
+  that file and the lost call is counted only by `ledger settle --spent-usd X`, from Meta's
+  console. The fake profile ticks `ok` (nothing is refused), whatever the budget.
 - **At start**, a Meta profile is blocked if unconfigured, the file unreadable, `unknown`
   non-empty, or `spent_usd > 0.9 x budget` (above US$135 of 150). From 50% (US$75) and 80%
   (US$120) it starts and `usage.tick` carries `warn_50` / `warn_80`. A running agent is not cut.

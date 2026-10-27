@@ -88,6 +88,8 @@ SLOT: Literal["A"] = "A"
 PROFILES = {MUSE_SPARK.id: MUSE_SPARK, FAKE_MODEL.id: FAKE_MODEL}
 MAIN_SUSPECT = "main's state is unknown: reject the change and restart the server"
 MAIN_LEFT = "Main was left mid-merge or dirty; the next start's reset rebuilds it."
+SETTLE = "settle with Meta's console total before the next run"
+SETTLE_HOW = "stop the server, then run: uv run python -m oversight ledger settle --spent-usd X"
 
 type ClientFactory = Callable[[ModelProfile], ModelClient]
 
@@ -161,6 +163,10 @@ class LiveRun:
         self._manager: ChangeManager | None = None
         self._venv: asyncio.Task[None] | None = None
         self._runs: dict[str, asyncio.Task[None]] = {}
+        self._change_ids: dict[str, str] = {}
+        self._ledger_lost = False
+        """Set once a model call could not be written to the ledger: the file is behind the real
+        spend by that call. Every Meta start is refused until the process restarts."""
         self._slot: str | None = None
         """Who holds slot A: "starting" during a start, then the agent's id until its change is
         rejected or merged."""
@@ -179,7 +185,9 @@ class LiveRun:
             ledger_error = str(error)
         spent = self.ledger.state.spent_usd if self.ledger.state is not None else 0.0
         budget = settings.budget_usd or 0.0
-        self._usage = UsageLedger(budget, spent, warn_at=WARN_AT, block_at=BLOCK_AT)
+        self._usage = UsageLedger(
+            budget, spent, warn_at=WARN_AT, block_at=BLOCK_AT, braked=self._metered
+        )
         await self.store.start()
         await self.store.publish(
             RunStarted(
@@ -306,17 +314,25 @@ class LiveRun:
         return stored
 
     async def _persist(self, tick: UsageTick) -> None:
+        """Fails closed. A tick the ledger could not take is not published as recorded: a fatal
+        `error` goes out instead, every Meta start is refused until a restart, and the agent's run
+        stops as a shutdown stops it (cancelled, so `_run` ends it and its change is rejected the
+        usual way). After a restart the brake reads the last good file: the lost call is only
+        recovered by `ledger settle`."""
         entry = UnknownUsage(self.run_id, tick.agent_id, tick.model, format_ts(datetime.now(UTC)))
         try:
             await self.ledger.record(tick.cost_usd, entry)
         except (LedgerError, OSError) as error:
-            # The tick still goes out; new metered starts are refused, since `state` is None.
+            self._ledger_lost = True
             await self._report(
                 "server",
-                f"The ledger could not record a model call: {_describe(error)}. "
-                "Muse Spark starts are refused until it is settled.",
+                f"The ledger (.runtime/ledger.json) could not record a model call: "
+                f"{_describe(error)}. This run is stopped; {SETTLE} ({SETTLE_HOW}).",
                 agent_id=tick.agent_id,
+                change_id=self._change_ids.get(tick.agent_id),
+                fatal=True,
             )
+            raise asyncio.CancelledError from error
 
     # --- Commands -----------------------------------------------------------------------------
 
@@ -341,6 +357,8 @@ class LiveRun:
                 "the budget or prices are not configured: set OVERSIGHT_BUDGET_USD, "
                 "MUSE_SPARK_INPUT_USD_PER_M and MUSE_SPARK_OUTPUT_USD_PER_M in .env"
             )
+        if self._ledger_lost:
+            return f"a model call could not be recorded in the ledger: {SETTLE} ({SETTLE_HOW})"
         state = self.ledger.state
         if state is None:
             return "the ledger (.runtime/ledger.json) cannot be read or written; settle it"
@@ -412,6 +430,7 @@ class LiveRun:
             raise
         # No await from `open` to here: the run task exists as soon as the change does.
         self._slot = task.agent_id
+        self._change_ids[task.agent_id] = task.change_id
         self._runs[task.agent_id] = asyncio.create_task(
             self._run(manager, task, client, tree), name=f"run-{task.agent_id}"
         )
