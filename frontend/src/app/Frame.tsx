@@ -18,7 +18,7 @@ import { TopBar } from "./TopBar";
 import { fieldInput } from "./fieldScope";
 import { graphScope } from "./graphScope";
 import { changeNodeIds, panelOpen } from "./view";
-import type { View } from "./view";
+import type { View, ViewAction } from "./view";
 import { useFunctionTask } from "./useFunctionTask";
 
 type AgentState = AgentStatus["state"];
@@ -76,6 +76,10 @@ export interface FrameProps {
   replayOf?: string;
   /** Overlay lines on the graph, such as the replay label and a transport failure. */
   notice?: ReactNode;
+  replayLabel?: string;
+  connection?: "connecting" | "connected" | "lost";
+  onRetry?: () => void;
+  onTabAction?: (action: ViewAction) => void;
 }
 
 function LeftRail({ watching, onWatch }: { watching: boolean; onWatch: () => void }) {
