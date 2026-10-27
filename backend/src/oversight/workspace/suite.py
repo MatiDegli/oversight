@@ -98,7 +98,7 @@ def _take_report(path: Path) -> list[str] | None:
         return None
     except SizeLimitError:
         path.unlink(missing_ok=True)
-        return None
+        raise
     path.unlink(missing_ok=True)
     return lines
 
@@ -133,11 +133,18 @@ async def run_suite(
         "-p",
         "oversight_report",
     ]
+    report_error: str | None = None
     try:
         process = await spawn(argv, cwd=tree_root, timeout_s=timeout_s, env=env)
     finally:
-        lines = await offload(lambda: _take_report(report))
+        try:
+            lines = await offload(lambda: _take_report(report))
+        except SizeLimitError as error:
+            lines = None
+            report_error = str(error)
     tally = parse_report(lines or [])
+    if report_error is not None:
+        tally.failed_tests.append(report_error)
     result = summarize(
         tally,
         returncode=process.returncode,
@@ -148,6 +155,8 @@ async def run_suite(
     text = process.stdout
     if process.stderr.strip():
         text += "\n" + process.stderr
+    if report_error is not None:
+        text += "\n" + report_error
     return SuiteRun(result=result, output=redact(text)[-OUTPUT_TAIL:])
 
 

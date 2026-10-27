@@ -405,6 +405,9 @@ Level 3 wiring starts now. Contracts 1.4.0 delivery A was approved by the mainta
     Add forbidden (HTTP 403) within this same 1.4.0 delivery for requests whose Host or Origin
     is not on the allow list, supporting the planned DNS rebinding defense. The API guard is
     a separate front that supplies enforcement.
+16. **Size refusal code** — approved by the maintainer, 2026-10-27 (M6).
+    `too_large` (HTTP 413) rides in 1.4.0. Body and file limits are now enforced by the
+    size-limits front, after API guard admission and before routing or side effects.
 
 The tuple gate compares all changed array constraints with the byte-exact 1.3.0 baseline.
 It discovers fields generically and checks generated TypeScript, including local references and
@@ -433,4 +436,10 @@ routes. Pure ASGI preserves unbuffered SSE. A future terminal consumes this same
 same-authority checks for unsafe HTTP and every WebSocket, authentication and its stricter IPv4
 listener requirement. See guard decisions G1–G3; their defaults and decline outcomes apply.
 
-too_large (413) rides in 1.4.0; limits come with the API guard front (maintainer, M6, 2026-10-27)
+## Shared byte limits — 2026-10-27
+
+`backend/src/oversight/limits.py` holds byte ceilings and bounded read helpers shared by the
+independent backend modules, keeping import boundaries intact. HTTP bodies and event lines have
+separate 1 MiB limits; regular files use 256 KiB, while agent ranged reads allow up to 64 MiB.
+Event line limits exclude the trailing newline and apply to both import and export. Ledger
+writes are compact and refuse growth beyond their read cap before replacing the previous file.

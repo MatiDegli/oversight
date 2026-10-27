@@ -5,7 +5,7 @@ import json
 import pytest
 
 from oversight.agents.tools import MAX_READ_CHARS, Toolbox
-from oversight.limits import MAX_FILE_BYTES
+from oversight.limits import MAX_FILE_BYTES, MAX_RANGE_FILE_BYTES
 
 pytestmark = pytest.mark.anyio
 
@@ -46,3 +46,18 @@ async def test_large_file_is_readable_by_range_and_huge_line_is_cut(small_tree) 
         ),
     )
     assert ranged.ok and "59999| short\n60000| short" in ranged.content
+
+
+async def test_absolute_range_ceiling_returns_a_plain_tool_error(small_tree) -> None:
+    workspace, tree = small_tree
+    target = tree.root / "oversized.txt"
+    with target.open("wb") as handle:
+        handle.truncate(MAX_RANGE_FILE_BYTES + 1)
+    tools = Toolbox(workspace, tree, test_timeout_s=60)
+    result = await tools.call(
+        "read_file", json.dumps({"path": target.name, "start_line": 1, "end_line": 1})
+    )
+    assert not result.ok
+    assert result.content == (
+        f"Error: oversized.txt exceeds the {MAX_RANGE_FILE_BYTES}-byte size limit"
+    )
