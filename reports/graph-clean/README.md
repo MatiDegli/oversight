@@ -17,8 +17,9 @@ frames and 11 imports, so those totals are not counts of visible rows or drawn c
 
 `make shots` writes metrics beside each PNG. Baseline metrics were measured from an archive of
 `97e739a` with the same fonts, viewport and proposed fixture, using the same read-only probe counters.
-The three side-by-side PNGs are external artifacts in the requested research report directory;
-reference pixels and reference source are not included in this repository.
+The three side-by-side PNGs are external artifacts in `/tmp/graph-clean/`. The requested research
+report directory is mounted read-only in this clone; the coordinator can copy the pairs there.
+Reference pixels and reference source are not included in this repository.
 
 ## Differences that remain
 
