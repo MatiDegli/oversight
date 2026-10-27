@@ -26,7 +26,8 @@ def added_cases(rec: ChangeRecord, revision: int) -> tuple[tuple[str, ...], tupl
 
     Static ids also cover an added plain test that collection omitted. Changes to
     parameter definitions require a clean report from the original base; without
-    it their identity is ambiguous and is reported, never guessed.
+    it their identity is ambiguous and is reported, never guessed. Fixture hooks
+    may affect other files, so unresolved parameter sources suppress all probes.
     """
     current = [
         run
@@ -43,6 +44,7 @@ def added_cases(rec: ChangeRecord, revision: int) -> tuple[tuple[str, ...], tupl
     known = {c.test_id for run in baseline for c in run.cases}
     ids = {test_id for run in current for test_id in added_ids(rec, run)}
     problems: list[str] = []
+    ambiguous_parameters = False
     for path, text in sorted(rec.head_files.items()):
         if not is_test_file(path) or text == rec.base_files.get(path):
             continue
@@ -54,6 +56,7 @@ def added_cases(rec: ChangeRecord, revision: int) -> tuple[tuple[str, ...], tupl
             continue
         if not baseline and _parameter_sources_changed(before, after):
             problems.append(f"added tests: base parameter ids unavailable for {path}")
+            ambiguous_parameters = True
         if any("#" in qual for qual in after.tests):
             problems.append(f"added tests: duplicate definitions in {path}")
             ids.difference_update(
@@ -83,7 +86,7 @@ def added_cases(rec: ChangeRecord, revision: int) -> tuple[tuple[str, ...], tupl
                     ast.dump(d) for d in old.decorator_list
                 ]:
                     problems.append(f"added tests: base parameter ids unavailable for {prefix}")
-    return tuple(sorted(ids)), tuple(problems)
+    return (() if ambiguous_parameters else tuple(sorted(ids))), tuple(problems)
 
 
 def _parameter_sources_changed(before: Source, after: Source) -> bool:
@@ -133,8 +136,8 @@ def _probe_paths(rec: ChangeRecord, ids: tuple[str, ...]) -> tuple[str, ...]:
             {test_id.split("::", 1)[0] for test_id in ids}
             | {
                 path
-                for path in rec.head_files
-                if is_test_file(path) and rec.base_files.get(path) != rec.head_files[path]
+                for path in rec.base_files.keys() | rec.head_files.keys()
+                if is_test_file(path) and rec.base_files.get(path) != rec.head_files.get(path)
             }
         )
     )
@@ -149,7 +152,7 @@ async def probe_added_tests(
     outside the process budget, as for ordinary suite evidence. The caller holds
     main/agent locks; interruption keeps partial evidence and runs cleanup.
     """
-    ids, diagnostics = added_cases(rec, revision)
+    ids, diagnostics = await asyncio.to_thread(added_cases, rec, revision)
     if not ids:
         return (), diagnostics
     paths = _probe_paths(rec, ids)

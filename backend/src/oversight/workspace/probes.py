@@ -37,7 +37,7 @@ async def base_probe_checkout(
     paths: tuple[str, ...],
     timeout_s: float,
 ) -> AsyncGenerator[Tree]:
-    """Copy only test/support paths from head onto base, never implementation edits.
+    """Overlay test/support paths from head, including deletions, onto base.
 
     Even a partially successful worktree add is cleaned in finally. Cleanup uses
     two five-second Git deadlines and a symlink-safe filesystem fallback. Cleanup
@@ -52,7 +52,17 @@ async def base_probe_checkout(
         )
         for path in paths:
             tree.resolve(path)  # Validate every target, including parents, before checkout.
-        await workspace.git_ok(tree, "checkout", head, "--", *paths, timeout_s=timeout_s)
+        await workspace.git_ok(
+            tree,
+            "restore",
+            "--source",
+            head,
+            "--staged",
+            "--worktree",
+            "--",
+            *paths,
+            timeout_s=timeout_s,
+        )
         yield tree
     finally:
         try:

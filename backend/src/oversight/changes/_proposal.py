@@ -274,7 +274,7 @@ async def record_probe_facts(
             raise asyncio.CancelledError
         probes, problems = await probe_added_tests(ctx, rec, head=head, revision=revision)
     except asyncio.CancelledError:
-        ids, diagnostics = added_cases(rec, revision)
+        ids, diagnostics = await asyncio.to_thread(added_cases, rec, revision)
         probes = ()
         problems = (*diagnostics, "added tests: probes interrupted") if ids or diagnostics else ()
         cancelled = True
