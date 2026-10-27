@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from decision_helpers import observed_body
 from live_helpers import DEADLINE_S, Scripts, is_type, live_server, live_settings, script_json
 
 from oversight_contracts.commands import AgentCreated, GraphResponse
@@ -68,7 +69,9 @@ async def test_two_approved_runs_and_a_rejected_one(tmp_path: Path) -> None:
             )
             proposed = [e for e in s.events() if e.type == "change.proposed"][-1]
             assert proposed.payload.tests.outcome == "passed"
-            decided = await s.client.post(f"/changes/{created.change_id}/{decision}")
+            decided = await s.client.post(
+                f"/changes/{created.change_id}/{decision}", json=observed_body(s, created.change_id)
+            )
             assert decided.status_code == 202
             await s.until(is_type("agent.status", agent_id=created.agent_id, state="done"))
             events = s.events()

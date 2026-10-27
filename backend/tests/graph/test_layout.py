@@ -169,7 +169,7 @@ async def test_positions_survive_a_delta_through_the_servers_fold(tmp_path: Path
     change = graph_delta(first, second, "user_edit", COMMIT)
     assert change is not None
     assert change.nodes_removed == ["b:g"] and [n.id for n in change.nodes_added] == ["b:other"]
-    async with EventStore(tmp_path / "run.sqlite", "run-1") as store:
+    async with EventStore(tmp_path / "run.sqlite", "run-1", mode="replay") as store:
         await store.publish(first)
         await store.publish(change)
         seq, folded = store.graph()
