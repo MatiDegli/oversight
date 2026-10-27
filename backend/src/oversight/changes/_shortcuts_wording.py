@@ -81,6 +81,18 @@ def _same_constraints(before: list[tuple[int, str]], after: list[tuple[int, str]
     )
 
 
+def _direct_match(before: str, after: str) -> bool:
+    """Every old check needs its own evidence in one surviving message.
+
+    A check without numbers may be part of a split message, but a numeric
+    constraint must survive in that message, not across a component's links.
+    """
+    before, after = before.lower(), after.lower()
+    numbers = Counter(re.findall(r"\b\d+(?:\.\d+)?\b", before))
+    words = set(re.findall(r"\w+", before)) & set(re.findall(r"\w+", after))
+    return len(words) >= 2 and numbers <= Counter(re.findall(r"\b\d+(?:\.\d+)?\b", after))
+
+
 def cancel_reworded(
     before: list[ast.Assert | ast.Call], after: list[ast.Assert | ast.Call]
 ) -> tuple[list[ast.Assert | ast.Call], list[ast.Assert | ast.Call]]:
@@ -89,6 +101,11 @@ def cancel_reworded(
     matched_new: set[int] = set()
     for key in sorted(left.keys() & right.keys()):
         for old_entries, new_entries in _components(left[key], right[key]):
+            old_entries = [
+                entry
+                for entry in old_entries
+                if any(_direct_match(entry[1], text) for _, text in new_entries)
+            ]
             if _same_constraints(old_entries, new_entries):
                 matched_old.update(i for i, _ in old_entries)
                 matched_new.update(i for i, _ in new_entries)

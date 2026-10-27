@@ -15,6 +15,7 @@ Unknown runtime approx values cannot prove a tolerance wider. Historical Python 
 syntax is reported as a parse error. This module is not wired into the manager.
 """
 
+import ast
 from collections.abc import Iterable
 
 from oversight.changes._shortcuts_asserts import detect_assertions
@@ -98,6 +99,7 @@ def _compare_file(
     old_sources: dict[str, Source],
     matches: dict[TestRef, TestRef],
     inputs: list[TestCase],
+    old_compares: set[str],
 ) -> list[Finding]:
     findings: list[Finding] = []
     if is_test_file(path):
@@ -119,7 +121,7 @@ def _compare_file(
         findings.extend(
             detect_literal_branches(
                 path,
-                old.tree if old else None,
+                old_compares,
                 new.tree,
                 inputs,
             )
@@ -178,9 +180,17 @@ def detect_shortcuts(changes: Iterable[Change]) -> list[Finding]:
         if is_test_file(path)
         for case in collect_test_cases(source)
     ]
+    # A helper can move into an existing file without moving its whole source.
+    # Literal comparisons already present anywhere in the baseline stay old.
+    old_compares = {
+        ast.dump(node)
+        for source in old_sources.values()
+        for node in ast.walk(source.tree)
+        if isinstance(node, ast.Compare)
+    }
     for path, new in new_sources.items():
         old = old_sources.get(moved.get(path, path))
         if old is not None and old.text == new.text:
             continue
-        findings.extend(_compare_file(path, old, new, old_sources, matches, inputs))
+        findings.extend(_compare_file(path, old, new, old_sources, matches, inputs, old_compares))
     return _combine_findings(findings)

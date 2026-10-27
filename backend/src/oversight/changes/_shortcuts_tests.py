@@ -301,6 +301,14 @@ def detect_parametrize_expected(
 ) -> list[Finding]:
     old_map, new_map = _collect_parametrize(old), _collect_parametrize(new)
     owners = dict(pairs) if pairs is not None else None
+    if owners is not None:
+        for before, after in pairs or []:
+            # Class decorators supply parameters to every method. Follow all
+            # enclosing owners when a matched method is renamed or moved.
+            while "." in before and "." in after:
+                before, after = before.rsplit(".", 1)[0], after.rsplit(".", 1)[0]
+                if before in old.classes and after in new.classes:
+                    owners[before] = after
     findings: list[Finding] = []
     for key, old_entries in old_map.items():
         owner, names = key

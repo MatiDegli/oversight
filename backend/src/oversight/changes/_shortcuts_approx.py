@@ -41,6 +41,12 @@ def _effective(call: ast.Call) -> tuple[float, ...] | None:
             *((kw.arg, kw.value) for kw in call.keywords if kw.arg in {"rel", "abs"}),
         ]
     )
+    # Explicit None has the same meaning as an omitted tolerance in pytest.
+    options = {
+        key: value
+        for key, value in options.items()
+        if not (isinstance(value, ast.Constant) and value.value is None)
+    }
     # pytest uses only the absolute tolerance when abs is explicitly supplied
     # and rel is omitted. Its default relative tolerance no longer applies.
     rel, absolute = (0.0 if "abs" in options and "rel" not in options else 1e-6), 1e-12

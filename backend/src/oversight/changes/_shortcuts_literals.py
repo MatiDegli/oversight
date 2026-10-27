@@ -158,21 +158,18 @@ def _literals_in_expr(node: ast.AST) -> list[tuple[str, object]]:
 
 def detect_literal_branches(
     path: str,
-    old_tree: ast.Module | None,
+    old_compares: set[str],
     new_tree: ast.Module,
     test_cases: list[TestCase],
 ) -> list[Finding]:
     if not test_cases:
         return []
-    old_dumps: set[str] = set()
-    if old_tree is not None:
-        old_dumps = {ast.dump(n) for n in ast.walk(old_tree) if isinstance(n, ast.Compare)}
     findings: list[Finding] = []
     for node in ast.walk(new_tree):
         if not isinstance(node, (ast.If, ast.While, ast.IfExp)):
             continue
         for sub in ast.walk(node.test):
-            if not isinstance(sub, ast.Compare) or ast.dump(sub) in old_dumps:
+            if not isinstance(sub, ast.Compare) or ast.dump(sub) in old_compares:
                 continue
             matched: tuple[str, object] | None = None
             for key in _literals_in_expr(sub):

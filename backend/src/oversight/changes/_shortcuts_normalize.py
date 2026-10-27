@@ -108,11 +108,18 @@ def align_local_names(before: FuncNode, after: FuncNode) -> None:
         for key, name in left.items()
         if key in right and (right[key] == name or right[key] not in existing)
     }
-    captured = {
-        right[key]
-        for key, name in left.items()
-        if key in right and right[key] != name and right[key] in existing
-    }
+    # Store contexts cover annotated/walrus assignments and destructured
+    # for/with targets too. Capture matters even if their values don't match
+    # the narrow plain-assignment patterns used for safe name alignment.
+    old_stores, new_stores = (
+        Counter(
+            n.id
+            for n in walk_local(func)
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+        )
+        for func in (before, after)
+    )
+    captured = set(new_stores - old_stores) & existing
     # Nested scope bindings can shadow a local; don't rewrite across them.
     if any(
         isinstance(
