@@ -199,7 +199,9 @@ def test_the_api_paths_are_the_frontend_proxys_and_the_routers() -> None:
     config = (REPO_ROOT / "frontend" / "vite.config.ts").read_text(encoding="utf-8")
     match = re.search(r"const apiPaths = \[(.*?)\];", config, re.DOTALL)
     assert match is not None, "vite.config.ts no longer declares apiPaths"
-    proxied = {path.strip().strip("\"'").lstrip("/") for path in match.group(1).split(",") if path}
+    proxied = {
+        path.strip().strip("\"'").lstrip("/") for path in match.group(1).split(",") if path.strip()
+    }
     assert proxied == API_PATHS
 
     store = EventStore(Path("unused.sqlite"), "run-20261027-140312")
