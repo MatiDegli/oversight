@@ -133,6 +133,8 @@ A level is done when its demo runs three times in a row from a clean start, with
 
 ## Out of scope for these 9 days
 A persistent incremental engine, more languages, runtime traces, embeddings, a sandbox, undo, and a worktree pool.
+One bounded exception to undo, in level 3: a one-click Revert of a merge made by rules, only while it applies
+without conflict; otherwise the change goes to "needs you".
 
 ## Environment
 Develop in WSL, on the Linux filesystem. The UI is opened and recorded in the Windows browser, which shares localhost with WSL.
