@@ -181,6 +181,8 @@ function panelFrame(page: Page) {
       },
       focus: view.nodeBounds("node.pending"),
       cone: view.nodeBounds("node.cone"),
+      graph: view.nodeBounds(),
+      modules: view.nodeBounds(".module"),
     };
   });
 }
@@ -563,5 +565,61 @@ it("the impact cone component keeps keyboard focus on a revealed row and never t
     await browserExpect(other).toBeFocused();
     await page.evaluate(() => window.graphTest.mountCone(false));
     await browserExpect(other).toBeFocused();
+  });
+}, 30_000);
+
+it("offers a reveal row for a caller under the bottom overlays, then clears it on reveal", async () => {
+  await withPage("reduce", async (page) => {
+    const id = await page.evaluate(() => window.graphTest.caller);
+    await page.evaluate(() => window.graphTest.review());
+    const row = page.getByRole("region", { name: "Possibly affected", exact: true }).getByTitle(id);
+    await row.click();
+    await browserExpect(row).not.toContainText("Out of view");
+    const before = await report(page, []);
+    const shift = await page.evaluate((id) => {
+      const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+      const probe = host?.oversightGraph;
+      const node = probe?.nodeBounds().find((node) => node.id === probe.representative(id));
+      if (!host || !probe || !node) throw new Error("Missing caller");
+      const box = host.getBoundingClientRect();
+      return {
+        box,
+        dx: host.clientWidth - 40 - (node.x2 * probe.zoom() + probe.pan().x),
+        dy: host.clientHeight - 20 - (node.y2 * probe.zoom() + probe.pan().y),
+      };
+    }, id);
+    const empty = await emptyCanvasPoint(page);
+    await page.mouse.move(shift.box.x + empty.x, shift.box.y + empty.y);
+    await page.mouse.down();
+    await page.mouse.move(shift.box.x + empty.x + shift.dx, shift.box.y + empty.y + shift.dy, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    const occluded = await page.evaluate((id) => {
+      const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+      const probe = host?.oversightGraph;
+      const clear = document.querySelector("[data-graph-clear-area]")?.getBoundingClientRect();
+      const node = probe?.nodeBounds().find((node) => node.id === probe.representative(id));
+      if (!host || !probe || !node || !clear) throw new Error("Missing graph geometry");
+      return {
+        x1: node.x1 * probe.zoom() + probe.pan().x,
+        x2: node.x2 * probe.zoom() + probe.pan().x,
+        y1: node.y1 * probe.zoom() + probe.pan().y,
+        y2: node.y2 * probe.zoom() + probe.pan().y,
+        bottom: clear.bottom - host.getBoundingClientRect().top,
+        width: host.clientWidth,
+        height: host.clientHeight,
+      };
+    }, id);
+    expect(occluded.x1).toBeGreaterThan(0);
+    expect(occluded.x2).toBeLessThan(occluded.width);
+    expect(occluded.y1).toBeGreaterThan(0);
+    expect(occluded.y2).toBeLessThan(occluded.height);
+    expect(occluded.y2).toBeGreaterThan(occluded.bottom);
+    await browserExpect(row).toContainText("Out of view");
+    await browserExpect(row).toHaveRole("button");
+    await row.click();
+    await browserExpect(row).not.toContainText("Out of view");
+    expect((await report(page, [])).positions).toEqual(before.positions);
   });
 }, 30_000);

@@ -296,6 +296,8 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
     ...result,
     zoom: cy.zoom(),
     pan: cy.pan(),
+    // The live viewport report replaces the opening target's stale framed set too.
+    framed: new Set(),
     outOfView: new Set(["billing:changed", "billing:fee"]),
   });
   onFramed.mockClear();

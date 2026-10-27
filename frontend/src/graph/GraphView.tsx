@@ -95,6 +95,7 @@ function reportFraming(
   }
   const graphBox = host.getBoundingClientRect();
   const card = props.coneCardRef?.current?.getBoundingClientRect();
+  const clear = props.startAreaRef?.current?.getBoundingClientRect();
   const ids = [...(props.frameIds ?? []), ...props.cone.entries.map((entry) => entry.node_id)];
   const shown = ids.map((id) => visibleId(cy, id));
   const nodes = cy.nodes().filter((node) => shown.includes(node.id()));
@@ -104,7 +105,12 @@ function reportFraming(
       ...node.boundingBox({ includeLabels: true, includeOverlays: false }),
     })),
     framing,
-    { x1: 0, y1: 0, x2: cy.width(), y2: cy.height() },
+    {
+      x1: 0,
+      y1: 0,
+      x2: cy.width(),
+      y2: clear ? Math.min(cy.height(), clear.bottom - graphBox.top) : cy.height(),
+    },
     card
       ? {
           x1: card.left - graphBox.left,
@@ -116,6 +122,7 @@ function reportFraming(
   );
   props.onFramed?.({
     ...framing,
+    framed: new Set(shown.filter((id) => visible.has(id))),
     outOfView: new Set(ids.filter((id) => !visible.has(visibleId(cy, id)))),
   });
 }
@@ -386,7 +393,7 @@ export function GraphView({
             zoomBy(cy, 1 / ZOOM_STEP, prefersReducedMotion());
           },
           fit: () => {
-            frameCamera(cy, [], prefersReducedMotion());
+            frameCamera(cy, [], prefersReducedMotion(), panelGeometry(host, latest.current));
           },
           reveal: (nodeId) => {
             const target = revealNode(cy, nodeId, prefersReducedMotion());

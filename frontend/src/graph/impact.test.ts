@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyEvent, createInitialState } from "../state";
 import { themes } from "../theme";
 import { frameCamera } from "./camera";
+import { changeZoom } from "./changeFrame";
 import { graphElements } from "./elements";
 import { graphStyles } from "./styles";
 import { updateGraph } from "./updateGraph";
@@ -70,7 +71,7 @@ describe("review's impact graph", () => {
     const camera = frameCamera(cy, [changed], true, {
       coneIds: cone.entries.map((entry) => entry.node_id),
     });
-    expect(camera?.zoom).toBeGreaterThanOrEqual(0.4);
+    expect(camera?.zoom).toBeGreaterThanOrEqual(changeZoom().min);
     expect(camera?.zoom).toBeLessThanOrEqual(1);
     expect(camera?.framed.has(changed)).toBe(true);
     expect(camera?.framed.has("shop.pricing:price_breaks")).toBe(true);

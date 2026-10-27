@@ -32,6 +32,7 @@ interface Limits {
   leftInset?: number;
   /** The overlay's actual rendered box; independent of the column reserved for fitting. */
   occlusion?: Box;
+  area?: Box;
 }
 
 export interface FrameNode extends Box {
@@ -55,7 +56,7 @@ export interface Framing extends Camera {
 
 const EPSILON = 1e-7;
 
-/** Full boxes only: the fit area has padding; the visible area does not. */
+/** Full boxes only: visibility excludes overlays, without the fit area's side padding. */
 export function nodesInViewport(
   nodes: readonly FrameNode[],
   camera: Camera,
@@ -92,8 +93,8 @@ export function frameBox(
   limits: Limits,
   cone: readonly FrameNode[] = [],
 ): Framing | null {
-  const visible = { x1: 0, y1: 0, x2: size.width, y2: size.height };
-  const area = {
+  const visible = { x1: 0, y1: 0, x2: size.width, y2: limits.area?.y2 ?? size.height };
+  const area = limits.area ?? {
     x1: (limits.leftInset ?? 0) + limits.padding,
     y1: limits.padding,
     x2: size.width - limits.padding,
@@ -347,7 +348,7 @@ export function revealNode(cy: Core, id: string, reduceMotion: boolean): Camera 
 }
 
 /** Fit all nodes for the explicit Fit control, within the person's navigation range. */
-function fitCamera(cy: Core): Framing | null {
+function fitCamera(cy: Core, area?: Box, occlusion?: Box): Framing | null {
   return frameBox(
     cy.nodes().map((node) => ({
       id: node.id(),
@@ -355,7 +356,7 @@ function fitCamera(cy: Core): Framing | null {
     })),
     { width: cy.width(), height: cy.height() },
     Infinity,
-    { padding: PADDING, minZoom: cy.minZoom(), maxZoom: cy.maxZoom() },
+    { padding: PADDING, minZoom: cy.minZoom(), maxZoom: cy.maxZoom(), area, occlusion },
   );
 }
 
@@ -412,9 +413,14 @@ export function frameCamera(
             y2: cy.height() - PADDING,
           },
         })
-      : fitCamera(cy));
+      : fitCamera(cy, area, occlusion));
   const onScreen = target
-    ? nodesInViewport(nodes, target, { x1: 0, y1: 0, x2: cy.width(), y2: cy.height() }, occlusion)
+    ? nodesInViewport(
+        nodes,
+        target,
+        { x1: 0, y1: 0, x2: cy.width(), y2: area?.y2 ?? cy.height() },
+        occlusion,
+      )
     : new Set<string>();
   const camera = target
     ? {

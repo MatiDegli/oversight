@@ -289,6 +289,28 @@ describe("frameBox", () => {
 });
 
 describe("frameCamera", () => {
+  it("fits every node inside the area above bottom overlays and beside the cone card", () => {
+    const cy = narrowedGraph(904);
+    const area = { x1: 344, y1: 40, x2: 864, y2: 520 };
+    const camera = frameCamera(cy, [], true, { area });
+    if (!camera) throw new Error("Missing fit camera");
+    const nodes = cy.nodes().map((node) => ({ id: node.id(), ...node.boundingBox() }));
+    expect(nodesInViewport(nodes, camera, area)).toEqual(new Set(nodes.map((node) => node.id)));
+    expect(camera.outOfView.size).toBe(0);
+  });
+
+  it("marks callers crossing the bottom clear-area boundary as out of view", () => {
+    const cy = narrowedGraph(904);
+    const camera = frameCamera(cy, ["a"], true, {
+      coneIds: ["b", "c"],
+      area: { x1: 40, y1: 40, x2: 864, y2: 520 },
+      restoreCamera: { zoom: 1, pan: { x: 20, y: 390 } },
+    });
+    // b ends above the boundary; c crosses it but remains inside the full 600px canvas.
+    expect(camera?.framed).toEqual(new Set(["a", "b"]));
+    expect(camera?.outOfView).toEqual(new Set(["c"]));
+  });
+
   it("restores the exact saved watch camera after review, including a person's pan and zoom", () => {
     const cy = narrowedGraph(1600);
     const watch = { zoom: 1.017, pan: { x: -17, y: 52 } };

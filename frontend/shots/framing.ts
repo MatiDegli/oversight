@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import type { NodeBounds } from "../src/graph";
+import { assertCenteredFrame } from "./framePosition.ts";
 
 type Box = Pick<NodeBounds, "x1" | "y1" | "x2" | "y2">;
 interface Frame {
@@ -13,6 +14,8 @@ interface Frame {
   area?: Box;
   focus: NodeBounds[];
   cone: NodeBounds[];
+  graph: NodeBounds[];
+  modules: NodeBounds[];
   outOfView?: string[];
 }
 
@@ -47,6 +50,10 @@ export function assertReadableFrame(frame: Frame): void {
   assert(targets.length > 0, "no nodes to frame");
   const floor = 11 / Math.min(frame.labelSizes.name, frame.labelSizes.state);
   assert(frame.zoom >= floor - 1e-6, "labels must render at least 11 CSS px");
+  assert(
+    !frame.focus.length || fit(frame.focus) >= floor - 1e-7,
+    "changes do not fit at the legibility floor",
+  );
   if (fit(targets) < floor - 1e-7)
     targets = [...frame.focus, ...frame.cone.filter((n) => (n.distance ?? 1) === 1)];
   const partial = fit(targets) < floor - 1e-7;
@@ -61,11 +68,15 @@ export function assertReadableFrame(frame: Frame): void {
     node.y1 * frame.zoom + frame.pan.y >= bounds.y1 - 1e-6 &&
     node.y2 * frame.zoom + frame.pan.y <= bounds.y2 + 1e-6;
   if (partial) targets = nearestTargets(frame, fit, floor);
-  if (targets.length && fit(targets) >= floor - 1e-7)
-    assert(
-      targets.every((node) => inside(node, area)),
-      "target outside the clear area",
-    );
+  assert(
+    targets.every((node) => inside(node, area)),
+    "target outside the clear area",
+  );
+  assertCenteredFrame(frame, targets, area);
+  assertVisibility(frame, inside);
+}
+
+function assertVisibility(frame: Frame, inside: (node: NodeBounds, bounds: Box) => boolean) {
   if (frame.outOfView) {
     const card = frame.card;
     const visible = (node: NodeBounds) =>
@@ -73,7 +84,7 @@ export function assertReadableFrame(frame: Frame): void {
         x1: 0,
         y1: 0,
         x2: frame.size.width,
-        y2: frame.size.height,
+        y2: frame.area?.y2 ?? frame.size.height,
       }) &&
       (!card ||
         node.x2 * frame.zoom + frame.pan.x <= card.x1 + 1e-6 ||

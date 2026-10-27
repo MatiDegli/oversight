@@ -12,6 +12,8 @@ const frame = {
   size: { width: 600, height: 400 },
   focus: [changed],
   cone: [near],
+  graph: [{ id: "graph", x1: -1000, y1: -1000, x2: 6000, y2: 6000 }],
+  modules: [],
 };
 
 void test("both panels must frame the change and cone; live has no review card or rows", () => {
@@ -60,7 +62,7 @@ void test("shots accepts the legibility floor when no distance 1 member fits", (
   const fallback = {
     ...frame,
     zoom: 11 / 16,
-    pan: { x: 250, y: 160 },
+    pan: { x: 214.0625, y: 131.25 },
     cone: [far],
     outOfView: [far.id],
   };
@@ -88,4 +90,77 @@ void test("shots checks the clear area and the card's actual occlusion separatel
   assert.throws(() => {
     assertReadableFrame({ ...fallback, outOfView: [far.id] });
   }, /actual visibility/);
+});
+
+void test("shots rejects changes that cannot fit at the legibility floor", () => {
+  assert.throws(() => {
+    assertReadableFrame({
+      ...frame,
+      zoom: 11 / 16,
+      focus: [{ ...changed, x2: 1500 }],
+      cone: [],
+    });
+  }, /changes do not fit/);
+});
+
+void test("shots rejects an off-center camera even when every target is clear", () => {
+  assert.throws(() => {
+    assertReadableFrame({ ...frame, pan: { x: 100, y: 35 } });
+  }, /center/);
+});
+
+void test("shots centers within graph bounds, including graphs smaller than the clear area", () => {
+  assertReadableFrame({ ...frame, graph: [changed, near] });
+  const origin = { id: "origin", x1: 0, y1: 0, x2: 50, y2: 50 };
+  const bounded = {
+    ...frame,
+    graph: [{ ...origin, id: "graph", x2: 6000, y2: 6000 }],
+    focus: [origin],
+    cone: [],
+    pan: { x: 80, y: 80 },
+  };
+  assertReadableFrame(bounded);
+  assert.throws(() => {
+    assertReadableFrame({ ...bounded, pan: { x: 275, y: 175 } });
+  }, /center/);
+});
+
+void test("shots prefers the nearest uncut module view over a centered cut", () => {
+  const caller = { id: "caller", x1: 500, y1: 400, x2: 700, y2: 450 };
+  const modules = [
+    { id: "one", x1: 400, y1: 300, x2: 800, y2: 800 },
+    { id: "two", x1: 900, y1: 300, x2: 1200, y2: 800 },
+  ];
+  const uncut = {
+    ...frame,
+    size: { width: 680, height: 800 },
+    focus: [caller],
+    cone: [],
+    modules,
+    graph: [{ id: "graph", x1: 0, y1: 0, x2: 2400, y2: 2000 }],
+    pan: { x: -220, y: -40 },
+  };
+  assertReadableFrame(uncut);
+  assert.throws(() => {
+    assertReadableFrame({ ...uncut, pan: { x: -260, y: -25 } });
+  }, /uncut/);
+  assert.throws(() => {
+    assertReadableFrame({ ...uncut, pan: { x: -220, y: -50 } });
+  }, /center/);
+});
+
+void test("shots marks a caller behind bottom overlays even inside the full viewport", () => {
+  const below = { id: "bottom", x1: 150, x2: 200, y1: 290, y2: 330, distance: 2 };
+  const far = { ...near, id: "far", x1: 5000, x2: 5050, distance: 2 };
+  const bottom = {
+    ...frame,
+    area: { x1: 40, y1: 40, x2: 560, y2: 320 },
+    pan: { x: 75, y: 15 },
+    cone: [near, below, far],
+    outOfView: [far.id],
+  };
+  assert.throws(() => {
+    assertReadableFrame(bottom);
+  }, /actual visibility/);
+  assertReadableFrame({ ...bottom, outOfView: [below.id, far.id] });
 });

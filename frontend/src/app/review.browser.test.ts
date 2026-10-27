@@ -79,6 +79,8 @@ function camera(page: Page, id: string) {
       })(),
       focus: view.nodeBounds().filter((node) => node.id === view.representative(wanted)),
       cone: view.nodeBounds("node.cone"),
+      graph: view.nodeBounds(),
+      modules: view.nodeBounds(".module"),
     };
   }, id);
 }

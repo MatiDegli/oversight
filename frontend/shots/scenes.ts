@@ -120,6 +120,8 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
             size: { width: host.clientWidth, height: host.clientHeight },
             focus: view.nodeBounds("node.pending"),
             cone: view.nodeBounds("node.cone"),
+            graph: view.nodeBounds(),
+            modules: view.nodeBounds(".module"),
           }
         : null;
     },
