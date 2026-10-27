@@ -165,8 +165,7 @@ Its stage split (2026-10-27) keeps the same signatures, tasks and event ordering
   Reject, Stop and main checks. Its assignable compatibility properties delegate to the owners;
   `request_changes` continues resolving `_request_changes` when called.
 
-The move manifest and AST fidelity check are described in
-[`_split.md`](backend/src/oversight/changes/_split.md); the residual file/revision inventory is in
+The stage map, historical AST fidelity method and residual file/revision inventory are in
 [the change plan](docs/plans/changes.md#1-facade-and-callers). The original logger name is retained.
 Existing tests and contracts are unchanged. `_policy`, `_zones` and `_beforeafter` remain unwired.
 Enforced by `private-changes`, `layers`, `model-gate`, `web-at-the-edge` and the forbidden

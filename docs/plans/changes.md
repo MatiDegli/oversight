@@ -34,8 +34,15 @@ starting agents stays in front 16.
 `_versions.py` and `_diff.py` retain their existing responsibilities. `_policy.py`, `_zones.py`
 and `_beforeafter.py` remain unwired. Helpers never import `_manager`, even under `TYPE_CHECKING`;
 `changes-no-facade-backedge` enforces this alongside the existing import contracts.
-The full move/rename table and repeatable AST check are in
-[`_split.md`](../../backend/src/oversight/changes/_split.md). Existing tests are unchanged.
+
+The extraction has four stages: state/support; proposal; approval/merge/recovery; delivery.
+At each branch tip, the AST fidelity check compared all 85 original operations and the four
+records against `fa58329`, normalizing only declared owner paths, signatures, calls and docstring
+indentation. It preserved callbacks, locks, awaits and exception boundaries, rejected unknown
+`self`/`ctx` accesses, and rejected 3/3 seeded mutations: a removed await, swapped lock sites and
+a widened exception handler. The checker and move/rename manifest live in the history of
+`refactor/cm-split-1`. The AST comparison excluded constructors, forwarding wrappers,
+compatibility properties, imports and port construction. Existing tests are unchanged.
 
 The facade stores only one context reference; its assignable `_suspect`, `_agents`, `_main_graph`
 and `snapshot` properties delegate to the owners. `main_suspect` reads the shared state.

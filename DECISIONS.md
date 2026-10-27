@@ -345,5 +345,4 @@ Ours wins in every case below.
   and `_restore_save` remain on the facade. Create-files must be redone over it later. The facade
   remains over 500 lines to keep the residual file and revision transactions within this agreed
   scope; no function exceeds 80 lines. Two unsuccessful fidelity/review repair rounds stop the
-  sequence for a coordinator decision. Integration still requires the independent Sonnet review;
-  preparing branches does not approve or merge them.
+  sequence for a coordinator decision.
