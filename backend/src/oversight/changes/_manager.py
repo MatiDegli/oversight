@@ -8,7 +8,9 @@ main's state cannot be read. `closing` becomes `closed` once its resolution, del
 all sent; until then the change is pending, keeps its worktree until the resolution is out, and the
 next decision or `open` sends the rest. Request changes takes `ready` or `conflict` back to
 `working` and discards nothing; from `conflict` it first merges main into the agent's branch, so
-the agent redoes its change on the new base. Every git call is `Workspace.git`, async with a
+the agent redoes its change on the new base. In `ready`, the person's save in review commits to the
+agent's worktree and re-proposes; Approve merges only the revision it was clicked on, with the
+worktree at that revision's head. Every git call is `Workspace.git`, async with a
 timeout; decisions hold main's lock, then the agent's, throughout. Once a change enters `broken`,
 `main_suspect` stays true until the process restarts; `check_main` reads main's state, and `aclose`
 drains the close-outs before the store closes.
@@ -142,6 +144,8 @@ class _Change:
     sent. The change stays `deciding` until then, so nothing is decided while it is settled."""
     decision: int = 0
     """Counts the decisions taken; only the latest one's task may end `deciding`."""
+    taken: int = 0
+    """The revision Approve was clicked on (R1): a later one is reviewed before any merge."""
 
     @property
     def agent_id(self) -> AgentId:
@@ -476,13 +480,17 @@ class ChangeManager:
         rec.revision, rec.head_commit = proposal.revision, proposal.head_commit
         rec.proposed_now, rec.summary = True, proposal.summary
 
-    async def _commit(self, rec: _Change) -> tuple[str, dict[str, FileStatus]]:
-        """Commit the worktree as the agent; HEAD, and the files that differ from the base."""
+    async def _commit(self, rec: _Change, by: By = "agent") -> tuple[str, dict[str, FileStatus]]:
+        """Commit the worktree as the agent, or as the user for edits in review; HEAD, and the
+        files that differ from the base."""
         tree = rec.tree
         await self._git(tree, "add", "-A")
         if (await self._git(tree, "status", "--porcelain")).strip():
-            message = f"{rec.change_id} ({rec.agent_id})"
-            await self._git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
+            if by == "agent":
+                message, author = f"{rec.change_id} ({rec.agent_id})", rec.agent_id
+            else:
+                message, author = f"{rec.change_id}: edited in review", "user"
+            await self._git(tree, "commit", "-q", "-m", message, commit_as=author)
         head = (await self._git(tree, "rev-parse", "HEAD")).strip()
         names = await self._git(
             tree, "diff", "--name-status", "--no-renames", "-z", rec.base_commit, head
@@ -514,6 +522,80 @@ class ChangeManager:
         elif end is not None:
             rec.steps = end.steps
         rec.state = "ready" if rec.proposed_now else "unproposed"
+
+    # --- The person's edits in review ---------------------------------------------------------
+
+    async def save_for_review(
+        self, agent_id: AgentId, path: str, content: str, base_hash: str
+    ) -> str:
+        """The person's save on the new side in review: write `path` in the agent's worktree,
+        commit it as the user and re-propose (R6), so Approve never merges an untested edit; the
+        file's new hash. Only from `ready`, checked again under the agent's lock, which the save
+        holds throughout (`WrongState`); `StaleFile` when the file is not the one `base_hash` names.
+        R9: with nothing to commit and HEAD still the last proposal's, nothing is sent. A save cut
+        short after its write is re-proposed by the next Approve (R1)."""
+        rec = self._agents.get(agent_id)
+        if rec is None:
+            raise ChangeNotFound(agent_id)
+        self._check_editable(rec)
+        async with self._workspace.locks(agent_id=agent_id):
+            self._check_editable(rec)  # a decision may have taken it while the save waited
+            saved = await rec.tree.write_text(path, content, expected_hash=base_hash)
+            rec.touched.add(path)
+            head, files = await self._commit(rec, "user")
+            if head != rec.head_commit:
+                await self._proposal(rec, head, files, "user", rec.summary)
+        return saved
+
+    @staticmethod
+    def _check_editable(rec: _Change) -> None:
+        if rec.state != "ready":
+            raise WrongState(f"{rec.change_id} is {rec.state}; a save in review needs ready")
+
+    async def _as_clicked(self, rec: _Change) -> bool:
+        """R1: merge only the revision Approve was clicked on, with the worktree exactly at its
+        head. A save proposed after the click is left for review; one cut short, whose write or
+        commit landed without its proposal, is re-proposed from what the worktree holds, leftovers
+        committed as the user. Either way an `error` names the revision to review and nothing
+        merges: main is untouched, so the decision's end puts the change back to `ready`. The
+        caller holds both locks."""
+        if rec.revision != rec.taken:
+            await self._error(
+                "server",
+                f"Revision {rec.revision} of {rec.change_id} arrived after you clicked; "
+                "review it and approve again.",
+                rec,
+                fatal=False,
+            )
+            return False
+        tree = rec.tree
+        try:
+            head = (await self._git(tree, "rev-parse", "HEAD")).strip()
+            if (
+                head == rec.head_commit
+                and not (await self._git(tree, "status", "--porcelain")).strip()
+            ):
+                return True
+            head, files = await self._commit(rec, "user")
+            await self._proposal(rec, head, files, "user", rec.summary)
+        except Exception as error:
+            source: Source = "git" if isinstance(error, WorkspaceError) else "server"
+            await self._error(
+                source,
+                f"Approving {rec.change_id} merged nothing: its worktree could not be checked or "
+                f"re-proposed ({error}); approve again or reject.",
+                rec,
+                fatal=False,
+            )
+            return False
+        await self._error(
+            "server",
+            f"Revision {rec.revision} of {rec.change_id} holds edits that were not proposed when "
+            "you clicked; review it and approve again.",
+            rec,
+            fatal=False,
+        )
+        return False
 
     # --- Decisions ----------------------------------------------------------------------------
 
@@ -555,6 +637,7 @@ class ChangeManager:
 
     def approve(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
         rec = self._take(change_id, APPROVABLE, "approve")
+        rec.taken = rec.revision
         return self._decide(rec, self._approve(rec, comment))
 
     def reject(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
@@ -624,6 +707,8 @@ class ChangeManager:
             # merge's delta starts from, and must find its own delta still there: wait for it.
             for other in list(self._pending.values()):
                 await self._drain(other)
+            if not await self._as_clicked(rec):
+                return
             pre: str | None = None
             try:
                 pre = (await self._git(self._workspace.main, "rev-parse", "HEAD")).strip()
@@ -652,7 +737,11 @@ class ChangeManager:
                 except Exception as error:
                     await self._settle_move(rec, move, error)
                     return None
-        return await self._whole(self._requested(rec, comment, note))
+            return await self._whole(self._requested(rec, comment, note))
+        # From `ready`: a save in review holds the agent's lock until its revision is proposed, so
+        # waiting for the lock makes the request name that revision and precede the revision run.
+        async with self._workspace.locks(agent_id=rec.agent_id):
+            return await self._whole(self._requested(rec, comment, note))
 
     async def _move_base(self, rec: _Change, move: _Move) -> str:
         """Merge main's HEAD into the agent's branch, committing as the agent; unmerged paths are

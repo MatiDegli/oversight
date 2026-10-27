@@ -194,6 +194,11 @@ class Harness:
     `held` set meanwhile, as a slow store's would."""
     held: asyncio.Event = field(default_factory=asyncio.Event)
     release: asyncio.Event = field(default_factory=asyncio.Event)
+    gate: type[BaseModel] | None = None
+    """The next payload of this type waits for `open_gate` before the store, with `at_gate` set
+    meanwhile: the store has not taken it yet."""
+    at_gate: asyncio.Event = field(default_factory=asyncio.Event)
+    open_gate: asyncio.Event = field(default_factory=asyncio.Event)
     _manager: ChangeManager | None = None
 
     @property
@@ -202,6 +207,10 @@ class Harness:
         return self._manager
 
     async def publish(self, payload: EventPayload) -> StoredEvent:
+        if self.gate is not None and isinstance(payload, self.gate):
+            self.gate = None
+            self.at_gate.set()
+            await self.open_gate.wait()
         if self.fail_once is not None and isinstance(payload, self.fail_once):
             self.fail_times -= 1
             if self.fail_times <= 0:
