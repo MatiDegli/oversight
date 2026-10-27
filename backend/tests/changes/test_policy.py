@@ -15,7 +15,7 @@ from oversight_contracts.policy import (
     RuleAssessment,
 )
 
-RULES = SAFE_MERGE_V1_RULES
+RULES = tuple(sorted(SAFE_MERGE_V1_RULES))
 
 
 @pytest.fixture
