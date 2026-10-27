@@ -3,7 +3,8 @@
 Live, the lifespan starts the run (docs/plans/api.md, section 1): the runtime lock, a clean
 workspace, the ledger, the event store with `run.started` and `graph.snapshot`, the change manager,
 and the demo venv in the background. `LiveRun` implements the API's commands. Shutdown runs every
-step even if one before failed: the agent's run, the venv build, the manager, the store, the lock.
+step even if one before failed: the agent's run, the venv build, the manager's drain, main's check,
+the store, the lock.
 """
 
 import asyncio
@@ -85,6 +86,8 @@ BLOCK_AT = 0.9
 SLOT: Literal["A"] = "A"
 """Level 1 runs one agent, in slot A."""
 PROFILES = {MUSE_SPARK.id: MUSE_SPARK, FAKE_MODEL.id: FAKE_MODEL}
+MAIN_SUSPECT = "main's state is unknown: reject the change and restart the server"
+MAIN_LEFT = "Main was left mid-merge or dirty; the next start's reset rebuilds it."
 
 type ClientFactory = Callable[[ModelProfile], ModelClient]
 
@@ -214,7 +217,14 @@ class LiveRun:
     async def shutdown(self) -> None:
         """Every step runs, even after one failed or was cancelled; the first such is re-raised."""
         failure: BaseException | None = None
-        for step in (self._stop_runs, self._stop_venv, self._close_manager, self.store.close):
+        steps = (
+            self._stop_runs,
+            self._stop_venv,
+            self._close_manager,
+            self._check_main,
+            self.store.close,
+        )
+        for step in steps:
             try:
                 await step()
             except BaseException as error:
@@ -238,8 +248,15 @@ class LiveRun:
             await asyncio.gather(self._venv, return_exceptions=True)
 
     async def _close_manager(self) -> None:
+        """Waits for decisions in flight and drains unsent close-outs, before the store closes."""
         if self._manager is not None:
             await self._manager.aclose()
+
+    async def _check_main(self) -> None:
+        """Never a silent `MERGE_HEAD`: unless main is clean, a fatal `error` goes out before the
+        store closes."""
+        if self._manager is not None and await self._manager.check_main() is not True:
+            await self._report("git", MAIN_LEFT, fatal=True)
 
     async def _build_venv(self) -> None:
         """A failed build is reported, not fatal: the run's `run_tests` then reports `error`."""
@@ -253,7 +270,7 @@ class LiveRun:
 
     async def _report(
         self,
-        source: Literal["server", "tests", "agent"],
+        source: Literal["server", "tests", "agent", "git"],
         message: str,
         *,
         agent_id: str | None = None,
@@ -342,7 +359,7 @@ class LiveRun:
             )
         return None
 
-    def _check(self, request: StartAgent) -> None:
+    def _check(self, request: StartAgent, manager: ChangeManager) -> None:
         """The side-effect-free checks, in order; `ApiError` for the first that fails."""
         profile = self.profile
         model = request.model or profile.id
@@ -358,6 +375,8 @@ class LiveRun:
             raise ApiError("invalid_request", "META_API_KEY is not set in .env")
         if self._metered and (reason := self.brake_reason()) is not None:
             raise ApiError("spend_brake", reason)
+        if manager.main_suspect:
+            raise ApiError("wrong_state", MAIN_SUSPECT)
         if self._slot is not None:
             raise ApiError("slot_busy", f"slot A is taken ({self._slot})")
 
@@ -365,7 +384,7 @@ class LiveRun:
         manager = self._manager
         if manager is None:
             raise ApiError("wrong_state", "the run has not started")
-        self._check(request)
+        self._check(request, manager)
         self._slot = "starting"  # no await since the check: two starts cannot both pass it
         try:
             if self._venv is not None:
@@ -429,6 +448,8 @@ class LiveRun:
     def approve(self, change_id: str, comment: str | None) -> None:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
+        if self._manager.main_suspect:
+            raise ApiError("wrong_state", MAIN_SUSPECT)
         self._manager.approve(change_id, comment)
 
     def reject(self, change_id: str, comment: str | None) -> None:
