@@ -144,7 +144,11 @@ export interface LiveDiffProps {
   onMount?: (diffEditor: editor.IStandaloneDiffEditor) => void;
 }
 
-export function LiveDiff({ data, palette = getActiveTheme(), onMount }: LiveDiffProps) {
+/**
+ * The read-only inline diff once the editor fonts load, with the editor theme from the active
+ * tokens. The live diff and review both show their diffs through it.
+ */
+export function EditorDiff({ data, palette = getActiveTheme(), onMount }: LiveDiffProps) {
   const [fonts, setFonts] = useState<"loading" | "ready" | "failed">("loading");
 
   useEffect(() => {
@@ -168,6 +172,24 @@ export function LiveDiff({ data, palette = getActiveTheme(), onMount }: LiveDiff
   }, [palette]);
 
   return (
+    <>
+      {fonts === "loading" && (
+        <p role="status" className="p-4 text-sm text-muted">
+          Loading editor fonts…
+        </p>
+      )}
+      {fonts === "failed" && (
+        <p role="alert" className="p-4 text-sm text-muted">
+          Editor fonts could not load. Reload to try again.
+        </p>
+      )}
+      {fonts === "ready" && data && <InlineDiff data={data} onMount={onMount} />}
+    </>
+  );
+}
+
+export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
+  return (
     <section
       aria-label="Live diff"
       className="flex h-full min-h-96 min-w-0 flex-col bg-page text-text"
@@ -190,17 +212,7 @@ export function LiveDiff({ data, palette = getActiveTheme(), onMount }: LiveDiff
           : "Select a changed file to see its live diff."}
       </p>
       <div className="min-h-0 flex-1" hidden={!data}>
-        {fonts === "loading" && (
-          <p role="status" className="p-4 text-sm text-muted">
-            Loading editor fonts…
-          </p>
-        )}
-        {fonts === "failed" && (
-          <p role="alert" className="p-4 text-sm text-muted">
-            Editor fonts could not load. Reload to try again.
-          </p>
-        )}
-        {fonts === "ready" && data && <InlineDiff data={data} onMount={onMount} />}
+        <EditorDiff data={data} palette={palette} onMount={onMount} />
       </div>
     </section>
   );

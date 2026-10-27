@@ -140,6 +140,53 @@ it("switches selected files and changes in one editor, with exact line changes a
   });
 }, 60_000);
 
+it("tints the gutter for a removal but not for an insertion", async () => {
+  await withPage(async (page) => {
+    const lines = (skip: number | null, extra: number | null) =>
+      Array.from({ length: 12 }, (_, i) => `line_${String(i)} = ${String(i)}`)
+        .flatMap((line, i) => (i === extra ? [line, "added = 1"] : [line]))
+        .filter((_, i) => i !== skip)
+        .join("\n");
+    // The gutter's own color, as the computed style of an element painted with the token.
+    const gutter = () =>
+      page.evaluate(() => {
+        const probe = document.createElement("div");
+        probe.style.backgroundColor = "var(--page)";
+        document.body.append(probe);
+        const page = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        const painted = (selector: string) =>
+          [...document.querySelectorAll(selector)].map(
+            (element) => getComputedStyle(element).backgroundColor,
+          );
+        return {
+          page,
+          // Placeholders in the original gutter beside inserted lines.
+          inserted: painted(".original-in-monaco-diff-editor .margin-view-zones .gutter-delete"),
+          // Gutter cells of removed lines in the inline view.
+          removed: painted(
+            ".inline-deleted-margin-view-zone, .margin-view-overlays .gutter-delete",
+          ),
+        };
+      });
+    await render(page, { ...data, original: lines(null, null), modified: lines(null, 5) });
+    await browserExpect.poll(async () => (await gutter()).inserted.length).toBeGreaterThan(0);
+    const insertion = await gutter();
+    expect(new Set(insertion.inserted)).toEqual(new Set([insertion.page]));
+
+    await render(page, {
+      ...data,
+      path: "shop/removal.py",
+      original: lines(null, null),
+      modified: lines(3, null),
+    });
+    await browserExpect.poll(async () => (await gutter()).removed.length).toBeGreaterThan(0);
+    const removal = await gutter();
+    // A removal keeps its tint: its gutter is not the page's color.
+    expect(removal.removed.every((color) => color !== removal.page)).toBe(true);
+  });
+}, 60_000);
+
 it("mounts Monaco only after both font loads resolve", async () => {
   await withPage(async (page) => {
     await page.evaluate(() => {

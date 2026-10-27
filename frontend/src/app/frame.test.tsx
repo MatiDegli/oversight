@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import { Frame } from "./Frame";
 import type { FrameProps } from "./Frame";
 import { through } from "./replay.fixture";
-import { initialView, openChange } from "./view";
+import { startAttempt } from "../review";
+import { initialView, openChange, openReview } from "./view";
 import type { View } from "./view";
 
 // Monaco needs a browser (pnpm test:browser); the frame's markup does not.
@@ -72,7 +73,7 @@ describe("the frame over the level 1 fixture", () => {
   });
 
   it("opens the live diff on the left and folds the agents panel into the rail", () => {
-    const markup = render(14, { selected: "shop.pricing:compute_price", diff });
+    const markup = render(14, { selected: "shop.pricing:compute_price", diff, review: null });
     expect(tag(markup, "Live diff panel")).toContain("w-[min(var(--review-panel-width),46vw)]");
     expect(markup).toContain('aria-label="Live diff"');
     expect(markup).toContain("shop/pricing.py");
@@ -83,8 +84,94 @@ describe("the frame over the level 1 fixture", () => {
     expect(tag(markup, "Watch")).not.toContain("aria-current");
     // The graph region is the same element in both modes, so it is never remounted.
     expect(tag(markup, "Repository graph")).toBe(tag(render(14), "Repository graph"));
-    expect(render(20, { selected: null, diff })).toContain(
+    expect(render(20, { selected: null, diff, review: null })).toContain(
       'aria-label="Agent A: Ready for review"',
     );
+  });
+});
+
+describe("review mode over the level 1 fixture", () => {
+  const review: View = { selected: "shop.pricing:compute_price", diff: null, review: "change-1" };
+  const decide = vi.fn();
+  const reviewing = (seq: number, props: Partial<FrameProps> = {}) =>
+    render(seq, review, { onDecide: decide, ...props });
+  /** The opening tag of the button whose text includes `text`. */
+  const button = (markup: string, text: string) =>
+    new RegExp(`<button [^>]*>(?:(?!</button>).)*${text}`).exec(markup)?.[0];
+
+  it("offers Review change on the card and the queue counter once the change is proposed", () => {
+    const state = through(20);
+    const canReview = (changeId: string) => openReview(state, initialView, changeId) !== null;
+    const ready = render(20, initialView, { canReview, onReview: vi.fn(), onOpenQueue: vi.fn() });
+    expect(ready).toContain("Review change</button>");
+    expect(ready).not.toContain("Live diff</button>");
+    expect(button(ready, "change ready for review")).not.toContain('disabled=""');
+    const working = render(14, initialView, { canReview: () => false, onReview: vi.fn() });
+    expect(working).toContain("Live diff</button>");
+    expect(working).not.toContain("Review change");
+    // Nothing opens review by itself: a proposed change leaves watch mode as it was.
+    expect(ready).not.toContain("Review panel");
+  });
+
+  it("shows the header, facts, note, diff and decisions on the left, with the agents rail", () => {
+    const markup = reviewing(20);
+    expect(tag(markup, "Review panel")).toContain("w-[min(var(--review-panel-width),46vw)]");
+    expect(tag(markup, "Review panel")).toContain("bg-page");
+    for (const text of [
+      "Cap the combined discount at 30% in compute_price",
+      'aria-label="Agent A"',
+      "Ready for review",
+      'aria-label="Close review"',
+      "28 passed",
+      "+2",
+      "compute_price now caps",
+      'aria-label="Diff of shop/pricing.py"',
+      "Comment (optional)",
+      "If main moved since the agent started, the tests run again",
+    ])
+      expect(markup).toContain(text);
+    expect(button(markup, "Approve and merge")).not.toContain('disabled=""');
+    expect(button(markup, "Reject")).not.toContain('disabled=""');
+    expect(markup).not.toContain("Request changes");
+    expect(markup).not.toContain("Live diff panel");
+    expect(tag(markup, "Agents")).toContain("w-(--agents-rail-width)");
+    expect(tag(markup, "Repository graph")).toBe(tag(render(20), "Repository graph"));
+  });
+
+  it("disables both buttons while a decision is pending and shows a refusal's message", () => {
+    const pending = reviewing(20, {
+      attempts: { "change-1": startAttempt(through(20), "change-1", "approve") },
+    });
+    expect(button(pending, "Approve and merge")).toContain('disabled=""');
+    expect(button(pending, "Reject")).toContain('disabled=""');
+    expect(pending).toContain("Approving: waiting for the merge result.");
+    const refused = reviewing(20, {
+      attempts: {
+        "change-1": { phase: "failed", action: "approve", revision: 1, message: "Main moved." },
+      },
+    });
+    expect(button(refused, "Approve and merge")).not.toContain('disabled=""');
+    expect(refused).toMatch(/role="alert"[^>]*>.*Main moved\./);
+  });
+
+  it("keeps review open after the decision and shows its result, with no buttons", () => {
+    const merged = reviewing(23, {
+      attempts: { "change-1": startAttempt(through(20), "change-1", "approve") },
+    });
+    expect(merged).toContain("Approved and merged into main");
+    expect(merged).toContain(">040a486<");
+    expect(merged).not.toContain("Approve and merge");
+    expect(merged).not.toContain("Reject</button>");
+  });
+
+  it("in a recorded run sends nothing: disabled buttons, then the recorded decision", () => {
+    const before = render(20, review);
+    expect(before).toContain("Recorded run: nothing here sends a decision.");
+    expect(before).not.toContain("<textarea");
+    expect(button(before, "Approve and merge")).toContain('disabled=""');
+    expect(button(before, "Reject")).toContain('disabled=""');
+    const after = render(21, review);
+    expect(after).toContain("Recorded run: this is the decision that was made.");
+    expect(after).toContain("Approved and merged into main");
   });
 });
