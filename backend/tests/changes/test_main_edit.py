@@ -411,12 +411,14 @@ async def test_cancelled_approval_scan_holds_main_until_its_thread_ends(
     monkeypatch.setattr(h.main_graph, "scan", scan)
     monkeypatch.setattr(h.workspace, "git", git)
     approval = h.manager.approve("change-1", None)
-    await inside.wait()  # the merge is committed; its scan thread is running
-    order.append("cancelled")
-    approval.cancel()
-    save = start_save(h, content, base, TESTS)
-    await queued_callbacks_ran()
-    gate.set()
+    try:
+        await inside.wait()  # the merge is committed; its scan thread is running
+        order.append("cancelled")
+        approval.cancel()
+        save = start_save(h, content, base, TESTS)
+        await queued_callbacks_ran()
+    finally:
+        gate.set()  # a thread event, which the harness cannot open: never leave it closed
     with pytest.raises(asyncio.CancelledError):
         await approval
     await save
