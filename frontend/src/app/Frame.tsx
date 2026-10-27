@@ -1,13 +1,16 @@
 import type { AgentStatus, StartAgent } from "@contracts";
 import { GitBranch, Network, X } from "lucide-react";
+import { useMemo } from "react";
 import type { ReactNode } from "react";
 
 import { AgentCard, TaskBox } from "../agents";
 import { LiveDiff } from "../editor";
 import { GraphView } from "../graph";
+import { ReviewPanel } from "../review";
+import type { DecisionAction, DecisionAttempt } from "../review";
 import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
-import { readyCount } from "./view";
+import { changeNodeIds, litNodeIds, panelOpen, readyCount } from "./view";
 import type { View } from "./view";
 
 type AgentState = AgentStatus["state"];
@@ -50,11 +53,20 @@ export interface FrameProps {
   onClosePanel: () => void;
   /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
+  /** True for a proposed change: its card offers Review change instead of the live diff. */
+  canReview?: (changeId: string) => boolean;
+  onReview?: (changeId: string) => void;
+  /** The queue counter's click: review of the next proposed change. */
+  onOpenQueue?: () => void;
+  /** The person's last decision per change. */
+  attempts?: Readonly<Record<string, DecisionAttempt>>;
+  /** Absent in a recorded run, which sends no commands: review then shows the recorded decision. */
+  onDecide?: (changeId: string, action: DecisionAction, comment: string) => void;
   /** Overlay lines on the graph, such as the replay label and a transport failure. */
   notice?: ReactNode;
 }
 
-function TopBar({ state }: { state: State }) {
+function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () => void }) {
   const ready = readyCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
   return (
@@ -76,11 +88,17 @@ function TopBar({ state }: { state: State }) {
       {/* Always mounted, so the counter's arrival is announced and nothing else moves. */}
       <div role="status" aria-label="Review queue" className="ml-auto flex items-center">
         {ready > 0 && (
-          <p className="inline-flex h-(--queue-counter-height) items-center gap-2 rounded-full bg-raised px-3.5 text-sm">
+          <button
+            type="button"
+            disabled={onOpenQueue === undefined}
+            onClick={onOpenQueue}
+            title="Open the next change in review"
+            className={`inline-flex h-(--queue-counter-height) items-center gap-2 rounded-full bg-raised px-3.5 text-sm text-text enabled:hover:bg-page-raised ${focusRing}`}
+          >
             <span aria-hidden="true" className="size-(--status-lamp-size) rounded-full bg-text" />
             <span className="font-mono">{ready}</span>{" "}
             {ready === 1 ? "change ready for review" : "changes ready for review"}
-          </p>
+          </button>
         )}
       </div>
     </header>
@@ -114,7 +132,12 @@ function AgentsPanel({
   canOpenChange,
   onOpenChange,
   onStartAgent,
-}: Pick<FrameProps, "state" | "canOpenChange" | "onOpenChange" | "onStartAgent">) {
+  canReview,
+  onReview,
+}: Pick<
+  FrameProps,
+  "state" | "canOpenChange" | "onOpenChange" | "onStartAgent" | "canReview" | "onReview"
+>) {
   const cards = selectAgents(state).flatMap((agent) => {
     const data = selectAgentCard(state, agent.agent_id);
     return data ? [data] : [];
@@ -122,13 +145,17 @@ function AgentsPanel({
   // One keyed list, so the new-agent box keeps its place in the tree (and the person's focus)
   // when the first card appears above it.
   const body = [
-    ...cards.map((data) => (
-      <AgentCard
-        key={data.agent.agent_id}
-        data={data}
-        onOpenDiff={canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
-      />
-    )),
+    ...cards.map((data) => {
+      const review = canReview?.(data.agent.change_id) === true;
+      return (
+        <AgentCard
+          key={data.agent.agent_id}
+          data={data}
+          onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
+          onReview={review ? onReview : undefined}
+        />
+      );
+    }),
     <TaskBox key="new-agent" state={state} onStart={onStartAgent} />,
   ];
   if (cards.length === 0) {
@@ -239,21 +266,43 @@ function LeftPanel({ state, view, onClose }: { state: State; view: View; onClose
  */
 export function Frame(props: FrameProps) {
   const { state, view, onNodeTap, canOpenChange, onOpenChange, onClosePanel, notice } = props;
+  const open = panelOpen(view);
+  // Review dims everything but the change's nodes until it is decided; the array changes only with
+  // that change.
+  const reviewed = view.review === null ? undefined : state.changes[view.review];
+  const litIds = useMemo(() => litNodeIds(reviewed), [reviewed]);
+  // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
+  const shown = view.review ?? view.diff?.changeId ?? null;
+  const shownChange = shown === null ? undefined : state.changes[shown];
+  const frameIds = useMemo(() => (shownChange ? changeNodeIds(shownChange) : null), [shownChange]);
   return (
     <div className="flex h-full flex-col bg-background text-text">
-      <TopBar state={state} />
+      <TopBar state={state} onOpenQueue={props.onOpenQueue} />
       <div className="flex min-h-0 flex-1">
-        <LeftRail watching={view.diff === null} onWatch={onClosePanel} />
-        {view.diff && <LeftPanel state={state} view={view} onClose={onClosePanel} />}
+        <LeftRail watching={!open} onWatch={onClosePanel} />
+        {view.review !== null ? (
+          <ReviewPanel
+            key={view.review}
+            state={state}
+            changeId={view.review}
+            attempt={props.attempts?.[view.review]}
+            onDecide={props.onDecide}
+            onClose={onClosePanel}
+          />
+        ) : (
+          view.diff && <LeftPanel state={state} view={view} onClose={onClosePanel} />
+        )}
         <main className="relative min-w-0 flex-1 bg-ground">
           <GraphView
             selectedId={view.selected}
             onNodeTap={onNodeTap}
-            panelOpen={view.diff !== null}
+            panelOpen={open}
+            litIds={litIds}
+            frameIds={frameIds}
           />
           {notice && <div className="absolute top-6 left-6 text-muted">{notice}</div>}
         </main>
-        {view.diff ? (
+        {open ? (
           <AgentsRail state={state} />
         ) : (
           <AgentsPanel
@@ -261,6 +310,8 @@ export function Frame(props: FrameProps) {
             canOpenChange={canOpenChange}
             onOpenChange={onOpenChange}
             onStartAgent={props.onStartAgent}
+            canReview={props.canReview}
+            onReview={props.onReview}
           />
         )}
       </div>

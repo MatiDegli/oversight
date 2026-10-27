@@ -48,6 +48,9 @@ replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with
 # systemd-run when this machine has a user manager, and uncapped when it does not.
 IMPECCABLE ?= .agents/skills/impeccable/scripts/impeccable
 
+# Its default log ends with the change proposed, so the review scene has a change to open; a LOG
+# given on the command line still wins.
+shots: LOG = fixtures/events/handwritten-level1-proposed.jsonl
 shots: ## screenshots of the UI from LOG into .shots/ and the Impeccable scan, Chrome capped at 6G; not in check
 	@$(NO_KEYS) LOG="$(LOG)" IMPECCABLE="$(IMPECCABLE)" bash frontend/shots/run.sh
 

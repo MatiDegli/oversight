@@ -22,14 +22,17 @@ export interface Theme {
 
 /**
  * Clicks the center of the first node with a pending change, as the person would, waits for the
- * left panel's diff to show the inserted lines and for the camera to settle, then fails unless that
- * node is still in view. Cytoscape draws on a canvas, so the node's place on screen comes from the
- * graph element's own probe (src/graph/probe.ts), which the app exposes for this.
+ * left panel (`panel`, its aria-label) to show the diff's inserted lines and for the camera to
+ * settle, then fails unless that node is centered in the graph area at the zoom it had before.
+ * Cytoscape draws on a canvas, so the node's place on screen comes from the graph element's own
+ * probe (src/graph/probe.ts), which the app exposes for this. A proposed change opens review; one
+ * still being edited opens the live diff.
  */
-async function clickChangedNode(page: Page): Promise<void> {
+async function clickChangedNode(page: Page, panel: string): Promise<void> {
   type Probe = {
     nodeCenters(selector?: string): { id: string; x: number; y: number }[];
     animating(): boolean;
+    zoom(): number;
   };
   const graph = '[aria-label="Repository graph"]';
   const handle = await page.waitForFunction((selector) => {
@@ -40,28 +43,42 @@ async function clickChangedNode(page: Page): Promise<void> {
     return { id: node.id, x: box.left + node.x, y: box.top + node.y };
   }, graph);
   const { id, x, y } = (await handle.jsonValue()) as { id: string; x: number; y: number };
+  const zoomBefore = await page.evaluate(
+    (selector) =>
+      document
+        .querySelector<HTMLElement & { oversightGraph?: Probe }>(selector)
+        ?.oversightGraph?.zoom(),
+    graph,
+  );
   await page.mouse.click(x, y);
-  await page.locator('[aria-label="Live diff panel"] .line-insert').first().waitFor();
+  await page.locator(`[aria-label="${panel}"] .line-insert`).first().waitFor();
   await page.waitForFunction((selector) => {
     const host = document.querySelector<HTMLElement & { oversightGraph?: Probe }>(selector);
     return host?.oversightGraph?.animating() === false;
   }, graph);
-  const inView = await page.evaluate(
+  // The labels keep the size they had in watch, and the change sits in the middle of the graph area
+  // between the panel and the rail (the log's change is one node, so it always fits).
+  const framed = await page.evaluate(
     ({ selector, nodeId }) => {
       const host = document.querySelector<HTMLElement & { oversightGraph?: Probe }>(selector);
       const node = host?.oversightGraph?.nodeCenters().find((center) => center.id === nodeId);
-      return (
-        host !== null &&
-        node !== undefined &&
-        node.x >= 0 &&
-        node.y >= 0 &&
-        node.x <= host.clientWidth &&
-        node.y <= host.clientHeight
-      );
+      return host && node
+        ? {
+            zoom: host.oversightGraph?.zoom(),
+            dx: node.x - host.clientWidth / 2,
+            dy: node.y - host.clientHeight / 2,
+          }
+        : null;
     },
     { selector: graph, nodeId: id },
   );
-  if (!inView) throw new Error(`the clicked node ${id} is out of the graph's view`);
+  if (!framed) throw new Error(`the clicked node ${id} is not on the graph`);
+  if (zoomBefore === undefined || Math.abs((framed.zoom ?? 0) - zoomBefore) > 1e-6)
+    throw new Error(`the zoom moved from ${String(zoomBefore)} to ${String(framed.zoom)}`);
+  if (Math.abs(framed.dx) > 2 || Math.abs(framed.dy) > 2)
+    throw new Error(
+      `the clicked node ${id} is not centered: off by ${String(framed.dx)}, ${String(framed.dy)}`,
+    );
 }
 
 export const scenes: readonly Scene[] = [
@@ -74,22 +91,22 @@ export const scenes: readonly Scene[] = [
       await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
     },
   },
+  // Review: the proposed change's node opens it, with Monaco's inline diff on the left and the graph
+  // dimmed but for the change. It needs a log that ends while the change is proposed: `make shots`
+  // serves handwritten-level1-proposed.jsonl, the hand-written log cut after seq 20.
   {
     name: "review",
-    enabled: false,
-    // Enabled by: the review panel (Monaco's inline diff on the left, the graph with the impact
-    // cone on the right) and a recorded run that proposes a change. Then `prepare` clicks the
-    // "Ready for review" pill, and the scene waits on the review panel being mounted.
-    needs: "the review panel and the graph view (not on main yet)",
+    enabled: true,
+    prepare: (page) => clickChangedNode(page, "Review panel"),
   },
   {
     name: "live-diff",
     // Ready: `prepare` clicks a changed node and waits for Monaco's inline diff. It needs a log that
-    // ends while the change is pending; the default log approves it at seq 21, so no node is changed
-    // when the replay ends. Run it with LOG set to a log cut before the decision.
+    // ends while the change is being edited: once proposed (seq 19) the node opens review instead.
+    // Run it with LOG set to a log cut between seq 12 and 18.
     enabled: false,
-    needs: "a log that ends with a pending change (handwritten-level1 approves it at seq 21)",
-    prepare: clickChangedNode,
+    needs: "a log that ends while the change is being edited, before change.proposed at seq 19",
+    prepare: (page) => clickChangedNode(page, "Live diff panel"),
   },
   {
     name: "file-view",

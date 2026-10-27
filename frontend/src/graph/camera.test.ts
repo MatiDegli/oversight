@@ -3,7 +3,7 @@ import type { Core } from "cytoscape";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getActiveTheme } from "../theme";
-import { frameCamera, prefersReducedMotion } from "./camera";
+import { frameBox, frameCamera, prefersReducedMotion } from "./camera";
 
 const theme = getActiveTheme();
 const graphs: Core[] = [];
@@ -51,34 +51,85 @@ function inView(cy: Core, ids: string[]) {
   });
 }
 
+const limits = { padding: 40, minZoom: 0.1, maxZoom: 4 };
+const box = (width: number, height: number) => ({
+  x1: 100,
+  y1: 50,
+  x2: 100 + width,
+  y2: 50 + height,
+});
+const size = { width: 600, height: 400 };
+
+describe("frameBox", () => {
+  it("keeps the zoom it is given and centers the box when the box fits", () => {
+    const camera = frameBox(box(100, 50), size, 1, limits);
+    expect(camera?.zoom).toBe(1);
+    // The box's center, (150, 75), lands on the viewport's center, (300, 200).
+    expect(camera?.pan).toEqual({ x: 150, y: 125 });
+  });
+
+  it("zooms out only as far as the box needs to fit inside the padding", () => {
+    const wide = frameBox(box(2000, 50), size, 1, limits);
+    expect(wide?.zoom).toBeCloseTo((600 - 80) / 2000);
+    const tall = frameBox(box(100, 1600), size, 1, limits);
+    expect(tall?.zoom).toBeCloseTo((400 - 80) / 1600);
+    // Exactly the padding is left at the box's long sides.
+    const left = 100 * (wide?.zoom ?? 0) + (wide?.pan.x ?? 0);
+    expect(left).toBeCloseTo(40);
+  });
+
+  it("never zooms in past the zoom it is given, and respects the zoom limits", () => {
+    expect(frameBox(box(10, 10), size, 0.5, limits)?.zoom).toBe(0.5);
+    expect(frameBox(box(10, 10), size, Number.POSITIVE_INFINITY, limits)?.zoom).toBe(4);
+    expect(frameBox(box(100_000, 10), size, 1, limits)?.zoom).toBe(0.1);
+    expect(frameBox(box(10, 10), size, 0.01, limits)?.zoom).toBe(0.1);
+  });
+
+  it("answers null when the viewport has no room inside the padding", () => {
+    expect(frameBox(box(10, 10), { width: 80, height: 400 }, 1, limits)).toBeNull();
+    expect(frameBox(box(10, 10), { width: 600, height: 60 }, 1, limits)).toBeNull();
+  });
+});
+
 describe("frameCamera", () => {
-  it("opening keeps the focused node and its neighbours in view, without moving a node", () => {
+  it("opening keeps the zoom the watch had and centers the lit nodes without moving a node", () => {
     const cy = narrowedGraph(600);
     const before = positions(cy);
     // Without a reframe the camera would stay put and these would sit past the 600 px edge.
     expect(inView(cy, ["c", "d"])).toBe(false);
-    frameCamera(cy, "c", true);
-    expect(inView(cy, ["b", "c", "d"])).toBe(true);
-    expect(positions(cy)).toEqual(before);
-    expect(cy.zoom()).toBeLessThanOrEqual(0.5);
-  });
-
-  it("never zooms in on open: an isolated node keeps the zoom it had", () => {
-    const cy = narrowedGraph(600);
-    frameCamera(cy, "lone", true);
+    frameCamera(cy, ["c", "d"], true);
     expect(cy.zoom()).toBe(0.5);
-    expect(inView(cy, ["lone"])).toBe(true);
+    expect(inView(cy, ["c", "d"])).toBe(true);
+    const lit = cy.collection().union(cy.getElementById("c")).union(cy.getElementById("d"));
+    const { x1, x2 } = lit.renderedBoundingBox({ includeLabels: true });
+    expect((x1 + x2) / 2).toBeCloseTo(300);
+    expect(positions(cy)).toEqual(before);
   });
 
-  it("zooms out when the neighbourhood does not fit at the current zoom", () => {
-    const cy = narrowedGraph(300);
-    frameCamera(cy, "c", true);
+  it("lets the context around the lit nodes run past the edges", () => {
+    const cy = narrowedGraph(600);
+    frameCamera(cy, ["c"], true);
+    expect(cy.zoom()).toBe(0.5);
+    expect(inView(cy, ["c"])).toBe(true);
+    // The neighbours are not framed: the one at the far right is cut off, and nothing zoomed out.
+    expect(inView(cy, ["d", "lone"])).toBe(false);
+  });
+
+  it("zooms out only when the lit nodes do not fit at the zoom it had", () => {
+    const cy = narrowedGraph(200);
+    frameCamera(cy, ["c", "d"], true);
     expect(cy.zoom()).toBeLessThan(0.5);
-    expect(inView(cy, ["b", "c", "d"])).toBe(true);
+    const { x1, x2 } = cy
+      .collection()
+      .union(cy.getElementById("c"))
+      .union(cy.getElementById("d"))
+      .renderedBoundingBox({ includeLabels: true });
+    expect(x1).toBeGreaterThanOrEqual(40 - 0.5);
+    expect(x2).toBeLessThanOrEqual(200 - 40 + 0.5);
   });
 
-  it("closing, or opening with no node, returns to the fit of the whole graph", () => {
-    for (const focus of [null, "missing"]) {
+  it("closing, or opening with nothing to frame, returns to the fit of the whole graph", () => {
+    for (const focus of [[], ["missing"]]) {
       const cy = narrowedGraph(900);
       const before = positions(cy);
       frameCamera(cy, focus, true);
@@ -94,12 +145,12 @@ describe("frameCamera", () => {
   it("jumps under reduced motion and eases over the theme's transition otherwise", () => {
     const jumped = narrowedGraph(600);
     const animate = vi.spyOn(jumped, "animate");
-    frameCamera(jumped, "c", true);
+    frameCamera(jumped, ["c"], true);
     expect(animate).not.toHaveBeenCalled();
 
     const eased = narrowedGraph(600);
     const easing = vi.spyOn(eased, "animate").mockReturnValue(eased);
-    frameCamera(eased, "c", false);
+    frameCamera(eased, ["c"], false);
     expect(easing).toHaveBeenCalledExactlyOnceWith(
       { zoom: jumped.zoom(), pan: jumped.pan() },
       { duration: 240, easing: theme["transition-easing"] },
@@ -111,11 +162,11 @@ describe("frameCamera", () => {
   it("leaves the camera alone when there is nothing to frame or no room to frame it in", () => {
     const empty = cytoscape({ headless: true });
     graphs.push(empty);
-    frameCamera(empty, "c", true);
+    frameCamera(empty, ["c"], true);
     expect(empty.zoom()).toBe(1);
 
     const cramped = narrowedGraph(60);
-    frameCamera(cramped, "c", true);
+    frameCamera(cramped, ["c"], true);
     expect(cramped.zoom()).toBe(0.5);
     expect(cramped.pan()).toEqual({ x: 20, y: 40 });
   });
