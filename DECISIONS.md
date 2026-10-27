@@ -515,3 +515,21 @@ same-authority checks for unsafe HTTP and every WebSocket, authentication and it
 listener requirement. See guard decisions G1–G3; their defaults and decline outcomes apply.
 
 too_large (413) rides in 1.4.0; limits come with the API guard front (maintainer, M6, 2026-10-27)
+
+## Monaco's vendored DOMPurify — 2026-10-27
+
+Pin Monaco's DOMPurify dependency to 3.4.17 and patch monaco-editor@0.57.0 with the official
+3.4.17 ES build from the pnpm store, preserving its license and default export and omitting only
+the sourcemap reference. Its vendored 3.4.15 build matches the official 3.4.15 ES build apart from
+the absent sourcemap reference. Monaco imports that vendored file directly from domSanitize.js,
+so a dependency override alone does not fix the sanitizer the app runs. Monaco 0.57.0 is the
+latest release and no Monaco release includes the fix yet. Drop the patch once Monaco ships
+DOMPurify >= 3.4.17; an offline unit test in make check pins the vendored version so an update
+cannot silently lose the patch.
+
+DOMPurify 3.4.17 fixes GHSA-6688-9rhm-gjv2, GHSA-c6gr-qvv4-5v3f,
+GHSA-cg2g-xh64-v4q7 (critical), GHSA-mrv2-3pqr-j5jr (high), and GHSA-p98j-92pf-mc4p.
+Published on 2026-10-12, it satisfies the 14-day release-age rule. The app never enables IN_PLACE,
+SAFE_FOR_TEMPLATES, or the XHTML parser, so this is defense in depth. No other dependency or
+version changes. The patch is kept as the official build rather than reformatted or minimized,
+even though replacing it produces a patch over 500 lines.
