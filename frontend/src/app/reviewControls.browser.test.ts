@@ -17,6 +17,55 @@ async function typeEdit(page: Page, text: string) {
   await page.keyboard.insertText(text);
 }
 
+it("allows only Reject after an approval conflicts, even with a comment", async () => {
+  await withPage(false, async (page) => {
+    await open(page);
+    const request = panel(page).getByRole("button", { name: "Request changes", exact: true });
+    const approve = panel(page).getByRole("button", { name: "Approve and merge" });
+    const reject = panel(page).getByRole("button", { name: "Reject", exact: true });
+    const comment = panel(page).getByRole("textbox", { name: /Comment/ });
+    await comment.fill("Cover empty carts");
+    await browserExpect(request).toBeEnabled();
+    await approve.click();
+    await browserExpect(request).toBeDisabled();
+    await page.evaluate(() => {
+      window.reviewTest.emit({
+        seq: 0,
+        ts: "2026-10-27T14:04:00Z",
+        type: "change.resolved",
+        payload: {
+          change_id: "change-1",
+          agent_id: "agent-1",
+          revision: 1,
+          decision: "approved",
+          comment: "Cover empty carts",
+          merge: "conflict",
+          merge_commit: null,
+          conflict: { kind: "merge", paths: ["shop/pricing.py"], tests: null },
+          reason: null,
+          decided_by: null,
+          reasons: [],
+          assessment: null,
+        },
+      });
+    });
+    await browserExpect(panel(page).getByText(/Approved, not merged/)).toBeVisible();
+    await browserExpect(approve).toBeDisabled();
+    await browserExpect(request).toBeDisabled();
+    await browserExpect(reject).toBeEnabled();
+    // Editing the comment cannot reopen Request changes in the conflict state.
+    await comment.fill("Try again on the new base");
+    await browserExpect(comment).toBeFocused();
+    await browserExpect(request).toBeDisabled();
+    await reject.focus();
+    await page.keyboard.press("Enter");
+    expect(await page.evaluate(() => window.reviewTest.decisions)).toMatchObject([
+      { action: "approve" },
+      { action: "reject", comment: "Try again on the new base" },
+    ]);
+  });
+}, 30_000);
+
 it("requires a comment, stays pending until SSE, and reopens the same change after revision", async () => {
   await withPage(false, async (page) => {
     await open(page);

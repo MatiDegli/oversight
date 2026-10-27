@@ -18,7 +18,7 @@ from live_helpers import (
 )
 
 from oversight.agents import load_script
-from oversight.workspace import content_hash
+from oversight.workspace import Tree, WorkspaceError, content_hash
 from oversight_contracts.commands import AgentCreated, FileContent, FileSaved
 
 pytestmark = pytest.mark.anyio
@@ -87,6 +87,36 @@ async def test_review_save_errors_preserve_the_file(tmp_path: Path) -> None:
             response = await put(s, path, "# mine\n", base, agent)
             assert error_code(response) == (status, code)
         assert await read(s, PRICING, created.agent_id) == before
+        assert s.events()[-1].seq == cursor
+
+
+async def test_failed_review_save_answers_internal_and_preserves_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        created = await reviewed(s)
+        before = await read(s, PRICING, created.agent_id)
+        main = await read(s, PRICING)
+        cursor = s.events()[-1].seq
+        calls = 0
+
+        async def failed_write(
+            tree: Tree, path: str, content: str, *, expected_hash: str | None
+        ) -> str:
+            nonlocal calls
+            assert tree.agent_id == created.agent_id
+            assert (path, content, expected_hash) == (PRICING, "# mine\n", before.hash)
+            calls += 1
+            raise WorkspaceError("The review file could not be written")
+
+        monkeypatch.setattr(Tree, "write_text", failed_write)
+        response = await put(s, PRICING, "# mine\n", before.hash, created.agent_id)
+
+        assert calls == 1
+        assert error_code(response) == (500, "internal")
+        assert "The review file could not be written" in response.json()["error"]["message"]
+        assert await read(s, PRICING, created.agent_id) == before
+        assert await read(s, PRICING) == main
         assert s.events()[-1].seq == cursor
 
 
