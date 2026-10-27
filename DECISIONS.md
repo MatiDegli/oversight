@@ -275,22 +275,68 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 - **R3: function edges on demand.** Module edges show at rest. Function edges appear on hover,
   selection and working agents' cones; calls within one file stay hidden. This reduces clutter
   while keeping the calls relevant to the current work visible.
-- **R4: a local light.** Light surrounds the node the agent is on. The ambient field is dimmer
-  and masked under the title, legend, zoom controls and panels. This keeps the work visible
-  without flooding the graph or obscuring its controls.
-- **R5: motion that reports work accepted.** Events may cause motion that shows progress and
-  state changes. Motion needs a cause. DESIGN.md's Motion section waits for the motion sketches,
-  so each transition can be judged before its rules replace the current section.
+- **R4: local light, amended by the maintainer on 2026-10-27.** The approved v4 field keeps
+  square LEDs and box-shaped light from the current node and last read, not a round glow.
+  The full amendment is recorded under v4 below and in DESIGN.md; it replaces the earlier
+  mode-dependent source tables. Local light must not flood the graph or obscure its controls.
+- **R5: motion that reports work, settled by the maintainer on 2026-10-27.** The approved v4
+  motion rules now replace the pending section in DESIGN.md: event-driven card, row, value,
+  state and review transitions, graph folding, agent travel and merge settlement, all off under
+  reduced motion. The v4 Motion decision below records the timing and marker behavior.
 - **Shell zones accepted.** The top bar, left rail, sidebar, focus panel, graph stage,
-  agents panel, bottom dock and status line give each feature a known home. DESIGN.md's Layout
-  section waits for the shell sketches. The maintainer updated AGENTS.md for focus panel tabs and
-  the Files view. Approve keeps no keyboard shortcut, so the shell's keyboard map has no approve
+  agents panel, bottom dock and status line give each feature a known home. The v4 Layout
+  decision below and DESIGN.md now settle their dimensions and width rules. The maintainer updated
+  AGENTS.md for focus panel tabs and the Files view. Approve keeps no keyboard shortcut, so the shell's keyboard map has no approve
   key, and Ctrl K offers no Approve command; the existing "Approve answers only a pointer click"
   decision applies. Nothing else waits on AGENTS.md.
 - **Terminal placed now, built last.** Its home is the bottom dock. Implementation waits for an
   independently reviewed security plan: bind to 127.0.0.1, use a per-session token, check Origin
   and Host, and kill the terminal with the server. Agents never reach it. This reserves its place
   without adding shell access before its boundaries are reviewed.
+
+### Approved v4 shell (maintainer, 2026-10-27)
+
+- **v4 is the shell target (maintainer, 2026-10-27).** The seven approved images in
+  `docs/sketches/v4/` define watch, focus, conversation, review, changes, settings and the agent
+  marker. DESIGN.md adopts them inside Signal, retaining AGENTS.md's authority and the matte
+  review header. Reason: later shell work needs one agreed visual target rather than accumulated
+  additions; a sample in a sketch does not change a contract or make a feature available.
+- **Layout: zones and docks (maintainer, 2026-10-27).** At 1920x1080, top bar 52px, left rail
+  56px, sidebar 280px, focus panel 880px, graph at least 560px, agents panel 400px or rail 56px,
+  bottom dock 280px high and status line 24px. Opening any focus tab folds the agents panel.
+  By 1440px, sidebar and expanded agents panel overlay; below 1280px a width notice appears.
+  Explicit maximize may hide the graph and offers restoration. Ctrl K jumps and runs commands
+  but has no Approve command; the keyboard map has no Approve key. Reason: files, diffs, review,
+  conversation and settings need stable homes without losing the graph or making a merge fire
+  from typing. The terminal is placed here but still built last.
+- **Motion: R5 applied (maintainer, 2026-10-27).** Nothing moves without a cause. The enumerated
+  card, step, value, pill, fold, review, highlight and merge transitions take 160 to 320ms with
+  the existing easing. On each agent.focus the lettered marker glides along the edge route when
+  one exists, carrying its light; approval fades both out. Working rings and the status lamp
+  report ongoing work. Reduced motion disables every animation. Reason: visible event changes
+  make work legible in use and on video without opening panels or stealing focus.
+- **Surfaces: layered dark neutrals (maintainer, 2026-10-27).** Shell #09090a, panel #0d0d0f,
+  page #101012, card #151518 to #111113, raised #1b1b1f and inset #09090b replace the dark
+  surfaces. Divider is white at 6%, border at 10%, top highlight at 4.5%; cards have a soft
+  shadow. Agent and slot cards carry a 2px agent-colored top line; the active tab uses its
+  subject's agent color or neutral. Graph overlays frost at 12px blur; group labels are 11.5px,
+  uppercase and tracked. Every color remains a theme token, accents and day colors unchanged.
+  Reason: the approved layers distinguish work surfaces without adding a hue. DESIGN.md records
+  the full contrast matrix and nearest passing proposals for failures; approved values are not
+  silently adjusted. This supersedes the blanket ban on panel shadows and overlay blur.
+- **R4 amended: the Signal LED field (maintainer, 2026-10-27).** Keep 7px square LEDs, three
+  dithered lit levels, box-shaped light, a faint 28px resting grid and an expanding working ring.
+  Only the current node (full) and last read (about 0.4) emit light; spreads are about 26px and
+  72px at 100%, scaled with zoom. Title, legend, zoom controls and every overlay mask the field.
+  Reason: preserve Signal's material and show exactly where an agent works without lighting an
+  entire frame. The round-glow reading and former cone/selection light sources are superseded.
+- **Settings as a focus tab (maintainer, 2026-10-27).** No repeated title inside. Left navigation
+  and Saved line frame merge-mode cards and rules, budget input and threshold bar, steps stepper,
+  size and cone inputs with units, protected-area rows with type/remove/add, and model-slot cards
+  with model and cross-review selectors and key-status pills. Reason: make decisions and limits
+  scannable in the same shell as the work. Values are illustrative: unsupported rows and choices,
+  including a second provider-key row with no backing, are dropped. Fixed contract limits are
+  not made editable by the sketch, and reserved features are not presented as working controls.
 
 ### Where Impeccable clashes with our rules
 
@@ -301,15 +347,15 @@ Ours wins in every case below.
   raises it, ours wins: the graph's ground is `#000000`, plain black until the dot field
   (AGENTS.md); panels use near-blacks.
 - **Its core stance** ("go all out", "dream big and bold") against Signal's restraint: color is an
-  agent or a state, panels are flat. Hence the forbidden commands.
+  agent or a state, panels stay plain within the approved tonal layers. Hence the forbidden commands.
 - **"Dark or light is never a default; pick it from the use scene."** Ours: dark everywhere
   (AGENTS.md). The use scene is long supervision and a dark demo video; day mode is the gallery's.
 - **The detector's "pulsing dot" and its craft floor's "one authored moment" of motion.** Ours: a
-  working agent's status lamp pulses, the one motion on the person's surface, because it reports
-  work in progress; it stops under reduced motion.
+  working agent's status lamp pulses because it reports work in progress; the v4 R5 list also
+  permits transitions tied to events. All stop under reduced motion.
 - **The detector's "colored glow on a dark background".** Ours: the dot field's light and the rings
   are agent-colored light on black, because the light says which agent works where; it is dithered
-  dots on its own canvas, not a glow on an element, and comes after level 1.
+  LEDs on its own canvas, not a glow on an element, brought forward without blocking a level.
 - **document's process:** it extracts DESIGN.md from the code, asks before replacing one, and
   writes a sidecar (`.impeccable/design.json`). Ours: DESIGN.md is written by hand from the agreed
   design, document is forbidden, and no sidecar is committed.
@@ -349,8 +395,8 @@ Ours wins in every case below.
 - **Classes start folded (maintainer, 2026-10-27):** one row names the class and its method count; a click toggles it, and a new change adding or modifying a method opens it. Reads and cone membership project onto the folded row (nearest distance). Preset positions plus fold state determine all positions; only later rows and modules in that column slide for 240ms with cubic-bezier(0.2, 0.7, 0.2, 1), or jump under reduced motion. Incoming calls share a target trunk outside frames; endpoint taps alone traverse their own containing frame.
 
 - **Graph cleanup evidence (2026-10-27):** comparison images and work reports stay outside the product repository; the start camera stays at 100%, frames settled header bounds, and treats the heading, notices and bottom overlays as viewport edges when choosing the nearest clear gutter.
-- **Dot field brought forward (maintainer, 2026-10-27):** the dot field, rings and breathing light
-  behind the graph move from "after level 1" to now, built as DESIGN.md specifies; it must never
+- **Dot field brought forward (maintainer, 2026-10-27):** the dot field and working rings
+  behind the graph move from "after level 1" to now, with the v4 R4 amendment above; it must never
   block level 1, so with no WebGL, a failed draw or a lost context the graph shows plain ground.
 
 ## Change manager stages
