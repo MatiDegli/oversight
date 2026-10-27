@@ -63,6 +63,7 @@ function Harness({ recorded }: { recorded: boolean }) {
         if (id !== null) setView((current) => openReview(now(), current, id) ?? current);
       }}
       attempts={attempts}
+      replayOf={recorded ? "hand-written demo fixture" : undefined}
       onDecide={
         recorded
           ? undefined

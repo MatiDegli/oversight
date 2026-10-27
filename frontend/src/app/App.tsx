@@ -86,6 +86,7 @@ export function App() {
       onOpenQueue={onOpenQueue}
       attempts={attempts}
       onDecide={commands ? onDecide : undefined}
+      replayOf={replayBuild ? replaySource.kind : undefined}
       notice={
         replayBuild || error !== null ? (
           <>

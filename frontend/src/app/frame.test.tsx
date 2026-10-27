@@ -164,14 +164,25 @@ describe("review mode over the level 1 fixture", () => {
     expect(merged).not.toContain("Reject</button>");
   });
 
-  it("in a recorded run sends nothing: disabled buttons, then the recorded decision", () => {
-    const before = render(20, review);
-    expect(before).toContain("Recorded run: nothing here sends a decision.");
+  it("in a replay sends nothing: disabled buttons, then the decision the log holds", () => {
+    const replayOf = "hand-written demo fixture";
+    const before = render(20, review, { replayOf });
+    expect(before).toContain(
+      "Replay of a hand-written demo fixture: nothing here sends a decision.",
+    );
+    expect(before).not.toMatch(/recorded run/i);
     expect(before).not.toContain("<textarea");
     expect(button(before, "Approve and merge")).toContain('disabled=""');
     expect(button(before, "Reject")).toContain('disabled=""');
-    const after = render(21, review);
-    expect(after).toContain("Recorded run: this is the decision that was made.");
+    const after = render(21, review, { replayOf });
+    expect(after).toContain(
+      "Replay of a hand-written demo fixture: this is the decision the log holds.",
+    );
+    expect(after).not.toMatch(/recorded run/i);
     expect(after).toContain("Approved and merged into main");
+    // A real recording says so by its own source, never by a default.
+    expect(render(21, review, { replayOf: "real recorded run" })).toContain(
+      "Replay of a real recorded run: this is the decision the log holds.",
+    );
   });
 });

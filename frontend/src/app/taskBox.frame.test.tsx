@@ -52,12 +52,20 @@ describe("the agents panel's new-agent section", () => {
     expect(render(4, live)).not.toContain("Agent A is working.");
   });
 
-  it("offers no live control in a recorded run, which passes no command", () => {
+  it("offers no live control in a replay, which passes no command, and words it from the source", () => {
+    const replayOf = "hand-written demo fixture";
     for (const seq of [2, 4, 20]) {
-      const markup = render(seq);
-      expect(markup).toContain("Recorded run: agents cannot be started here.");
+      const markup = render(seq, { replayOf });
+      expect(markup).toContain(
+        "Replay of a hand-written demo fixture: agents cannot be started here.",
+      );
+      expect(markup).not.toMatch(/recorded run/i);
       expect(markup).not.toContain("<textarea");
       expect(markup).not.toContain("Start agent");
     }
+    // A real recording says so by its own source, never by a default.
+    expect(render(4, { replayOf: "real recorded run" })).toContain(
+      "Replay of a real recorded run: agents cannot be started here.",
+    );
   });
 });
