@@ -37,14 +37,6 @@ SUSPECT = "Main's state is unknown; reject the change and restart the server"
 CLOSE_OUT_ATTEMPTS = 2
 """Tries per event on each occasion (a decision, a retry before the next decision or `open`, the
 drain)."""
-EVENT_TYPES = {
-    "requested": "change.resolved changes_requested",
-    "stopped": "agent.status stopped",
-    "resolved": "change.resolved",
-    "delta": "graph.delta",
-    "done": "agent.status done",
-}
-"""Close-out events by their names in `ChangeRecord.sent`, as an `error` names them."""
 
 
 class ChangeNotFound(LookupError):

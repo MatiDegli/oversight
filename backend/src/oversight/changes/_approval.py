@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from oversight.changes import _delivery as delivery
 from oversight.changes import _merge as merge
 from oversight.changes import _proposal as proposal
 from oversight.changes import _recovery as recovery
@@ -17,11 +18,11 @@ _log = logging.getLogger("oversight.changes._manager")
 
 
 async def approve(ctx: ChangeContext, rec: ChangeRecord, comment: str | None) -> None:
-    await ctx.ports.finish_pending()
+    await delivery.finish_pending(ctx)
     async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
         # A close-out publish left running by a cancel may still move `snapshot`, which this
         # merge's delta starts from, and must find its own delta still there: wait for it.
-        await ctx.ports.drain_pending()
+        await delivery.drain_pending(ctx)
         if ctx.state.suspect:
             # M5: main turned suspect while this queued. No git call; the decision's end puts
             # the change back to `ready`.
@@ -45,7 +46,7 @@ async def approve(ctx: ChangeContext, rec: ChangeRecord, comment: str | None) ->
         except Exception as error:
             await recovery.recover(ctx, rec, comment, pre, error)
         if rec.merged:
-            await ctx.ports.finish(rec)
+            await delivery.finish(ctx, rec)
 
 
 async def as_clicked(ctx: ChangeContext, rec: ChangeRecord) -> bool:

@@ -46,6 +46,8 @@ owner of main's graph, `snapshot` and lock order.
 
 ### 1.3 Mechanisms shared by saves, rescans and merges
 
+After the stage split, `_finish_pending` and `_record_merge` are `_delivery.finish_pending` and `_delivery.record_merge`; `_recover` is `_recovery.recover`.
+
 - **M1, one whole step (B3, S1, the cancel half of B2).** `save_main` and `rescan` run their body
   as one `_whole(...)` step; the spawned task takes main's lock itself (locks are reentrant per
   task; the request task holds none). A cancel of the request waits for the save to end, then
