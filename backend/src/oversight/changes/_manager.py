@@ -6,8 +6,10 @@ such as after a halt whose worktree root was lost). Approve takes `ready`; Rejec
 the decision is a fact, in `conflict`, back in `ready` when main is untouched, or in `broken` when
 main's state cannot be read. `closing` becomes `closed` once its resolution, delta and `done` are
 all sent; until then the change is pending, keeps its worktree until the resolution is out, and the
-next decision or `open` sends the rest. Every git call is `Workspace.git`, async with a timeout;
-approve and reject hold main's lock, then the agent's, throughout. Once a change enters `broken`,
+next decision or `open` sends the rest. Request changes takes `ready` or `conflict` back to
+`working` and discards nothing; from `conflict` it first merges main into the agent's branch, so
+the agent redoes its change on the new base. Every git call is `Workspace.git`, async with a
+timeout; decisions hold main's lock, then the agent's, throughout. Once a change enters `broken`,
 `main_suspect` stays true until the process restarts; `check_main` reads main's state, and `aclose`
 drains the close-outs before the store closes.
 """
@@ -47,14 +49,22 @@ type State = Literal[
     "working", "ready", "unproposed", "deciding", "conflict", "closing", "closed", "broken"
 ]
 type Source = Literal["git", "tests", "graph", "server"]
+type By = Literal["agent", "user"]
+"""Who wrote a file version that a `change.updated` shows."""
 
 APPROVABLE: frozenset[State] = frozenset({"ready"})
 REJECTABLE: frozenset[State] = frozenset({"ready", "conflict", "unproposed", "broken"})
 """`broken`: the merge failed and main's state is unknown; Reject still closes the change."""
+REVISABLE: frozenset[State] = frozenset({"ready", "conflict"})
 CLOSE_OUT_ATTEMPTS = 2
 """Tries per event on each occasion (a decision, a retry before the next decision or `open`, the
 drain)."""
-EVENT_TYPES = {"resolved": "change.resolved", "delta": "graph.delta", "done": "agent.status done"}
+EVENT_TYPES = {
+    "requested": "change.resolved changes_requested",
+    "resolved": "change.resolved",
+    "delta": "graph.delta",
+    "done": "agent.status done",
+}
 """Close-out events by their names in `_Change.sent`, as an `error` names them."""
 
 
@@ -64,6 +74,24 @@ class ChangeNotFound(LookupError):
 
 class WrongState(Exception):
     """The change cannot take that decision now: the route answers wrong_state."""
+
+
+@dataclass(frozen=True)
+class Revision:
+    """What the agent resumes with after Request changes."""
+
+    comment: str
+    note: str | None
+    """Set when the base moved: main merged in, and the files with conflict markers or the tests
+    that failed with main."""
+
+
+@dataclass
+class _Move:
+    """A base move's facts as read so far, for its recovery."""
+
+    main_head: str | None = None
+    old_head: str | None = None
 
 
 @dataclass
@@ -80,7 +108,19 @@ class _Change:
     state: State = "working"
     revision: int = 0
     head_commit: str | None = None
+    """The head of the last revision the store took."""
+    proposed_now: bool = False
+    """The current run (the first, or a revision's) proposed; `run_ended` reads it."""
+    summary: str | None = None
+    """The agent's note on the last revision the store took."""
     steps: int = 0
+    requests: int = 0
+    """Request changes taken so far; each grows the step budget by `limits.max_steps`."""
+    requested: ChangeResolved | None = None
+    """A `changes_requested` the store has not taken yet: sent before the next proposal, or
+    before a Reject's close-out."""
+    conflict: Conflict | None = None
+    """The last approval's conflict, for the note of a redo on the new base."""
     merged: bool = False
     touched: set[str] = field(default_factory=lambda: set[str]())
     published: dict[str, str | None] = field(default_factory=lambda: dict[str, str | None]())
@@ -98,7 +138,8 @@ class _Change:
     """The worktree and branch are gone."""
     fallback: State = "ready"
     """Where a decision that ends without settling leaves the change: the state it was taken from,
-    or `broken` once the merge may have touched main."""
+    `broken` once the merge may have touched main, or `conflict` once the approval's conflict is
+    sent. The change stays `deciding` until then, so nothing is decided while it is settled."""
     decision: int = 0
     """Counts the decisions taken; only the latest one's task may end `deciding`."""
 
@@ -156,7 +197,7 @@ class ChangeManager:
         self._pending: dict[AgentId, _Change] = {}
         """Changes whose close-out or cleanup is unfinished; the next decision or `open` runs them
         again first."""
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._tasks: set[asyncio.Task[Any]] = set()
         self._suspect = False
 
     @property
@@ -209,11 +250,26 @@ class ChangeManager:
             return False
         return True
 
-    def _spawn(self, work: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+    def _spawn[T](self, work: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
         task = asyncio.get_running_loop().create_task(work)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return task
+
+    async def _whole[T](self, work: Coroutine[Any, Any, T]) -> T:
+        """Run `work` as a tracked task and wait for its end through every cancel, then re-raise
+        the first cancel. Only for a publish and the bookkeeping that must match what the store
+        took, so a cancel never leaves one without the other."""
+        task = self._spawn(work)
+        cancelled = False
+        while not task.done():
+            try:
+                await asyncio.wait([task])
+            except asyncio.CancelledError:
+                cancelled = True
+        if cancelled:
+            raise asyncio.CancelledError
+        return task.result()
 
     # --- Opening a change ---------------------------------------------------------------------
 
@@ -243,13 +299,17 @@ class ChangeManager:
         self._agents[task.agent_id] = rec
         return tree
 
-    async def _read_base(self, tree: Tree, commit: str) -> tuple[dict[str, str], CodeVersion]:
+    async def _read_files(self, tree: Tree) -> dict[str, str]:
         files: dict[str, str] = {}
         for path in await tree.list_files():
             try:
                 files[path] = (await tree.read_text(path)).content
             except WorkspaceError:
                 continue  # not UTF-8 text: no agent tool can edit it
+        return files
+
+    async def _read_base(self, tree: Tree, commit: str) -> tuple[dict[str, str], CodeVersion]:
+        files = await self._read_files(tree)
         found = (files, await parse(files, commit, None))
         self._bases[commit] = found
         return found
@@ -308,7 +368,7 @@ class ChangeManager:
                 files, added, removed = files + 1, added + plus, removed + minus
         return files, added, removed
 
-    async def _send_file(self, rec: _Change, path: str) -> None:
+    async def _send_file(self, rec: _Change, path: str, author: By = "agent") -> None:
         original, modified = rec.base_files.get(path), rec.head_files.get(path)
         status = file_status(original, modified)
         if status is None:  # in neither version: nothing to show
@@ -320,7 +380,7 @@ class ChangeManager:
             ChangeUpdated(
                 change_id=rec.change_id,
                 agent_id=rec.agent_id,
-                author="agent",
+                author=author,
                 file=FileDiff(
                     path=path,
                     status=status,
@@ -348,52 +408,73 @@ class ChangeManager:
             if rec is None or rec.state != "working":
                 raise WrongState(f"{agent_id} has no change in progress")
             async with self._workspace.locks(agent_id=agent_id):
+                if rec.requested is not None:
+                    # R2: revision n + 1 never precedes its request in the log.
+                    failure = await self._send_requested(rec)
+                    if failure:
+                        raise RuntimeError(f"its request for changes is still unsent ({failure})")
                 head_commit, files = await self._commit(rec)
-                await self._refresh(rec, set(files) | rec.touched)
-                for path in sorted(set(files) | rec.touched):
-                    modified = rec.head_files.get(path)
-                    if path not in rec.published or rec.published[path] != modified:
-                        await self._send_file(rec, path)
-                tests = await self._run_tests(rec)
-                limits = rec.task.limits
-                impact = change_cone(
-                    rec.graph,
-                    rec.head.graph,
-                    max_depth=limits.cone_max_depth,
-                    max_nodes=limits.cone_max_nodes,
-                )
-                stats = [
-                    FileStat(path=path, status=status, lines_added=plus, lines_removed=minus)
-                    for path, status in sorted(files.items())
-                    for plus, minus in [
-                        count_lines(rec.base_files.get(path), rec.head_files.get(path))
-                    ]
-                ]
-                await self._publish(
-                    ChangeProposed(
-                        change_id=rec.change_id,
-                        agent_id=agent_id,
-                        revision=rec.revision + 1,
-                        task=rec.task.task,
-                        summary=summary,
-                        base_commit=rec.base_commit,
-                        head_commit=head_commit,
-                        files=stats,
-                        lines_added=sum(s.lines_added for s in stats),
-                        lines_removed=sum(s.lines_removed for s in stats),
-                        graph=rec.graph,
-                        tests=tests,
-                        impact=impact,
-                    )
-                )
-                rec.revision += 1
-                rec.head_commit = head_commit
+                await self._proposal(rec, head_commit, files, "agent", summary)
             return True
         except Exception as error:
             source: Source = "git" if isinstance(error, WorkspaceError) else "server"
             change = rec.change_id if rec else agent_id
             await self._error(source, f"{change} could not be proposed: {error}", rec, fatal=True)
             return False
+
+    async def _proposal(
+        self,
+        rec: _Change,
+        head: str,
+        files: dict[str, FileStatus],
+        author: By,
+        summary: str | None,
+    ) -> None:
+        """Republish what differs from what the UI holds, test the worktree, take the cone on the
+        agent's version, then publish `change.proposed` (revision n + 1) and record it in one
+        `_whole` step. The caller holds the agent's lock and has committed `head`."""
+        paths = set(files) | rec.touched | rec.unpublished
+        await self._refresh(rec, paths)
+        for path in sorted(paths):
+            modified = rec.head_files.get(path)
+            fresh = path in rec.published and rec.published[path] == modified
+            if path in rec.unpublished or not fresh:
+                await self._send_file(rec, path, author)
+        tests = await self._run_tests(rec)
+        limits = rec.task.limits
+        impact = change_cone(
+            rec.graph,
+            rec.head.graph,
+            max_depth=limits.cone_max_depth,
+            max_nodes=limits.cone_max_nodes,
+        )
+        stats = [
+            FileStat(path=path, status=status, lines_added=plus, lines_removed=minus)
+            for path, status in sorted(files.items())
+            for plus, minus in [count_lines(rec.base_files.get(path), rec.head_files.get(path))]
+        ]
+        proposal = ChangeProposed(
+            change_id=rec.change_id,
+            agent_id=rec.agent_id,
+            revision=rec.revision + 1,
+            task=rec.task.task,
+            summary=summary,
+            base_commit=rec.base_commit,
+            head_commit=head,
+            files=stats,
+            lines_added=sum(s.lines_added for s in stats),
+            lines_removed=sum(s.lines_removed for s in stats),
+            graph=rec.graph,
+            tests=tests,
+            impact=impact,
+        )
+        await self._whole(self._record_proposal(rec, proposal))
+
+    async def _record_proposal(self, rec: _Change, proposal: ChangeProposed) -> None:
+        """R7: a run cancelled during this publish still finds the record matching the store."""
+        await self._publish(proposal)
+        rec.revision, rec.head_commit = proposal.revision, proposal.head_commit
+        rec.proposed_now, rec.summary = True, proposal.summary
 
     async def _commit(self, rec: _Change) -> tuple[str, dict[str, FileStatus]]:
         """Commit the worktree as the agent; HEAD, and the files that differ from the base."""
@@ -420,16 +501,19 @@ class ChangeManager:
             )
         return run.result
 
-    def run_ended(self, agent_id: AgentId, end: RunEnd | None) -> None:
-        """The run is over (`None`: it raised): `ready` if it was proposed, else `unproposed`."""
+    def run_ended(self, agent_id: AgentId, end: RunEnd | None, *, steps: int | None = None) -> None:
+        """The run is over (`end` is `None` when it raised or was cancelled): `ready` if this run
+        proposed, else `unproposed`. `steps`, the run's own count, wins over `end.steps`."""
         rec = self._agents.get(agent_id)
         if rec is None:
             raise ChangeNotFound(agent_id)
         if rec.state != "working":
             return
-        if end is not None:
+        if steps is not None:
+            rec.steps = steps
+        elif end is not None:
             rec.steps = end.steps
-        rec.state = "ready" if rec.head_commit is not None else "unproposed"
+        rec.state = "ready" if rec.proposed_now else "unproposed"
 
     # --- Decisions ----------------------------------------------------------------------------
 
@@ -446,7 +530,7 @@ class ChangeManager:
         rec.decision += 1
         return rec
 
-    def _decide(self, rec: _Change, work: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+    def _decide[T](self, rec: _Change, work: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
         """Run a decision in a tracked task. A decision that ends still `deciding`, such as a task
         cancelled before its first step, which runs none of its code, goes back to `fallback`
         through a done-callback, which runs before anyone awaiting the task resumes. The callback
@@ -477,6 +561,14 @@ class ChangeManager:
         rec = self._take(change_id, REJECTABLE, "reject")
         return self._decide(rec, self._reject(rec, comment))
 
+    def request_changes(self, change_id: ChangeId, comment: str) -> asyncio.Task[Revision | None]:
+        """Send the comment back to the agent; its worktree, branch, base and files stay. From
+        `conflict`, main is merged into the agent's branch first. The task returns what the agent
+        resumes with, the change `working`; or `None` after an `error` when the base could not
+        move, the change still `conflict` (or `broken`, when the worktree's state is unknown)."""
+        rec = self._take(change_id, REVISABLE, "request changes")
+        return self._decide(rec, self._request_changes(rec, comment))
+
     async def check_main(self) -> bool | None:
         """Under main's lock: True when main has no `MERGE_HEAD` and `status --porcelain` is empty,
         False otherwise, None when git fails or times out."""
@@ -498,12 +590,16 @@ class ChangeManager:
         while self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         for rec in list(self._pending.values()):
-            if rec.state != "closing":
-                continue  # all sent; only its cleanup is pending
             async with self._workspace.locks(main=True, agent_id=rec.agent_id):
-                failure = await self._try_close_out(rec)
+                if rec.state == "closing":
+                    failure = await self._try_close_out(rec)
+                    names = [name for name, _ in self._unsent(rec)]
+                elif rec.requested is not None:
+                    failure, names = await self._send_requested(rec), ["requested"]
+                else:
+                    continue  # all sent; only its cleanup is pending
                 if failure:
-                    unsent = ", ".join(EVENT_TYPES[name] for name, _ in self._unsent(rec))
+                    unsent = ", ".join(EVENT_TYPES[name] for name in names)
                     reported = await self._error(
                         "server",
                         f"Shutting down with the close-out of {rec.change_id} incomplete "
@@ -540,6 +636,173 @@ class ChangeManager:
                 await self._recover(rec, comment, pre, error)
             if rec.merged:
                 await self._finish(rec)
+
+    async def _request_changes(self, rec: _Change, comment: str) -> Revision | None:
+        await self._finish_pending()
+        note: str | None = None
+        if rec.fallback == "conflict":
+            # Phase A, cancellable: a cancel before phase B leaves the change as it was.
+            async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+                move = _Move()
+                try:
+                    note = await self._move_base(rec, move)
+                except asyncio.CancelledError:
+                    await self._settle_move(rec, move, None)
+                    raise
+                except Exception as error:
+                    await self._settle_move(rec, move, error)
+                    return None
+        return await self._whole(self._requested(rec, comment, note))
+
+    async def _move_base(self, rec: _Change, move: _Move) -> str:
+        """Merge main's HEAD into the agent's branch, committing as the agent; unmerged paths are
+        committed with their markers, for the agent, which has no git, to resolve. The note."""
+        main, tree = self._workspace.main, rec.tree
+        move.main_head = (await self._git(main, "rev-parse", "HEAD")).strip()
+        if (await self._git(main, "status", "--porcelain")).strip():
+            raise WorkspaceError("main has uncommitted changes")
+        move.old_head = (await self._git(tree, "rev-parse", "HEAD")).strip()
+        message = f"Merge main into {rec.change_id} ({rec.agent_id})"
+        result = await self._run(tree, "merge", "--no-ff", "--no-commit", move.main_head)
+        if result.returncode == 0:
+            # Exit 0 with no MERGE_HEAD: the branch already holds main.
+            if await self._yes_no(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+                await self._git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
+        elif result.returncode == 1 and (
+            await self._git(tree, "diff", "--name-only", "--diff-filter=U", "-z")
+        ).strip("\0"):
+            await self._git(tree, "add", "-A")
+            await self._git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
+        else:
+            detail = "timed out" if result.timed_out else self._workspace.redact(result.stderr)
+            raise WorkspaceError(f"git merge failed: {detail.strip()[-500:]}")
+        await self._moved(rec, move.main_head)
+        return self._move_note(rec)
+
+    async def _moved(self, rec: _Change, main_head: str) -> None:
+        """R4: the base is `main_head`. Both versions come from the trees, the head from every file
+        of the worktree, never only the paths in the new diff, so what main added stays in the
+        graph and the cone. Each file whose original or modified changed is shown again. Nothing
+        is recorded until every read is done; a file not shown stays in `unpublished`, which the
+        next edit or proposal sends."""
+        main, tree = self._workspace.main, rec.tree
+        base_files, base = self._bases.get(main_head) or await self._read_base(main, main_head)
+        head_files = await self._read_files(tree)
+        head = await parse(head_files, main_head, None)
+        diff = ("diff", "--name-only", "--no-renames", "-z", main_head, "HEAD")
+        names = await self._git(tree, *diff)
+        touched = {path for path in names.split("\0") if path}
+        for path in rec.published.keys() | rec.touched | touched:
+            before = rec.base_files.get(path), rec.head_files.get(path)
+            if before != (base_files.get(path), head_files.get(path)):
+                rec.unpublished.add(path)
+        rec.base_commit, rec.base_files, rec.base = main_head, base_files, base
+        rec.head_files, rec.head, rec.touched = head_files, head, touched
+        rec.graph = change_graph(base, head)
+        for path in sorted(rec.unpublished):
+            try:
+                await self._send_file(rec, path)
+            except Exception as error:
+                await self._error(
+                    "server", f"{path} was not shown again: {error}", rec, fatal=False
+                )
+
+    @staticmethod
+    def _move_note(rec: _Change) -> str:
+        markers = [
+            path
+            for path in sorted(rec.touched)
+            if any(line.startswith("<<<<<<< ") for line in rec.head_files.get(path, "").split("\n"))
+        ]
+        note = (
+            "Main was merged into your branch: your change now starts from main's latest version."
+        )
+        if markers:
+            note += f" These files have git conflict markers to resolve: {', '.join(markers)}."
+        tests = rec.conflict.tests if rec.conflict is not None else None
+        if tests is not None:
+            failed = ", ".join(tests.failed_tests) or tests.outcome
+            note += f" The tests failed with your change on main: {failed}."
+        return note
+
+    async def _settle_move(self, rec: _Change, move: _Move, error: Exception | None) -> None:
+        """R3: a base move failed or was cancelled. Still under both locks, decide from the
+        worktree's facts: abort an unfinished merge; clean at the old head is unchanged; clean at a
+        merge of the old head and main's is a move that landed, recorded from those facts; anything
+        else, git failing, or a second cancel cutting this recovery, is `broken`. Main was only
+        read, so `main_suspect` stays as it was. The change ends `conflict` or `broken`, with no
+        resolution sent; the second cancel is re-raised once the `error` is out."""
+        tree = rec.tree
+        cut = False
+        try:
+            if await self._yes_no(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+                await self._git(tree, "merge", "--abort")
+            head = (await self._git(tree, "rev-parse", "HEAD")).strip()
+            clean = not (await self._git(tree, "status", "--porcelain")).strip()
+            parents = (await self._git(tree, "rev-list", "--parents", "-n", "1", head)).split()[1:]
+            if clean and move.old_head in (None, head):  # None: the merge never ran
+                note = "its worktree is unchanged; request changes again or reject"
+            elif clean and move.main_head and parents == [move.old_head, move.main_head]:
+                await self._moved(rec, move.main_head)
+                note = "main was merged into its worktree; request changes again to revise"
+            else:
+                raise WorkspaceError("the worktree is neither unchanged nor merged")
+            rec.state = "conflict"
+        except (Exception, asyncio.CancelledError) as failure:
+            # A second cancel may have cut the recovery before its abort ran, so the worktree can
+            # still be mid-merge; `_restore` would put such a change back to `conflict`.
+            cut = isinstance(failure, asyncio.CancelledError)
+            rec.state = "broken"
+            note = "its worktree's state is unknown; reject the change"
+        what = "was cancelled" if error is None else f"failed: {error}"
+        await self._error(
+            "git", f"Requesting changes on {rec.change_id} {what}; {note}.", rec, fatal=False
+        )
+        if cut:
+            raise asyncio.CancelledError
+
+    async def _requested(self, rec: _Change, comment: str, note: str | None) -> Revision:
+        """Phase B, one `_whole` step: the resolution and `working` go together whatever cancels
+        come. R2: a resolution the store refused twice stays pending, and the revision starts."""
+        rec.requested = ChangeResolved(
+            change_id=rec.change_id,
+            agent_id=rec.agent_id,
+            revision=rec.revision,
+            decision="changes_requested",
+            reason=None,
+            comment=comment,
+            merge=None,
+            merge_commit=None,
+            conflict=None,
+        )
+        failure = await self._send_requested(rec)
+        if failure:
+            self._pending[rec.agent_id] = rec
+            await self._error(
+                "server",
+                f"The request for changes on {rec.change_id} was not sent ({failure}); "
+                "it is sent before the next proposal.",
+                rec,
+                fatal=False,
+            )
+        rec.state, rec.proposed_now = "working", False
+        rec.requests += 1
+        return Revision(comment, note)
+
+    async def _send_requested(self, rec: _Change) -> str:
+        """Send a pending `changes_requested`, up to `CLOSE_OUT_ATTEMPTS` tries: the last failure,
+        or "" once the store took it. A change pending only for it then leaves `_pending`."""
+        await self._drain(rec)
+        failure = ""
+        for _ in range(CLOSE_OUT_ATTEMPTS):
+            if rec.requested is None:
+                break
+            failure = await self._send_event(rec, "requested", rec.requested)
+        if rec.requested is not None:
+            return failure
+        if rec.state not in ("closing", "closed"):
+            self._pending.pop(rec.agent_id, None)
+        return ""
 
     async def _reject(self, rec: _Change, comment: str | None) -> None:
         await self._finish_pending()
@@ -588,6 +851,8 @@ class ChangeManager:
             detail = "timed out" if result.timed_out else self._workspace.redact(result.stderr)
             raise WorkspaceError(f"git merge failed: {detail.strip()[-500:]}")
         if await self._yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+            if pre != rec.base_commit and not await self._combined_tests_pass(rec, comment, pre):
+                return
             await self._git(
                 main,
                 "commit",
@@ -610,10 +875,37 @@ class ChangeManager:
         await self._git(main, "merge", "--abort")
         if not (await self._facts(rec.head_commit or rec.base_commit)).unchanged(pre):
             raise WorkspaceError("main did not return to its HEAD after the conflict")
-        conflict = Conflict(kind="merge", paths=paths, tests=None)
-        await self._publish(self._resolution(rec, "approved", comment, conflict=conflict))
-        rec.state = "conflict"
+        await self._conflicted(rec, comment, Conflict(kind="merge", paths=paths, tests=None))
         return True
+
+    async def _combined_tests_pass(self, rec: _Change, comment: str | None, pre: str) -> bool:
+        """R5: main moved since the change's base, so the merge, staged on main, is tested before
+        its commit. A failure or timeout aborts it and resolves as a tests conflict. A cancel
+        during the run is `_recover`'s, which aborts on `MERGE_HEAD`."""
+        main = self._workspace.main
+        run = await self._workspace.run_tests(main, timeout_s=rec.task.limits.test_timeout_s)
+        if run.result.outcome == "passed":
+            return True
+        await self._git(main, "merge", "--abort")
+        if not (await self._facts(rec.head_commit or rec.base_commit)).unchanged(pre):
+            raise WorkspaceError("main did not return to its HEAD after the combined tests")
+        await self._conflicted(rec, comment, Conflict(kind="tests", paths=[], tests=run.result))
+        return False
+
+    async def _conflicted(self, rec: _Change, comment: str | None, conflict: Conflict) -> None:
+        """Main is back at `pre`: send the approval's conflict and record it, as one `_whole` step,
+        so a cancel never leaves a resolution in the store that the record, and so a second
+        Approve or a Request changes, does not know. The change stays `deciding`, with `conflict`
+        as its fallback: the decision's end, or its recovery, makes it `conflict`, and no other
+        decision enters before."""
+        resolution = self._resolution(rec, "approved", comment, conflict=conflict)
+        await self._whole(self._record_conflict(rec, resolution, conflict))
+
+    async def _record_conflict(
+        self, rec: _Change, resolution: ChangeResolved, conflict: Conflict
+    ) -> None:
+        await self._publish(resolution)
+        rec.conflict, rec.fallback = conflict, "conflict"
 
     async def _facts(self, head_commit: str) -> _Facts:
         main = self._workspace.main
@@ -628,9 +920,9 @@ class ChangeManager:
         self, rec: _Change, comment: str | None, pre: str | None, error: Exception | None
     ) -> None:
         """Decide from git facts after a failed approval, or a cancelled one (`error` is `None`):
-        abort an unfinished merge, record a landed one. No `reset --hard`, no lock removal. A
-        cancelled approval always reports; a landed merge closes out first and leaves its cleanup
-        to the next decision or `open`."""
+        abort an unfinished merge, record a landed one; a conflict already sent stays `conflict`. No
+        `reset --hard`, no lock removal. A cancelled approval always reports; a landed merge closes
+        out first and leaves its cleanup to the next decision or `open`."""
         main = self._workspace.main
         facts: _Facts | None = None
         try:
@@ -646,8 +938,12 @@ class ChangeManager:
             await self._close_out(rec)
             note = "the merge landed and is recorded"
         elif facts is not None and facts.unchanged(pre):
-            rec.state = "ready"
-            note = "main is unchanged; approve again or reject"
+            if rec.fallback == "conflict":  # set only by `_record_conflict`: the store has it
+                rec.state = "conflict"
+                note = "main is unchanged and the conflict is recorded; request changes or reject"
+            else:
+                rec.state = "ready"
+                note = "main is unchanged; approve again or reject"
         else:
             self._break(rec)
             note = "main's state is unknown; reject the change or restart"
@@ -682,7 +978,7 @@ class ChangeManager:
             model=rec.model_id,
             state="done",
             step=rec.steps,
-            max_steps=task.limits.max_steps,
+            max_steps=task.limits.max_steps * (rec.requests + 1),
             detail=None,
         )
 
@@ -697,9 +993,14 @@ class ChangeManager:
                 self._pending.pop(rec.agent_id, None)
 
     async def _finish_pending(self) -> None:
-        """Before a decision or an `open`: retry every unfinished close-out and cleanup."""
+        """Before a decision or an `open`: retry every unfinished close-out and cleanup, and every
+        unsent request for changes, which closes nothing."""
         for rec in list(self._pending.values()):
-            await self._finish(rec)
+            if rec.state in ("closing", "closed"):
+                await self._finish(rec)
+            else:
+                async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+                    await self._send_requested(rec)
 
     async def _close_out(self, rec: _Change) -> None:
         """The only way into `closed`: the resolution, the delta (approve only), then `done`, each
@@ -726,8 +1027,10 @@ class ChangeManager:
         return failure
 
     def _unsent(self, rec: _Change) -> list[tuple[str, EventPayload]]:
-        """The close-out events not yet sent, in order: the resolution, the delta, `done`."""
+        """The close-out events not yet sent, in order: an unsent request for changes, the
+        resolution, the delta, `done`."""
         events: list[tuple[str, EventPayload | None]] = [
+            ("requested", rec.requested),
             ("resolved", rec.resolution),
             ("delta", rec.delta),
             ("done", self._done(rec)),
@@ -774,6 +1077,9 @@ class ChangeManager:
         if rec.sending is sending:
             rec.sending = None
         if sending.cancelled() or sending.exception() is not None:
+            return
+        if name == "requested":
+            rec.requested = None  # one per request, so never in `sent`
             return
         rec.sent.add(name)
         if name == "delta" and rec.next_snapshot is not None:
