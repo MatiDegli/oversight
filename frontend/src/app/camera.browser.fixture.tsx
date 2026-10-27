@@ -1,5 +1,5 @@
 // Browser-only component harness; never imported by the application.
-import type { ServerEvent } from "@contracts";
+import type { GraphSnapshot, ServerEvent } from "@contracts";
 import { useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -9,9 +9,12 @@ import type { Framing, GraphApi } from "../graph";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import { fieldInput } from "./fieldScope";
 import { graphScope } from "./graphScope";
-import { ZoomControls } from "./GraphOverlays";
+import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
+import { TopBar } from "./TopBar";
 import { initialView } from "./view";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
+import demoGraph from "../../../fixtures/graph/demo-repo.json";
+import demoPreset from "../../../fixtures/layouts/demo-repo.json";
 
 const CHANGED = "shop.pricing:compute_price";
 const CALLER = "shop.cart:Cart.quote_add";
@@ -46,7 +49,9 @@ async function loadCone() {
 }
 
 /** Exercise the camera without importing Frame's unrelated Monaco editor and workers. */
-function Harness({ mode }: { mode: Mode }) {
+function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
+  const state = stateStore.getState().state;
+  const startArea = useRef<HTMLDivElement>(null);
   const api = useRef<GraphApi | null>(null);
   const card = useRef<HTMLDivElement>(null);
   const [framing, setFraming] = useState<Framing | null>(null);
@@ -59,45 +64,63 @@ function Harness({ mode }: { mode: Mode }) {
     [mode],
   );
   // Use Frame's scope builders so live preview lights stay separate from review framing.
-  const { cone: impact, liveCone, litIds } = useMemo(() => graphScope(recorded, view), [view]);
-  const field = useMemo(() => fieldInput(recorded, view, liveCone), [view, liveCone]);
+  const { cone: impact, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
+  const field = useMemo(() => fieldInput(state, view, liveCone), [state, view, liveCone]);
   return (
-    <div className="flex h-full bg-ground text-text">
-      {mode !== "watch" && <aside aria-label="Panel" className="w-[700px] shrink-0" />}
-      <main className="relative min-w-0 flex-1">
-        <GraphView
-          panelOpen={mode !== "watch"}
-          frameIds={[CHANGED]}
-          frameKey={mode}
-          cone={impact}
-          liveCone={liveCone}
-          litIds={litIds}
-          field={field}
-          onFramed={setFraming}
-          coneCardRef={card}
-          apiRef={api}
-        />
-        {impact && (
-          <div ref={card} className="absolute top-6 left-6 w-(--cone-card-width)">
-            <ImpactConeCard
-              cone={impact}
-              nodes={nodes}
-              outOfView={framing?.outOfView}
-              onReveal={(id) => api.current?.reveal(id)}
-            />
-          </div>
-        )}
-        <div className="absolute right-6 bottom-6">
-          <ZoomControls api={api} />
-        </div>
-      </main>
+    <div className="flex h-full flex-col bg-ground text-text">
+      {demo && <TopBar state={state} />}
+      <div className="flex min-h-0 flex-1">
+        {mode !== "watch" && <aside aria-label="Panel" className="w-[700px] shrink-0" />}
+        <main className="relative min-w-0 flex-1">
+          <GraphView
+            panelOpen={mode !== "watch"}
+            frameIds={[CHANGED]}
+            frameKey={mode}
+            cone={impact}
+            liveCone={liveCone}
+            startAreaRef={demo ? startArea : undefined}
+            litIds={litIds}
+            field={field}
+            onFramed={setFraming}
+            coneCardRef={card}
+            apiRef={api}
+          />
+          {impact && (
+            <div ref={card} className="absolute top-6 left-6 w-(--cone-card-width)">
+              <ImpactConeCard
+                cone={impact}
+                nodes={nodes}
+                outOfView={framing?.outOfView}
+                onReveal={(id) => api.current?.reveal(id)}
+              />
+            </div>
+          )}
+          {demo ? (
+            <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
+              <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
+                <GraphHeading state={state} />
+              </div>
+              <div ref={startArea} className="min-h-0 flex-1" />
+              <div className="flex items-end justify-between gap-(--spacing-lg)">
+                <Legend state={state} />
+                <ZoomControls api={api} />
+              </div>
+            </div>
+          ) : (
+            <div className="absolute right-6 bottom-6">
+              <ZoomControls api={api} />
+            </div>
+          )}
+        </main>
+        {demo && <aside aria-label="Agents" className="w-(--agents-panel-width) shrink-0" />}
+      </div>
     </div>
   );
 }
 
-function render(mode: Mode) {
+function render(mode: Mode, demo = false) {
   flushSync(() => {
-    root.render(<Harness mode={mode} />);
+    root.render(<Harness mode={mode} demo={demo} />);
   });
 }
 
@@ -126,6 +149,16 @@ export const graphTest = {
   caller: CALLER,
   mount: () => {
     render("watch");
+  },
+  mountEmpty() {
+    stateStore.setState({ state: createInitialState() });
+    render("watch", true);
+  },
+  loadDemo() {
+    stateStore.setState({
+      state: { ...recorded, graph: { ...demoGraph, positions: demoPreset } as GraphSnapshot },
+    });
+    render("watch", true);
   },
   open: () => {
     render("panel");

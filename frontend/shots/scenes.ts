@@ -88,9 +88,15 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
                   }
                 : undefined;
             })(),
-            outOfView: [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
-              .filter((row) => row.textContent.includes("Out of view"))
-              .map((row) => row.querySelector("[title]")?.getAttribute("title") ?? ""),
+            outOfView: [
+              ...new Set(
+                [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
+                  .filter((row) => row.textContent.includes("Out of view"))
+                  .map((row) =>
+                    view.representative(row.querySelector("[title]")?.getAttribute("title") ?? ""),
+                  ),
+              ),
+            ],
             pan: view.pan(),
             size: { width: host.clientWidth, height: host.clientHeight },
             focus: view.nodeBounds().filter((node) => node.id === nodeId),
@@ -210,6 +216,15 @@ export const scenes: readonly Scene[] = [
     // double; it is a capture of the file view, not a saved edit reconstructed from the log.
     prepare: async (page) => {
       const path = "shop/cart.py";
+      // The uncut start camera may leave Cart wholly outside the view. Reveal it as a person
+      // would before opening the file; a screenshot must not click an offscreen class row.
+      await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating() === false,
+      );
       const content = await readFile(new URL(`../../demo-repo/${path}`, import.meta.url), "utf8");
       await page.route("**/files?*", (route) =>
         route.fulfill({
@@ -221,6 +236,23 @@ export const scenes: readonly Scene[] = [
           },
         }),
       );
+      const folded = await page.evaluate(() => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        const row = host?.oversightGraph
+          ?.nodeCenters(".folded")
+          .find(({ id }) => id === "shop.cart:Cart");
+        const box = host?.getBoundingClientRect();
+        return row && box ? { x: box.left + row.x, y: box.top + row.y } : null;
+      });
+      if (folded) {
+        await page.mouse.click(folded.x, folded.y);
+        await page.waitForFunction(
+          () =>
+            document
+              .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+              ?.oversightGraph?.animating() === false,
+        );
+      }
       const point = await page.evaluate(() => {
         const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
         const node = host?.oversightGraph
