@@ -52,7 +52,15 @@ export default defineConfig({
           exclude: ["src/**/*.browser.test.{ts,tsx}"],
         },
       },
-      { extends: true, test: { name: "browser", include: ["src/**/*.browser.test.{ts,tsx}"] } },
+      {
+        extends: true,
+        test: {
+          name: "browser",
+          include: ["src/**/*.browser.test.{ts,tsx}"],
+          // These tests include cold chunk loading, fonts and browser teardown.
+          testTimeout: 30_000,
+        },
+      },
     ],
   },
 });
