@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { resolveConfig } from "vite";
 
-import { fixtureCacheDir } from "../src/app/browserCache.support.ts";
+import { fixtureCacheDir } from "./browserCache.support.ts";
 
 const configFile = resolve(import.meta.dirname, "../vite.config.ts");
 
@@ -37,6 +37,7 @@ void test("without it, the cache stays in node_modules/.vite, as make dev has it
 void test("concurrent app fixture families never write to the same Vite cache", () => {
   const families = [
     "app/camera",
+    "app/appDecisions",
     "app/dotField",
     "app/taskBox",
     "app/fileView",
@@ -44,6 +45,7 @@ void test("concurrent app fixture families never write to the same Vite cache", 
     "app/review",
     "app/reviewControls",
     "editor/LiveDiff",
+    "editor/diffViewport",
     "graph/folds",
   ];
   const caches = families.map((family) => {

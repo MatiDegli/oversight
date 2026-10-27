@@ -92,7 +92,9 @@ def delta(
 
 
 def open_store(tmp_path: Path, clock: StepClock | None = None) -> EventStore:
-    return EventStore(tmp_path / "runs" / f"{RUN_ID}.sqlite", RUN_ID, clock or StepClock())
+    return EventStore(
+        tmp_path / "runs" / f"{RUN_ID}.sqlite", RUN_ID, clock or StepClock(), mode="replay"
+    )
 
 
 async def test_two_concurrent_writers_get_strictly_increasing_seq_with_no_gaps(
@@ -186,7 +188,7 @@ async def test_the_graph_is_read_with_the_seq_it_reflects(tmp_path: Path) -> Non
 async def test_a_run_started_for_another_run_is_refused(tmp_path: Path) -> None:
     started = read_jsonl(FIXTURES / "handwritten-level1.jsonl")[0].payload
     assert isinstance(started, RunStarted)
-    async with EventStore(tmp_path / "x.sqlite", "run-20990101-000000") as store:
+    async with EventStore(tmp_path / "x.sqlite", "run-20990101-000000", mode="replay") as store:
         with pytest.raises(ValueError, match="this log is run-20990101-000000"):
             await store.publish(started)
     assert store.last_seq == 0

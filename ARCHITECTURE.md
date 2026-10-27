@@ -12,11 +12,33 @@ without calling a provider. Health reports missing settings without exposing the
 
 [Makefile](Makefile) provides the entry points:
 
-- `make dev` starts FastAPI with reload and Vite. Vite serves port 5710 and proxies API
-  routes to FastAPI, normally on 8710. The SSE proxy streams without buffering.
+- `make dev` starts FastAPI with reload and Vite. Both processes receive resolved `OVERSIGHT_PORT`
+  (8710) and `OVERSIGHT_VITE_PORT` (launcher fallback 5710), with environment precedence over `.env`.
+  Vite uses strictPort and proxies API routes while preserving Host and Origin.
+  The SSE proxy streams without buffering.
 - `make demo` checks setup, builds the frontend and serves it with the API on one origin.
-  `DEMO_PORT` defaults to 8710. Starting the server spends no model credits.
+  `DEMO_PORT` defaults to 8710; demo explicitly clears `OVERSIGHT_VITE_PORT`, overriding `.env`.
+  Starting the server spends no model credits.
 - `make replay` plays JSONL through the event store and SSE, with Vite serving the UI.
+
+[The API guard](backend/src/oversight/api/security.py), exported by the API facade and installed by
+`create_app`, checks every HTTP request and WebSocket handshake in live and server replay before
+routing. Its single policy admits only `localhost`, `127.0.0.1`, `[::1]` at P and optional V, and
+exact `http://` Origins at those authorities. Missing/duplicate/malformed Host and supplied invalid,
+null, duplicate or foreign Origin receive typed `forbidden/403` without echoing header values.
+Absent Origin is allowed for HTTP CLI writes with the terminal off; Host is still checked. No CORS
+or forwarded headers widen admission. Uvicorn disables proxy-header interpretation so the
+transport scheme, used for omitted Host ports, cannot be changed by forwarded headers. Omitted authority ports mean protocol defaults. Accepted IPv6
+authorities do not change listener binding. WebSockets are refused before acceptance (HTTP denial
+if supported, otherwise close). Lifespan and other scopes pass through; SSE is never buffered.
+
+The backend's V defaults to unset; empty V is unset, invalid ports or P=V stop startup. The shared
+settings parser also resolves launcher exports. `make shots` exports its distinct free P/V and
+checks readiness through Vite's `/graph`. `make test-browser`, under a timeout and `tools/capped.sh`,
+exercises actual dev/replay launchers, environment and port-only `.env` overrides, `/graph` and
+streaming/resumed `/events`, with its own runtime/cache. Defaults are checked from resolved exports
+without binding 8710/5710. CI invokes that target. Future terminal controls layer same-authority,
+authentication and IPv4 listener requirements on this policy; see approved guard decisions G1–G3.
 
 At live startup, the workspace takes a runtime lock, removes the previous workspace and
 worktrees, copies [demo-repo](demo-repo) and creates an initial git commit on `main`.
@@ -229,6 +251,17 @@ Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
 `GET /graph`, `GET /health` and `GET /events` provide graph, readiness and events.
 
 `GET /impact`, agent message/pause/resume, merge-mode and plan routes still return 501.
+The 1.4 reservations also include tree, history, queue, leads, GET agent/change, and change
+review/revert. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
+Six more event types are reserved: change.reviewed, change.facts_recorded, tests.executed,
+revert.resolved, queue.updated and lead.status. Transport and reducer consume their sequences.
+Approve, Reject and Request changes require the revision and head shown by the review render;
+revision zero is limited to rejecting the published agent base before any proposal.
+Live resolutions record principal and head explicitly. The writer validates each frozen
+candidate independently before SQL admission. EventRejected is terminal for that delivery;
+valid neighbors still commit with contiguous sequences. A rejected post-effect resolution
+retains its Git facts, evidence, worktree and slot until a clean restart. Replay stores are
+configured explicitly; accepting fake reviews additionally requires explicit server permission.
 Proposal cones and the frontend's live preview work without `GET /impact`.
 Backend replay returns 501 for all command routes, including file reads and rescans.
 
@@ -261,5 +294,5 @@ Main contains `changes/_policy`, `_zones`, `_runrule`, `_beforeafter`, `_reviewf
 `agents/_crossreview`. They cover merge rules, plan zones, test-run evidence, before/after
 results, review facts and cross-review parsing. They are private and not wired into the live
 flow. Reserved `change.assessed`, `merge_mode.changed` and `plan.updated` events only advance
-the frontend sequence. Contracts are at 1.3.0; 1.4.0 awaits the maintainer's approval.
+the frontend sequence. Contracts are at 1.4.0; delivery A was approved by the maintainer, 2026-10-27.
 Level 3 wiring starts after this level 2 close.

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
+from oversight.limits import SizeLimitError, bounded_text
 from oversight_contracts.common import NodeId
 from oversight_contracts.graph import Point
 
@@ -37,10 +38,10 @@ def read_layout(path: Path) -> dict[NodeId, Point]:
 
 def _parse(path: Path) -> dict[NodeId, Point]:
     try:
-        text = path.read_text(encoding="utf-8")
+        text = bounded_text(path)
     except FileNotFoundError:
         raise
-    except (OSError, UnicodeDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, SizeLimitError) as exc:
         raise _Unusable(f"it cannot be read: {exc}") from exc
     try:
         # Strict: a coordinate that is a string is a mistake, not a number to coerce.

@@ -7,7 +7,7 @@ import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect } from "vitest";
 
 import type {} from "./review.browser.fixture";
-import { fixtureCacheDir } from "./browserCache.support";
+import { fixtureCacheDir } from "../../shots/browserCache.support";
 import type { GraphProbeHost } from "../graph";
 
 let server: ViteDevServer | undefined;

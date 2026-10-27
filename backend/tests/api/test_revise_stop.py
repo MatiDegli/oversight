@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from decision_helpers import observed_body
 from live_helpers import (
     DEADLINE_S,
     BySlot,
@@ -52,6 +53,7 @@ from oversight.agents import (
 from oversight.api import ApiError
 from oversight.app import LIMITS, LiveRun
 from oversight.changes import ChangeManager, _revision
+from oversight_contracts.commands import RequestChanges
 from oversight_contracts.events import ChangeProposed
 from oversight_contracts.graph import ParseError
 
@@ -129,7 +131,15 @@ async def test_a_revision_resumes_the_kept_run_with_the_comment(
             assert "Callers:" in message and "Siblings:" in message
         [proposal] = [e.payload for e in events if isinstance(e.payload, ChangeProposed)]
         assert proposal.change_id == "change-1" and proposal.summary == "Shortened the docstring."
-        assert (await s.client.post(f"{CHANGE}/approve")).status_code == 202
+        assert (
+            await s.client.post(
+                f"{CHANGE}/approve",
+                json={
+                    **observed_body(s, "change-1"),
+                    "revision": max(1, observed_body(s, "change-1")["revision"]),
+                },
+            )
+        ).status_code == 202
         await s.until(is_type("agent.status", state="done"))
         merged = resolutions(s.events())[-1]
         assert (merged.decision, merged.merge, merged.revision) == ("approved", "merged", 2)
@@ -154,7 +164,9 @@ async def test_request_changes_keeps_the_slot(tmp_path: Path) -> None:
         await ready(s, after=events[-1].seq)
         assert live._slots == {"A": "agent-1"} and "agent-1" in live._kept  # pyright: ignore[reportPrivateUsage]
         assert error_code(await start(s)) == (409, "slot_busy")
-        assert (await s.client.post(f"{CHANGE}/reject")).status_code == 202
+        assert (
+            await s.client.post(f"{CHANGE}/reject", json=observed_body(s, "change-1"))
+        ).status_code == 202
         await s.until(is_type("agent.status", state="done"))
         assert live._slots == {"A": None} and live._kept == {}  # pyright: ignore[reportPrivateUsage]
         assert (await start(s)).status_code == 201
@@ -170,7 +182,9 @@ async def test_a_missing_or_blank_comment_is_invalid_request(
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         await start(s)
         await ready(s)
-        refused = await s.client.post(f"{CHANGE}/request-changes", json=body)
+        refused = await s.client.post(
+            f"{CHANGE}/request-changes", json={**observed_body(s), **body}
+        )
         assert refused.status_code == 422, refused.text
         assert error_code(refused) == (422, "invalid_request")
         # Nothing was taken: the change is still reviewable.
@@ -207,11 +221,27 @@ async def test_request_changes_and_stop_need_a_state_that_takes_them(
         await held.at["agent-1"].wait()  # deciding: its request is not in the log yet
         assert error_code(await request(s)) == (409, "wrong_state")
         assert error_code(await s.client.post("/agents/agent-1/stop")) == (409, "wrong_state")
-        assert error_code(await s.client.post(f"{CHANGE}/approve")) == (409, "wrong_state")
+        assert error_code(
+            await s.client.post(
+                f"{CHANGE}/approve",
+                json={
+                    **observed_body(s, "change-1"),
+                    "revision": max(1, observed_body(s, "change-1")["revision"]),
+                },
+            )
+        ) == (409, "wrong_state")
         held.open("agent-1")
         events = await ready(s, after=first[-1].seq)
         assert states(events) == ["revising", "ready_for_review"]
-        assert (await s.client.post(f"{CHANGE}/approve")).status_code == 202
+        assert (
+            await s.client.post(
+                f"{CHANGE}/approve",
+                json={
+                    **observed_body(s, "change-1"),
+                    "revision": max(1, observed_body(s, "change-1")["revision"]),
+                },
+            )
+        ).status_code == 202
         await s.until(is_type("agent.status", state="done"))
         merged = await request(s)  # the kept run went with the merge
         assert error_code(merged) == (409, "wrong_state")
@@ -312,11 +342,17 @@ async def test_a_request_taken_as_an_earlier_revision_ends_keeps_its_own_records
         first = await ready(s)
         with monkeypatch.context() as patch:
             patch.setattr(ChangeManager, "_request_changes", held_no_move)
-            live.request_changes("change-1", "First.")
+            live.request_changes(
+                "change-1", RequestChanges(comment="First.", **observed_body(s, "change-1"))
+            )
         revise = live._runs["agent-1"]  # pyright: ignore[reportPrivateUsage]
         decision = live._decisions["agent-1"]  # pyright: ignore[reportPrivateUsage]
         # Registered at once, so before `revise` first waits on the decision: it runs first.
-        decision.add_done_callback(lambda _: live.request_changes("change-1", "Second."))
+        decision.add_done_callback(
+            lambda _: live.request_changes(
+                "change-1", RequestChanges(comment="Second.", **observed_body(s, "change-1"))
+            )
+        )
         await held.wait()  # the decision waits, and `revise` waits on it
         gate.set()
         await asyncio.wait({revise})
@@ -347,7 +383,10 @@ async def test_a_request_that_moves_no_base_ends_with_no_run_and_the_change_read
         calls = len(model.requests)
         with monkeypatch.context() as patch:
             patch.setattr(ChangeManager, "_request_changes", no_move)
-            live.request_changes("change-1", "Shorter, please.")
+            live.request_changes(
+                "change-1",
+                RequestChanges(comment="Shorter, please.", **observed_body(s, "change-1")),
+            )
             await asyncio.wait({live._runs["agent-1"]})  # pyright: ignore[reportPrivateUsage]
         assert len(model.requests) == calls and not resolutions(s.events()[first[-1].seq :])
         assert not [e for e in s.events() if e.type == "error"]  # a quiet end, not a failed run
@@ -360,7 +399,12 @@ async def test_a_request_that_moves_no_base_ends_with_no_run_and_the_change_read
 
 def test_the_commands_before_the_run_starts_are_wrong_state(tmp_path: Path) -> None:
     live = LiveRun(live_settings(tmp_path))
-    for refused in (lambda: live.request_changes("change-1", "c"), lambda: live.stop("agent-1")):
+    for refused in (
+        lambda: live.request_changes(
+            "change-1", RequestChanges(comment="c", revision=1, head_commit="observed")
+        ),
+        lambda: live.stop("agent-1"),
+    ):
         with pytest.raises(ApiError) as caught:
             refused()
         assert caught.value.code == "wrong_state"

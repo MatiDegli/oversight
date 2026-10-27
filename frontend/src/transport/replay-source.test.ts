@@ -52,3 +52,18 @@ describe("chooseReplaySource", () => {
     }
   });
 });
+
+it("refuses fake reviews inside a real model recording", () => {
+  const rows = recorded.trim().split("\n");
+  rows.push(
+    JSON.stringify({
+      seq: rows.length + 1,
+      ts: "2026-10-27T14:03:40.000Z",
+      type: "change.reviewed",
+      payload: { reviewer_provider: "fake" },
+    }),
+  );
+  expect(() =>
+    chooseReplaySource(rows.join("\n"), fixture, { ...provenance, event_count: rows.length }),
+  ).toThrow();
+});

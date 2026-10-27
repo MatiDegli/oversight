@@ -45,6 +45,9 @@ const resolved = (state: State, payload: Partial<ChangeResolved>) =>
     ts,
     type: "change.resolved",
     payload: {
+      review_seq: null,
+      requested_by: null,
+      head_commit: null,
       change_id: "change-1",
       agent_id: "agent-1",
       revision: 1,
@@ -167,7 +170,11 @@ describe("the recorded braked log", () => {
 
   it("preselects B once its change is resolved, with the ledger's total read from B's tick", () => {
     const state = upTo(6);
-    expect(selectSpend(state)).toEqual({ spentUsd: 136, budgetUsd: 150, brake: "blocked" });
+    expect(selectSpend(state)).toEqual({
+      spentUsd: 136,
+      budgetUsd: 150,
+      brake: "blocked",
+    });
     expect(startBlock(state, "B")).toBeNull();
     expect(nextSlot(state)).toBe("B");
     expect(selectedSlot(state, null)).toBe("B");

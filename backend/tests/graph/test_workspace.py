@@ -83,3 +83,19 @@ def test_output_is_sorted_by_id_and_independent_of_scan_history(tmp_path: Path) 
     graph.scan(COMMIT)
     write(tmp_path, files)
     assert graph.scan(COMMIT) == WorkspaceGraph(tmp_path).scan(COMMIT) == snap
+
+
+def test_oversized_source_is_skipped_with_reason_and_recovers(tmp_path: Path) -> None:
+    from oversight.limits import MAX_FILE_BYTES
+
+    graph, _ = scan(tmp_path, {"ok.py": "def f(): ...\n", "big.py": "def before(): ...\n"})
+    (tmp_path / "big.py").write_bytes(b"#" * (MAX_FILE_BYTES + 1))
+    snap = graph.scan(COMMIT)
+    assert [n.id for n in snap.nodes] == ["ok", "ok:f"]
+    assert len(snap.parse_errors) == 1
+    assert snap.parse_errors[0].path == "big.py"
+    assert "size limit; skipped" in snap.parse_errors[0].message
+    (tmp_path / "big.py").write_text("def after(): ...\n")
+    fixed = graph.scan(COMMIT)
+    assert not fixed.parse_errors
+    assert "big:after" in {n.id for n in fixed.nodes}

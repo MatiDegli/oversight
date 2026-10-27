@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import cast
 
 from oversight.agents.client import FAKE_MODEL, Message, ModelReply, ToolCall, ToolSchema, Usage
+from oversight.limits import bounded_text
 from oversight_contracts.events import ModelProfile
 
 
@@ -85,7 +86,7 @@ def parse_script(text: str) -> Script:
 
 def load_script(path: Path) -> Script:
     """Synchronous: read scripts at start-up or in tests, not inside a running loop."""
-    return parse_script(path.read_text(encoding="utf-8"))
+    return parse_script(bounded_text(path))
 
 
 class ScriptedModel:

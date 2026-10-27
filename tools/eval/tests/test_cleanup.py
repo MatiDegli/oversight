@@ -1,7 +1,7 @@
 """Fail individual local endpoints, preserving baseline or the unresolved reservation."""
 
 import json
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from live_helpers import Scripts, live_server, live_settings  # pyright: ignore[reportMissingImports]
@@ -66,3 +66,55 @@ async def test_setup_failure_rolls_back_and_cleanup_failure_blocks_retry(endpoin
             with pytest.raises(BenchError, match="unsettled reservation"):
                 await execute(str(server.client.base_url), "fake", 1, out, [task], rates)
             assert factory.calls == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("proposed,base", [(True, "base"), (False, "base"), (False, None)])
+async def test_cleanup_uses_observed_target_or_stop(proposed: bool, base: str | None) -> None:
+    from types import SimpleNamespace
+
+    from tools.eval.run import cleanup
+
+    sent = []
+    attempt: Any = SimpleNamespace(
+        resolved=False,
+        interrupted=False,
+        terminal="halted",
+        base_commit=base,
+        proposal=SimpleNamespace(revision=3, head_commit="observed-head") if proposed else None,
+        record=SimpleNamespace(change_id="change-1", agent_id="agent-1"),
+    )
+
+    async def request(*args, **kwargs):
+        sent.append((args, kwargs))
+
+    async def reconnect():
+        pass
+
+    async def next_event():
+        return object()
+
+    def observe(*_):
+        attempt.resolved = True
+
+    attempt.observe = observe
+    session: Any = SimpleNamespace(
+        api=SimpleNamespace(request=request),
+        events=SimpleNamespace(reconnect=reconnect, next=next_event),
+    )
+    await cleanup(session, attempt, cast(Any, None))
+    if proposed or base:
+        assert sent == [
+            (
+                ("POST", "/changes/change-1/reject"),
+                {
+                    "json": {
+                        "comment": "Task bench: graded; never merge.",
+                        "revision": 3 if proposed else 0,
+                        "head_commit": "observed-head" if proposed else base,
+                    }
+                },
+            )
+        ]
+    else:
+        assert sent == [(("POST", "/agents/agent-1/stop"), {})]

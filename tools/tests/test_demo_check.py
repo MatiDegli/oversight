@@ -370,7 +370,7 @@ def test_request_changes_failure_identifies_a_lost_comment(monkeypatch: pytest.M
                     stream,
                     demo_check.OverallClock(),
                     A,
-                    SimpleNamespace(payload=SimpleNamespace(revision=1)),
+                    SimpleNamespace(payload=SimpleNamespace(revision=1, head_commit="head-1")),
                 )
         finally:
             stream.close()
@@ -400,7 +400,7 @@ def test_approve_failure_cannot_reuse_the_request_changes_resolution(
                     stream,
                     demo_check.OverallClock(),
                     A,
-                    SimpleNamespace(payload=SimpleNamespace(revision=2)),
+                    SimpleNamespace(payload=SimpleNamespace(revision=2, head_commit="head-2")),
                     cast(GraphResponse, None),
                 )
         finally:
@@ -440,7 +440,7 @@ def test_stop_requires_rejected_stopped_and_checks_worktree_cleanup(
     monkeypatch.setattr(phases, "DECIDE_DEADLINE", 0.01)
     tree = tmp_path / "worktrees" / B.agent_id
     tree.mkdir(parents=True)
-    proposal = SimpleNamespace(payload=SimpleNamespace(revision=1))
+    proposal = SimpleNamespace(payload=SimpleNamespace(revision=1, head_commit="head-1"))
     for reason, message in [
         (None, "B Stop did not resolve"),
         ("stopped", "B worktree still exists"),
@@ -495,3 +495,38 @@ def test_pending_overlay_survives_request_changes_and_is_removed_on_stop() -> No
         assert phases.pending_nodes(events, B.agent_id) == (
             {"node"} if decision == "changes_requested" else set()
         )
+
+
+@pytest.mark.parametrize("verb", ["request", "approve"])
+def test_demo_decisions_send_the_observed_guard(monkeypatch: pytest.MonkeyPatch, verb: str) -> None:
+    stub_api(monkeypatch)
+    captured = []
+
+    def capture(*args, **kwargs):
+        captured.append(kwargs["post"])
+        raise ValueError("captured request")
+
+    monkeypatch.setattr(phases, "request", capture)
+    proposal = SimpleNamespace(payload=SimpleNamespace(revision=7, head_commit="observed-head"))
+    with pytest.raises(ValueError, match="captured request"):
+        if verb == "request":
+            phases.request_revision(
+                "http://localhost",
+                cast(demo_check.EventStream, None),
+                demo_check.OverallClock(),
+                A,
+                proposal,
+            )
+        else:
+            phases.approve_a(
+                "http://localhost",
+                cast(demo_check.EventStream, None),
+                demo_check.OverallClock(),
+                A,
+                proposal,
+                cast(GraphResponse, None),
+            )
+    expected = {"revision": 7, "head_commit": "observed-head"}
+    if verb == "request":
+        expected["comment"] = "Shorten the docstring."
+    assert captured == [expected]

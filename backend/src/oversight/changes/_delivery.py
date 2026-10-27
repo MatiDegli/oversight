@@ -4,6 +4,8 @@ import logging
 import os
 from typing import Literal
 
+from oversight.agents import validate_agent_status
+from oversight.changes._resolution_validation import validate_resolution_evidence
 from oversight.changes._state import (
     CLOSE_OUT_ATTEMPTS,
     STOPPED,
@@ -14,7 +16,7 @@ from oversight.changes._versions import (
     main_delta,
     with_positions,
 )
-from oversight.events import EventPayload
+from oversight.events import EventPayload, EventRejected
 from oversight_contracts.events import (
     AgentStatus,
     ChangeResolved,
@@ -47,7 +49,9 @@ async def record_merge(
         rec.next_snapshot = with_positions(new, ctx.state.snapshot)
         supersede_pending(ctx, rec)
     rec.merged = True
-    rec.resolution = resolution(ctx, rec, "approved", comment, merge_commit=post)
+    rec.resolution = resolution(
+        ctx, rec, "approved", comment, decided_by="person", merge_commit=post
+    )
 
 
 def resolution(
@@ -56,6 +60,7 @@ def resolution(
     decision: Literal["approved", "rejected"],
     comment: str | None,
     *,
+    decided_by: Literal["person", "rules", "cross_review", "lead_agent"],
     merge_commit: str | None = None,
     conflict: Conflict | None = None,
     reason: Literal["stopped"] | None = None,
@@ -63,11 +68,15 @@ def resolution(
     merge: Literal["merged", "conflict"] | None = None
     if decision == "approved":
         merge = "conflict" if conflict is not None else "merged"
-    return ChangeResolved(
+    payload = ChangeResolved(
         change_id=rec.change_id,
         agent_id=rec.agent_id,
         revision=rec.revision,
         decision=decision,
+        decided_by=decided_by,
+        head_commit=rec.evidence.head_commit
+        if rec.evidence
+        else rec.head_commit or rec.base_commit,
         reason=reason,
         comment=comment,
         merge=merge,
@@ -75,28 +84,39 @@ def resolution(
         conflict=conflict,
     )
 
+    if rec.evidence is None:
+        raise ValueError("resolution lacks pre-effect evidence")
+    validate_resolution_evidence(payload, rec.evidence)
+    return payload
+
 
 def status(ctx: ChangeContext, rec: ChangeRecord, state: Literal["done", "stopped"]) -> AgentStatus:
     task = rec.task
-    return AgentStatus(
+    payload = AgentStatus(
         agent_id=task.agent_id,
         slot=task.slot,
         change_id=task.change_id,
         task=task.task,
         model=rec.model_id,
+        base_commit=rec.base_commit,
         state=state,
         step=rec.steps,
         max_steps=task.limits.max_steps * (rec.requests + 1),
         detail=STOPPED if state == "stopped" else None,
     )
 
+    validate_agent_status(payload, base_commit=rec.base_commit)
+    return payload
+
 
 async def finish(ctx: ChangeContext, rec: ChangeRecord) -> None:
     """Close out, then clean up once `change.resolved` is out, so a worktree or branch is never
     removed before its resolution is sent. The change stays pending until both are done."""
+    if rec.delivery_rejected:
+        return
     async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
         await close_out(ctx, rec)
-        if "resolved" in rec.sent and not rec.cleaned:
+        if not rec.delivery_rejected and "resolved" in rec.sent and not rec.cleaned:
             await cleanup(ctx, rec)
         if rec.state == "closed" and rec.cleaned:
             ctx.state.pending.pop(rec.agent_id, None)
@@ -106,6 +126,8 @@ async def finish_pending(ctx: ChangeContext) -> None:
     """Before a decision or an `open`: retry every unfinished close-out and cleanup, and every
     unsent request for changes, which closes nothing."""
     for rec in list(ctx.state.pending.values()):
+        if rec.delivery_rejected:
+            continue
         if rec.state in ("closing", "closed"):
             await finish(ctx, rec)
         else:
@@ -117,9 +139,15 @@ async def close_out(ctx: ChangeContext, rec: ChangeRecord) -> None:
     """The only way into `closed`: the resolution, the delta (approve only), then `done`, each
     marked when sent, so nothing goes twice. Until all are out the change is `closing` and
     pending, and a later call sends only what is missing. Never raises, save a cancel."""
+    if rec.delivery_rejected:
+        return
     rec.state = "closing"
     ctx.state.pending[rec.agent_id] = rec
-    failure = await try_close_out(ctx, rec)
+    try:
+        failure = await try_close_out(ctx, rec)
+    except EventRejected as error:
+        await rejected(ctx, rec, error)
+        return
     if failure:
         await ctx.error(
             "server",
@@ -164,7 +192,11 @@ async def send_close_out(ctx: ChangeContext, rec: ChangeRecord) -> str:
     """Send what is missing, in order, each event up to `CLOSE_OUT_ATTEMPTS` times; the last
     failure of the first event that never went out, or "" once everything is out. A publish
     that a cancelled close-out left running is waited for first, so it is not resent."""
+    if rec.delivery_rejected:
+        return rec.delivery_rejected
     await ctx.ports.drain(rec)
+    if rec.delivery_rejected:
+        raise EventRejected(rec.delivery_rejected)
     for name, payload in unsent_events(ctx, rec):
         failure = ""
         for _ in range(CLOSE_OUT_ATTEMPTS):
@@ -183,6 +215,8 @@ async def send_event(
     # The publish runs in its own task, kept on the record, and a done-callback records its
     # outcome: the store may commit the event however many cancels the close-out gets, and
     # the next close-out must not send it again.
+    if rec.delivery_rejected:
+        raise EventRejected(rec.delivery_rejected)
     sending = ctx.spawn(deliver(ctx, payload))
     sending.add_done_callback(functools.partial(receipt, ctx, rec, name))
     rec.sending = sending
@@ -190,6 +224,8 @@ async def send_event(
     if cancelled or sending.cancelled():
         raise asyncio.CancelledError
     failure = sending.exception()
+    if isinstance(failure, EventRejected):
+        raise failure
     return "" if failure is None else f"{name}: {failure}"
 
 
@@ -204,7 +240,14 @@ def receipt(ctx: ChangeContext, rec: ChangeRecord, name: str, sending: asyncio.T
     resumes, cancelled or not. A cancelled publish tells nothing: its event stays unsent."""
     if rec.sending is sending:
         rec.sending = None
-    if sending.cancelled() or sending.exception() is not None:
+    if sending.cancelled():
+        return
+    failure = sending.exception()
+    if isinstance(failure, EventRejected):
+        mark_rejected(ctx, rec, failure)
+        ctx.spawn(report_rejected(ctx, rec))
+        return
+    if failure is not None:
         return
     if name == "requested":
         rec.requested = None  # one per request, so never in `sent`
@@ -233,7 +276,11 @@ def supersede_pending(ctx: ChangeContext, built: ChangeRecord | None = None) -> 
 async def send_requested(ctx: ChangeContext, rec: ChangeRecord) -> str:
     """Send a pending `changes_requested`, up to `CLOSE_OUT_ATTEMPTS` tries: the last failure,
     or "" once the store took it. A change pending only for it then leaves `_pending`."""
+    if rec.delivery_rejected:
+        return rec.delivery_rejected
     await ctx.ports.drain(rec)
+    if rec.delivery_rejected:
+        raise EventRejected(rec.delivery_rejected)
     failure = ""
     for _ in range(CLOSE_OUT_ATTEMPTS):
         if rec.requested is None:
@@ -250,6 +297,8 @@ async def cleanup(ctx: ChangeContext, rec: ChangeRecord) -> None:
     """Remove the worktree, then the branch, each step skipped once done, so a rerun after a
     failure finishes the job. A failure is reported and retried by the next decision or
     `open`, as the change is still pending."""
+    if rec.delivery_rejected:
+        return
     workspace, agent = ctx.workspace, rec.agent_id
     main = workspace.main
     try:
@@ -289,12 +338,22 @@ async def aclose(ctx: ChangeContext) -> None:
     while ctx.state.tasks:
         await asyncio.gather(*ctx.state.tasks, return_exceptions=True)
     for rec in list(ctx.state.pending.values()):
+        if rec.delivery_rejected:
+            continue
         async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
             if rec.state == "closing":
-                failure = await try_close_out(ctx, rec)
+                try:
+                    failure = await try_close_out(ctx, rec)
+                except EventRejected as error:
+                    await rejected(ctx, rec, error)
+                    continue
                 names = [name for name, _ in unsent_events(ctx, rec)]
             elif rec.requested is not None:
-                failure, names = await send_requested(ctx, rec), ["requested"]
+                try:
+                    failure, names = await send_requested(ctx, rec), ["requested"]
+                except EventRejected as error:
+                    await rejected(ctx, rec, error)
+                    continue
             else:
                 continue  # all sent; only its cleanup is pending
             if failure:
@@ -315,3 +374,26 @@ async def aclose(ctx: ChangeContext) -> None:
                         rec.agent_id,
                         unsent,
                     )
+
+
+def mark_rejected(ctx: ChangeContext, rec: ChangeRecord, error: EventRejected) -> None:
+    """Terminal for this run: retain Git facts, payload, evidence, worktree and occupied slot."""
+    rec.delivery_rejected = str(error)
+    rec.state = "delivery_failed"
+    ctx.state.pending[rec.agent_id] = rec
+
+
+async def report_rejected(ctx: ChangeContext, rec: ChangeRecord) -> None:
+    if not await ctx.error(
+        "server",
+        f"Delivery rejected for {rec.change_id}; restart required: {rec.delivery_rejected}",
+        rec,
+        fatal=False,
+    ):
+        _log.error("Terminal delivery rejection for %s", rec.change_id)
+
+
+async def rejected(ctx: ChangeContext, rec: ChangeRecord, error: EventRejected) -> None:
+    if rec.delivery_rejected is None:
+        mark_rejected(ctx, rec, error)
+        await report_rejected(ctx, rec)
