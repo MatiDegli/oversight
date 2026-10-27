@@ -13,7 +13,7 @@ from changes_helpers import (
     queued_callbacks_ran,
 )
 
-from oversight.changes import ChangeNotFound, Revision, WrongState
+from oversight.changes import ChangeNotFound, WrongState
 from oversight.workspace import WorkspaceError
 from oversight_contracts.events import (
     AgentStatus,
@@ -86,7 +86,8 @@ async def test_revision_keeps_worktree_and_base(h: Harness) -> None:
 
     revision = await h.manager.request_changes("change-1", "Make it 4.")
 
-    assert revision == Revision("Make it 4.", None)
+    assert revision is not None and revision.note is None
+    assert revision.comment.startswith("Make it 4.\n\nFunctions one call away")
     [requested] = h.payloads(ChangeResolved)
     assert (requested.decision, requested.comment, requested.revision, requested.merge) == (
         "changes_requested",
