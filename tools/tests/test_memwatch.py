@@ -50,6 +50,22 @@ def test_a_bad_cap_is_refused_not_ignored(raw: str) -> None:
         memwatch.parse_cap(raw)
 
 
+@pytest.mark.parametrize(
+    ("workers", "expected"),
+    [(None, 8 * 2**30), ("1", 8 * 2**30), ("8", 2**30), ("16", 2**29), ("3", 8 * 2**30 // 3)],
+)
+def test_an_xdist_worker_gets_an_equal_share_of_the_budget_and_no_worker_all_of_it(
+    workers: str | None, expected: int
+) -> None:
+    assert memwatch.worker_cap(8 * 2**30, workers) == expected
+
+
+@pytest.mark.parametrize("workers", ["", "0", "-2", "many"])
+def test_a_bad_worker_count_is_refused_not_ignored(workers: str) -> None:
+    with pytest.raises(ValueError, match=memwatch.ENV_WORKERS):
+        memwatch.worker_cap(8 * 2**30, workers)
+
+
 def test_rss_is_this_process_and_grows_with_what_it_holds() -> None:
     before = memwatch.self_rss_bytes()
     assert before > 10 * MIB
@@ -94,7 +110,11 @@ def test_this_run_has_the_memory_cap_armed_and_knows_which_test_runs(
     watch = request.config.pluginmanager.get_plugin(memwatch.PLUGIN_NAME)
     assert isinstance(watch, memwatch.MemoryWatch), "the root conftest.py does not load memwatch"
     assert watch.watchdog.alive
-    assert watch.watchdog.cap_bytes == memwatch.parse_cap(os.environ.get(memwatch.ENV_CAP))
+    total = memwatch.parse_cap(os.environ.get(memwatch.ENV_CAP))
+    # Under pytest-xdist this process is a worker, and its cap is its share of the budget.
+    assert watch.watchdog.cap_bytes == memwatch.worker_cap(
+        total, os.environ.get(memwatch.ENV_WORKERS)
+    )
     assert watch.current == request.node.nodeid
 
 
@@ -231,6 +251,90 @@ def test_a_test_that_outlives_the_timeout_fails_alone_with_its_name(tmp_path: Pa
     assert "Failed: Timeout (>1.0s) from pytest-timeout." in run.stdout
     assert "FAILED test_inner.py::test_hangs" in run.stdout
     assert "1 failed, 1 passed" in run.stdout
+
+
+# --- the same caps in a pytest-xdist run, where the Makefile's pytest runs ----------------------
+
+XDIST = ("-n", "2", "--max-worker-restart=0")  # what make check passes, with two workers
+XDIST_CAP_GB = "1.2"  # the budget of the run: 1229 MiB, so 614 MiB for each of two workers
+XDIST_HELD_MIB = 900  # above a worker's share, and below the whole budget
+
+
+def test_a_worker_over_its_share_ends_the_run_naming_itself_and_none_is_restarted(
+    tmp_path: Path,
+) -> None:
+    """900 MiB is under the budget of the run and over a worker's half of it: only the division
+    ends the run. The controller sees a crashed worker, and restarting is off."""
+    run = inner_pytest(
+        tmp_path,
+        f"""\
+        import threading
+
+        def test_grows():
+            blob = b"x" * ({XDIST_HELD_MIB} * 2**20)
+            threading.Event().wait({INNER_WAIT_S})  # the watchdog ends the worker long before this
+        """,
+        *XDIST,
+        cap_gb=XDIST_CAP_GB,
+    )
+    assert run.returncode != 0, run.stdout + run.stderr
+    lines = memory_cap_lines(run.stderr)
+    assert len(lines) == 1, run.stdout + run.stderr
+    assert "test_inner.py::test_grows" in lines[0]
+    assert "0.60 GiB" in lines[0]
+    assert "split over 2 workers" in lines[0]
+    assert "crashed" in run.stdout
+    assert "replacing crashed worker" not in run.stdout + run.stderr, "a worker was restarted"
+
+
+def test_the_time_cap_fails_one_test_in_a_worker_and_the_rest_run(tmp_path: Path) -> None:
+    run = inner_pytest(
+        tmp_path,
+        f"""\
+        import threading
+
+        def test_hangs():
+            threading.Event().wait({INNER_WAIT_S})  # the timeout ends it long before this
+
+        def test_next_still_runs():
+            assert True
+        """,
+        *XDIST,
+        "-o",
+        "timeout=1",
+        cap_gb="8",
+    )
+    assert run.returncode == 1, run.stdout + run.stderr
+    assert "Failed: Timeout (>1.0s) from pytest-timeout." in run.stdout
+    assert "FAILED test_inner.py::test_hangs" in run.stdout
+    assert "1 failed, 1 passed" in run.stdout
+
+
+def test_a_worker_shares_the_process_group_and_the_scope_of_its_controller(tmp_path: Path) -> None:
+    """tools/bounded.sh ends a process group and tools/capped.sh holds a cgroup, both from the
+    controller's side: a worker in either of its own would escape the outer bound or the 10G."""
+    run = inner_pytest(
+        tmp_path,
+        """\
+        import os
+        from pathlib import Path
+
+        def test_where_the_worker_runs():
+            parent = os.getppid()
+            cgroup = Path("/proc/self/cgroup").read_text()
+            Path(os.environ["INNER_DIR"], "worker.txt").write_text(
+                f"{parent} {os.getpgid(0) == os.getpgid(parent)} "
+                f"{cgroup == Path(f'/proc/{parent}/cgroup').read_text()}"
+            )
+        """,
+        *XDIST,
+        cap_gb="8",
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+    parent, same_group, same_scope = (tmp_path / "worker.txt").read_text().split()
+    assert int(parent) == run.pid, "the test did not run in a worker of the inner pytest"
+    assert same_group == "True", "a worker is outside its controller's process group"
+    assert same_scope == "True", "a worker is outside its controller's cgroup"
 
 
 class Interrupted(Exception):
