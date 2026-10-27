@@ -1,10 +1,6 @@
-import logging
-
 from oversight.changes import _delivery as delivery
 from oversight.changes._state import ChangeRecord, Facts
 from oversight.changes._support import ChangeContext
-
-_log = logging.getLogger("oversight.changes._manager")
 
 
 async def read_facts(ctx: ChangeContext, head_commit: str) -> Facts:

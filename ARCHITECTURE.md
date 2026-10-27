@@ -161,11 +161,10 @@ Its stage split (2026-10-27) keeps the same signatures, tasks and event ordering
 - `_delivery` owns close-out, receipts, retries, cleanup and shutdown. Its only facade callback,
   `ChangePorts.drain`, resolves the static `_drain` dynamically; the three delivery wait sites all
   use it. Other stage calls use direct imports.
-- `_manager` keeps synchronous admission, file/save transactions, review edits, Request changes,
-  Reject, Stop and main checks. Its assignable compatibility properties delegate to the owners;
-  `request_changes` continues resolving `_request_changes` when called.
+- `_files` owns file/review saves, reads, rescans and main checks; `_revision` owns Request changes and base moves.
+- `_manager` retains admission, Reject, Stop and forwarding; compatibility properties delegate, and `request_changes` dynamically calls `_request_changes`.
 
-The stage map, historical AST fidelity method and residual file/revision inventory are in
+The stage map and historical AST fidelity method are in
 [the change plan](docs/plans/changes.md#1-facade-and-callers). The original logger name is retained.
 Existing tests and contracts are unchanged. `_policy`, `_zones` and `_beforeafter` remain unwired.
 Enforced by `private-changes`, `layers`, `model-gate`, `web-at-the-edge` and the forbidden

@@ -1,5 +1,4 @@
 import asyncio
-import logging
 
 from oversight.changes import _delivery as delivery
 from oversight.changes import _merge as merge
@@ -13,8 +12,6 @@ from oversight.changes._support import ChangeContext
 from oversight.workspace import (
     WorkspaceError,
 )
-
-_log = logging.getLogger("oversight.changes._manager")
 
 
 async def approve(ctx: ChangeContext, rec: ChangeRecord, comment: str | None) -> None:

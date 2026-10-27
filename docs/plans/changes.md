@@ -29,7 +29,8 @@ starting agents stays in front 16.
 | `_merge.py` | Merge, combined tests and conflict publication |
 | `_recovery.py` | Git facts and approval recovery |
 | `_delivery.py` | Merge record, close-out, receipts, retries, pending work, cleanup, shutdown and `EVENT_TYPES` |
-| `_manager.py` | Synchronous admission, forwarding facade, files, saves, revisions, Reject, Stop and `_drain` |
+| `_files.py`, `_revision.py` | File/read/save/rescan/main checks; Request changes and base-move transactions |
+| `_manager.py` | 282-line admission/forwarding facade, Reject, Stop and dynamic `_request_changes`/`_drain` |
 
 `_versions.py` and `_diff.py` retain their existing responsibilities. `_policy.py`, `_zones.py`
 and `_beforeafter.py` remain unwired. Helpers never import `_manager`, even under `TYPE_CHECKING`;
@@ -51,20 +52,6 @@ Calls between stages use direct module imports. `ChangePorts.drain` is construct
 `drain_pending`, so class-level spies still observe waits outside the approval task.
 `request_changes` still resolves `self._request_changes` when called. Logger names stay
 `oversight.changes._manager`. No review-policy or before/after wiring is introduced.
-
-Residual inventory for later extractions (not part of this split):
-
-- Files: `read_file`, `_read_text`, `save_main`, `_save_main`, `_settle_save`, `_save_landed`,
-  `_restore_save`, `rescan`, `_rescan`, `_main_blocked` and `_publish_main`.
-- Review/revision: `save_for_review`, `_check_editable`, `request_changes`, `_request_changes`,
-  `_refused_as_suspect`, `_move_base`, `_moved`, `_move_note`, `_settle_move` and `_requested`.
-- Admission/lifecycle facade: `_take`, `_decide`, approve/reject/stop, `_reject`, `_stop`,
-  `check_main`, `_drain`, compatibility properties and the public sink/shutdown forwarders.
-
-`_manager.py` remains 652 lines because these file and revision transactions deliberately stay
-together; `_save_main`, `_settle_save` and `_restore_save` stay here so create-files can be redone
-on this facade later. No function in the extracted code exceeds 80 lines. Further extraction
-requires its own plan and review.
 
 ```python
 class ChangeManager:                      # satisfies oversight.agents.ChangeSink structurally
