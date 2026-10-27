@@ -301,6 +301,11 @@ body {
   line-height: var(--body-line-height);
 }
 
+/* Monaco hard-codes a grey background while Find closes and disables its inputs. */
+.monaco-editor .find-widget .monaco-findInput.disabled {
+  background-color: var(--field);
+}
+
 /* The inline diff's original gutter has an empty cell beside lines the other side inserted, and
    Monaco paints it with the removal tint. An insertion removes nothing, so the cell keeps the
    gutter's own color; the gutters of removed lines are not in this selector and stay tinted. */
