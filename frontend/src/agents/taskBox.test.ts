@@ -1,0 +1,240 @@
+import { readFileSync } from "node:fs";
+
+import type { AgentStatus, ChangeResolved, ServerEvent } from "@contracts";
+import { describe, expect, it, vi } from "vitest";
+
+import { applyEvent, createInitialState } from "../state";
+import type { State } from "../state";
+import { createCommandClient } from "../transport";
+import { createTaskBoxStore, startBlock, startFailure } from "./taskBox";
+
+// The level 1 log: agent A starts at seq 3, proposes at 19, is ready at 20, approved and merged at
+// 21, done at 23.
+const log = readFileSync(
+  new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
+  "utf8",
+)
+  .trim()
+  .split("\n")
+  .map((line) => JSON.parse(line) as ServerEvent);
+const through = (seq: number) =>
+  log.filter((event) => event.seq <= seq).reduce(applyEvent, createInitialState());
+const ts = "2026-10-27T14:03:40.000Z";
+
+function agentState(state: State, agentState: AgentStatus["state"]) {
+  const agent = state.agents["agent-1"];
+  if (!agent) throw new Error("The fixture has agent-1 from seq 3");
+  return applyEvent(state, {
+    seq: state.lastSeq + 1,
+    ts,
+    type: "agent.status",
+    payload: { ...agent, state: agentState },
+  });
+}
+const resolved = (state: State, payload: Partial<ChangeResolved>) =>
+  applyEvent(state, {
+    seq: state.lastSeq + 1,
+    ts,
+    type: "change.resolved",
+    payload: {
+      change_id: "change-1",
+      agent_id: "agent-1",
+      revision: 1,
+      decision: "rejected",
+      reason: null,
+      comment: null,
+      merge: null,
+      merge_commit: null,
+      conflict: null,
+      ...payload,
+    },
+  });
+/** The same run with only these slots, as the level 1 backend announces it: slot A. */
+function withSlots(state: State, slots: ("A" | "B")[]): State {
+  if (!state.run) throw new Error("The fixture starts with run.started");
+  const model = state.run.slots[0]?.default_model ?? "muse-spark";
+  return {
+    ...state,
+    run: { ...state.run, slots: slots.map((slot) => ({ slot, default_model: model })) },
+  };
+}
+
+const levelOne = (seq: number) => withSlots(through(seq), ["A"]);
+
+describe("why a start is blocked", () => {
+  it("is free once the server is up and before any agent exists", () => {
+    expect(startBlock(levelOne(2))).toBeNull();
+  });
+
+  it("waits for run.started: no slots are known before it", () => {
+    expect(startBlock(createInitialState())).toBe("Waiting for the server.");
+  });
+
+  it("names the agent that holds the only slot, by what it is doing", () => {
+    expect(startBlock(levelOne(3))).toBe("Agent A is starting.");
+    expect(startBlock(levelOne(4))).toBe("Agent A is working.");
+    expect(startBlock(levelOne(14))).toBe("Agent A is working.");
+    expect(startBlock(levelOne(20))).toBe("Agent A is waiting for your review.");
+    expect(startBlock(agentState(levelOne(14), "revising"))).toBe(
+      "Agent A is revising its change.",
+    );
+    expect(startBlock(agentState(levelOne(14), "halted"))).toBe(
+      "Agent A is halted and waiting for your review.",
+    );
+  });
+
+  it("frees the slot when the change is merged, rejected or the agent was stopped", () => {
+    expect(startBlock(levelOne(21))).toBeNull();
+    expect(startBlock(levelOne(23))).toBeNull();
+    const rejected = resolved(levelOne(14), { decision: "rejected" });
+    expect(startBlock(rejected)).toBeNull();
+    const stopped = resolved(agentState(levelOne(14), "stopped"), {
+      decision: "rejected",
+      reason: "stopped",
+    });
+    expect(startBlock(stopped)).toBeNull();
+  });
+
+  it("keeps the slot held while a merge conflict waits for the person", () => {
+    const conflict = resolved(levelOne(20), {
+      decision: "approved",
+      merge: "conflict",
+      conflict: { kind: "merge", paths: ["shop/pricing.py"], tests: null },
+    });
+    expect(startBlock(conflict)).toBe("Agent A is waiting for your review.");
+  });
+
+  it("is free while any slot is free, and lists every holder when none is", () => {
+    // The fixture announces both slots: B stays free while A works.
+    const two = through(14);
+    expect(startBlock(two)).toBeNull();
+    const agent = two.agents["agent-1"];
+    if (!agent) throw new Error("The fixture has agent-1");
+    const both = applyEvent(two, {
+      seq: two.lastSeq + 1,
+      ts,
+      type: "agent.status",
+      payload: {
+        ...agent,
+        agent_id: "agent-2",
+        slot: "B",
+        change_id: "change-2",
+        state: "ready_for_review",
+      },
+    });
+    expect(startBlock(both)).toBe("Agent A is working. Agent B is waiting for your review.");
+  });
+});
+
+const created = { agent_id: "agent-1", change_id: "change-1", slot: "A" };
+const reply = (status: number, body: unknown) =>
+  new Response(typeof body === "string" ? body : JSON.stringify(body), { status });
+const refusal = (status: number, code: string, message: string) =>
+  reply(status, { error: { code, message } });
+
+/** A store wired to the real command client over a fake fetch, as the app wires it. */
+function setup(answer: () => Promise<Response>) {
+  const request = vi.fn<typeof fetch>(answer);
+  const client = createCommandClient(request);
+  const store = createTaskBoxStore();
+  const start = () => store.getState().start(client.startAgent);
+  return { request, store, start };
+}
+
+describe("starting an agent from the box", () => {
+  it("sends the trimmed task and nothing else, to POST /agents", async () => {
+    const { request, store, start } = setup(() => Promise.resolve(reply(201, created)));
+    store.getState().setDraft("  Cap the discount at 30%\n\n  ");
+    await start();
+    expect(request).toHaveBeenCalledTimes(1);
+    const [path, init] = request.mock.calls[0] ?? [];
+    expect(path).toBe("/agents");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe(JSON.stringify({ task: "Cap the discount at 30%" }));
+  });
+
+  it("sends nothing for a blank or whitespace task", async () => {
+    const { request, store, start } = setup(() => Promise.resolve(reply(201, created)));
+    await start();
+    for (const draft of ["", " ", "\n\t \n"]) {
+      store.getState().setDraft(draft);
+      await start();
+    }
+    expect(request).not.toHaveBeenCalled();
+    expect(store.getState().pending).toBe(false);
+  });
+
+  it("is pending until the answer, sends once, and clears the box on 201", async () => {
+    let answer: (response: Response) => void = () => undefined;
+    const { request, store, start } = setup(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    store.getState().setDraft("Cap the discount");
+    const first = start();
+    expect(store.getState().pending).toBe(true);
+    await start();
+    expect(request).toHaveBeenCalledTimes(1);
+    answer(reply(201, created));
+    await first;
+    expect(store.getState()).toMatchObject({ draft: "", pending: false, failure: null });
+  });
+
+  it.each([
+    ["spend_brake", 403, "Spending is above 90% of the budget; new runs are refused."],
+    ["slot_busy", 409, "Slot A is busy."],
+    ["wrong_state", 409, "Main is suspect; check the workspace first."],
+    ["invalid_request", 422, "task must not be empty."],
+  ])(
+    "shows a %s refusal's message, keeps the task and starts again after it",
+    async (code, status, message) => {
+      let attempt = 0;
+      const { request, store, start } = setup(() =>
+        Promise.resolve(++attempt === 1 ? refusal(status, code, message) : reply(201, created)),
+      );
+      store.getState().setDraft("Cap the discount");
+      await start();
+      expect(store.getState()).toMatchObject({ draft: "Cap the discount", pending: false });
+      expect(store.getState().failure).toBe(message);
+      await start();
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(store.getState()).toMatchObject({ draft: "", pending: false, failure: null });
+    },
+  );
+
+  it("shows a 500's message and a proxy's bare HTTP line, and re-enables", async () => {
+    const cases: [Response, string][] = [
+      [refusal(500, "internal", "Boom."), "The server failed to start the agent: Boom."],
+      [reply(502, "<html>Bad Gateway</html>"), "The server failed to start the agent: HTTP 502"],
+    ];
+    for (const [response, line] of cases) {
+      const { store, start } = setup(() => Promise.resolve(response));
+      store.getState().setDraft("Cap the discount");
+      await start();
+      expect(store.getState()).toMatchObject({ draft: "Cap the discount", pending: false });
+      expect(store.getState().failure).toContain(line);
+    }
+  });
+
+  it("says a network failure did not reach the server, and re-enables", async () => {
+    const { store, start } = setup(() => Promise.reject(new TypeError("Failed to fetch")));
+    store.getState().setDraft("Cap the discount");
+    await start();
+    expect(store.getState()).toMatchObject({ draft: "Cap the discount", pending: false });
+    expect(store.getState().failure).toBe(
+      "The request did not reach the server. Check the connection and try again.",
+    );
+    expect(startFailure(new Error("anything else"))).toContain("did not reach the server");
+  });
+
+  it("drops a failure's line when the person edits the task", async () => {
+    const { store, start } = setup(() => Promise.resolve(refusal(409, "slot_busy", "Busy.")));
+    store.getState().setDraft("Cap the discount");
+    await start();
+    expect(store.getState().failure).toBe("Busy.");
+    store.getState().setDraft("Cap the discount at 30%");
+    expect(store.getState().failure).toBeNull();
+  });
+});

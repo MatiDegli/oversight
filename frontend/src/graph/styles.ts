@@ -3,6 +3,8 @@ import badgeFont from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyp
 
 import type { getActiveTheme } from "../theme";
 
+import { nodeGeometry } from "./geometry";
+
 export type EdgeShape = "bezier" | "taxi";
 // The product default. The dev-only query override lets make shots compare identical presets.
 export const EDGE_CURVE_STYLE: EdgeShape = "bezier";
@@ -33,6 +35,7 @@ export function graphStyles(
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(badgeSize)}" height="${String(badgeSize)}">${font}<circle cx="${String(badgeSize / 2)}" cy="${String(badgeSize / 2)}" r="${String(badgeSize / 2)}" fill="${theme.text}"/><text x="50%" y="50%" dy=".35em" text-anchor="middle" fill="${theme.page}" font-family='${theme["text-font"]}' font-size="${theme["distance-badge-font-size"]}" font-weight="${String(theme["distance-badge-font-weight"])}">${String(distance)}</text></svg>`;
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
   };
+  const geometry = nodeGeometry(theme);
   const pendingBorder = {
     "border-style": "dashed" as const,
     "border-width": theme["agent-border-width"],
@@ -59,8 +62,8 @@ export function graphStyles(
         shape: "round-rectangle",
         "corner-radius": theme["radius-node"],
         // Keep the preset's proportions in units of the graph's body type.
-        width: px(theme["body-size"]) * 10,
-        height: px(theme["body-size"]) * 4,
+        width: geometry.width,
+        height: geometry.height,
       },
     },
     {
@@ -77,7 +80,7 @@ export function graphStyles(
     },
     {
       selector: "node.module:parent, node.class:parent",
-      style: { "text-valign": "top", padding: `${String(px(theme["spacing-md"]) * 3)}px` },
+      style: { "text-valign": "top", padding: `${String(geometry.padding)}px` },
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
       (["A", "B"] as const).map((slot) => {

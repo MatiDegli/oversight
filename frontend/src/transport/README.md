@@ -16,8 +16,11 @@ A parse failure, reducer exception, sequence gap or graph-version mismatch close
 retries from the last applied cursor. All network errors also close and retry, including a CLOSED
 EventSource after a non-200 proxy response. The retry window doubles from 500 ms to 30 seconds,
 with equal jitter (50–100% of the window). The first applied event resets the window. One visible
-error is reported per failure streak; the shell clears it on the next applied event. Persistent
-bad events remain visible and retry with bounded waits instead of skipping or rewriting history.
+error is reported per failure streak; the shell clears it on the next applied event. A lost
+connection is also cleared when the reopened stream opens (`onError(null)`), because a server with
+nothing new to send applies no event. A bad event is not cleared that way: the reopened stream
+replays it. Persistent bad events remain visible and retry with bounded waits instead of skipping
+or rewriting history.
 Disposal cancels pending retries and ignores late callbacks.
 
 ## Replay and commands
@@ -32,6 +35,7 @@ with a real recorded run and update the label before publishing the judges' demo
 
 `createCommandClient` exposes every JSON command in proposal 4.7. Accepted commands return no
 result; SSE provides their results. HTTP errors use `CommandError` with `status`, contract `code`
-and server `message`. Non-JSON or malformed error bodies fall back to an HTTP status message
-and `code: undefined`, without inventing a contract ErrorCode. Network errors keep their original
+and server `message`. A body with a `message` but a code the contract does not name keeps the
+message and has `code: undefined`. Non-JSON or malformed error bodies fall back to an HTTP status
+message and `code: undefined`, without inventing a contract ErrorCode. Network errors keep their original
 browser error.
