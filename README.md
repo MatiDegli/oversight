@@ -14,15 +14,29 @@ through others. Nothing reaches main until you approve it.
 
 ## Built during the hackathon
 
-- The hackathon ran from 2026-10-26 at 12:00 ET to 2026-11-04 at 21:00 ET. All code in this repository
-  was written in that window, and the git history shows it. The first commit came after the kickoff,
-  and [DEVLOG.md](DEVLOG.md) records what was built each day.
+- The hackathon runs from 2026-10-26 at 12:00 ET to 2026-11-04 at 21:00 ET (13:00 to
+  23:00 ART). All code in this repository was written since the kickoff, and the git history shows
+  it. The first commit came after the kickoff, and [DEVLOG.md](DEVLOG.md) records what was built
+  each day.
 - Before the kickoff there were planning notes and UI sketches, and no code. What the project takes
   from them is written again here, under `docs/`.
 - No code comes from other projects. Dependencies keep their own licenses: MIT, Apache-2.0, BSD, or
   ISC, and SIL OFL 1.1 for fonts. GPL projects were read for ideas only.
 - Agents inside the product use only Meta models: Muse Spark through the Meta Model API, and Muse
   Spark Open through partner inference.
+- Merged on day 1: repository tooling and CI; contracts v1 and 1.1 with generated schemas and types;
+  the demo repository; the SQLite event store and SSE; the graph core, impact cone and preset
+  layout; the worktree runner, agent runtime and scripted fake model; the change manager; and API
+  wiring with the spending brake. The UI includes the graph, agent cards, live diff, Approve and
+  Reject, task entry, the review impact cone and the spend meter. The runtime also supports revision
+  runs, which are not yet reachable from the UI or API (`POST /changes/{id}/request-changes` still
+  answers 501).
+- `make demo` builds and serves the frontend and API together; starting an agent uses API credits.
+  `make demo-check` checks the demo path three times from clean starts using the scripted fake
+  model, without API credits. Smoke tests, screenshot tooling and test resource caps are also
+  merged.
+- The static replay build currently plays a hand-written event log and labels it as a fixture. A
+  real recorded run for the judges has not been bundled yet.
 
 ## Next
 

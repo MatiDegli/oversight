@@ -1,12 +1,13 @@
 import type { AgentStatus, StartAgent } from "@contracts";
 import { GitBranch, Network, X } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { AgentCard, TaskBox } from "../agents";
 import { LiveDiff } from "../editor";
 import { GraphView } from "../graph";
-import { ReviewPanel } from "../review";
+import type { Framing } from "../graph";
+import { ImpactConeCard, ReviewPanel } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
@@ -269,14 +270,23 @@ function LeftPanel({ state, view, onClose }: { state: State; view: View; onClose
 export function Frame(props: FrameProps) {
   const { state, view, onNodeTap, canOpenChange, onOpenChange, onClosePanel, notice } = props;
   const open = panelOpen(view);
-  // Review dims everything but the change's nodes until it is decided; the array changes only with
-  // that change.
+  // The cone and the change stay lit until the decision; events never open review themselves.
   const reviewed = view.review === null ? undefined : state.changes[view.review];
   const litIds = useMemo(() => litNodeIds(reviewed), [reviewed]);
+  const cone = litIds === null ? null : (reviewed?.proposal?.impact ?? null);
   // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
   const shown = view.review ?? view.diff?.changeId ?? null;
   const shownChange = shown === null ? undefined : state.changes[shown];
   const frameIds = useMemo(() => (shownChange ? changeNodeIds(shownChange) : null), [shownChange]);
+  const frameKey = view.review === null ? shown : `review:${view.review}`;
+  const [framing, setFraming] = useState<{ key: string | null; outOfView: ReadonlySet<string> }>();
+  const coneCardRef = useRef<HTMLDivElement>(null);
+  const onFramed = useCallback(
+    (result: Framing | null) => {
+      setFraming({ key: frameKey, outOfView: result?.outOfView ?? new Set() });
+    },
+    [frameKey],
+  );
   return (
     <div className="flex h-full flex-col bg-background text-text">
       <TopBar state={state} onOpenQueue={props.onOpenQueue} />
@@ -301,8 +311,29 @@ export function Frame(props: FrameProps) {
             panelOpen={open}
             litIds={litIds}
             frameIds={frameIds}
+            cone={cone}
+            frameKey={frameKey}
+            onFramed={onFramed}
+            coneCardRef={coneCardRef}
           />
-          {notice && <div className="absolute top-6 left-6 text-muted">{notice}</div>}
+          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex max-w-(--cone-card-width) flex-col items-start gap-(--spacing-md)">
+            {cone && (
+              <div ref={coneCardRef} className="pointer-events-auto min-h-0 w-full overflow-auto">
+                <ImpactConeCard
+                  cone={cone}
+                  outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
+                  nodes={[...(state.graph?.nodes ?? []), ...(reviewed?.graph.nodes_added ?? [])]}
+                />
+              </div>
+            )}
+          </div>
+          {notice && (
+            <div
+              className={`absolute left-(--spacing-overlay) text-muted ${cone ? "bottom-(--spacing-overlay)" : "top-(--spacing-overlay)"}`}
+            >
+              {notice}
+            </div>
+          )}
         </main>
         {open ? (
           <AgentsRail state={state} />

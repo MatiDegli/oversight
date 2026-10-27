@@ -39,7 +39,7 @@ from oversight.agents import (
     UsageLedger,
     load_script,
 )
-from oversight.api import ApiError, create_router, install_error_handlers
+from oversight.api import ApiError, add_static, create_router, install_error_handlers
 from oversight.changes import ChangeManager
 from oversight.events import (
     EventPayload,
@@ -555,6 +555,8 @@ def _live_app(settings: Settings, client_factory: ClientFactory | None) -> FastA
 
     app = FastAPI(title="Oversight", lifespan=lifespan)
     app.include_router(create_router(live.store, "live", live))
+    if settings.frontend_dist is not None:
+        add_static(app, settings.frontend_dist)  # after the API routes, so they always win
     app.state.live = live
     app.state.store = live.store
     app.state.layout = live.layout
