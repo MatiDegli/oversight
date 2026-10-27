@@ -114,14 +114,7 @@ export function App() {
       attempts={attempts}
       onDecide={commands ? onDecide : undefined}
       replayOf={replayBuild ? replaySource.kind : undefined}
-      notice={
-        replayBuild || error !== null ? (
-          <>
-            {replayBuild && <p>{replaySource.label}</p>}
-            {error !== null && <p role="alert">{error}</p>}
-          </>
-        ) : undefined
-      }
+      notice={error !== null ? <p role="alert">{error}</p> : undefined}
     />
   );
 }

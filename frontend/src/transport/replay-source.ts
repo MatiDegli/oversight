@@ -19,6 +19,22 @@ export interface RecordedReplay {
   provenance: RecordingProvenance;
 }
 
+/** The exporter's run id records the calendar date; event timestamps may be retimed for replay. */
+function recordingDate(runId: string): string {
+  const iso = /^run-\d{8}-\d{6}$/.test(runId)
+    ? `${runId.slice(4, 8)}-${runId.slice(8, 10)}-${runId.slice(10, 12)}`
+    : "";
+  const date = new Date(`${iso}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== iso)
+    throw new Error("Recorded replay provenance run id has no valid date");
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 /**
  * Vite's recorded-replay loader checks the receipt's digest and every payload against the
  * Pydantic contracts before bundling. Keep the marker and real model checks here too, so
@@ -51,9 +67,7 @@ export function chooseReplaySource(
     )
       throw new Error("Recorded replay must be an exported real model run");
     const kind: ReplayKind = "real recorded run";
-    const model = first.payload.models[0]?.model ?? "";
-    const date = first.ts.slice(0, 10);
-    return { text: recorded, kind, label: `Replay · ${kind} · ${model} · ${date}` };
+    return { text: recorded, kind, label: `Recorded run · ${recordingDate(provenance.run_id)}` };
   }
   const kind: ReplayKind = "hand-written demo fixture";
   return { text: fixture, kind, label: `Replay · ${kind}` };
