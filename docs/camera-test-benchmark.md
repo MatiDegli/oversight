@@ -356,6 +356,8 @@ which includes the Monaco fix and sixth editor browser case from `fc94088`.
 The documentation-only commit recording these results changes no measured code.
 The earlier failed `69d7e0c` gate above remains part of the history.
 
+The `2b3234d` camera measurements and both recorded gates below predate the final `origin/main` merge (`985bc0b`); its `frontend/vite.config.ts` changes are config-only, and fixture-server startup contributes to measured wall time.
+
 ### Regression checks and cache coverage
 
 Removing only the disabled-find stylesheet rule temporarily made the existing
