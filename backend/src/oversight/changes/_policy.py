@@ -3,14 +3,19 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from math import isfinite
-from typing import Literal, get_args
+from typing import Literal
 
 from pydantic import JsonValue, ValidationError
 
 from oversight_contracts.common import MergeMode, RuleId
 from oversight_contracts.events import SuiteResult
 from oversight_contracts.graph import ImpactCone
-from oversight_contracts.policy import ChangeAssessment, EvidenceRef, RuleAssessment
+from oversight_contracts.policy import (
+    SAFE_MERGE_V1_RULES,
+    ChangeAssessment,
+    EvidenceRef,
+    RuleAssessment,
+)
 
 type Result = Literal["pass", "fail", "unknown"]
 
@@ -250,6 +255,6 @@ def merges_alone(assessment: ChangeAssessment) -> bool:
         assessment.policy_version == "safe-merge-v1"
         and assessment.mode == "merge_when_safe"
         and len(assessment.rules) == 5
-        and {rule.rule for rule in assessment.rules} == set(get_args(RuleId.__value__))
+        and {rule.rule for rule in assessment.rules} == set(SAFE_MERGE_V1_RULES)
         and all(rule.result == "pass" for rule in assessment.rules)
     )

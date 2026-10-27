@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from oversight.agents.client import Usage
+from oversight_contracts.events import UsageTick
 
 _log = logging.getLogger(__name__)
 
@@ -223,3 +224,18 @@ class LedgerFile:
         else:
             _log.error("a cancelled ledger write failed: %s", error.__class__.__name__)
         return error
+
+
+def validate_usage_tick(tick: "UsageTick") -> None:
+    """Require call purpose and the corresponding accounting identity in live producers."""
+    if tick.role is None:
+        raise ValueError("live usage requires a role")
+    if tick.role in {"agent", "review"} and tick.change_id is None:
+        raise ValueError("agent and review usage require a change")
+    if tick.role == "plan" and tick.plan_id is None:
+        raise ValueError("plan usage requires a plan")
+    if any(
+        value is not None and value < 0
+        for value in (tick.input_tokens, tick.output_tokens, tick.cached_tokens, tick.cost_usd)
+    ):
+        raise ValueError("usage cannot be negative")

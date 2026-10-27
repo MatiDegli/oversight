@@ -4,6 +4,7 @@
 from typing import Protocol
 
 from oversight_contracts.common import AgentId
+from oversight_contracts.review import FinishDeclaration
 
 
 class ChangeSink(Protocol):
@@ -16,7 +17,13 @@ class ChangeSink(Protocol):
         with no nodes."""
         ...
 
-    async def proposed(self, agent_id: AgentId, summary: str | None) -> bool:
+    async def proposed(
+        self,
+        agent_id: AgentId,
+        summary: str | None,
+        *,
+        declaration: FinishDeclaration | None = None,
+    ) -> bool:
         """The run ended: `finish` was called with `summary`, or the run halted (`None`). The
         change manager sends `change.proposed` before this returns.
 

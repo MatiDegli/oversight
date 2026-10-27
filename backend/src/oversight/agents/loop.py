@@ -37,6 +37,7 @@ from oversight_contracts.events import (
     Limits,
     UsageTick,
 )
+from oversight_contracts.review import FinishDeclaration
 
 SYSTEM_PROMPT = """You are a coding agent working on a small Python repository, in your own copy.
 Use the tools to do the task you are given. Read the code before you change it: prefer one read
@@ -145,6 +146,7 @@ class AgentRun:
         self._pricing = pricing
         self._monotonic = monotonic
         self._tools = Toolbox(workspace, tree, test_timeout_s=task.limits.test_timeout_s)
+        self._declaration: FinishDeclaration | None = None
         self._step = 0
         self._halted = False
         self._turns = 0
@@ -229,6 +231,7 @@ class AgentRun:
             self._max_steps += self._task.limits.max_steps
             self._max_turns += self._task.limits.max_steps
             self._failures = 0
+            self._declaration = None
             self._seen.clear()
             return await self._drive("revising")
         finally:
@@ -320,7 +323,9 @@ class AgentRun:
         """Whether the sink proposed the change. A sink that returns `False` has sent its own
         `error`; one that raises has not, so the runtime reports it."""
         try:
-            return await self._sink.proposed(self._task.agent_id, summary)
+            return await self._sink.proposed(
+                self._task.agent_id, summary, declaration=self._declaration
+            )
         except Exception as error:
             await self._publish(
                 ErrorReport(
@@ -364,6 +369,7 @@ class AgentRun:
                 )
                 await self._report(call.name, outcome, duration_ms)
                 if outcome.finish_summary is not None:
+                    self._declaration = outcome.declaration
                     return outcome.finish_summary
                 try:
                     self._check(call.name, call.arguments, outcome)
@@ -458,6 +464,8 @@ class AgentRun:
         await self._publish(
             UsageTick(
                 agent_id=self._task.agent_id,
+                role="agent",
+                change_id=self._task.change_id,
                 model=reply.model,
                 input_tokens=reply.usage.input_tokens,
                 output_tokens=reply.usage.output_tokens,
