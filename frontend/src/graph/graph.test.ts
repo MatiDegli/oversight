@@ -868,9 +868,9 @@ describe("edges in watch: draw order and the quiet of edges nobody is at", () =>
 
   it("draws frames, then edges, then leaf nodes, so a line never crosses a node's name", () => {
     const graph = render(initial());
-    const z = (id: string) => graph.getElementById(id).numericStyle("z-index");
+    const z = (id: string) => Number(graph.getElementById(id).style("z-index"));
     const frames = [z("billing"), z("billing:Bill")];
-    const edges = graph.edges().map((edge) => edge.numericStyle("z-index"));
+    const edges = graph.edges().map((edge) => Number(edge.style("z-index")));
     const leaves = [z("billing:fee"), z("billing:Bill.total")];
     expect(Math.max(...frames)).toBeLessThan(Math.min(...edges));
     expect(Math.max(...edges)).toBeLessThan(Math.min(...leaves));
