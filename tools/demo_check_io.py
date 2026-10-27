@@ -28,7 +28,7 @@ PROPOSE_DEADLINE = 240.0  # the agent's run: from the answer to POST /agents to 
 DECIDE_DEADLINE = 60.0  # approve to change.resolved and graph.delta
 STOP_DEADLINE = 20.0  # seconds the server gets after SIGTERM before SIGKILL
 # UI assets, command boundaries (GET /graph), decisions, files and cleanup probes.
-REQUESTS_PER_RUN = 30
+REQUESTS_PER_RUN = 60
 OVERALL_MARGIN = 60.0  # slack over the worst-case sum, for process start and cleanup
 # Worst case: every phase in every run takes its full deadline. START_AGENT_DEADLINE (the cold
 # 480 s venv build, once in practice but allowed per run here) and PROPOSE_DEADLINE drive it.
@@ -36,7 +36,7 @@ PER_RUN_DEADLINE = (
     2 * START_DEADLINE
     + 2 * START_AGENT_DEADLINE
     + 3 * PROPOSE_DEADLINE  # initial A/B proposals and A's revision
-    + 20 * DECIDE_DEADLINE  # correlated steps, usage, decisions, deltas and discard
+    + 40 * DECIDE_DEADLINE  # correlated steps, usage, decisions, deltas and discard
     + 2 * STOP_DEADLINE  # SIGTERM wait, then the SIGKILL wait in smoke.stop_child
     + REQUESTS_PER_RUN * REQUEST_TIMEOUT
 )
