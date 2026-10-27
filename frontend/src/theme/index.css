@@ -19,6 +19,7 @@
   --card-end: #111113;
   --inset: #09090b;
   --overlay-panel: rgba(13, 13, 15, 0.84);
+  --overlay-fill: rgba(13, 13, 15, 0.96);
   --sheet-backdrop: rgba(0, 0, 0, 0.6);
   --raised: #1b1b1f;
   --page-raised: #131313;
@@ -254,6 +255,7 @@
   --color-card-end: var(--card-end);
   --color-inset: var(--inset);
   --color-overlay-panel: var(--overlay-panel);
+  --color-overlay-fill: var(--overlay-fill);
   --color-sheet-backdrop: var(--sheet-backdrop);
   --color-raised: var(--raised);
   --color-page-raised: var(--page-raised);

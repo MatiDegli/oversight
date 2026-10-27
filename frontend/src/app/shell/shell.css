@@ -138,7 +138,8 @@
   top: 56px;
   left: 64px;
   padding: 8px 12px;
-  background: var(--panel);
+  background: var(--overlay-fill);
+  box-shadow: var(--top-highlight);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   color: var(--muted);
@@ -150,9 +151,9 @@
   max-width: 480px;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  background: var(--panel);
+  background: var(--overlay-fill);
   color: var(--text);
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--top-highlight), var(--card-shadow);
 }
 .shortcuts-sheet::backdrop {
   background: var(--sheet-backdrop);
@@ -179,6 +180,10 @@
 .frosted {
   background: var(--overlay-panel);
   backdrop-filter: blur(var(--overlay-blur));
+  box-shadow: var(--top-highlight);
+}
+.overlay-fill {
+  background: var(--overlay-fill);
   box-shadow: var(--top-highlight);
 }
 .agent-card,

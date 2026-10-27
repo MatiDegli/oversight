@@ -7,7 +7,7 @@ import type { State } from "../state";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
-// Graph overlays sit on the shell color at 90%, so the graph shows faintly through (DESIGN.md).
+// M8 reserves frost for the graph's legend, zoom and future segmented controls.
 const surface = "frosted border border-border";
 
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
@@ -19,7 +19,7 @@ export function GraphHeading({ state }: { state: State }) {
   const count = (value: number, one: string, many: string) =>
     `${String(value)} ${plural(value, one, many)}`;
   return (
-    <div className="flex flex-wrap items-baseline gap-x-3.5 gap-y-1">
+    <div className="overlay-fill flex flex-wrap items-baseline gap-x-3.5 gap-y-1">
       <h2 className="text-(length:--headline-size) leading-(--headline-line-height) font-bold">
         {repo}
       </h2>

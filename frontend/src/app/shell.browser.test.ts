@@ -233,3 +233,70 @@ it("ignores Meta+Escape in the shortcuts sheet", async () => {
     await check(sheet).toHaveCount(0);
   });
 }, 30_000);
+
+it("limits fixed blur to graph controls and fills other overlays (M8)", async () => {
+  await withPage(1920, 1080, async (page) => {
+    const filled = async (selector: string) => {
+      const look = await page.locator(selector).evaluate((element) => {
+        const reference = document.createElement("span");
+        reference.style.background = "var(--overlay-fill)";
+        reference.style.boxShadow = "var(--top-highlight)";
+        document.body.append(reference);
+        const style = getComputedStyle(element);
+        const expected = getComputedStyle(reference);
+        const result = {
+          fill: style.backgroundColor,
+          expectedFill: expected.backgroundColor,
+          shadow: style.boxShadow,
+          expectedShadow: expected.boxShadow,
+          blur: style.backdropFilter,
+        };
+        reference.remove();
+        return result;
+      });
+      expect(look.blur).toBe("none");
+      expect(look.fill).toBe(look.expectedFill);
+      expect(look.fill).not.toBe("rgba(0, 0, 0, 0)");
+      expect(look.shadow).toContain(look.expectedShadow);
+      expect(look.expectedShadow).not.toBe("none");
+    };
+    await filled(".graph-stage h2:has-text('demo-repo') >> ..");
+    await page.evaluate(() => {
+      window.shellTest.update();
+      window.shellTest.open("review");
+    });
+    await filled('[aria-label="Possibly affected"]');
+    const blurred = await page.evaluate(() =>
+      [...document.querySelectorAll("*")]
+        .filter((element) => getComputedStyle(element).backdropFilter !== "none")
+        .map((element) => ({
+          label: element.getAttribute("aria-label"),
+          radius: getComputedStyle(element).backdropFilter,
+          transition: getComputedStyle(element).transitionProperty,
+          duration: getComputedStyle(element).transitionDuration,
+        })),
+    );
+    expect(blurred).toHaveLength(2);
+    for (const element of blurred) {
+      expect(["Legend", "Zoom"]).toContain(element.label);
+      expect(element.radius).toBe("blur(12px)");
+      if (element.duration.split(",").some((duration) => Number.parseFloat(duration) > 0))
+        expect(element.transition).not.toMatch(/all|filter|overlay-blur/);
+    }
+    expect(
+      await page.evaluate(() =>
+        document
+          .getAnimations()
+          .flatMap((animation) =>
+            animation.effect instanceof KeyframeEffect
+              ? animation.effect.getKeyframes().flatMap(Object.keys)
+              : [],
+          ),
+      ),
+    ).not.toEqual(expect.arrayContaining([expect.stringMatching(/filter|overlay-blur/i)]));
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await filled(".narrow-notice");
+    await page.getByRole("button", { name: "Keyboard shortcuts", exact: true }).click();
+    await filled(".shortcuts-sheet");
+  });
+}, 40_000);

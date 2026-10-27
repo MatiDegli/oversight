@@ -390,3 +390,20 @@ without delivering W to the page; native Alt+W reaches it. Therefore Alt+W close
 focus tab. Ctrl+B toggles the sidebar, Ctrl+backquote the dock, and Escape closes the active
 tab. Shell shortcuts are ignored in text fields, task boxes and Monaco. Review's existing
 keys remain local; Approve has no shortcut or command.
+
+## 2026-10-27 — M8: bounded backdrop blur
+
+M8 narrows the shell-frame exception to DESIGN.md's Flat Panel Rule: only the graph legend,
+zoom controls and segmented controls may use the fixed 12 px `overlay-blur` token. Segmented
+controls are reserved for a later front; none are added here. Other overlays and popovers use
+the 96% `overlay-fill` theme token with `top-highlight`, without backdrop blur. This covers the
+watch heading, impact cone, narrow-window notice and shortcuts sheet. Blur radii never animate.
+The earlier shell zones, colors, tabs and keyboard decisions remain in force.
+
+Compositor evidence is reproducible with `node frontend/shots/compositor.ts --label before`
+on the pre-M8 tree and `--label after` on M8. Both use the Vite dev shell fixture at 1920×1080,
+review's camera, a deterministic 180-frame pan and a controlled JS field clock; three samples
+per version. The runner verifies identical camera paths, layout positions and field draw counts.
+Raw Chromium traces and JSON reports stay in `.shots/`. Its metric is the union of top-level
+task durations on renderer Compositor and VizCompositorThread, summed across threads, in ms;
+it is compositor task occupancy, not GPU execution time or a frame-latency measurement.

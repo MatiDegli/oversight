@@ -11,6 +11,7 @@ export const themes = {
     "card-end": "#111113",
     inset: "#09090b",
     "overlay-panel": { color: "#0d0d0f", alpha: 0.84 },
+    "overlay-fill": { color: "#0d0d0f", alpha: 0.96 },
     "sheet-backdrop": { color: "#000000", alpha: 0.6 },
     raised: "#1b1b1f",
     "page-raised": "#131313",

@@ -304,6 +304,16 @@ it("checks alpha compositing against reference colors", () => {
   expect(composite({ color: "#ff0000", alpha: 0 }, "#123456")).toBe("#123456");
   expect(composite({ color: "#ff0000", alpha: 1 }, "#123456")).toBe("#ff0000");
 });
+it.each(["text", "muted", "faint"] as const)(
+  "meets body contrast for %s on M8 overlay fills",
+  (text) => {
+    expect(tokens["overlay-fill"].alpha).toBeGreaterThanOrEqual(0.94);
+    for (const backdrop of ["#000000", "#ffffff"])
+      expect(
+        contrast(tokens[text], composite(tokens["overlay-fill"], backdrop)),
+      ).toBeGreaterThanOrEqual(4.5);
+  },
+);
 it("checks WCAG reference pairs so a broken calculation cannot pass", () => {
   expect(contrast("#000000", "#ffffff")).toBe(21);
   expect(contrast("#777777", "#ffffff")).toBeLessThan(4.5);
