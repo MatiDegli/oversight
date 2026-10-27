@@ -34,6 +34,18 @@ type AgentId = Annotated[str, StringConstraints(pattern=r"^agent-[1-9]\d*$")]
 type ChangeId = Annotated[str, StringConstraints(pattern=r"^change-[1-9]\d*$")]
 """`change-` and a counter per run, one change per agent: `change-1`."""
 
+type PlanId = Annotated[str, StringConstraints(pattern=r"^plan-[1-9]\d*$")]
+"""`plan-` and a counter per run."""
+
+type NonEmptyText = Annotated[str, StringConstraints(min_length=1)]
+
+type MergeMode = Literal["ask_me", "merge_when_safe"]
+
+type RuleId = Literal[
+    "combined_tests", "small_cone", "small_change", "known_spend", "existing_tests_untouched"
+]
+
+
 type NodeId = str
 """A module's dotted path (`shop.pricing`), or the module, `:` and a qualified name
 (`shop.models:Product.total`), with `#n` from a name's second definition on. Never a line number."""

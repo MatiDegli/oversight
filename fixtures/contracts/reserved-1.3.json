@@ -1,0 +1,181 @@
+[
+  {
+    "seq": 2,
+    "ts": "2026-10-27T14:03:12.345Z",
+    "type": "change.assessed",
+    "payload": {
+      "change_id": "change-1",
+      "agent_id": "agent-1",
+      "revision": 1,
+      "base_commit": "base",
+      "head_commit": "head",
+      "main_commit": "main",
+      "candidate_tree": "candidate",
+      "policy_version": "safe-merge-v1",
+      "mode": "merge_when_safe",
+      "mode_revision": 1,
+      "rules": [
+        {
+          "rule": "combined_tests",
+          "observed": {
+            "outcome": "passed",
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "duration_ms": 12,
+            "failed_tests": []
+          },
+          "threshold": {
+            "outcome": "passed",
+            "passed_min": 1,
+            "failed_max": 0,
+            "skipped_max": 0
+          },
+          "result": "pass",
+          "evidence": [
+            {
+              "event_seq": 1,
+              "git_object": null,
+              "path": null
+            }
+          ]
+        },
+        {
+          "rule": "small_cone",
+          "observed": {
+            "nodes": 2,
+            "omitted_by_depth": 0,
+            "omitted_by_limit": 0,
+            "parse_errors": 0,
+            "unresolved_removed": 0
+          },
+          "threshold": {
+            "nodes_max": 5,
+            "omitted_by_depth_max": 0,
+            "omitted_by_limit_max": 0,
+            "parse_errors_max": 0,
+            "unresolved_removed_max": 0
+          },
+          "result": "pass",
+          "evidence": [
+            {
+              "event_seq": 1,
+              "git_object": null,
+              "path": null
+            }
+          ]
+        },
+        {
+          "rule": "small_change",
+          "observed": {
+            "files": 1,
+            "lines_added": 10,
+            "lines_removed": 2
+          },
+          "threshold": {
+            "files_min": 1,
+            "files_max": 3,
+            "lines_total_max": 60
+          },
+          "result": "pass",
+          "evidence": [
+            {
+              "event_seq": 1,
+              "git_object": null,
+              "path": null
+            }
+          ]
+        },
+        {
+          "rule": "known_spend",
+          "observed": {
+            "spent_usd": 1.0,
+            "budget_usd": 10.0,
+            "unknown_costs": 0,
+            "ledger_ok": true
+          },
+          "threshold": {
+            "budget_fraction_lt": 0.5,
+            "unknown_costs_max": 0,
+            "ledger_ok": true
+          },
+          "result": "pass",
+          "evidence": [
+            {
+              "event_seq": 1,
+              "git_object": null,
+              "path": null
+            }
+          ]
+        },
+        {
+          "rule": "existing_tests_untouched",
+          "observed": {
+            "modified_existing_paths": [],
+            "deleted_existing_paths": []
+          },
+          "threshold": {
+            "modified_existing_max": 0,
+            "deleted_existing_max": 0
+          },
+          "result": "pass",
+          "evidence": [
+            {
+              "event_seq": 1,
+              "git_object": null,
+              "path": null
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "seq": 3,
+    "ts": "2026-10-27T14:03:12.345Z",
+    "type": "merge_mode.changed",
+    "payload": {
+      "mode": "merge_when_safe",
+      "revision": 1
+    }
+  },
+  {
+    "seq": 4,
+    "ts": "2026-10-27T14:03:12.345Z",
+    "type": "plan.updated",
+    "payload": {
+      "plan_id": "plan-1",
+      "revision": 1,
+      "task": "Improve pricing",
+      "graph_version": "v1",
+      "state": "proposed",
+      "subtasks": [
+        {
+          "task": "Update price",
+          "zone": {
+            "node_ids": [
+              "shop:price"
+            ],
+            "paths": [
+              "shop.py"
+            ]
+          },
+          "agent_id": null
+        },
+        {
+          "task": "Update total",
+          "zone": {
+            "node_ids": [
+              "shop:total"
+            ],
+            "paths": [
+              "shop.py"
+            ]
+          },
+          "agent_id": null
+        }
+      ],
+      "detail": null
+    }
+  }
+]

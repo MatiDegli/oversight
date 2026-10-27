@@ -49,6 +49,7 @@ const agent = (slot: "A" | "B"): AgentStatus => ({
   step: 1,
   max_steps: 10,
   detail: null,
+  plan_id: null,
 });
 const a = agent("A");
 const b = agent("B");
@@ -62,6 +63,7 @@ function event<K extends ServerEvent["type"]>(
 const log: ServerEvent[] = [
   event(1, "run.started", {
     run_id: "run-graph-test",
+    merge_mode: null,
     contract_version: "1.0.0",
     prompt_version: "test",
     workspace: "demo-repo",
