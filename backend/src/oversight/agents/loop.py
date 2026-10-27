@@ -13,7 +13,7 @@ import time
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 from oversight.agents.client import (
     Message,
@@ -44,10 +44,19 @@ of a whole function to several small reads. Make small, exact edits with edit_fi
 before you finish. When the task is done, call finish with a short note for the reviewer. A person
 reviews your change before it is merged."""
 
+REVISION_PROMPT = """The reviewer has requested changes to the change you proposed.
+
+Reviewer comment:
+{comment}
+{note}
+Read a file again before editing it, even if you read or edited it earlier: the file may have \
+changed since you last saw it. Make the requested changes, run the tests, and call finish with \
+a short note for the reviewer."""
+
 PROMPT_VERSION = (
     "agent-v1-"
     + hashlib.sha256(
-        (SYSTEM_PROMPT + json.dumps(TOOL_SCHEMAS, sort_keys=True)).encode()
+        (SYSTEM_PROMPT + REVISION_PROMPT + json.dumps(TOOL_SCHEMAS, sort_keys=True)).encode()
     ).hexdigest()[:12]
 )
 """A name and a hash of the system prompt and tool schemas, for `run.started`."""
@@ -142,6 +151,14 @@ class AgentRun:
         """Model calls so far. Bounded on their own, so the run ends even if a stop rule fails."""
         self._failures = 0
         self._seen: Counter[tuple[str, str, str]] = Counter()
+        self._messages: list[Message] | None = None
+        """The conversation, kept across `run` and every `revise` on this run."""
+        self._max_steps = task.limits.max_steps
+        """The step budget: `limits.max_steps` per task or revision, cumulative."""
+        self._max_turns = task.limits.max_steps + FAILURE_LIMIT
+        """The model-call bound, grown with the step budget on each revision."""
+        self._running = False
+        """Whether a `run` or `revise` drive is in progress on this run."""
 
     @property
     def steps(self) -> int:
@@ -167,17 +184,77 @@ class AgentRun:
                 model=self._model.profile.id,
                 state=state,
                 step=self._step,
-                max_steps=task.limits.max_steps,
+                max_steps=self._max_steps,
                 detail=detail,
             )
         )
 
     async def run(self) -> RunEnd:
-        await self._status("starting")
-        messages: list[Message] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": self._task.task},
-        ]
+        if self._running:
+            raise RuntimeError("a run is already in progress on this agent run")
+        self._running = True
+        try:
+            self._messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": self._task.task},
+            ]
+            return await self._drive("starting")
+        finally:
+            self._running = False
+
+    async def revise(self, comment: str, note: str | None) -> RunEnd:
+        """Resume the kept run with the reviewer's comment as a new user message.
+
+        The history, step count and ledger carry over; the step budget and the turn bound
+        grow by `limits.max_steps`, and the no-progress counts start over."""
+        if self._running:
+            raise RuntimeError("cannot revise while a run is in progress")
+        if self._messages is None:
+            raise RuntimeError("cannot revise before the first run")
+        self._running = True
+        try:
+            self._answer_unanswered()
+            note_block = f"\n{note}\n" if note else ""
+            self._messages.append(
+                {
+                    "role": "user",
+                    "content": REVISION_PROMPT.format(comment=comment, note=note_block),
+                }
+            )
+            self._max_steps += self._task.limits.max_steps
+            self._max_turns += self._task.limits.max_steps
+            self._failures = 0
+            self._seen.clear()
+            return await self._drive("revising")
+        finally:
+            self._running = False
+
+    def _answer_unanswered(self) -> None:
+        """Give every tool call left without a result a `Not run.` result, so the kept
+        history is a valid conversation again: a call cut short mid-call by the time limit
+        or a stop, and the calls after `finish` in its reply, never got one."""
+        assert self._messages is not None
+        answered = {
+            str(message["tool_call_id"]) for message in self._messages if message["role"] == "tool"
+        }
+        missing: list[Message] = []
+        for message in self._messages:
+            if message["role"] != "assistant":
+                continue
+            calls = message.get("tool_calls")
+            if not isinstance(calls, list):
+                continue
+            for call in cast(list[dict[str, object]], calls):
+                call_id = str(call.get("id"))
+                if call_id not in answered:
+                    missing.append({"role": "tool", "tool_call_id": call_id, "content": "Not run."})
+        self._messages.extend(missing)
+
+    async def _drive(self, first_status: AgentState) -> RunEnd:
+        messages = self._messages
+        assert messages is not None
+        self._halted = False
+        await self._status(first_status)
         summary: str | None = None
         detail: str | None = None
         root_lost = False
@@ -189,7 +266,8 @@ class AgentRun:
                 except WorkspaceError as error:
                     reason = " ".join(str(error).split()) or type(error).__name__
                     raise _RootLost(f"The worktree cannot be used: {reason}.") from error
-                await self._status("working")
+                if first_status == "starting":
+                    await self._status("working")
                 summary = await self._loop(messages)
         except _Halt as halt:
             detail = halt.detail
@@ -253,10 +331,9 @@ class AgentRun:
     async def _loop(self, messages: list[Message]) -> str:
         # Every reply with a tool call adds a step, so the step limit bounds those; the failure
         # allowance covers replies without one. The bound holds even if a stop rule is broken.
-        max_turns = self._task.limits.max_steps + FAILURE_LIMIT
         while True:
-            if self._turns >= max_turns:
-                raise _Halt(f"Reached the limit of {max_turns} model calls.")
+            if self._turns >= self._max_turns:
+                raise _Halt(f"Reached the limit of {self._max_turns} model calls.")
             self._turns += 1
             reply = await self._model.complete(messages, TOOL_SCHEMAS)
             await self._usage(reply)
@@ -306,8 +383,8 @@ class AgentRun:
         if self._seen[key] >= SAME_RESULT_LIMIT:
             raise _Halt(f"Stopped: the same call gave the same result {SAME_RESULT_LIMIT} times.")
         self._fail_or_halt(ok=outcome.ok)
-        if self._step >= self._task.limits.max_steps:
-            raise _Halt(f"Reached the step limit of {self._task.limits.max_steps}.")
+        if self._step >= self._max_steps:
+            raise _Halt(f"Reached the step limit of {self._max_steps}.")
 
     async def _record(self, path: str) -> bool:
         """Whether the sink recorded the edit. A sink that returns `False` has sent its own
