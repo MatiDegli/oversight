@@ -143,7 +143,8 @@ it("opening the panel centers the changed node at the same zoom; closing restore
     const callers = await page.evaluate(() =>
       document
         .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-        ?.oversightGraph?.nodeCenters("node.cone:not(.dimmed)"),
+        ?.oversightGraph?.nodeCenters()
+        .filter((node) => node.id === window.graphTest.caller),
     );
     expect(callers?.length).toBeGreaterThan(0);
     expect(open.cutOff).toEqual([]);

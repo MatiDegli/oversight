@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import record_run
 import recording
+import validate_recording
 from oversight.events import EventPayload, EventStore, read_jsonl
 from oversight.workspace import ProcessResult
 from oversight_contracts.events import (
@@ -332,4 +333,40 @@ def test_provenance_output_cannot_replace_source(tmp_path: Path) -> None:
     with pytest.raises(record_run.RecordError, match="source"):
         record_run.record_run(store, out)
     assert store.read_bytes() == before
+    assert not out.exists()
+
+
+def test_fake_fixture_roundtrip_and_public_refusal(tmp_path: Path) -> None:
+    store = write_store(
+        tmp_path / f"{RUN_ID}.sqlite",
+        RUN_ID,
+        [
+            (started(models=[FAKE]), "2026-10-27T14:03:12.000Z"),
+            (step(), "2026-10-27T14:03:13.000Z"),
+        ],
+    )
+    out = tmp_path / "fake.jsonl"
+    assert record_run.record_run(store, out, fake_fixture=True).count == 2
+    bundle = recording.load_recording(out, fake_fixture=True)
+    provenance = bundle["provenance"]
+    assert isinstance(provenance, dict)
+    assert provenance["exporter"] == "oversight.fake_recording.v1"
+    assert validate_recording.main(["--fake-fixture", str(out)]) == 0
+    assert validate_recording.main([str(out)]) == 1
+    with pytest.raises(recording.RecordError, match="fake"):
+        recording.load_recording(out)
+    marker = recording.provenance_path(out)
+    metadata = json.loads(marker.read_text())
+    metadata["exporter"] = "oversight.record_run.v1"
+    marker.write_text(json.dumps(metadata))
+    with pytest.raises(recording.RecordError):
+        recording.load_recording(out, fake_fixture=True)
+    with pytest.raises(recording.RecordError):
+        recording.load_recording(out)
+
+
+def test_fake_mode_refuses_real_model(tmp_path: Path) -> None:
+    out = tmp_path / "fake.jsonl"
+    with pytest.raises(recording.RecordError, match="provider"):
+        record_run.record_run(real_store(tmp_path), out, fake_fixture=True)
     assert not out.exists()
