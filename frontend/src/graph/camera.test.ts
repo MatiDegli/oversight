@@ -10,6 +10,7 @@ import {
   includeNewNodes,
   nodesInViewport,
   prefersReducedMotion,
+  revealNode,
   startCamera,
   startingView,
   ZOOM_RANGE,
@@ -583,6 +584,43 @@ describe("the zoom range after Fit", () => {
     expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
     expect((500 - cy.pan().x) / cy.zoom()).toBeCloseTo(middle.x);
     expect((300 - cy.pan().y) / cy.zoom()).toBeCloseTo(middle.y);
+  });
+});
+
+describe("revealNode", () => {
+  const inset =
+    Number.parseFloat(theme["cone-card-width"]) + Number.parseFloat(theme["spacing-overlay"]);
+
+  it("pans to put a node in the middle of what the cone card leaves free, at the zoom it has", () => {
+    const cy = wideGraph(40_000);
+    cy.viewport({ zoom: 0.5, pan: { x: 20, y: 40 } });
+    const before = positions(cy);
+    const target = revealNode(cy, "east", true);
+    expect(target?.zoom).toBe(0.5);
+    expect(cy.zoom()).toBe(0.5);
+    const { x, y } = cy.getElementById("east").renderedPosition();
+    expect(x).toBeCloseTo((inset + 1000) / 2);
+    expect(y).toBeCloseTo(300);
+    expect(cy.pan()).toEqual(target?.pan);
+    expect(positions(cy)).toEqual(before);
+  });
+
+  it("eases under normal motion and does nothing for a node that is not on the graph", () => {
+    const cy = wideGraph(40_000);
+    const animate = vi.spyOn(cy, "animate").mockReturnValue(cy);
+    expect(revealNode(cy, "missing", false)).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+    revealNode(cy, "east", false);
+    expect(animate).toHaveBeenCalledOnce();
+    expect(animate.mock.calls[0]?.[0]).toMatchObject({ zoom: 1 });
+  });
+
+  it("is a move like any other: it keeps the zoom range", () => {
+    const cy = wideGraph(40_000);
+    cy.viewport({ zoom: ZOOM_RANGE.min, pan: { x: 0, y: 0 } });
+    revealNode(cy, "east", true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
   });
 });
 

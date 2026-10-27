@@ -46,7 +46,7 @@ import { themes } from "../theme";
 const theme = themes.dark;
 
 import { GraphView } from "./GraphView";
-import type { GraphViewProps } from "./GraphView";
+import type { GraphApi, GraphViewProps } from "./GraphView";
 import * as camera from "./camera";
 
 let cleanup: undefined | (() => void);
@@ -450,6 +450,69 @@ it("measures the card's real height and refreshes marks when that height changes
   bottom = 300;
   resize();
   expect(onFramed).toHaveBeenLastCalledWith(expect.objectContaining({ outOfView: new Set() }));
+});
+
+it("pans to a cone row's node only when asked, and tells the cone card what that left in view", async () => {
+  setLabel("Caller");
+  const apiRef = { current: null as GraphApi | null };
+  const onFramed = vi.fn();
+  const coneCardRef = {
+    current: {
+      getBoundingClientRect: () => ({ left: 24, right: 304, top: 24, bottom: 300 }),
+    } as HTMLDivElement,
+  };
+  const cone = {
+    seeds: ["billing:changed"],
+    entries: [{ node_id: "billing:fee", distance: 1 }],
+    edges_followed: "exact" as const,
+    max_depth: 3,
+    max_nodes: 40,
+    omitted_by_depth: 0,
+    omitted_by_limit: 0,
+    tests_reaching: 0,
+  };
+  const { settle } = mount({ apiRef, onFramed, coneCardRef });
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Graph was not created");
+  vi.spyOn(cy, "width").mockReturnValue(928);
+  vi.spyOn(cy, "height").mockReturnValue(1028);
+  cy.getElementById("billing:fee").position({ x: 5000, y: 400 });
+  cy.viewport({ zoom: 1, pan: { x: 0, y: 0 } });
+  const reveal = vi.spyOn(camera, "revealNode");
+  const frame = vi.spyOn(camera, "frameCamera").mockReturnValue({
+    zoom: 1,
+    pan: { x: 0, y: 0 },
+    framed: new Set(),
+    outOfView: new Set(),
+  });
+  rerender({
+    apiRef,
+    onFramed,
+    coneCardRef,
+    cone,
+    panelOpen: true,
+    frameKey: "review:change-1",
+    frameIds: [],
+  });
+  // Entering review framed the camera and listed the row as out of view; it moved nothing else.
+  expect(frame).toHaveBeenCalledOnce();
+  expect(onFramed).toHaveBeenLastCalledWith(
+    expect.objectContaining({ outOfView: new Set(["billing:fee"]) }),
+  );
+  expect(reveal).not.toHaveBeenCalled();
+  expect(cy.pan()).toEqual({ x: 0, y: 0 });
+  onFramed.mockClear();
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
+  apiRef.current?.reveal("billing:fee");
+  expect(reveal).toHaveBeenCalledExactlyOnceWith(cy, "billing:fee", true);
+  expect(cy.zoom()).toBe(1);
+  expect(cy.getElementById("billing:fee").renderedPosition().x).toBeCloseTo((304 + 928) / 2);
+  expect(onFramed).toHaveBeenLastCalledWith(expect.objectContaining({ outOfView: new Set() }));
+  // A node that is not on the graph is no move and no report.
+  onFramed.mockClear();
+  apiRef.current?.reveal("missing");
+  expect(onFramed).not.toHaveBeenCalled();
 });
 
 it("limits the zoom to the buttons' range, and routes a call again when a node it joins is moved", async () => {
