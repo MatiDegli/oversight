@@ -29,6 +29,7 @@ from collections.abc import Coroutine
 from typing import Any, Literal
 
 from oversight.agents import AgentTask, Publish, RunEnd
+from oversight.changes import _approval as approval
 from oversight.changes import _proposal as proposal
 from oversight.changes._state import (
     APPROVABLE,
@@ -42,10 +43,8 @@ from oversight.changes._state import (
     ChangeNotFound,
     ChangeRecord,
     ChangeState,
-    Facts,
     Move,
     Revision,
-    Source,
     State,
     WrongState,
 )
@@ -105,6 +104,13 @@ class ChangeManager:
             ChangePorts(
                 finish_pending=lambda: self._finish_pending(),
                 send_requested=lambda rec: self._send_requested(rec),
+                drain_pending=lambda: self._drain_pending(),
+                finish=lambda rec: self._finish(rec),
+                record_merge=lambda rec, comment, post: self._record_merge(rec, comment, post),
+                close_out=lambda rec: self._close_out(rec),
+                resolution=lambda rec, decision, comment, conflict=None: self._resolution(
+                    rec, decision, comment, conflict=conflict
+                ),
             ),
         )
 
@@ -191,51 +197,6 @@ class ChangeManager:
     def _check_editable(rec: ChangeRecord) -> None:
         if rec.state != "ready":
             raise WrongState(f"{rec.change_id} is {rec.state}; a save in review needs ready")
-
-    async def _as_clicked(self, rec: ChangeRecord) -> bool:
-        """R1: merge only the revision Approve was clicked on, with the worktree exactly at its
-        head. A save proposed after the click is left for review; one cut short, whose write or
-        commit landed without its proposal, is re-proposed from what the worktree holds, leftovers
-        committed as the user. Either way an `error` names the revision to review and nothing
-        merges: main is untouched, so the decision's end puts the change back to `ready`. The
-        caller holds both locks."""
-        if rec.revision != rec.taken:
-            await self._ctx.error(
-                "server",
-                f"Revision {rec.revision} of {rec.change_id} arrived after you clicked; "
-                "review it and approve again.",
-                rec,
-                fatal=False,
-            )
-            return False
-        tree = rec.tree
-        try:
-            head = (await self._ctx.git(tree, "rev-parse", "HEAD")).strip()
-            if (
-                head == rec.head_commit
-                and not (await self._ctx.git(tree, "status", "--porcelain")).strip()
-            ):
-                return True
-            head, files = await proposal.commit(self._ctx, rec, "user")
-            await proposal.proposal(self._ctx, rec, head, files, "user", rec.summary)
-        except Exception as error:
-            source: Source = "git" if isinstance(error, WorkspaceError) else "server"
-            await self._ctx.error(
-                source,
-                f"Approving {rec.change_id} merged nothing: its worktree could not be checked or "
-                f"re-proposed ({error}); approve again or reject.",
-                rec,
-                fatal=False,
-            )
-            return False
-        await self._ctx.error(
-            "server",
-            f"Revision {rec.revision} of {rec.change_id} holds edits that were not proposed when "
-            "you clicked; review it and approve again.",
-            rec,
-            fatal=False,
-        )
-        return False
 
     async def read_file(self, agent_id: AgentId | None, path: str) -> FileContent:
         """GET /files. Main is read under main's lock, which every mutation of main holds from its
@@ -445,7 +406,7 @@ class ChangeManager:
     def approve(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
         rec = self._take(change_id, APPROVABLE, "approve")
         rec.taken = rec.revision
-        return self._decide(rec, self._approve(rec, comment))
+        return self._decide(rec, approval.approve(self._ctx, rec, comment))
 
     def reject(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
         rec = self._take(change_id, REJECTABLE, "reject")
@@ -525,37 +486,6 @@ class ChangeManager:
                             rec.agent_id,
                             unsent,
                         )
-
-    async def _approve(self, rec: ChangeRecord, comment: str | None) -> None:
-        await self._finish_pending()
-        async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
-            # A close-out publish left running by a cancel may still move `snapshot`, which this
-            # merge's delta starts from, and must find its own delta still there: wait for it.
-            await self._drain_pending()
-            if self._ctx.state.suspect:
-                # M5: main turned suspect while this queued. No git call; the decision's end puts
-                # the change back to `ready`.
-                await self._ctx.error(
-                    "server",
-                    "Main became suspect before this approval ran; reject the change or restart.",
-                    rec,
-                    fatal=False,
-                )
-                return
-            if not await self._as_clicked(rec):
-                return
-            pre: str | None = None
-            try:
-                pre = (await self._ctx.git(self._ctx.workspace.main, "rev-parse", "HEAD")).strip()
-                await self._merge(rec, comment, pre)
-            except asyncio.CancelledError:
-                # Still under both locks: settle main from its facts, then cancel.
-                await self._recover(rec, comment, pre, None)
-                raise
-            except Exception as error:
-                await self._recover(rec, comment, pre, error)
-            if rec.merged:
-                await self._finish(rec)
 
     async def _request_changes(self, rec: ChangeRecord, comment: str) -> Revision | None:
         await self._finish_pending()
@@ -795,124 +725,6 @@ class ChangeManager:
             merge_commit=merge_commit,
             conflict=conflict,
         )
-
-    async def _merge(self, rec: ChangeRecord, comment: str | None, pre: str) -> None:
-        main = self._ctx.workspace.main
-        head = rec.head_commit or rec.base_commit
-        rec.fallback = "broken"  # from here on, main may change
-        # --no-ff on every merge: --no-commit alone fast-forwards a head that descends from main,
-        # leaving HEAD moved and nothing for `merge --abort` to undo.
-        result = await self._ctx.run(main, "merge", "--no-ff", "--no-commit", head)
-        if result.returncode != 0:
-            if (
-                result.returncode == 1
-                and not result.timed_out
-                and await self._conflict(rec, comment, pre)
-            ):
-                return
-            detail = "timed out" if result.timed_out else self._ctx.workspace.redact(result.stderr)
-            raise WorkspaceError(f"git merge failed: {detail.strip()[-500:]}")
-        if await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
-            if pre != rec.base_commit and not await self._combined_tests_pass(rec, comment, pre):
-                return
-            await self._ctx.git(
-                main,
-                "commit",
-                "-q",
-                "-m",
-                f"Merge {rec.change_id} ({rec.agent_id})",
-                commit_as="user",
-            )
-        facts = await self._facts(head)
-        if not facts.merged:
-            raise WorkspaceError("the merge did not land on main")
-        await self._record_merge(rec, comment, facts.head)
-
-    async def _conflict(self, rec: ChangeRecord, comment: str | None, pre: str) -> bool:
-        main = self._ctx.workspace.main
-        names = await self._ctx.git(main, "diff", "--name-only", "--diff-filter=U", "-z")
-        paths = sorted(p for p in names.split("\0") if p)
-        if not paths:
-            return False
-        await self._ctx.git(main, "merge", "--abort")
-        if not (await self._facts(rec.head_commit or rec.base_commit)).unchanged(pre):
-            raise WorkspaceError("main did not return to its HEAD after the conflict")
-        await self._conflicted(rec, comment, Conflict(kind="merge", paths=paths, tests=None))
-        return True
-
-    async def _combined_tests_pass(self, rec: ChangeRecord, comment: str | None, pre: str) -> bool:
-        """R5: main moved since the change's base, so the merge, staged on main, is tested before
-        its commit. A failure or timeout aborts it and resolves as a tests conflict. A cancel
-        during the run is `_recover`'s, which aborts on `MERGE_HEAD`."""
-        main = self._ctx.workspace.main
-        run = await self._ctx.workspace.run_tests(main, timeout_s=rec.task.limits.test_timeout_s)
-        if run.result.outcome == "passed":
-            return True
-        await self._ctx.git(main, "merge", "--abort")
-        if not (await self._facts(rec.head_commit or rec.base_commit)).unchanged(pre):
-            raise WorkspaceError("main did not return to its HEAD after the combined tests")
-        await self._conflicted(rec, comment, Conflict(kind="tests", paths=[], tests=run.result))
-        return False
-
-    async def _conflicted(self, rec: ChangeRecord, comment: str | None, conflict: Conflict) -> None:
-        """Main is back at `pre`: send the approval's conflict and record it, as one `_whole` step,
-        so a cancel never leaves a resolution in the store that the record, and so a second
-        Approve or a Request changes, does not know. The change stays `deciding`, with `conflict`
-        as its fallback: the decision's end, or its recovery, makes it `conflict`, and no other
-        decision enters before."""
-        resolution = self._resolution(rec, "approved", comment, conflict=conflict)
-        await self._ctx.whole(self._record_conflict(rec, resolution, conflict))
-
-    async def _record_conflict(
-        self, rec: ChangeRecord, resolution: ChangeResolved, conflict: Conflict
-    ) -> None:
-        await self._ctx.publish(resolution)
-        rec.conflict, rec.fallback = conflict, "conflict"
-
-    async def _facts(self, head_commit: str) -> Facts:
-        main = self._ctx.workspace.main
-        return Facts(
-            head=(await self._ctx.git(main, "rev-parse", "HEAD")).strip(),
-            clean=not (await self._ctx.git(main, "status", "--porcelain")).strip(),
-            merging=await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"),
-            contains=await self._ctx.yes_no(
-                main, "merge-base", "--is-ancestor", head_commit, "HEAD"
-            ),
-        )
-
-    async def _recover(
-        self, rec: ChangeRecord, comment: str | None, pre: str | None, error: Exception | None
-    ) -> None:
-        """Decide from git facts after a failed approval, or a cancelled one (`error` is `None`):
-        abort an unfinished merge, record a landed one; a conflict already sent stays `conflict`. No
-        `reset --hard`, no lock removal. A cancelled approval always reports; a landed merge closes
-        out first and leaves its cleanup to the next decision or `open`."""
-        main = self._ctx.workspace.main
-        facts: Facts | None = None
-        try:
-            if await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
-                await self._ctx.git(main, "merge", "--abort")
-            facts = await self._facts(rec.head_commit or rec.base_commit)
-        except Exception:
-            facts = None
-        if facts is not None and facts.merged:
-            await self._record_merge(rec, comment, facts.head)
-            if error is not None:
-                return  # the approval closes out and cleans up
-            await self._close_out(rec)
-            note = "the merge landed and is recorded"
-        elif facts is not None and facts.unchanged(pre):
-            if rec.fallback == "conflict":  # set only by `_record_conflict`: the store has it
-                rec.state = "conflict"
-                note = "main is unchanged and the conflict is recorded; request changes or reject"
-            else:
-                rec.state = "ready"
-                note = "main is unchanged; approve again or reject"
-        else:
-            self._ctx.state.break_change(rec)
-            note = "main's state is unknown; reject the change or restart"
-        what = "was cancelled" if error is None else f"failed: {error}"
-        await self._ctx.error("git", f"Approving {rec.change_id} {what}. {note}.", rec, fatal=False)
 
     async def _record_merge(self, rec: ChangeRecord, comment: str | None, post: str) -> None:
         """The merge is a fact: rescan main and build the resolution and delta, sending nothing."""
