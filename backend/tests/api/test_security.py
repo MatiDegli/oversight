@@ -327,8 +327,8 @@ def test_cli_keeps_transport_scheme_independent_of_proxy_headers(monkeypatch, co
 
     # No listener or provider: intercept the process boundary, checking both production entries.
     run = Mock()
-    monkeypatch.setattr(cli.uvicorn, "run", run)
-    monkeypatch.setattr(cli.Settings, "load", lambda: Settings())
+    monkeypatch.setattr("oversight.__main__.uvicorn.run", run)
+    monkeypatch.setattr(Settings, "load", lambda: Settings())
     monkeypatch.setattr(cli, "create_app", Mock())
     args = ["oversight", command] + (["unused.jsonl"] if command == "replay" else [])
     monkeypatch.setattr("sys.argv", args)
