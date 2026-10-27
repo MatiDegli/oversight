@@ -133,7 +133,8 @@ self._agents: dict[str, _Agent]                 # replaces _change_ids
   client until the change is rejected or merged. `_runs` and `_stop_runs` are on main already.
 - This plan edits the slot constant, `__init__`'s fields, `startup`, `_publish`, `_ledger_gone`,
   `_default_client`, `_check`, `start`, `_run`'s `pricing=` line and `_halt_for_ledger`'s body.
-  Only `__init__` overlaps: `pricing=` is 16 lines above the `finally`; `_stop_runs` is touched once, below.
+  Only `__init__` overlaps: `pricing=` is 16 lines above the `finally`; `_stop_runs` is
+  touched once, below.
 - `_stop_runs` is touched once: after the gather, a loop `for agent_id in runs:
   manager.run_ended(agent_id, None)` over the snapshot taken before the cancels (K17). It is the
   fallback the request plan's R8 already describes ("if the drained change is then `working`,
@@ -181,7 +182,8 @@ could say "the first free slot that can start, A before B", the rule the task bo
   reads closed (`brake_reason()` not None), B ends halted with its own profile, and a fatal
   `error` went out. Without the task around `record`, B's cost is missing in the first case and
   the brake open in the second.
-- K7 *`test_run_started_lists_the_offered_slots` (with the fixture `[A, B]`; a fake B with no script: `[A]`).
+- K7 *`test_run_started_lists_the_offered_slots` (with the fixture `[A, B]`; a fake B with no
+  script: `[A]`).
 - K8 B's halt names A's model or change: *`test_a_lost_ledger_halts_b_with_its_own_profile`.
 - K9 one client for two agents: *`test_each_start_builds_its_own_client` (two scripts, two edits).
 - K10 endpoints mixed up: *`test_the_client_endpoint_follows_the_provider` (`test-key`, no call).
