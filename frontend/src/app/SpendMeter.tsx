@@ -1,7 +1,7 @@
 import type { UsageTick } from "@contracts";
 import { Ban, CircleAlert } from "lucide-react";
 
-import { selectSpend } from "../state";
+import { formatUsd, selectSpend } from "../state";
 import type { State } from "../state";
 
 const captions: Record<UsageTick["brake"], string | null> = {
@@ -10,17 +10,6 @@ const captions: Record<UsageTick["brake"], string | null> = {
   warn_80: "80% of the budget used",
   blocked: "New runs are blocked: the budget is nearly spent",
 };
-const money = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  currencyDisplay: "code",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-/** `US$150.00`: the code Meta's invoices use, and no space, as the total is written. */
-const usd = (amount: number) => money.format(amount).replace("USD", "US$").replace(/\s/g, "");
-
 /**
  * "Spent US$0.47 of US$150.00" on the bar's own line. The group is anchored to the bar's right
  * edge, and a brake caption (icon and words) comes before it on the same line, so the total never
@@ -31,7 +20,7 @@ export function SpendMeter({ state }: { state: State }) {
   if (!spend) return null;
   const caption = captions[spend.brake];
   const Icon = spend.brake === "blocked" ? Ban : CircleAlert;
-  const total = spend.spentUsd === null ? "unknown" : usd(spend.spentUsd);
+  const total = spend.spentUsd === null ? "unknown" : formatUsd(spend.spentUsd);
   return (
     <div
       role="group"
@@ -49,7 +38,7 @@ export function SpendMeter({ state }: { state: State }) {
       <p>
         Spent{" "}
         <span className="font-mono text-(length:--data-size) font-bold text-text">{total}</span> of{" "}
-        <span className="font-mono text-(length:--data-size)">{usd(spend.budgetUsd)}</span>
+        <span className="font-mono text-(length:--data-size)">{formatUsd(spend.budgetUsd)}</span>
       </p>
     </div>
   );

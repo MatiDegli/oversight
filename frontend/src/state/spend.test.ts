@@ -78,6 +78,44 @@ describe("spend events and selection", () => {
     expect(selectSpend(store.getState().state)?.spentUsd).toBe(expected);
   });
 
+  describe("an agent's own cost", () => {
+    const cost = (agentId: string, usd: number | null, seq: number) => ({
+      ...tick,
+      seq,
+      payload: { ...tick.payload, agent_id: agentId, cost_usd: usd },
+    });
+
+    it("sums the agent's ticks and keeps agents apart, with no entry before a first tick", () => {
+      let state = through(1);
+      expect(state.agentCosts).toEqual({});
+      state = applyEvent(state, cost("agent-1", 0.25, 2));
+      state = applyEvent(state, cost("agent-2", 0.5, 3));
+      state = applyEvent(state, cost("agent-1", 0.125, 4));
+      expect(state.agentCosts).toEqual({ "agent-1": 0.375, "agent-2": 0.5 });
+    });
+
+    it("keeps an unreported cost unknown for good, never 0 and never a partial sum", () => {
+      let state = applyEvent(through(1), cost("agent-1", 0.25, 2));
+      state = applyEvent(state, cost("agent-1", null, 3));
+      expect(state.agentCosts["agent-1"]).toBeNull();
+      state = applyEvent(state, cost("agent-1", 0.25, 4));
+      expect(state.agentCosts["agent-1"]).toBeNull();
+      expect(applyEvent(through(1), cost("agent-2", null, 2)).agentCosts["agent-2"]).toBeNull();
+    });
+
+    it("starts again from nothing with a new run", () => {
+      const state = applyEvent(through(1), cost("agent-1", 0.25, 2));
+      if (!state.run) throw new Error("Missing run fixture");
+      const fresh = applyEvent(state, {
+        seq: 1,
+        ts: tick.ts,
+        type: "run.started",
+        payload: { ...state.run, run_id: "next-run" },
+      });
+      expect(fresh.agentCosts).toEqual({});
+    });
+  });
+
   it("leaves usage unchanged on a missing sequence", () => {
     const state = applyEvent(through(1), tick);
     const gap = applyEvent(state, { ...tick, seq: 4 });

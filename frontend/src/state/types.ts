@@ -35,6 +35,12 @@ export interface State {
   focus: Record<string, AgentFocus>;
   changes: Record<string, ChangeState>;
   usage: UsageTick | null;
+  /**
+   * What each agent has cost so far: the sum of its usage ticks. Null once any of its ticks
+   * reported no cost, because an unreported cost is unknown and never 0. An agent with no tick
+   * has no entry.
+   */
+  agentCosts: Record<string, number | null>;
   errors: ErrorReport[];
 }
 
@@ -49,6 +55,7 @@ export function createInitialState(): State {
     focus: {},
     changes: {},
     usage: null,
+    agentCosts: {},
     errors: [],
   };
 }

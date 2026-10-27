@@ -14,9 +14,15 @@ export function selectAgentCard(state: State, agentId: string) {
   const steps = state.steps[agentId] ?? [];
   return {
     agent,
+    /** The model's own name from the run ("Muse Spark"); the id when the run does not list it. */
+    modelLabel: state.run?.models.find((model) => model.id === agent.model)?.label ?? agent.model,
     steps: [...steps].reverse(),
     step: Math.max(agent.step, ...steps.map((step) => step.step)),
     readyForReview: agent.state === "ready_for_review",
+    /** What the agent proposed, with its tests; null until change.proposed arrives. */
+    proposal: state.changes[agent.change_id]?.proposal ?? null,
+    /** Null: unknown, as the server reported it. Undefined: no usage tick yet, so nothing to say. */
+    cost: state.agentCosts[agentId],
   };
 }
 

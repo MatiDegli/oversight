@@ -2,6 +2,18 @@ import type { UsageTick } from "@contracts";
 
 import type { State } from "./types";
 
+const money = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  currencyDisplay: "code",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** `US$150.00`: the code Meta's invoices use, and no space, as the total is written. */
+export const formatUsd = (amount: number) =>
+  money.format(amount).replace("USD", "US$").replace(/\s/g, "");
+
 export interface Spend {
   spentUsd: number | null;
   budgetUsd: number;

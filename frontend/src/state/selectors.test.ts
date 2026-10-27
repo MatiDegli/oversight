@@ -28,6 +28,24 @@ describe("panel selectors over the level 1 fixture", () => {
     expect(selectAgentCard(through(23), "agent-1")?.readyForReview).toBe(false);
   });
 
+  it("selects the card's model name, proposal and cost, each from its own event", () => {
+    const working = selectAgentCard(through(11), "agent-1");
+    expect(working?.modelLabel).toBe("Muse Spark");
+    expect(working?.proposal).toBeNull();
+    expect(working?.cost).toBeGreaterThan(0);
+    const ready = selectAgentCard(through(20), "agent-1");
+    expect(ready?.proposal?.tests.outcome).toBe("passed");
+    expect(ready?.proposal?.lines_added).toBe(2);
+    // No tick yet: nothing to say, which is not the same as unknown.
+    expect(selectAgentCard(through(4), "agent-1")?.cost).toBeUndefined();
+    // A model the run does not list shows its id.
+    const state = through(4);
+    const agent = state.agents["agent-1"];
+    if (!agent) throw new Error("Fixture needs agent-1");
+    state.agents["agent-1"] = { ...agent, model: "unlisted-model" };
+    expect(selectAgentCard(state, "agent-1")?.modelLabel).toBe("unlisted-model");
+  });
+
   it("selects full contents by change and selected file as subsequent edits arrive", () => {
     const event = panelEvents.find((event) => event.type === "change.updated");
     expect(event).toBeDefined();

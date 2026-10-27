@@ -152,8 +152,17 @@ export function applyEvent(state: State, event: ServerEvent): State {
         },
       };
     }
-    case "usage.tick":
-      return { ...next, usage: event.payload };
+    case "usage.tick": {
+      const tick = event.payload;
+      const before = state.agentCosts[tick.agent_id];
+      // Unknown stays unknown: a later tick with a cost does not make the total known again.
+      const cost = tick.cost_usd === null || before === null ? null : (before ?? 0) + tick.cost_usd;
+      return {
+        ...next,
+        usage: tick,
+        agentCosts: { ...state.agentCosts, [tick.agent_id]: cost },
+      };
+    }
     case "error":
       return { ...next, errors: [...state.errors, event.payload] };
     default: {
