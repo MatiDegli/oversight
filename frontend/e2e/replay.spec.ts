@@ -39,7 +39,19 @@ if (!snapshot || !delta || !update || !proposal || !resolution)
   throw new Error(`${LOG_NAME} must hold a snapshot, a delta, an edit, a proposal and a decision`);
 
 // The graph hides test nodes by default; the snapshot's other nodes are what the page draws.
-const drawn = snapshot.nodes.filter((node) => !node.is_test).map((node) => node.id);
+const ancestors = new Map(snapshot.nodes.map((node) => [node.id, node]));
+const representedBy = (id: string) => {
+  let node = ancestors.get(id);
+  let visible = id;
+  while (node?.parent_id) {
+    node = ancestors.get(node.parent_id);
+    if (node?.kind === "class") visible = node.id;
+  }
+  return visible;
+};
+const drawn = snapshot.nodes
+  .filter((node) => !node.is_test && representedBy(node.id) === node.id)
+  .map((node) => node.id);
 const afterDelta = [
   ...drawn.filter((id) => !delta.nodes_removed.includes(id)),
   ...delta.nodes_added.filter((node) => !node.is_test).map((node) => node.id),
@@ -50,7 +62,8 @@ const slot = payloads("agent.status")[0]?.slot;
 if (slot === undefined) throw new Error(`${LOG_NAME} has no agent status`);
 // What the person sees light up, in order: each focus event names the nodes it lights.
 const lighting = payloads("agent.focus").map(
-  ({ mode, node_ids }) => `${slot} ${mode}:${node_ids.toSorted().join(",")}`,
+  ({ mode, node_ids }) =>
+    `${slot} ${mode}:${[...new Set(node_ids.map(representedBy))].sort().join(",")}`,
 );
 const changedNode = update.graph.nodes_modified[0];
 if (changedNode === undefined) throw new Error(`${LOG_NAME}: the edit names no node`);

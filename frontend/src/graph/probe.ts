@@ -1,5 +1,7 @@
 import type { Core } from "cytoscape";
 
+import { visibleId } from "./foldVisibility";
+
 export interface NodeBounds {
   id: string;
   distance?: number;
@@ -21,6 +23,7 @@ export interface GraphProbe {
   nodeBounds(selector?: string): NodeBounds[];
   /** Layout positions of the nodes with no children, which no camera move may change. A box's own position follows its children. */
   positions(): Record<string, { x: number; y: number }>;
+  representative(id: string): string;
   zoom(): number;
   pan(): { x: number; y: number };
   /** True while the camera is easing to a place. */
@@ -52,6 +55,7 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
       })),
     positions: () =>
       Object.fromEntries(cy.nodes(":childless").map((node) => [node.id(), { ...node.position() }])),
+    representative: (id) => visibleId(cy, id),
     zoom: () => cy.zoom(),
     pan: () => ({ ...cy.pan() }),
     animating: () => cy.animated() || cy.scratch("foldAnimating") === true,

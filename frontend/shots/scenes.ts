@@ -86,9 +86,15 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
                   }
                 : undefined;
             })(),
-            outOfView: [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
-              .filter((row) => row.textContent.includes("Out of view"))
-              .map((row) => row.querySelector("[title]")?.getAttribute("title") ?? ""),
+            outOfView: [
+              ...new Set(
+                [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
+                  .filter((row) => row.textContent.includes("Out of view"))
+                  .map((row) =>
+                    view.representative(row.querySelector("[title]")?.getAttribute("title") ?? ""),
+                  ),
+              ),
+            ],
             pan: view.pan(),
             size: { width: host.clientWidth, height: host.clientHeight },
             focus: view.nodeBounds().filter((node) => node.id === nodeId),
