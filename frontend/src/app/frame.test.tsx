@@ -53,7 +53,9 @@ describe("the frame over the level 1 fixture", () => {
     const markup = (view: View) => render(20, view, { state });
     const card = markup(initialView);
     const bCard = card.slice(card.indexOf('<article aria-label="Agent B"'));
-    expect(bCard).toContain("muse-spark-open");
+    // The card names the model as the run does ("Muse Spark Open"), not by its id.
+    expect(bCard).toContain(">Muse Spark Open<");
+    expect(bCard).not.toContain("muse-spark-open");
     for (const token of ["text-agent-b-text", "bg-agent-b-tint", "border-agent-b", "bg-agent-b"])
       expect(bCard).toContain(token);
     const rail = markup({ selected: null, diff, review: null });
