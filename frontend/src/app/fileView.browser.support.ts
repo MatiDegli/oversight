@@ -5,7 +5,7 @@ import { chromium, expect as browserExpect } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
-import { afterAll, beforeAll, expect } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, expect } from "vitest";
 
 import type {} from "./fileView.browser.fixture";
 import type { GraphProbeHost } from "../graph";
@@ -47,9 +47,35 @@ interface Save {
   content: string;
   base_hash: string;
 }
+interface FilePage {
+  page: Page;
+  calls: Save[];
+  serverFile: { content: string; hash: string };
+  errors: string[];
+}
+let currentPage: FilePage | undefined;
+// App/module loading and opening Cart are fixture setup, separate from each interaction's
+// existing deadline. Every test still gets a fresh page, real fit/unfold clicks and normal motion.
+beforeEach(async () => {
+  currentPage = await preparePage();
+}, 30_000);
+afterEach(async () => {
+  const current = currentPage;
+  currentPage = undefined;
+  if (!current) return;
+  try {
+    expect(current.errors).toEqual([]);
+  } finally {
+    await current.page.close();
+  }
+});
 export async function withPage(
   test: (page: Page, calls: Save[], serverFile: { content: string; hash: string }) => Promise<void>,
 ) {
+  if (!currentPage) throw new Error("File view page was not prepared");
+  await test(currentPage.page, currentPage.calls, currentPage.serverFile);
+}
+async function preparePage(): Promise<FilePage> {
   if (!browser) throw new Error("Browser was not started");
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   page.setDefaultTimeout(15_000);
@@ -110,10 +136,10 @@ export async function withPage(
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.animating() === false,
     );
-    await test(page, calls, serverFile);
-    expect(errors).toEqual([]);
-  } finally {
+    return { page, calls, serverFile, errors };
+  } catch (error) {
     await page.close();
+    throw error;
   }
 }
 

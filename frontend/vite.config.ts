@@ -51,16 +51,7 @@ export default defineConfig({
           exclude: ["src/**/*.browser.test.{ts,tsx}"],
         },
       },
-      {
-        extends: true,
-        test: {
-          name: "browser",
-          include: ["src/**/*.browser.test.{ts,tsx}"],
-          // Each suite owns Chromium and Vite. Keep their startup costs from competing with
-          // short interaction deadlines, and keep the shared file-view Vite cache exclusive.
-          fileParallelism: false,
-        },
-      },
+      { extends: true, test: { name: "browser", include: ["src/**/*.browser.test.{ts,tsx}"] } },
     ],
   },
 });
