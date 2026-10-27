@@ -21,8 +21,12 @@ from oversight_contracts.common import (
 from oversight_contracts.common import (
     NonEmptyText as NonEmptyText,
 )
+from oversight_contracts.events import ChangeProposed, ChangeResolved, FileDiff, ServerEvent
 from oversight_contracts.graph import GraphSnapshot
-from oversight_contracts.plans import SubtaskDraft
+from oversight_contracts.plans import PlanZone, SubtaskDraft
+from oversight_contracts.policy import ChangeAssessment
+from oversight_contracts.queue import QueueSpec
+from oversight_contracts.review import ChangeFacts, CrossReview
 
 
 class StartAgent(ContractModel):
@@ -33,6 +37,8 @@ class StartAgent(ContractModel):
     """The free slot when omitted."""
     model: str | None = None
     """A ModelProfile id; the slot's default model when omitted."""
+    zone: PlanZone | None = None
+    """The requested edit zone."""
 
 
 class AgentCreated(ContractModel):
@@ -50,9 +56,14 @@ class AgentMessage(ContractModel):
 
 
 class ApproveChange(ContractModel):
-    """`POST /changes/{id}/approve`. It takes no hash: in review the agent is idle."""
+    """`POST /changes/{id}/approve`: approve the observed revision and head."""
 
     comment: str | None = None
+
+    revision: PositiveInt
+    """The proposed revision the caller observed."""
+    head_commit: NonEmptyText
+    """The proposed head the caller observed."""
 
 
 class RequestChanges(ContractModel):
@@ -60,11 +71,21 @@ class RequestChanges(ContractModel):
 
     comment: NonEmptyText
 
+    revision: PositiveInt
+    """The proposed revision the caller observed."""
+    head_commit: NonEmptyText
+    """The proposed head the caller observed."""
+
 
 class RejectChange(ContractModel):
     """`POST /changes/{id}/reject`."""
 
     comment: str | None = None
+
+    revision: NonNegativeInt
+    """The observed revision, including zero before any proposal."""
+    head_commit: NonEmptyText
+    """The observed proposed head, or agent base at revision zero."""
 
 
 class GraphResponse(ContractModel):
@@ -218,3 +239,167 @@ class RejectPlan(PlanRevision):
     """Refuse a proposed plan without starting its agents."""
 
     comment: str | None = None
+
+
+class EnqueueTask(QueueSpec):
+    """Queue work without starting it immediately."""
+
+
+class QueueRevision(ContractModel):
+    """The queue item revision observed by the person."""
+
+    revision: PositiveInt
+    """The queue revision observed by the caller."""
+
+
+class StartLead(ContractModel):
+    """Request a coordination lead."""
+
+    task: NonEmptyText
+    """The lead's coordination task."""
+    model: NonEmptyText | None = None
+    """The offered Meta profile, or default."""
+
+
+class LeadCreated(ContractModel):
+    """The created coordination lead."""
+
+    agent_id: AgentId
+    """The created lead identifier."""
+
+
+class StopLead(ContractModel):
+    """Stop the observed lead state."""
+
+    revision: PositiveInt
+    """The lead-state revision observed by the person."""
+
+
+class ReviewChange(ContractModel):
+    """Request advisory review of an exact candidate."""
+
+    revision: PositiveInt
+    """The revision to review."""
+    head_commit: NonEmptyText
+    """The proposed head to review."""
+    main_commit: NonEmptyText
+    """Main used to prepare this review."""
+
+
+class RevertChange(ContractModel):
+    """Request an inverse of a rules merge."""
+
+    resolution_seq: PositiveInt
+    """The original rules resolution."""
+    merge_commit: NonEmptyText
+    """The rules merge to revert."""
+    main_commit: NonEmptyText
+    """The current main observed by the caller."""
+
+
+class ChangeView(ContractModel):
+    """An archived view of one change."""
+
+    change_id: ChangeId
+    """The requested change."""
+    seq: NonNegativeInt
+    """The event position read with this view."""
+    proposal: ChangeProposed | None
+    """The latest proposal and its diff statistics."""
+    files: list[FileDiff]
+    """Archived full diff contents."""
+    facts: ChangeFacts | None
+    """Facts matching the current target."""
+    review: CrossReview | None
+    """The latest review matching the current candidate."""
+    assessment: ChangeAssessment | None
+    """The current candidate assessment."""
+    resolution: ChangeResolved | None
+    """The latest change resolution."""
+
+
+class HistoryPage(ContractModel):
+    """One bounded page of historical event envelopes."""
+
+    run_id: RunId
+    """The current run only."""
+    through_seq: NonNegativeInt
+    """The fixed pagination upper bound."""
+    events: list[ServerEvent] = Field(max_length=100)
+    """The allowed historical event envelopes."""
+    next_seq: PositiveInt | None
+    """The next after_seq cursor, or null."""
+
+    @model_validator(mode="after")
+    def _history_envelopes(self) -> Self:
+        allowed = {
+            "change.proposed",
+            "change.assessed",
+            "change.reviewed",
+            "change.facts_recorded",
+            "tests.executed",
+            "change.resolved",
+            "revert.resolved",
+            "merge_mode.changed",
+            "plan.updated",
+            "queue.updated",
+            "lead.status",
+        }
+        if any(event.type not in allowed or event.seq > self.through_seq for event in self.events):
+            raise ValueError("history contains a disallowed envelope or exceeds its horizon")
+        seqs = [event.seq for event in self.events]
+        if seqs != sorted(set(seqs)):
+            raise ValueError("history envelopes must be chronological and unique")
+        return self
+
+
+class TreeFile(ContractModel):
+    """One regular file in the selected runtime tree."""
+
+    path: WorkspacePath
+    """Workspace-relative path with forward slashes."""
+    hash: str | None
+    """Lowercase hex SHA-256 of exact file bytes, or null when hashing was not completed."""
+
+    @model_validator(mode="after")
+    def _hash_shape(self) -> Self:
+        if self.hash is not None and (
+            len(self.hash) != 64 or any(char not in "0123456789abcdef" for char in self.hash)
+        ):
+            raise ValueError("file hash must be lowercase hex SHA-256")
+        return self
+
+
+class TreeResponse(ContractModel):
+    """200 from `GET /tree?agent=`: a plain, bounded runtime listing."""
+
+    run_id: RunId
+    """The current run."""
+    agent_id: AgentId | None
+    """Whose worktree was listed; null for main."""
+    directories: list[WorkspacePath]
+    """Sorted unique directory paths; excludes the root and trailing slashes."""
+    files: list[TreeFile]
+    """Regular files, sorted by unique workspace-relative path."""
+    graph_version: str | None
+    """Matching published main graph version; null for agents or unverified consistency."""
+    truncated: bool
+    """True exactly when eligible entries were omitted by the 2,000-entry cap."""
+
+    @model_validator(mode="after")
+    def _entry_limit(self) -> Self:
+        count = len(self.directories) + len(self.files)
+        if count > 2000:
+            raise ValueError("tree listing exceeds 2,000 entries")
+        if self.truncated and count != 2000:
+            raise ValueError("a truncated tree listing must contain exactly 2,000 entries")
+        return self
+
+    @model_validator(mode="after")
+    def _ordered_unique(self) -> Self:
+        paths = [file.path for file in self.files]
+        if self.directories != sorted(set(self.directories)) or paths != sorted(set(paths)):
+            raise ValueError("tree paths must be sorted and unique")
+        if set(self.directories).intersection(paths):
+            raise ValueError("a path cannot be both a directory and a file")
+        return self

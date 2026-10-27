@@ -1,3 +1,5 @@
+# pyright: reportUnknownMemberType=false
+# Pydantic leaves ValidationInfo.context untyped; keep the approved authority validator literal.
 """The envelope, the eleven event payloads and the ServerEvent union (docs/proposal.md, 4.4 to 4.6).
 
 Every event carries seq, ts, type and payload. No event carries an absolute path or model text.
@@ -5,23 +7,28 @@ Every event carries seq, ts, type and payload. No event carries an absolute path
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, NonNegativeInt, PositiveInt, ValidationInfo, model_validator
 
 from oversight_contracts.common import (
     AgentId,
+    CaseOutcome,
     ChangeId,
     ContractModel,
     FileStatus,
     NodeId,
+    NonEmptyText,
     PlanId,
+    QueuedTaskId,
     RunId,
     Slot,
     Timestamp,
     WorkspacePath,
 )
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot, ImpactCone
-from oversight_contracts.plans import Plan
+from oversight_contracts.plans import Plan, PlanZone
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
+from oversight_contracts.queue import QueuedTask
+from oversight_contracts.review import ChangeFacts, CrossReview
 
 # run.started
 
@@ -108,6 +115,25 @@ class AgentStatus(ContractModel):
     """Why it halted or stopped, in one sentence."""
     plan_id: PlanId | None = None
     """The originating plan; null for standalone agents or older recordings."""
+    zone: PlanZone | None = None
+    """The server-assigned edit zone."""
+    started_by: AgentId | None = None
+    """The lead that started this agent."""
+    queued_task_id: QueuedTaskId | None = None
+    """The queue item dispatching this agent."""
+    base_commit: NonEmptyText | None = None
+    """The agent base used to guard an unproposed rejection."""
+
+
+class CaseResult(ContractModel):
+    """One observed pytest node outcome."""
+
+    test_id: NonEmptyText
+    """The complete pytest node id."""
+    outcome: CaseOutcome
+    """The observed per-node outcome."""
+    detail: str | None = None
+    """A bounded diagnostic without absolute paths."""
 
 
 class SuiteResult(ContractModel):
@@ -121,6 +147,19 @@ class SuiteResult(ContractModel):
     duration_ms: int
     failed_tests: list[str]
     """Pytest node ids, 20 at most."""
+
+    cases: list[CaseResult] | None = Field(default=None, max_length=200)
+    """At most 200 observed pytest node outcomes."""
+    cases_complete: bool | None = None
+    """Whether all per-node outcomes were resolved and retained."""
+
+    @model_validator(mode="after")
+    def _case_completeness(self) -> Self:
+        if self.cases_complete and self.cases is None:
+            raise ValueError("complete cases require a list")
+        if self.cases is not None and len({case.test_id for case in self.cases}) != len(self.cases):
+            raise ValueError("case ids must be unique")
+        return self
 
 
 class AgentStep(ContractModel):
@@ -225,8 +264,8 @@ class Conflict(ContractModel):
 class ChangeResolved(ContractModel):
     change_id: ChangeId
     agent_id: AgentId
-    revision: int
-    """0 when the change was never proposed."""
+    revision: NonNegativeInt
+    """Zero when the change was never proposed."""
     decision: Literal["approved", "changes_requested", "rejected"]
     reason: Literal["stopped"] | None
     """"stopped": the agent was stopped and its change discarded."""
@@ -238,12 +277,57 @@ class ChangeResolved(ContractModel):
     conflict: Conflict | None
     """Set exactly when the merge is "conflict"."""
 
-    decided_by: Literal["person", "rules"] | None = None
-    """Decision provenance; null when it was not recorded."""
+    decided_by: Literal["person", "rules", "cross_review", "lead_agent"] | None = None
+    """Recorded decision or revision-request provenance."""
+    review_seq: PositiveInt | None = None
+    """The review triggering this revision request."""
+    requested_by: AgentId | None = None
+    """The lead requesting this revision."""
+    head_commit: NonEmptyText | None = None
+    """The head receiving this resolution, or the agent base at revision zero."""
     reasons: list[str] = Field(default_factory=list)
     """Recorded server-authored reasons for this decision."""
     assessment: ChangeAssessment | None = None
     """The immutable assessment used for this decision, when available."""
+
+    @model_validator(mode="after")
+    def _authority(self, info: ValidationInfo) -> Self:
+        actor = self.decided_by
+        if actor in {"cross_review", "lead_agent"}:
+            if (
+                self.decision != "changes_requested"
+                or self.reason is not None
+                or self.revision < 1
+                or not self.head_commit
+                or not self.comment
+                or not self.comment.strip()
+            ):
+                raise ValueError("model actors may only request changes with a target and comment")
+            if actor == "cross_review" and self.review_seq is None:
+                raise ValueError("cross-review requests require review_seq")
+        if (actor == "lead_agent") != (self.requested_by is not None):
+            raise ValueError("requested_by is set exactly for lead revision requests")
+        if self.decision == "approved" and actor not in {"person", "rules", None}:
+            raise ValueError("only person or rules may approve")
+        if (info.context or {}).get("live") and actor is None:
+            raise ValueError("live resolutions require explicit provenance")
+        return self
+
+    @model_validator(mode="after")
+    def _live_head(self, info: ValidationInfo) -> Self:
+        if (info.context or {}).get("live") and not self.head_commit:
+            raise ValueError("live resolutions require the observed head")
+        return self
+
+    @model_validator(mode="after")
+    def _zero_resolution(self) -> Self:
+        if self.revision == 0 and (
+            self.decision != "rejected"
+            or self.merge is not None
+            or self.decided_by not in {"person", None}
+        ):
+            raise ValueError("revision zero requires a personal or historical rejection")
+        return self
 
     @model_validator(mode="after")
     def _rules_decision(self) -> Self:
@@ -292,6 +376,13 @@ class UsageTick(ContractModel):
     budget_usd: float
     brake: Literal["ok", "warn_50", "warn_80", "blocked"]
 
+    role: Literal["agent", "review", "plan", "lead"] | None = None
+    """The purpose of this model call."""
+    change_id: ChangeId | None = None
+    """The change associated with this call."""
+    plan_id: PlanId | None = None
+    """The plan associated with this call."""
+
 
 class ErrorReport(ContractModel):
     """A failure shown without breaking the demo."""
@@ -302,6 +393,85 @@ class ErrorReport(ContractModel):
     change_id: ChangeId | None
     fatal: bool
     """The agent's run halted because of it."""
+
+
+class SuiteExecution(ContractModel):
+    """The server-observed execution of a specific Git tree."""
+
+    change_id: ChangeId
+    """The change owning this execution."""
+    agent_id: AgentId
+    """The agent owning this execution."""
+    revision: PositiveInt | None
+    """The proposed revision, if already assigned."""
+    phase: Literal["agent", "proposal", "combined", "base_probe", "head_probe"]
+    """The purpose of this execution."""
+    tested_commit: NonEmptyText | None
+    """The tested commit, when one exists."""
+    tested_tree: NonEmptyText
+    """The exact tested Git tree."""
+    suite: SuiteResult
+    """The server-observed test result."""
+
+
+class LeadStatus(ContractModel):
+    """The server-owned coordination lead state."""
+
+    agent_id: AgentId
+    """The lead identifier."""
+    revision: PositiveInt
+    """The monotonically increasing lead-state revision."""
+    task: NonEmptyText
+    """The coordination task."""
+    model: NonEmptyText
+    """The offered model profile."""
+    state: Literal["starting", "working", "halted", "stopped", "done"]
+    """The lead's lifecycle state."""
+    step: NonNegativeInt
+    """Completed public-command tool calls."""
+    detail: str | None
+    """The lifecycle explanation."""
+
+
+class RevertResult(ContractModel):
+    """The outcome of a person-authorized rules merge inverse."""
+
+    change_id: ChangeId
+    """The original change."""
+    revision: PositiveInt
+    """The original merged revision."""
+    resolution_seq: PositiveInt
+    """The original rules resolution."""
+    merge_commit: NonEmptyText
+    """The original merge commit."""
+    decided_by: Literal["person"]
+    """The principal requesting this revert."""
+    result: Literal["reverted", "needs_you"]
+    """The revert outcome."""
+    main_commit: NonEmptyText
+    """Main when this result was finalized."""
+    revert_commit: NonEmptyText | None
+    """The committed inverse, if successful."""
+    paths: list[WorkspacePath]
+    """Conflicting paths, when known."""
+    reason: NonEmptyText | None
+    """Why intervention is required."""
+    tests: SuiteResult | None
+    """The inverse candidate's test result."""
+
+    @model_validator(mode="after")
+    def _shape(self) -> Self:
+        if self.result == "reverted":
+            if (
+                not self.revert_commit
+                or self.main_commit != self.revert_commit
+                or self.tests is None
+                or self.tests.outcome != "passed"
+            ):
+                raise ValueError("reverted requires the committed and tested inverse")
+        elif not self.reason or self.revert_commit is not None:
+            raise ValueError("needs_you requires a reason and no inverse commit")
+        return self
 
 
 # The envelope
@@ -389,6 +559,60 @@ class PlanUpdatedEvent(EventBase):
     payload: Plan
 
 
+class ChangeReviewedEvent(EventBase):
+    """The change.reviewed envelope."""
+
+    type: Literal["change.reviewed"]
+    """The event discriminator."""
+    payload: CrossReview
+    """The complete event payload."""
+
+
+class ChangeFactsRecordedEvent(EventBase):
+    """The change.facts_recorded envelope."""
+
+    type: Literal["change.facts_recorded"]
+    """The event discriminator."""
+    payload: ChangeFacts
+    """The complete event payload."""
+
+
+class TestsExecutedEvent(EventBase):
+    """The tests.executed envelope."""
+
+    type: Literal["tests.executed"]
+    """The event discriminator."""
+    payload: SuiteExecution
+    """The complete event payload."""
+
+
+class RevertResolvedEvent(EventBase):
+    """The revert.resolved envelope."""
+
+    type: Literal["revert.resolved"]
+    """The event discriminator."""
+    payload: RevertResult
+    """The complete event payload."""
+
+
+class QueueUpdatedEvent(EventBase):
+    """The queue.updated envelope."""
+
+    type: Literal["queue.updated"]
+    """The event discriminator."""
+    payload: QueuedTask
+    """The complete event payload."""
+
+
+class LeadStatusEvent(EventBase):
+    """The lead.status envelope."""
+
+    type: Literal["lead.status"]
+    """The event discriminator."""
+    payload: LeadStatus
+    """The complete event payload."""
+
+
 type ServerEvent = Annotated[
     RunStartedEvent
     | GraphSnapshotEvent
@@ -403,7 +627,13 @@ type ServerEvent = Annotated[
     | ErrorReportEvent
     | ChangeAssessedEvent
     | MergeModeChangedEvent
-    | PlanUpdatedEvent,
+    | PlanUpdatedEvent
+    | ChangeReviewedEvent
+    | ChangeFactsRecordedEvent
+    | TestsExecutedEvent
+    | RevertResolvedEvent
+    | QueueUpdatedEvent
+    | LeadStatusEvent,
     Field(discriminator="type"),
 ]
 """Every event the server sends; validate one with `TypeAdapter(ServerEvent)`."""
