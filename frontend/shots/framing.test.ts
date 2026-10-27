@@ -45,6 +45,8 @@ void test("shots falls back to distance 1 if farther callers cannot fit legibly"
   const far = { ...near, id: "far", x1: 2000, x2: 2050, distance: 2 };
   const fallback = { ...frame, cone: [near, far], outOfView: [far.id] };
   assertReadableFrame(fallback);
+  // The live diff has the same fallback camera, but no review rows to mark off-screen callers.
+  assertPanelFrame({ ...fallback, outOfView: [] }, "live-diff");
   assert.throws(() => {
     assertReadableFrame({ ...fallback, zoom: 0.4 });
   }, /11 CSS px/);

@@ -22,7 +22,8 @@ export function assertPanelFrame(frame: Frame, mode: "review" | "live-diff"): vo
     assert(!frame.card && !frame.leftInset, "live diff must not show the review card");
     assert(!frame.outOfView?.length, "live diff must not report review rows");
   }
-  assertReadableFrame(frame);
+  // Only review has rows to mark. Live diff still checks legibility and all selected boxes.
+  assertReadableFrame(mode === "live-diff" ? { ...frame, outOfView: undefined } : frame);
 }
 
 /** Independent geometry acceptance check, shared by capture scenes and their unit tests. */
