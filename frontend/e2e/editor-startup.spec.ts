@@ -91,9 +91,9 @@ for (const first of ["file", "live diff", "review"] as const) {
     await expectPython(panel);
     if (first === "review") {
       await expect(panel.getByLabel("Editable review file")).toHaveAttribute("data-state", "clean");
-      // Review leaves fewer visible lines than live diff; the fixture's added docstring is at 38.
-      await panel.locator(".editor.modified").hover();
-      await page.mouse.wheel(0, 500);
+      // Review leaves fewer visible lines; the fixture's added docstring is near the end.
+      await panel.locator(":is(.native-edit-context, textarea.inputarea)").last().focus();
+      await page.keyboard.press("Control+End");
     }
     if (first !== "file") {
       await expect(panel.locator(".monaco-diff-editor .line-insert").first()).toBeVisible();
