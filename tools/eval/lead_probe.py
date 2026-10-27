@@ -428,12 +428,22 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    canonical_out = REPO / ".eval-output" / "lead"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runs", type=int, choices=range(1, 6), default=5)
-    parser.add_argument("--out", type=Path, default=REPO / ".eval-output" / "lead")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=canonical_out,
+        help="must resolve to .eval-output/lead in the repository; the ledger cannot move",
+    )
     parser.add_argument("--dry-run", action="store_true")
     try:
-        return asyncio.run(run(parser.parse_args(argv)))
+        args = parser.parse_args(argv)
+        if args.out.resolve() != canonical_out.resolve():
+            parser.error(f"--out must resolve to {canonical_out}; reuse the cumulative ledger")
+        args.out = canonical_out
+        return asyncio.run(run(args))
     except (BenchError, OSError, ValueError):
         print(
             "Lead probe refused: check settings, output ledger and filesystem; no automatic retry."

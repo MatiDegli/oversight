@@ -288,16 +288,71 @@ async def test_call_error_and_crash_reservation_block_reruns(tmp_path, snapshot)
     assert not script.calls and summary["total_cost_usd"] == "unknown"
 
 
-def test_dry_run_creates_no_client_or_settings(monkeypatch, tmp_path, capsys):
+@pytest.mark.parametrize("output", ["default", "absolute", "relative"])
+def test_dry_run_creates_no_client_or_settings(output, monkeypatch, tmp_path, capsys):
     def forbidden(*args, **kwargs):
         pytest.fail("dry-run loaded settings or created a client")
 
     monkeypatch.setattr(probe, "make_client", forbidden)
     monkeypatch.setattr(probe.Settings, "load", forbidden)
-    assert probe.main(["--dry-run", "--out", str(tmp_path / "out")]) == 0
+    canonical = tmp_path / ".eval-output" / "lead"
+    monkeypatch.setattr(probe, "REPO", tmp_path)
+    monkeypatch.chdir(tmp_path)
+    # Scan the actual template even with a test-owned canonical output directory.
+    demo_graph = probe.demo_graph
+
+    async def graph():
+        with monkeypatch.context() as context:
+            context.setattr(probe, "REPO", probe.SCENARIOS.parents[2])
+            return await demo_graph()
+
+    monkeypatch.setattr(probe, "demo_graph", graph)
+    args = (
+        []
+        if output == "default"
+        else ["--out", str(canonical) if output == "absolute" else ".eval-output/lead"]
+    )
+    assert probe.main(["--dry-run", *args]) == 0
     printed = json.loads(capsys.readouterr().out)
     assert len(printed) == 5 and printed[0]["prompts"]["plan"]
-    assert not (tmp_path / "out").exists()
+    assert not canonical.exists()
+
+
+@pytest.mark.parametrize("output", ["absolute", "relative"])
+def test_cli_refuses_new_output_directory_with_exhausted_canonical_ledger(
+    output, monkeypatch, tmp_path, capsys
+):
+    canonical = tmp_path / ".eval-output" / "lead"
+    ledger = Ledger(canonical / "accounting.jsonl", probe.TOTAL_CAP, Tariff(input=1, output=1))
+    ledger.state.records.append(
+        Record(
+            task_id="prior",
+            task_hash="hash",
+            profile="muse-spark",
+            run_id="old",
+            allowance_usd=probe.TOTAL_CAP,
+            charged_usd=probe.TOTAL_CAP,
+            status="finished",
+        )
+    )
+    ledger.save()
+    ledger.close()
+    before = (canonical / "ledger.json").read_bytes()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("alternate output reached graph/settings/client creation")
+
+    monkeypatch.setattr(probe, "REPO", tmp_path)
+    monkeypatch.chdir(tmp_path)
+    for target, name in ((probe, "demo_graph"), (probe.Settings, "load"), (probe, "make_client")):
+        monkeypatch.setattr(target, name, forbidden)
+    fresh = tmp_path / "fresh"
+    with pytest.raises(SystemExit) as error:
+        probe.main(["--out", str(fresh) if output == "absolute" else "fresh"])
+    assert error.value.code == 2
+    assert "--out must resolve to" in capsys.readouterr().err
+    assert not fresh.exists()
+    assert (canonical / "ledger.json").read_bytes() == before
 
 
 def test_product_client_explicit_reasoning_and_no_hidden_retries(monkeypatch):

@@ -167,8 +167,11 @@ and 256 per message/tool for framing) and 1,536 output tokens, including reasoni
 uncached. Refuse a call whose allowance reaches $0.05/run or $0.50 overall. Provider usage is
 checked against that allowance; an overrun or unknown usage stops the whole probe for manual
 reconciliation. A run cap stops that run; a total cap stops the probe. No automatic retry/reset.
-`ledger.py` supplies the exclusive lock, durable reservations and accumulated charges: always reuse
-the same output directory across reruns. Unknown usage and interrupted reservations block reruns;
+`ledger.py` supplies the exclusive lock, durable reservations and accumulated charges. The CLI pins
+`--out` to `.eval-output/lead` under the repository root and refuses any other directory before
+loading settings or creating a client, so selecting a fresh output cannot reset the cumulative cap.
+Relative and absolute paths resolving to that directory are accepted; omitting `--out` uses it too.
+Unknown usage and interrupted reservations block reruns;
 changing the tariff is refused. `accounting.jsonl` is the ledger's reserved recovery filename;
 call charges live in `ledger.json`, and probe evidence in `run-<id>.json` and `summary.json`.
 
