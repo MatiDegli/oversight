@@ -43,7 +43,7 @@ export function GraphStage({
   const scopeKey =
     tab?.frameKey ??
     (view.review === null ? (shown ?? view.file?.path ?? null) : `review:${view.review}`);
-  const frameKey = open ? `${scopeKey ?? "file"}:${layoutKey}` : null;
+  const frameKey = open ? (layoutKey ? `${scopeKey ?? "file"}:${layoutKey}` : scopeKey) : null;
   const [framing, setFraming] = useState<{ key: string | null; outOfView: ReadonlySet<string> }>();
   const coneCardRef = useRef<HTMLDivElement>(null);
   const startAreaRef = useRef<HTMLDivElement>(null);

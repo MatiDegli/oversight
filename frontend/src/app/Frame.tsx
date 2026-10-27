@@ -51,6 +51,14 @@ export function Frame(props: FrameProps) {
   const open = panelOpen(view);
   const task = useFunctionTask(state, view, props.onStartAgent !== undefined);
   const shell = useShell(open, onClosePanel);
+  const layoutKey =
+    shell.sidebar === null &&
+    !shell.dock &&
+    !shell.maximized &&
+    !task.expanded &&
+    shell.layoutRevision === 0
+      ? ""
+      : `${shell.sidebar ?? ""}:${String(shell.dock)}:${String(shell.maximized)}:${String(task.expanded)}:${String(shell.layoutRevision)}`;
   return (
     <div className="shell-frame flex h-full flex-col bg-background text-text">
       <TopBar state={state} onOpenQueue={props.onOpenQueue} />
@@ -89,7 +97,7 @@ export function Frame(props: FrameProps) {
               state={state}
               view={view}
               onNodeTap={props.onNodeTap}
-              layoutKey={`${shell.sidebar ?? ""}:${String(shell.dock)}:${String(shell.maximized)}:${String(task.expanded)}:${String(shell.layoutRevision)}`}
+              layoutKey={layoutKey}
             />
           </div>
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}
