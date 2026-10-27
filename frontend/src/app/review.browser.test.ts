@@ -120,6 +120,29 @@ function camera(page: Page, id: string) {
 
 const panel = (page: Page) => page.getByRole("complementary", { name: "Review panel" });
 
+it("the queue counter reframes each proposal while review stays open and keeps keyboard focus", async () => {
+  await withPage(false, async (page) => {
+    const target = await page.evaluate(() => window.reviewTest.addSecondProposal());
+    const positions = (await probe(page, ":childless")).positions;
+    const queue = page.getByRole("button", { name: /changes ready for review/ });
+    await queue.click();
+    await panel(page).locator(".line-insert").first().waitFor();
+    const firstId = await page.evaluate(() => window.reviewTest.changed);
+    await browserExpect.poll(async () => (await camera(page, firstId)).animating).toBe(false);
+    const first = await camera(page, firstId);
+    await queue.click();
+    await browserExpect(panel(page).getByText("Second proposal", { exact: true })).toBeVisible();
+    await browserExpect.poll(async () => (await camera(page, target)).animating).toBe(false);
+    const second = await camera(page, target);
+    expect(second.pan).not.toEqual(first.pan);
+    assertReadableFrame(second.zoom, second);
+    expect((await probe(page, ":childless")).positions).toEqual(positions);
+    await browserExpect(queue).toBeFocused();
+    await queue.click();
+    await browserExpect(panel(page).getByText("Second proposal", { exact: true })).toHaveCount(0);
+  });
+}, 30_000);
+
 it("opens review only from the person's click, keeps the change and cone lit, dims the rest, and closes", async () => {
   await withPage(false, async (page) => {
     const changed = await page.evaluate(() => window.reviewTest.changed);

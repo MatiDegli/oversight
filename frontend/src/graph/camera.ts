@@ -180,6 +180,50 @@ export function prefersReducedMotion(): boolean {
   return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/** Expand around the current view's centre, retaining its context and every node's position. */
+export function includeNewNodes(cy: Core, ids: readonly string[], reduceMotion: boolean): void {
+  const nodes = cy.nodes().filter((node) => ids.includes(node.id()));
+  if (nodes.empty()) return;
+  const box = nodes.renderedBoundingBox({ includeLabels: true, includeOverlays: false });
+  const width = cy.width();
+  const height = cy.height();
+  if (box.x1 >= 0 && box.y1 >= 0 && box.x2 <= width && box.y2 <= height) return;
+  if (width <= PADDING * 2 || height <= PADDING * 2) return;
+  const center = { x: width / 2, y: height / 2 };
+  const scale = Math.min(
+    1,
+    (center.x - PADDING) / Math.max(Math.abs(box.x1 - center.x), Math.abs(box.x2 - center.x)),
+    (center.y - PADDING) / Math.max(Math.abs(box.y1 - center.y), Math.abs(box.y2 - center.y)),
+  );
+  moveCamera(
+    cy,
+    {
+      zoom: cy.zoom() * scale,
+      pan: {
+        x: center.x + (cy.pan().x - center.x) * scale,
+        y: center.y + (cy.pan().y - center.y) * scale,
+      },
+    },
+    reduceMotion,
+  );
+}
+
+function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
+  cy.stop();
+  if (camera.zoom < cy.minZoom()) cy.minZoom(camera.zoom);
+  const viewport = { zoom: camera.zoom, pan: camera.pan };
+  if (reduceMotion) {
+    cy.viewport(viewport);
+    return;
+  }
+  const theme = getActiveTheme();
+  cy.animate(viewport, {
+    duration: Number.parseFloat(theme["transition-duration"]),
+    // Cytoscape accepts the CSS form at run time; its types list only the named easings.
+    easing: theme["transition-easing"] as AnimationOptions["easing"],
+  });
+}
+
 /** Fit the lit nodes subject to the readable floor; the whole-graph watch fit has no floor. */
 function cameraFor(
   cy: Core,
@@ -258,18 +302,6 @@ export function frameCamera(
     ...camera.outOfView,
     ...[...focusIds, ...(coneIds ?? [])].filter((id) => cy.getElementById(id).empty()),
   ]);
-  cy.stop();
-  if (camera.zoom < cy.minZoom()) cy.minZoom(camera.zoom);
-  const viewport = { zoom: camera.zoom, pan: camera.pan };
-  if (reduceMotion) {
-    cy.viewport(viewport);
-    return camera;
-  }
-  const theme = getActiveTheme();
-  cy.animate(viewport, {
-    duration: Number.parseFloat(theme["transition-duration"]),
-    // Cytoscape accepts the CSS form at run time; its types list only the named easings.
-    easing: theme["transition-easing"] as AnimationOptions["easing"],
-  });
+  moveCamera(cy, camera, reduceMotion);
   return camera;
 }

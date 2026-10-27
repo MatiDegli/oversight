@@ -25,6 +25,13 @@ export interface GraphProbe {
   pan(): { x: number; y: number };
   /** True while the camera is easing to a place. */
   animating(): boolean;
+  /** Renderer measurements for screenshot checks, returned as a detached value. */
+  metrics(): {
+    viewport: { width: number; height: number };
+    zoom: number;
+    minLabelPx: number;
+    edgeShape: string;
+  };
 }
 
 export type GraphProbeHost = HTMLElement & { oversightGraph?: GraphProbe };
@@ -40,10 +47,16 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
         ...node.boundingBox({ includeLabels: true, includeOverlays: false }),
       })),
     positions: () =>
-      Object.fromEntries(cy.nodes(":childless").map((node) => [node.id(), node.position()])),
+      Object.fromEntries(cy.nodes(":childless").map((node) => [node.id(), { ...node.position() }])),
     zoom: () => cy.zoom(),
     pan: () => ({ ...cy.pan() }),
     animating: () => cy.animated(),
+    metrics: () => ({
+      viewport: { width: cy.width(), height: cy.height() },
+      zoom: cy.zoom(),
+      minLabelPx: Math.min(...cy.nodes().map((node) => node.numericStyle("font-size") * cy.zoom())),
+      edgeShape: String(cy.edges().first().style("curve-style")),
+    }),
   };
   return () => {
     delete host.oversightGraph;

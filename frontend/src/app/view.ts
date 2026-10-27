@@ -124,9 +124,12 @@ export function openReview(state: State, view: View, changeId: string): View | n
   return { selected: node ?? view.selected, diff: null, review: changeId };
 }
 
-/** The change the queue counter opens: the first proposed one, agent A's first. */
-export function nextReview(state: State): string | null {
-  return pendingBySlot(state).find(isProposed)?.change_id ?? null;
+/** Cycle proposed changes in slot order; start with agent A when no review is open. */
+export function nextReview(state: State, current: string | null = null): string | null {
+  const proposed = pendingBySlot(state).filter(isProposed);
+  if (proposed.length === 0) return null;
+  const index = proposed.findIndex((change) => change.change_id === current);
+  return proposed[(index + 1) % proposed.length]?.change_id ?? null;
 }
 
 export function closePanel(view: View): View {

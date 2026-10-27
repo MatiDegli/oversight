@@ -85,6 +85,25 @@ describe("panel switching over the level 1 fixture", () => {
     expect(panelOpen({ ...initialView, diff })).toBe(true);
   });
 
+  it("advances the queue from the open change to the next proposal and wraps", () => {
+    const state = through(20);
+    const first = state.changes["change-1"];
+    if (!first) throw new Error("Missing proposal");
+    state.changes["change-2"] = {
+      ...first,
+      change_id: "change-2",
+      graph: { ...first.graph, nodes_modified: [untouched] },
+    };
+    const firstId = nextReview(state);
+    const secondId = nextReview(state, firstId);
+    expect(secondId).toBe("change-2");
+    expect(openReview(state, initialView, secondId ?? "")?.review).toBe("change-2");
+    expect(nextReview(state, secondId)).toBe("change-1");
+    state.changes["change-1"] = { ...first, status: "approved" };
+    expect(nextReview(state, "change-1")).toBe("change-2");
+    expect(nextReview(state, "change-2")).toBe("change-2");
+  });
+
   it("opens the card's change at its first file only when there is one to show", () => {
     expect(openChange(through(11), initialView, "change-1")).toBeNull();
     expect(openChange(through(14), initialView, "change-1")).toEqual({
