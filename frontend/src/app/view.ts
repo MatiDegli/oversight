@@ -40,6 +40,16 @@ export function changeNodeIds(change: ChangeState): string[] {
   ];
 }
 
+/**
+ * What review keeps lit while the change waits for the person: its nodes. Null once it is approved
+ * or rejected, so the graph returns to its normal lights while the panel shows the outcome; an
+ * approval that did not merge (status conflict) is still waiting and stays lit.
+ */
+export function litNodeIds(change: ChangeState | undefined): string[] | null {
+  if (!change || change.status === "approved" || change.status === "rejected") return null;
+  return changeNodeIds(change);
+}
+
 /** Unresolved changes, agent A's first, so a node two agents touch opens the same diff each time. */
 function pendingBySlot(state: State): ChangeState[] {
   const slot = (change: ChangeState) => state.agents[change.agent_id]?.slot ?? "~";

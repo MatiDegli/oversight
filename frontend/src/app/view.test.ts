@@ -8,6 +8,7 @@ import {
   diffForNode,
   changeNodeIds,
   initialView,
+  litNodeIds,
   nextReview,
   openChange,
   openReview,
@@ -115,5 +116,17 @@ describe("panel switching over the level 1 fixture", () => {
     expect(readyCount(through(19))).toBe(1);
     expect(readyCount(through(20))).toBe(1);
     expect(readyCount(through(21))).toBe(0);
+  });
+
+  it("keeps the change's nodes lit until it is decided, then none", () => {
+    expect(litNodeIds(through(20).changes["change-1"])).toEqual([edited]);
+    // change.resolved at seq 21: approved and merged, so the graph goes back to its normal lights.
+    expect(through(21).changes["change-1"]?.status).toBe("approved");
+    expect(litNodeIds(through(21).changes["change-1"])).toBeNull();
+    const ready = through(20).changes["change-1"];
+    expect(ready && litNodeIds({ ...ready, status: "rejected" })).toBeNull();
+    // An approval that did not merge still waits for the person.
+    expect(ready && litNodeIds({ ...ready, status: "conflict" })).toEqual([edited]);
+    expect(litNodeIds(undefined)).toBeNull();
   });
 });

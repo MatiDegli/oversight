@@ -10,7 +10,7 @@ import { ReviewPanel } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
-import { changeNodeIds, panelOpen, readyCount } from "./view";
+import { changeNodeIds, litNodeIds, panelOpen, readyCount } from "./view";
 import type { View } from "./view";
 
 type AgentState = AgentStatus["state"];
@@ -253,9 +253,14 @@ function LeftPanel({ state, view, onClose }: { state: State; view: View; onClose
 export function Frame(props: FrameProps) {
   const { state, view, onNodeTap, canOpenChange, onOpenChange, onClosePanel, notice } = props;
   const open = panelOpen(view);
-  // Review dims everything but the change's nodes; the array changes only with that change.
+  // Review dims everything but the change's nodes until it is decided; the array changes only with
+  // that change.
   const reviewed = view.review === null ? undefined : state.changes[view.review];
-  const litIds = useMemo(() => (reviewed ? changeNodeIds(reviewed) : null), [reviewed]);
+  const litIds = useMemo(() => litNodeIds(reviewed), [reviewed]);
+  // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
+  const shown = view.review ?? view.diff?.changeId ?? null;
+  const shownChange = shown === null ? undefined : state.changes[shown];
+  const frameIds = useMemo(() => (shownChange ? changeNodeIds(shownChange) : null), [shownChange]);
   return (
     <div className="flex h-full flex-col bg-background text-text">
       <TopBar state={state} onOpenQueue={props.onOpenQueue} />
@@ -279,6 +284,7 @@ export function Frame(props: FrameProps) {
             onNodeTap={onNodeTap}
             panelOpen={open}
             litIds={litIds}
+            frameIds={frameIds}
           />
           {notice && <div className="absolute top-6 left-6 text-muted">{notice}</div>}
         </main>

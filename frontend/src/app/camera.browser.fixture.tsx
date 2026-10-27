@@ -64,14 +64,6 @@ export const graphTest = {
   close() {
     render(initialView);
   },
-  /** The nodes one call edge away from `id`, which are drawn (tests are hidden). */
-  neighbours(id: string) {
-    const graph = stateStore.getState().state.graph;
-    const shown = new Set(graph?.nodes.filter((node) => !node.is_test).map((node) => node.id));
-    return (graph?.edges ?? [])
-      .flatMap((edge) => (edge.src === id ? [edge.dst] : edge.dst === id ? [edge.src] : []))
-      .filter((other) => shown.has(other));
-  },
 };
 
 declare global {

@@ -86,6 +86,8 @@ function report(page: Page, ids: string[]) {
         .map(({ id }) => id);
     return {
       cutOff: outside(centers.filter(({ id }) => wanted.includes(id))),
+      centers: centers.filter(({ id }) => wanted.includes(id)),
+      size: { width: element.clientWidth, height: element.clientHeight },
       cutOffAnywhere: outside(centers),
       animating: probe.animating(),
       zoom: probe.zoom(),
@@ -100,16 +102,13 @@ async function settled(page: Page) {
     .toBe(false);
 }
 
-const wanted = (page: Page) =>
-  page.evaluate(() => [
-    window.graphTest.changed,
-    ...window.graphTest.neighbours(window.graphTest.changed),
-  ]);
+/** The nodes the camera frames when the change opens: the change's own, in the recorded run. */
+const wanted = (page: Page) => page.evaluate(() => [window.graphTest.changed]);
 
-it("opening the panel keeps the changed node and its neighbours in view; closing refits the graph", async () => {
+it("opening the panel centers the changed node at the same zoom; closing refits the graph", async () => {
   await withPage("no-preference", async (page) => {
     const ids = await wanted(page);
-    expect(ids.length).toBeGreaterThan(1);
+    expect(ids).toHaveLength(1);
     const wide = await report(page, ids);
     // The first layout fitted the whole graph into the wide picture.
     expect(wide.cutOffAnywhere).toEqual([]);
@@ -126,7 +125,12 @@ it("opening the panel keeps the changed node and its neighbours in view; closing
     const open = await report(page, ids);
     expect(open.cutOff).toEqual([]);
     expect(open.positions).toEqual(wide.positions);
-    expect(open.zoom).toBeLessThanOrEqual(wide.zoom);
+    // The labels keep their size: the zoom is the watch fit's, not a fit of the narrowed graph.
+    expect(open.zoom).toBeCloseTo(wide.zoom, 6);
+    // And the node sits in the middle of the graph area between the panel and the rail.
+    const [center] = open.centers;
+    expect(center?.x).toBeCloseTo(open.size.width / 2, 0);
+    expect(center?.y).toBeCloseTo(open.size.height / 2, 0);
 
     await page.evaluate(() => {
       window.graphTest.close();

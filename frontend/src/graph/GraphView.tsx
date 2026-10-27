@@ -21,9 +21,15 @@ export interface GraphViewProps {
   onNodeTap?: (nodeId: string) => void;
   /**
    * Whether the left panel is open. The graph's width changes with it, so when this flips the
-   * camera moves (to the selected node's neighbourhood on open, to the whole graph on close).
+   * camera moves (to the nodes in `frameIds` on open, to the whole graph on close).
    */
   panelOpen?: boolean;
+  /**
+   * The nodes the camera centers when the panel opens, at the zoom the watch view had: the open
+   * change's nodes. Read only at that moment; changing it moves nothing. Empty falls back to the
+   * selected node, then to the whole graph.
+   */
+  frameIds?: readonly string[] | null;
   /** The nodes that stay lit while everything else dims, as in review; null dims nothing. */
   litIds?: readonly string[] | null;
 }
@@ -33,6 +39,7 @@ export function GraphView({
   onNodeTap,
   panelOpen = false,
   litIds = null,
+  frameIds = null,
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
   const graph = useRef<Core | undefined>(undefined);
@@ -41,21 +48,19 @@ export function GraphView({
   const framedFor = useRef(panelOpen);
   useEffect(() => {
     const relit = latest.current.litIds !== litIds;
-    latest.current = { selectedId, onNodeTap, panelOpen, litIds };
+    latest.current = { selectedId, onNodeTap, panelOpen, litIds, frameIds };
     if (relit) resync.current?.();
     else if (graph.current) showSelection(graph.current, selectedId);
-  }, [selectedId, onNodeTap, panelOpen, litIds]);
+  }, [selectedId, onNodeTap, panelOpen, litIds, frameIds]);
   // Only a change of the panel moves the camera, never a tap or an event; the first render keeps
   // the fit the first layout made.
   useEffect(() => {
     if (framedFor.current === panelOpen) return;
     framedFor.current = panelOpen;
     if (graph.current) {
-      frameCamera(
-        graph.current,
-        panelOpen ? (latest.current.selectedId ?? null) : null,
-        prefersReducedMotion(),
-      );
+      const { frameIds: framed, selectedId: selected } = latest.current;
+      const focus = framed?.length ? framed : selected ? [selected] : [];
+      frameCamera(graph.current, panelOpen ? focus : [], prefersReducedMotion());
     }
   }, [panelOpen]);
   useEffect(() => {

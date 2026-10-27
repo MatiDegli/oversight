@@ -78,6 +78,21 @@ function probe(page: Page, selector: string) {
   }, selector);
 }
 
+/** The camera as the graph reports it: zoom, whether it is easing, and where a node sits. */
+function camera(page: Page, id: string) {
+  return page.evaluate((wanted) => {
+    const element = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const view = element?.oversightGraph;
+    if (!element || !view) throw new Error("The graph is not mounted");
+    return {
+      zoom: view.zoom(),
+      animating: view.animating(),
+      size: { width: element.clientWidth, height: element.clientHeight },
+      node: view.nodeCenters().find((center) => center.id === wanted),
+    };
+  }, id);
+}
+
 const panel = (page: Page) => page.getByRole("complementary", { name: "Review panel" });
 
 it("opens review only from the person's click, dims all but the change, and closes", async () => {
@@ -101,6 +116,25 @@ it("opens review only from the person's click, dims all but the change, and clos
     await page.getByRole("button", { name: "Close review" }).click();
     await browserExpect(panel(page)).toHaveCount(0);
     await browserExpect.poll(async () => (await probe(page, "node.dimmed")).ids).toEqual([]);
+  });
+}, 30_000);
+
+it("frames the change at the zoom of the watch fit, centered between the panel and the rail", async () => {
+  await withPage(false, async (page) => {
+    const changed = await page.evaluate(() => window.reviewTest.changed);
+    const watch = await camera(page, changed);
+    await page.getByRole("button", { name: "Review change" }).click();
+    await panel(page).locator(".line-insert").first().waitFor();
+    await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
+    const review = await camera(page, changed);
+    // The labels stay at the size they had in watch, 15 px at a zoom of 1.
+    expect(review.zoom).toBeCloseTo(watch.zoom, 6);
+    expect(review.node?.x).toBeCloseTo(review.size.width / 2, 0);
+    expect(review.node?.y).toBeCloseTo(review.size.height / 2, 0);
+
+    await page.getByRole("button", { name: "Close review" }).click();
+    await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
+    expect((await camera(page, changed)).zoom).toBeCloseTo(watch.zoom, 2);
   });
 }, 30_000);
 
@@ -136,6 +170,8 @@ it("never approves from the keyboard in the comment box; the click waits for cha
     });
     await browserExpect(panel(page).getByText("Approved and merged into main")).toBeVisible();
     await browserExpect(approve).toHaveCount(0);
+    // The panel shows the outcome while the graph is back to its normal lights.
+    await browserExpect.poll(async () => (await probe(page, "node.dimmed")).ids).toEqual([]);
     const after = await probe(page, "node");
     expect(after.positions).toEqual(before.positions);
     expect((await probe(page, "node.pending")).ids).toEqual([]);
