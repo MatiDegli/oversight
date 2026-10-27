@@ -58,9 +58,9 @@ def start_agent(base: str, clock: OverallClock | None = None, slot: str = "A") -
 def graph_of(base: str, clock: OverallClock | None = None) -> GraphResponse:
     timeout = REQUEST_TIMEOUT if clock is None else clock.bounded(REQUEST_TIMEOUT)
     status, body = smoke.fetch_json(f"{base}/graph", time.monotonic() + timeout)
+    if clock is not None:
+        clock.check()
     if status != 200:
-        if clock is not None:
-            clock.check()
         raise smoke.SmokeError(f"GET /graph answered {status}, not 200")
     try:
         return GraphResponse.model_validate(body)
@@ -195,6 +195,7 @@ def stop_working_b(
     while tree.exists() and time.monotonic() < end:
         clock.check()
         time.sleep(0.05)
+    clock.check()
     if tree.exists():
         raise smoke.SmokeError("B worktree still exists after Stop")
     if pending_nodes(stream.seen, b.agent_id):
@@ -304,7 +305,12 @@ def check_level2(
     before = graph_of(base, clock).seq
     with ThreadPoolExecutor(max_workers=2) as pool:
         jobs = [pool.submit(start_agent, base, clock, slot) for slot in ("A", "B")]
-        a, b = [job.result(timeout=clock.bounded(START_AGENT_DEADLINE)) for job in jobs]
+        try:
+            a, b = [job.result(timeout=clock.bounded(START_AGENT_DEADLINE)) for job in jobs]
+        except (TimeoutError, smoke.SmokeError):
+            clock.check()
+            raise
+        clock.check()
     if (a.slot, b.slot) != ("A", "B") or a.agent_id == b.agent_id or a.change_id == b.change_id:
         raise smoke.SmokeError("parallel starts did not create distinct A/B agents and changes")
     clock.set_phase("A/B: first steps, proposals and overlap")
