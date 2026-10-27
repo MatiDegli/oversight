@@ -11,7 +11,8 @@ section).
 
 The maintainer placed the ideas below on Tue Oct 27. Level 3 wiring starts when level 2 closes. Pure
 cores start now: they add only new private files, change nothing the level 2 demo uses, and run on
-Muse Code and Codex. Level 2 fronts go first in the review queue.
+Muse Code and Codex. Level 2 fronts go first in the review queue. Where the notes further down
+differ, such as the condition for idea 9, this section wins.
 
 | # | Package | Ideas | Decision |
 | --- | --- | --- | --- |
