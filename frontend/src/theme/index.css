@@ -268,3 +268,10 @@ body {
   font-weight: var(--body-weight);
   line-height: var(--body-line-height);
 }
+
+/* The inline diff's original gutter has an empty cell beside lines the other side inserted, and
+   Monaco paints it with the removal tint. An insertion removes nothing, so the cell keeps the
+   gutter's own color; the gutters of removed lines are not in this selector and stay tinted. */
+.monaco-diff-editor .original-in-monaco-diff-editor .margin-view-zones .gutter-delete {
+  background-color: var(--page);
+}

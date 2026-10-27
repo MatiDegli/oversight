@@ -135,6 +135,13 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   like level 3. Every color comes from a token under `data-theme` on the root element, including
   what Cytoscape, Monaco and the dot-field canvas receive, so the switch repaints everything and no
   component picks a color. The screenshots (`make shots`) cover both modes.
+- **Approve answers only a pointer click (maintainer, 2026-10-26):** a click with `detail === 0`,
+  which is what Enter, Space and a script's click produce on a focused button, never calls approve;
+  the review panel shows "Approve with a click: it merges into main" under the buttons instead.
+  Approve stays focusable and labelled, and Reject stays keyboard-operable. Reason: AGENTS.md says
+  Approve has no keyboard shortcut and must never fire while a comment is typed, and Tab then Space
+  from the comment box would merge into main. Cost: keyboard and screen-reader users cannot approve;
+  they are told why, and the merge stays a deliberate pointer act.
 
 ### Where Impeccable clashes with our rules
 
