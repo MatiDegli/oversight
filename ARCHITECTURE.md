@@ -12,11 +12,32 @@ without calling a provider. Health reports missing settings without exposing the
 
 [Makefile](Makefile) provides the entry points:
 
-- `make dev` starts FastAPI with reload and Vite. Vite serves port 5710 and proxies API
-  routes to FastAPI, normally on 8710. The SSE proxy streams without buffering.
+- `make dev` starts FastAPI with reload and Vite. Both processes receive resolved `OVERSIGHT_PORT`
+  (8710) and `OVERSIGHT_VITE_PORT` (launcher fallback 5710), with environment precedence over `.env`.
+  Vite uses strictPort and proxies API routes while preserving Host and Origin.
+  The SSE proxy streams without buffering.
 - `make demo` checks setup, builds the frontend and serves it with the API on one origin.
-  `DEMO_PORT` defaults to 8710. Starting the server spends no model credits.
+  `DEMO_PORT` defaults to 8710; demo explicitly clears `OVERSIGHT_VITE_PORT`, overriding `.env`.
+  Starting the server spends no model credits.
 - `make replay` plays JSONL through the event store and SSE, with Vite serving the UI.
+
+[The API guard](backend/src/oversight/api/security.py), exported by the API facade and installed by
+`create_app`, checks every HTTP request and WebSocket handshake in live and server replay before
+routing. Its single policy admits only `localhost`, `127.0.0.1`, `[::1]` at P and optional V, and
+exact `http://` Origins at those authorities. Missing/duplicate/malformed Host and supplied invalid,
+null, duplicate or foreign Origin receive typed `forbidden/403` without echoing header values.
+Absent Origin is allowed for HTTP CLI writes with the terminal off; Host is still checked. No CORS
+or forwarded headers widen admission. Omitted authority ports mean protocol defaults. Accepted IPv6
+authorities do not change listener binding. WebSockets are refused before acceptance (HTTP denial
+if supported, otherwise close). Lifespan and other scopes pass through; SSE is never buffered.
+
+The backend's V defaults to unset; empty V is unset, invalid ports or P=V stop startup. The shared
+settings parser also resolves launcher exports. `make shots` exports its distinct free P/V and
+checks readiness through Vite's `/graph`. `make test-browser`, under a timeout and `tools/capped.sh`,
+exercises actual dev/replay launchers, environment and port-only `.env` overrides, `/graph` and
+streaming/resumed `/events`, with its own runtime/cache. Defaults are checked from resolved exports
+without binding 8710/5710. CI invokes that target. Future terminal controls layer same-authority,
+authentication and IPv4 listener requirements on this policy; see approved guard decisions G1–G3.
 
 At live startup, the workspace takes a runtime lock, removes the previous workspace and
 worktrees, copies [demo-repo](demo-repo) and creates an initial git commit on `main`.

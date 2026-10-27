@@ -6,10 +6,13 @@ Other modules import only what this file exports; everything else here is intern
 from oversight.api.commands import Commands
 from oversight.api.errors import ApiError, error_response, install_error_handlers
 from oversight.api.routes import create_router
+from oversight.api.security import ApiGuard, AuthorityPolicy
 from oversight.api.static import add_static
 
 __all__ = [
     "ApiError",
+    "ApiGuard",
+    "AuthorityPolicy",
     "Commands",
     "add_static",
     "create_router",

@@ -8,7 +8,19 @@ import { recordedReplayPlugin } from "./tools/recorded-replay.ts";
 
 // One origin in development: Vite serves the UI and forwards the API and the SSE stream to FastAPI.
 // The proxy streams responses as they arrive, so SSE events are not buffered.
-const backend = `http://127.0.0.1:${process.env.OVERSIGHT_PORT ?? "8710"}`;
+function port(name: string, raw: string): number {
+  const value = Number(raw);
+  if (!/^[0-9]+$/.test(raw) || !Number.isInteger(value) || value < 1 || value > 65535) {
+    throw new Error(`${name} must be an integer in 1-65535`);
+  }
+  return value;
+}
+const backendPort = port("OVERSIGHT_PORT", process.env.OVERSIGHT_PORT ?? "8710");
+const vitePort = port("OVERSIGHT_VITE_PORT", process.env.OVERSIGHT_VITE_PORT || "5710");
+if (vitePort === backendPort) {
+  throw new Error("OVERSIGHT_VITE_PORT must differ from OVERSIGHT_PORT");
+}
+const backend = `http://127.0.0.1:${backendPort}`;
 // `make shots` keeps Vite's cache under .shots/ through this variable, so it never shares state with
 // `make dev`. Without it, Vite's default (node_modules/.vite) applies.
 const cacheDir = process.env.OVERSIGHT_VITE_CACHE_DIR;
@@ -39,7 +51,7 @@ export default defineConfig({
   },
   server: {
     host: "127.0.0.1",
-    port: 5710,
+    port: vitePort,
     strictPort: true,
     proxy: Object.fromEntries(apiPaths.map((path) => [path, { target: backend }])),
   },

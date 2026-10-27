@@ -72,13 +72,14 @@ wait_for() {
 backend_port=$(free_port)
 vite_port=$(free_port)
 while [ "$vite_port" = "$backend_port" ]; do vite_port=$(free_port); done
+export OVERSIGHT_PORT=$backend_port OVERSIGHT_VITE_PORT=$vite_port
 url="http://127.0.0.1:$vite_port/"
 
 # The fake player, with no pauses, on its own port: a running `make dev` keeps its ports. The
 # environment is the caller's (the Makefile drops the API keys); OVERSIGHT_PORT moves the backend
 # and Vite's proxy target together.
 OVERSIGHT_PORT=$backend_port OVERSIGHT_RUNTIME_DIR="$out/runtime" \
-  uv run --frozen python -m oversight replay "$log" --speed 0 \
+  uv run --frozen python -m oversight replay "$log" --allow-fake-provider --speed 0 \
   >"$out/backend.log" 2>&1 &
 pids+=("$!")
 # Vite keeps all its state under .shots/, so `make dev` shares none of it: its cache through
@@ -101,7 +102,7 @@ OVERSIGHT_SCAN_LOG="$root/$out/scan-log.jsonl" OVERSIGHT_VITE_CACHE_DIR="$root/$
 pids+=("$!")
 
 wait_for "http://127.0.0.1:$backend_port/health" "${pids[0]}" backend 60
-wait_for "$url" "${pids[1]}" vite 60
+wait_for "${url}graph" "${pids[1]}" vite 60
 wait_for "$scan_url" "${pids[2]}" scan-vite 60
 echo "shots: replay of $log on :$backend_port, UI on $url, scan page on $scan_url"
 
