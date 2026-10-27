@@ -490,7 +490,7 @@ class LiveRun:
         )
 
     def brake_reason(self) -> str | None:
-        """Why a metered start is refused now, or `None`. Fails closed."""
+        """Why a metered start or revision is refused now, or `None`. Fails closed."""
         settings = self._settings
         if self._ledger_lost:
             return f"a model call could not be recorded in the ledger: {SETTLE} ({SETTLE_HOW})"
@@ -503,7 +503,9 @@ class LiveRun:
                 "Meta's console and settle it (uv run python -m oversight ledger settle)"
             )
         if settings.budget_usd is None:
-            return None  # Configuration is checked separately before the spending brake.
+            return "OVERSIGHT_BUDGET_USD is not configured"
+        if self._pricing is None:
+            return "Muse Spark input and output prices are not configured"
         ledger = UsageLedger(
             settings.budget_usd, state.spent_usd, warn_at=WARN_AT, block_at=BLOCK_AT
         )
@@ -530,16 +532,20 @@ class LiveRun:
             raise ApiError("invalid_request", f"slot {slot} has no fake script")
         return offered[name]
 
+    def _check_spending(self, slot: Slot, profile: ModelProfile) -> None:
+        """Check the selected profile's setup before applying Meta's spending brake."""
+        if missing := missing_settings(self._settings, {slot: profile}):
+            raise ApiError("not_configured", "Server setup is incomplete.", missing=missing)
+        if _metered(profile) and (reason := self.brake_reason()) is not None:
+            raise ApiError("spend_brake", reason)
+
     def _check_start(self, slot: Slot, request: StartAgent, manager: ChangeManager) -> ModelProfile:
         """What a start on `slot` needs, in order, each on that slot's profile: the model, the
         task, setup, the brake (for a metered profile only), and main."""
         profile = self._profile_for(slot, request.model)
         if not request.task.strip():
             raise ApiError("invalid_request", "the task is empty")
-        if missing := missing_settings(self._settings, {slot: profile}):
-            raise ApiError("not_configured", "Server setup is incomplete.", missing=missing)
-        if _metered(profile) and (reason := self.brake_reason()) is not None:
-            raise ApiError("spend_brake", reason)
+        self._check_spending(slot, profile)
         if manager.main_suspect:
             raise ApiError("wrong_state", MAIN_SUSPECT)
         return profile
@@ -759,8 +765,7 @@ class LiveRun:
         agent_id, agent = owner
         if manager.main_suspect:
             raise ApiError("wrong_state", MAIN_SUSPECT)
-        if agent.metered and (reason := self.brake_reason()) is not None:
-            raise ApiError("spend_brake", reason)
+        self._check_spending(agent.slot, agent.profile)
         run = self._kept.get(agent_id)
         if run is None:  # resolved, or its run never started: no state takes a request
             raise ApiError("wrong_state", f"{change_id} has no run to resume")

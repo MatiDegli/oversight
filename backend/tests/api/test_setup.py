@@ -3,8 +3,9 @@
 import asyncio
 import contextlib
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import Mock
 
 import httpx
@@ -16,11 +17,21 @@ from live_helpers import (
     meta_settings,
 )
 
-from oversight.app import ClientFactory, LiveRun, create_app
-from oversight.changes import ChangeManager
+from oversight import app as app_module
+from oversight.agents import (
+    FAKE_MODEL,
+    MUSE_SPARK,
+    MUSE_SPARK_OPEN,
+    AgentRun,
+    AgentTask,
+    LedgerState,
+)
+from oversight.app import LIMITS, ClientFactory, LiveRun, create_app
+from oversight.changes import ChangeManager, Revision
 from oversight.settings import Settings
 from oversight.setup import missing_settings, offered_profiles
 from oversight_contracts.commands import ErrorResponse, Health, StartAgent
+from oversight_contracts.events import ModelProfile
 
 pytestmark = pytest.mark.anyio
 
@@ -43,6 +54,94 @@ async def client_for(
 
 async def start(client: httpx.AsyncClient, **body: Any) -> httpx.Response:
     return await client.post("/agents", json={"task": "t", **body})
+
+
+@contextlib.asynccontextmanager
+async def proposed_run(
+    settings: Settings, profile: ModelProfile
+) -> AsyncIterator[tuple[httpx.AsyncClient, LiveRun]]:
+    # Seed a kept run so the real route and revision dispatch need no sockets or workspace.
+    app = create_app(settings, client_factory=Scripts())
+    live: LiveRun = app.state.live
+    manager = Mock(spec=ChangeManager, main_suspect=False)
+    manager.request_changes.side_effect = lambda _id, comment: asyncio.create_task(
+        asyncio.sleep(0, result=Revision(comment, None))
+    )
+    live._manager = manager  # pyright: ignore[reportPrivateUsage]
+    task = AgentTask("agent-1", "change-1", "B", "t", LIMITS)
+    live._agents["agent-1"] = app_module._Agent(task, profile)  # pyright: ignore[reportPrivateUsage]
+    live._kept["agent-1"] = Mock(spec=AgentRun, steps=1)  # pyright: ignore[reportPrivateUsage]
+    live.ledger.state = LedgerState(0.0, ())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://localhost"
+    ) as client:
+        yield client, live
+
+
+@pytest.mark.parametrize(
+    ("overrides", "names"),
+    [
+        ({"budget_usd": None}, ["OVERSIGHT_BUDGET_USD"]),
+        ({"input_usd_per_m": None}, ["MUSE_SPARK_INPUT_USD_PER_M"]),
+        ({"output_usd_per_m": None}, ["MUSE_SPARK_OUTPUT_USD_PER_M"]),
+        (
+            {"meta_api_key": None, "budget_usd": None, "input_usd_per_m": None},
+            ["META_API_KEY", "OVERSIGHT_BUDGET_USD", "MUSE_SPARK_INPUT_USD_PER_M"],
+        ),
+    ],
+)
+async def test_metered_revision_lists_setup_problems_and_starts_no_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, overrides: dict[str, Any], names: list[str]
+) -> None:
+    settings = meta_settings(tmp_path)
+    async with asyncio.timeout(DEADLINE_S), proposed_run(settings, MUSE_SPARK) as (client, live):
+        before = live.store.last_seq
+        manager = live._manager  # pyright: ignore[reportPrivateUsage]
+        assert manager is not None
+        monkeypatch.setattr(live, "_settings", replace(settings, **overrides))
+        response = await client.post(
+            "/changes/change-1/request-changes", json={"comment": "Revise, please."}
+        )
+        assert response.status_code == 503, response.text
+        assert response.json()["error"] == {
+            "code": "not_configured",
+            "message": "Server setup is incomplete.",
+            "missing": [{"name": name, "problem": "missing", "slots": ["B"]} for name in names],
+        }
+        cast(Mock, manager.request_changes).assert_not_called()
+        assert live._runs == {} and live._decisions == {}  # pyright: ignore[reportPrivateUsage]
+        assert live.store.last_seq == before
+
+
+@pytest.mark.parametrize("profile", [MUSE_SPARK_OPEN, FAKE_MODEL], ids=["baseten", "fake"])
+async def test_unmetered_revision_ignores_missing_meta_setup(
+    tmp_path: Path, profile: ModelProfile
+) -> None:
+    settings = meta_settings(
+        tmp_path,
+        agent_model_b=profile.id,
+        fake_script_b=FAKE_SCRIPT_B,
+        baseten_api_key="test-baseten",
+        meta_api_key=None,
+        budget_usd=None,
+        input_usd_per_m=None,
+        output_usd_per_m=None,
+    )
+    async with asyncio.timeout(DEADLINE_S), proposed_run(settings, profile) as (client, live):
+        response = await client.post(
+            "/changes/change-1/request-changes", json={"comment": "Revise, please."}
+        )
+        assert response.status_code == 202, response.text
+        await asyncio.wait({live._runs["agent-1"]})  # pyright: ignore[reportPrivateUsage]
+        run = cast(Mock, live._kept["agent-1"])  # pyright: ignore[reportPrivateUsage]
+        run.revise.assert_awaited_once_with("Revise, please.", None)
+
+
+@pytest.mark.parametrize("attribute", ["budget_usd", "input_usd_per_m", "output_usd_per_m"])
+def test_brake_itself_fails_closed_without_budget_or_prices(tmp_path: Path, attribute: str) -> None:
+    live = LiveRun(meta_settings(tmp_path, **{attribute: None}))
+    live.ledger.state = LedgerState(0.0, ())
+    assert live.brake_reason() is not None
 
 
 @pytest.mark.parametrize(
