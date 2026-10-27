@@ -14,3 +14,5 @@ One line per day, in Argentina time (ART).
   task box and Start agent; spend meter; layout and transport fixes; smoke test, screenshot tooling,
   test memory and time caps, parallel check groups and pytest workers; `make demo` and
   `make demo-check`.
+
+- **2026-10-27:** Level 2 review controls: Request changes with a required comment, editable review saves to the agent worktree with re-proposal, and confirmed Stop and discard; fake API, component and browser coverage.
