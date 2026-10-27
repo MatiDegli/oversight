@@ -181,6 +181,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   Approve has no keyboard shortcut and must never fire while a comment is typed, and Tab then Space
   from the comment box would merge into main. Cost: keyboard and screen-reader users cannot approve;
   they are told why, and the merge stays a deliberate pointer act.
+- **Bezier edges kept over taxi (maintainer, 2026-10-26):** captures of both on the preset layout
+  were compared; curves read better.
 
 ### Where Impeccable clashes with our rules
 
