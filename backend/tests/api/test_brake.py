@@ -23,6 +23,7 @@ from live_helpers import (
     write_ledger,
 )
 
+from oversight import app as app_module
 from oversight.agents import (
     MUSE_SPARK,
     LedgerFile,
@@ -313,7 +314,8 @@ class GatedWrites:
         self.release = threading.Event()
         self.trace: list[str] = []
         self.draining = asyncio.Event()
-        """Set when a cancelled `record` starts waiting for its write (`watch_drain`)."""
+        """Set when a cancelled `record` starts waiting for its write (`watch_drain`), or a
+        cancelled run starts waiting for the write the server keeps going (`watch_wait`)."""
         real_write = ledger.write
 
         def write(state: LedgerState) -> None:
@@ -336,6 +338,21 @@ class GatedWrites:
             return await real_drain(write, new)
 
         monkeypatch.setattr(ledger, "_drain", drain)
+
+    def watch_wait(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The server waits for a write with `asyncio.wait`, which a cancel interrupts without
+        stopping the write: `draining` is set when such a wait is cancelled."""
+        real_wait = asyncio.wait
+
+        async def wait(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return await real_wait(*args, **kwargs)
+            except asyncio.CancelledError:
+                self.draining.set()
+                raise
+
+        swapped = SimpleNamespace(**{**vars(asyncio), "wait": wait})
+        monkeypatch.setattr(app_module, "asyncio", swapped)
 
     async def wait_entered(self) -> None:
         assert await asyncio.to_thread(self.entered.wait, DEADLINE_S)
@@ -382,7 +399,7 @@ async def test_a_cancel_during_a_ledger_write_that_then_fails_closes_the_brake(
     client: ModelClient = model
     async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _p, _s: client) as s:
         gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
-        gate.watch_drain(s.live.ledger, monkeypatch)
+        gate.watch_wait(monkeypatch)
         created = (await s.client.post("/agents", json={"task": "t"})).json()
         await gate.wait_entered()
         run = s.live._runs[created["agent_id"]]  # pyright: ignore[reportPrivateUsage]
@@ -449,7 +466,7 @@ async def test_the_run_timeout_during_a_failing_ledger_write_closes_the_brake(
     expiry = Expiry(monkeypatch)
     async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _p, _s: client) as s:
         gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
-        gate.watch_drain(s.live.ledger, monkeypatch)
+        gate.watch_wait(monkeypatch)
         created = (await s.client.post("/agents", json={"task": "t"})).json()
         await gate.wait_entered()
         expiry.expire()
@@ -474,7 +491,7 @@ async def test_a_cancel_while_the_timeouts_halt_is_committing_adds_no_second_hal
     expiry = Expiry(monkeypatch)
     async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _p, _s: client) as s:
         gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
-        gate.watch_drain(s.live.ledger, monkeypatch)
+        gate.watch_wait(monkeypatch)
         commit = HeldCommit(s.store, monkeypatch)
         created = (await s.client.post("/agents", json={"task": "t"})).json()
         await gate.wait_entered()

@@ -23,6 +23,7 @@ from oversight.agents import (
     Message,
     ModelClient,
     ModelReply,
+    Script,
     ScriptedModel,
     ToolSchema,
     load_script,
@@ -148,6 +149,24 @@ class GatedModel:
             tool_calls=[],
             model=self.profile.model,
         )
+
+
+class Stepped:
+    """A scripted model whose every call waits until the test lets one call through."""
+
+    def __init__(self, script: Script, profile: ModelProfile = FAKE_MODEL) -> None:
+        self._inner = ScriptedModel(script, profile)
+        self.permits = asyncio.Semaphore(0)
+
+    @property
+    def profile(self) -> ModelProfile:
+        return self._inner.profile
+
+    async def complete(
+        self, messages: Sequence[Message], tools: Sequence[ToolSchema]
+    ) -> ModelReply:
+        await self.permits.acquire()
+        return await self._inner.complete(messages, tools)
 
 
 @dataclass

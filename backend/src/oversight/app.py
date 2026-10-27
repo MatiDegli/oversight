@@ -381,17 +381,30 @@ class LiveRun:
         stops as a shutdown stops it (cancelled, so `_run` ends it halted and its change is
         rejected the usual way). A write that fails after a cancel (the run's timeout, a stop or
         a shutdown) takes the same road, and the cancellation still propagates. After a restart
-        the brake reads the last good file: the lost call is only recovered by `ledger settle`."""
+        the brake reads the last good file: the lost call is only recovered by `ledger settle`.
+
+        The call is a paid one, so it is never dropped. `record` runs as a task of its own, started
+        at once (its lock queues the writes in tick order), and this waits with `asyncio.wait`,
+        which never cancels it: a cancel while another agent's write holds the lock would
+        otherwise raise before anything was written, with the brake still open."""
         entry = UnknownUsage(self.run_id, tick.agent_id, tick.model, format_ts(datetime.now(UTC)))
-        try:
-            await self.ledger.record(tick.cost_usd, entry)
-        except (LedgerError, OSError) as error:
-            await self._ledger_gone(tick, error)
-            raise asyncio.CancelledError from error
-        except asyncio.CancelledError as cancelled:
-            if cancelled.__cause__ is not None:  # the write was waited for after the cancel
-                await self._ledger_gone(tick, cancelled.__cause__)
-            raise
+        write = asyncio.ensure_future(self.ledger.record(tick.cost_usd, entry))
+        cancel: asyncio.CancelledError | None = None
+        while not write.done():  # one pass per cancel
+            try:
+                await asyncio.wait({write})
+            except asyncio.CancelledError as cancelled:
+                cancel = cancelled
+        failure = None if write.cancelled() else write.exception()
+        if isinstance(failure, LedgerError | OSError):
+            await self._ledger_gone(tick, failure)
+            raise (cancel or asyncio.CancelledError()) from failure
+        if cancel is not None:
+            raise cancel
+        if failure is not None:
+            raise failure
+        if write.cancelled():
+            raise asyncio.CancelledError
 
     async def _ledger_gone(self, tick: UsageTick, error: BaseException) -> None:
         """The brake closes before the first await. The report is finished however often this
