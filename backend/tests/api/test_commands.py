@@ -121,15 +121,18 @@ async def test_a_start_on_an_unverified_profile_is_refused_and_takes_no_slot(
         assert (await s.client.post("/agents", json={"task": "t"})).status_code == 201
 
 
-async def test_a_meta_start_without_a_key_is_invalid_request_before_the_brake(
+async def test_a_meta_start_without_a_key_lists_setup_problems_before_the_brake(
     tmp_path: Path,
 ) -> None:
     settings = meta_settings(tmp_path, meta_api_key=None, budget_usd=None)
     calls: list[object] = []
     async with asyncio.timeout(DEADLINE_S), live_server(settings, calls.append) as s:  # pyright: ignore[reportArgumentType]
         response = await s.client.post("/agents", json={"task": "t"})
-        assert error_code(response) == (422, "invalid_request")
-        assert "META_API_KEY" in response.json()["error"]["message"]
+        assert error_code(response) == (503, "not_configured")
+        assert response.json()["error"]["missing"] == [
+            {"name": "META_API_KEY", "problem": "missing", "slots": ["A"]},
+            {"name": "OVERSIGHT_BUDGET_USD", "problem": "missing", "slots": ["A"]},
+        ]
     assert calls == []
 
 

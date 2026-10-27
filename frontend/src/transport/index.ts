@@ -5,6 +5,7 @@ import { startLive } from "./live";
 import { startReplay } from "./replay";
 
 export { CommandError, createCommandClient } from "./commands";
+export { commandFailure } from "./failure";
 export type { Transport, TransportStore } from "./events";
 export { startLive } from "./live";
 export type { EventStream, LiveOptions } from "./live";

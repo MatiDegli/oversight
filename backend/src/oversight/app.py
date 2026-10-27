@@ -54,6 +54,7 @@ from oversight.events import (
 )
 from oversight.graph import WorkspaceGraph, read_layout
 from oversight.settings import REPO_ROOT, Settings
+from oversight.setup import missing_settings, offered_profiles
 from oversight.workspace import Tree, Workspace
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import AgentCreated, FileContent, FileSaved, SaveFile, StartAgent
@@ -489,13 +490,8 @@ class LiveRun:
         )
 
     def brake_reason(self) -> str | None:
-        """Why a metered start is refused now, or `None`. Fails closed."""
+        """Why a metered start or revision is refused now, or `None`. Fails closed."""
         settings = self._settings
-        if settings.budget_usd is None or self._pricing is None:
-            return (
-                "the budget or prices are not configured: set OVERSIGHT_BUDGET_USD, "
-                "MUSE_SPARK_INPUT_USD_PER_M and MUSE_SPARK_OUTPUT_USD_PER_M in .env"
-            )
         if self._ledger_lost:
             return f"a model call could not be recorded in the ledger: {SETTLE} ({SETTLE_HOW})"
         state = self.ledger.state
@@ -506,6 +502,10 @@ class LiveRun:
                 f"{len(state.unknown)} model calls of unknown cost are in the ledger; check "
                 "Meta's console and settle it (uv run python -m oversight ledger settle)"
             )
+        if settings.budget_usd is None:
+            return "OVERSIGHT_BUDGET_USD is not configured"
+        if self._pricing is None:
+            return "Muse Spark input and output prices are not configured"
         ledger = UsageLedger(
             settings.budget_usd, state.spent_usd, warn_at=WARN_AT, block_at=BLOCK_AT
         )
@@ -532,18 +532,20 @@ class LiveRun:
             raise ApiError("invalid_request", f"slot {slot} has no fake script")
         return offered[name]
 
+    def _check_spending(self, slot: Slot, profile: ModelProfile) -> None:
+        """Check the selected profile's setup before applying Meta's spending brake."""
+        if missing := missing_settings(self._settings, {slot: profile}):
+            raise ApiError("not_configured", "Server setup is incomplete.", missing=missing)
+        if _metered(profile) and (reason := self.brake_reason()) is not None:
+            raise ApiError("spend_brake", reason)
+
     def _check_start(self, slot: Slot, request: StartAgent, manager: ChangeManager) -> ModelProfile:
         """What a start on `slot` needs, in order, each on that slot's profile: the model, the
-        task, the provider's key, the brake (for a metered profile only), and main."""
+        task, setup, the brake (for a metered profile only), and main."""
         profile = self._profile_for(slot, request.model)
         if not request.task.strip():
             raise ApiError("invalid_request", "the task is empty")
-        if profile.provider in PROVIDER_URLS and not self._api_key(profile.provider):
-            raise ApiError(
-                "invalid_request", f"{profile.provider.upper()}_API_KEY is not set in .env"
-            )
-        if _metered(profile) and (reason := self.brake_reason()) is not None:
-            raise ApiError("spend_brake", reason)
+        self._check_spending(slot, profile)
         if manager.main_suspect:
             raise ApiError("wrong_state", MAIN_SUSPECT)
         return profile
@@ -763,8 +765,7 @@ class LiveRun:
         agent_id, agent = owner
         if manager.main_suspect:
             raise ApiError("wrong_state", MAIN_SUSPECT)
-        if agent.metered and (reason := self.brake_reason()) is not None:
-            raise ApiError("spend_brake", reason)
+        self._check_spending(agent.slot, agent.profile)
         run = self._kept.get(agent_id)
         if run is None:  # resolved, or its run never started: no state takes a request
             raise ApiError("wrong_state", f"{change_id} has no run to resume")
@@ -830,7 +831,14 @@ def _live_app(settings: Settings, client_factory: ClientFactory | None) -> FastA
             await live.shutdown()
 
     app = FastAPI(title="Oversight", lifespan=lifespan)
-    app.include_router(create_router(live.store, "live", live))
+    app.include_router(
+        create_router(
+            live.store,
+            "live",
+            live,
+            missing_settings=missing_settings(settings, offered_profiles(settings)),
+        )
+    )
     if settings.frontend_dist is not None:
         add_static(app, settings.frontend_dist)  # after the API routes, so they always win
     app.state.live = live

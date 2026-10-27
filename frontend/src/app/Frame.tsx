@@ -4,7 +4,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { AgentCard, TaskBox } from "../agents";
-import { LiveDiff } from "../editor";
+import { FileView, LiveDiff } from "../editor";
+import type { FileAccess } from "../editor";
 import { GraphView } from "../graph";
 import type { Framing, GraphApi } from "../graph";
 import { ImpactConeCard, ReviewPanel } from "../review";
@@ -49,6 +50,7 @@ const focusRing =
 export interface FrameProps {
   state: State;
   view: View;
+  files?: FileAccess;
   onNodeTap: (nodeId: string) => void;
   /** Present only for a change the card can open; a card never shows a button that does nothing. */
   canOpenChange: (changeId: string) => boolean;
@@ -273,9 +275,16 @@ export function Frame(props: FrameProps) {
             replayOf={props.replayOf}
             onClose={onClosePanel}
           />
-        ) : (
-          view.diff && <LeftPanel state={state} view={view} onClose={onClosePanel} />
-        )}
+        ) : view.diff ? (
+          <LeftPanel state={state} view={view} onClose={onClosePanel} />
+        ) : view.file && props.files ? (
+          <FileView
+            target={view.file}
+            files={props.files}
+            commit={state.graph?.commit ?? ""}
+            onClose={onClosePanel}
+          />
+        ) : null}
         <main className="relative min-w-0 flex-1 bg-ground">
           <GraphView
             selectedId={view.selected}

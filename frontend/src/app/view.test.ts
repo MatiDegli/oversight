@@ -49,8 +49,13 @@ describe("panel switching over the level 1 fixture", () => {
   it("selects every clicked node and keeps the panel on a node no change touches", () => {
     const state = through(14);
     const open = clickNode(state, initialView, edited);
-    expect(open).toEqual({ selected: edited, diff, review: null });
-    expect(clickNode(state, open, untouched)).toEqual({ selected: untouched, diff, review: null });
+    expect(open).toEqual({ selected: edited, diff, review: null, file: null });
+    expect(clickNode(state, open, untouched)).toEqual({
+      selected: untouched,
+      diff,
+      review: null,
+      file: null,
+    });
     expect(clickNode(state, initialView, untouched)).toEqual({
       ...initialView,
       selected: untouched,
@@ -62,20 +67,60 @@ describe("panel switching over the level 1 fixture", () => {
   });
 
   it("opens review on a node whose change is proposed, and the live diff before that", () => {
-    const review = { selected: edited, diff: null, review: "change-1" };
+    const review = { selected: edited, diff: null, review: "change-1", file: null };
     // Seq 18: the agent finished but has not proposed; seq 19 is change.proposed.
     expect(clickNode(through(18), initialView, edited)).toEqual({
       selected: edited,
       diff,
       review: null,
+      file: null,
     });
     expect(clickNode(through(19), initialView, edited)).toEqual(review);
-    // From the live diff the same node switches the panel to review; review survives other clicks.
+    // From the live diff the same node switches to review; untouched nodes keep that review open.
     const live = clickNode(through(14), initialView, edited);
     expect(clickNode(through(20), live, edited)).toEqual(review);
     expect(clickNode(through(20), review, untouched)).toEqual({ ...review, selected: untouched });
+    expect(clickNode(through(20), review, untouched, true)).toEqual({
+      ...review,
+      selected: untouched,
+    });
     // Once decided, the node opens nothing and an open review stays as it was.
     expect(clickNode(through(21), review, edited)).toEqual(review);
+  });
+
+  it("switches an open review to another proposal when its changed node is clicked", () => {
+    const state = through(20);
+    const first = state.changes["change-1"];
+    const entry = first?.files[diff.path];
+    if (!first || !entry) throw new Error("Missing proposal file");
+    const secondNode = "shop.cart:Cart.add";
+    const secondPath = "shop/cart.py";
+    state.changes["change-2"] = {
+      ...first,
+      change_id: "change-2",
+      files: {
+        [secondPath]: {
+          ...entry,
+          file: { ...entry.file, path: secondPath },
+          node_ids: [secondNode],
+        },
+      },
+      graph: { ...first.graph, nodes_modified: [secondNode] },
+    };
+    const review = openReview(state, initialView, "change-1");
+    if (!review) throw new Error("Missing open review");
+    expect(diffForNode(state, secondNode)).toEqual({
+      changeId: "change-2",
+      path: secondPath,
+    });
+    for (const filesEnabled of [false, true]) {
+      expect(clickNode(state, review, secondNode, filesEnabled)).toEqual({
+        selected: secondNode,
+        diff: null,
+        review: "change-2",
+        file: null,
+      });
+    }
   });
 
   it("opens review only for a proposed change, from the card or the queue counter", () => {
@@ -84,6 +129,7 @@ describe("panel switching over the level 1 fixture", () => {
       selected: edited,
       diff: null,
       review: "change-1",
+      file: null,
     });
     expect(openReview(through(21), initialView, "change-1")).toBeNull();
     expect(openReview(through(20), initialView, "change-9")).toBeNull();
@@ -98,7 +144,7 @@ describe("panel switching over the level 1 fixture", () => {
       expect(change && changeNodeIds(change)).toEqual([edited]);
     }
     expect(panelOpen(initialView)).toBe(false);
-    expect(panelOpen({ ...initialView, review: "change-1" })).toBe(true);
+    expect(panelOpen({ ...initialView, review: "change-1", file: null })).toBe(true);
     expect(panelOpen({ ...initialView, diff })).toBe(true);
   });
 
@@ -127,18 +173,20 @@ describe("panel switching over the level 1 fixture", () => {
       selected: edited,
       diff,
       review: null,
+      file: null,
     });
     expect(openChange(through(21), initialView, "change-1")).toBeNull();
     expect(openChange(through(14), initialView, "change-9")).toBeNull();
   });
 
   it("closes on the close button and on Escape the editor did not take, keeping the selection", () => {
-    const open = { selected: edited, diff, review: null };
-    expect(closePanel(open)).toEqual({ selected: edited, diff: null, review: null });
-    expect(closePanel({ selected: edited, diff: null, review: "change-1" })).toEqual({
+    const open = { selected: edited, diff, review: null, file: null };
+    expect(closePanel(open)).toEqual({ selected: edited, diff: null, review: null, file: null });
+    expect(closePanel({ selected: edited, diff: null, review: "change-1", file: null })).toEqual({
       selected: edited,
       diff: null,
       review: null,
+      file: null,
     });
     const key = { key: "Escape", defaultPrevented: false, isComposing: false };
     expect(closesPanel(key)).toBe(true);
@@ -169,5 +217,60 @@ describe("panel switching over the level 1 fixture", () => {
     // An approval that did not merge still waits for the person.
     expect(ready && litNodeIds({ ...ready, status: "conflict" })).toEqual(expected);
     expect(litNodeIds(undefined)).toBeNull();
+  });
+});
+
+describe("file targets when file commands are available", () => {
+  it("opens an untouched node's source span in the single panel", () => {
+    const state = through(20);
+    const node = state.graph?.nodes.find(({ id }) => id === untouched);
+    if (!node) throw new Error("Missing untouched node");
+    const opened = clickNode(state, initialView, untouched, true);
+    expect(opened).toEqual({
+      selected: untouched,
+      diff: null,
+      review: null,
+      file: { path: node.path, agentId: null, startLine: node.start_line, endLine: node.end_line },
+    });
+    expect(panelOpen(opened)).toBe(true);
+    expect(closePanel(opened)).toEqual({ ...initialView, selected: untouched });
+  });
+
+  it("opens a module's whole file, and a removed node opens no file", () => {
+    const state = through(20);
+    const module = state.graph?.nodes.find(({ kind }) => kind === "module");
+    if (!module) throw new Error("Missing module");
+    expect(clickNode(state, initialView, module.id, true).file).toEqual({
+      path: module.path,
+      agentId: null,
+      startLine: 1,
+      endLine: module.end_line,
+    });
+    expect(clickNode(state, initialView, "removed-node", true).file).toBeNull();
+  });
+
+  it("pending nodes still open live diff then review, clearing the file target", () => {
+    const file = clickNode(through(14), initialView, untouched, true);
+    expect(clickNode(through(14), file, edited, true)).toEqual({
+      ...initialView,
+      selected: edited,
+      diff,
+    });
+    expect(clickNode(through(20), file, edited, true)).toEqual({
+      ...initialView,
+      selected: edited,
+      review: "change-1",
+    });
+    expect(openChange(through(14), file, "change-1")?.file).toBeNull();
+    expect(openReview(through(20), file, "change-1")?.file).toBeNull();
+  });
+
+  it("replay keeps today's node click behaviour without file callbacks", () => {
+    const review = openReview(through(20), initialView, "change-1") ?? initialView;
+    expect(clickNode(through(20), review, untouched, false)).toEqual({
+      ...review,
+      selected: untouched,
+    });
+    expect(clickNode(through(20), initialView, untouched, false).file).toBeNull();
   });
 });

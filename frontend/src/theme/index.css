@@ -77,6 +77,7 @@
   --label-size: 14px;
   --label-weight: 600;
   --caption-size: 13px;
+  --caption-line-height: 20px;
   --caption-weight: 400;
   --badge-size: 13px;
   --badge-weight: 700;
@@ -276,4 +277,9 @@ body {
    gutter's own color; the gutters of removed lines are not in this selector and stay tinted. */
 .monaco-diff-editor .original-in-monaco-diff-editor .margin-view-zones .gutter-delete {
   background-color: var(--page);
+}
+
+/* The file's selected source span uses the same neutral token as Monaco's range highlight. */
+.file-span {
+  background-color: var(--file-span);
 }

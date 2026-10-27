@@ -317,7 +317,15 @@ class Harness:
     def payloads[T: BaseModel](self, kind: type[T]) -> list[T]:
         return [e.payload for e in self.events() if isinstance(e.payload, kind)]
 
+    def open_every_gate(self) -> None:
+        """Open every gate a test can close. A test that fails before it opens one leaves a task
+        waiting on it, and `aclose` waits for that task: the teardown hangs until its deadline."""
+        self.open_gate.set()
+        self.release.set()
+        self.workspace.resume.set()
+
     async def close(self) -> None:
+        self.open_every_gate()
         try:
             if self._manager is not None:
                 await self.manager.aclose()

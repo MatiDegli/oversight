@@ -383,8 +383,8 @@ async def test_an_omitted_slot_with_both_braked_is_refused_with_the_brake(tmp_pa
         (
             {"agent_model_b": "muse-spark-open"},
             {"slot": "B"},
-            422,
-            "BASETEN_API_KEY is not set in .env",
+            503,
+            "Server setup is incomplete.",
             [],
         ),
         (
@@ -394,8 +394,8 @@ async def test_an_omitted_slot_with_both_braked_is_refused_with_the_brake(tmp_pa
                 "meta_api_key": None,
             },
             {"slot": "B", "model": "muse-spark"},
-            422,
-            "META_API_KEY is not set in .env",
+            503,
+            "Server setup is incomplete.",
             [],
         ),
         # A model no slot runs.
@@ -434,7 +434,14 @@ async def test_slot_model_combinations(
         response = await start(s, **body)
         assert response.status_code == status
         if message is not None:
-            assert response.json()["error"] == {"code": "invalid_request", "message": message}
+            error = response.json()["error"]
+            assert error["message"] == message
+            assert error["code"] == ("not_configured" if status == 503 else "invalid_request")
+            if status == 503:
+                name = "META_API_KEY" if body.get("model") == "muse-spark" else "BASETEN_API_KEY"
+                assert error["missing"] == [{"name": name, "problem": "missing", "slots": ["B"]}]
+            else:
+                assert "missing" not in error
     assert clients.built == built
 
 
