@@ -59,6 +59,8 @@ export default defineConfig({
           include: ["src/**/*.browser.test.{ts,tsx}"],
           // These tests include cold chunk loading, fonts and browser teardown.
           testTimeout: 30_000,
+          // Each file starts Chromium and Vite; some fixtures also share an optimizer cache.
+          fileParallelism: false,
         },
       },
     ],

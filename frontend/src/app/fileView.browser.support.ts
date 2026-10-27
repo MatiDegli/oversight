@@ -167,7 +167,7 @@ export async function clickGraphNode(page: Page, id: string) {
 export async function clickUntouched(page: Page, phase = "clean") {
   const id = await page.evaluate(() => window.fileViewTest.untouched);
   await clickGraphNode(page, id);
-  await browserExpect(filePanel(page)).toHaveAttribute("data-state", phase);
+  await browserExpect(filePanel(page)).toHaveAttribute("data-state", phase, { timeout: 15_000 });
 }
 export async function append(page: Page, text: string) {
   await input(page).focus();

@@ -1,0 +1,4 @@
+/* Monaco hard-codes its disabled find input; preserve the active input token while it closes. */
+.monaco-editor.vs-dark .monaco-findInput.disabled {
+  background-color: var(--vscode-input-background);
+}
