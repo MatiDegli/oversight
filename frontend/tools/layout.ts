@@ -1,24 +1,25 @@
-// Deterministic rectangular packing. No force simulation or random initial positions.
+// The demo's preset layout, in the Signal sketch's arrangement: modules in columns, calls flowing
+// from left to right, with wide gutters between the columns for the edges' lanes. Deterministic: no
+// force simulation and no random start, so a take looks the same every time.
 // node frontend/tools/layout.ts [--input snapshot.json] [--output positions.json] [--events log.jsonl]
+//
+// It lays out in two passes, so that a module is a compact block that the zoom views can later
+// shrink to a dot at its center: first every module's block is measured from its contents and
+// placed among the others, then each module's contents are placed inside its block.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import type { GraphNode, GraphSnapshot, Point } from "../../contracts/generated/contracts.ts";
-import { FIT_PADDING, nodeGeometry } from "../src/graph/geometry.ts";
+import { FIT_PADDING, nodeGeometry, rowWidthAt } from "../src/graph/geometry.ts";
 import { themes } from "../src/theme/index.ts";
 
 const px = (token: string) => Number.parseFloat(token);
 const geometry = nodeGeometry(themes.dark);
-const { font, gap } = geometry;
-// A frame's padding and its border; a leaf and a childless container reserve their border twice.
-const padding = geometry.inset;
-const leafWidth = geometry.width + geometry.border * 2;
-const leafHeight = geometry.height + geometry.border * 2;
 /**
  * The graph area of a 1920x1080 take in watch mode (DESIGN.md, Layout: a 52px top bar, a 56px left
- * rail and the 400px agents panel), less the fit padding. Review mode has less room, but it moves
- * the camera and never the nodes, so watch mode is the size the preset is judged at.
+ * rail and the 400px agents panel), less the camera's padding: the room the starting view has at
+ * 100%. Review mode has less room, but it moves the camera and never the nodes.
  */
 export const watchViewport = {
   width:
@@ -28,13 +29,6 @@ export const watchViewport = {
     FIT_PADDING * 2,
   height: 1080 - px(themes.dark["top-bar-height"]) - FIT_PADDING * 2,
 };
-
-/**
- * Weight of one px of module-to-module call distance against the fit ratio (1 = fills the viewport).
- * 1e-7 only broke ties; 1e-5 pulls called modules together and, at the watch viewport, also lands on
- * the best fit found (labels at 15px or more). 3e-5 and up give up the fit for closer modules.
- */
-const callWeight = 1e-5;
 
 /** Code-unit order, so the output does not depend on the Node or ICU build. */
 const compare = (a: string, b: string): number => (a === b ? 0 : a < b ? -1 : 1);
@@ -53,79 +47,100 @@ function required<T>(value: T | undefined): T {
   return value;
 }
 
-function shelf(items: readonly Block[], limit: number): Block[] {
-  let x = 0;
-  let y = 0;
-  let rowHeight = 0;
-  return items.map((item) => {
-    if (x && x + item.width > limit) {
-      x = 0;
-      y += rowHeight + gap;
-      rowHeight = 0;
-    }
-    const block = { ...item, x, y };
-    x += item.width + gap;
-    rowHeight = Math.max(rowHeight, item.height);
-    return block;
-  });
-}
-
-function size(blocks: readonly Block[]) {
-  return {
-    width: Math.max(0, ...blocks.map((b) => b.x + b.width)),
-    height: Math.max(0, ...blocks.map((b) => b.y + b.height)),
-  };
-}
-
-function pack(items: readonly Block[], score: (blocks: Block[]) => number): Block[] {
-  if (!items.length) return [];
-  const minWidth = Math.max(...items.map((b) => b.width));
-  const maxWidth = items.reduce((sum, b) => sum + b.width + gap, 0);
-  let best = shelf(items, minWidth);
-  let bestScore = score(best);
-  // Integer graph units; bounded by the total width, never by convergence or time.
-  for (let width = minWidth; width <= maxWidth; width += gap) {
-    const candidate = shelf(items, width);
-    const value = score(candidate);
-    if (value < bestScore) {
-      best = candidate;
-      bestScore = value;
-    }
-  }
-  return best;
-}
-
-/** Every distinct shelf packing of the items, narrowest first, without the dominated ones. */
-function shapes(items: readonly Block[]): Block[][] {
-  const minWidth = Math.max(...items.map((b) => b.width));
-  const maxWidth = items.reduce((sum, b) => sum + b.width + gap, 0);
-  const all: Block[][] = [];
-  for (let width = minWidth; width <= maxWidth; width += gap) all.push(shelf(items, width));
-  return all.filter((a, i) =>
-    all.every((b, j) => {
-      const [x, y] = [size(a), size(b)];
-      const dominated = y.width <= x.width && y.height <= x.height;
-      return !dominated || j === i || (y.width === x.width && y.height === x.height && j > i);
-    }),
-  );
-}
-
 interface Layout {
   positions: GraphSnapshot["positions"];
   blocks: Block[];
 }
 
+/** How many sweeps reorder the modules of each column by the height of the modules they call. */
+const SWEEPS = 4;
+
 /**
- * One layout. `choice` picks the packing shape of a container by index into its shapes; without
- * one, a container takes the shape nearest twice as wide as tall. `options` counts the shapes of
- * every production container, and `score` is the production graph's fit (lower is better).
+ * Pass 1: the modules' blocks, in columns. A module's column is how many calls separate it from a
+ * module nobody calls; modules that only receive calls go in the last column, so the callees sit
+ * together at the right. Within a column the order follows the height of connected modules, and
+ * each column is centered on one line, so the graph reads left to right.
  */
-function build(
-  snapshot: GraphSnapshot,
-  choice: ReadonlyMap<string, number>,
-  withTests: boolean,
-): Layout & { options: Map<string, number>; score: number } {
-  const options = new Map<string, number>();
+function arrange(modules: readonly Tree[], calls: readonly (readonly [string, string])[]): Block[] {
+  if (!modules.length) return [];
+  const ids = modules.map((m) => m.id);
+  const known = new Set(ids);
+  const links = calls.filter(([a, b]) => a !== b && known.has(a) && known.has(b));
+  const callers = new Map(ids.map((id) => [id, new Set<string>()]));
+  const callees = new Map(ids.map((id) => [id, new Set<string>()]));
+  for (const [a, b] of links) {
+    required(callees.get(a)).add(b);
+    required(callers.get(b)).add(a);
+  }
+  // Longest chain of calls into each module: one relaxation pass per module, each capped at the
+  // last possible column, so a cycle of calls ends the search instead of growing it.
+  const depth = new Map(ids.map((id) => [id, 0]));
+  for (let pass = 0; pass < ids.length; pass++)
+    for (const [a, b] of links)
+      depth.set(
+        b,
+        Math.max(required(depth.get(b)), Math.min(required(depth.get(a)) + 1, ids.length - 1)),
+      );
+  const last = Math.max(0, ...ids.map((id) => required(depth.get(id))));
+  const column = new Map(
+    ids.map((id) => [
+      id,
+      required(callees.get(id)).size === 0 && required(callers.get(id)).size > 0
+        ? last
+        : Math.min(required(depth.get(id)), last),
+    ]),
+  );
+  const tree = new Map(modules.map((m) => [m.id, m]));
+  const columns = Array.from({ length: last + 1 }, (_, k) =>
+    ids.filter((id) => column.get(id) === k).sort(compare),
+  );
+  const heightOf = (column: readonly string[]) =>
+    column.reduce((sum, id) => sum + required(tree.get(id)).height, 0) +
+    Math.max(0, column.length - 1) * geometry.rowGap;
+  const middles = new Map<string, number>();
+  const stack = () => {
+    for (const members of columns) {
+      let y = -heightOf(members) / 2;
+      for (const id of members) {
+        const height = required(tree.get(id)).height;
+        middles.set(id, y + height / 2);
+        y += height + geometry.rowGap;
+      }
+    }
+  };
+  stack();
+  for (let sweep = 0; sweep < SWEEPS; sweep++) {
+    for (const members of columns) {
+      const key = (id: string) => {
+        const near = [...required(callers.get(id)), ...required(callees.get(id))];
+        return near.length
+          ? near.reduce((sum, n) => sum + required(middles.get(n)), 0) / near.length
+          : required(middles.get(id));
+      };
+      members.sort((a, b) => key(a) - key(b) || compare(a, b));
+    }
+    stack();
+  }
+  const blocks: Block[] = [];
+  let x = 0;
+  for (const members of columns) {
+    const width = Math.max(0, ...members.map((id) => required(tree.get(id)).width));
+    for (const id of members) {
+      const module = required(tree.get(id));
+      blocks.push({
+        id,
+        x,
+        y: required(middles.get(id)) - module.height / 2,
+        width: module.width,
+        height: module.height,
+      });
+    }
+    x += width + geometry.gutter;
+  }
+  return blocks;
+}
+
+function build(snapshot: GraphSnapshot): Layout {
   const nodes = [...snapshot.nodes].sort((a, b) => compare(a.id, b.id));
   const children = new Map<string, GraphNode[]>();
   for (const node of nodes) {
@@ -133,45 +148,54 @@ function build(
     siblings.push(node);
     children.set(node.parent_id ?? "", siblings);
   }
-  const measure = (node: GraphNode): Tree => {
-    const descendants = (children.get(node.id) ?? []).map(measure);
-    if (!descendants.length)
+  // Rows stack in the order of the source, then by id.
+  for (const siblings of children.values())
+    siblings.sort((a, b) => a.start_line - b.start_line || compare(a.id, b.id));
+  // A frame is measured from what it holds: its rows in one column, left-aligned inside its padding.
+  // A class is as wide as a row of the frame it sits in, so its own rows are narrower.
+  const measure = (node: GraphNode, classes: number): Tree => {
+    const frame = node.kind === "module" || node.kind === "class";
+    const inside = (children.get(node.id) ?? []).map((child) =>
+      measure(child, classes + (node.kind === "class" ? 1 : 0)),
+    );
+    if (!frame)
       return {
         id: node.id,
         x: 0,
         y: 0,
-        // A module or class with no children draws at leaf size: its padding and outside label
-        // are for parents only (styles.ts).
-        width: Math.max(leafWidth, node.name.length * font * 0.6 + 12),
-        height: leafHeight,
+        width: rowWidthAt(themes.dark, classes),
+        height: geometry.rowHeight,
         children: [],
       };
-    descendants.sort((a, b) => b.height - a.height || compare(a.id, b.id));
-    const fits = shapes(descendants);
-    const area = (blocks: Block[]) => {
-      const { width, height } = size(blocks);
-      return width * height * (1 + 0.25 * Math.abs(Math.log(width / height / 2)));
-    };
-    let nearest = 0;
-    for (const [i, shape] of fits.entries())
-      if (area(shape) < area(required(fits[nearest]))) nearest = i;
-    if (!node.is_test) options.set(node.id, fits.length);
-    const arranged = required(fits[Math.min(choice.get(node.id) ?? nearest, fits.length - 1)]);
-    const bounds = size(arranged);
+    const pad = geometry.outer[node.kind === "module" ? "module" : "class"];
+    if (!inside.length)
+      return {
+        id: node.id,
+        x: 0,
+        y: 0,
+        width:
+          node.kind === "module"
+            ? pad.left + geometry.rowWidth + pad.right
+            : rowWidthAt(themes.dark, classes),
+        height: geometry.headerHeight,
+        children: [],
+      };
+    let y = pad.top;
+    const placed = inside.map((child) => {
+      const at = { ...child, x: pad.left, y };
+      y += child.height + geometry.gap;
+      return at;
+    });
     return {
       id: node.id,
       x: 0,
       y: 0,
-      width: bounds.width + padding * 2,
-      height: bounds.height + padding * 2 + font,
-      children: arranged.map((b) => ({
-        ...required(descendants.find((child) => child.id === b.id)),
-        x: b.x + padding,
-        y: b.y + padding + font,
-      })),
+      width: pad.left + Math.max(...inside.map((child) => child.width)) + pad.right,
+      height: y - geometry.gap + pad.bottom,
+      children: placed,
     };
   };
-  const roots = (children.get("") ?? []).map(measure);
+  const roots = (children.get("") ?? []).map((root) => measure(root, 0));
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const moduleOf = (id: string): string => {
     let node = required(byId.get(id));
@@ -180,89 +204,38 @@ function build(
   };
   const calls = snapshot.edges
     .filter((edge) => edge.kind === "calls")
-    .map((edge) => [moduleOf(edge.src), moduleOf(edge.dst)] as const)
-    .filter(([a, b]) => a !== b);
-  const degree = (id: string) => calls.filter(([a, b]) => a === id || b === id).length;
-  const arrangeModules = (modules: Tree[]): { blocks: Block[]; score: number } => {
-    // Highest connectivity first, with stable ties. Call distance breaks equal-fit packings.
-    modules.sort((a, b) => degree(b.id) - degree(a.id) || compare(a.id, b.id));
-    const score = (blocks: Block[]) => {
-      const { width, height } = size(blocks);
-      const centers = new Map(
-        blocks.map((b) => [b.id, { x: b.x + b.width / 2, y: b.y + b.height / 2 }]),
-      );
-      const distance = calls.reduce((sum, [a, b]) => {
-        const src = centers.get(a);
-        const dst = centers.get(b);
-        return sum + (src && dst ? Math.abs(src.x - dst.x) + Math.abs(src.y - dst.y) : 0);
-      }, 0);
-      return (
-        Math.max(width / watchViewport.width, height / watchViewport.height) + distance * callWeight
-      );
-    };
-    let best = pack(modules, score);
-    // Two bounded pair-swap passes improve adjacency without a stochastic optimizer.
-    for (let pass = 0; pass < 2; pass++)
-      for (let i = 0; i < modules.length; i++)
-        for (let j = i + 1; j < modules.length; j++) {
-          const candidate = [...modules];
-          [candidate[i], candidate[j]] = [required(candidate[j]), required(candidate[i])];
-          const packed = pack(candidate, score);
-          if (score(packed) < score(best)) {
-            modules = candidate;
-            best = packed;
-          }
-        }
-    return { blocks: best, score: score(best) };
-  };
-  // Pass 1: whole module rectangles, related by module-to-module calls. Tests occupy a separate
-  // band: hiding them must not leave holes in the production graph's camera fit.
-  const production = arrangeModules(roots.filter((r) => !required(byId.get(r.id)).is_test));
-  const testOffset = size(production.blocks).height + gap * 3;
-  const tests = withTests
-    ? arrangeModules(roots.filter((r) => required(byId.get(r.id)).is_test)).blocks.map((b) => ({
-        ...b,
-        y: b.y + testOffset,
-      }))
-    : [];
+    .map((edge) => [moduleOf(edge.src), moduleOf(edge.dst)] as const);
+  // Pass 1: whole module blocks, in columns by who calls whom. Tests occupy a separate band below:
+  // hiding them must not leave holes in the production graph.
+  const isTest = (tree: Tree) => required(byId.get(tree.id)).is_test;
+  const production = arrange(
+    roots.filter((root) => !isTest(root)),
+    calls,
+  );
+  const top = Math.min(0, ...production.map((b) => b.y));
+  const bottom = Math.max(0, ...production.map((b) => b.y + b.height));
+  const band = arrange(roots.filter(isTest), calls);
+  const bandTop = Math.min(0, ...band.map((b) => b.y));
+  const tests = band.map((b) => ({ ...b, y: b.y - bandTop + bottom + geometry.rowGap * 2 }));
   const blocks: Block[] = [];
   const positions: GraphSnapshot["positions"] = {};
-  // Pass 2: place each module's measured contents; classes remain compact sub-blocks.
+  // Pass 2: place each module's measured contents inside its block.
   const place = (tree: Tree, x: number, y: number) => {
     blocks.push({ id: tree.id, x, y, width: tree.width, height: tree.height });
     positions[tree.id] = { x: x + tree.width / 2, y: y + tree.height / 2 };
     for (const child of tree.children) place(child, x + child.x, y + child.y);
   };
-  for (const b of [...production.blocks, ...tests])
-    place(required(roots.find((r) => r.id === b.id)), b.x, b.y);
+  for (const b of [...production, ...tests])
+    place(required(roots.find((root) => root.id === b.id)), b.x, b.y - top);
   return {
     positions: Object.fromEntries(Object.entries(positions).sort(([a], [b]) => compare(a, b))),
     blocks,
-    options,
-    score: production.score,
   };
 }
 
-/**
- * Returns conservative outer rectangles too, so tests can check actual occupied space.
- * Coordinate descent over each production container's packing shape, scored by how well the
- * production graph fits the watch viewport: two bounded passes, no randomness.
- */
+/** Returns conservative outer rectangles too, so tests can check the space each node takes. */
 export function generateLayout(snapshot: GraphSnapshot): Layout {
-  let choice = new Map<string, number>();
-  let best = build(snapshot, choice, false);
-  for (let pass = 0; pass < 2; pass++)
-    for (const [id, count] of [...best.options].sort(([a], [b]) => compare(a, b)))
-      for (let index = 0; index < count; index++) {
-        const trial = new Map(choice).set(id, index);
-        const candidate = build(snapshot, trial, false);
-        if (candidate.score < best.score) {
-          best = candidate;
-          choice = trial;
-        }
-      }
-  const { positions, blocks } = build(snapshot, choice, true);
-  return { positions, blocks };
+  return build(snapshot);
 }
 
 /**

@@ -317,6 +317,7 @@ export function Frame(props: FrameProps) {
                   <ImpactConeCard
                     cone={cone}
                     outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
+                    onReveal={(id) => graphApi.current?.reveal(id)}
                     nodes={[...(state.graph?.nodes ?? []), ...(reviewed?.graph.nodes_added ?? [])]}
                   />
                 </div>

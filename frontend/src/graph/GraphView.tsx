@@ -13,6 +13,8 @@ import {
   includeNewNodes,
   nodesInViewport,
   prefersReducedMotion,
+  revealNode,
+  ZOOM_RANGE,
   zoomBy,
 } from "./camera";
 import type { Camera, Framing } from "./camera";
@@ -20,7 +22,7 @@ import { graphElements } from "./elements";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
 import { edgeShape, graphStyles } from "./styles";
-import { updateGraph } from "./updateGraph";
+import { settle, updateGraph } from "./updateGraph";
 
 cytoscape.use(fcose);
 
@@ -32,6 +34,8 @@ export interface GraphApi {
   zoomOut: () => void;
   /** The whole graph in view, as at the start. */
   fit: () => void;
+  /** Pans to a node the cone card lists as out of view, at the zoom it has. Only on a click. */
+  reveal: (nodeId: string) => void;
 }
 
 const ZOOM_STEP = 1.25;
@@ -169,6 +173,9 @@ export function GraphView({
         container: host,
         layout: { name: "preset" },
         boxSelectionEnabled: false,
+        // The wheel and the pinch stay within the range the zoom buttons use.
+        minZoom: ZOOM_RANGE.min,
+        maxZoom: ZOOM_RANGE.max,
       });
       cy.style(
         graphStyles(
@@ -189,6 +196,11 @@ export function GraphView({
       cy.on("tapend", () => {
         interacting = false;
         quietUntil = performance.now() + NAVIGATION_QUIET_MS;
+      });
+      // A node the person moved changes its frame's header and its edges' routes: settle them
+      // when it lands, not on every pixel of the drag.
+      cy.on("free", () => {
+        settle(cy);
       });
       cy.on("dragpan scrollzoom pinchzoom", () => {
         arriving.clear();
@@ -242,6 +254,14 @@ export function GraphView({
           },
           fit: () => {
             frameCamera(cy, [], prefersReducedMotion());
+          },
+          reveal: (nodeId) => {
+            const target = revealNode(cy, nodeId, prefersReducedMotion());
+            if (!target) return;
+            // The cone card lists what is out of view from the camera it is told of.
+            const framing = { ...target, framed: new Set<string>(), outOfView: new Set<string>() };
+            targetFrame.current = framing;
+            reportFraming(cy, host, latest.current, framing);
           },
         };
       }

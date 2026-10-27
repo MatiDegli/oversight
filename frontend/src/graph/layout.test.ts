@@ -22,7 +22,7 @@ import { applyEvent, createInitialState } from "../state";
 import { themes } from "../theme";
 
 import { graphElements } from "./elements";
-import { FIT_PADDING } from "./geometry";
+import { FIT_PADDING, nodeGeometry } from "./geometry";
 import { EDGE_CURVE_STYLE, edgeShape, graphStyles } from "./styles";
 
 const root = new URL("../../../", import.meta.url);
@@ -122,24 +122,89 @@ describe("demo preset", () => {
     });
   });
 
-  it("projects graph labels at design size at the watch viewport's fit", () => {
+  it("draws graph labels at the sketch's size at the starting view's 100%", () => {
+    // The camera starts at 100% and never fits: a name is the sketch's 18px where it is read.
+    expect(Number.parseFloat(themes.dark["node-name-size"])).toBe(18);
     const cy = renderedDemo(generated.positions);
     try {
-      const bounds = cy.elements().boundingBox();
-      const zoom = Math.min(
-        (1464 - FIT_PADDING * 2) / bounds.w,
-        (1028 - FIT_PADDING * 2) / bounds.h,
-      );
-      const label = Number.parseFloat(themes.dark["body-size"]) * zoom;
-      // DESIGN.md sets graph labels at 15px; at fit the preset must not shrink them below that.
-      expect(label).toBeGreaterThanOrEqual(15);
+      expect(cy.nodes(".function").first().style("font-size")).toBe("18px");
     } finally {
       cy.destroy();
     }
   });
 
-  it("draws a module or class without children at leaf size, in the container's colors", () => {
+  it("leaves a gutter of at least 60px between modules that sit side by side", () => {
+    const modules = snapshot.nodes
+      .filter((n) => n.kind === "module")
+      .map((n) => required(generated.blocks.find((b) => b.id === n.id)));
+    let neighbours = 0;
+    for (const a of modules)
+      for (const b of modules) {
+        // Level in y, so that a call between them runs through the space between them.
+        const level = a.y < b.y + b.height && b.y < a.y + a.height;
+        if (a === b || !level || b.x < a.x + a.width) continue;
+        neighbours++;
+        expect(b.x - (a.x + a.width), `${a.id} to ${b.id}`).toBeGreaterThanOrEqual(60);
+      }
+    expect(neighbours).toBeGreaterThan(0);
+    // Stacked modules keep the row gap the stylesheet's frames need between them.
+    for (const a of modules)
+      for (const b of modules) {
+        const overlapsX = a.x < b.x + b.width && b.x < a.x + a.width;
+        if (a !== b && overlapsX && a.y < b.y)
+          expect(b.y - (a.y + a.height), `${a.id} over ${b.id}`).toBeGreaterThanOrEqual(60);
+      }
+  });
+
+  it("places the modules in two passes: calls move whole blocks, never what is inside one", () => {
+    // Pass 1 puts the blocks by who calls whom; pass 2 places each module's contents inside its
+    // own block. So with no calls at all the blocks move, and every node keeps its offset from
+    // its module's block.
+    const bare = generateLayout({ ...snapshot, edges: [] });
+    const origin = (layout: typeof generated, id: string) => {
+      let node = required(snapshot.nodes.find((n) => n.id === id));
+      while (node.parent_id) node = required(snapshot.nodes.find((n) => n.id === node.parent_id));
+      return required(layout.blocks.find((block) => block.id === node.id));
+    };
+    let moved = 0;
+    for (const block of generated.blocks) {
+      const here = origin(generated, block.id);
+      const there = origin(bare, block.id);
+      const alone = required(bare.blocks.find((b) => b.id === block.id));
+      expect([block.x - here.x, block.y - here.y], block.id).toEqual([
+        alone.x - there.x,
+        alone.y - there.y,
+      ]);
+      if (here.x !== there.x || here.y !== there.y) moved++;
+    }
+    expect(moved).toBeGreaterThan(0);
+  });
+
+  it("flows calls mostly one way, from the left column to the right", () => {
+    const blocks = new Map(generated.blocks.map((b) => [b.id, b]));
+    const moduleOf = (id: string): string => {
+      let node = snapshot.nodes.find((n) => n.id === id);
+      while (node?.parent_id) node = snapshot.nodes.find((n) => n.id === node?.parent_id);
+      return required(node).id;
+    };
+    const between = new Set<string>();
+    for (const edge of snapshot.edges) {
+      if (edge.kind !== "calls") continue;
+      const [a, b] = [moduleOf(edge.src), moduleOf(edge.dst)];
+      if (a !== b) between.add(`${a}>${b}`);
+    }
+    let right = 0;
+    for (const pair of between) {
+      const [a, b] = pair.split(">");
+      if (required(blocks.get(required(a))).x < required(blocks.get(required(b))).x) right++;
+    }
+    expect(between.size).toBeGreaterThan(4);
+    expect(right / between.size).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it("draws a module or class without children as one header row, in the container's colors", () => {
     const cy = renderedDemo(generated.positions);
+    const g = nodeGeometry(themes.dark);
     try {
       const leaf = cy.nodes(".function").first();
       const childless = cy.nodes(".module:childless, .class:childless").toArray();
@@ -147,10 +212,15 @@ describe("demo preset", () => {
         expect.arrayContaining(["shop", "shop.models:OrderLine", "shop.inventory:OutOfStock"]),
       );
       for (const node of childless) {
+        // A header's height; as wide as the module's rows plus its paddings, or as a module's row
+        // for a class, which sits in the module's column.
+        const width = node.hasClass("module")
+          ? g.outer.module.left + g.rowWidth + g.outer.module.right
+          : g.rowWidth;
         expect([node.id(), node.outerWidth(), node.outerHeight()]).toEqual([
           node.id(),
-          leaf.outerWidth(),
-          leaf.outerHeight(),
+          width,
+          g.headerHeight,
         ]);
         expect(node.style("text-valign")).toBe("center");
         // Still a container to the eye: the module frame's fill, border and label color.
@@ -164,22 +234,22 @@ describe("demo preset", () => {
     }
   });
 
-  it("reserves leaf size for a childless module or class, and every rendered box fits its block", () => {
+  it("reserves a header's height for a childless module or class, and every rendered box fits its block", () => {
     const blocks = new Map(generated.blocks.map((b) => [b.id, b]));
-    const leaf = required(blocks.get("shop.cart:Cart.add"));
     for (const id of ["shop", "shop.models:OrderLine", "shop.inventory:OutOfStock"])
-      expect(required(blocks.get(id)).height, id).toBe(leaf.height);
+      expect(required(blocks.get(id)).height, id).toBe(nodeGeometry(themes.dark).headerHeight);
     const cy = renderedDemo(generated.positions);
     try {
       for (const node of cy.nodes().toArray()) {
         const box = node.boundingBox({ includeLabels: false, includeOverlays: false });
         const block = required(blocks.get(node.id()));
         // The positions are block centers; a rendered body must stay inside its reserved block,
-        // give or take the strokes Cytoscape adds to a compound's bounding box (under 2px).
-        expect(box.x1, node.id()).toBeGreaterThanOrEqual(block.x - 2);
-        expect(box.y1, node.id()).toBeGreaterThanOrEqual(block.y - 2);
-        expect(box.x2, node.id()).toBeLessThanOrEqual(block.x + block.width + 2);
-        expect(box.y2, node.id()).toBeLessThanOrEqual(block.y + block.height + 2);
+        // give or take the strokes Cytoscape adds to a compound's bounding box: about a pixel
+        // for each frame around a node, so up to 4px for a class inside a module.
+        expect(box.x1, node.id()).toBeGreaterThanOrEqual(block.x - 4);
+        expect(box.y1, node.id()).toBeGreaterThanOrEqual(block.y - 4);
+        expect(box.x2, node.id()).toBeLessThanOrEqual(block.x + block.width + 4);
+        expect(box.y2, node.id()).toBeLessThanOrEqual(block.y + block.height + 4);
       }
     } finally {
       cy.destroy();
@@ -402,27 +472,37 @@ describe("demo preset", () => {
   });
 });
 
-it("defaults to bezier and applies the dev taxi choice to graph styles", () => {
-  expect(EDGE_CURVE_STYLE).toBe("bezier");
+it("defaults to routed taxi edges and applies the dev bezier choice to graph styles", () => {
+  expect(EDGE_CURVE_STYLE).toBe("taxi");
   for (const [search, expected] of [
-    ["", "bezier"],
-    ["?edge-shape=invalid", "bezier"],
-    ["?edge-shape=taxi", "taxi"],
+    ["", "round-segments"],
+    ["?edge-shape=invalid", "round-segments"],
+    ["?edge-shape=taxi", "round-segments"],
     ["?edge-shape=bezier", "bezier"],
   ] as const) {
-    expect(edgeShape(search)).toBe(expected);
+    expect(edgeShape(search)).toBe(search.endsWith("bezier") ? "bezier" : "taxi");
     const cy = cytoscape({
       headless: true,
       styleEnabled: true,
       elements: [
         { data: { id: "a" } },
         { data: { id: "b" } },
-        { data: { id: "edge", source: "a", target: "b" } },
+        {
+          data: {
+            id: "edge",
+            source: "a",
+            target: "b",
+            route: { s: [10, 0], t: [-10, 0], w: [0.5], d: [0] },
+          },
+        },
+        { data: { id: "plain", source: "b", target: "a" } },
       ],
       style: graphStyles(themes.dark, edgeShape(search)),
     });
     try {
-      expect(cy.edges().first().style("curve-style")).toBe(expected);
+      expect(cy.getElementById("edge").style("curve-style")).toBe(expected);
+      // An edge nothing has routed yet is a curve, whatever the choice.
+      expect(cy.getElementById("plain").style("curve-style")).toBe("bezier");
     } finally {
       cy.destroy();
     }

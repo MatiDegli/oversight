@@ -46,7 +46,7 @@ import { themes } from "../theme";
 const theme = themes.dark;
 
 import { GraphView } from "./GraphView";
-import type { GraphViewProps } from "./GraphView";
+import type { GraphApi, GraphViewProps } from "./GraphView";
 import * as camera from "./camera";
 
 let cleanup: undefined | (() => void);
@@ -154,12 +154,14 @@ it.each(["resolved", "rejected"] as const)(
     expect(cy.getElementById("billing:fee").style("font-family")).toBe(theme["text-font"]);
     expect(observer.observe).toHaveBeenCalledTimes(1);
 
+    // Cytoscape's own bounding boxes read the stylesheet through cy.style(); only a call that
+    // passes one sets it again.
     const style = vi.spyOn(cy, "style");
     setLabel("After loading");
     expect(cy.getElementById("billing:fee").data("label")).toBe("After loading");
     await Promise.resolve();
     expect(mocks.instances).toHaveLength(1);
-    expect(style).not.toHaveBeenCalled();
+    expect(style.mock.calls.filter((call) => call.length > 0)).toEqual([]);
 
     cleanup?.();
     cleanup = undefined;
@@ -232,6 +234,8 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   const cy = mocks.instances[0];
   if (!cy) throw new Error("Graph was not created");
   cy.zoom(0.5);
+  // Whatever the starting camera was, the person's watch camera is the one to come back to.
+  const watchCamera = { zoom: cy.zoom(), pan: { ...cy.pan() } };
   const frame = vi.spyOn(camera, "frameCamera").mockImplementation(() => null);
   const result = {
     zoom: 0.8,
@@ -286,7 +290,7 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, [], false, {
     coneIds: undefined,
     watchZoom: 0.5,
-    restoreCamera: { zoom: 0.5, pan: { x: 0.5, y: 0.5 } },
+    restoreCamera: watchCamera,
   });
 });
 
@@ -446,4 +450,126 @@ it("measures the card's real height and refreshes marks when that height changes
   bottom = 300;
   resize();
   expect(onFramed).toHaveBeenLastCalledWith(expect.objectContaining({ outOfView: new Set() }));
+});
+
+it("pans to a cone row's node only when asked, and tells the cone card what that left in view", async () => {
+  setLabel("Caller");
+  const apiRef = { current: null as GraphApi | null };
+  const onFramed = vi.fn();
+  const coneCardRef = {
+    current: {
+      getBoundingClientRect: () => ({ left: 24, right: 304, top: 24, bottom: 300 }),
+    } as HTMLDivElement,
+  };
+  const cone = {
+    seeds: ["billing:changed"],
+    entries: [{ node_id: "billing:fee", distance: 1 }],
+    edges_followed: "exact" as const,
+    max_depth: 3,
+    max_nodes: 40,
+    omitted_by_depth: 0,
+    omitted_by_limit: 0,
+    tests_reaching: 0,
+  };
+  const { settle } = mount({ apiRef, onFramed, coneCardRef });
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Graph was not created");
+  vi.spyOn(cy, "width").mockReturnValue(928);
+  vi.spyOn(cy, "height").mockReturnValue(1028);
+  cy.getElementById("billing:fee").position({ x: 5000, y: 400 });
+  cy.viewport({ zoom: 1, pan: { x: 0, y: 0 } });
+  const reveal = vi.spyOn(camera, "revealNode");
+  const frame = vi.spyOn(camera, "frameCamera").mockReturnValue({
+    zoom: 1,
+    pan: { x: 0, y: 0 },
+    framed: new Set(),
+    outOfView: new Set(),
+  });
+  rerender({
+    apiRef,
+    onFramed,
+    coneCardRef,
+    cone,
+    panelOpen: true,
+    frameKey: "review:change-1",
+    frameIds: [],
+  });
+  // Entering review framed the camera and listed the row as out of view; it moved nothing else.
+  expect(frame).toHaveBeenCalledOnce();
+  expect(onFramed).toHaveBeenLastCalledWith(
+    expect.objectContaining({ outOfView: new Set(["billing:fee"]) }),
+  );
+  expect(reveal).not.toHaveBeenCalled();
+  expect(cy.pan()).toEqual({ x: 0, y: 0 });
+  onFramed.mockClear();
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
+  apiRef.current?.reveal("billing:fee");
+  expect(reveal).toHaveBeenCalledExactlyOnceWith(cy, "billing:fee", true);
+  expect(cy.zoom()).toBe(1);
+  expect(cy.getElementById("billing:fee").renderedPosition().x).toBeCloseTo((304 + 928) / 2);
+  expect(onFramed).toHaveBeenLastCalledWith(expect.objectContaining({ outOfView: new Set() }));
+  // A node that is not on the graph is no move and no report.
+  onFramed.mockClear();
+  apiRef.current?.reveal("missing");
+  expect(onFramed).not.toHaveBeenCalled();
+});
+
+it("limits the zoom to the buttons' range, and routes a call again when a node it joins is moved", async () => {
+  const fn = (id: string, parent: string | null, line: number) => ({
+    id,
+    kind: "function" as const,
+    parent_id: parent,
+    name: id,
+    qualname: id,
+    path: `${parent ?? id}.py`,
+    start_line: line,
+    end_line: line + 1,
+    is_test: false,
+  });
+  stateStore.setState({
+    state: {
+      ...createInitialState(),
+      graph: {
+        version: "v1",
+        commit: "base",
+        nodes: [
+          { ...fn("a", null, 1), kind: "module" as const },
+          { ...fn("b", null, 1), kind: "module" as const },
+          fn("a:f", "a", 2),
+          fn("b:g", "b", 2),
+        ],
+        edges: [
+          {
+            id: "call",
+            kind: "calls",
+            src: "a:f",
+            dst: "b:g",
+            confidence: "exact",
+            reason: null,
+          },
+        ],
+        positions: {
+          a: { x: 0, y: 0 },
+          b: { x: 700, y: 0 },
+          "a:f": { x: 0, y: 0 },
+          "b:g": { x: 700, y: 300 },
+        },
+        parse_errors: [],
+      },
+    },
+  });
+  const { settle } = mount();
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Graph was not created");
+  expect([cy.minZoom(), cy.maxZoom()]).toEqual([camera.ZOOM_RANGE.min, camera.ZOOM_RANGE.max]);
+  const route = () => JSON.stringify(cy.getElementById("call").data("route"));
+  const before = route();
+  expect(before).not.toBeUndefined();
+  // Drag the callee to the same height as its caller, and let go.
+  cy.getElementById("b:g").position({ x: 700, y: 0 });
+  expect(route()).toBe(before);
+  cy.getElementById("b:g").emit("free");
+  expect(route()).not.toBe(before);
 });

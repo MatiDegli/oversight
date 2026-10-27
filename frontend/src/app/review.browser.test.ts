@@ -206,6 +206,40 @@ it("maximizes callers by distance at zoom 0.8, clears the card, and marks only c
   });
 }, 30_000);
 
+it("pans to a node its cone row lists as out of view only when that row is clicked", async () => {
+  await withPage(false, async (page) => {
+    const changed = await page.evaluate(() => window.reviewTest.changed);
+    await page.getByRole("button", { name: "Review change" }).click();
+    await panel(page).locator(".line-insert").first().waitFor();
+    await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
+    const review = await camera(page, changed);
+    const id = review.outOfView[0];
+    if (!id) throw new Error("The demo's review should list a caller out of view");
+    const positions = (await probe(page, ":childless")).positions;
+    const card = page.getByRole("region", { name: "Possibly affected", exact: true });
+    // The caller is off screen or behind the card, and the camera has not gone to it on its own.
+    const before = (await camera(page, id)).node;
+    const hidden =
+      !before ||
+      before.x < review.leftInset ||
+      before.x > review.size.width ||
+      before.y < 0 ||
+      before.y > review.size.height;
+    expect(hidden).toBe(true);
+    await card.locator(`button[title="${id}"]`).click();
+    await browserExpect.poll(async () => (await camera(page, id)).animating).toBe(false);
+    const after = await camera(page, id);
+    // The same zoom, the node in the middle of what the card leaves free, and no node moved.
+    expect(after.zoom).toBeCloseTo(review.zoom, 10);
+    expect(after.node?.x).toBeCloseTo((review.leftInset + after.size.width) / 2, 0);
+    expect(after.node?.y).toBeCloseTo(after.size.height / 2, 0);
+    expect((await probe(page, ":childless")).positions).toEqual(positions);
+    // The row no longer says it is out of view, so it is no longer a button.
+    await browserExpect(card.locator(`button[title="${id}"]`)).toHaveCount(0);
+    expect((await camera(page, id)).outOfView).not.toContain(id);
+  });
+}, 30_000);
+
 it("never approves from the keyboard in the comment box; the click waits for change.resolved", async () => {
   await withPage(false, async (page) => {
     await page.getByRole("button", { name: /change ready for review/ }).click();
