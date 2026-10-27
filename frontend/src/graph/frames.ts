@@ -7,7 +7,7 @@
 //
 // The extra is a function of the children's bounds, so it is recomputed, deepest frame first,
 // whenever the graph is placed or a node is moved. It moves no node.
-import type { BoundingBoxOptions, Core } from "cytoscape";
+import type { BoundingBoxOptions, Core, NodeCollection } from "cytoscape";
 
 import { nodeGeometry } from "./geometry";
 import type { GeometryTokens } from "./geometry";
@@ -29,22 +29,29 @@ export function frameExtras(theme: GeometryTokens) {
 
 export function applyFrames(cy: Core, theme: GeometryTokens): void {
   const extras = frameExtras(theme);
-  const parents = cy.nodes(":parent").toArray();
-  // The deepest first: a class's size is part of its module's content.
-  const depth = (id: string) => cy.getElementById(id).ancestors().length;
-  parents.sort((a, b) => depth(b.id()) - depth(a.id()));
-  cy.batch(() => {
-    for (const frame of parents) {
-      const extra = extras[frame.hasClass("class") ? "class" : "module"];
-      // The children's union as Cytoscape measures it for a compound, without labels.
-      // Cytoscape accepts useCache; its type definitions leave it out.
-      const options: BoundingBoxOptions & { useCache: boolean } = {
-        includeLabels: false,
-        includeOverlays: false,
-        useCache: false,
-      };
-      const content = frame.children().boundingBox(options);
-      frame.data({ minW: content.w + extra.left, minH: content.h + extra.top });
-    }
-  });
+  // The frames by depth, the deepest first: a class's size is part of its module's content, so a
+  // module is measured only after its classes have taken theirs. Cytoscape applies a batch's data
+  // changes to the style when the batch ends, so each level is its own batch.
+  const levels = new Map<number, NodeCollection>();
+  for (const frame of cy.nodes(":parent").toArray()) {
+    const depth = frame.ancestors().length;
+    levels.set(depth, (levels.get(depth) ?? cy.collection()).union(frame));
+  }
+  const deepestFirst = [...levels.entries()].sort(([a], [b]) => b - a);
+  for (const [, frames] of deepestFirst) {
+    cy.batch(() => {
+      for (const frame of frames.toArray()) {
+        const extra = extras[frame.hasClass("class") ? "class" : "module"];
+        // The children's union as Cytoscape measures it for a compound, without labels.
+        // Cytoscape accepts useCache; its type definitions leave it out.
+        const options: BoundingBoxOptions & { useCache: boolean } = {
+          includeLabels: false,
+          includeOverlays: false,
+          useCache: false,
+        };
+        const content = frame.children().boundingBox(options);
+        frame.data({ minW: content.w + extra.left, minH: content.h + extra.top });
+      }
+    });
+  }
 }

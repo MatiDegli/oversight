@@ -806,8 +806,9 @@ describe("graph updates and log entry point", () => {
       }),
     ]);
     updateGraph(graph, graphElements(stateStore.getState().state));
-    // One batch for the elements, however many: one more each for the frames and for the routes.
-    expect(batch).toHaveBeenCalledTimes(3);
+    // One batch for the elements, however many; one more for each level of frames (the class, then
+    // the module) and one for the routes.
+    expect(batch).toHaveBeenCalledTimes(4);
     expect(layout).not.toHaveBeenCalled();
     for (const { id, position } of positions)
       expect(graph.getElementById(id).position()).toEqual(position);

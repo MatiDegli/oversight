@@ -11,7 +11,7 @@ import { themes } from "../theme";
 import { graphElements } from "./elements";
 import { frameExtras } from "./frames";
 import { graphStyles } from "./styles";
-import { updateGraph } from "./updateGraph";
+import { settle, updateGraph } from "./updateGraph";
 
 const root = new URL("../../../", import.meta.url);
 const snapshot = JSON.parse(
@@ -100,5 +100,55 @@ describe("frames at the sketch's size", () => {
       expect(inner.x2, row.id()).toBeLessThan(box.x2);
       expect(row.position(), row.id()).toEqual(preset[row.id()]);
     }
+  });
+});
+
+/** Every frame's size and minimum, and every edge's route: what a settle decides. */
+function settled(graph: Core): string {
+  return JSON.stringify({
+    frames: graph
+      .nodes(":parent")
+      .toArray()
+      .map((frame) => {
+        const box = frame.boundingBox({ includeLabels: false });
+        const { minW, minH } = frame.data() as { minW: number; minH: number };
+        return [frame.id(), minW, minH, box.x1, box.y1, box.x2, box.y2];
+      }),
+    routes: graph
+      .edges()
+      .toArray()
+      .map((edge) => [edge.id(), edge.data("route") as unknown]),
+  });
+}
+
+describe("a settle is final", () => {
+  it("leaves frames and routes as a second settle would, from the first placement", () => {
+    const graph = demo();
+    const once = settled(graph);
+    settle(graph, theme);
+    expect(settled(graph)).toBe(once);
+  });
+
+  it("gives a module a header band above its class, in one settle", () => {
+    const graph = demo();
+    const module = graph.getElementById("shop.cart").boundingBox({ includeLabels: false });
+    const cart = graph.getElementById("shop.cart:Cart").boundingBox({ includeLabels: false });
+    // A class is a child of its module: the module's 54px band, within a stroke's width.
+    expect(Math.abs(cart.y1 - module.y1 - 54)).toBeLessThanOrEqual(2);
+  });
+
+  it("leaves frames and routes final after a method is dragged out of its class, in one settle", () => {
+    const graph = demo();
+    const method = graph.getElementById("shop.cart:Cart.add");
+    const before = graph.getElementById("shop.cart:Cart").outerHeight();
+    method.position({ x: method.position().x, y: method.position().y + 400 });
+    settle(graph, theme);
+    expect(graph.getElementById("shop.cart:Cart").outerHeight()).toBeGreaterThan(before);
+    const once = settled(graph);
+    const module = graph.getElementById("shop.cart").boundingBox({ includeLabels: false });
+    const cart = graph.getElementById("shop.cart:Cart").boundingBox({ includeLabels: false });
+    expect(Math.abs(cart.y1 - module.y1 - 54)).toBeLessThanOrEqual(2);
+    settle(graph, theme);
+    expect(settled(graph)).toBe(once);
   });
 });
