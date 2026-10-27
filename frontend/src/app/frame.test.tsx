@@ -48,6 +48,19 @@ describe("the frame over the level 1 fixture", () => {
     expect(markup).not.toContain("Live diff panel");
   });
 
+  it("overlays the graph with the heading, the legend and the zoom controls", () => {
+    const markup = render(14);
+    for (const text of ["6 modules", "36 functions", "1 agent working", "Possible call", "Zoom in"])
+      expect(markup).toContain(text);
+    // In review the cone card takes the heading's place; the legend and the zoom stay.
+    const state = through(20);
+    const review = openReview(state, initialView, "change-1");
+    if (!review) throw new Error("Missing recorded review");
+    const reviewing = render(20, review);
+    expect(reviewing).not.toContain("agents working");
+    for (const text of ["Possible call", "Zoom in"]) expect(reviewing).toContain(text);
+  });
+
   it("offers the card's Live diff only for a pending change with a file, and no decisions", () => {
     expect(render(4)).not.toContain("Live diff</button>");
     expect(render(14)).toContain("Live diff</button>");

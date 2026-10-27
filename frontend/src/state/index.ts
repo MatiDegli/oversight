@@ -5,6 +5,7 @@ export {
   selectLiveDiff,
   selectAgents,
   selectChangeForAgent,
+  selectGraphSummary,
   selectHasReadyForReview,
   selectLitNodes,
   selectNodeMarks,

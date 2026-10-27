@@ -2,7 +2,7 @@ import type { AgentStatus, ChangeUpdated, ServerEvent } from "@contracts";
 import { describe, expect, it } from "vitest";
 
 import { appendEvent, panelEvents, through } from "./panels.fixture";
-import { selectAgentCard, selectLiveDiff, selectNodeMarks } from "./selectors";
+import { selectAgentCard, selectGraphSummary, selectLiveDiff, selectNodeMarks } from "./selectors";
 import { createChange, createInitialState } from "./types";
 
 describe("panel selectors over the level 1 fixture", () => {
@@ -169,5 +169,39 @@ describe("selectNodeMarks", () => {
     ];
     const state = { ...createInitialState(), changes: { unknown: change } };
     expect(selectNodeMarks(state)).toEqual({ new: { pending: true, pendingSlots: [], focus: {} } });
+  });
+});
+
+describe("selectGraphSummary", () => {
+  it("counts modules and functions of main, tests left out, and the agents at work", () => {
+    expect(selectGraphSummary(createInitialState())).toEqual({
+      repo: null,
+      modules: 0,
+      functions: 0,
+      working: 0,
+    });
+    // The fixture's snapshot: 6 modules, 14 functions and 22 methods, 8 classes not counted.
+    expect(selectGraphSummary(through(2))).toEqual({
+      repo: "demo-repo",
+      modules: 6,
+      functions: 36,
+      working: 0,
+    });
+    expect(selectGraphSummary(through(4)).working).toBe(1);
+    expect(selectGraphSummary(through(20)).working).toBe(0);
+  });
+
+  it("leaves a test module and its functions out", () => {
+    const state = through(2);
+    const test = { path: "tests/t.py", start_line: 1, end_line: 2, parent_id: null, is_test: true };
+    const graph = {
+      ...state.graph,
+      nodes: [
+        ...(state.graph?.nodes ?? []),
+        { ...test, id: "tests.t", kind: "module", name: "t", qualname: "tests.t" },
+        { ...test, id: "tests.t:f", kind: "function", name: "f", qualname: "f" },
+      ],
+    } as NonNullable<typeof state.graph>;
+    expect(selectGraphSummary({ ...state, graph })).toEqual(selectGraphSummary(state));
   });
 });

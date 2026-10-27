@@ -93,3 +93,18 @@ export function selectNodeMarks(state: State): Record<string, NodeMarks> {
   }
   return marks;
 }
+
+/** What the graph's heading says: the repository, what is drawn of it, and who is at work. */
+export function selectGraphSummary(state: State) {
+  const nodes = state.graph?.nodes.filter((node) => !node.is_test) ?? [];
+  return {
+    repo: state.run?.workspace ?? null,
+    modules: nodes.filter((node) => node.kind === "module").length,
+    // Methods count as functions: the graph draws both the same way.
+    functions: nodes.filter((node) => node.kind === "function" || node.kind === "method").length,
+    working: Object.values(state.agents).filter(
+      (agent) =>
+        agent.state === "starting" || agent.state === "working" || agent.state === "revising",
+    ).length,
+  };
+}

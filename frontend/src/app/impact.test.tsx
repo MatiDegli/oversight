@@ -43,8 +43,11 @@ it("passes the recorded cone to the same graph, with a card and a panel summary 
   const html = render(view);
   expect(html).toContain('aria-label="Possibly affected"');
   expect(html).toContain("9 functions possibly affected, up to distance 2");
-  expect(html).toContain("bottom-(--spacing-overlay)");
-  expect(html).toContain("Real recorded run");
+  // The notice stays on the graph, under the cone card that takes the heading's place.
+  expect(html.indexOf("Real recorded run")).toBeGreaterThan(
+    html.indexOf('aria-label="Possibly affected"'),
+  );
+  expect(html).not.toContain("agents working");
   expect(graph.render).toHaveBeenCalledWith(
     expect.objectContaining({
       cone: proposal.impact,

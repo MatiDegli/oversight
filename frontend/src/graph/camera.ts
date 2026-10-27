@@ -208,6 +208,30 @@ export function includeNewNodes(cy: Core, ids: readonly string[], reduceMotion: 
   );
 }
 
+/** The zoom the person's zoom buttons keep the graph between: wide enough to see all, never huge. */
+export const ZOOM_RANGE = { min: 0.2, max: 3 } as const;
+
+/**
+ * Zooms by a factor around the middle of the graph's view and moves no node. The result stays in
+ * ZOOM_RANGE; the move eases, or jumps under reduced motion.
+ */
+export function zoomBy(cy: Core, factor: number, reduceMotion: boolean): void {
+  const zoom = Math.min(ZOOM_RANGE.max, Math.max(ZOOM_RANGE.min, cy.zoom() * factor));
+  const scale = zoom / cy.zoom();
+  const center = { x: cy.width() / 2, y: cy.height() / 2 };
+  moveCamera(
+    cy,
+    {
+      zoom,
+      pan: {
+        x: center.x + (cy.pan().x - center.x) * scale,
+        y: center.y + (cy.pan().y - center.y) * scale,
+      },
+    },
+    reduceMotion,
+  );
+}
+
 function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
   cy.stop();
   if (camera.zoom < cy.minZoom()) cy.minZoom(camera.zoom);

@@ -6,11 +6,12 @@ import type { ReactNode } from "react";
 import { AgentCard, TaskBox } from "../agents";
 import { LiveDiff } from "../editor";
 import { GraphView } from "../graph";
-import type { Framing } from "../graph";
+import type { Framing, GraphApi } from "../graph";
 import { ImpactConeCard, ReviewPanel } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
+import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import { SpendMeter } from "./SpendMeter";
 import { changeNodeIds, litNodeIds, panelOpen, readyCount } from "./view";
 import type { View } from "./view";
@@ -290,6 +291,7 @@ export function Frame(props: FrameProps) {
   const frameKey = view.review === null ? shown : `review:${view.review}`;
   const [framing, setFraming] = useState<{ key: string | null; outOfView: ReadonlySet<string> }>();
   const coneCardRef = useRef<HTMLDivElement>(null);
+  const graphApi = useRef<GraphApi | null>(null);
   const onFramed = useCallback(
     (result: Framing | null) => {
       setFraming({ key: frameKey, outOfView: result?.outOfView ?? new Set() });
@@ -325,25 +327,39 @@ export function Frame(props: FrameProps) {
             frameKey={frameKey}
             onFramed={onFramed}
             coneCardRef={coneCardRef}
+            apiRef={graphApi}
           />
-          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex max-w-(--cone-card-width) flex-col items-start gap-(--spacing-md)">
-            {cone && (
-              <div ref={coneCardRef} className="pointer-events-auto min-h-0 w-full overflow-auto">
-                <ImpactConeCard
-                  cone={cone}
-                  outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
-                  nodes={[...(state.graph?.nodes ?? []), ...(reviewed?.graph.nodes_added ?? [])]}
-                />
-              </div>
-            )}
-          </div>
-          {notice && (
-            <div
-              className={`absolute left-(--spacing-overlay) text-muted ${cone ? "bottom-(--spacing-overlay)" : "top-(--spacing-overlay)"}`}
-            >
-              {notice}
+          {/* Overlays sit 24px in from the graph's edges: the heading (or the cone card in review)
+              top left, the legend bottom left, the zoom controls bottom right. */}
+          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col justify-between gap-(--spacing-md)">
+            <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
+              {cone ? (
+                <div
+                  ref={coneCardRef}
+                  className="pointer-events-auto min-h-0 w-full max-w-(--cone-card-width) overflow-auto"
+                >
+                  <ImpactConeCard
+                    cone={cone}
+                    outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
+                    nodes={[...(state.graph?.nodes ?? []), ...(reviewed?.graph.nodes_added ?? [])]}
+                  />
+                </div>
+              ) : (
+                <div className="pointer-events-auto">
+                  <GraphHeading state={state} />
+                </div>
+              )}
+              {notice && <div className="pointer-events-auto text-muted">{notice}</div>}
             </div>
-          )}
+            <div className="flex items-end justify-between gap-(--spacing-lg)">
+              <div className="pointer-events-auto min-w-0">
+                <Legend state={state} />
+              </div>
+              <div className="pointer-events-auto shrink-0">
+                <ZoomControls api={graphApi} />
+              </div>
+            </div>
+          </div>
         </main>
         {open ? (
           <AgentsRail state={state} />
