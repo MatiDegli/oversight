@@ -3,7 +3,6 @@
 
 import contextlib
 import fcntl
-import http.client
 import http.server
 import json
 import os
