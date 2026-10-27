@@ -33,11 +33,13 @@ Vite, Chromium and module startup. Sharing the page moves module startup into
 
 The supplied branch already assigned 30 s explicitly to each case. These runs did
 not reproduce the reported 5 s timeout. Instead, C1 failed in all 13 baseline runs:
-it expected visible cone nodes in panel mode, although the harness supplies the cone
+it expected visible cone nodes in panel mode, although the harness supplied the cone
 only in review mode. That failure exits C1 before its close/restore assertions, so
-its baseline timings cover less work. The fix checks the absence of the cone in
-panel mode and its presence in review; all original camera assertions still run.
-The final tests use the normal 5 s limit, with no custom per-case timeout.
+its baseline timings cover less work. The initial optimization checked absence in
+panel mode and presence in review. Review found this weakened C1: the fix-round
+measurements below restore the live cone in panel mode and the non-empty assertion,
+including a named caller beyond the frame. All camera assertions now run with the
+normal 5 s limit and no custom per-case timeout.
 
 ## Isolated runs
 
@@ -56,7 +58,7 @@ The final tests use the normal 5 s limit, with no custom per-case timeout.
 | 9   | 2.070 | 1.423 | 2.422 | 1.404 | 7.320  | 8.122  | C1 failed |
 | 10  | 2.172 | 1.466 | 2.437 | 1.356 | 7.430  | 8.282  | C1 failed |
 
-### After
+### Initial optimization (before review)
 
 | Run | C1    | C2    | C3    | C4    | Sum   | Wall  | Result |
 | --- | ----- | ----- | ----- | ----- | ----- | ----- | ------ |
@@ -85,9 +87,9 @@ The final tests use the normal 5 s limit, with no custom per-case timeout.
 ## Interpretation
 
 - Isolated: median case sum 7.458 → 3.185 s (57.3% lower);
-  slowest final individual case 1.274 s.
+  slowest initially optimized individual case 1.274 s.
 - Loaded: median case sum 7.758 → 4.201 s (45.9% lower);
-  slowest final individual case 1.709 s.
+  slowest initially optimized individual case 1.709 s.
 
 The avoidable work was repeated browser/module startup, the unrelated dot-field
 WebGL initialization, and wall-clock animation/viewport frames. The test now loads
@@ -97,11 +99,60 @@ and `performance.now()` advance explicitly. A midpoint assertion verifies that t
 real Cytoscape animation progresses before the final frame completes it. DOM/font
 readiness is condition-polled independently of the controlled animation queue.
 
-Button handlers are dispatched explicitly so Playwright actionability does not
-wait for paused frames; the Cytoscape background drag and keyboard input remain
-real browser input. Visibility reporting is flushed after each navigation action.
+The initial optimization dispatched button handlers explicitly. The fix round below
+restores real Playwright clicks and paints frames until each click completes its
+visibility, stability and hit tests. Visibility reporting is flushed after each
+navigation action; background drag and keyboard input also remain real browser input.
 
 The baseline already had a saved preset layout and checks forbidding Monaco requests;
 those remain. The 2d Cytoscape renderer remains real. WebGL drawing is covered by
 `dotField.browser.test.ts`, including its plain-ground fallback. No application code,
 contracts, dependencies, README or DEVLOG changed.
+
+## Fix round 1: restored regression coverage
+
+Measured 2026-10-27 14:54 ART (UTC-3), with the same commands and baseline above.
+The panel fixture now supplies `liveCone` and its lit ids, independently of review's
+card and camera cone. C1 requires non-empty cone nodes, the named caller in that
+cone and that caller outside the changed node's frame, while retaining midpoint,
+zoom, centering and close/restore checks. C3 uses real Playwright clicks while a
+controlled frame pump lets actionability finish; all eight button events must be
+`isTrusted`. A fifth case seeds stale errors and editor requests and verifies that
+`withPage` clears both. Its diagnostic duration is **D** below.
+
+Each regression was checked with its defect reintroduced separately: omitting the
+live cone, dispatching synthetic clicks, or removing the diagnostic resets each
+made its targeted browser test exit 1. All three fixes were then restored.
+
+**Sum** still adds C1–C4 for comparison with the original four-case baseline;
+**Wall** now includes all five cases and shared setup. All 13 runs passed 5/5;
+each loaded run overlapped a fresh `make check` that subsequently exited 0.
+
+### Isolated after review
+
+| Run | C1    | C2    | C3    | C4    | D     | Sum   | Wall  |
+| --- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
+| 1   | 1.218 | 0.677 | 1.313 | 0.772 | 0.415 | 3.980 | 5.832 |
+| 2   | 1.257 | 0.708 | 1.363 | 0.740 | 0.415 | 4.067 | 5.911 |
+| 3   | 1.264 | 0.725 | 1.398 | 0.442 | 0.478 | 3.829 | 5.745 |
+| 4   | 1.354 | 0.696 | 1.308 | 0.771 | 0.434 | 4.129 | 6.135 |
+| 5   | 1.272 | 0.736 | 1.317 | 0.441 | 0.408 | 3.766 | 5.673 |
+| 6   | 1.351 | 0.802 | 1.475 | 0.837 | 0.478 | 4.464 | 6.369 |
+| 7   | 1.348 | 0.716 | 1.569 | 0.892 | 0.501 | 4.525 | 6.635 |
+| 8   | 1.436 | 0.865 | 1.696 | 1.226 | 0.680 | 5.223 | 7.695 |
+| 9   | 1.724 | 0.958 | 1.676 | 1.022 | 1.188 | 5.380 | 8.774 |
+| 10  | 1.692 | 0.846 | 1.505 | 0.858 | 0.421 | 4.901 | 7.544 |
+
+Median C1–C4 sum: 7.458 → 4.297 s (42.4% lower).
+Slowest original case: 1.724 s; slowest including D: 1.724 s.
+
+### Alongside make check after review
+
+| Run | C1    | C2    | C3    | C4    | D     | Sum   | Wall  |
+| --- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
+| 1   | 1.758 | 0.980 | 1.478 | 0.489 | 1.141 | 4.705 | 7.849 |
+| 2   | 1.558 | 0.815 | 1.379 | 0.872 | 0.517 | 4.623 | 6.938 |
+| 3   | 1.864 | 1.488 | 1.704 | 0.560 | 0.551 | 5.617 | 8.205 |
+
+Median C1–C4 sum: 7.758 → 4.705 s (39.4% lower).
+Slowest original case: 1.864 s; slowest including D: 1.864 s.

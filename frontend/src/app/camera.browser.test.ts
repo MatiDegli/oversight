@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import { chromium, expect as browserExpect } from "@playwright/test";
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, Locator, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -61,6 +61,7 @@ afterAll(async () => {
 declare global {
   interface Window {
     cameraFrames: { paint: (ms: number) => void };
+    cameraClicks?: { trusted: boolean[]; controller: AbortController };
   }
 }
 
@@ -108,6 +109,8 @@ async function withPage(
   reducedMotion: "reduce" | "no-preference",
   test: (page: Page) => Promise<void>,
 ) {
+  errors.length = 0;
+  editorRequests.length = 0;
   if (!sharedPage) throw new Error("Browser was not started");
   const page = sharedPage;
   await page.emulateMedia({ reducedMotion });
@@ -134,11 +137,27 @@ async function withPage(
     expect(errors).toEqual([]);
   } finally {
     await page.evaluate(() => {
+      window.cameraClicks?.controller.abort();
+      delete window.cameraClicks;
       window.graphTest.unmount();
     });
     // Dispose the old renderer before the next case, including its queued frame.
     await paint(page);
   }
+}
+
+/** Keep Playwright's visibility, stability and hit tests while its click awaits paint frames. */
+async function click(page: Page, target: Locator) {
+  const progress = { finished: false };
+  const clicking = target.click().finally(() => {
+    progress.finished = true;
+  });
+  await Promise.all([
+    clicking,
+    (async () => {
+      while (!progress.finished) await paint(page);
+    })(),
+  ]);
 }
 
 /** The graph's own report: where the nodes are on screen, in the graph element's pixels. */
@@ -219,7 +238,10 @@ it("opening the panel centers the changed node at the same zoom; closing restore
         .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
         ?.oversightGraph?.nodeCenters("node.cone:not(.dimmed)"),
     );
-    expect(callers).toEqual([]);
+    expect(callers?.length).toBeGreaterThan(0);
+    const caller = await page.evaluate(() => window.graphTest.caller);
+    expect(callers?.map(({ id }) => id)).toContain(caller);
+    expect(open.cutOffAnywhere).toContain(caller);
     expect(open.cutOff).toEqual([]);
     expect(open.positions).toEqual(wide.positions);
     // The labels keep their size: the zoom is the watch fit's, not a fit of the narrowed graph.
@@ -312,8 +334,22 @@ it("refreshes a revealed cone row after pan, zoom and Fit without moving the cam
       ),
     ).toBeGreaterThan(0);
     const row = page.getByRole("region", { name: "Possibly affected", exact: true }).getByTitle(id);
+    // Synthetic dispatch must not replace the real input/actionability coverage of these controls.
+    await page.evaluate(() => {
+      const trusted: boolean[] = [];
+      const controller = new AbortController();
+      document.addEventListener(
+        "click",
+        (event) => {
+          if (event.target instanceof Element && event.target.closest("button"))
+            trusted.push(event.isTrusted);
+        },
+        { signal: controller.signal },
+      );
+      window.cameraClicks = { trusted, controller };
+    });
     await browserExpect(row).toContainText("Out of view");
-    await row.dispatchEvent("click");
+    await click(page, row);
     await paint(page);
     await browserExpect(row).not.toContainText("Out of view");
     const positions = (await report(page, [])).positions;
@@ -325,19 +361,22 @@ it("refreshes a revealed cone row after pan, zoom and Fit without moving the cam
     const away = await report(page, [id]);
     await paint(page);
     expect((await report(page, [id])).centers).toEqual(away.centers);
-    await page.getByRole("button", { name: "Fit the graph to the view" }).dispatchEvent("click");
+    await click(page, page.getByRole("button", { name: "Fit the graph to the view" }));
     await paint(page);
     await browserExpect(row).not.toContainText("Out of view");
     expect((await report(page, [id])).cutOff).toEqual([]);
     // Zooming at the viewport center hides the distant caller without a pan gesture.
     for (let step = 0; step < 5; step++)
-      await page.getByRole("button", { name: "Zoom in", exact: true }).dispatchEvent("click");
+      await click(page, page.getByRole("button", { name: "Zoom in", exact: true }));
     await paint(page);
     await browserExpect(row).toContainText("Out of view");
-    await page.getByRole("button", { name: "Fit the graph to the view" }).dispatchEvent("click");
+    await click(page, page.getByRole("button", { name: "Fit the graph to the view" }));
     await paint(page);
     await browserExpect(row).not.toContainText("Out of view");
     expect((await report(page, [])).positions).toEqual(positions);
+    expect(await page.evaluate(() => window.cameraClicks?.trusted)).toEqual(
+      Array<boolean>(8).fill(true),
+    );
   });
 });
 
@@ -358,5 +397,15 @@ it("the impact cone component keeps keyboard focus on a revealed row and never t
     await browserExpect(other).toBeFocused();
     await page.evaluate(() => window.graphTest.mountCone(false));
     await browserExpect(other).toBeFocused();
+  });
+});
+
+it("clears late diagnostics between shared-page cases", async () => {
+  errors.push("Late error from the previous case");
+  editorRequests.push("Late editor request from the previous case");
+  await withPage("reduce", async (page) => {
+    await paint(page);
+    expect(errors).toEqual([]);
+    expect(editorRequests).toEqual([]);
   });
 });

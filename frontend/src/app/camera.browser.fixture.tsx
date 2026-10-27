@@ -48,9 +48,11 @@ function Harness({ mode }: { mode: Mode }) {
   const card = useRef<HTMLDivElement>(null);
   const [framing, setFraming] = useState<Framing | null>(null);
   const impact = mode === "review" ? cone : null;
+  const liveCone = mode === "panel" ? cone : null;
+  const highlighted = impact ?? liveCone;
   const litIds = useMemo(
-    () => (impact ? [CHANGED, ...impact.entries.map((entry) => entry.node_id)] : null),
-    [impact],
+    () => (highlighted ? [CHANGED, ...highlighted.entries.map((entry) => entry.node_id)] : null),
+    [highlighted],
   );
   return (
     <div className="flex h-full bg-ground text-text">
@@ -61,6 +63,7 @@ function Harness({ mode }: { mode: Mode }) {
           frameIds={[CHANGED]}
           frameKey={mode}
           cone={impact}
+          liveCone={liveCone}
           litIds={litIds}
           onFramed={setFraming}
           coneCardRef={card}
