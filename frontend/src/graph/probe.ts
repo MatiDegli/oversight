@@ -31,6 +31,10 @@ export interface GraphProbe {
     zoom: number;
     minLabelPx: number;
     edgeShape: string;
+    visibleRows: number;
+    visibleEdges: number;
+    rows: number;
+    edges: number;
   };
 }
 
@@ -56,6 +60,19 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
       zoom: cy.zoom(),
       minLabelPx: Math.min(...cy.nodes().map((node) => node.numericStyle("font-size") * cy.zoom())),
       // A call's shape: imports are not drawn.
+      visibleRows: cy.nodes(":childless").filter((node) => {
+        const b = node.renderedBoundingBox({ includeLabels: false, includeOverlays: false });
+        return b.x1 >= 0 && b.y1 >= 0 && b.x2 <= cy.width() && b.y2 <= cy.height();
+      }).length,
+      visibleEdges: cy
+        .edges()
+        .not(".imports")
+        .filter((edge) => {
+          const b = edge.renderedBoundingBox({ includeLabels: false, includeOverlays: false });
+          return b.x2 >= 0 && b.y2 >= 0 && b.x1 <= cy.width() && b.y1 <= cy.height();
+        }).length,
+      rows: cy.nodes(":childless").length,
+      edges: cy.edges().not(".imports").length,
       edgeShape: String(cy.edges().not(".imports").first().style("curve-style")),
     }),
   };

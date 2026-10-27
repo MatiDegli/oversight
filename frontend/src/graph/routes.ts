@@ -1,13 +1,16 @@
 // Orthogonal ("taxi") edge routes through the gutters between module frames, as in the Signal
 // sketch: a call leaves its caller's row at the right, runs along a lane in the gutter and enters
-// its callee's row at the left, with the arrowhead on the border. A call between two rows of one
-// module, or of two modules in one column, loops through a lane at the left instead.
+// its callee's row at the left, with the arrowhead on the border. Back and same-column calls
+// detour outside frames. Callers of the same target share its incoming trunk.
 //
 // The router is a pure function of boxes and edges. It places no node: it only says where each edge
 // meets its two nodes (offsets from the node's centre, in px) and where it bends, in the terms
 // Cytoscape's `segments` style takes (weights along the line between the two ends, distances
 // across it), which the stylesheet reads from the edge's data.
 import type { Core } from "cytoscape";
+
+import { orthogonalPath, simplify } from "./orthogonal";
+import type { XY } from "./orthogonal";
 
 /** A node's box, in graph units, and the line an edge meets it on. */
 export interface RouteBox {
@@ -51,52 +54,48 @@ export interface Tuning {
   loopInset: number;
 }
 
-type Kind = "forward" | "backward" | "loop" | "stacked";
-
-interface Plan {
-  edge: RouteEdge;
-  from: RouteBox;
-  to: RouteBox;
-  kind: Kind;
-  /** Which way the vertical run goes: the target is below the source (or level with it). */
-  down: boolean;
-  lane: number;
-  fromY: number;
-  toY: number;
-}
-
 const center = (box: RouteBox) => ({ x: (box.x1 + box.x2) / 2, y: (box.y1 + box.y2) / 2 });
 
-/** The gaps between the outermost frames: runs of x no frame covers, as [from, to]. */
-function corridors(tops: readonly RouteBox[], minGutter: number): [number, number][] {
-  const sorted = [...tops].sort((a, b) => a.x1 - b.x1 || a.x2 - b.x2);
-  const gaps: [number, number][] = [];
-  let reach = sorted[0]?.x2 ?? 0;
-  for (const box of sorted.slice(1)) {
-    if (box.x1 - reach >= minGutter) gaps.push([reach, box.x1]);
-    reach = Math.max(reach, box.x2);
+/** Encode explicit bends in Cytoscape's endpoint-relative coordinates. */
+function encode(points: XY[], from: RouteBox, to: RouteBox): Route {
+  const start = points[0] ?? center(from);
+  const end = points.at(-1) ?? center(to);
+  const vx = end.x - start.x;
+  const vy = end.y - start.y;
+  const length = Math.hypot(vx, vy);
+  const bends = points.slice(1, -1);
+  const a = center(from);
+  const b = center(to);
+  return {
+    s: [start.x - a.x, start.y - a.y],
+    t: [end.x - b.x, end.y - b.y],
+    w: bends.map((p) => ((p.x - start.x) * vx + (p.y - start.y) * vy) / (length * length)),
+    d: bends.map((p) => ((p.x - start.x) * -vy + (p.y - start.y) * vx) / length),
+  };
+}
+
+/** One incoming trunk per target, immediately left of its module's column. */
+function trunks(boxes: readonly RouteBox[], edges: readonly RouteEdge[], tuning: Tuning) {
+  const byId = new Map(boxes.map((box) => [box.id, box]));
+  const columns = new Map<number, RouteBox[]>();
+  for (const id of new Set(edges.map((edge) => edge.target))) {
+    const target = byId.get(id);
+    const frame = target && byId.get(target.top);
+    if (target && frame) columns.set(frame.x1, [...(columns.get(frame.x1) ?? []), target]);
   }
-  return gaps;
-}
-
-/** How many frames, other than the two ends', a horizontal run from `xa` to `xb` at `y` crosses. */
-function crossings(
-  tops: readonly RouteBox[],
-  skip: readonly string[],
-  xa: number,
-  xb: number,
-  y: number,
-) {
-  const [lo, hi] = [Math.min(xa, xb), Math.max(xa, xb)];
-  return tops.filter(
-    (box) => !skip.includes(box.id) && box.y1 < y && y < box.y2 && box.x1 < hi && box.x2 > lo,
-  ).length;
-}
-
-/** Evenly spaced offsets around zero, at most `step` apart and inside ±`limit`. */
-function spread(count: number, step: number, limit: number): number[] {
-  const gap = count > 1 ? Math.min(step, (2 * limit) / (count - 1)) : 0;
-  return Array.from({ length: count }, (_, k) => (k - (count - 1) / 2) * gap);
+  const lanes = new Map<string, number>();
+  for (const [left, targets] of columns) {
+    targets.sort((a, b) => a.anchorY - b.anchorY || (a.id < b.id ? -1 : 1));
+    const previousRight = Math.max(
+      -Infinity,
+      ...boxes.filter((box) => box.id === box.top && box.x2 < left).map((box) => box.x2),
+    );
+    const room = left - previousRight;
+    const inset = Math.min(tuning.loopInset, room / 3);
+    const gap = Math.min(tuning.laneGap, (room - inset * 2) / Math.max(1, targets.length));
+    targets.forEach((target, rank) => lanes.set(target.id, left - inset - rank * gap));
+  }
+  return lanes;
 }
 
 export function routeEdges(
@@ -106,188 +105,24 @@ export function routeEdges(
 ): Map<string, Route> {
   const byId = new Map(boxes.map((box) => [box.id, box]));
   const tops = boxes.filter((box) => box.id === box.top);
-  const gutters = corridors(tops, tuning.minGutter);
-  const plans: Plan[] = [];
+  const lanes = trunks(boxes, edges, tuning);
+  const routes = new Map<string, Route>();
   for (const edge of edges) {
     const from = byId.get(edge.source);
     const to = byId.get(edge.target);
     if (!from || !to || from.id === to.id) continue;
-    const a = byId.get(from.top);
-    const b = byId.get(to.top);
-    if (!a || !b) continue;
-    const kind: Kind =
-      a.id === b.id ? "loop" : b.x1 >= a.x2 ? "forward" : b.x2 <= a.x1 ? "backward" : "stacked";
-    plans.push({
-      edge,
-      from,
-      to,
-      kind,
-      down: to.anchorY >= from.anchorY,
-      lane: 0,
-      fromY: from.anchorY,
-      toY: to.anchorY,
-    });
-  }
-
-  // Lanes in the gutters. A call picks the gutter that makes its two horizontal runs cross the
-  // fewest frames, the one nearest its callee when several do equally well.
-  const chosen = new Map<string, Plan[]>();
-  for (const plan of plans) {
-    if (plan.kind !== "forward" && plan.kind !== "backward") continue;
-    const a = byId.get(plan.from.top);
-    const b = byId.get(plan.to.top);
-    if (!a || !b) continue;
-    const [lo, hi] = plan.kind === "forward" ? [a.x2, b.x1] : [b.x2, a.x1];
-    const between = gutters.filter(([from, to]) => from >= lo - 1 && to <= hi + 1);
-    const start = plan.kind === "forward" ? plan.from.x2 : plan.from.x1;
-    const end = plan.kind === "forward" ? plan.to.x1 : plan.to.x2;
-    const options = between.length ? between : ([[lo, hi]] as [number, number][]);
-    let best = options[0] ?? [lo, hi];
-    let bestCost = Infinity;
-    for (const gutter of options) {
-      const x = (gutter[0] + gutter[1]) / 2;
-      const cost =
-        crossings(tops, [a.id, b.id], start, x, plan.fromY) +
-        crossings(tops, [a.id, b.id], x, end, plan.toY);
-      const nearer = plan.kind === "forward" ? gutter[0] > best[0] : gutter[0] < best[0];
-      if (cost < bestCost || (cost === bestCost && nearer)) {
-        best = gutter;
-        bestCost = cost;
-      }
-    }
-    const key = `${String(best[0])}:${String(best[1])}`;
-    chosen.set(key, [...(chosen.get(key) ?? []), plan]);
-  }
-  for (const [key, group] of chosen) {
-    const [from = 0, to = 0] = key.split(":").map(Number);
-    const forward = group.filter((p) => p.kind === "forward");
-    const backward = group.filter((p) => p.kind === "backward");
-    // Inner lanes (nearer the caller) go to the edges that start lower when they run down, and to
-    // the ones that start higher when they run up, so a run never cuts through another's lane.
-    const order = (plan: Plan, other: Plan) =>
-      Number(other.down) - Number(plan.down) ||
-      (plan.down
-        ? other.fromY - plan.fromY || other.toY - plan.toY
-        : plan.fromY - other.fromY || plan.toY - other.toY) ||
-      (plan.edge.id < other.edge.id ? -1 : 1);
-    forward.sort(order);
-    backward.sort(order);
-    const count = group.length;
-    const gap = Math.min(tuning.laneGap, (to - from) / (count + 1));
-    const left = (from + to) / 2 - ((count - 1) * gap) / 2;
-    forward.forEach((plan, i) => (plan.lane = left + i * gap));
-    backward.forEach((plan, i) => (plan.lane = left + (count - 1 - i) * gap));
-  }
-
-  // Loops at the left: the shorter a loop, the nearer its lane to the rows it joins.
-  const loops = new Map<string, Plan[]>();
-  for (const plan of plans) {
-    if (plan.kind !== "loop" && plan.kind !== "stacked") continue;
-    const key = plan.kind === "loop" ? plan.from.top : `${plan.from.top}|${plan.to.top}`;
-    loops.set(key, [...(loops.get(key) ?? []), plan]);
-  }
-  for (const group of loops.values()) {
-    group.sort(
-      (p, q) =>
-        Math.abs(p.toY - p.fromY) - Math.abs(q.toY - q.fromY) ||
-        p.fromY - q.fromY ||
-        (p.edge.id < q.edge.id ? -1 : 1),
-    );
-    group.forEach((plan, rank) => {
-      const rows = Math.min(plan.from.x1, plan.to.x1);
-      if (plan.kind === "loop") {
-        // Inside the module's own padding: each further loop steps half a lane nearer its border,
-        // and none leaves the frame.
-        const frame = byId.get(plan.from.top)?.x1 ?? rows;
-        plan.lane = Math.max(
-          frame + tuning.loopInset / 2,
-          rows - tuning.loopInset - (rank * tuning.laneGap) / 2,
-        );
-      } else {
-        // In the gutter at the left of both modules.
-        const frames = Math.min(
-          byId.get(plan.from.top)?.x1 ?? rows,
-          byId.get(plan.to.top)?.x1 ?? rows,
-        );
-        plan.lane = frames - tuning.loopInset - rank * tuning.laneGap;
-      }
-    });
-  }
-
-  // Where each edge meets its nodes: on one side of a node, edges are sorted by the height of the
-  // other end, so that those to and from above meet the upper part and the rest the lower part.
-  const sideOf = (plan: Plan, end: "from" | "to") =>
-    plan.kind === "forward"
-      ? end === "from"
-        ? "right"
-        : "left"
-      : plan.kind === "backward"
-        ? end === "from"
-          ? "left"
-          : "right"
-        : "left";
-  const ports = new Map<string, { plan: Plan; end: "from" | "to" }[]>();
-  for (const plan of plans)
-    for (const end of ["from", "to"] as const) {
-      const key = `${plan[end].id}|${sideOf(plan, end)}`;
-      ports.set(key, [...(ports.get(key) ?? []), { plan, end }]);
-    }
-  const other = (entry: { plan: Plan; end: "from" | "to" }) =>
-    entry.end === "from" ? entry.plan.to.anchorY : entry.plan.from.anchorY;
-  for (const entries of ports.values()) {
-    entries.sort(
-      (p, q) =>
-        other(p) - other(q) ||
-        Math.abs(p.plan.lane) - Math.abs(q.plan.lane) ||
-        (p.plan.edge.id < q.plan.edge.id ? -1 : 1),
-    );
-    const node = entries[0]?.plan[entries[0].end];
-    if (!node) continue;
-    const height = node.y2 - node.y1;
-    const offsets = spread(
-      entries.length,
-      tuning.portGap,
-      Math.min(Math.max(0, height / 2 - tuning.portMargin), (entries.length * tuning.portGap) / 2),
-    );
-    entries.forEach(({ plan, end }, i) => {
-      const y = plan[end].anchorY + (offsets[i] ?? 0);
-      if (end === "from") plan.fromY = y;
-      else plan.toY = y;
-    });
-  }
-
-  const routes = new Map<string, Route>();
-  for (const plan of plans) {
-    const start = {
-      x: sideOf(plan, "from") === "right" ? plan.from.x2 : plan.from.x1,
-      y: plan.fromY,
-    };
-    const end = { x: sideOf(plan, "to") === "right" ? plan.to.x2 : plan.to.x1, y: plan.toY };
-    const bends = [
-      { x: plan.lane, y: start.y },
-      { x: plan.lane, y: end.y },
-    ].filter((p) => Math.abs(p.y - start.y) + Math.abs(p.y - end.y) > 0);
-    const vx = end.x - start.x;
-    const vy = end.y - start.y;
-    const length = Math.hypot(vx, vy);
-    if (length === 0) continue;
-    const straight = start.y === end.y;
-    const w: number[] = [];
-    const d: number[] = [];
-    if (!straight)
-      for (const p of bends) {
-        // Cytoscape puts a bend at the end-to-end line's weight w, offset d along its left normal.
-        w.push(((p.x - start.x) * vx + (p.y - start.y) * vy) / (length * length));
-        d.push(((p.x - start.x) * -vy + (p.y - start.y) * vx) / length);
-      }
-    const from = center(plan.from);
-    const to = center(plan.to);
-    routes.set(plan.edge.id, {
-      s: [start.x - from.x, start.y - from.y],
-      t: [end.x - to.x, end.y - to.y],
-      w,
-      d,
-    });
+    const source = byId.get(from.top);
+    const lane = lanes.get(to.id);
+    if (!source || lane === undefined) continue;
+    const start = { x: from.x2, y: from.anchorY };
+    const end = { x: to.x1, y: to.anchorY };
+    // Only the short taps traverse their endpoint's own frame. The visibility search treats
+    // every module, including both endpoints, as an obstacle for the rest of the path.
+    const exit = { x: source.x2 + tuning.laneGap, y: start.y };
+    const trunk = { x: lane, y: end.y };
+    const path = orthogonalPath(exit, trunk, tops, tuning.laneGap);
+    if (!path) continue;
+    routes.set(edge.id, encode(simplify([start, ...path, end]), from, to));
   }
   return routes;
 }
@@ -352,6 +187,7 @@ export function applyRoutes(cy: Core, theme: RouteTheme): void {
   cy.batch(() => {
     for (const edge of cy.edges()) {
       const route = routes.get(edge.id());
+      edge.toggleClass("unroutable", !route && !edge.hasClass("imports"));
       if (route) edge.data("route", route);
       else if (edge.data("route") !== undefined) edge.removeData("route");
     }
