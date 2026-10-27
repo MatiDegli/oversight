@@ -272,7 +272,7 @@ describe("demo preset", () => {
     expect(jsonFloat(0)).toBe("0.0");
     expect(jsonFloat(-0)).toBe("-0.0");
     expect(jsonFloat(-5)).toBe("-5.0");
-    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1e15, 1e-7])
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])
       expect(() => jsonFloat(value)).toThrow("Coordinate out of range");
     const points = { "a.b": { x: 1092, y: 611.5 }, c: { x: 0, y: -3 } };
     expect(serializePositions(points)).toBe(
@@ -293,6 +293,50 @@ describe("demo preset", () => {
       '{"seq":1,"type":"graph.snapshot","payload":{"nodes":[{"id":"a.b"},{"id":"c"}],' +
         '"positions":{"a.b":{"x":1092.0,"y":611.5},"c":{"x":0.0,"y":-3.0}}}}',
     );
+  });
+
+  it.each([
+    // The text Pydantic's model_dump_json writes for each value, from:
+    //   P(x=float(literal)).model_dump_json() with `class P(BaseModel): x: float`
+    [1092.0, "1092.0"],
+    [611.5, "611.5"],
+    [1137.3000000000002, "1137.3000000000002"],
+    [0.0, "0.0"],
+    [-0.0, "-0.0"],
+    [-5.0, "-5.0"],
+    [0.1, "0.1"],
+    [0.0001, "0.0001"],
+    // Decimal down to 1e-5, where Python's repr already writes 1e-05.
+    [1e-5, "0.00001"],
+    [1.5e-5, "0.000015"],
+    [5e-5, "0.00005"],
+    [2.5e-5, "0.000025"],
+    // Exponent form below it, with the exponent signed and not padded (repr: 1e-06).
+    [9.999e-6, "9.999e-6"],
+    [1e-6, "1e-6"],
+    [1.5e-6, "1.5e-6"],
+    [3e-6, "3e-6"],
+    [9.999e-7, "9.999e-7"],
+    [1e-7, "1e-7"],
+    [1.234e-10, "1.234e-10"],
+    [5e-324, "5e-324"],
+    [-1e-6, "-1e-6"],
+    // Decimal up to the largest 16-digit integer, exponent form with a plus from 1e16.
+    [1e15, "1000000000000000.0"],
+    [1.5e15, "1500000000000000.0"],
+    [9999999999999998.0, "9999999999999998.0"],
+    [1e16, "1e+16"],
+    [1.5e16, "1.5e+16"],
+    [-1.5e17, "-1.5e+17"],
+    [123456789012345678.0, "1.2345678901234568e+17"],
+    [1e21, "1e+21"],
+    [1e22, "1e+22"],
+    [1e300, "1e+300"],
+    [1.7976931348623157e308, "1.7976931348623157e+308"],
+  ])("writes %s as %s, the float text Pydantic prints", (value, text) => {
+    expect(jsonFloat(value)).toBe(text);
+    // JavaScript reads the text back to the same double, so the replay log keeps its value.
+    expect(Number(text)).toBe(value);
   });
 
   it("keeps no integral coordinate in the preset file or the replay snapshot", () => {

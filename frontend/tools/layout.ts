@@ -266,17 +266,25 @@ export function generateLayout(snapshot: GraphSnapshot): Layout {
 }
 
 /**
- * A coordinate as the backend's JSON writes the contract's float: an integral value keeps its
- * ".0" (`1092.0`), a fractional one is its shortest round-trip digits. JSON.stringify writes
- * `1092`, and the replay log must round-trip through the event store byte for byte. The two
- * writers agree on decimal digits between 1e-6 and 1e15, which is all a position can be.
+ * A coordinate as the backend's JSON writes the contract's float, which is what Pydantic's
+ * `model_dump_json` prints (the event store writes every payload that way), not Python's `repr`:
+ * the shortest round-trip digits, always with a point (`1092.0`), in decimal from 1e-5 up to
+ * just under 1e16 and in exponent form outside it, with a signed exponent that is not padded
+ * (`1e-6`, `1.5e+16`). `repr` writes `1e-06` and `1e-05`. JSON.stringify writes `1092`, and the
+ * replay log must round-trip through the event store byte for byte.
  */
 export function jsonFloat(value: number): string {
-  const size = Math.abs(value);
-  if (!Number.isFinite(value) || size >= 1e15 || (size !== 0 && size < 1e-6))
-    throw new Error(`Coordinate out of range: ${String(value)}`);
-  if (Object.is(value, -0)) return "-0.0";
-  return Number.isInteger(value) ? value.toFixed(1) : String(value);
+  if (!Number.isFinite(value)) throw new Error(`Coordinate out of range: ${String(value)}`);
+  if (value === 0) return Object.is(value, -0) ? "-0.0" : "0.0";
+  const [mantissa = "", exponent = ""] = Math.abs(value).toExponential().split("e");
+  const power = Number(exponent);
+  if (power < -5 || power > 15) {
+    const sign = value < 0 ? "-" : "";
+    return `${sign}${mantissa}e${power < 0 ? "-" : "+"}${String(Math.abs(power))}`;
+  }
+  // From 1e-5 to 1e16 JavaScript writes the same shortest digits without an exponent.
+  const text = String(value);
+  return text.includes(".") ? text : `${text}.0`;
 }
 
 const pointJson = ({ x, y }: Point, pretty: boolean) =>
