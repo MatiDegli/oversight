@@ -28,47 +28,32 @@ from typing import Any
 from oversight.agents import AgentTask, Publish, RunEnd
 from oversight.changes import _approval as approval
 from oversight.changes import _delivery as delivery
+from oversight.changes import _files as files
 from oversight.changes import _proposal as proposal
+from oversight.changes import _revision as revision
 from oversight.changes._state import (
     APPROVABLE,
     REJECTABLE,
     REVISABLE,
     STOPPABLE,
-    SUSPECT,
     ChangeNotFound,
     ChangeRecord,
     ChangeState,
-    Move,
     Revision,
     State,
     WrongState,
 )
 from oversight.changes._support import ChangeContext, ChangePorts
-from oversight.changes._versions import (
-    main_delta,
-    parse,
-    rescan_delta,
-    with_positions,
-)
 from oversight.events import Clock, system_clock
 from oversight.graph import (
-    DeltaCause,
     WorkspaceGraph,
-    change_graph,
 )
 from oversight.workspace import (
-    FileRead,
-    InvalidPath,
-    StaleFile,
     Tree,
     Workspace,
-    WorkspaceError,
 )
 from oversight_contracts.commands import FileContent, FileSaved
 from oversight_contracts.common import AgentId, ChangeId
-from oversight_contracts.events import (
-    ChangeResolved,
-)
 from oversight_contracts.graph import GraphSnapshot
 
 
@@ -163,23 +148,7 @@ class ChangeManager:
         holds throughout (`WrongState`); `StaleFile` when the file is not the one `base_hash` names.
         R9: with nothing to commit and HEAD still the last proposal's, nothing is sent. A save cut
         short after its write is re-proposed by the next Approve (R1)."""
-        rec = self._ctx.state.agents.get(agent_id)
-        if rec is None:
-            raise ChangeNotFound(agent_id)
-        self._check_editable(rec)
-        async with self._ctx.workspace.locks(agent_id=agent_id):
-            self._check_editable(rec)  # a decision may have taken it while the save waited
-            saved = await rec.tree.write_text(path, content, expected_hash=base_hash)
-            rec.touched.add(path)
-            head, files = await proposal.commit(self._ctx, rec, "user")
-            if head != rec.head_commit:
-                await proposal.proposal(self._ctx, rec, head, files, "user", rec.summary)
-        return saved
-
-    @staticmethod
-    def _check_editable(rec: ChangeRecord) -> None:
-        if rec.state != "ready":
-            raise WrongState(f"{rec.change_id} is {rec.state}; a save in review needs ready")
+        return await files.save_for_review(self._ctx, agent_id, path, content, base_hash)
 
     async def read_file(self, agent_id: AgentId | None, path: str) -> FileContent:
         """GET /files. Main is read under main's lock, which every mutation of main holds from its
@@ -188,31 +157,7 @@ class ChangeManager:
         stands. An agent's worktree is read under its own lock, in any state until its cleanup.
         `ChangeNotFound` for no live worktree, `FileNotFoundError` for a missing file, `InvalidPath`
         for a path the workspace refuses and for a file that is not UTF-8 text."""
-        if agent_id is None:
-            async with self._ctx.workspace.locks(main=True):
-                read = await self._read_text(self._ctx.workspace.main, path)
-        else:
-            rec = self._ctx.state.agents.get(agent_id)
-            if rec is None:
-                raise ChangeNotFound(agent_id)
-            async with self._ctx.workspace.locks(agent_id=agent_id):
-                if rec.cleaned:  # read under the lock a cleanup holds
-                    raise ChangeNotFound(agent_id)
-                read = await self._read_text(rec.tree, path)
-        return FileContent(path=path, content=read.content, hash=read.hash, agent_id=agent_id)
-
-    @staticmethod
-    async def _read_text(tree: Tree, path: str) -> FileRead:
-        """`tree.read_text`, with what a person's request can meet as `InvalidPath`: a path through
-        a file, and a file that is not UTF-8 text (a directory is refused by the workspace)."""
-        try:
-            return await tree.read_text(path)
-        except NotADirectoryError as error:
-            raise InvalidPath(f"invalid path {path[:80]!r}: a parent is not a directory") from error
-        except WorkspaceError as error:
-            if isinstance(error.__cause__, UnicodeDecodeError):
-                raise InvalidPath(f"{path[:80]!r} is not a UTF-8 text file") from error
-            raise
+        return await files.read_file(self._ctx, agent_id, path)
 
     async def save_main(self, path: str, content: str, base_hash: str) -> FileSaved:
         """PUT /files on main: commit `content` for `path` as the user, a commit holding that file
@@ -223,95 +168,7 @@ class ChangeManager:
         The same bytes commit nothing. A failed commit restores the file and raises
         `WorkspaceError`; the commit is the save, so a failed rescan after it still answers saved.
         Runs no tests: the next approval tests the combination (R5)."""
-        return await self._ctx.whole(self._save_main(path, content, base_hash))
-
-    async def _save_main(self, path: str, content: str, base_hash: str) -> FileSaved:
-        # M4: a pending close-out usually sends its delta here, moving `snapshot`, before the
-        # save's delta is built from it.
-        await delivery.finish_pending(self._ctx)
-        main = self._ctx.workspace.main
-        async with self._ctx.workspace.locks(main=True):
-            await delivery.drain_pending(self._ctx)
-            blocked = await self._main_blocked()
-            if blocked is not None:
-                raise WrongState(f"{blocked}; nothing was saved")
-            pre = (await self._ctx.git(main, "rev-parse", "HEAD")).strip()
-            try:
-                original = (await self._read_text(main, path)).content
-            except FileNotFoundError:
-                raise StaleFile(f"{path} no longer exists") from None
-            saved = await main.write_text(path, content, expected_hash=base_hash)
-            if saved == base_hash:
-                return FileSaved(path=path, hash=saved)  # the same bytes: no commit, no event
-            try:
-                # `:(literal)`: the path is a file's name, never a glob or a pathspec's magic.
-                await self._ctx.git(main, "add", "--", f":(literal){path}")
-                await self._ctx.git(main, "commit", "-q", "-m", f"Edit {path}", commit_as="user")
-            except Exception as failure:
-                await self._settle_save(path, pre, original, saved, failure)
-            try:
-                head = (await self._ctx.git(main, "rev-parse", "HEAD")).strip()
-                await self._publish_main(head, "user_edit")
-            except Exception as error:
-                # The snapshot stays: the next merge, save or rescan covers this commit.
-                message = f"Main's graph was not updated after saving {path}: {error}"
-                await self._ctx.report("graph", message, fatal=False)
-            return FileSaved(path=path, hash=saved)
-
-    async def _settle_save(
-        self, path: str, pre: str, original: str, saved: str, failure: Exception
-    ) -> None:
-        """B2: the save's `add` or `commit` failed, or timed out after it ran. Decide from git's
-        facts first, then act. A commit that landed whole returns, and the save goes on. Main
-        still at `pre`: put `original` back and stage it, so the index matches HEAD; confirmed
-        clean, main stays trusted. Anything else, an unreadable fact or a restore that fails: main
-        is suspect until restart. Either way raises `WorkspaceError` after its `error` event."""
-        landed = await self._save_landed(path, pre, saved)
-        if landed:
-            return
-        if landed is False and await self._restore_save(path, original, saved):
-            await self._ctx.report(
-                "git", f"Saving {path} failed ({failure}); main is unchanged.", fatal=False
-            )
-        else:
-            self._ctx.state.suspect = True
-            await self._ctx.report(
-                "git",
-                f"Saving {path} failed ({failure}) and main's state is unknown; "
-                "reject the change and restart the server.",
-                fatal=True,
-            )
-        raise WorkspaceError(f"saving {path} failed")
-
-    async def _save_landed(self, path: str, pre: str, saved: str) -> bool | None:
-        """True when the commit landed whole: HEAD is a child of `pre` that changed `path` alone,
-        main is clean and the file on disk is the saved one. False when main is at `pre` with no
-        merge. None for anything else, and when a fact cannot be read."""
-        main = self._ctx.workspace.main
-        try:
-            head = (await self._ctx.git(main, "rev-parse", "HEAD")).strip()
-            if await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
-                return None
-            if head == pre:
-                return False
-            parent = (await self._ctx.git(main, "rev-parse", "HEAD^")).strip()
-            diff = ("diff", "--name-only", "--no-renames", "-z", pre, "HEAD")
-            names = [name for name in (await self._ctx.git(main, *diff)).split("\0") if name]
-            clean = not (await self._ctx.git(main, "status", "--porcelain")).strip()
-            on_disk = (await main.read_text(path)).hash
-        except Exception:
-            return None
-        return True if parent == pre and names == [path] and clean and on_disk == saved else None
-
-    async def _restore_save(self, path: str, original: str, saved: str) -> bool:
-        """Write `original` back over the saved file and stage it; True once status is clean."""
-        main = self._ctx.workspace.main
-        try:
-            await main.write_text(path, original, expected_hash=saved)
-            await self._ctx.git(main, "add", "--", f":(literal){path}")
-            return not (await self._ctx.git(main, "status", "--porcelain")).strip()
-        except Exception:
-            return False
+        return await files.save_main(self._ctx, path, content, base_hash)
 
     async def rescan(self) -> None:
         """POST /graph/rescan: read main again and publish one delta (`rescan`) if anything moved:
@@ -319,48 +176,7 @@ class ChangeManager:
         that is suspect, mid-merge or dirty is not main's graph at any commit: refused with an
         `error` event and nothing published, until the contract lists `wrong_state` for it (P1).
         A scan or publish that raises sends an `error`, keeps `snapshot` and re-raises."""
-        await self._ctx.whole(self._rescan())
-
-    async def _rescan(self) -> None:
-        await delivery.finish_pending(self._ctx)
-        async with self._ctx.workspace.locks(main=True):
-            await delivery.drain_pending(self._ctx)
-            blocked = await self._main_blocked()
-            if blocked is not None:
-                await self._ctx.report("graph", f"{blocked}; nothing was rescanned.", fatal=False)
-                return
-            try:
-                head = (await self._ctx.git(self._ctx.workspace.main, "rev-parse", "HEAD")).strip()
-                await self._publish_main(head, "rescan")
-            except Exception as error:
-                await self._ctx.report(
-                    "graph", f"Main's graph was not rescanned: {error}", fatal=False
-                )
-                raise
-
-    async def _main_blocked(self) -> str | None:
-        """Why main cannot take a commit or a rescan now, or None: M5's check, then `check_main`'s
-        facts. The caller holds main's lock, and `check_main` takes it again."""
-        if self._ctx.state.suspect:
-            return SUSPECT
-        clean = await self.check_main()
-        if clean is None:
-            return "Main's state could not be read"
-        return None if clean else "Main has uncommitted edits or a merge in progress"
-
-    async def _publish_main(self, head: str, cause: DeltaCause) -> None:
-        """M3: scan main at `head` and send the one delta from the graph the UI holds, then move
-        `snapshot` to it with no await between. A rescan sends none when nothing moved."""
-        new = await self._ctx.scan(head)
-        old = self._ctx.state.snapshot
-        delta = (
-            rescan_delta(old, new, head) if cause == "rescan" else main_delta(old, new, head, cause)
-        )
-        if delta is None:
-            return
-        delivery.supersede_pending(self._ctx)
-        await self._ctx.publish(delta)
-        self._ctx.state.snapshot = with_positions(new, old)
+        return await files.rescan(self._ctx)
 
     def _take(self, change_id: ChangeId, allowed: frozenset[State], verb: str) -> ChangeRecord:
         """Check and flip the state with no `await`, so a second click fails at once."""
@@ -425,14 +241,7 @@ class ChangeManager:
     async def check_main(self) -> bool | None:
         """Under main's lock: True when main has no `MERGE_HEAD` and `status --porcelain` is empty,
         False otherwise, None when git fails or times out."""
-        main = self._ctx.workspace.main
-        async with self._ctx.workspace.locks(main=True):
-            try:
-                merging = await self._ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD")
-                dirty = bool((await self._ctx.git(main, "status", "--porcelain")).strip())
-            except (WorkspaceError, OSError):
-                return None
-        return not merging and not dirty
+        return await files.check_main(self._ctx)
 
     async def aclose(self) -> None:
         """Drain before the store closes, which the caller does only once this returns: wait for
@@ -443,183 +252,7 @@ class ChangeManager:
         return await delivery.aclose(self._ctx)
 
     async def _request_changes(self, rec: ChangeRecord, comment: str) -> Revision | None:
-        await delivery.finish_pending(self._ctx)
-        note: str | None = None
-        if rec.fallback == "conflict":
-            # Phase A, cancellable: a cancel before phase B leaves the change as it was.
-            async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
-                if await self._refused_as_suspect(rec):
-                    return None
-                move = Move()
-                try:
-                    note = await self._move_base(rec, move)
-                except asyncio.CancelledError:
-                    await self._settle_move(rec, move, None)
-                    raise
-                except Exception as error:
-                    await self._settle_move(rec, move, error)
-                    return None
-            return await self._ctx.whole(self._requested(rec, comment, note))
-        # From `ready`, under both locks as every decision: a save in review holds the agent's
-        # lock until its revision is proposed, so the request names that revision and precedes
-        # the revision run.
-        async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
-            if await self._refused_as_suspect(rec):
-                return None
-            return await self._ctx.whole(self._requested(rec, comment, note))
-
-    async def _refused_as_suspect(self, rec: ChangeRecord) -> bool:
-        """F1, under main's lock: main turned suspect while the request queued, so it is refused
-        with one `error`, no base move, no `changes_requested` and no revision; the decision's end
-        puts the change back to `ready` or `conflict`, where it was taken from."""
-        if not self._ctx.state.suspect:
-            return False
-        await self._ctx.error(
-            "server",
-            "Main became suspect before this request ran; reject it or restart.",
-            rec,
-            fatal=False,
-        )
-        return True
-
-    async def _move_base(self, rec: ChangeRecord, move: Move) -> str:
-        """Merge main's HEAD into the agent's branch, committing as the agent; unmerged paths are
-        committed with their markers, for the agent, which has no git, to resolve. The note."""
-        main, tree = self._ctx.workspace.main, rec.tree
-        move.main_head = (await self._ctx.git(main, "rev-parse", "HEAD")).strip()
-        if (await self._ctx.git(main, "status", "--porcelain")).strip():
-            raise WorkspaceError("main has uncommitted changes")
-        move.old_head = (await self._ctx.git(tree, "rev-parse", "HEAD")).strip()
-        message = f"Merge main into {rec.change_id} ({rec.agent_id})"
-        result = await self._ctx.run(tree, "merge", "--no-ff", "--no-commit", move.main_head)
-        if result.returncode == 0:
-            # Exit 0 with no MERGE_HEAD: the branch already holds main.
-            if await self._ctx.yes_no(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
-                await self._ctx.git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
-        elif result.returncode == 1 and (
-            await self._ctx.git(tree, "diff", "--name-only", "--diff-filter=U", "-z")
-        ).strip("\0"):
-            await self._ctx.git(tree, "add", "-A")
-            await self._ctx.git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
-        else:
-            detail = "timed out" if result.timed_out else self._ctx.workspace.redact(result.stderr)
-            raise WorkspaceError(f"git merge failed: {detail.strip()[-500:]}")
-        await self._moved(rec, move.main_head)
-        return self._move_note(rec)
-
-    async def _moved(self, rec: ChangeRecord, main_head: str) -> None:
-        """R4: the base is `main_head`. Both versions come from the trees, the head from every file
-        of the worktree, never only the paths in the new diff, so what main added stays in the
-        graph and the cone. Each file whose original or modified changed is shown again. Nothing
-        is recorded until every read is done; a file not shown stays in `unpublished`, which the
-        next edit or proposal sends."""
-        main, tree = self._ctx.workspace.main, rec.tree
-        base_files, base = self._ctx.state.bases.get(main_head) or await proposal.read_base(
-            self._ctx, main, main_head
-        )
-        head_files = await proposal.read_files(self._ctx, tree)
-        head = await parse(head_files, main_head, None)
-        diff = ("diff", "--name-only", "--no-renames", "-z", main_head, "HEAD")
-        names = await self._ctx.git(tree, *diff)
-        touched = {path for path in names.split("\0") if path}
-        for path in rec.published.keys() | rec.touched | touched:
-            before = rec.base_files.get(path), rec.head_files.get(path)
-            if before != (base_files.get(path), head_files.get(path)):
-                rec.unpublished.add(path)
-        rec.base_commit, rec.base_files, rec.base = main_head, base_files, base
-        rec.head_files, rec.head, rec.touched = head_files, head, touched
-        rec.graph = change_graph(base, head)
-        for path in sorted(rec.unpublished):
-            try:
-                await proposal.send_file(self._ctx, rec, path)
-            except Exception as error:
-                await self._ctx.error(
-                    "server", f"{path} was not shown again: {error}", rec, fatal=False
-                )
-
-    @staticmethod
-    def _move_note(rec: ChangeRecord) -> str:
-        markers = [
-            path
-            for path in sorted(rec.touched)
-            if any(line.startswith("<<<<<<< ") for line in rec.head_files.get(path, "").split("\n"))
-        ]
-        note = (
-            "Main was merged into your branch: your change now starts from main's latest version."
-        )
-        if markers:
-            note += f" These files have git conflict markers to resolve: {', '.join(markers)}."
-        tests = rec.conflict.tests if rec.conflict is not None else None
-        if tests is not None:
-            failed = ", ".join(tests.failed_tests) or tests.outcome
-            note += f" The tests failed with your change on main: {failed}."
-        return note
-
-    async def _settle_move(self, rec: ChangeRecord, move: Move, error: Exception | None) -> None:
-        """R3: a base move failed or was cancelled. Still under both locks, decide from the
-        worktree's facts: abort an unfinished merge; clean at the old head is unchanged; clean at a
-        merge of the old head and main's is a move that landed, recorded from those facts; anything
-        else, git failing, or a second cancel cutting this recovery, is `broken`. Main was only
-        read, so `main_suspect` stays as it was. The change ends `conflict` or `broken`, with no
-        resolution sent; the second cancel is re-raised once the `error` is out."""
-        tree = rec.tree
-        cut = False
-        try:
-            if await self._ctx.yes_no(tree, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
-                await self._ctx.git(tree, "merge", "--abort")
-            head = (await self._ctx.git(tree, "rev-parse", "HEAD")).strip()
-            clean = not (await self._ctx.git(tree, "status", "--porcelain")).strip()
-            parents = (await self._ctx.git(tree, "rev-list", "--parents", "-n", "1", head)).split()[
-                1:
-            ]
-            if clean and move.old_head in (None, head):  # None: the merge never ran
-                note = "its worktree is unchanged; request changes again or reject"
-            elif clean and move.main_head and parents == [move.old_head, move.main_head]:
-                await self._moved(rec, move.main_head)
-                note = "main was merged into its worktree; request changes again to revise"
-            else:
-                raise WorkspaceError("the worktree is neither unchanged nor merged")
-            rec.state = "conflict"
-        except (Exception, asyncio.CancelledError) as failure:
-            # A second cancel may have cut the recovery before its abort ran, so the worktree can
-            # still be mid-merge; `_restore` would put such a change back to `conflict`.
-            cut = isinstance(failure, asyncio.CancelledError)
-            rec.state = "broken"
-            note = "its worktree's state is unknown; reject the change"
-        what = "was cancelled" if error is None else f"failed: {error}"
-        await self._ctx.error(
-            "git", f"Requesting changes on {rec.change_id} {what}; {note}.", rec, fatal=False
-        )
-        if cut:
-            raise asyncio.CancelledError
-
-    async def _requested(self, rec: ChangeRecord, comment: str, note: str | None) -> Revision:
-        """Phase B, one `_whole` step: the resolution and `working` go together whatever cancels
-        come. R2: a resolution the store refused twice stays pending, and the revision starts."""
-        rec.requested = ChangeResolved(
-            change_id=rec.change_id,
-            agent_id=rec.agent_id,
-            revision=rec.revision,
-            decision="changes_requested",
-            reason=None,
-            comment=comment,
-            merge=None,
-            merge_commit=None,
-            conflict=None,
-        )
-        failure = await delivery.send_requested(self._ctx, rec)
-        if failure:
-            self._ctx.state.pending[rec.agent_id] = rec
-            await self._ctx.error(
-                "server",
-                f"The request for changes on {rec.change_id} was not sent ({failure}); "
-                "it is sent before the next proposal.",
-                rec,
-                fatal=False,
-            )
-        rec.state, rec.proposed_now = "working", False
-        rec.requests += 1
-        return Revision(comment, note)
+        return await revision.request_changes(self._ctx, rec, comment)
 
     async def _reject(self, rec: ChangeRecord, comment: str | None) -> None:
         await delivery.finish_pending(self._ctx)
