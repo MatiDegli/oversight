@@ -4,7 +4,8 @@ Reads `.runtime/runs/{run_id}.sqlite`, exports it to `fixtures/events/recorded-d
 (by default) and validates the result. It reads a finished run only: it spends no credits
 and never calls a model API. A run on the scripted fake model, a log that does not start
 with `run.started`, or any string holding an absolute path is refused: the output is
-deleted and the exit code is nonzero.
+deleted and the exit code is nonzero. Internal test tooling may opt into fake_fixture=True;
+that requires fake-only profiles and writes a distinct, non-publishable receipt.
 """
 
 import argparse
@@ -56,7 +57,7 @@ def confined_store(store: Path, runs_dir: Path) -> Path:
     return store
 
 
-def record_run(store_path: Path, out: Path) -> Recording:
+def record_run(store_path: Path, out: Path, *, fake_fixture: bool = False) -> Recording:
     """Export `store_path` to `out`, validate it, and return its summary.
 
     On any refusal the output is deleted and RecordError is raised.
@@ -75,10 +76,13 @@ def record_run(store_path: Path, out: Path) -> Recording:
             candidate = Path(scratch) / "events.jsonl"
             export_run(store_path, candidate)
             text = candidate.read_text(encoding="utf-8")
-            events = validate_text(text)
+            events = validate_text(text, fake_fixture=fake_fixture)
             scan_secrets(candidate)
             marker = provenance_path(candidate)
-            marker.write_text(receipt(text, events).model_dump_json() + "\n", encoding="utf-8")
+            marker.write_text(
+                receipt(text, events, fake_fixture=fake_fixture).model_dump_json() + "\n",
+                encoding="utf-8",
+            )
             candidate.replace(out)
             marker.replace(metadata)
     except (RecordError, ValueError, OSError, sqlite3.Error) as error:

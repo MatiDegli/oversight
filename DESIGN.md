@@ -249,9 +249,9 @@ components:
 
 Oversight has two surfaces with different jobs, and they never borrow each other's materials. The
 graph is the machines' surface: it shows what the agents are doing, with nodes that light up, a
-change in its agent's color, and, after level 1, rings and a field of dots that glow like an LED
-panel. It is the only place where light moves. The panels are the person's surface: the agents
-panel, review, live diff and file view are dark, flat and still. They hold text, decisions and code.
+change in its agent's color, and rings and a field of dots that glow like an LED panel. It is the
+only place where light moves. The panels are the person's surface: the agents panel, review, live
+diff and file view are dark, flat and still. They hold text, decisions and code.
 
 The product is a tool someone operates for long stretches while agents work, and the demo is
 recorded on video. So the screen is dense but calm, every color means something, and nothing moves
@@ -623,8 +623,8 @@ node ("read", "editing", "changed", "new"):
 - **Editing:** the node is in the agent's current focus: the `node_ids` of its latest `agent.focus`
   event, when that event's mode is edit and the agent is working or revising. Only that latest
   focus counts; when the agent moves on, the previous nodes become "changed". Dashed 1.5px border
-  in the agent's color, the agent's node fill, a filled letter badge, the word "editing". After
-  level 1, rings spread from it.
+  in the agent's color, the agent's node fill, a filled letter badge, the word "editing". Rings
+  spread from it.
 - **Pending (changed or new):** the node carries the agent's change and is not its current edit
   focus. Dashed 1.5px border, dash 6px and gap 4px, in the agent's color; the agent's node fill
   (`-new` for a node the agent added); a filled badge; the word "changed" or "new". An edge the
@@ -663,8 +663,7 @@ everything else steps back.
   says what the bounds cut, for example "+12 omitted by depth". It is "possibly affected", never a
   complete list. The review panel keeps a one-line summary.
 - In level 1, before the cone exists, review dims everything except the change's nodes.
-- Once both the cone (level 2) and the dot field (after level 1) exist, the cone also casts the
-  neutral work light.
+- Once both the cone (level 2) and the dot field exist, the cone also casts the neutral work light.
 
 ### Review panel with the matte header (signature component)
 
@@ -701,10 +700,10 @@ change is proposed.
   2 it is editable and edits go to main. On the graph the selected node and its direct callers and
   callees stay lit; the rest dims.
 
-### Dot field and rings (signature component, after level 1)
+### Dot field and rings (signature component)
 
-They come after level 1 and never block a level. Until they ship, and whenever WebGL is missing,
-the graph's background is plain ground.
+They were brought forward from after level 1 (DECISIONS.md) and never block a level. Whenever
+WebGL is missing, the graph's background is plain ground.
 
 - **Grid:** its own canvas under a transparent Cytoscape canvas, reading the rendered boxes of the
   lit nodes; it never draws nodes or edges. Cells are 7px, fixed to the screen (they do not pan or
@@ -808,8 +807,9 @@ Each item is a target checked on the built result:
 
 | Level | Design elements |
 | --- | --- |
-| 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the queue counter; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain black graph and plain review header |
+| 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the queue counter; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
 | 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
-| After level 1, never blocking | the dot field with its light, the rings, the matte header's grain |
+| Brought forward to level 1, never blocking | the dot field with its light, the rings and the breathing light; plain black ground whenever WebGL is missing |
+| After level 1, never blocking | the matte header's grain |
 | Mon Nov 2, only with level 2 closed | day mode |

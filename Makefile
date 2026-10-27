@@ -12,7 +12,7 @@ PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-ci check-fast check-python lint-python check-frontend \
 	lint-frontend contracts check-contracts check-secrets demo-repo-check replay shots smoke layout \
-	test-browser demo demo-setup-check demo-check e2e record
+	test-browser demo demo-setup-check demo-check e2e record record-level2
 
 help: ## list the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -107,13 +107,18 @@ smoke: ## start the backend and check /health and /graph
 test-browser: ## the frontend's browser tests in Playwright's Chromium; not in check
 	$(PNPM) test:browser
 
-# e2e: one Playwright test over the static replay build (vite build --mode replay, served by vite
-# preview) and the hand-written log: level 1's definition of done, with no backend and no credits.
+record-level2: ## regenerate the level 2 replay fixture from the HTTP backend and fake scripts
+	$(UV) python tools/record_level2.py
+	$(UV) python tools/validate_recording.py --fake-fixture fixtures/events/scripted-level2.jsonl > /dev/null
+
+# e2e: two Playwright tests over the static replay build (vite build --mode replay, served by vite
+# preview) and the level 1 / scripted level 2 logs: both levels' definitions of done, with no
+# backend and no credits.
 # The build and the run share one time bound of 600 s (10 s more, then killed) and the 6 GiB memory
 # cap of make shots, which needs a user systemd: without one (CI) the run has the time bound only,
 # and tools/capped.sh says so on stderr. The preview server is run.sh's own and never outlives it.
 # It is not part of make check yet; CI runs it in its own job.
-e2e: ## Playwright over the static replay build and a hand-written log; 600 s; 6G cap only with a user systemd (not in CI); not in check
+e2e: ## Playwright over static level 1 and 2 replays; 600 s; 6G cap only with a user systemd (not in CI); not in check
 	@$(NO_KEYS) timeout --kill-after=10 600 bash tools/capped.sh 6G bash frontend/e2e/run.sh
 
 # Two layers keep a runaway test from taking the machine. The soft one, for every pytest run

@@ -165,7 +165,8 @@ function Decisions({
   const pending = view.kind === "pending";
   const revising = view.kind === "revising";
   const approvable = view.kind === "open" && onDecide !== undefined && !blocked;
-  const requestable = view.kind === "open" && onDecide !== undefined && !blocked;
+  const requestable =
+    (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined && !blocked;
   const rejectable = (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined;
   const failure = view.kind === "open" || view.kind === "conflict" ? view.failure : null;
   // No key in this section makes a decision. Approve answers only a pointer click: Enter and Space

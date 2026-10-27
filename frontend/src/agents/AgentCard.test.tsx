@@ -246,7 +246,7 @@ describe("AgentCard over the level 1 fixture", () => {
   });
 });
 
-it("offers Stop and discard only on working, revising and ready cards with a command", () => {
+it("offers Stop and discard on working, revising, ready and halted cards with a command", () => {
   const data = selectAgentCard(through(20), "agent-1");
   if (!data) throw new Error("Missing agent");
   for (const state of [
@@ -266,7 +266,7 @@ it("offers Stop and discard only on working, revising and ready cards with a com
       />,
     );
     expect(html.includes("Stop and discard")).toBe(
-      ["working", "revising", "ready_for_review"].includes(state),
+      ["working", "revising", "ready_for_review", "halted"].includes(state),
     );
     expect(html).not.toContain("Confirm stop and discard");
   }
