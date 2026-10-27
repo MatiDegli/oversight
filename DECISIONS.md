@@ -305,6 +305,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   56px, sidebar 280px, focus panel 880px, graph at least 560px, agents panel 400px or rail 56px,
   bottom dock 280px high and status line 24px. Opening any focus tab folds the agents panel.
   By 1440px, sidebar and expanded agents panel overlay; below 1280px a width notice appears.
+  With focus open, the sidebar overlays below 1832px; below 1552px the focus panel shrinks from
+  880px, reserving 112px for both rails and 560px for the graph (608px of focus at 1280px).
   Explicit maximize may hide the graph and offers restoration. Ctrl K jumps and runs commands
   but has no Approve command; the keyboard map has no Approve key. Reason: files, diffs, review,
   conversation and settings need stable homes without losing the graph or making a merge fire
@@ -334,10 +336,11 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 - **Settings as a focus tab (maintainer, 2026-10-27).** No repeated title inside. Left navigation
   and Saved line frame merge-mode cards and rules, budget input and threshold bar, steps stepper,
   size and cone inputs with units, protected-area rows with type/remove/add, and model-slot cards
-  with model and cross-review selectors and key-status pills. Reason: make decisions and limits
-  scannable in the same shell as the work. Values are illustrative: unsupported rows and choices,
-  including a second provider-key row with no backing, are dropped. Fixed contract limits are
-  not made editable by the sketch, and reserved features are not presented as working controls.
+  with model selectors; cross-review and key-status rows sit below the cards. Reason: make decisions
+  and limits scannable in the same shell as the work. Values are illustrative: unsupported rows
+  and choices, including a second provider-key row with no backing, are dropped. Fixed contract
+  limits are not made editable by the sketch, and reserved features are not presented as working
+  controls.
 
 ### Where Impeccable clashes with our rules
 

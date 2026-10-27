@@ -386,9 +386,8 @@ The neutral roles:
 - **Review header and highlights:** matte-top and matte-bottom are the two ends of the matte
   header's gradient; span-highlight and fold-tint are the Monaco highlights described below.
 - **Graph neutrals:** edge for an exact call edge, edge-possible for a possible one, lit-edge for an
-  edge inside the cone or the change, node-hover for a hovered node's border, work-light for the
-  light the cone casts; lamp-off for an unlit lamp of the dot field and guide-dot for its guide
-  dots.
+  edge inside the cone or the change, node-hover for a hovered node's border; lamp-off for an
+  unlit lamp of the dot field and guide-dot for its guide dots.
 
 ### Code colors
 
@@ -531,8 +530,12 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   sidebar and both rails intact. Its terminal is labeled main, reserved now and built last after
   its security plan is reviewed; product agents never use it.
 - **Width:** by 1440px, the sidebar and expanded agents panel overlay their part of the work area
-  instead of taking graph width. The graph keeps its 560px minimum. Below 1280px a notice asks the
-  person to widen the window. Type and radii do not shrink to fit.
+  instead of taking graph width. With a focus tab open, both 56px rails stay docked and the graph
+  keeps its 560px minimum: the sidebar becomes an overlay first, below 1832px, when its 280px no
+  longer fits beside the 880px focus panel. Below 1552px, the focus panel shrinks to
+  `min(880px, viewport width - 112px - 560px)`: 823px at 1495px, 768px at 1440px and 608px at
+  1280px. Overlays cover their part of the work area without changing these widths. Below 1280px
+  a notice asks the person to widen the window. Type and radii do not shrink to fit.
 - **Maximize:** an explicit focus-panel control fills the work area and hides the graph behind a
   restore-graph button. Restoring returns to the same shell; maximize is not used in the video.
 - **Keyboard:** Ctrl K jumps to functions and files and runs commands; Ctrl B toggles the sidebar;
@@ -693,10 +696,11 @@ keys, with a Saved line and the repository scope below. Section headings remain 
   settings without backing support.
 - **Protected areas:** rows name the path or function, its type and a remove action; an add field
   and Add button follow the list. The row states that an edit waits for the person.
-- **Models and keys:** one card per model slot with its letter, model selector, cross-review
-  selector and key-status pills. The card's top line takes that slot's agent color. Selectors use
-  actual offered models and review choices. Key pills report configured, missing or invalid from
-  readiness; they never show a key value or imply a provider was contacted to verify it.
+- **Models and keys:** one card per model slot with its letter and model selector. The card's top
+  line takes that slot's agent color. Below the slot cards, separate rows hold the cross-review
+  selector and key-status pills. Selectors use actual offered models and review choices. Key
+  pills report configured, missing or invalid from readiness; they never show a key value or
+  imply a provider was contacted to verify it.
 - **Real settings only:** sample values are illustrative. Drop any row or choice with no backing
   in Oversight, including a second provider-key row when none is configured for an offered slot.
   A generic Muse key is not another credential: show Meta and, when used, Baseten readiness from
