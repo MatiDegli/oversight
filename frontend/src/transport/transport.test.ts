@@ -39,7 +39,7 @@ class FakeSource implements EventStream {
 }
 
 const stops: (() => void)[] = [];
-function setup() {
+function setup(onOpen?: () => void) {
   const sources: FakeSource[] = [];
   const store = createStateStore();
   const onError = vi.fn();
@@ -50,6 +50,7 @@ function setup() {
   const transport = startLive({
     store,
     onError,
+    onOpen,
     openStream: (url) => {
       const source = new FakeSource(url);
       sources.push(source);
@@ -73,6 +74,17 @@ afterEach(() => {
 });
 
 describe("live transport", () => {
+  it("reports a connected stream even with no new events and ignores opens after stop", async () => {
+    const onOpen = vi.fn();
+    const { source, transport, onError } = setup(onOpen);
+    await transport.ready;
+    source().open();
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+    transport.stop();
+    source().open();
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
   it("consumes reserved events in live streams without changing product state", async () => {
     const { transport, store, source, onError } = setup();
     await transport.ready;

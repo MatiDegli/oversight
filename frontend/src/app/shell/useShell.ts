@@ -9,6 +9,16 @@ export function isTyping(target: EventTarget | null): boolean {
 }
 
 export function useShell(open: boolean, onClose: () => void) {
+  const [layoutRevision, setLayoutRevision] = useState(0);
+  useEffect(() => {
+    const resized = () => {
+      setLayoutRevision((value) => value + 1);
+    };
+    window.addEventListener("resize", resized);
+    return () => {
+      window.removeEventListener("resize", resized);
+    };
+  }, []);
   const [sidebar, setSidebar] = useState<"Files" | "Changes" | null>(null);
   const [dock, setDock] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
@@ -47,6 +57,7 @@ export function useShell(open: boolean, onClose: () => void) {
     };
   }, [open, onClose, shortcuts]);
   return {
+    layoutRevision,
     sidebar,
     dock,
     shortcuts,

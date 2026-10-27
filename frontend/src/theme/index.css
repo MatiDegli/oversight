@@ -8,6 +8,8 @@
 :root:not([data-theme]),
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --top-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   --ground: #000000;
   --shell: #09090a;
   --panel: #0d0d0f;
@@ -110,8 +112,6 @@
   --overlay-blur: 12px;
   --group-label-size: 11.5px;
   --group-label-tracking: 0.08em;
-  --top-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   --top-bar-height: 52px;
   --left-rail-width: 56px;
   --agents-panel-width: 400px;

@@ -1,0 +1,206 @@
+import { fileURLToPath } from "node:url";
+import { chromium, expect as check } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
+import { createServer } from "vite";
+import type { ViteDevServer } from "vite";
+import { afterAll, beforeAll, expect, it } from "vitest";
+import type {} from "./shell.browser.fixture";
+import type { GraphProbeHost } from "../graph";
+
+let server: ViteDevServer | undefined;
+let browser: Browser | undefined;
+let html: string;
+let url: string;
+beforeAll(async () => {
+  server = await createServer({
+    root: fileURLToPath(new URL("../../", import.meta.url)),
+    cacheDir: fileURLToPath(new URL("../../../.shots/shell-cache", import.meta.url)),
+    server: {
+      host: "127.0.0.1",
+      port: 0,
+      strictPort: false,
+      fs: { allow: [fileURLToPath(new URL("../../../", import.meta.url))] },
+    },
+  });
+  html = await server.transformIndexHtml(
+    "/",
+    '<html><body><script type="module">import "/src/theme/index.css"; import { shellTest } from "/src/app/shell.browser.fixture.tsx"; window.shellTest = shellTest;</script></body></html>',
+  );
+  await server.listen();
+  url = server.resolvedUrls?.local[0] ?? "";
+  browser = await chromium.launch();
+}, 60_000);
+afterAll(async () => {
+  await browser?.close();
+  await server?.close();
+});
+async function withPage(width: number, height: number, test: (page: Page) => Promise<void>) {
+  if (!browser) throw new Error("Browser not started");
+  const page = await browser.newPage({ viewport: { width, height }, reducedMotion: "reduce" });
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url);
+    await page.waitForFunction(() => !!window.shellTest);
+    await page.evaluate(() => {
+      window.shellTest.mount();
+    });
+    await page.locator("[data-graph-clear-area]").waitFor();
+    await test(page);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+  }
+}
+async function box(page: Page, selector: string) {
+  const value = await page.locator(selector).boundingBox();
+  if (!value) throw new Error(`Missing ${selector}`);
+  return value;
+}
+
+async function framed(page: Page, id: string) {
+  await check
+    .poll(() =>
+      page.evaluate((id) => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        const graph = host?.oversightGraph;
+        const node = graph?.nodeCenters().find((node) => node.id === graph.representative(id));
+        return {
+          framed:
+            !!host &&
+            !!node &&
+            !graph?.animating() &&
+            node.x > 0 &&
+            node.x < host.clientWidth &&
+            node.y > 0 &&
+            node.y < host.clientHeight,
+          node,
+          size: host ? [host.clientWidth, host.clientHeight] : null,
+          ids: graph?.nodeCenters().map((node) => node.id),
+        };
+      }, id),
+    )
+    .toMatchObject({ framed: true });
+}
+
+it.each([
+  [1920, 1080],
+  [1440, 900],
+])(
+  "measures every zone at %sx%s and preserves the graph across toggles and tabs",
+  async (width, height) => {
+    await withPage(width, height, async (page) => {
+      expect((await box(page, ".shell-frame > header")).height).toBe(52);
+      expect((await box(page, ".left-rail")).width).toBe(56);
+      expect((await box(page, '[aria-label="Status line"]')).height).toBe(24);
+      expect((await box(page, '[aria-label="Agents"]')).width).toBe(400);
+      expect(
+        await page.locator(".agents-expanded").evaluate((node) => getComputedStyle(node).position),
+      ).toBe(width === 1440 ? "absolute" : "static");
+      await page.evaluate(() => {
+        const node = document.querySelector('[aria-label="Repository graph"]');
+        Object.assign(window, { originalGraph: node });
+      });
+      await page.getByRole("button", { name: "Files", exact: true }).click();
+      expect((await box(page, ".shell-sidebar")).width).toBe(280);
+      expect(
+        await page.locator(".shell-sidebar").evaluate((node) => getComputedStyle(node).position),
+      ).toBe(width === 1440 ? "absolute" : "static");
+      await page.evaluate(() => {
+        window.shellTest.open("diff");
+      });
+      expect((await box(page, ".focus-panel")).width).toBe(width === 1920 ? 880 : 768);
+      expect((await box(page, '[aria-label="Agents"]')).width).toBe(56);
+      expect((await box(page, ".graph-stage")).width).toBeGreaterThanOrEqual(560);
+      await page.keyboard.press("Control+b");
+      await check(page.locator(".shell-sidebar")).toHaveCount(0);
+      await page.keyboard.press("Control+Backquote");
+      expect((await box(page, ".bottom-dock")).height).toBe(280);
+      const dock = await box(page, ".bottom-dock");
+      const center = await box(page, ".shell-center");
+      expect(dock.x).toBe(center.x);
+      expect(dock.width).toBe(center.width);
+      await framed(page, "shop.pricing:compute_price");
+      await page.getByRole("tab", { name: "Activity log", exact: true }).click();
+      await check(page.getByRole("tabpanel", { name: "Activity log" })).toHaveText(
+        "The run’s activity log will appear here.",
+      );
+      await page.evaluate(() => {
+        window.shellTest.open("file");
+        window.shellTest.update();
+        window.shellTest.open("review");
+      });
+      const tabs = page.getByRole("tablist", { name: "Open files and changes" }).getByRole("tab");
+      await check(tabs).toHaveCount(3);
+      await check(tabs.last()).toContainText("ready for review");
+      await tabs.first().click();
+      await framed(page, "shop.pricing:compute_price");
+      await check(tabs.first()).toHaveAttribute("aria-selected", "true");
+      expect(
+        await page.evaluate(
+          () =>
+            document.querySelector('[aria-label="Repository graph"]') ===
+            Reflect.get(window, "originalGraph"),
+        ),
+      ).toBe(true);
+      await page.getByRole("button", { name: "Maximize focus panel", exact: true }).click();
+      expect((await box(page, ".focus-panel")).width).toBe(
+        (await box(page, ".shell-center")).width,
+      );
+      await check(page.locator(".graph-stage")).toBeHidden();
+      await page.getByRole("button", { name: "Show graph", exact: true }).click();
+      await framed(page, "shop.pricing:compute_price");
+      expect((await box(page, ".graph-stage")).width).toBeGreaterThanOrEqual(560);
+      await page.keyboard.press("Alt+w");
+      await check(tabs).toHaveCount(2);
+      await page.keyboard.press("Escape");
+      await check(tabs).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(0);
+      await page.keyboard.press("Control+b");
+      await check(page.locator(".shell-sidebar")).toHaveCount(1);
+      await page.keyboard.press("Control+b");
+      await check(page.locator(".shell-sidebar")).toHaveCount(0);
+      await page.getByRole("button", { name: "Keyboard shortcuts", exact: true }).click();
+      await check(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await check(page.getByRole("dialog")).toHaveCount(0);
+    });
+  },
+  60_000,
+);
+
+it("ignores shell shortcuts in the task box and Monaco, and events never open a tab", async () => {
+  await withPage(1920, 1080, async (page) => {
+    const task = page.getByLabel("Task for the new agent");
+    await task.fill("Keep typing");
+    await task.focus();
+    for (const key of ["Control+b", "Control+Backquote", "Alt+w", "Escape"])
+      await page.keyboard.press(key);
+    await check(task).toBeFocused();
+    await check(task).toHaveValue("Keep typing");
+    await check(page.locator(".shell-sidebar, .bottom-dock")).toHaveCount(0);
+    await page.evaluate(() => {
+      window.shellTest.update();
+    });
+    await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(0);
+    await page.evaluate(() => {
+      window.shellTest.open("file");
+    });
+    const editor = page
+      .locator(".monaco-editor :is(textarea.inputarea, .native-edit-context)")
+      .first();
+    await editor.focus();
+    for (const key of ["Control+b", "Control+Backquote", "Alt+w", "Escape"])
+      await page.keyboard.press(key);
+    await check(page.locator(".focus-panel")).toHaveCount(1);
+    await check(page.locator(".shell-sidebar, .bottom-dock")).toHaveCount(0);
+    await check(editor).toBeFocused();
+    await page.getByRole("button", { name: "Close file", exact: true }).focus();
+    await page.keyboard.press("Alt+w");
+    await check(page.locator(".focus-panel")).toHaveCount(0);
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await check(page.getByText("This window is too narrow.", { exact: false })).toBeVisible();
+  });
+}, 40_000);

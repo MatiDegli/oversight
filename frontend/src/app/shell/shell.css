@@ -200,14 +200,6 @@
 [data-slot-card="B"]::before {
   background: var(--agent-b);
 }
-/* The start-from-function task panel expands over the graph without squeezing its canvas. */
-.shell-workspace:has(.focus-panel) > aside[aria-label="Agents"].agents-expanded {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 4;
-}
 @media (max-width: 1440px) {
   .shell-sidebar {
     position: absolute;

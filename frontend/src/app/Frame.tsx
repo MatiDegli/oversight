@@ -85,7 +85,12 @@ export function Frame(props: FrameProps) {
                 onMaximize={shell.toggleMaximize}
               />
             )}
-            <GraphStage state={state} view={view} onNodeTap={props.onNodeTap} />
+            <GraphStage
+              state={state}
+              view={view}
+              onNodeTap={props.onNodeTap}
+              layoutKey={`${shell.sidebar ?? ""}:${String(shell.dock)}:${String(shell.maximized)}:${String(task.expanded)}:${String(shell.layoutRevision)}`}
+            />
           </div>
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}
         </div>

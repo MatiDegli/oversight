@@ -13,10 +13,12 @@ export function GraphStage({
   state,
   view,
   onNodeTap,
+  layoutKey = "",
 }: {
   state: State;
   view: View;
   onNodeTap: (id: string) => void;
+  layoutKey?: string;
 }) {
   const open = panelOpen(view);
   // The cone and the change stay lit until the decision; events never open review themselves.
@@ -38,9 +40,10 @@ export function GraphStage({
             : null,
     [tab, shownChange, view.file, view.selected],
   );
-  const frameKey =
+  const scopeKey =
     tab?.frameKey ??
     (view.review === null ? (shown ?? view.file?.path ?? null) : `review:${view.review}`);
+  const frameKey = open ? `${scopeKey ?? "file"}:${layoutKey}` : null;
   const [framing, setFraming] = useState<{ key: string | null; outOfView: ReadonlySet<string> }>();
   const coneCardRef = useRef<HTMLDivElement>(null);
   const startAreaRef = useRef<HTMLDivElement>(null);

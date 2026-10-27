@@ -46,6 +46,7 @@ const colors = Object.entries(tokens).filter(
     !tsOnly.some((token) => token === name) &&
     (typeof value === "object" || (typeof value === "string" && value.startsWith("#"))),
 );
+const effects = ["top-highlight", "card-shadow"];
 const radii = Object.fromEntries(
   Object.entries(tokens).filter(([name]) => name.startsWith("radius-")),
 );
@@ -132,7 +133,7 @@ describe("theme", () => {
   });
 
   it("scopes only colors to dark and keeps all theme-independent tokens global", () => {
-    expect(Object.keys(dark).sort()).toEqual(colors.map(([name]) => name).sort());
+    expect(Object.keys(dark).sort()).toEqual([...colors.map(([name]) => name), ...effects].sort());
     expect(global).toEqual(
       Object.fromEntries(
         Object.entries(tokens)
@@ -140,6 +141,7 @@ describe("theme", () => {
             ([name]) =>
               !tsOnly.some((token) => token === name) &&
               !colors.some(([color]) => color === name) &&
+              !effects.includes(name) &&
               !name.startsWith("radius-"),
           )
           .map(([name, value]) => [name, typeof value === "number" ? String(value) : value]),
