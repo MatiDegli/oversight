@@ -8,7 +8,7 @@ import { chromium } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 
 const out = fileURLToPath(new URL("../../../../.shots/field-cost/", import.meta.url));
 let server: ViteDevServer | undefined;
@@ -46,16 +46,18 @@ async function capture(page: Page, ratio: number) {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   if (ratio === 1.5) {
-    await page.route("**/src/graph/field/controller.ts*", async (route) => {
-      const response = await route.fetch();
-      const source = await response.text();
-      const capped = "Math.min(window.devicePixelRatio || 1, 1)";
-      expect(source.split(capped)).toHaveLength(2);
-      await route.fulfill({
-        response,
+    const source = (await server?.transformRequest("/src/graph/field/controller.ts"))?.code ?? "";
+    const capped = "Math.min(window.devicePixelRatio || 1, 1)";
+    expect(
+      source.split(capped),
+      "Reference controller must contain exactly one DPR cap",
+    ).toHaveLength(2);
+    await page.route("**/src/graph/field/controller.ts*", (route) =>
+      route.fulfill({
+        contentType: "text/javascript",
         body: source.replace(capped, "Math.min(window.devicePixelRatio || 1, 1.5)"),
-      });
-    });
+      }),
+    );
   }
   await page.route(/\/?\?field-time=2$/, (route) =>
     route.fulfill({ contentType: "text/html", body: html }),
@@ -96,9 +98,29 @@ async function capture(page: Page, ratio: number) {
   return metrics;
 }
 
+it.each(["missing", "duplicated"])("rejects a %s cap before navigation", async (shape) => {
+  if (!browser || !server) throw new Error("Browser and server were not started");
+  const page = await browser.newPage();
+  const source = "Math.min(window.devicePixelRatio || 1, 1)";
+  const transform = vi.spyOn(server, "transformRequest").mockResolvedValueOnce({
+    code: shape === "missing" ? "" : `${source}; ${source}`,
+    map: null,
+  });
+  const navigate = vi.spyOn(page, "goto").mockRejectedValue(new Error("Unexpected navigation"));
+  try {
+    await expect(capture(page, 1.5)).rejects.toThrow(
+      "Reference controller must contain exactly one DPR cap",
+    );
+    expect(navigate).not.toHaveBeenCalled();
+  } finally {
+    transform.mockRestore();
+    await page.close();
+  }
+});
+
 it("captures the same watch scene with field buffers at DPR 1 and 1.5", async () => {
   if (!browser) throw new Error("Browser was not started");
-  const metrics = [];
+  const metrics: Awaited<ReturnType<typeof capture>>[] = [];
   for (const ratio of [1, 1.5]) {
     const page = await browser.newPage({
       viewport: { width: 1920, height: 1080 },
