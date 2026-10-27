@@ -17,7 +17,7 @@ section).
 | 4 | Verified cone | Each node of the cone checked by the tests that reach it: passed, failed or no tests | medium | run_tests, the "no tests" badge |
 | 5 | Decisions as data | Rejected and approved versions with the comment, exported as preference pairs | small | Request changes |
 | 6 | Rules on areas | Rules tied to nodes or modules, loaded by an agent when it enters that area | small to medium | Request changes, cross-review |
-| 7 | Merge alone when safe | A mode in which a change that passes every rule merges by itself, with its reasons in the history; the rest waits as "needs you" | small to medium | 3, tests on the combined result |
+| 7 | Merge alone when safe | A mode in which a change that passes every rule merges by itself, with its reasons in the history; the rest waits as "needs you" | small to medium | tests on the combined result; 1 to 3 when approved |
 | 8 | One task, one plan, two agents | A large task split into two subtasks with their zones, drawn on the graph and started with one click | medium | 2, 7, two agent slots |
 | 9 | Lead agent | An agent that starts agents and requests changes on their work, never merges | medium to large | 7, 8 |
 
@@ -150,7 +150,9 @@ is stricter than the process that builds it. This idea brings that process into 
 - **Ideas 1 to 3 are still not approved.** Approving ideas 7 to 9 does not approve them. The first
   version of 7 works without them: the rules above that come from them (the detector's facts from
   idea 3, the zone and the protected areas from idea 2, the other model's review from idea 1) are
-  added only as each of those ideas is approved and lands.
+  added only as each of those ideas is approved and lands. Until a rule exists, the case it would
+  cover goes to "needs you", never through. For tests: until idea 3's detector lands, any change
+  that edits or deletes an existing test file needs you; added tests are fine.
 - **A model can call the person in; only code lets a change through without them.** A model's
   output can add a reason to wait, never remove one.
 - **Every merge by rules is in the history with its reasons**, and has a one-click Revert while it
