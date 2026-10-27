@@ -45,6 +45,9 @@ labels keep their size on screen. Not built yet; it comes after the core feature
 Oversight's look on 2026-10-26. It is a picture of the idea, not the product: its name and numbers
 are placeholders.*
 
+More candidates beyond the scope levels, in the order proposed, are in
+[docs/additions.md](docs/additions.md). None is built yet.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

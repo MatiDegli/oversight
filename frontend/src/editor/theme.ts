@@ -118,6 +118,10 @@ export function createEditorTheme(colors: EditorColors): editor.IStandaloneTheme
       "input.foreground": text,
       "input.border": colors["control-edge"],
       "input.placeholderForeground": faint,
+      // An invalid find pattern (regex on, `[`): neutral, like every error outside failing tests.
+      "inputValidation.errorBackground": colors.field,
+      "inputValidation.errorBorder": text,
+      "inputValidation.errorForeground": text,
       "inputOption.activeBorder": text,
       "inputOption.activeForeground": text,
       "inputOption.activeBackground": tint(colors["span-highlight"]),

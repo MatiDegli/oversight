@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from changes_helpers import ADD_THRICE, Harness, bounded
+from changes_helpers import ADD_THRICE, Harness, bounded, cancel_twice
 
 from oversight.changes import WrongState
 from oversight.workspace import SuiteRun, Tree, WorkspaceError
@@ -27,6 +27,22 @@ async def test_publish_cut_short_sends_the_rest_once(h: Harness) -> None:
     assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
     assert h.types().count("change.resolved") == 1
     assert h.manager.snapshot.version == h.payloads(GraphDelta)[0].to_version
+    assert not await h.has_branch("agent-1")
+
+
+@bounded
+async def test_each_event_gets_two_tries(h: Harness) -> None:
+    """The resolution fails once and the delta fails once: each is tried twice, in order, so the
+    approval closes out whole, with no `error`, and nothing goes twice."""
+    await h.run_agent(1, ADD_THRICE)
+    h.fail_script = [ChangeResolved, GraphDelta]
+
+    await h.manager.approve("change-1", None)
+
+    assert h.fail_script == []
+    assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
+    assert h.payloads(ErrorReport) == []
+    assert h.types().count("change.resolved") == 1
     assert not await h.has_branch("agent-1")
 
 
@@ -51,25 +67,6 @@ async def test_cancel_during_a_publish_records_what_went_out(h: Harness) -> None
     [delta] = h.payloads(GraphDelta)
     assert h.manager.snapshot.version == delta.to_version
     assert not await h.has_branch("agent-1")
-
-
-async def queued_callbacks_ran() -> None:
-    """Return once the callbacks queued so far have run, in their order: a task that a cancel woke
-    has taken it and is waiting again. It waits on a loop callback, never on time."""
-    loop = asyncio.get_running_loop()
-    turn = loop.create_future()
-    loop.call_soon(turn.set_result, None)
-    await turn
-
-
-async def cancel_twice(decision: asyncio.Task[None]) -> None:
-    """Cancel a decision held in a close-out publish, again once it waits through the first cancel:
-    the second cancel ends its wait, while the publish stays held."""
-    decision.cancel()
-    await queued_callbacks_ran()
-    decision.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await decision
 
 
 @bounded
