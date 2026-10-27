@@ -14,7 +14,7 @@ export function selectSpend(state: State): Spend | null {
   if (!budget || budget.budget_usd <= 0) return null;
   if (state.usage) {
     return {
-      spentUsd: state.usage.cost_usd === null ? null : state.usage.spent_usd,
+      spentUsd: state.spendUnknown ? null : state.usage.spent_usd,
       budgetUsd: state.usage.budget_usd,
       brake: state.usage.brake,
     };

@@ -18,6 +18,23 @@ export function editingLog(jsonl: string): string | null {
 
 /** Derive an editing cut only for a scene that needs it; null skips that scene alone. */
 export function logForScene(jsonl: string, scene: Pick<Scene, "log">): string | null {
+  if (scene.log === "one-slot") {
+    const events = jsonl
+      .trim()
+      .split("\n")
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            type: string;
+            payload: { slots: unknown[] };
+          },
+      );
+    const opening = events.slice(0, 2);
+    const run = opening.find((event) => event.type === "run.started");
+    if (!run) return null;
+    run.payload.slots = run.payload.slots.slice(0, 1);
+    return opening.map((event) => JSON.stringify(event)).join("\n") + "\n";
+  }
   return scene.log === "editing" ? editingLog(jsonl) : jsonl;
 }
 

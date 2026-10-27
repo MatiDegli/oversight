@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import { applyEvent, createInitialState, stateStore } from "../state";
+import { twoSlotState } from "../taskBox.fixture";
 import { CommandError } from "../transport";
 import { Frame } from "./Frame";
 import { initialView, openChange } from "./view";
@@ -66,6 +67,22 @@ export const taskBoxTest = {
     render();
   },
   calls: () => structuredClone(calls),
+  /** Offer both profiles, optionally after the non-Meta tick carrying Meta's brake. */
+  twoSlots(braked = false) {
+    stateStore.setState({ state: twoSlotState(braked) });
+  },
+  /** Reuse recorded A events after the slot test's opening, then render from the same store. */
+  holdA() {
+    const agent = events.find((event) => event.type === "agent.status");
+    if (!agent) throw new Error("Missing agent status");
+    stateStore.getState().applyEvents([
+      {
+        ...agent,
+        seq: stateStore.getState().state.lastSeq + 1,
+        payload: { ...agent.payload, model: "muse-spark", state: "working" },
+      },
+    ]);
+  },
   /** Answers the start request that is waiting: 201, a refusal, or a lost connection. */
   answer(result: StartAnswer) {
     if (!answer) throw new Error("No start is waiting");
