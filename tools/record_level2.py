@@ -11,6 +11,8 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
+from unittest.mock import patch
 
 import uvicorn
 
@@ -27,12 +29,22 @@ from demo_check_phases import (
     wait_for,
 )
 from oversight import app
+from oversight.agents import AgentRun, AgentTask, ModelClient, Pricing
 from oversight.settings import Settings
 from oversight_contracts.commands import FileContent
 from record_run import latest_store, record_run
 
 OUT = demo.REPO_ROOT / "fixtures/events/scripted-level2.jsonl"
 REVIEW_EDIT = "\n# Reviewed by the developer.\n"
+
+
+def priced_fake_run(task: AgentTask, *, model: ModelClient, **options: Any) -> AgentRun:
+    """Synthetic prices for this recording only; no provider or real credit is involved."""
+    if model.profile.provider != "fake":
+        raise ValueError("the level 2 recorder only accepts fake models")
+    # Large enough for the cards to show distinct cents, including A's extra revision ticks.
+    options["pricing"] = Pricing(input_usd=100, output_usd=200, cached_input_usd=100)
+    return AgentRun(task, model=model, **options)
 
 
 def capture(base: str, runtime: Path) -> None:
@@ -134,12 +146,13 @@ def main() -> None:
     if args.serve:
         app.LIMITS = app.LIMITS.model_copy(update={"cone_max_depth": 1, "cone_max_nodes": 1})
         settings = Settings.load()
-        uvicorn.run(
-            app.create_app(settings),
-            host=settings.host,
-            port=settings.port,
-            timeout_graceful_shutdown=1,
-        )
+        with patch.object(app, "AgentRun", side_effect=priced_fake_run):
+            uvicorn.run(
+                app.create_app(settings),
+                host=settings.host,
+                port=settings.port,
+                timeout_graceful_shutdown=1,
+            )
     else:
         record()
 

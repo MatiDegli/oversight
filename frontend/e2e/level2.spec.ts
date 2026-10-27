@@ -111,6 +111,8 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
         })
         .toBe(true);
     }
+    const strays = (await recorded(page)).map((sample) => sample.stray);
+    expect(Math.max(...strays)).toBe(0);
     await expect(page.getByRole("complementary", { name: "Review panel" })).toHaveCount(0);
     await cardA.getByRole("button", { name: "Live diff" }).click();
     const live = page.getByRole("complementary", { name: "Live diff panel" });
@@ -275,11 +277,31 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
   });
 
   await test.step("spend uses both agents; stop and discard requires confirmation on B's card", async () => {
-    await expect(page.getByRole("group", { name: "Spend", exact: true })).toHaveText(
-      "Spent US$0.00 of US$150",
+    // Only ticks replayed so far count. Each card must show its own sum, including A's revision.
+    const ticks = events
+      .filter((e) => e.type === "usage.tick")
+      .filter((e) => e.seq < holds.saved.seq);
+    const costs = [a, b].map((who) =>
+      ticks
+        .filter((e) => e.payload.agent_id === who.agent_id)
+        .reduce((sum, e) => {
+          if (e.payload.cost_usd === null) throw new Error("Recording needs known fake costs");
+          return sum + e.payload.cost_usd;
+        }, 0),
     );
-    for (const card of [cardA, cardB])
-      await expect(card.getByRole("definition").filter({ hasText: "Unknown" })).toBeVisible();
+    const figures = costs.map((cost) => `US$${cost.toFixed(2)}`);
+    expect(costs.every((cost) => cost >= 0.005)).toBe(true);
+    expect(figures[0]).not.toBe(figures[1]);
+    await expect(page.getByRole("group", { name: "Spend", exact: true })).toHaveText(
+      `Spent US$${costs.reduce((sum, cost) => sum + cost, 0).toFixed(2)} of US$150`,
+    );
+    for (const [index, card] of [cardA, cardB].entries())
+      await expect(
+        card
+          .locator("dl > div")
+          .filter({ has: page.getByText("Cost", { exact: true }) })
+          .getByRole("definition"),
+      ).toHaveText(figures[index] ?? "");
     // B's logged request resumes it, so cancellation is checked during work rather than after finish.
     await cardB.getByRole("button", { name: "Review change" }).click();
     await expect(editable).toHaveAttribute("data-state", "clean");
