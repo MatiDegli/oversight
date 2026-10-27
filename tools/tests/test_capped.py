@@ -123,7 +123,16 @@ def test_it_needs_a_limit_and_a_command(tmp_path: Path, arguments: tuple[str, ..
 
 def make_dry_run(*variables: str, target: str = "check-python") -> list[str]:
     """The commands `make <target>` would run, one per line, as `make -n` prints them."""
-    env = {k: v for k, v in os.environ.items() if k not in {"MAKEFLAGS", "MFLAGS", "MAKELEVEL"}}
+    # Isolate the dry run from the caller's make: an outer `make check WORKERS=0` exports
+    # WORKERS and carries it in MAKEFLAGS/MAKEOVERRIDES, which would otherwise override the
+    # defaults these tests pin. Only `variables` given here may set them.
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"MAKEFLAGS", "MFLAGS", "MAKELEVEL", "MAKEOVERRIDES", "WORKERS", "RUN_TIMEOUT"}
+    }
+    env["MAKEFLAGS"] = ""
+    env["MAKEOVERRIDES"] = ""
     done = subprocess.run(
         ["make", "-n", "--no-print-directory", "-C", str(ROOT), target, *variables],
         env=env,
@@ -146,6 +155,18 @@ def test_make_runs_pytest_through_the_helper_under_the_outer_bound() -> None:
         r"-n 8 --max-worker-restart=0 --ignore=tools/tests/test_eslint_boundaries\.py",
         lines[0],
     ), lines[0]
+
+
+def test_the_dry_run_ignores_the_callers_workers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Running the suite through `make check WORKERS=0` (or 4) exports that value to pytest;
+    the dry run must still pin the default 8 unless a test passes WORKERS itself."""
+    monkeypatch.setenv("WORKERS", "0")
+    monkeypatch.setenv("RUN_TIMEOUT", "7")
+    monkeypatch.setenv("MAKEFLAGS", "w -- WORKERS=0 RUN_TIMEOUT=7")
+    monkeypatch.setenv("MAKEOVERRIDES", "WORKERS=0")
+    (line,) = [line for line in make_dry_run(target="check") if "--ignore=" in line]
+    assert " -n 8 --max-worker-restart=0 " in line, line
+    assert line.startswith("bash tools/bounded.sh 900 "), line
 
 
 def test_the_outer_bound_can_be_set_for_one_run() -> None:
@@ -203,6 +224,20 @@ def test_check_runs_every_group_and_only_check_scans_for_secrets(
     ):
         assert command in lines, f"{target} does not run {command!r}"
     assert ("gitleaks git" in lines) is with_secrets
+
+
+def test_check_and_check_ci_derive_from_the_one_gates_list() -> None:
+    """A gate added to GATES lands in both: overriding GATES to one gate runs only that gate
+    in both, and check-ci only ever filters check-secrets out of the same list."""
+    for target in ("check", "check-ci"):
+        lines = "\n".join(make_dry_run("GATES=check-contracts", target=target))
+        assert "generate.py --check" in lines, target
+        assert "ruff check ." not in lines, target
+        assert "gitleaks git" not in lines, target
+    check = "\n".join(make_dry_run("GATES=check-secrets", target="check"))
+    check_ci = "\n".join(make_dry_run("GATES=check-secrets", target="check-ci"))
+    assert "gitleaks git" in check
+    assert "gitleaks git" not in check_ci
 
 
 def test_check_runs_its_groups_in_parallel_with_their_output_kept_together() -> None:

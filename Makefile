@@ -102,15 +102,17 @@ BOUNDARIES := tools/tests/test_eslint_boundaries.py
 # jobs already started finish after a failure, starts no other, and exits 2: the first failure still
 # fails the whole target. Inside a group the steps run in order: lint before tests, so a lint
 # error ends the group before its tests start. CI has no gitleaks in its check job (the history is
-# scanned in a job of its own), so it runs check-ci, which is check without check-secrets.
-GATES := check-python check-contracts check-frontend
+# scanned in a job of its own), so it runs check-ci, which is check without check-secrets. Both
+# derive from the one GATES list, so a new gate added there lands in both (check-ci only ever
+# filters out check-secrets).
+GATES := check-python check-contracts check-frontend check-secrets
 PARALLEL := --no-print-directory -j4 --output-sync=target
 
 check: ## every gate, in parallel groups; tests capped at 10G, 120 s each and 15 min in all; no credits
-	@$(MAKE) $(PARALLEL) $(GATES) check-secrets
+	@$(MAKE) $(PARALLEL) $(GATES)
 
 check-ci: ## check without gitleaks, for CI, where the history is scanned in its own job
-	@$(MAKE) $(PARALLEL) $(GATES)
+	@$(MAKE) $(PARALLEL) $(filter-out check-secrets,$(GATES))
 
 check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
 
