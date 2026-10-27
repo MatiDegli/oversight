@@ -43,7 +43,9 @@ from oversight.agents import (
     ToolSchema,
     parse_script,
 )
-from oversight.app import LIMITS
+from oversight.api import ApiError
+from oversight.app import LIMITS, LiveRun
+from oversight.changes import ChangeManager
 from oversight_contracts.events import AgentStatus, ChangeProposed, ChangeResolved
 
 pytestmark = pytest.mark.anyio
@@ -227,6 +229,45 @@ async def test_the_brake_refuses_a_revision_of_the_metered_agent_only(
         assert (await request(s, change="change-2")).status_code == 202
         events = await ready(s, "agent-2", after=first_ready["agent-2"])
         assert states(events, "agent-2") == ["revising", "ready_for_review"]
+
+
+async def test_a_request_that_moves_no_base_ends_with_no_run_and_the_change_ready(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The manager answers `None` when a redo's base cannot move, after an `error` and with the
+    # change as it was (its own tests cover why). `_revise` then resumes nothing, and the kept run
+    # serves the next request.
+    async def no_move(self: ChangeManager, rec: Any, comment: str) -> None:
+        return None
+
+    model = scripted_a()
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+    ):
+        live = s.live
+        await start(s)
+        first = await ready(s)
+        calls = len(model.requests)
+        with monkeypatch.context() as patch:
+            patch.setattr(ChangeManager, "_request_changes", no_move)
+            live.request_changes("change-1", "Shorter, please.")
+            await asyncio.wait({live._runs["agent-1"]})  # pyright: ignore[reportPrivateUsage]
+        assert len(model.requests) == calls and not resolutions(s.events()[first[-1].seq :])
+        assert not [e for e in s.events() if e.type == "error"]  # a quiet end, not a failed run
+        assert live._runs == {} and live._decisions == {}  # pyright: ignore[reportPrivateUsage]
+        assert live._slots == {"A": "agent-1"} and "agent-1" in live._kept  # pyright: ignore[reportPrivateUsage]
+        assert (await request(s)).status_code == 202  # the change is reviewable again
+        events = await ready(s, after=first[-1].seq)
+        assert states(events) == ["revising", "ready_for_review"]
+
+
+def test_the_commands_before_the_run_starts_are_wrong_state(tmp_path: Path) -> None:
+    live = LiveRun(live_settings(tmp_path))
+    for refused in (lambda: live.request_changes("change-1", "c"), lambda: live.stop("agent-1")):
+        with pytest.raises(ApiError) as caught:
+            refused()
+        assert caught.value.code == "wrong_state"
 
 
 async def test_a_revision_that_fails_is_reported_and_leaves_the_change_unproposed(
