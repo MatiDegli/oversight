@@ -8,11 +8,20 @@ process only, every 0.5 s. Past OVERSIGHT_TEST_MEM_GB GiB (default 8) it writes 
 the running test to the terminal's own stderr and ends the process with exit code 70.
 
 It signals no other process and counts no children, so it cannot hit a process that reused a
-pid, and it cannot count a page two processes share twice. What it cannot do is promise to run
-in time: a thread needs the GIL, and one allocation in C that holds it can fill the machine
-before the next look. That is the hard layer's job, the Makefile's: `make check` runs pytest in a
-systemd scope with a kernel memory limit (tools/capped.sh). This plugin is the soft layer, for a
-worker's bare `uv run pytest` and for CI, where no scope may exist.
+pid, and it cannot count a page two processes share twice.
+
+Under pytest-xdist (`pytest -n N`) every worker loads this plugin and watches itself, and the
+budget is for the run: a worker's cap is OVERSIGHT_TEST_MEM_GB divided by the number of workers,
+so the workers together stay within it. The controller runs no test and keeps the whole cap. A
+worker that goes over ends itself with the same line and exit code; the controller sees a crashed
+worker, and `--max-worker-restart=0` (the Makefile's) ends the run there instead of starting
+another worker.
+
+What it cannot do is promise to run in time: a thread needs the GIL, and one allocation in C that
+holds it can fill the machine before the next look. That is the hard layer's job, the Makefile's:
+`make check` runs pytest in a systemd scope with a kernel memory limit (tools/capped.sh), which
+holds the controller and every worker. This plugin is the soft layer, for a worker's bare
+`uv run pytest` and for CI, where no scope may exist.
 
 No RLIMIT_AS: it caps virtual address space, which Node and thread arenas reserve far beyond what
 they use, so it would fail for the wrong reason. Stdlib only, and Linux only (/proc).
@@ -26,6 +35,7 @@ from contextlib import suppress
 import pytest
 
 ENV_CAP = "OVERSIGHT_TEST_MEM_GB"
+ENV_WORKERS = "PYTEST_XDIST_WORKER_COUNT"  # pytest-xdist sets it in each worker, and nowhere else
 DEFAULT_CAP_GB = 8.0
 POLL_INTERVAL_S = 0.5
 EXIT_CODE = 70  # pytest uses 0 to 5; 70 is sysexits' EX_SOFTWARE
@@ -45,6 +55,21 @@ def parse_cap(raw: str | None) -> int:
     if not 0 < gib < float("inf"):
         raise ValueError(f"{ENV_CAP} must be a positive number of GiB, not {raw!r}")
     return max(1, int(gib * GIB))
+
+
+def worker_cap(total_bytes: int, raw_workers: str | None) -> int:
+    """The cap of one process of the run: all of `total_bytes` when this is not an xdist worker
+    (`raw_workers`, the value of PYTEST_XDIST_WORKER_COUNT, is unset), and an equal share of it
+    when it is."""
+    if raw_workers is None:
+        return total_bytes
+    try:
+        workers = int(raw_workers)
+    except ValueError:
+        workers = 0
+    if workers < 1:
+        raise ValueError(f"{ENV_WORKERS} must be a whole number of workers, not {raw_workers!r}")
+    return max(1, total_bytes // workers)
 
 
 def self_rss_bytes() -> int:
@@ -107,16 +132,18 @@ class MemoryWatch:
     COLLECTING = "(collecting tests)"
     BETWEEN = "(between tests)"
 
-    def __init__(self, cap_bytes: int, stderr_fd: int) -> None:
+    def __init__(self, cap_bytes: int, stderr_fd: int, workers: int = 1) -> None:
         self.current = self.COLLECTING
         self._stderr_fd = stderr_fd
+        self._workers = workers
         self.watchdog = Watchdog(cap_bytes, self._report_and_exit)
 
     def line(self, used_bytes: int) -> str:
         cap = self.watchdog.cap_bytes
+        share = f", split over {self._workers} workers" if self._workers > 1 else ""
         return (
             f"MEMORY CAP: {self.current} used {used_bytes / GIB:.2f} GiB resident, over the "
-            f"cap of {cap / GIB:.2f} GiB ({ENV_CAP}); ending the run"
+            f"cap of {cap / GIB:.2f} GiB ({ENV_CAP}{share}); ending the run"
         )
 
     def _report_and_exit(self, used_bytes: int) -> None:
@@ -141,10 +168,11 @@ class MemoryWatch:
 def pytest_configure(config: pytest.Config) -> None:
     """Start the watchdog. pytest suspends its capture once the conftest files are loaded and
     before this hook, so fd 2 is still the terminal's, and a copy of it is kept for the report."""
+    raw_workers = os.environ.get(ENV_WORKERS)
     try:
-        cap = parse_cap(os.environ.get(ENV_CAP))
+        cap = worker_cap(parse_cap(os.environ.get(ENV_CAP)), raw_workers)
     except ValueError as error:
         raise pytest.UsageError(str(error)) from error
-    watch = MemoryWatch(cap, os.dup(2))
+    watch = MemoryWatch(cap, os.dup(2), int(raw_workers) if raw_workers is not None else 1)
     config.pluginmanager.register(watch, PLUGIN_NAME)
     watch.watchdog.start()

@@ -17,6 +17,7 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 | pydantic | 2.14.1 | MIT | the contracts' source of truth |
 | ruff, pyright, pytest, import-linter, httpx | 0.17.0, 1.1.414, 9.1.1, 2.15, 0.28.1 | MIT, MIT, MIT, BSD-2-Clause, BSD-3-Clause | lint and format, types, tests, import contracts, the test client |
 | pytest-timeout | 2.4.0 | MIT | a time limit per test: a hang fails alone, with its name |
+| pytest-xdist (and execnet 2.1.2) | 3.8.0 | MIT | runs the suite on 8 worker processes: `make check` waits for the slowest group, not the sum |
 | react, react-dom | 19.3.0 | MIT | the UI |
 | zustand | 5.0.15 | MIT | the store around the pure reducer |
 | cytoscape, cytoscape-fcose | 3.34.3, 2.2.0 | MIT | the graph view and its layout |
@@ -82,6 +83,44 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   - *Chrome:* `frontend/shots/capped.sh`, the one helper `make shots` uses for the capture and the
     detector, runs the command under the same helper with a limit of 6G, so the two caps share one
     piece of logic.
+- **`make check` runs its groups at once, and pytest on 8 xdist workers** (2026-10-27). Measured on
+  main, warm, one step after another: ruff, import-linter and contract drift under 1 s each,
+  pyright 5.3 s, pytest 81.3 s (665 tests), tsc 2.4 s, ESLint 4.8 s, Prettier 1.0 s, the frontend's
+  vitest and node tests 11.1 s, gitleaks 0.3 s: 106 s in all, and pytest was three quarters of it.
+  After, five runs in a row, all green: 24.3, 26.3, 24.7, 25.7 and 25.9 s, with the suite in 19 s.
+  Three changes, none touching a gate's content:
+  - *Groups.* `check` starts python, contracts, frontend and secrets with `make -j4
+    --output-sync=target`: each target's output comes out in one piece when it ends, so groups
+    never interleave. Inside a group the steps stay in order, lint before tests, so a lint error
+    ends the group before its tests start. A failure leaves the jobs already running to finish,
+    starts no other, and `make` exits 2: the first failure still fails the whole target (tried
+    with a lint error and with a failing test). CI runs `make check-ci`, the same without
+    gitleaks, which its check job has not got (the history is scanned in a job of its own), so
+    the two cannot drift apart.
+  - *xdist.* Chosen over splitting the suite by hand because the tests were already isolated:
+    real uvicorn on a socket bound before it starts, `tmp_path` runtimes, no shared state.
+    `-n 8` is fixed, not `auto`, so the memory share below is the same on every machine;
+    `WORKERS=0` runs one process, and `-p no:xdist` and a bare `uv run pytest` still work (serial,
+    82 s). The final code ran the whole suite under xdist 11 times, six of them `make check` and
+    five bare, at 4, 16 (twice) and 32 workers and with a budget of 4 GiB (half a share), without
+    one failure. The scheduler is `load` (balance over locality):
+    a session fixture, the demo environment, is built once per worker that needs it, under a
+    second each.
+  - *The ESLint boundaries test* (`tools/tests/test_eslint_boundaries.py`) writes probe files into
+    `frontend/src` and lints them with the real configuration. Run beside tsc, ESLint and Prettier
+    it would make them fail on a probe, and two workers would race on the same folders, so it is
+    excluded from the parallel python run and runs alone in the frontend group, after the frontend
+    gates (a test in `test_capped.py` pins that each file is in exactly one group). Linting the
+    probes from stdin does not work: typescript-eslint's project service needs the file on disk.
+  - *The caps reach the whole worker tree.* The workers are children of the controller that
+    `bounded.sh` and `capped.sh` start, so they share its process group (the outer 900 s ends
+    them) and its systemd scope (the 10G counts them); a test runs a nested xdist pytest and
+    compares both. memwatch gives each worker an equal share of `OVERSIGHT_TEST_MEM_GB` (1 GiB
+    each at 8 workers), so the workers together stay inside the budget where no scope exists;
+    the idle controller keeps the whole cap. pytest-timeout runs in each worker (the nested test
+    checks it fails one test and the rest run). A worker that memwatch ends is a crashed worker
+    to the controller, and `--max-worker-restart=0` ends the run there, so a runaway test is not
+    run again on a fresh worker.
 - **The frontend's lint is type-aware** (`strictTypeChecked`), with the exhaustive-switch rule on,
   so a new event type fails the build until every switch handles it.
 
