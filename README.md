@@ -29,15 +29,16 @@ through others. Nothing reaches main until you approve it.
   layout; the worktree runner, agent runtime and scripted fake model; the change manager; and API
   wiring with the spending brake. The UI includes the graph, agent cards, live diff, Approve and
   Reject, task entry, the review impact cone and the spend meter. The runtime also supports revision
-  runs through `POST /changes/{id}/request-changes`; the review UI is developed on a separate front.
+  runs through `POST /changes/{id}/request-changes`, including the review UI.
 - `make demo` builds and serves the frontend and API together; starting an agent uses API credits.
   `make demo-check` checks the API demo path three times from clean starts using two scripted fake
   agents, without API keys or credits: overlap, Request changes and a higher revision, merge,
-  Stop/discard during work, a file edit on main and usage ticks. Saving the editable new side
-  (`PUT /files` with `agent_id`) is an explicitly skipped TODO for its parallel front. Smoke
-  tests, screenshot tooling and test resource caps are also merged.
-- The static replay build currently plays a hand-written event log and labels it as a fixture. A
-  real recorded run for the judges has not been bundled yet.
+  Stop/discard during work, a file edit on main, usage ticks and saving the editable new side
+  (`PUT /files` with `agent_id`). Smoke tests, screenshot tooling and test resource caps are merged.
+- Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
+  start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
+  scripted two-agent replay. A real recorded run will be bundled for the static replay.
+- The static replay build currently plays a hand-written event log and labels it as a fixture.
 
 To bundle a finished real run, install gitleaks 8.30.1 and run `make record RUN=<id>` (or
 `make record` for the latest run). This reads the SQLite log without model calls or credits and
