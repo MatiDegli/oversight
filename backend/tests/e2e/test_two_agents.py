@@ -10,7 +10,6 @@ from live_helpers import (
     DEADLINE_S,
     BySlot,
     GatedModel,
-    Scripts,
     Stepped,
     error_code,
     is_type,
@@ -20,7 +19,7 @@ from live_helpers import (
     two_fakes,
 )
 
-from oversight.agents import parse_script
+from oversight.agents import FAKE_MODEL, Script, ScriptedModel, parse_script
 
 pytestmark = pytest.mark.anyio
 
@@ -79,7 +78,7 @@ TOTAL_TEMPLATE = {
 }
 
 
-def raise_to_two(path: str) -> str:
+def raise_to_two(path: str) -> Script:
     """A script that reads `path`, turns its `return 1` into `return 2`, tests, and finishes."""
     calls = [
         {"name": "read_file", "arguments": {"path": path}},
@@ -90,23 +89,31 @@ def raise_to_two(path: str) -> str:
         {"name": "run_tests", "arguments": {}},
         {"name": "finish", "arguments": {"summary": f"Raised {path}."}},
     ]
-    return script_json("Raise it.", [{"tool_calls": [call]} for call in calls])
+    return parse_script(script_json("Raise it.", [{"tool_calls": [call]} for call in calls]))
 
 
 async def test_a_then_b_with_a_failing_combination(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Each edit passes the suite alone. Approving A moves main; B's merge, staged on that main, runs
-    # the suite again and fails: B conflicts, main stays at A's merge and B keeps its slot.
+    # the suite again and fails: B conflicts, main stays at A's merge and B keeps its slot. A waits
+    # for a permit at each call and B runs free, so B's proposal is in the log before A's.
+    script_a, script_b = raise_to_two("shop/pricing.py"), raise_to_two("shop/stock.py")
+    model_a = Stepped(script_a)
+    clients = BySlot(
+        lambda _profile, slot: model_a if slot == "A" else ScriptedModel(script_b, FAKE_MODEL)
+    )
     template = tmp_path / "template"
     for name, text in TOTAL_TEMPLATE.items():
         (template / name).parent.mkdir(parents=True, exist_ok=True)
         (template / name).write_text(text)
     monkeypatch.setattr("oversight.app.TEMPLATE", template)
-    scripts = Scripts([raise_to_two("shop/pricing.py"), raise_to_two("shop/stock.py")])
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), scripts) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), clients) as s:
         assert (await start(s, slot="A")).status_code == 201
         assert (await start(s, slot="B")).status_code == 201
+        await s.until(is_type("change.proposed", change_id="change-2"))
+        for _ in script_a.turns:
+            model_a.permits.release()
         for agent in ("agent-1", "agent-2"):
             await s.until(is_type("agent.status", agent_id=agent, state="ready_for_review"))
         assert (await s.client.post("/changes/change-1/approve")).status_code == 202
@@ -130,11 +137,13 @@ async def test_a_then_b_with_a_failing_combination(
             path: (workspace.main.root / path).read_text()
             for path in ("shop/pricing.py", "shop/stock.py")
         }
+    # Matched by change, not by position: two runs finish in either order.
     proposed = [e.payload for e in events if e.type == "change.proposed"]
-    assert [(p.change_id, p.tests.outcome) for p in proposed] == [
-        ("change-1", "passed"),
-        ("change-2", "passed"),
+    assert sorted((p.change_id, p.agent_id, p.tests.outcome) for p in proposed) == [
+        ("change-1", "agent-1", "passed"),
+        ("change-2", "agent-2", "passed"),
     ]
+    assert [p.change_id for p in proposed] == ["change-2", "change-1"]  # B first, as arranged
     resolved = [e.payload for e in events if e.type == "change.resolved"]
     assert [(r.change_id, r.decision, r.merge) for r in resolved] == [
         ("change-1", "approved", "merged"),
