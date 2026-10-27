@@ -43,7 +43,14 @@ from oversight.agents import (
     validate_agent_status,
     validate_usage_tick,
 )
-from oversight.api import ApiError, add_static, create_router, install_error_handlers
+from oversight.api import (
+    ApiError,
+    ApiGuard,
+    AuthorityPolicy,
+    add_static,
+    create_router,
+    install_error_handlers,
+)
 from oversight.changes import ChangeManager, ChangeNotFound, Revision, WrongState
 from oversight.events import (
     EventPayload,
@@ -851,6 +858,7 @@ def create_app(
     and the fake model its slot's script."""
     settings = settings or Settings.load()
     app = _live_app(settings, client_factory) if replay is None else _replay_app(settings, replay)
+    app.add_middleware(ApiGuard, policy=AuthorityPolicy(settings.port, settings.vite_port))
     app.state.settings = settings
     install_error_handlers(app)
     return app

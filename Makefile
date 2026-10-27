@@ -27,7 +27,8 @@ setup: install ## install the dependencies and the git hooks: pre-commit, commit
 # On exit, dev stops only the backend it started, never the process group, which make shares with
 # whoever ran it. uv forwards SIGTERM to its child, and uvicorn stops its reload worker.
 dev: ## FastAPI with reload and the Vite dev server, one origin through Vite's proxy
-	@uv run --frozen python -m oversight serve --reload & backend=$$!; \
+	@source tools/dev-ports.sh; \
+	uv run --frozen python -m oversight serve --reload & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
 
@@ -42,7 +43,8 @@ record: ## bundle a finished run (RUN=<id>, or the latest run) into fixtures/eve
 	@if [ -n "$(RUN)" ]; then $(UV) python tools/record_run.py "$(RUN)"; else $(UV) python tools/record_run.py --latest; fi
 
 replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with the Vite dev server
-	@uv run --frozen python -m oversight replay "$(LOG)" --allow-fake-provider --speed "$(SPEED)" & backend=$$!; \
+	@source tools/dev-ports.sh; \
+	uv run --frozen python -m oversight replay "$(LOG)" --allow-fake-provider --speed "$(SPEED)" & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
 
@@ -64,7 +66,7 @@ demo: demo-setup-check ## build the UI, then serve it and the API on one port (D
 	@echo "Oversight: open http://localhost:$(DEMO_PORT)/ in the browser (from Windows too: localhost is shared with WSL). Ctrl+C stops it."
 	@echo ""
 	@env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR \
-		-u GIT_PREFIX OVERSIGHT_HOST=127.0.0.1 OVERSIGHT_PORT=$(DEMO_PORT) \
+		-u GIT_PREFIX OVERSIGHT_HOST=127.0.0.1 OVERSIGHT_PORT=$(DEMO_PORT) OVERSIGHT_VITE_PORT= \
 		uv run --frozen python -m oversight serve
 
 # demo-check: the demo's path three times in a row from a clean start, on the scripted fake model, so
@@ -102,10 +104,10 @@ layout: ## regenerate the demo preset and replay snapshot positions; not in chec
 smoke: ## start the backend and check /health and /graph
 	$(UV) python tools/smoke.py
 
-# test-browser: the frontend tests that drive Monaco in Playwright's Chromium (pnpm test:browser).
-# make check and CI run without a browser, so pnpm test leaves these out.
-test-browser: ## the frontend's browser tests in Playwright's Chromium; not in check
-	$(PNPM) test:browser
+# test-browser: isolated real dev/replay proxy fixtures, then Chromium tests for Monaco/graph.
+# The timeout and memory scope cover both stages. CI invokes this target too.
+test-browser: ## fake-only launcher/proxy integration and Chromium tests; 600 s, 6G where supported
+	@$(NO_KEYS) timeout --kill-after=10 600 bash tools/capped.sh 6G bash tools/test-browser.sh
 
 record-level2: ## regenerate the level 2 replay fixture from the HTTP backend and fake scripts
 	$(UV) python tools/record_level2.py

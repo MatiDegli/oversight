@@ -10,6 +10,19 @@ import pytest
 from oversight.settings import REPO_ROOT
 
 
+def test_make_demo_dry_run_clears_inherited_vite_port() -> None:
+    result = subprocess.run(
+        ["make", "-n", "demo"],
+        cwd=REPO_ROOT,
+        timeout=15,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "OVERSIGHT_VITE_PORT": "5710"},
+    )
+    assert result.stdout.count("OVERSIGHT_VITE_PORT= ") == 1
+
+
 @pytest.mark.parametrize("mode", ["missing", "invalid", "ready", "fake", "bad-model", "bad-port"])
 def test_check_exit_code_and_output_never_contain_values(tmp_path: Path, mode: str) -> None:
     values = {
