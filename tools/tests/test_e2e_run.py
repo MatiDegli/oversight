@@ -4,10 +4,11 @@ On 2026-10-27 a `vite preview` from an earlier e2e run stayed alive for minutes 
 ended: Playwright's own webServer starts it in a process group of its own, so a run that
 `timeout` ended left it behind. The script now owns the server, in its own process group, and
 stops it by PID, only when the PID still has the start time recorded at launch (a reused PID is
-someone else's), and the kernel kills it with the script even when only the script is SIGKILLed
-(`setpriv --pdeathsig`). Each test runs the real script over a fake frontend folder (a vite that
-builds nothing and a preview that only listens, a playwright that fails or hangs) and checks
-that the server's process is gone after the end the test chose. It needs a node, as the script does.
+someone else's). The kernel also kills the server and Playwright with the script when only the
+script is SIGKILLed (`setpriv --pdeathsig`), and the script refuses to start without setpriv.
+Each test runs the real script over a fake frontend folder (a vite that builds nothing and a
+preview that only listens, a playwright that fails or hangs) and checks that nothing of the run
+is left after the end the test chose. It needs a node, as the script does.
 """
 
 import contextlib
@@ -35,6 +36,8 @@ TIED_S = 10
 TOOLS = ("node", "seq", "sleep", "dirname")
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="run.sh needs node")
+needs_setpriv = pytest.mark.skipif(shutil.which("setpriv") is None, reason="run.sh needs setpriv")
+SETPRIVS = [pytest.param("real", marks=needs_setpriv), "plain"]
 
 # What the fake preview does: listen on the port it is given and say which process it is.
 PREVIEW_JS = textwrap.dedent(
@@ -49,7 +52,7 @@ PREVIEW_JS = textwrap.dedent(
     """
 )
 # `build` builds nothing. The fake playwright says it started, then fails or waits to be ended.
-FAKE_VITE = "#!/bin/sh\nexit 0\n"
+FAKE_VITE = '#!/bin/sh\n: > "$FAKE_DIR/vite.built"\nexit 0\n'
 FAKE_PLAYWRIGHT = textwrap.dedent(
     """\
     #!/bin/bash
@@ -90,6 +93,21 @@ def until(condition: object, what: str, deadline_s: float = DEADLINE_S) -> None:
         if time.monotonic() > stop:
             pytest.fail(f"gave up waiting for {what}")
         time.sleep(0.02)
+
+
+def group_members(pgid: int) -> list[int]:
+    """The running processes of a process group: what a run left behind, whatever they are."""
+    members = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            state, _, group = entry.joinpath("stat").read_text().rsplit(")", 1)[1].split()[:3]
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        if int(group) == pgid and state != "Z":
+            members.append(int(entry.name))
+    return members
 
 
 def listening(port: int) -> bool:
@@ -163,41 +181,46 @@ def run_until(tmp_path: Path, mode: str, how: str, setpriv: str = "plain") -> tu
         elif how == "kill-script":  # the script alone: no trap runs, and nothing signals the group
             os.kill(run.pid, signal.SIGKILL)
         status = run.wait(timeout=DEADLINE_S)
-        until(
-            lambda: not alive(server),
-            "the preview server to be gone",
-            TIED_S if how == "kill-script" else DEADLINE_S,
-        )
+        # Before any cleanup: nothing of the run may be left, or the cleanup would hide a leak.
+        playwright = int((tmp_path / "playwright.pid").read_text())
+        wait_s = TIED_S if how == "kill-script" else DEADLINE_S
+        until(lambda: not alive(server), "the preview server to be gone", wait_s)
+        until(lambda: not alive(playwright), "playwright to be gone", wait_s)
+        until(lambda: not group_members(run.pid), "no process of the run to be left", wait_s)
         return status, server, stderr_path.read_text()
     finally:
         with_server = tmp_path / "server.pid"
         if with_server.exists() and alive(int(with_server.read_text())):
             os.kill(int(with_server.read_text()), signal.SIGKILL)
-        # Whatever of the group is left, such as the fake playwright of a killed script.
+        # A safety net after the checks above, for the run that failed them.
         with contextlib.suppress(ProcessLookupError):
             os.killpg(run.pid, signal.SIGKILL)
         run.wait(timeout=DEADLINE_S)
 
 
-@pytest.mark.parametrize("setpriv", ["real", "plain"])
+@pytest.mark.parametrize("setpriv", SETPRIVS)
 def test_the_server_stops_when_the_tests_fail(tmp_path: Path, setpriv: str) -> None:
     status, _, _ = run_until(tmp_path, "fail", "none", setpriv)
     assert status == 3, "the tests' own exit status comes through"
 
 
-@pytest.mark.parametrize("setpriv", ["real", "plain"])
+@pytest.mark.parametrize("setpriv", SETPRIVS)
 def test_the_server_stops_when_the_time_bound_ends_the_run(tmp_path: Path, setpriv: str) -> None:
     status, _, _ = run_until(tmp_path, "hang", "term", setpriv)
     assert status == 143
 
 
+@needs_setpriv
 def test_the_server_stops_when_the_run_is_killed_outright(tmp_path: Path) -> None:
     status, _, _ = run_until(tmp_path, "hang", "kill", "real")
     assert status == -signal.SIGKILL
 
 
-@pytest.mark.skipif(shutil.which("setpriv") is None, reason="the tie to the script needs setpriv")
-def test_the_server_dies_with_the_script_when_only_the_script_is_killed(tmp_path: Path) -> None:
+@needs_setpriv
+def test_the_server_and_playwright_die_with_the_script_when_only_it_is_killed(
+    tmp_path: Path,
+) -> None:
+    # run_until fails unless, before it cleans up, the server, playwright and the group are gone.
     status, server, _ = run_until(tmp_path, "hang", "kill-script", "real")
     assert status == -signal.SIGKILL
     assert not alive(server)
@@ -205,10 +228,27 @@ def test_the_server_dies_with_the_script_when_only_the_script_is_killed(tmp_path
     until(lambda: not listening(port), "the server's port to be closed", TIED_S)
 
 
-def test_a_machine_without_setpriv_is_told_so_and_still_runs(tmp_path: Path) -> None:
-    status, _, stderr = run_until(tmp_path, "fail", "none", "none")
-    assert status == 3
-    assert "no setpriv" in stderr
+def test_a_machine_without_setpriv_is_refused_before_anything_starts(tmp_path: Path) -> None:
+    frontend = fake_frontend(tmp_path)
+    env = {
+        **os.environ,
+        "PATH": tool_path(tmp_path, "none"),
+        "FAKE_DIR": str(tmp_path),
+        "FAKE_MODE": "fail",
+    }
+    done = subprocess.run(
+        [BASH, str(frontend / "e2e" / "run.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=DEADLINE_S,
+        start_new_session=True,
+        check=False,
+    )
+    assert done.returncode != 0
+    assert "needs setpriv" in done.stderr
+    for started in ("vite.built", "server.pid", "playwright.pid"):
+        assert not (tmp_path / started).exists(), f"{started}: something started without setpriv"
 
 
 # The guard against a reused PID, on its own: procs.sh is what run.sh sources.

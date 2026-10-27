@@ -20,6 +20,11 @@ proc_start() {
 # kill_if_started PID START: sends PID the TERM signal only while its start time is still START.
 # It fails, and signals nothing, for a START that is empty, a PID that is gone, or a PID that now
 # belongs to another process.
+# A window remains between the start-time check and the `kill`: if the process ends, is reaped and
+# its PID is reused within those microseconds, the signal still lands on the stranger. It is
+# accepted: bash has no pidfd to close it, a PID is not reused within microseconds (the kernel
+# allocates them in turn, up to pid_max), and the check removes the likely case, a PID reused
+# during the minutes Playwright ran.
 kill_if_started() {
   local now
   [ -n "$2" ] || return 1
