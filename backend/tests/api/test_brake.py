@@ -20,6 +20,7 @@ from live_helpers import (
     script_json,
 )
 
+import oversight.app
 from oversight.agents import (
     MUSE_SPARK,
     LedgerFile,
@@ -251,6 +252,18 @@ def fail_ledger_writes(monkeypatch: pytest.MonkeyPatch, step: str) -> None:
         monkeypatch.setattr(os, "replace", broken_replace)
 
 
+async def expect_halted(s: Any, created: dict[str, Any], detail: str | None = None) -> None:
+    """The card of a run stopped because the ledger was lost says so, after the fatal `error`:
+    without it the frontend keeps the agent at `working` until Reject."""
+    events = await s.until(is_type("agent.status", state="halted"))
+    [fatal] = [i for i, e in enumerate(events) if e.type == "error" and e.payload.fatal]
+    assert fatal < len(events) - 1
+    halted = events[-1].payload
+    assert (halted.agent_id, halted.change_id) == ("agent-1", created["change_id"])
+    assert (halted.slot, halted.state, halted.step) == ("A", "halted", 0)
+    assert halted.detail is not None and (detail or "ledger") in halted.detail
+
+
 @pytest.mark.parametrize("step", ["fsync", "replace"])
 async def test_a_tick_the_ledger_cannot_record_stops_the_run_and_closes_the_brake(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, step: str
@@ -277,6 +290,7 @@ async def test_a_tick_the_ledger_cannot_record_stops_the_run_and_closes_the_brak
         assert model.task.cancelled() and model.calls == 1
         assert [e.type for e in s.events() if e.type == "usage.tick"] == []
         assert read_ledger(settings) == {"spent_usd": 1.0, "unknown": []}
+        await expect_halted(s, created)
         # Writes work again, and the brake stays closed for this process.
         refused = await s.client.post("/agents", json={"task": "t"})
         body = ErrorResponse.model_validate(refused.json()).error
@@ -291,11 +305,16 @@ async def test_a_tick_the_ledger_cannot_record_stops_the_run_and_closes_the_brak
 
 
 class GatedWrites:
-    """A ledger whose write of one chosen total waits on `release`, in its thread, and then
-    succeeds or fails. `entered` is set once that write is waiting; `trace` lists the writes."""
+    """A ledger whose write of one chosen total (any, if `gated` is `None`) waits on `release`,
+    in its thread, and then succeeds or fails. `entered` is set once that write is waiting;
+    `trace` lists the writes."""
 
     def __init__(
-        self, ledger: LedgerFile, monkeypatch: pytest.MonkeyPatch, gated: float, fail: bool = False
+        self,
+        ledger: LedgerFile,
+        monkeypatch: pytest.MonkeyPatch,
+        gated: float | None,
+        fail: bool = False,
     ) -> None:
         self.entered = threading.Event()
         self.release = threading.Event()
@@ -306,7 +325,7 @@ class GatedWrites:
 
         def write(state: LedgerState) -> None:
             self.trace.append(f"enter {state.spent_usd}")
-            if state.spent_usd == gated:
+            if gated is None or state.spent_usd == gated:
                 self.entered.set()
                 assert self.release.wait(DEADLINE_S)
                 if fail:
@@ -319,14 +338,92 @@ class GatedWrites:
     def watch_drain(self, ledger: LedgerFile, monkeypatch: pytest.MonkeyPatch) -> None:
         real_drain = ledger._drain  # pyright: ignore[reportPrivateUsage]
 
-        async def drain(write: Any, new: LedgerState) -> None:
+        async def drain(write: Any, new: LedgerState) -> BaseException | None:
             self.draining.set()
-            await real_drain(write, new)
+            return await real_drain(write, new)
 
         monkeypatch.setattr(ledger, "_drain", drain)
 
     async def wait_entered(self) -> None:
         assert await asyncio.to_thread(self.entered.wait, DEADLINE_S)
+
+
+def lost_run_settings(tmp_path: Path) -> Settings:
+    settings = meta_settings(tmp_path)
+    write_ledger(settings, {"spent_usd": 1.0, "unknown": []})
+    return settings
+
+
+async def expect_lost_ledger(
+    s: Any, settings: Settings, created: dict[str, Any], model: CountingModel, halted_detail: str
+) -> None:
+    """After a run's ledger write failed while it was being cancelled: the fatal `error` names the
+    ledger and says to settle, the card halted, no tick went out as recorded, and the brake stays
+    closed."""
+    [error] = [e for e in await s.until(is_type("error")) if e.type == "error"]
+    assert (error.payload.source, error.payload.fatal) == ("server", True)
+    assert (error.payload.agent_id, error.payload.change_id) == ("agent-1", created["change_id"])
+    assert "ledger" in error.payload.message
+    assert "settle with Meta's console total before the next run" in error.payload.message
+    await expect_halted(s, created, halted_detail)
+    assert model.task is not None and model.calls == 1
+    assert [e.type for e in s.events() if e.type == "usage.tick"] == []
+    assert read_ledger(settings) == {"spent_usd": 1.0, "unknown": []}
+    refused = await s.client.post("/agents", json={"task": "t"})
+    body = ErrorResponse.model_validate(refused.json()).error
+    assert (refused.status_code, body.code) == (403, "spend_brake")
+    assert "settle with Meta's console total before the next run" in body.message
+    # The change stays rejectable, and rejecting it frees the slot.
+    assert (await s.client.post(f"/changes/{created['change_id']}/reject")).status_code == 202
+    await s.until(is_type("agent.status", state="done"))
+    assert s.live._slot is None  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_a_cancel_during_a_ledger_write_that_then_fails_closes_the_brake(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A shutdown or a stop cancels the run while its write is in flight, and the write then
+    # fails: no fatal `error` and no closed brake would leave the spend lost without a word.
+    settings = lost_run_settings(tmp_path)
+    model = CountingModel(ScriptedModel(parse_script(TWO_CALLS), MUSE_SPARK))
+    client: ModelClient = model
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _: client) as s:
+        gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
+        gate.watch_drain(s.live.ledger, monkeypatch)
+        created = (await s.client.post("/agents", json={"task": "t"})).json()
+        await gate.wait_entered()
+        run = s.live._runs[created["agent_id"]]  # pyright: ignore[reportPrivateUsage]
+        run.cancel()
+        await gate.draining.wait()
+        gate.release.set()
+        await asyncio.wait({run})
+        assert run.cancelled()  # the cancellation still propagated
+        await expect_lost_ledger(s, settings, created, model, "ledger")
+    assert model.calls == 1
+
+
+async def test_the_run_timeout_during_a_failing_ledger_write_closes_the_brake(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The run's wall-clock limit (2 s here, long against the start of the run) lands while the
+    # write waits; the test waits on the drain starting, which only the timeout can cause.
+    limits = oversight.app.LIMITS.model_copy(update={"max_wall_clock_s": 2})
+    monkeypatch.setattr(oversight.app, "LIMITS", limits)
+    settings = lost_run_settings(tmp_path)
+    model = CountingModel(ScriptedModel(parse_script(TWO_CALLS), MUSE_SPARK))
+    client: ModelClient = model
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda _: client) as s:
+        gate = GatedWrites(s.live.ledger, monkeypatch, gated=None, fail=True)
+        gate.watch_drain(s.live.ledger, monkeypatch)
+        created = (await s.client.post("/agents", json={"task": "t"})).json()
+        await gate.wait_entered()
+        await gate.draining.wait()
+        gate.release.set()
+        # The loop ends its own run at the limit, halted for that reason; no second status.
+        await expect_lost_ledger(s, settings, created, model, "time limit")
+        halted = [e for e in s.events() if e.type == "agent.status" and e.payload.state == "halted"]
+        assert len(halted) == 1
+    assert model.calls == 1
 
 
 ENTRY = UnknownUsage("run-20261026-000000", "agent-1", None, "2026-10-26T00:00:00.000Z")
@@ -345,8 +442,9 @@ async def test_a_cancelled_ledger_write_ends_before_the_lock_is_released(
         first.cancel()
         second = asyncio.create_task(ledger.record(1.0, ENTRY))
         gate.release.set()
-        with pytest.raises(asyncio.CancelledError):
+        with pytest.raises(asyncio.CancelledError) as cancelled:
             await first
+        assert cancelled.value.__cause__ is None  # a clean cancel carries no write error
         # The cancelled write landed, and the next one started only after it ended.
         assert await second == LedgerState(3.0, ())
     assert gate.trace == ["enter 2.0", "exit 2.0", "enter 3.0", "exit 3.0"]
@@ -387,7 +485,9 @@ async def test_a_cancelled_ledger_write_that_fails_leaves_the_state_unknown(
         await gate.wait_entered()
         first.cancel()
         gate.release.set()
-        with pytest.raises(asyncio.CancelledError):
+        with pytest.raises(asyncio.CancelledError) as cancelled:
             await first
+    # Still a cancellation, and it names the write that was lost.
+    assert isinstance(cancelled.value.__cause__, OSError)
     assert ledger.state is None
     assert ledger.read() == LedgerState(1.0, ())

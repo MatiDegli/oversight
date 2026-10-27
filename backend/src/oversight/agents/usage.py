@@ -185,7 +185,9 @@ class LedgerFile:
         (`None`) appends `unknown`. A failed write raises and leaves `state` as `None`, so the
         caller refuses further metered starts: the spend on disk is behind. The write runs to its
         end before the lock is released, also when this call is cancelled: a thread cannot be
-        stopped, and a late `os.replace` must not land on a file someone else has written since."""
+        stopped, and a late `os.replace` must not land on a file someone else has written since.
+        A cancelled call whose write then failed still raises its `CancelledError`, with the
+        write's error as `__cause__`: the caller must tell a lost write from a clean cancel."""
         async with self._lock:
             state = self.state
             if state is None:
@@ -198,23 +200,26 @@ class LedgerFile:
             write = asyncio.ensure_future(asyncio.to_thread(self.write, new))
             try:
                 await asyncio.shield(write)
-            except asyncio.CancelledError:
-                await self._drain(write, new)
+            except asyncio.CancelledError as cancelled:
+                error = await self._drain(write, new)
+                if error is not None:
+                    raise cancelled from error
                 raise
             self.state = new
             return new
 
-    async def _drain(self, write: "asyncio.Future[None]", new: LedgerState) -> None:
-        """Wait for a write in flight however often this task is cancelled again. `state` is `new`
-        only if the write succeeded; otherwise it stays `None`, and the next metered start is
-        refused."""
+    async def _drain(self, write: "asyncio.Future[None]", new: LedgerState) -> BaseException | None:
+        """Wait for a write in flight however often this task is cancelled again; the error it
+        ended with, or `None`. `state` is `new` only if the write succeeded; otherwise it stays
+        `None`, and the next metered start is refused."""
         while not write.done():
             with contextlib.suppress(asyncio.CancelledError):
                 await asyncio.wait({write})
         if write.cancelled():
-            return
+            return None
         error = write.exception()
         if error is None:
             self.state = new
         else:
             _log.error("a cancelled ledger write failed: %s", error.__class__.__name__)
+        return error

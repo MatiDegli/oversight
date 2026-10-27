@@ -57,6 +57,13 @@ async def test_shutdown_mid_run_ends_the_run_closes_the_store_and_frees_the_lock
         # The ended change can still be read from the log; nothing after the store closed.
         logged = [SERVER_EVENT.validate_json(e.envelope).type for e in read_store(s.store.path)]
         assert logged[:2] == ["run.started", "graph.snapshot"]
+        # A plain shutdown says nothing about the agent's state: only a lost ledger halts it.
+        states = [
+            e.payload.state
+            for e in map(SERVER_EVENT.validate_json, (e.envelope for e in read_store(s.store.path)))
+            if e.type == "agent.status"
+        ]
+        assert states == ["starting", "working"]
 
 
 async def test_shutdown_reaps_a_blocked_venv_build_before_the_store_closes(

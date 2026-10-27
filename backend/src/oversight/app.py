@@ -10,7 +10,7 @@ the store, the lock.
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -56,6 +56,7 @@ from oversight.workspace import Tree, Workspace
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import AgentCreated, StartAgent
 from oversight_contracts.events import (
+    AgentStatus,
     Budget,
     ChangeResolved,
     ErrorReport,
@@ -167,6 +168,8 @@ class LiveRun:
         self._ledger_lost = False
         """Set once a model call could not be written to the ledger: the file is behind the real
         spend by that call. Every Meta start is refused until the process restarts."""
+        self._ledger_lost_agents: set[str] = set()
+        """Agents whose model call the ledger could not record: their runs end halted."""
         self._slot: str | None = None
         """Who holds slot A: "starting" during a start, then the agent's id until its change is
         rejected or merged."""
@@ -316,15 +319,28 @@ class LiveRun:
     async def _persist(self, tick: UsageTick) -> None:
         """Fails closed. A tick the ledger could not take is not published as recorded: a fatal
         `error` goes out instead, every Meta start is refused until a restart, and the agent's run
-        stops as a shutdown stops it (cancelled, so `_run` ends it and its change is rejected the
-        usual way). After a restart the brake reads the last good file: the lost call is only
-        recovered by `ledger settle`."""
+        stops as a shutdown stops it (cancelled, so `_run` ends it halted and its change is
+        rejected the usual way). A write that fails after a cancel (the run's timeout, a stop or
+        a shutdown) takes the same road, and the cancellation still propagates. After a restart
+        the brake reads the last good file: the lost call is only recovered by `ledger settle`."""
         entry = UnknownUsage(self.run_id, tick.agent_id, tick.model, format_ts(datetime.now(UTC)))
         try:
             await self.ledger.record(tick.cost_usd, entry)
         except (LedgerError, OSError) as error:
-            self._ledger_lost = True
-            await self._report(
+            await self._ledger_gone(tick, error)
+            raise asyncio.CancelledError from error
+        except asyncio.CancelledError as cancelled:
+            if cancelled.__cause__ is not None:  # the write was waited for after the cancel
+                await self._ledger_gone(tick, cancelled.__cause__)
+            raise
+
+    async def _ledger_gone(self, tick: UsageTick, error: BaseException) -> None:
+        """The brake closes before the first await. The report is finished however often this
+        task is cancelled again: the fatal `error` is what tells me to settle."""
+        self._ledger_lost = True
+        self._ledger_lost_agents.add(tick.agent_id)
+        await self._finish(
+            self._report(
                 "server",
                 f"The ledger (.runtime/ledger.json) could not record a model call: "
                 f"{_describe(error)}. This run is stopped; {SETTLE} ({SETTLE_HOW}).",
@@ -332,7 +348,16 @@ class LiveRun:
                 change_id=self._change_ids.get(tick.agent_id),
                 fatal=True,
             )
-            raise asyncio.CancelledError from error
+        )
+
+    @staticmethod
+    async def _finish[T](work: Awaitable[T]) -> T:
+        """Run `work` to its end, however often this task is cancelled meanwhile."""
+        future = asyncio.ensure_future(work)
+        while not future.done():
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.wait({future})
+        return future.result()
 
     # --- Commands -----------------------------------------------------------------------------
 
@@ -440,6 +465,7 @@ class LiveRun:
         self, manager: ChangeManager, task: AgentTask, client: ModelClient, tree: Tree
     ) -> None:
         end: RunEnd | None = None
+        run: AgentRun | None = None
         try:
             run = AgentRun(
                 task,
@@ -452,6 +478,10 @@ class LiveRun:
                 pricing=self._pricing if self._metered else None,
             )
             end = await run.run()
+        except asyncio.CancelledError:
+            if task.agent_id in self._ledger_lost_agents:
+                await self._halt_for_ledger(task, run.steps if run else 0)
+            raise
         except Exception as error:
             await self._report(
                 "agent",
@@ -463,6 +493,25 @@ class LiveRun:
         finally:
             self._runs.pop(task.agent_id, None)
             manager.run_ended(task.agent_id, end)
+
+    async def _halt_for_ledger(self, task: AgentTask, steps: int) -> None:
+        """A run stopped because the ledger was lost ends halted, as the card should say; a plain
+        cancel (a shutdown) says nothing. A store that cannot take it leaves a log line."""
+        status = AgentStatus(
+            agent_id=task.agent_id,
+            slot=task.slot,
+            change_id=task.change_id,
+            task=task.task,
+            model=self.profile.id,
+            state="halted",
+            step=steps,
+            max_steps=task.limits.max_steps,
+            detail="The ledger could not record a model call: the run was stopped.",
+        )
+        try:
+            await self._finish(self._publish(status))
+        except Exception as error:
+            _log.error("could not publish %s's halt: %s", task.agent_id, _describe(error))
 
     def approve(self, change_id: str, comment: str | None) -> None:
         if self._manager is None:

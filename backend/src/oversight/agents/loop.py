@@ -142,6 +142,11 @@ class AgentRun:
         self._failures = 0
         self._seen: Counter[tuple[str, str, str]] = Counter()
 
+    @property
+    def steps(self) -> int:
+        """Tool calls finished so far."""
+        return self._step
+
     async def _status(self, state: AgentState, detail: str | None = None) -> None:
         task = self._task
         await self._publish(
