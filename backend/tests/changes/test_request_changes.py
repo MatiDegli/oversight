@@ -226,6 +226,23 @@ async def test_main_not_clean_keeps_the_conflict(h: Harness) -> None:
 
 
 @bounded
+async def test_move_shown_again_by_the_next_proposal(h: Harness) -> None:
+    """A file the move could not show again stays unpublished; the next proposal shows it."""
+    await conflicted(h)
+    shown = len(h.payloads(ChangeUpdated))
+    h.fail_once = ChangeUpdated
+
+    assert await h.manager.request_changes("change-1", "Redo.") is not None
+
+    assert errors(h, "shop/mod.py was not shown")
+    assert len(h.payloads(ChangeUpdated)) == shown
+    assert await h.finish(1)
+    [update] = h.payloads(ChangeUpdated)[shown:]
+    assert update.file.original is not None and "return 5" in update.file.original
+    assert h.types()[-2:] == ["change.updated", "change.proposed"]
+
+
+@bounded
 async def test_redo_after_failed_combined_tests_names_them(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     main_head = await commit_on_main(h, {"tests/test_twice.py": STRICT})

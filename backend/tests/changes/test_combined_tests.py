@@ -3,8 +3,8 @@
 import pytest
 from changes_helpers import Harness, bounded
 
-from oversight.workspace import SuiteRun, Tree
-from oversight_contracts.events import ChangeResolved
+from oversight.workspace import SuiteRun, Tree, WorkspaceError
+from oversight_contracts.events import ChangeResolved, ErrorReport
 
 pytestmark = pytest.mark.anyio
 
@@ -91,4 +91,26 @@ async def test_no_combined_tests_when_main_did_not_move(
     monkeypatch.setattr(h.workspace, "run_tests", refuse)
     await h.manager.approve("change-1", None)
     assert ran == []
+    assert h.payloads(ChangeResolved)[0].merge == "merged"
+
+
+@bounded
+async def test_combined_tests_that_cannot_run_leave_main_unchanged(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await h.run_agent(1, EDIT)
+    pre = await add_on_main(h, "tests/test_twice.py", LOOSE)
+
+    async def broken(tree: Tree, *, timeout_s: float) -> SuiteRun:
+        raise WorkspaceError("the demo venv is missing")
+
+    monkeypatch.setattr(h.workspace, "run_tests", broken)
+    await h.manager.approve("change-1", None)
+
+    assert await h.main_head() == pre
+    await assert_main_clean(h)
+    assert h.payloads(ChangeResolved) == []
+    assert any("the demo venv is missing" in e.message for e in h.payloads(ErrorReport))
+    monkeypatch.undo()
+    await h.manager.approve("change-1", None)  # still `ready`
     assert h.payloads(ChangeResolved)[0].merge == "merged"
