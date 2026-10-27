@@ -57,9 +57,31 @@ Native tools. Front 12 sends `tools` and reads `tool_calls` in Chat Completions,
 <!-- probe:baseten -->
 ## Baseten: Muse Spark Open
 
-Skipped: BASETEN_API_KEY is not set.
+- Date: 2026-10-26 23:22 ART
+- Endpoint: `https://inference.baseten.co/v1`
+- Model requested: `meta-models/muse-spark-open-1026`; reported by the API: `meta-models/muse-spark-open-1026`
+- Calls made: 8 of at most 8
 
-Still unknown for agent B: which slug is right (`meta-models/muse-spark-open-1026` in AGENTS.md; the Baseten changelog's example is `meta-models/muse-spark-open`), whether native tool calling and parallel calls work, which parameter sets reasoning, what usage is reported, and the latency. Run `uv run --frozen python tools/probe_api.py baseten` once `BASETEN_API_KEY` is set.
+### Answers
+
+| Question | Answer | Evidence |
+| --- | --- | --- |
+| Plain chat call, and the model id the API reports | works; the API reports `meta-models/muse-spark-open-1026` | HTTP 200, 1.87 s; finish_reason=stop; reply '541171' |
+| Native tool call (read_file and edit_file as JSON Schema tools) | returned in the standard format | HTTP 200, 0.90 s; finish_reason=tool_calls; tool_calls=1; type=function; name=read_file; arguments=['path']; id present; content=None |
+| A tool result sent back: the next turn uses it | yes, an edit_file call built on the result | HTTP 200, 1.07 s; finish_reason=tool_calls; name=edit_file; old_text holds the value only the result had: yes; old_text appears exactly once in the file: yes; new_text holds 0.085: yes |
+| Parallel tool calls in one turn | yes, 2 calls in one turn | HTTP 200, 1.13 s; tool_calls=['read_file', 'read_file'] |
+| Reasoning with no parameter sent (the default) | on by default (113 reasoning tokens with no parameter) | completion_tokens_details.reasoning_tokens=113; reasoning_content="We need to answer with number only. 1847 * 293 = ?\n\nCalculate: 1847*293 = 1847*(300-7) = 554100 - 12929 = 541171\n\nLet's double-check: 1847*200=369400, *90=166230 => 535630, *3=5541 => 541171 yes.\n\nSo answer 541171\n\nWe should answer with number only.\n\nThe recall: We need to do exactly that. Probably trivial.\n\nAnswer with number only: 541171" |
+| `reasoning_effort: low` (top-level parameter, Chat Completions) | accepted | HTTP 200, 0.89 s; reasoning_tokens=122 (default call: 113); completion_tokens=134 |
+| `reasoning_effort: none` (top-level parameter, Chat Completions) | accepted | HTTP 200, 0.88 s; reasoning_tokens=98 (default call: 113); completion_tokens=110 |
+| `temperature` and `max_completion_tokens`: rejected, ignored or honored | both accepted; the token limit is honored (finish_reason length); reasoning used the budget and left the reply empty | HTTP 200, 0.63 s; finish_reason=length; completion_tokens=32, of which reasoning_tokens=29; reply length 0 characters; temperature 0.2 has no effect one call can show |
+| Streaming with `stream_options: {include_usage: true}` | works; usage arrives in the last chunk | HTTP 200, 2.49 s; chunks=104; first chunk after 0.63 s; usage: completion_tokens=418, prompt_tokens=160, total_tokens=578, completion_tokens_details.accepted_prediction_tokens=311, completion_tokens_details.audio_tokens=0, completion_tokens_details.reasoning_tokens=405, completion_tokens_details.rejected_prediction_tokens=438, prompt_tokens_details.audio_tokens=0, prompt_tokens_details.cached_tokens=128 |
+| Token usage on every response, and as what | yes, on all 7 responses; cached input tokens non-zero on 7 of 7 | fields: completion_tokens=125, prompt_tokens=160, total_tokens=285, completion_tokens_details.accepted_prediction_tokens=86, completion_tokens_details.audio_tokens=0, completion_tokens_details.reasoning_tokens=113, completion_tokens_details.rejected_prediction_tokens=187, prompt_tokens_details.audio_tokens=0, prompt_tokens_details.cached_tokens=128; cached input tokens at prompt_tokens_details.cached_tokens; per call, in/out/cached/reasoning: chat: 160/125/128/113; tools_call: 825/97/128/16; tools_result: 934/205/768/84; parallel: 808/178/768/62; reasoning_low: 160/134/128/122; reasoning_none: 160/110/128/98; limits: 158/32/128/29 |
+| Latency per call, non-streaming and streaming | median 0.99 s, from 0.63 to 2.49 s over 8 calls | chat 1.87 s, tools_call 0.90 s, tools_result 1.07 s, parallel 1.13 s, reasoning_low 0.89 s, reasoning_none 0.88 s, limits 0.63 s, stream 2.49 s |
+| Rate-limit headers on responses | x-ratelimit-limit-requests=100, x-ratelimit-limit-tokens=2000000, x-ratelimit-remaining-requests=49, x-ratelimit-remaining-tokens=2000000 | x-ratelimit-* and retry-after |
+
+### Verdict
+
+Native tools. Front 12 sends `tools` and reads `tool_calls` in Chat Completions, then answers each call with one `tool` message. Parallel calls: yes, 2 calls in one turn. Reasoning: with no parameter, on by default (113 reasoning tokens with no parameter); `reasoning_effort` low was accepted; none was accepted. One sample each, on a trivial prompt: low gave 122 reasoning tokens and the default 113, so what each setting costs is still unmeasured.
 
 ### Where the endpoint and model names came from
 
