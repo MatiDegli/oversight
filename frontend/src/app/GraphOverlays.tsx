@@ -19,7 +19,7 @@ export function GraphHeading({ state }: { state: State }) {
   const count = (value: number, one: string, many: string) =>
     `${String(value)} ${plural(value, one, many)}`;
   return (
-    <div className="overlay-fill flex flex-wrap items-baseline gap-x-3.5 gap-y-1">
+    <div className="overlay-fill flex flex-wrap items-baseline gap-x-3.5 gap-y-1 rounded-control px-(--spacing-sm) py-(--spacing-xs)">
       <h2 className="text-(length:--headline-size) leading-(--headline-line-height) font-bold">
         {repo}
       </h2>

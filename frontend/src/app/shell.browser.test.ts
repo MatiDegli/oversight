@@ -250,6 +250,11 @@ it("limits fixed blur to graph controls and fills other overlays (M8)", async ()
           shadow: style.boxShadow,
           expectedShadow: expected.boxShadow,
           blur: style.backdropFilter,
+          inset: Math.min(
+            ...[style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft].map(
+              Number.parseFloat,
+            ),
+          ),
         };
         reference.remove();
         return result;
@@ -259,6 +264,7 @@ it("limits fixed blur to graph controls and fills other overlays (M8)", async ()
       expect(look.fill).not.toBe("rgba(0, 0, 0, 0)");
       expect(look.shadow).toContain(look.expectedShadow);
       expect(look.expectedShadow).not.toBe("none");
+      expect(look.inset).toBeGreaterThan(0);
     };
     await filled(".graph-stage h2:has-text('demo-repo') >> ..");
     await page.evaluate(() => {
