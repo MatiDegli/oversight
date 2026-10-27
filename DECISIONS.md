@@ -193,6 +193,18 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   they are told why, and the merge stays a deliberate pointer act.
 - **Bezier edges kept over taxi (maintainer, 2026-10-26):** captures of both on the preset layout
   were compared; curves read better.
+- **Visual parity round 1 (maintainer, 2026-10-27).** Nothing moves; each answer below is built.
+  Edges draw under leaf nodes and quiet down (0.45) unless an agent is at them or the person
+  selects a node; frame headers can still be crossed by an edge (a frame is one node, and its fill
+  would hide the edges behind it). Search, history and settings are left out of the top bar until
+  each is built, with no logo mark or Ctrl K hint. The ready card shows the summary only. The Agents
+  heading counts slots in use and the task box is pinned to the panel's bottom. The legend names
+  "Editing or changed" (dashed and filled: editing is dashed here, solid only in the sketch). Each
+  step shows its age against the latest event's time, kept per step in the state, so a replay reads
+  as it did live. The budget is "US$150" when round. Module file names stay in Next. A touched frame
+  says its state in its header and gives up its count while it does; an empty module or class
+  stacks its title and count. If the person's focus was in what leaves a card (the step list, Live
+  diff), the card takes it, and only then.
 - **Review change takes its agent's color (2026-10-27, to confirm):** the sketches fill the button
   with the agent's color and the dark on-agent letters, and DESIGN.md's button list does not name it
   (primary is text-colored for Approve and merge, Send and Start agent). It follows the sketch: it

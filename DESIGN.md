@@ -285,6 +285,10 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Text-box placeholder | `#6d6d68` | faint `#85857f`, 5.3:1 on field | same |
 | Exact call edge | `#4a4a46`, 2.4:1 on black | `#6a6a65`, 3.7:1 | quality floor: meaningful graphics at 3:1 |
 | Possible call edge | `#3a3a37`, 1.8:1 | `#5f5f5b`, 3.14:1 on a module frame at 90% over ground (3.28:1 on ground) | same, measured on its worst surface, unrounded; it stays thinner and grey |
+| Call edge no agent is at (watch) | full strength | quiet-edge, 0.45 opacity, until an agent reads, edits or changes a node it touches, or the person selects one | the demo graph has 47 edges across its frames; stepping back the ones nobody is at lets the others read. Context, like the dimmed nodes of review: the full edge returns on selection |
+| Edge draw order | not specified | frames, then edges, then leaf nodes; a frame's header is part of its frame, so an edge can still cross it | keeps a line from crossing a node's name without hiding the edges behind the frames' fill |
+| Task box keyboard hint | none | "Ctrl+Enter to start" under the box | the hint is how the keyboard starts an agent; a hint belongs next to what it starts |
+| Search, history and settings in the top bar | drawn | left out until each feature is built | a control that looks present and does nothing is worse than no control |
 | Input border | `#222222` to `#262626` | control-edge `#62625e`, 3.2:1 on field | quality floor: a control's boundary at 3:1 |
 | Task box fill | `#070707` | field `#0b0b0b` | one fill for every input |
 | Pressed rail button | `#161616` | raised `#121212` | one color for hover and pressed |
@@ -554,8 +558,10 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 
 ### Navigation
 
-- **Top bar** (shell): product name, repository, branch and short commit hash (Mono), the search
-  box, the review queue counter, the spend total (level 2), history and settings icons.
+- **Top bar** (shell): product name, repository, branch and short commit hash (Mono), the review
+  queue counter and the spend total (level 2, the budget in whole dollars when it is round:
+  "US$150"). The search box, the history icon and the settings icon join the bar when each feature
+  is built, not before.
 - **Review queue counter:** "1 change ready for review" with a lamp, on raised. It counts across
   agents, so it is neutral, never an agent's color.
 - **Left rail** (shell): icon buttons; the current view's button on raised.

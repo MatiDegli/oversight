@@ -139,6 +139,7 @@
   --node-opacity: 0.94;
   --dim-node: 0.16;
   --dim-module: 0.6;
+  --quiet-edge: 0.45;
   --matte-grain: 0.02;
   --dot-cell-size: 7px;
   --dot-lamp-coverage: 0.72;

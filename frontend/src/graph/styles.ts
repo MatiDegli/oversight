@@ -23,6 +23,13 @@ type Widen<T> = T extends string
     : { [K in keyof T]: Widen<T[K]> };
 type GraphTheme = Widen<ReturnType<typeof getActiveTheme>>;
 
+/**
+ * Draw order, low to high: frames, then edges, then leaf nodes. Edges run over a frame's fill but
+ * under every node's name and marks, so a line never crosses a label. (A frame's header is part of
+ * the frame, so a line can still cross it.)
+ */
+const LAYER = { frame: 1, edge: 2, leaf: 3 } as const;
+
 export function graphStyles(
   theme: GraphTheme,
   shape: EdgeShape = EDGE_CURVE_STYLE,
@@ -122,6 +129,8 @@ export function graphStyles(
         // Keep the preset's proportions in units of the graph's body type.
         width: geometry.width,
         height: geometry.height,
+        "z-index-compare": "manual",
+        "z-index": LAYER.leaf,
       },
     },
     {
@@ -147,7 +156,11 @@ export function graphStyles(
     },
     {
       selector: "node.module:parent, node.class:parent",
-      style: { "text-valign": "top", padding: `${String(geometry.padding)}px` },
+      style: {
+        "text-valign": "top",
+        padding: `${String(geometry.padding)}px`,
+        "z-index": LAYER.frame,
+      },
     },
     {
       // A frame's title and count are its header row, drawn as images; its label would sit above it.
@@ -246,6 +259,8 @@ export function graphStyles(
         "target-arrow-color": theme.edge,
         "target-arrow-shape": "triangle",
         width: theme["exact-edge-width"],
+        "z-index-compare": "manual",
+        "z-index": LAYER.edge,
       },
     },
     { selector: "edge.imports", style: { "target-arrow-shape": "chevron" } },
@@ -277,6 +292,9 @@ export function graphStyles(
         "target-arrow-color": theme["edge-possible"],
       },
     },
+    // Watch mode: an edge no agent touches steps back; one at a node the person selected comes back.
+    { selector: "edge.quiet", style: { opacity: theme["quiet-edge"] } },
+    { selector: "edge.touching", style: { opacity: 1 } },
     { selector: "node.dimmed, edge.dimmed", style: { opacity: theme["dim-node"] } },
     { selector: "node.module.dimmed", style: { opacity: theme["dim-module"] } },
     {

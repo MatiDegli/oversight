@@ -182,6 +182,14 @@ export function graphElements(
         edge.kind,
         edge.confidence,
         ...(addedEdgeSlots.get(edge.id) ?? []),
+        // In watch, an edge stays quiet unless it touches a node an agent reads, edits or has
+        // changed (or one the person selects, which the selection adds), or is itself a change.
+        ...(lit === null &&
+        !addedEdgeSlots.has(edge.id) &&
+        !nodeMarks[edge.src] &&
+        !nodeMarks[edge.dst]
+          ? ["quiet"]
+          : []),
         ...(lit === null
           ? []
           : lit.has(edge.src) && lit.has(edge.dst)

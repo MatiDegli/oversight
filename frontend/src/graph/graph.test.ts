@@ -11,6 +11,7 @@ import { themes } from "../theme";
 import { loadGraphEvents } from "./devLog";
 import { graphElements } from "./elements";
 import { EDGE_CURVE_STYLE, graphStyles } from "./styles";
+import { showSelection } from "./selection";
 import { updateGraph } from "./updateGraph";
 
 cytoscape.use(fcose);
@@ -240,10 +241,11 @@ describe("graph mapping", () => {
       ["method"],
       ["function"],
     ]);
+    // In watch, no agent touches these, so each edge is quiet.
     expect(graph.edges().map((e) => e.classes())).toEqual([
-      ["calls", "possible"],
-      ["imports", "exact"],
-      ["inherits", "exact"],
+      ["calls", "possible", "quiet"],
+      ["imports", "exact", "quiet"],
+      ["inherits", "exact", "quiet"],
     ]);
     expect(graph.getElementById("billing:fee").style("font-family")).toBe(theme["text-font"]);
   });
@@ -821,6 +823,104 @@ describe("graph updates and log entry point", () => {
     expect(graph.getElementById("billing:Bill.total").parent().first().id()).toBe("billing");
     expect(graph.getElementById("billing:Bill.total").position()).toEqual({ x: 225, y: 200 });
     expect(graph.getElementById("edge-calls").target().id()).toBe("billing");
+  });
+});
+
+describe("edges in watch: draw order and the quiet of edges nobody is at", () => {
+  /** The fixture plus an edge between two functions that no agent touches. */
+  function withSpareEdge(state: State): State {
+    if (!state.graph) throw new Error("Missing graph");
+    return {
+      ...state,
+      graph: {
+        ...state.graph,
+        nodes: [
+          ...state.graph.nodes,
+          node("billing:x", "function", "billing"),
+          node("billing:y", "function", "billing"),
+        ],
+        edges: [
+          ...state.graph.edges,
+          {
+            id: "xy",
+            kind: "calls",
+            src: "billing:x",
+            dst: "billing:y",
+            confidence: "exact",
+            reason: null,
+          },
+        ],
+      },
+    };
+  }
+  const read = (state: State, ids: string[]) =>
+    applyEvent(
+      state,
+      event(state.lastSeq + 1, "agent.focus", {
+        agent_id: a.agent_id,
+        mode: "read",
+        node_ids: ids,
+        ranges: [],
+      }),
+    );
+  const quiet = (graph: Core) =>
+    Object.fromEntries(graph.edges().map((edge) => [edge.id(), edge.hasClass("quiet")]));
+
+  it("draws frames, then edges, then leaf nodes, so a line never crosses a node's name", () => {
+    const graph = render(initial());
+    const z = (id: string) => graph.getElementById(id).numericStyle("z-index");
+    const frames = [z("billing"), z("billing:Bill")];
+    const edges = graph.edges().map((edge) => edge.numericStyle("z-index"));
+    const leaves = [z("billing:fee"), z("billing:Bill.total")];
+    expect(Math.max(...frames)).toBeLessThan(Math.min(...edges));
+    expect(Math.max(...edges)).toBeLessThan(Math.min(...leaves));
+    for (const element of [...graph.nodes(), ...graph.edges()])
+      expect(element.style("z-index-compare")).toBe("manual");
+  });
+
+  it("keeps every edge quiet while no agent is anywhere near it, at the token's opacity", () => {
+    const graph = render(withSpareEdge(initial()));
+    expect(Object.values(quiet(graph)).every(Boolean)).toBe(true);
+    for (const edge of graph.edges())
+      expect(edge.numericStyle("opacity")).toBe(theme["quiet-edge"]);
+  });
+
+  it("brings back the edges at a node an agent reads, and leaves the rest quiet", () => {
+    const graph = render(withSpareEdge(read(initial(), ["billing:fee"])));
+    expect(quiet(graph)).toEqual({
+      "edge-calls": false,
+      "edge-imports": false,
+      "edge-inherits": false,
+      xy: true,
+    });
+    expect(graph.getElementById("edge-calls").numericStyle("opacity")).toBe(1);
+    expect(graph.getElementById("xy").numericStyle("opacity")).toBe(theme["quiet-edge"]);
+  });
+
+  it("never quiets an edge a change adds, and a changed node's edges stay clear", () => {
+    const graph = render(withSpareEdge(updated()));
+    expect(quiet(graph)["added-call"]).toBe(false);
+    expect(quiet(graph).xy).toBe(true);
+    expect(quiet(graph)["edge-calls"]).toBe(false);
+  });
+
+  it("quiets nothing in review, where lit and dimmed already say which edges matter", () => {
+    cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(theme) });
+    updateGraph(cy, graphElements(withSpareEdge(initial()), false, new Set(["billing:fee"])));
+    expect(Object.values(quiet(cy)).some(Boolean)).toBe(false);
+  });
+
+  it("brings back the edges at the node the person selects, and quiets them again after", () => {
+    const graph = render(withSpareEdge(initial()));
+    showSelection(graph, "billing:x");
+    expect(graph.getElementById("xy").hasClass("touching")).toBe(true);
+    expect(graph.getElementById("xy").numericStyle("opacity")).toBe(1);
+    expect(graph.getElementById("edge-calls").numericStyle("opacity")).toBe(theme["quiet-edge"]);
+    showSelection(graph, "billing:fee");
+    expect(graph.getElementById("xy").numericStyle("opacity")).toBe(theme["quiet-edge"]);
+    expect(graph.getElementById("edge-calls").numericStyle("opacity")).toBe(1);
+    showSelection(graph, null);
+    expect(graph.edges().filter(".touching")).toHaveLength(0);
   });
 });
 

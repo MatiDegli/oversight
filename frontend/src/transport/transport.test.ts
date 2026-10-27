@@ -299,6 +299,8 @@ describe("live transport", () => {
       ...createInitialState(),
       run: newRun.payload,
       lastSeq: 1,
+      // The new run's first event is its "now"; nothing of the old run's times survives.
+      clock: newRun.ts,
     });
     source().emit(graph);
     expect(store.getState().state.lastSeq).toBe(2);
