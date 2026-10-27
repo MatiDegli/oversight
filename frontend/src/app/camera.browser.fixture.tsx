@@ -127,6 +127,11 @@ export const graphTest = {
     render("watch");
   },
   mountCone,
+  unmount: () => {
+    flushSync(() => {
+      root.render(null);
+    });
+  },
 };
 
 declare global {

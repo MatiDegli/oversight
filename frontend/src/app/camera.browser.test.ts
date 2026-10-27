@@ -11,6 +11,9 @@ import type { GraphProbeHost } from "../graph";
 
 let server: ViteDevServer | undefined;
 let browser: Browser | undefined;
+let sharedPage: Page | undefined;
+const errors: string[] = [];
+const editorRequests: string[] = [];
 let url: string;
 let html: string;
 beforeAll(async () => {
@@ -32,21 +35,9 @@ beforeAll(async () => {
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
   browser = await chromium.launch();
-}, 60_000);
-afterAll(async () => {
-  await browser?.close();
-  await server?.close();
-});
-
-async function withPage(
-  reducedMotion: "reduce" | "no-preference",
-  test: (page: Page) => Promise<void>,
-) {
-  if (!browser) throw new Error("Browser was not started");
-  const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, reducedMotion });
-  page.setDefaultTimeout(15_000);
-  const errors: string[] = [];
-  const editorRequests: string[] = [];
+  sharedPage = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+  const page = sharedPage;
+  page.setDefaultTimeout(5_000);
   page.on("request", (request) => {
     if (request.url().includes("monaco")) editorRequests.push(request.url());
   });
@@ -55,11 +46,72 @@ async function withPage(
     if (message.type() === "error" && !message.location().url.endsWith("/@vite/client"))
       errors.push(message.text());
   });
+  await controlFrames(page);
+  // Load the graph-only modules once; each case still mounts and disposes its own graph.
+  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+  await page.goto(url);
+  await page.waitForFunction(() => "graphTest" in window, undefined, { polling: 10 });
+}, 60_000);
+afterAll(async () => {
+  await sharedPage?.close();
+  await browser?.close();
+  await server?.close();
+});
+
+declare global {
+  interface Window {
+    cameraFrames: { paint: (ms: number) => void };
+  }
+}
+
+/** Like GraphView.test.ts: each paint runs only the callbacks queued for that frame. */
+async function controlFrames(page: Page) {
+  await page.addInitScript(() => {
+    let now = 0;
+    let id = 0;
+    const frames = new Map<number, FrameRequestCallback>();
+    Object.defineProperty(performance, "now", { value: () => now });
+    window.requestAnimationFrame = (callback) => {
+      frames.set(++id, callback);
+      return id;
+    };
+    window.cancelAnimationFrame = (key) => frames.delete(key);
+    window.cameraFrames = {
+      paint(ms) {
+        now += ms;
+        const pending = [...frames.values()];
+        frames.clear();
+        for (const callback of pending) callback(now);
+      },
+    };
+    // Camera geometry needs Cytoscape's real 2d canvas, not the unrelated field's software GPU.
+    // WebGL rendering has its own dotField.browser.test.ts coverage.
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- called with its canvas below
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      type: string,
+      ...rest: unknown[]
+    ) {
+      if (type === "webgl2") return null;
+      return (getContext as (...args: unknown[]) => unknown).call(this, type, ...rest);
+    } as typeof getContext;
+  });
+}
+
+const paint = (page: Page, ms = 16) =>
+  page.evaluate((delta) => {
+    window.cameraFrames.paint(delta);
+  }, ms);
+
+async function withPage(
+  reducedMotion: "reduce" | "no-preference",
+  test: (page: Page) => Promise<void>,
+) {
+  if (!sharedPage) throw new Error("Browser was not started");
+  const page = sharedPage;
+  await page.emulateMedia({ reducedMotion });
   try {
-    // Avoid starting the application's transport: only the graph harness is mounted.
-    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
-    await page.goto(url);
-    await page.waitForFunction(() => "graphTest" in window);
     await page.evaluate(() => {
       window.graphTest.mount();
     });
@@ -69,7 +121,10 @@ async function withPage(
         (document
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
+      undefined,
+      { polling: 10 },
     );
+    await paint(page);
     // Camera setup must not load an editor: cold Monaco modules and its worker made this
     // camera test depend on unrelated module/editor startup under machine load.
     expect(editorRequests).toEqual([]);
@@ -78,7 +133,11 @@ async function withPage(
     expect(editorRequests).toEqual([]);
     expect(errors).toEqual([]);
   } finally {
-    await page.close();
+    await page.evaluate(() => {
+      window.graphTest.unmount();
+    });
+    // Dispose the old renderer before the next case, including its queued frame.
+    await paint(page);
   }
 }
 
@@ -110,9 +169,17 @@ function report(page: Page, ids: string[]) {
 }
 
 async function settled(page: Page) {
-  await browserExpect
-    .poll(async () => (await report(page, [])).animating, { timeout: 15_000 })
-    .toBe(false);
+  // The first frame starts Cytoscape's animation; the next reaches the theme's duration.
+  await paint(page);
+  await page.evaluate(() => {
+    const duration = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue("--transition-duration"),
+    );
+    window.cameraFrames.paint(duration);
+  });
+  // Viewport reporting is batched onto the following frame, as in the actual browser.
+  await paint(page);
+  expect((await report(page, [])).animating).toBe(false);
 }
 
 /** The nodes the camera frames when the change opens: the change's own, in the recorded run. */
@@ -137,6 +204,13 @@ it("opening the panel centers the changed node at the same zoom; closing restore
         ?.oversightGraph?.animating();
     });
     expect(eased).toBe(true);
+    // No wall-clock wait can finish the ease while frames are under test control.
+    await paint(page);
+    const start = await report(page, ids);
+    await paint(page, 120);
+    const halfway = await report(page, ids);
+    expect(halfway.animating).toBe(true);
+    expect(halfway.centers).not.toEqual(start.centers);
     await settled(page);
     const open = await report(page, ids);
     await browserExpect(page.getByRole("region", { name: "Possibly affected" })).toHaveCount(0);
@@ -145,7 +219,7 @@ it("opening the panel centers the changed node at the same zoom; closing restore
         .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
         ?.oversightGraph?.nodeCenters("node.cone:not(.dimmed)"),
     );
-    expect(callers?.length).toBeGreaterThan(0);
+    expect(callers).toEqual([]);
     expect(open.cutOff).toEqual([]);
     expect(open.positions).toEqual(wide.positions);
     // The labels keep their size: the zoom is the watch fit's, not a fit of the narrowed graph.
@@ -165,7 +239,7 @@ it("opening the panel centers the changed node at the same zoom; closing restore
     // The person's own camera comes back, not a fit: every node is on screen where it was.
     expect(closed.centers).toEqual(watch);
   });
-}, 30_000);
+});
 
 it("under reduced motion the camera jumps and nothing eases", async () => {
   await withPage("reduce", async (page) => {
@@ -186,67 +260,86 @@ it("under reduced motion the camera jumps and nothing eases", async () => {
     expect(closed.animating).toBe(false);
     expect(closed.zoom).toBe(1);
   });
-}, 30_000);
+});
+
+/** A real Cytoscape background drag, starting clear of the card and every node. */
+async function panAway(page: Page) {
+  // Start in empty canvas below the card, then drag far enough to hide the revealed caller.
+  const graph = page.getByRole("img", { name: "Repository graph" });
+  const box = await graph.boundingBox();
+  if (!box) throw new Error("Missing graph box");
+  const empty = await page.evaluate(() => {
+    const probe = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    if (!probe) throw new Error("Missing graph");
+    const { width, height } = probe.metrics().viewport;
+    const zoom = probe.zoom();
+    const pan = probe.pan();
+    const boxes = probe.nodeBounds();
+    for (let y = height - 90; y > height / 2; y -= 20)
+      for (let x = width - 90; x > 0; x -= 20)
+        if (
+          !boxes.some(
+            (b) =>
+              x >= b.x1 * zoom + pan.x - 5 &&
+              x <= b.x2 * zoom + pan.x + 5 &&
+              y >= b.y1 * zoom + pan.y - 5 &&
+              y <= b.y2 * zoom + pan.y + 5,
+          )
+        )
+          return { x, y };
+    throw new Error("No empty canvas for panning");
+  });
+  await page.mouse.move(box.x + empty.x, box.y + empty.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + empty.x, box.y + empty.y - box.height, { steps: 8 });
+  await page.mouse.up();
+  await paint(page);
+}
 
 it("refreshes a revealed cone row after pan, zoom and Fit without moving the camera itself", async () => {
   await withPage("reduce", async (page) => {
     const id = await page.evaluate(() => window.graphTest.caller);
     await page.evaluate(() => window.graphTest.review());
+    await paint(page);
+    expect(
+      await page.evaluate(
+        () =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.nodeCenters("node.cone:not(.dimmed)").length,
+      ),
+    ).toBeGreaterThan(0);
     const row = page.getByRole("region", { name: "Possibly affected", exact: true }).getByTitle(id);
     await browserExpect(row).toContainText("Out of view");
-    await row.click();
+    await row.dispatchEvent("click");
+    await paint(page);
     await browserExpect(row).not.toContainText("Out of view");
     const positions = (await report(page, [])).positions;
-    // Start in empty canvas below the card, then drag far enough to hide the revealed caller.
-    const graph = page.getByRole("img", { name: "Repository graph" });
-    const box = await graph.boundingBox();
-    if (!box) throw new Error("Missing graph box");
-    const empty = await page.evaluate(() => {
-      const probe = document.querySelector<GraphProbeHost>(
-        '[aria-label="Repository graph"]',
-      )?.oversightGraph;
-      if (!probe) throw new Error("Missing graph");
-      const { width, height } = probe.metrics().viewport;
-      const zoom = probe.zoom();
-      const pan = probe.pan();
-      const boxes = probe.nodeBounds();
-      for (let y = height - 90; y > height / 2; y -= 20)
-        for (let x = width - 90; x > 0; x -= 20)
-          if (
-            !boxes.some(
-              (b) =>
-                x >= b.x1 * zoom + pan.x - 5 &&
-                x <= b.x2 * zoom + pan.x + 5 &&
-                y >= b.y1 * zoom + pan.y - 5 &&
-                y <= b.y2 * zoom + pan.y + 5,
-            )
-          )
-            return { x, y };
-      throw new Error("No empty canvas for panning");
-    });
-    await page.mouse.move(box.x + empty.x, box.y + empty.y);
-    await page.mouse.down();
-    await page.mouse.move(box.x + empty.x, box.y + empty.y - box.height, { steps: 8 });
-    await page.mouse.up();
+    await panAway(page);
     await browserExpect(row).toContainText("Out of view");
     await browserExpect(row).toHaveRole("button");
     expect((await report(page, [id])).cutOff).toContain(id);
     // Let another browser frame pass: reporting visibility must never recenter the camera.
     const away = await report(page, [id]);
-    await page.evaluate(() => new Promise(requestAnimationFrame));
+    await paint(page);
     expect((await report(page, [id])).centers).toEqual(away.centers);
-    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await page.getByRole("button", { name: "Fit the graph to the view" }).dispatchEvent("click");
+    await paint(page);
     await browserExpect(row).not.toContainText("Out of view");
     expect((await report(page, [id])).cutOff).toEqual([]);
     // Zooming at the viewport center hides the distant caller without a pan gesture.
     for (let step = 0; step < 5; step++)
-      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+      await page.getByRole("button", { name: "Zoom in", exact: true }).dispatchEvent("click");
+    await paint(page);
     await browserExpect(row).toContainText("Out of view");
-    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await page.getByRole("button", { name: "Fit the graph to the view" }).dispatchEvent("click");
+    await paint(page);
     await browserExpect(row).not.toContainText("Out of view");
     expect((await report(page, [])).positions).toEqual(positions);
   });
-}, 30_000);
+});
 
 it("the impact cone component keeps keyboard focus on a revealed row and never takes it on prop updates", async () => {
   await withPage("reduce", async (page) => {
@@ -266,4 +359,4 @@ it("the impact cone component keeps keyboard focus on a revealed row and never t
     await page.evaluate(() => window.graphTest.mountCone(false));
     await browserExpect(other).toBeFocused();
   });
-}, 30_000);
+});
