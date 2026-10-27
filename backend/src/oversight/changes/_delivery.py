@@ -184,7 +184,7 @@ async def send_event(
     # outcome: the store may commit the event however many cancels the close-out gets, and
     # the next close-out must not send it again.
     sending = ctx.spawn(deliver(ctx, payload))
-    sending.add_done_callback(functools.partial(functools.partial(receipt, ctx), rec, name))
+    sending.add_done_callback(functools.partial(receipt, ctx, rec, name))
     rec.sending = sending
     cancelled = await ctx.settled(sending)
     if cancelled or sending.cancelled():
