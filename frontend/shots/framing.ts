@@ -5,6 +5,7 @@ import type { NodeBounds } from "../src/graph";
 type Box = Pick<NodeBounds, "x1" | "y1" | "x2" | "y2">;
 interface Frame {
   zoom: number;
+  labelSizes: { name: number; state: number };
   pan: { x: number; y: number };
   size: { width: number; height: number };
   leftInset?: number;
@@ -43,9 +44,12 @@ export function assertReadableFrame(frame: Frame): void {
     );
   let targets = [...frame.focus, ...frame.cone];
   assert(targets.length > 0, "no nodes to frame");
-  if (fit(targets) < 0.4)
-    targets = [...frame.focus, ...frame.cone.filter((n) => (n.distance ?? 1) <= 1)];
-  const expectedZoom = Math.max(0.4, Math.min(1, fit(targets)));
+  const floor = 11 / Math.min(frame.labelSizes.name, frame.labelSizes.state);
+  assert(frame.zoom >= floor - 1e-6, "labels must render at least 11 CSS px");
+  if (fit(targets) < floor - 1e-7)
+    targets = [...frame.focus, ...frame.cone.filter((n) => (n.distance ?? 1) === 1)];
+  const partial = fit(targets) < floor - 1e-7;
+  const expectedZoom = partial ? floor : Math.max(floor, Math.min(1, fit(targets)));
   assert(
     Math.abs(frame.zoom - expectedZoom) < 1e-6,
     `zoom ${String(frame.zoom)}; expected ${String(expectedZoom)}`,
@@ -55,9 +59,8 @@ export function assertReadableFrame(frame: Frame): void {
     node.x2 * frame.zoom + frame.pan.x <= bounds.x2 + 1e-6 &&
     node.y1 * frame.zoom + frame.pan.y >= bounds.y1 - 1e-6 &&
     node.y2 * frame.zoom + frame.pan.y <= bounds.y2 + 1e-6;
-  // If distance 1 is itself oversized, keep the change visible; the rows carry the rest.
-  if (fit(targets) < 0.4) targets = frame.focus;
-  if (targets.length && fit(targets) >= 0.4)
+  if (partial) targets = nearestTargets(frame, fit, floor);
+  if (targets.length && fit(targets) >= floor - 1e-7)
     assert(
       targets.every((node) => inside(node, area)),
       "target outside the clear area",
@@ -85,4 +88,24 @@ export function assertReadableFrame(frame: Frame): void {
       "out-of-view card marks must match actual visibility",
     );
   }
+}
+
+/** Independently require each nearest caller that can join the already selected boxes. */
+function nearestTargets(frame: Frame, fit: (nodes: NodeBounds[]) => number, floor: number) {
+  const gap = (node: NodeBounds) =>
+    Math.min(
+      ...frame.focus.map((change) =>
+        Math.hypot(
+          Math.max(0, node.x1 - change.x2, change.x1 - node.x2),
+          Math.max(0, node.y1 - change.y2, change.y1 - node.y2),
+        ),
+      ),
+    );
+  const targets = [...frame.focus];
+  for (const node of frame.cone
+    .filter((n) => (n.distance ?? 1) === 1)
+    .sort((a, b) => gap(a) - gap(b) || a.id.localeCompare(b.id))) {
+    if (fit([...targets, node]) >= floor - 1e-7) targets.push(node);
+  }
+  return targets;
 }

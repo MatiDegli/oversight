@@ -7,6 +7,7 @@ const changed = { id: "changed", x1: 100, y1: 80, x2: 150, y2: 120 };
 const near = { id: "caller", x1: 250, y1: 150, x2: 350, y2: 250, distance: 1 };
 const frame = {
   zoom: 1,
+  labelSizes: { name: 18, state: 16 },
   pan: { x: 75, y: 35 },
   size: { width: 600, height: 400 },
   focus: [changed],
@@ -28,7 +29,7 @@ void test("both panels must frame the change and cone; live has no review card o
   }, /review rows/);
 });
 
-void test("shots requires the zoom needed for the full cone, between 40% and 100%", () => {
+void test("shots requires the zoom needed for the full cone with legible labels", () => {
   assertReadableFrame(frame);
   assert.throws(() => {
     assertReadableFrame({ ...frame, zoom: 0.9 });
@@ -40,23 +41,23 @@ void test("shots requires the zoom needed for the full cone, between 40% and 100
   }, /expected 0.88/);
 });
 
-void test("shots falls back to distance 1 if farther callers cannot fit at 40%", () => {
+void test("shots falls back to distance 1 if farther callers cannot fit legibly", () => {
   const far = { ...near, id: "far", x1: 2000, x2: 2050, distance: 2 };
   const fallback = { ...frame, cone: [near, far], outOfView: [far.id] };
   assertReadableFrame(fallback);
   assert.throws(() => {
     assertReadableFrame({ ...fallback, zoom: 0.4 });
-  }, /expected 1/);
+  }, /11 CSS px/);
   assert.throws(() => {
     assertReadableFrame({ ...fallback, outOfView: [] });
   }, /actual visibility/);
 });
 
-void test("shots accepts the floor around the change when even distance 1 cannot fit", () => {
+void test("shots accepts the legibility floor when no distance 1 member fits", () => {
   const far = { ...near, id: "far", x1: 2000, x2: 2050 };
   const fallback = {
     ...frame,
-    zoom: 0.4,
+    zoom: 11 / 16,
     pan: { x: 250, y: 160 },
     cone: [far],
     outOfView: [far.id],
@@ -64,7 +65,7 @@ void test("shots accepts the floor around the change when even distance 1 cannot
   assertReadableFrame(fallback);
   assert.throws(() => {
     assertReadableFrame({ ...fallback, zoom: 0.3 });
-  }, /expected 0.4/);
+  }, /11 CSS px/);
 });
 
 void test("shots checks the clear area and the card's actual occlusion separately", () => {

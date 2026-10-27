@@ -148,12 +148,33 @@ function panelFrame(page: Page) {
     const view = host?.oversightGraph;
     const clear = document.querySelector("[data-graph-clear-area]")?.getBoundingClientRect();
     if (!host || !view || !clear) throw new Error("Missing graph clear area");
+    const graph = host.getBoundingClientRect();
+    const overlay = document
+      .querySelector('[aria-label="Possibly affected"]')
+      ?.getBoundingClientRect();
+    const card = overlay
+      ? {
+          x1: overlay.left - graph.left,
+          y1: overlay.top - graph.top,
+          x2: overlay.right - graph.left,
+          y2: overlay.bottom - graph.top,
+        }
+      : undefined;
     return {
       zoom: view.zoom(),
+      labelSizes: {
+        name: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--node-name-size"),
+        ),
+        state: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--node-word-size"),
+        ),
+      },
       pan: view.pan(),
       size: { width: host.clientWidth, height: host.clientHeight },
+      card,
       area: {
-        x1: 40,
+        x1: (card?.x2 ?? 0) + 40,
         y1: 40,
         x2: host.clientWidth - 40,
         y2: Math.min(host.clientHeight - 40, clear.bottom - host.getBoundingClientRect().top),
@@ -375,7 +396,11 @@ it.each(["open", "review"] as const)(
         const middle = await report(page, ids);
         await page.clock.runFor(160);
         const opened = await report(page, ids);
-        expect(opened.zoom).toBeGreaterThanOrEqual(0.4);
+        const framed = await panelFrame(page);
+        expect(
+          Math.min(framed.labelSizes.name, framed.labelSizes.state) * opened.zoom,
+        ).toBeGreaterThanOrEqual(11 - 1e-6);
+        assertPanelFrame(framed, mode === "open" ? "live-diff" : "review");
         expect(opened.zoom).toBeLessThan(1);
         expect(opened.cutOff).toEqual([]);
         expect(opened.positions).toEqual(wide.positions);

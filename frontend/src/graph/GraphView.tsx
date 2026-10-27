@@ -56,7 +56,7 @@ export interface GraphViewProps {
    */
   panelOpen?: boolean;
   /**
-   * The change's nodes, framed with the cone between 100% and 40%.
+   * The change's nodes, framed with the cone while keeping names and state words legible.
    * Read only when the panel target changes; incoming events move nothing. Empty falls back to the
    * selected node, then to the whole graph.
    */

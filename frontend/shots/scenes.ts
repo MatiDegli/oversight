@@ -33,7 +33,7 @@ export interface Theme {
 /**
  * Clicks the center of the first node with a pending change, as the person would, waits for the
  * left panel (`panel`, its aria-label) to show the diff's inserted lines and for the camera to
- * settle, then checks the change and cone framing between 100% and 40%.
+ * settle, then checks the change and cone framing with legible labels and state words.
  * Cytoscape draws on a canvas, so the node's place on screen comes from the graph element's own
  * probe (src/graph/probe.ts), which the app exposes for this. A proposed change opens review; one
  * still being edited opens the live diff.
@@ -55,7 +55,7 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
     return host?.oversightGraph?.animating() === false;
   }, graph);
   // Full lit bounds include labels and badges; the graph's position between panel and rail is its
-  // viewport. Distant cone nodes use the out-of-view rows when the full cone cannot fit at 40%.
+  // viewport. Distant cone nodes use the out-of-view rows when the full cone cannot fit legibly.
   const framed = await page.evaluate(
     ({ selector }) => {
       const host = document.querySelector<GraphProbeHost>(selector);
@@ -63,6 +63,14 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
       return host && view
         ? {
             zoom: view.zoom(),
+            labelSizes: {
+              name: Number.parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--node-name-size"),
+              ),
+              state: Number.parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--node-word-size"),
+              ),
+            },
             area: (() => {
               const clear = document
                 .querySelector("[data-graph-clear-area]")

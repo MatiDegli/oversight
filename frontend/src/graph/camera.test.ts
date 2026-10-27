@@ -3,6 +3,7 @@ import type { Core } from "cytoscape";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getActiveTheme } from "../theme";
+import { changeZoom } from "./changeFrame";
 import {
   frameBox,
   frameCamera,
@@ -310,10 +311,10 @@ describe("frameCamera", () => {
     expect(cy.zoom()).toBe(1);
   });
 
-  it("keeps the change visible at 40% when even the first ring cannot fit", () => {
+  it("keeps the change legible when even the first ring cannot fit", () => {
     const cy = narrowedGraph(504);
     frameCamera(cy, ["a"], true, { coneIds: ["c", "d"] });
-    expect(cy.zoom()).toBe(0.4);
+    expect(cy.zoom()).toBe(changeZoom().min);
     expect(inView(cy, ["a"])).toBe(true);
     expect(inView(cy, ["c", "d"])).toBe(false);
   });
@@ -324,12 +325,13 @@ describe("frameCamera", () => {
     cy.getElementById("b").data("distance", 1).style("bounds-expansion", 10);
     cy.getElementById("d").data("distance", 2);
     frameCamera(cy, ["a"], true, { coneIds: ["d", "b"] });
-    expect(inView(cy, ["a", "b", "d"])).toBe(true);
-    expect(cy.zoom()).toBeGreaterThanOrEqual(0.4);
-    expect(cy.zoom()).toBeLessThan(0.8);
+    expect(inView(cy, ["a", "b"])).toBe(true);
+    expect(inView(cy, ["d"])).toBe(false);
+    expect(cy.zoom()).toBeGreaterThanOrEqual(changeZoom().min);
+    expect(cy.zoom()).toBe(1);
     const bounds = cy
       .nodes()
-      .filter((node) => ["a", "b", "d"].includes(node.id()))
+      .filter((node) => ["a", "b"].includes(node.id()))
       .renderedBoundingBox();
     expect(bounds.x1).toBeGreaterThanOrEqual(40 - 0.5);
     expect(bounds.x2).toBeLessThanOrEqual(804 - 40 + 0.5);

@@ -30,6 +30,14 @@ function camera(page: Page, id: string) {
       representative: view.representative(wanted),
       representedOutOfView: [...new Set(outside.map((id) => view.representative(id)))],
       zoom: view.zoom(),
+      labelSizes: {
+        name: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--node-name-size"),
+        ),
+        state: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--node-word-size"),
+        ),
+      },
       leftInset: (() => {
         const card = document.querySelector('[aria-label="Possibly affected"]');
         return card ? card.getBoundingClientRect().right - element.getBoundingClientRect().left : 0;
@@ -131,7 +139,7 @@ it("opens review only from the person's click, keeps the change and cone lit, di
   });
 }, 30_000);
 
-it("frames the cone down to 40%, clears the card, and marks only clipped boxes", async () => {
+it("frames the cone with legible labels, clears the card, and marks only clipped boxes", async () => {
   await withPage(false, async (page) => {
     const changed = await page.evaluate(() => window.reviewTest.changed);
     const watch = await camera(page, changed);
@@ -141,7 +149,9 @@ it("frames the cone down to 40%, clears the card, and marks only clipped boxes",
     await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
     const review = await camera(page, changed);
     expect(review.leftInset).toBeCloseTo(304);
-    expect(review.zoom).toBeGreaterThanOrEqual(0.4);
+    expect(
+      Math.min(review.labelSizes.name, review.labelSizes.state) * review.zoom,
+    ).toBeGreaterThanOrEqual(11 - 1e-6);
     expect(review.zoom).toBeLessThanOrEqual(1);
     assertReadableFrame({ ...review, outOfView: review.representedOutOfView });
     // All excluded nodes remain lit and listed; the camera never removes cone entries.

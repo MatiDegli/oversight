@@ -494,9 +494,13 @@ person is doing.
   the person is not navigating); no node ever moves. A cone row that says "Out of view" pans the
   camera to its node when clicked, and never otherwise.
 - **Opening a change:** review and live diff frame the changed nodes and the cone up to its
-  depth limit, zooming out only as needed between 100% and 40%. If the full cone cannot fit at
-  40%, frame the changes and distance 1; farther members stay listed in review's out-of-view
-  rows. Hidden methods frame their folded class row. Center within the graph bounds and prefer
+  depth limit, zooming out only as needed from 100%, with a floor derived from the smaller of
+  the node-name-size and node-word-size tokens so names and state words stay at least 11 CSS px.
+  If the full cone cannot fit at that floor, frame the changes and distance 1; if that still cannot
+  fit, keep the changes and add distance 1 members in order of their shortest box-to-change gap,
+  as many as fit at the floor. Other members stay listed in review's out-of-view rows.
+  The measured cone overlay column and bottom controls stay clear of every framed node.
+  Hidden methods frame their folded class row. Center within the graph bounds and prefer
   uncut module frames as at the start. One 240ms eased move, or a reduced-motion jump; a person's
   navigation interrupts it. Live edits never repeat that move. Closing restores the saved camera.
 - **The preset's arrangement:** modules in columns, calls flowing from left to right, in two passes
