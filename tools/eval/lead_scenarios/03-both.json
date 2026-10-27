@@ -1,0 +1,8 @@
+{
+  "id": "coupon-and-stock",
+  "task": "Assign coupon whitespace normalization and preservation of stock on failed reservations to two agents with disjoint implementation and test zones.",
+  "changes": [
+    {"change_id": "A", "summary": "Normalize coupon text", "files": ["shop/pricing.py"], "review": {"verdict": "request_changes", "findings": ["SHOULD-FIX shop/pricing.py:25: Normalize case as well as whitespace."]}},
+    {"change_id": "B", "summary": "Preserve stock on a failed reservation", "files": ["shop/inventory.py"], "review": {"verdict": "request_changes", "findings": ["BLOCKING shop/inventory.py:29: The reserved count changes before availability is checked.", "NIT shop/inventory.py:30: Prefer a shorter local variable name."]}}
+  ]
+}
