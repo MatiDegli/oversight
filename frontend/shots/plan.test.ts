@@ -45,8 +45,8 @@ void test("the real list: watch, review, live diff, task slots and file view run
   const jobs = planJobs(scenes, themes);
   const running = jobs.filter((job) => job.skip === null).map((job) => job.file);
   assert.deepEqual(running, [
-    "watch-dark-bezier.png",
-    "watch-dark-taxi.png",
+    "watch-dark.png",
+    "watch-fit-dark.png",
     "review-dark.png",
     "live-diff-dark.png",
     "task-one-slot-dark.png",
@@ -55,7 +55,15 @@ void test("the real list: watch, review, live diff, task slots and file view run
   ]);
   assert.deepEqual(
     scenes.map((scene) => scene.name),
-    ["watch", "review", "live-diff", "task-one-slot", "task-two-slots-braked", "file-view"],
+    [
+      "watch",
+      "watch-fit",
+      "review",
+      "live-diff",
+      "task-one-slot",
+      "task-two-slots-braked",
+      "file-view",
+    ],
   );
   assert.ok(scenes.every((scene) => scene.enabled || (scene.needs ?? "") !== ""));
   assert.ok(themes.every((theme) => theme.enabled || (theme.needs ?? "") !== ""));
@@ -104,6 +112,7 @@ void test("a log without a pre-proposal edit still captures watch, review and fi
     enabled.map((scene) => [scene.name, logForScene(source, scene)]),
     [
       ["watch", source],
+      ["watch-fit", source],
       ["review", source],
       ["live-diff", null],
       ["file-view", source],
