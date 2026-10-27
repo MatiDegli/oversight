@@ -252,9 +252,9 @@ export function Frame(props: FrameProps) {
   const { state, view, onNodeTap, canOpenChange, onOpenChange, onClosePanel, notice } = props;
   const open = panelOpen(view);
   // The cone and the change stay lit until the decision; events never open review themselves.
-  const { cone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
+  const { cone, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
   // The dot field's light follows the same state and the same view, so it never needs an event.
-  const field = useMemo(() => fieldInput(state, view, cone), [state, view, cone]);
+  const field = useMemo(() => fieldInput(state, view, liveCone), [state, view, liveCone]);
   // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
   const shown = view.review ?? view.diff?.changeId ?? null;
   const shownChange = shown === null ? undefined : state.changes[shown];
@@ -302,6 +302,7 @@ export function Frame(props: FrameProps) {
             litIds={litIds}
             frameIds={frameIds}
             cone={cone}
+            liveCone={liveCone}
             frameKey={frameKey}
             onFramed={onFramed}
             coneCardRef={coneCardRef}

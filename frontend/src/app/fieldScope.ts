@@ -28,9 +28,9 @@ export function fieldScope(state: State, view: View): FieldScope {
 export function fieldInput(
   state: State,
   view: View,
-  cone: ImpactCone | null = graphScope(state, view).cone,
+  liveCone: ImpactCone | null = graphScope(state, view).liveCone,
 ): FieldInput {
   const target = fieldScope(state, view);
-  const scope = target.mode === "live-diff" ? { ...target, cone } : target;
+  const scope = target.mode === "live-diff" ? { ...target, cone: liveCone } : target;
   return { mode: scope.mode, lights: selectLights(state, scope) };
 }

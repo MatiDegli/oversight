@@ -59,8 +59,10 @@ export interface GraphViewProps {
   frameIds?: readonly string[] | null;
   /** The nodes that stay lit while everything else dims, as in review; null dims nothing. */
   litIds?: readonly string[] | null;
-  /** The current bounded cone: the proposal in review, a frontend preview in live diff. */
+  /** The review proposal's cone, used for its card, framing and out-of-view report. */
   cone?: ImpactCone | null;
+  /** Live preview for node dimming and distance badges only; never moves the camera. */
+  liveCone?: ImpactCone | null;
   /** Changes only when the person opens a different panel target or enters review. */
   frameKey?: string | null;
   /** Reports the camera decision to the cone card without changing the lit set. */
@@ -115,6 +117,7 @@ export function GraphView({
   litIds = null,
   frameIds = null,
   cone = null,
+  liveCone = null,
   frameKey = null,
   onFramed,
   coneCardRef,
@@ -136,6 +139,7 @@ export function GraphView({
     const relit =
       latest.current.litIds !== litIds ||
       latest.current.cone !== cone ||
+      latest.current.liveCone !== liveCone ||
       latest.current.field?.mode !== field.mode;
     latest.current = {
       selectedId,
@@ -144,6 +148,7 @@ export function GraphView({
       litIds,
       frameIds,
       cone,
+      liveCone,
       frameKey,
       onFramed,
       coneCardRef,
@@ -158,6 +163,7 @@ export function GraphView({
     litIds,
     frameIds,
     cone,
+    liveCone,
     frameKey,
     onFramed,
     coneCardRef,
@@ -244,7 +250,7 @@ export function GraphView({
             stateStore.getState().state,
             false,
             lit ? new Set(lit) : null,
-            latest.current.cone,
+            latest.current.cone ?? latest.current.liveCone,
             latest.current.field?.mode === "live-diff",
           ),
         );

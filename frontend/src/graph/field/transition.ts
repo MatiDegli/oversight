@@ -31,6 +31,7 @@ function blendLights(
   from: readonly FieldLight[],
   to: readonly FieldLight[],
   t: number,
+  pulses: boolean,
 ): FieldLight[] {
   const before = new Map(from.map((light) => [key(light), light]));
   const after = new Map(to.map((light) => [key(light), light]));
@@ -39,7 +40,7 @@ function blendLights(
     const b = after.get(id);
     const light = b ?? a;
     if (!light) throw new Error("Missing transition light");
-    const pulseWeight = mix(a ? pulse(a) : 0, b ? pulse(b) : 0, t);
+    const pulseWeight = pulses ? mix(a ? pulse(a) : 0, b ? pulse(b) : 0, t) : 0;
     return {
       ...light,
       weight: mix(a?.weight ?? 0, b?.weight ?? 0, t),
@@ -56,6 +57,7 @@ export class FieldTransition {
   private started = 0;
   private duration = 0;
   private easing = "";
+  private pulses = true;
 
   constructor(initial: FieldScene) {
     this.from = initial;
@@ -75,7 +77,11 @@ export class FieldTransition {
     jump: boolean,
   ) {
     this.from = this.sample(now);
-    this.to = { lights: input.lights, config };
+    this.pulses = input.mode === "watch" || input.mode === "live-diff";
+    const lights = this.pulses
+      ? input.lights
+      : input.lights.map((light) => ({ ...light, pulses: false, pulseWeight: 0 }));
+    this.to = { lights, config };
     this.started = now;
     this.duration = jump ? 0 : Number.parseFloat(duration);
     this.easing = easing;
@@ -92,7 +98,7 @@ export class FieldTransition {
     const a = this.from.config.profile;
     const b = this.to.config.profile;
     return {
-      lights: blendLights(this.from.lights, this.to.lights, t),
+      lights: blendLights(this.from.lights, this.to.lights, t, this.pulses),
       config: {
         ...this.to.config,
         profile: {

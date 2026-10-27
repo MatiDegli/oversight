@@ -84,7 +84,8 @@ it.each([14, 20])(
       (light) => light.source === "work-light",
     );
     const graphView = graphScope(state, watching);
-    expect(graphView.cone?.entries).toEqual([{ node_id: current.id, distance: 1 }]);
+    expect(graphView.cone).toBeNull();
+    expect(graphView.liveCone?.entries).toEqual([{ node_id: current.id, distance: 1 }]);
     expect(graphView.litIds).toContain(current.id);
     expect(lights).toEqual([{ id: current.id, source: "work-light", weight: 0.48, pulses: false }]);
   },

@@ -70,18 +70,23 @@ it("leaves watch without a cone", () => {
   );
 });
 
-it("shares the current live cone with the graph, dimming and field selector before a proposal", () => {
-  render({ ...initialView, diff: { changeId: "change-1", path: "shop/pricing.py" } }, 14);
+it("keeps live cone lights and dimming separate from the review card and camera scope", () => {
+  const html = render(
+    { ...initialView, diff: { changeId: "change-1", path: "shop/pricing.py" } },
+    14,
+  );
   const props = graph.render.mock.calls.at(-1)?.[0] as GraphViewProps;
-  expect(props.cone?.entries.length).toBeGreaterThan(0);
+  expect(html).not.toContain('aria-label="Possibly affected"');
+  expect(props.cone).toBeNull();
+  expect(props.liveCone?.entries.length).toBeGreaterThan(0);
   expect(
     props.field?.lights
       .filter((light) => light.source === "work-light")
       .map((light) => light.id)
       .sort(),
-  ).toEqual(props.cone?.entries.map((entry) => entry.node_id).sort());
+  ).toEqual(props.liveCone?.entries.map((entry) => entry.node_id).sort());
   expect(props.litIds).toEqual(
-    expect.arrayContaining(props.cone?.entries.map((entry) => entry.node_id) ?? []),
+    expect.arrayContaining(props.liveCone?.entries.map((entry) => entry.node_id) ?? []),
   );
 });
 

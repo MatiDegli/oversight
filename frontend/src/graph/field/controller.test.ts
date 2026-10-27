@@ -106,6 +106,45 @@ describe("field fallback", () => {
 });
 
 describe("field transitions", () => {
+  it.each([
+    ["watch", "review"],
+    ["watch", "file"],
+    ["live-diff", "review"],
+    ["live-diff", "file"],
+  ] as const)(
+    "stops breathing and rings immediately from %s to %s, including fading lights",
+    (from, mode) => {
+      const controller = createFieldController(canvas, source);
+      controller.update({
+        mode: from,
+        lights: light.lights.map((item) => ({ ...item, pulses: true })),
+      });
+      advance(240);
+      expect(last()[3][0]?.pulses).toBe(true);
+      controller.update({
+        mode,
+        lights: [
+          {
+            id: "a",
+            source: mode === "review" ? "agent-a" : "work-light",
+            weight: 0.8,
+            pulses: false,
+          },
+        ],
+      });
+      for (const time of [240, 360, 479]) {
+        advance(time);
+        const lights = last()[3];
+        expect(lights).toHaveLength(mode === "review" ? 1 : 2);
+        expect(lights.every((item) => !item.pulses && item.pulseWeight === 0)).toBe(true);
+      }
+      advance(480);
+      expect(last()[3]).toHaveLength(1);
+      expect(canvas.oversightField?.animating()).toBe(false);
+      controller.dispose();
+    },
+  );
+
   it("eases light weights and mode profiles for the 240 ms token, then stops frames", () => {
     const controller = createFieldController(canvas, source);
     controller.update(light);

@@ -1,8 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { BoxSource } from "./boxSource";
+import { createFieldController } from "./controller";
+import type { FieldHost } from "./controller";
 import { createLampRenderer } from "./renderer";
 
-/** Only WebGL entry points used during init; handles are tracked by identity. */
+/** WebGL entry points for initialization and drawing; handles are tracked by identity. */
 function context(failure: string) {
   const shaders: object[] = [];
   const programs: object[] = [];
@@ -52,6 +55,18 @@ function context(failure: string) {
     disable: vi.fn(),
     getError: vi.fn(() => (failure === "gl-error" ? 1285 : 0)),
     isContextLost: vi.fn(() => failure === "context-lost"),
+    activeTexture: vi.fn(),
+    texImage2D: vi.fn(),
+    texSubImage2D: vi.fn(),
+    viewport: vi.fn(),
+    useProgram: vi.fn(),
+    uniform1i: vi.fn(),
+    uniform2f: vi.fn(),
+    uniform1f: vi.fn(),
+    uniform4f: vi.fn(),
+    clearColor: vi.fn(),
+    clear: vi.fn(),
+    drawArrays: vi.fn(),
   };
   const canvas = { getContext: () => gl } as unknown as HTMLCanvasElement;
   return { canvas, gl, shaders, programs, textures, deleted };
@@ -108,3 +123,84 @@ describe("failed field initialization", () => {
     expect(test.deleted.textures).toEqual(test.textures);
   });
 });
+
+function mountCanvas(gl: unknown): FieldHost {
+  vi.stubGlobal("window", Object.assign(new EventTarget(), { devicePixelRatio: 1 }));
+  vi.stubGlobal(
+    "document",
+    Object.assign(new EventTarget(), {
+      hidden: false,
+      documentElement: { dataset: { theme: "dark" } },
+    }),
+  );
+  vi.stubGlobal(
+    "MutationObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  vi.stubGlobal("matchMedia", () => null);
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn(() => 1),
+  );
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  return Object.assign(new EventTarget(), {
+    getContext: () => gl,
+    clientWidth: 70,
+    clientHeight: 70,
+    hidden: false,
+  }) as unknown as FieldHost;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+it.each(["draw-error", "texture-allocation"])(
+  "falls back through the controller and frees GL resources after a runtime %s",
+  (failure) => {
+    const test = context("");
+    const canvas = mountCanvas(test.gl);
+    const source = {
+      boxes: () => new Map([["a", { x1: 0, y1: 0, x2: 10, y2: 10 }]]),
+      subscribe: () => () => undefined,
+    } as unknown as BoxSource;
+    const controller = createFieldController(canvas, source);
+    expect(canvas.oversightField?.state()).toBe("webgl");
+    expect(test.gl.texImage2D).toHaveBeenCalledOnce();
+    expect(test.gl.drawArrays).toHaveBeenCalledOnce();
+    expect(test.deleted.programs).toEqual([]);
+    expect(test.deleted.textures).toEqual([]);
+    controller.update({
+      mode: "watch",
+      lights: [{ id: "a", source: "agent-a", weight: 1, pulses: true }],
+    });
+    expect(canvas.oversightField?.animating()).toBe(true);
+    const draws = canvas.oversightField?.draws();
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fail = () => {
+      test.gl.getError.mockReturnValue(1285);
+    };
+    if (failure === "texture-allocation") {
+      Object.assign(canvas, { clientWidth: 140 });
+      test.gl.texImage2D.mockImplementationOnce(fail);
+    } else test.gl.drawArrays.mockImplementationOnce(fail);
+    controller.redraw();
+    expect(error).toHaveBeenCalledOnce();
+    expect(canvas.hidden).toBe(true);
+    expect(canvas.oversightField?.state()).toBe("plain");
+    expect(canvas.oversightField?.animating()).toBe(false);
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(1);
+    expect(canvas.oversightField?.draws()).toBe(draws);
+    expect(canvas.oversightField?.lamp(0, 0)).toBeNull();
+    expect(canvas.oversightField?.pixel(0, 0)).toBeNull();
+    controller.redraw();
+    controller.dispose();
+    expect(test.deleted.programs).toEqual(test.programs);
+    expect(test.deleted.textures).toEqual(test.textures);
+    expect(test.deleted.shaders).toEqual([...test.shaders].reverse());
+  },
+);
