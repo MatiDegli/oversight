@@ -6,6 +6,8 @@ import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
+import { assertPanelFrame } from "../../shots/framing";
+
 import type {} from "./camera.browser.fixture";
 import type { GraphProbeHost } from "../graph";
 
@@ -62,6 +64,9 @@ async function withPage(
   try {
     // Avoid starting the application's transport: only the graph harness is mounted.
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    // Install before Cytoscape imports capture the browser's performance clock.
+    if (reducedMotion === "no-preference")
+      await page.clock.install({ time: new Date("2026-10-27T15:00:00Z") });
     await page.goto(url);
     await page.waitForFunction(() => "graphTest" in window);
     await page.evaluate((demo) => {
@@ -115,26 +120,97 @@ function report(page: Page, ids: string[]) {
     const element = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
     const probe = element?.oversightGraph;
     if (!element || !probe) throw new Error("The graph is not mounted");
-    const centers = probe.nodeCenters();
-    const outside = (list: typeof centers) =>
+    const drawn = probe.nodeCenters();
+    const outside = (list: typeof drawn) =>
       list
         .filter(({ x, y }) => x < 0 || y < 0 || x > element.clientWidth || y > element.clientHeight)
         .map(({ id }) => id);
     return {
-      // Hidden methods are drawn and revealed through their folded class row.
-      cutOff: wanted.filter((id) => outside(centers).includes(probe.representative(id))),
-      centers: centers.filter(({ id }) => wanted.some((node) => probe.representative(node) === id)),
+      cutOff: wanted.filter((id) => outside(drawn).includes(probe.representative(id))),
+      centers: drawn.filter(({ id }) => wanted.some((node) => probe.representative(node) === id)),
       size: { width: element.clientWidth, height: element.clientHeight },
       leftInset: (() => {
         const card = document.querySelector('[aria-label="Possibly affected"]');
         return card ? card.getBoundingClientRect().right - element.getBoundingClientRect().left : 0;
       })(),
-      cutOffAnywhere: outside(centers),
+      cutOffAnywhere: outside(drawn),
       animating: probe.animating(),
       zoom: probe.zoom(),
+      pan: probe.pan(),
       positions: probe.positions(),
     };
   }, ids);
+}
+
+function panelFrame(page: Page) {
+  return page.evaluate(() => {
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const view = host?.oversightGraph;
+    const clear = document.querySelector("[data-graph-clear-area]")?.getBoundingClientRect();
+    if (!host || !view || !clear) throw new Error("Missing graph clear area");
+    const graph = host.getBoundingClientRect();
+    const overlay = document
+      .querySelector('[aria-label="Possibly affected"]')
+      ?.getBoundingClientRect();
+    const card = overlay
+      ? {
+          x1: overlay.left - graph.left,
+          y1: overlay.top - graph.top,
+          x2: overlay.right - graph.left,
+          y2: overlay.bottom - graph.top,
+        }
+      : undefined;
+    return {
+      zoom: view.zoom(),
+      labelSizes: {
+        name: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--node-name-size"),
+        ),
+        state: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--node-word-size"),
+        ),
+      },
+      pan: view.pan(),
+      size: { width: host.clientWidth, height: host.clientHeight },
+      card,
+      area: {
+        x1: (card?.x2 ?? 0) + 40,
+        y1: 40,
+        x2: host.clientWidth - 40,
+        y2: Math.min(host.clientHeight - 40, clear.bottom - host.getBoundingClientRect().top),
+      },
+      focus: view.nodeBounds("node.pending"),
+      cone: view.nodeBounds("node.cone"),
+      graph: view.nodeBounds(),
+      modules: view.nodeBounds(".module"),
+    };
+  });
+}
+
+function emptyCanvasPoint(page: Page) {
+  return page.evaluate(() => {
+    const probe = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    if (!probe) throw new Error("Missing graph");
+    const { width, height } = probe.metrics().viewport;
+    const zoom = probe.zoom();
+    const pan = probe.pan();
+    const boxes = probe.nodeBounds();
+    for (let y = height - 90; y > height / 2; y -= 20)
+      for (let x = width - 90; x > 0; x -= 20)
+        if (
+          !boxes.some(
+            (b) =>
+              x >= b.x1 * zoom + pan.x - 5 &&
+              x <= b.x2 * zoom + pan.x + 5 &&
+              y >= b.y1 * zoom + pan.y - 5 &&
+              y <= b.y2 * zoom + pan.y + 5,
+          )
+        )
+          return { x, y };
+    throw new Error("No empty canvas for panning");
+  });
 }
 
 async function settled(page: Page) {
@@ -233,7 +309,7 @@ it("live diff lights its callers and dims unrelated nodes, then clears that scop
   });
 }, 30_000);
 
-it("opening the panel centers the changed node at the same zoom; closing restores the camera", async () => {
+it("opening the panel frames the changed node and its callers; closing restores the camera", async () => {
   await withPage("no-preference", async (page) => {
     const ids = await wanted(page);
     expect(ids).toHaveLength(1);
@@ -260,12 +336,7 @@ it("opening the panel centers the changed node at the same zoom; closing restore
     expect(callers).toHaveLength(1);
     expect(open.cutOff).toEqual([]);
     expect(open.positions).toEqual(wide.positions);
-    // The labels keep their size: the zoom is the watch fit's, not a fit of the narrowed graph.
-    expect(open.zoom).toBeCloseTo(wide.zoom, 6);
-    // Live diff centers only the changed node, even with real callers beyond its frame.
-    const [center] = open.centers;
-    expect(center?.x).toBeCloseTo((open.leftInset + open.size.width) / 2, 0);
-    expect(center?.y).toBeCloseTo(open.size.height / 2, 0);
+    assertPanelFrame(await panelFrame(page), "live-diff");
 
     await page.evaluate(() => {
       window.graphTest.close();
@@ -300,6 +371,145 @@ it("under reduced motion the camera jumps and nothing eases", async () => {
   });
 }, 30_000);
 
+it.each(["open", "review"] as const)(
+  "%s eases the change and cone once; closing restores the personal camera",
+  async (mode) => {
+    await withPage(
+      "no-preference",
+      async (page) => {
+        const ids = await wanted(page);
+        const wide = await report(page, ids);
+        expect(wide.zoom).toBe(1);
+        const focus = page.getByRole("button", { name: "Zoom in", exact: true });
+        await focus.focus();
+        // Drive browser frames explicitly so renderer load cannot skip the entire 240ms move.
+        const clockStart = new Date("2026-10-27T15:00:00Z");
+        await page.clock.pauseAt(new Date(clockStart.getTime() + 60_000));
+        const easing = await page.evaluate(async (mode) => {
+          await window.graphTest[mode]();
+          return document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating();
+        }, mode);
+        expect(easing).toBe(true);
+        await page.clock.runFor(16);
+        const start = await report(page, ids);
+        await page.clock.runFor(120);
+        const middle = await report(page, ids);
+        await page.clock.runFor(160);
+        const opened = await report(page, ids);
+        const framed = await panelFrame(page);
+        expect(
+          Math.min(framed.labelSizes.name, framed.labelSizes.state) * opened.zoom,
+        ).toBeGreaterThanOrEqual(11 - 1e-6);
+        assertPanelFrame(framed, mode === "open" ? "live-diff" : "review");
+        expect(opened.zoom).toBeLessThan(1);
+        expect(opened.cutOff).toEqual([]);
+        expect(opened.positions).toEqual(wide.positions);
+        expect(start.zoom).toBeGreaterThan(middle.zoom);
+        expect(middle.zoom).toBeGreaterThan(opened.zoom);
+        // cubic-bezier(0.2, 0.7, 0.2, 1) passes the linear midpoint by 120ms.
+        expect((1 - middle.zoom) / (1 - opened.zoom)).toBeGreaterThan(0.6);
+        expect(opened.animating).toBe(false);
+        await browserExpect(focus).toBeFocused();
+        if (mode === "open") {
+          await page.evaluate(() => {
+            window.graphTest.update();
+          });
+          await page.clock.runFor(32);
+          const afterEdit = await report(page, ids);
+          expect(afterEdit.pan).toEqual(opened.pan);
+          expect(afterEdit.zoom).toBe(opened.zoom);
+          expect(afterEdit.animating).toBe(false);
+        }
+        await page.evaluate(() => {
+          window.graphTest.close();
+        });
+        await page.clock.runFor(300);
+        await settled(page);
+        const closed = await report(page, ids);
+        expect(closed.positions).toEqual(wide.positions);
+        expect(closed.zoom).toBe(wide.zoom);
+        expect(closed.pan).toEqual(wide.pan);
+      },
+      "at-mount",
+    );
+  },
+  30_000,
+);
+
+it.each(["open", "review"] as const)(
+  "%s jumps under reduced motion and restores without easing",
+  async (mode) => {
+    await withPage(
+      "reduce",
+      async (page) => {
+        const ids = await wanted(page);
+        const before = await report(page, ids);
+        await page.evaluate(async (mode) => window.graphTest[mode](), mode);
+        const opened = await report(page, ids);
+        expect(opened.animating).toBe(false);
+        expect(opened.cutOff).toEqual([]);
+        expect(opened.positions).toEqual(before.positions);
+        await page.evaluate(() => {
+          window.graphTest.close();
+        });
+        const closed = await report(page, ids);
+        expect(closed.animating).toBe(false);
+        expect(closed.zoom).toBe(before.zoom);
+        expect(closed.pan).toEqual(before.pan);
+      },
+      "at-mount",
+    );
+  },
+  30_000,
+);
+
+it.each([
+  ["open", "pan"],
+  ["open", "zoom"],
+  ["review", "pan"],
+  ["review", "zoom"],
+] as const)(
+  "%s: a person's %s interrupts the opening move and keeps control",
+  async (mode, gesture) => {
+    await withPage("no-preference", async (page) => {
+      const before = await report(page, []);
+      const graph = page.getByRole("img", { name: "Repository graph" });
+      if (mode === "review") await page.evaluate(() => window.graphTest.prepareReview());
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+      await page.evaluate(async (mode) => window.graphTest[mode](), mode);
+      await page.clock.runFor(32);
+      const moving = await report(page, []);
+      expect(moving.animating).toBe(true);
+      const box = await graph.boundingBox();
+      if (!box) throw new Error("No graph box");
+      const empty = await emptyCanvasPoint(page);
+      await page.mouse.move(box.x + empty.x, box.y + empty.y);
+      if (gesture === "pan") {
+        await page.mouse.down();
+        await page.mouse.move(box.x + empty.x - 140, box.y + empty.y + 60, { steps: 3 });
+        await page.mouse.up();
+      } else await page.mouse.wheel(0, -100);
+      // Allow wheel delivery, then demand cancellation before the 240ms move could finish.
+      await page.clock.runFor(32);
+      const manual = await report(page, []);
+      expect(manual.animating).toBe(false);
+      expect({ pan: manual.pan, zoom: manual.zoom }).not.toEqual({
+        pan: moving.pan,
+        zoom: moving.zoom,
+      });
+      // Run past the interrupted move; no queued easing may take back the camera.
+      await page.clock.runFor(300);
+      const after = await report(page, []);
+      expect(after.pan).toEqual(manual.pan);
+      expect(after.zoom).toBe(manual.zoom);
+      expect(after.positions).toEqual(before.positions);
+    });
+  },
+  30_000,
+);
+
 it("refreshes a revealed cone row after pan, zoom and Fit without moving the camera itself", async () => {
   await withPage("reduce", async (page) => {
     const id = await page.evaluate(() => window.graphTest.caller);
@@ -313,29 +523,7 @@ it("refreshes a revealed cone row after pan, zoom and Fit without moving the cam
     const graph = page.getByRole("img", { name: "Repository graph" });
     const box = await graph.boundingBox();
     if (!box) throw new Error("Missing graph box");
-    const empty = await page.evaluate(() => {
-      const probe = document.querySelector<GraphProbeHost>(
-        '[aria-label="Repository graph"]',
-      )?.oversightGraph;
-      if (!probe) throw new Error("Missing graph");
-      const { width, height } = probe.metrics().viewport;
-      const zoom = probe.zoom();
-      const pan = probe.pan();
-      const boxes = probe.nodeBounds();
-      for (let y = height - 90; y > height / 2; y -= 20)
-        for (let x = width - 90; x > 0; x -= 20)
-          if (
-            !boxes.some(
-              (b) =>
-                x >= b.x1 * zoom + pan.x - 5 &&
-                x <= b.x2 * zoom + pan.x + 5 &&
-                y >= b.y1 * zoom + pan.y - 5 &&
-                y <= b.y2 * zoom + pan.y + 5,
-            )
-          )
-            return { x, y };
-      throw new Error("No empty canvas for panning");
-    });
+    const empty = await emptyCanvasPoint(page);
     await page.mouse.move(box.x + empty.x, box.y + empty.y);
     await page.mouse.down();
     await page.mouse.move(box.x + empty.x, box.y + empty.y - box.height, { steps: 8 });
@@ -377,5 +565,61 @@ it("the impact cone component keeps keyboard focus on a revealed row and never t
     await browserExpect(other).toBeFocused();
     await page.evaluate(() => window.graphTest.mountCone(false));
     await browserExpect(other).toBeFocused();
+  });
+}, 30_000);
+
+it("offers a reveal row for a caller under the bottom overlays, then clears it on reveal", async () => {
+  await withPage("reduce", async (page) => {
+    const id = await page.evaluate(() => window.graphTest.caller);
+    await page.evaluate(() => window.graphTest.review());
+    const row = page.getByRole("region", { name: "Possibly affected", exact: true }).getByTitle(id);
+    await row.click();
+    await browserExpect(row).not.toContainText("Out of view");
+    const before = await report(page, []);
+    const shift = await page.evaluate((id) => {
+      const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+      const probe = host?.oversightGraph;
+      const node = probe?.nodeBounds().find((node) => node.id === probe.representative(id));
+      if (!host || !probe || !node) throw new Error("Missing caller");
+      const box = host.getBoundingClientRect();
+      return {
+        box,
+        dx: host.clientWidth - 40 - (node.x2 * probe.zoom() + probe.pan().x),
+        dy: host.clientHeight - 20 - (node.y2 * probe.zoom() + probe.pan().y),
+      };
+    }, id);
+    const empty = await emptyCanvasPoint(page);
+    await page.mouse.move(shift.box.x + empty.x, shift.box.y + empty.y);
+    await page.mouse.down();
+    await page.mouse.move(shift.box.x + empty.x + shift.dx, shift.box.y + empty.y + shift.dy, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    const occluded = await page.evaluate((id) => {
+      const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+      const probe = host?.oversightGraph;
+      const clear = document.querySelector("[data-graph-clear-area]")?.getBoundingClientRect();
+      const node = probe?.nodeBounds().find((node) => node.id === probe.representative(id));
+      if (!host || !probe || !node || !clear) throw new Error("Missing graph geometry");
+      return {
+        x1: node.x1 * probe.zoom() + probe.pan().x,
+        x2: node.x2 * probe.zoom() + probe.pan().x,
+        y1: node.y1 * probe.zoom() + probe.pan().y,
+        y2: node.y2 * probe.zoom() + probe.pan().y,
+        bottom: clear.bottom - host.getBoundingClientRect().top,
+        width: host.clientWidth,
+        height: host.clientHeight,
+      };
+    }, id);
+    expect(occluded.x1).toBeGreaterThan(0);
+    expect(occluded.x2).toBeLessThan(occluded.width);
+    expect(occluded.y1).toBeGreaterThan(0);
+    expect(occluded.y2).toBeLessThan(occluded.height);
+    expect(occluded.y2).toBeGreaterThan(occluded.bottom);
+    await browserExpect(row).toContainText("Out of view");
+    await browserExpect(row).toHaveRole("button");
+    await row.click();
+    await browserExpect(row).not.toContainText("Out of view");
+    expect((await report(page, [])).positions).toEqual(before.positions);
   });
 }, 30_000);
