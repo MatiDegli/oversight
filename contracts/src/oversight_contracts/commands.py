@@ -4,21 +4,25 @@ A 202 means only that a command was accepted; its results arrive as events. Requ
 omit their optional keys; responses always carry every key.
 """
 
-from typing import Annotated, Literal
+from typing import Literal, Self
 
-from pydantic import StringConstraints
+from pydantic import Field, NonNegativeInt, PositiveInt, model_validator
 
 from oversight_contracts.common import (
     AgentId,
     ChangeId,
     ContractModel,
+    MergeMode,
+    PlanId,
     RunId,
     Slot,
     WorkspacePath,
 )
+from oversight_contracts.common import (
+    NonEmptyText as NonEmptyText,
+)
 from oversight_contracts.graph import GraphSnapshot
-
-type NonEmptyText = Annotated[str, StringConstraints(min_length=1)]
+from oversight_contracts.plans import SubtaskDraft
 
 
 class StartAgent(ContractModel):
@@ -100,6 +104,23 @@ class FileSaved(ContractModel):
     hash: str
 
 
+type SettingName = Literal[
+    "META_API_KEY",
+    "BASETEN_API_KEY",
+    "OVERSIGHT_BUDGET_USD",
+    "MUSE_SPARK_INPUT_USD_PER_M",
+    "MUSE_SPARK_OUTPUT_USD_PER_M",
+]
+
+
+class MissingSetting(ContractModel):
+    """A setup problem: names and affected slots only, never configuration values."""
+
+    name: SettingName
+    problem: Literal["missing", "invalid"]
+    slots: list[Slot]
+
+
 class Health(ContractModel):
     """200 from `GET /health`."""
 
@@ -107,6 +128,7 @@ class Health(ContractModel):
     run_id: RunId
     contract_version: str
     mode: Literal["live", "replay"]
+    missing_settings: list[MissingSetting] = Field(default_factory=list[MissingSetting])
 
 
 type ErrorCode = Literal[
@@ -114,6 +136,7 @@ type ErrorCode = Literal[
     "wrong_state",
     "slot_busy",
     "spend_brake",
+    "not_configured",
     "invalid_path",
     "stale_file",
     "not_implemented",
@@ -126,6 +149,7 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     "wrong_state": 409,
     "slot_busy": 409,
     "spend_brake": 403,
+    "not_configured": 503,
     "invalid_path": 422,
     "stale_file": 409,
     "not_implemented": 501,
@@ -139,9 +163,58 @@ unexpected server-side failure becomes internal (contract 1.1)."""
 class ErrorDetail(ContractModel):
     code: ErrorCode
     message: str
+    missing: list[MissingSetting] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    """Present only for not_configured; other errors keep their existing wire shape."""
+
+    @model_validator(mode="after")
+    def setup_details(self) -> Self:
+        if (self.code == "not_configured") != (self.missing is not None):
+            raise ValueError("missing is set exactly for not_configured")
+        return self
 
 
 class ErrorResponse(ContractModel):
     """Every error, from every command."""
 
     error: ErrorDetail
+
+
+class SetMergeMode(ContractModel):
+    """Select a merge mode using the last observed server revision."""
+
+    mode: MergeMode
+    revision: NonNegativeInt
+
+
+class CreatePlan(ContractModel):
+    """Request a proposed split without starting coding agents."""
+
+    task: NonEmptyText
+
+
+class PlanCreated(ContractModel):
+    """The created plan identifier; generation continues through events."""
+
+    plan_id: PlanId
+
+
+class UpdatePlan(ContractModel):
+    """Replace both proposed subtasks using the expected plan revision."""
+
+    revision: PositiveInt
+    graph_version: NonEmptyText
+    subtasks: tuple[SubtaskDraft, SubtaskDraft]
+
+
+class PlanRevision(ContractModel):
+    """The expected revision for a plan command."""
+
+    revision: PositiveInt
+
+
+class RejectPlan(PlanRevision):
+    """Refuse a proposed plan without starting its agents."""
+
+    comment: str | None = None

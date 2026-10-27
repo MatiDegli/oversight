@@ -1,6 +1,7 @@
 import os
 import stat
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -114,6 +115,56 @@ def test_read_refuses_a_file_that_is_not_utf8_text(tree: Path) -> None:
     (tree / "blob.bin").write_bytes(b"\xff\xfe\x00")
     with pytest.raises(WorkspaceError, match="UTF-8"):
         read_file(tree, "blob.bin")
+
+
+@pytest.fixture
+def opened(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """The descriptors `os.open` returns from now on, in the order they were opened."""
+    fds: list[int] = []
+    real = os.open
+
+    def recording(*args: Any, **kwargs: Any) -> int:
+        fd = real(*args, **kwargs)
+        fds.append(fd)
+        return fd
+
+    monkeypatch.setattr(os, "open", recording)
+    return fds
+
+
+def is_open(fd: int) -> bool:
+    try:
+        os.fstat(fd)
+    except OSError:
+        return False
+    return True
+
+
+@pytest.mark.parametrize("kind", ["directory", "fifo"])
+def test_read_refuses_what_is_not_a_regular_file_and_closes_its_descriptor(
+    tree: Path, opened: list[int], kind: str
+) -> None:
+    if kind == "directory":
+        (tree / "special").mkdir()
+    else:
+        os.mkfifo(tree / "special")
+    for _ in range(5):
+        with pytest.raises(InvalidPath, match="not a regular file"):
+            read_file(tree, "special")
+
+    assert len(opened) == 5 and not any(is_open(fd) for fd in opened)
+
+
+def test_read_closes_its_descriptor_after_a_file_it_can_and_cannot_decode(
+    tree: Path, opened: list[int]
+) -> None:
+    (tree / "ok.txt").write_text("fine")
+    (tree / "blob.bin").write_bytes(b"\xff\xfe\x00")
+    assert read_file(tree, "ok.txt").content == "fine"
+    with pytest.raises(WorkspaceError, match="UTF-8"):
+        read_file(tree, "blob.bin")
+
+    assert len(opened) == 2 and not any(is_open(fd) for fd in opened)
 
 
 def test_write_never_follows_a_link_into_another_directory(tree: Path, tmp_path: Path) -> None:

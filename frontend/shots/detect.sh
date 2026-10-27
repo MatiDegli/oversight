@@ -61,7 +61,12 @@ run_detect() {
   trap - INT TERM HUP
   eval "$saved_traps"
   case $detect in
-    0 | 2) echo "shots: detect scanned $url (exit $detect), saved $out/detect.json" ;;
+    0 | 2)
+      echo "shots: detect scanned $url (exit $detect), saved $out/detect.json"
+      # The findings themselves, in the log. A report that cannot be read is said, not hidden.
+      node frontend/shots/findings.ts "$out/detect.json" ||
+        echo "shots: could not read the findings in $out/detect.json" >&2
+      ;;
     124 | 137)
       rm -f "$out/detect.json"
       echo "shots: detect did not finish within $seconds s, skipped (see $out/detect.err)" >&2

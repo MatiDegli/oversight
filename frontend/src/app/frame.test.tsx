@@ -36,6 +36,33 @@ const queue = (markup: string) =>
   /<div role="status" aria-label="Review queue"[^>]*>(.*?)<\/div>/.exec(markup)?.[1];
 
 describe("the frame over the level 1 fixture", () => {
+  it("keeps B's letter, model and token colors on its card and folded rail", () => {
+    const state = through(20);
+    const a = state.agents["agent-1"];
+    if (!a) throw new Error("Missing agent fixture");
+    state.agents = {
+      ...state.agents,
+      "agent-2": {
+        ...a,
+        agent_id: "agent-2",
+        change_id: "change-2",
+        slot: "B",
+        model: "muse-spark-open",
+      },
+    };
+    const markup = (view: View) => render(20, view, { state });
+    const card = markup(initialView);
+    const bCard = card.slice(card.indexOf('<article aria-label="Agent B"'));
+    // The card names the model as the run does ("Muse Spark Open"), not by its id.
+    expect(bCard).toContain(">Muse Spark Open<");
+    expect(bCard).not.toContain("muse-spark-open");
+    for (const token of ["text-agent-b-text", "bg-agent-b-tint", "border-agent-b", "bg-agent-b"])
+      expect(bCard).toContain(token);
+    const rail = markup({ selected: null, diff, review: null, file: null });
+    const bRail = rail.slice(rail.indexOf('aria-label="Agent B: Ready for review"'));
+    expect(bRail).toContain("bg-agent-b-tint text-agent-b-text");
+    expect(bRail).toMatch(/>B<span aria-hidden="true"/);
+  });
   it("lays out watch mode: top bar, view rail, graph and the agents panel with one card", () => {
     const markup = render(14);
     for (const text of ["Oversight", "demo-repo", "main", ">8cbf753<", "Agent A"])
@@ -46,6 +73,19 @@ describe("the frame over the level 1 fixture", () => {
     expect(markup.match(/<article aria-label="Agent A"/g)).toHaveLength(1);
     expect(tag(markup, "Watch")).toContain('aria-current="page"');
     expect(markup).not.toContain("Live diff panel");
+  });
+
+  it("overlays the graph with the heading, the legend and the zoom controls", () => {
+    const markup = render(14);
+    for (const text of ["6 modules", "36 functions", "1 agent working", "Possible call", "Zoom in"])
+      expect(markup).toContain(text);
+    // In review the cone card takes the heading's place; the legend and the zoom stay.
+    const state = through(20);
+    const review = openReview(state, initialView, "change-1");
+    if (!review) throw new Error("Missing recorded review");
+    const reviewing = render(20, review);
+    expect(reviewing).not.toContain("agents working");
+    for (const text of ["Possible call", "Zoom in"]) expect(reviewing).toContain(text);
   });
 
   it("offers the card's Live diff only for a pending change with a file, and no decisions", () => {
@@ -73,8 +113,16 @@ describe("the frame over the level 1 fixture", () => {
   });
 
   it("opens the live diff on the left and folds the agents panel into the rail", () => {
-    const markup = render(14, { selected: "shop.pricing:compute_price", diff, review: null });
+    const markup = render(14, {
+      selected: "shop.pricing:compute_price",
+      diff,
+      review: null,
+      file: null,
+    });
     expect(tag(markup, "Live diff panel")).toContain("w-[min(var(--review-panel-width),46vw)]");
+    // The heading is a watch overlay: beside the panel it would sit on the graph's own nodes.
+    expect(markup).not.toContain("agent working");
+    expect(markup).not.toContain("6 modules");
     expect(markup).toContain('aria-label="Live diff"');
     expect(markup).toContain("shop/pricing.py");
     expect(markup).toContain('aria-label="Close live diff"');
@@ -84,14 +132,19 @@ describe("the frame over the level 1 fixture", () => {
     expect(tag(markup, "Watch")).not.toContain("aria-current");
     // The graph region is the same element in both modes, so it is never remounted.
     expect(tag(markup, "Repository graph")).toBe(tag(render(14), "Repository graph"));
-    expect(render(20, { selected: null, diff, review: null })).toContain(
+    expect(render(20, { selected: null, diff, review: null, file: null })).toContain(
       'aria-label="Agent A: Ready for review"',
     );
   });
 });
 
 describe("review mode over the level 1 fixture", () => {
-  const review: View = { selected: "shop.pricing:compute_price", diff: null, review: "change-1" };
+  const review: View = {
+    selected: "shop.pricing:compute_price",
+    diff: null,
+    review: "change-1",
+    file: null,
+  };
   const decide = vi.fn();
   const reviewing = (seq: number, props: Partial<FrameProps> = {}) =>
     render(seq, review, { onDecide: decide, ...props });
@@ -164,14 +217,53 @@ describe("review mode over the level 1 fixture", () => {
     expect(merged).not.toContain("Reject</button>");
   });
 
-  it("in a recorded run sends nothing: disabled buttons, then the recorded decision", () => {
-    const before = render(20, review);
-    expect(before).toContain("Recorded run: nothing here sends a decision.");
+  it("in a replay sends nothing: disabled buttons, then the decision the log holds", () => {
+    const replayOf = "hand-written demo fixture";
+    const before = render(20, review, { replayOf });
+    expect(before).toContain(
+      "Replay of a hand-written demo fixture: nothing here sends a decision.",
+    );
+    expect(before).not.toMatch(/recorded run/i);
     expect(before).not.toContain("<textarea");
     expect(button(before, "Approve and merge")).toContain('disabled=""');
     expect(button(before, "Reject")).toContain('disabled=""');
-    const after = render(21, review);
-    expect(after).toContain("Recorded run: this is the decision that was made.");
+    const after = render(21, review, { replayOf });
+    expect(after).toContain(
+      "Replay of a hand-written demo fixture: this is the decision the log holds.",
+    );
+    expect(after).not.toMatch(/recorded run/i);
     expect(after).toContain("Approved and merged into main");
+    // A real recording says so by its own source, never by a default.
+    expect(render(21, review, { replayOf: "real recorded run" })).toContain(
+      "Replay of a real recorded run: this is the decision the log holds.",
+    );
   });
+});
+
+it("puts the file view in the same panel slot, folds the rail, and gives review and diff priority", () => {
+  const files = {
+    drafts: new Map(),
+    inFlightSaves: new Map(),
+    saved: new Map(),
+    readFile: vi.fn(),
+    saveFile: vi.fn(),
+  };
+  const view: View = {
+    ...initialView,
+    file: { path: "shop/cart.py", agentId: null, startLine: 5, endLine: 9 },
+  };
+  const markup = render(20, view, { files });
+  expect(tag(markup, "File view")).toContain("w-[min(var(--review-panel-width),46vw)]");
+  expect(tag(markup, "Agents")).toContain("w-(--agents-rail-width)");
+  expect(tag(markup, "Repository graph")).toBe(tag(render(20), "Repository graph"));
+  expect(markup).not.toContain("Live diff panel");
+  expect(markup).not.toContain("Review panel");
+  expect(markup).not.toContain("6 modules");
+  expect(markup).toContain("Possible call");
+  const reviewing = render(20, { ...view, review: "change-1" }, { files });
+  expect(reviewing).toContain('aria-label="Review panel"');
+  expect(reviewing).not.toContain('aria-label="File view"');
+  const live = render(14, { ...view, diff }, { files });
+  expect(live).toContain('aria-label="Live diff panel"');
+  expect(live).not.toContain('aria-label="File view"');
 });

@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 
+import type { FileSaved } from "@contracts";
+
+import type { FileDraft } from "../editor";
 import { sendDecision } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { stateStore } from "../state";
 import { createCommandClient, replayBuild, replaySource } from "../transport";
+import { createFileSession } from "./files";
 import { useEscapeCloses } from "./escape";
 import { Frame } from "./Frame";
 import { startAppSession } from "./session";
@@ -29,6 +33,20 @@ export function App() {
     () => (replayBuild ? null : createCommandClient()),
     [],
   );
+  const drafts = useRef(new Map<string, FileDraft>());
+  const inFlightSaves = useRef(new Map<string, Promise<FileSaved>>());
+  // A stable session owns settlement; its getters read these refs only in handlers and effects.
+  // The factory stores these getters and never reads either ref during render.
+  // eslint-disable-next-line react-hooks/refs
+  const [files] = useState(() =>
+    commands
+      ? createFileSession(
+          commands,
+          () => drafts.current,
+          () => inFlightSaves.current,
+        )
+      : undefined,
+  );
   const state = useStore(stateStore, (store) => store.state);
   useEffect(() => {
     return startAppSession(document.getElementById("root"), (failure) => {
@@ -38,9 +56,14 @@ export function App() {
     });
   }, []);
   // The graph keeps one tap handler; it reads the store when the tap happens.
-  const onNodeTap = useCallback((nodeId: string) => {
-    setView((current) => clickNode(stateStore.getState().state, current, nodeId));
-  }, []);
+  const onNodeTap = useCallback(
+    (nodeId: string) => {
+      setView((current) =>
+        clickNode(stateStore.getState().state, current, nodeId, commands !== null),
+      );
+    },
+    [commands],
+  );
   const onOpenChange = useCallback((changeId: string) => {
     setView((current) => openChange(stateStore.getState().state, current, changeId) ?? current);
   }, []);
@@ -53,8 +76,10 @@ export function App() {
   }, []);
   const onOpenQueue = useCallback(() => {
     const state = stateStore.getState().state;
-    const changeId = nextReview(state);
-    if (changeId !== null) setView((current) => openReview(state, current, changeId) ?? current);
+    setView((current) => {
+      const changeId = nextReview(state, current.review);
+      return changeId === null ? current : (openReview(state, current, changeId) ?? current);
+    });
   }, []);
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {
@@ -74,6 +99,7 @@ export function App() {
   );
   return (
     <Frame
+      files={files}
       state={state}
       view={view}
       onNodeTap={onNodeTap}
@@ -86,6 +112,7 @@ export function App() {
       onOpenQueue={onOpenQueue}
       attempts={attempts}
       onDecide={commands ? onDecide : undefined}
+      replayOf={replayBuild ? replaySource.kind : undefined}
       notice={
         replayBuild || error !== null ? (
           <>

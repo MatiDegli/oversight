@@ -18,10 +18,13 @@ import {
   createInitialState,
   createStateStore,
   selectAgents,
+  selectAgentCard,
   selectChangeForAgent,
   selectHasReadyForReview,
   selectLitNodes,
   selectPendingChanges,
+  selectNodeMarks,
+  selectSpend,
 } from "./index";
 
 function event<K extends ServerEvent["type"]>(
@@ -37,6 +40,7 @@ function event<K extends ServerEvent["type"]>(
 
 const run: RunStarted = {
   run_id: "run-1",
+  merge_mode: null,
   contract_version: "1.0.0",
   prompt_version: "test-prompt",
   workspace: "demo-repo",
@@ -94,6 +98,7 @@ const agent: AgentStatus = {
   step: 0,
   max_steps: 10,
   detail: null,
+  plan_id: null,
 };
 const overlay: ChangeGraph = {
   nodes_added: [{ ...node, id: "shop:discount", name: "discount", qualname: "discount" }],
@@ -154,6 +159,9 @@ const resolution: ChangeResolved = {
   merge: "merged",
   merge_commit: "merged",
   conflict: null,
+  decided_by: null,
+  reasons: [],
+  assessment: null,
 };
 const delta: GraphDelta = {
   from_version: "v1",
@@ -185,6 +193,128 @@ function freeze(value: unknown): void {
 }
 
 describe("applyEvent", () => {
+  it("keeps two interleaved agents' cards, steps and graph marks separate (K14)", () => {
+    const b = {
+      ...agent,
+      agent_id: "agent-2",
+      change_id: "change-2",
+      slot: "B" as const,
+      task: "Fix order",
+    };
+    const step = {
+      agent_id: agent.agent_id,
+      step: 1,
+      tool: "read_file",
+      summary: "Read price",
+      result: "ok" as const,
+      error: null,
+      duration_ms: 1,
+      tests: null,
+    };
+    const log = [
+      event(1, "run.started", run),
+      event(2, "graph.snapshot", snapshot),
+      event(3, "agent.status", b),
+      event(4, "agent.status", agent),
+      event(5, "agent.step", step),
+      event(6, "agent.focus", {
+        agent_id: b.agent_id,
+        mode: "edit",
+        node_ids: [caller.id],
+        ranges: [],
+      }),
+      event(7, "agent.step", { ...step, agent_id: b.agent_id, summary: "Edit order" }),
+      event(8, "change.updated", update),
+      event(9, "change.updated", {
+        ...update,
+        agent_id: b.agent_id,
+        change_id: b.change_id,
+        graph: { ...overlay, nodes_added: [], nodes_modified: [caller.id] },
+        node_ids: [caller.id],
+      }),
+      event(10, "agent.focus", {
+        agent_id: agent.agent_id,
+        mode: "read",
+        node_ids: [node.id],
+        ranges: [],
+      }),
+    ];
+    const state = log.reduce(applyEvent, createInitialState());
+    expect(selectAgents(state).map((entry) => entry.slot)).toEqual(["A", "B"]);
+    expect(selectAgentCard(state, agent.agent_id)?.steps).toEqual([step]);
+    expect(selectAgentCard(state, b.agent_id)?.steps[0]?.summary).toBe("Edit order");
+    expect(selectAgentCard(state, b.agent_id)?.agent.task).toBe("Fix order");
+    expect(selectNodeMarks(state)[node.id]).toEqual({
+      pending: true,
+      pendingSlots: ["A"],
+      focus: { A: "read" },
+    });
+    expect(selectNodeMarks(state)[caller.id]).toEqual({
+      pending: true,
+      pendingSlots: ["B"],
+      focus: { B: "edit" },
+    });
+  });
+
+  it.each(["baseten", "fake"] as const)(
+    "replays the same spend knowledge and latest %s ledger as live batches (K18)",
+    (provider) => {
+      const profile = {
+        id: "meta",
+        label: "Meta",
+        provider: "meta" as const,
+        model: "meta-api",
+        reasoning: null,
+      };
+      const usage = {
+        agent_id: agent.agent_id,
+        model: "meta-api",
+        input_tokens: null,
+        output_tokens: null,
+        cached_tokens: null,
+        cost_usd: 0.02,
+        spent_usd: 3,
+        budget_usd: 10,
+        brake: "ok" as const,
+      };
+      const b = {
+        ...agent,
+        agent_id: "agent-2",
+        change_id: "change-2",
+        slot: "B" as const,
+        model: "other",
+      };
+      const log = [
+        event(1, "run.started", {
+          ...run,
+          models: [profile, { ...profile, id: "other", provider }],
+        }),
+        event(2, "agent.status", { ...agent, model: "meta" }),
+        event(3, "agent.status", b),
+        event(4, "usage.tick", usage),
+        event(5, "usage.tick", { ...usage, agent_id: b.agent_id, cost_usd: null }),
+        event(6, "usage.tick", { ...usage, cost_usd: null }),
+        event(7, "usage.tick", {
+          ...usage,
+          agent_id: b.agent_id,
+          cost_usd: null,
+          spent_usd: 3.5,
+          brake: "blocked",
+        }),
+      ];
+      const store = createStateStore();
+      let replay = createInitialState();
+      for (const entry of log) {
+        replay = applyEvent(replay, entry);
+        store.getState().applyEvents([entry]);
+        expect(store.getState().state).toEqual(replay);
+        if (entry.seq === 5) expect(selectSpend(replay)?.spentUsd).toBe(3);
+      }
+      expect(replay.spendUnknown).toBe(true);
+      expect(replay.usage?.spent_usd).toBe(3.5);
+      expect(selectSpend(replay)).toEqual({ spentUsd: null, budgetUsd: 10, brake: "blocked" });
+    },
+  );
   it("starts with fresh plain data and sets the main snapshot", () => {
     const state = withGraph();
     expect(state.run).toEqual(run);
@@ -252,9 +382,52 @@ describe("applyEvent", () => {
       ...createInitialState(),
       run: newRun,
       lastSeq: 1,
+      // The new run's first event is its "now"; nothing of the old run's times survives.
+      clock: "2026-10-27T14:03:12.345Z",
     });
     expect(applyEvent(dirty, event(2, "run.started", newRun))).toEqual({ ...dirty, gap: true });
     expect(applyEvent(dirty, event(1, "run.started", run))).toEqual({ ...dirty, gap: true });
+  });
+
+  it("keeps each step's event time by agent and step, and the latest event's time as the clock", () => {
+    const step = (seq: number, n: number, ts: string) => ({
+      ...event(seq, "agent.step", {
+        agent_id: agent.agent_id,
+        step: n,
+        tool: "read_file",
+        summary: "Read",
+        result: "ok",
+        error: null,
+        duration_ms: 1,
+        tests: null,
+      }),
+      ts,
+    });
+    const first = applyEvent(proposed(), step(6, 1, "2026-10-27T14:05:00.000Z"));
+    const second = applyEvent(first, step(7, 2, "2026-10-27T14:05:40.000Z"));
+    expect(second.stepTimes[agent.agent_id]).toEqual({
+      1: "2026-10-27T14:05:00.000Z",
+      2: "2026-10-27T14:05:40.000Z",
+    });
+    expect(second.clock).toBe("2026-10-27T14:05:40.000Z");
+    // Any event moves the clock, and the earlier maps are left as they were.
+    const later = applyEvent(second, {
+      ...event(8, "error", {
+        source: "server",
+        message: "Example",
+        agent_id: null,
+        change_id: null,
+        fatal: false,
+      }),
+      ts: "2026-10-27T14:06:00.000Z",
+    });
+    expect(later.clock).toBe("2026-10-27T14:06:00.000Z");
+    expect(first.stepTimes[agent.agent_id]).toEqual({ 1: "2026-10-27T14:05:00.000Z" });
+    // An event out of sequence changes neither.
+    const gap = applyEvent(later, { ...step(20, 3, "2026-10-27T14:07:00.000Z") });
+    expect(gap.gap).toBe(true);
+    expect(gap.clock).toBe(later.clock);
+    expect(gap.stepTimes).toBe(later.stepTimes);
   });
 
   it("patches main by id, retains positions, and keeps another change's overlay intact", () => {

@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # `make shots`: serves the fake event player and the Vite dev server on free ports, captures the
-# scenes into .shots/ with capture.ts, then runs Impeccable's detector on the served URL. It stops
-# both servers by PID on every exit path, and every wait has a deadline.
+# scenes into .shots/ with capture.ts, then runs Impeccable's detector. It stops its servers by PID
+# on every exit path, and every wait has a deadline.
+#
+# The detector does not scan the page the captures use. That page keeps the SSE stream /events open,
+# and the detector's navigation only finishes when the page holds no connection, so it timed out
+# after 30 s with "Navigation timeout of 30000 ms exceeded". It scans a second Vite server instead,
+# in replay mode with the same log: the static site judges open, which opens no connection after
+# load (scan.vite.config.ts, scan-log.ts).
 #
 # Environment: LOG (the event log, relative to the repo root), IMPECCABLE (the detector's path),
 # DETECT_TIMEOUT (seconds the detector may take, 120 by default).
@@ -83,13 +89,25 @@ OVERSIGHT_PORT=$backend_port OVERSIGHT_VITE_CACHE_DIR="$root/$out/vite-cache" ba
   "$vite_port" >"$out/vite.log" 2>&1 &
 pids+=("$!")
 
+# The detector's server: replay mode, no backend, the log with every event at one time, so the
+# replay has no pause and the page is complete at load. Its own port and cache.
+scan_port=$(free_port)
+while [ "$scan_port" = "$backend_port" ] || [ "$scan_port" = "$vite_port" ]; do scan_port=$(free_port); done
+scan_url="http://127.0.0.1:$scan_port/"
+node frontend/shots/scan-log.ts "$log" "$out/scan-log.jsonl"
+OVERSIGHT_SCAN_LOG="$root/$out/scan-log.jsonl" OVERSIGHT_VITE_CACHE_DIR="$root/$out/scan-vite-cache" bash -c \
+  'cd frontend && exec ./node_modules/.bin/vite --config shots/scan.vite.config.ts --mode replay --host 127.0.0.1 --port "$0" --strictPort --configLoader runner' \
+  "$scan_port" >"$out/scan-vite.log" 2>&1 &
+pids+=("$!")
+
 wait_for "http://127.0.0.1:$backend_port/health" "${pids[0]}" backend 60
 wait_for "$url" "${pids[1]}" vite 60
-echo "shots: replay of $log on :$backend_port, UI on $url"
+wait_for "$scan_url" "${pids[2]}" scan-vite 60
+echo "shots: replay of $log on :$backend_port, UI on $url, scan page on $scan_url"
 
 # Node, not pnpm, so the deadline reaches the process that holds the browser. capped.sh puts it, and
 # the Chrome it starts, under a memory cap of 6 GiB where systemd can make one.
 timeout --kill-after=10 300 bash frontend/shots/capped.sh \
   node frontend/shots/capture.ts --url "$url" --log "$log" --out "$out"
 
-run_detect "$impeccable" "$url" "$out" "$detect_timeout"
+run_detect "$impeccable" "$scan_url" "$out" "$detect_timeout"

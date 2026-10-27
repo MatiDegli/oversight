@@ -1,6 +1,7 @@
 import type { GraphSnapshotEvent, ServerEvent } from "@contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import reserved from "../../../fixtures/contracts/reserved-1.3.json";
 import fixture from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import { applyEvent, createInitialState, createStateStore } from "../state";
 import { parseEvent } from "./events";
@@ -72,6 +73,22 @@ afterEach(() => {
 });
 
 describe("live transport", () => {
+  it("consumes reserved events in live streams without changing product state", async () => {
+    const { transport, store, source, onError } = setup();
+    await transport.ready;
+    for (const event of log) source().emit(event);
+    const before = store.getState().state;
+    for (const [index, example] of reserved.entries()) {
+      source().raw(JSON.stringify({ ...example, seq: before.lastSeq + index + 1 }));
+    }
+    expect(onError).not.toHaveBeenCalled();
+    expect(store.getState().state).toEqual({
+      ...before,
+      lastSeq: before.lastSeq + reserved.length,
+      clock: reserved.at(-1)?.ts,
+    });
+  });
+
   it("connects directly without GET /graph and matches replay at every event", async () => {
     const { transport, store, request, source } = setup();
     await transport.ready;
@@ -299,6 +316,8 @@ describe("live transport", () => {
       ...createInitialState(),
       run: newRun.payload,
       lastSeq: 1,
+      // The new run's first event is its "now"; nothing of the old run's times survives.
+      clock: newRun.ts,
     });
     source().emit(graph);
     expect(store.getState().state.lastSeq).toBe(2);

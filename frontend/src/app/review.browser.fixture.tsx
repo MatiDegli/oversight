@@ -59,10 +59,13 @@ function Harness({ recorded }: { recorded: boolean }) {
         setView((current) => openReview(now(), current, id) ?? current);
       }}
       onOpenQueue={() => {
-        const id = nextReview(now());
-        if (id !== null) setView((current) => openReview(now(), current, id) ?? current);
+        setView((current) => {
+          const id = nextReview(now(), current.review);
+          return id === null ? current : (openReview(now(), current, id) ?? current);
+        });
       }}
       attempts={attempts}
+      replayOf={recorded ? "hand-written demo fixture" : undefined}
       onDecide={
         recorded
           ? undefined
@@ -79,7 +82,47 @@ function Harness({ recorded }: { recorded: boolean }) {
 
 export const reviewTest = {
   changed: "shop.pricing:compute_price",
+  lit: events.flatMap((event) =>
+    event.type === "change.proposed"
+      ? [
+          ...event.payload.impact.seeds,
+          ...event.payload.impact.entries.map((entry) => entry.node_id),
+        ]
+      : [],
+  ),
   decisions,
+  addSecondProposal() {
+    const state = stateStore.getState().state;
+    const first = state.changes["change-1"];
+    if (!first?.proposal) throw new Error("Missing first proposal");
+    const target = "shop.orders:order_total";
+    stateStore.setState({
+      state: {
+        ...state,
+        changes: {
+          ...state.changes,
+          "change-2": {
+            ...first,
+            change_id: "change-2",
+            graph: { ...first.graph, nodes_modified: [target] },
+            files: Object.fromEntries(
+              Object.entries(first.files).map(([path, file]) => [
+                path,
+                { ...file, node_ids: [target] },
+              ]),
+            ),
+            proposal: {
+              ...first.proposal,
+              change_id: "change-2",
+              summary: "Second proposal",
+              impact: { ...first.proposal.impact, seeds: [target], entries: [] },
+            },
+          },
+        },
+      },
+    });
+    return target;
+  },
   /** Mounts the frame on the recorded run up to `seq`; seq 20 is ready for review. */
   mount(recorded: boolean, seq = 20) {
     stateStore.setState({

@@ -159,15 +159,15 @@ def wait_for_graph(base: str, deadline_seconds: float) -> int:
         time.sleep(POLL_INTERVAL)
 
 
-def stop_child(child: subprocess.Popen[Any]) -> None:
+def stop_child(child: subprocess.Popen[Any], deadline_s: float = STOP_DEADLINE) -> None:
     """Stop the child by PID: SIGTERM, wait out the deadline, then SIGKILL. Never raises."""
     if child.poll() is None:
         child.terminate()
     try:
-        child.wait(timeout=STOP_DEADLINE)
+        child.wait(timeout=deadline_s)
     except subprocess.TimeoutExpired:
         child.kill()
-        child.wait(timeout=STOP_DEADLINE)
+        child.wait(timeout=deadline_s)
 
 
 def child_env(port: int, runtime_dir: Path) -> dict[str, str]:

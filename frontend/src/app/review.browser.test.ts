@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 
 import type {} from "./review.browser.fixture";
 import type { GraphProbeHost } from "../graph";
+import { assertReadableFrame } from "../../shots/framing";
 
 let server: ViteDevServer | undefined;
 let browser: Browser | undefined;
@@ -86,16 +87,63 @@ function camera(page: Page, id: string) {
     if (!element || !view) throw new Error("The graph is not mounted");
     return {
       zoom: view.zoom(),
+      leftInset: (() => {
+        const card = document.querySelector('[aria-label="Possibly affected"]');
+        return card ? card.getBoundingClientRect().right - element.getBoundingClientRect().left : 0;
+      })(),
+      card: (() => {
+        const box = document
+          .querySelector('[aria-label="Possibly affected"]')
+          ?.parentElement?.getBoundingClientRect();
+        const graph = element.getBoundingClientRect();
+        return box
+          ? {
+              x1: box.left - graph.left,
+              y1: box.top - graph.top,
+              x2: box.right - graph.left,
+              y2: box.bottom - graph.top,
+            }
+          : undefined;
+      })(),
+      outOfView: [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
+        .filter((row) => row.textContent.includes("Out of view"))
+        .map((row) => row.querySelector("[title]")?.getAttribute("title") ?? ""),
+      pan: view.pan(),
       animating: view.animating(),
       size: { width: element.clientWidth, height: element.clientHeight },
       node: view.nodeCenters().find((center) => center.id === wanted),
+      focus: view.nodeBounds().filter((node) => node.id === wanted),
+      cone: view.nodeBounds("node.cone"),
     };
   }, id);
 }
 
 const panel = (page: Page) => page.getByRole("complementary", { name: "Review panel" });
 
-it("opens review only from the person's click, dims all but the change, and closes", async () => {
+it("the queue counter reframes each proposal while review stays open and keeps keyboard focus", async () => {
+  await withPage(false, async (page) => {
+    const target = await page.evaluate(() => window.reviewTest.addSecondProposal());
+    const positions = (await probe(page, ":childless")).positions;
+    const queue = page.getByRole("button", { name: /changes ready for review/ });
+    await queue.click();
+    await panel(page).locator(".line-insert").first().waitFor();
+    const firstId = await page.evaluate(() => window.reviewTest.changed);
+    await browserExpect.poll(async () => (await camera(page, firstId)).animating).toBe(false);
+    const first = await camera(page, firstId);
+    await queue.click();
+    await browserExpect(panel(page).getByText("Second proposal", { exact: true })).toBeVisible();
+    await browserExpect.poll(async () => (await camera(page, target)).animating).toBe(false);
+    const second = await camera(page, target);
+    expect(second.pan).not.toEqual(first.pan);
+    assertReadableFrame(second.zoom, second);
+    expect((await probe(page, ":childless")).positions).toEqual(positions);
+    await browserExpect(queue).toBeFocused();
+    await queue.click();
+    await browserExpect(panel(page).getByText("Second proposal", { exact: true })).toHaveCount(0);
+  });
+}, 30_000);
+
+it("opens review only from the person's click, keeps the change and cone lit, dims the rest, and closes", async () => {
   await withPage(false, async (page) => {
     const changed = await page.evaluate(() => window.reviewTest.changed);
     await browserExpect(page.getByRole("button", { name: "Review change" })).toBeVisible();
@@ -108,10 +156,14 @@ it("opens review only from the person's click, dims all but the change, and clos
       .poll(async () => (await probe(page, "node.dimmed")).ids.length)
       .toBeGreaterThan(10);
     expect((await probe(page, "node.dimmed")).ids).not.toContain(changed);
-    // Cytoscape's selectors have no :not(), so the lit leaves are the leaves minus the dimmed.
+    // Compound frames dim too, while each lit child keeps full opacity independently.
     const dimmed = new Set((await probe(page, "node.dimmed")).ids);
-    const leaves = (await probe(page, ":childless")).ids;
-    expect(leaves.filter((id) => !dimmed.has(id))).toEqual([changed]);
+    const nodes = (await probe(page, "node")).ids;
+    const lit = await page.evaluate(() => window.reviewTest.lit);
+    expect(nodes.filter((id) => !dimmed.has(id)).sort()).toEqual([...lit].sort());
+    expect((await probe(page, "node.cone")).ids.sort()).toEqual(
+      lit.filter((id) => id !== changed).sort(),
+    );
 
     await page.getByRole("button", { name: "Close review" }).click();
     await browserExpect(panel(page)).toHaveCount(0);
@@ -119,22 +171,38 @@ it("opens review only from the person's click, dims all but the change, and clos
   });
 }, 30_000);
 
-it("frames the change at the zoom of the watch fit, centered between the panel and the rail", async () => {
+it("maximizes callers by distance at zoom 0.8, clears the card, and marks only clipped boxes", async () => {
   await withPage(false, async (page) => {
     const changed = await page.evaluate(() => window.reviewTest.changed);
     const watch = await camera(page, changed);
+    const positions = (await probe(page, ":childless")).positions;
     await page.getByRole("button", { name: "Review change" }).click();
     await panel(page).locator(".line-insert").first().waitFor();
     await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
     const review = await camera(page, changed);
-    // The labels stay at the size they had in watch, 15 px at a zoom of 1.
-    expect(review.zoom).toBeCloseTo(watch.zoom, 6);
-    expect(review.node?.x).toBeCloseTo(review.size.width / 2, 0);
-    expect(review.node?.y).toBeCloseTo(review.size.height / 2, 0);
+    expect(review.leftInset).toBeCloseTo(304);
+    expect(review.zoom).toBeCloseTo(0.8, 6);
+    assertReadableFrame(watch.zoom, review);
+    expect(review.outOfView.length).toBeGreaterThan(0);
+    expect(review.outOfView).not.toContain("shop.models:Product.price_for");
+    // All excluded nodes remain lit and listed; the camera never removes cone entries.
+    for (const id of review.outOfView) {
+      expect((await probe(page, "node.cone:not(.dimmed)")).ids).toContain(id);
+      await browserExpect(
+        page
+          .getByRole("region", { name: "Possibly affected", exact: true })
+          .getByTitle(id)
+          .getByText("Out of view"),
+      ).toBeVisible();
+    }
+    expect((await probe(page, ":childless")).positions).toEqual(positions);
 
     await page.getByRole("button", { name: "Close review" }).click();
     await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
-    expect((await camera(page, changed)).zoom).toBeCloseTo(watch.zoom, 2);
+    const restored = await camera(page, changed);
+    expect(restored.zoom).toBeCloseTo(watch.zoom, 10);
+    expect(restored.pan.x).toBeCloseTo(watch.pan.x, 10);
+    expect(restored.pan.y).toBeCloseTo(watch.pan.y, 10);
   });
 }, 30_000);
 
@@ -248,7 +316,9 @@ it("Escape in the comment box only leaves it; Escape elsewhere closes review", a
 it("in a recorded run offers no decision and shows the recorded one when it arrives", async () => {
   await withPage(true, async (page) => {
     await page.getByRole("button", { name: /change ready for review/ }).click();
-    await browserExpect(panel(page).getByText(/Recorded run: nothing here sends/)).toBeVisible();
+    await browserExpect(
+      panel(page).getByText(/Replay of a hand-written demo fixture: nothing here sends/),
+    ).toBeVisible();
     await browserExpect(panel(page).getByRole("textbox", { name: /Comment/ })).toHaveCount(0);
     await browserExpect(
       panel(page).getByRole("button", { name: "Approve and merge" }),

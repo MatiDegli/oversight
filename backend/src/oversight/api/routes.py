@@ -12,7 +12,7 @@ from oversight.api.commands import Commands, add_command_routes
 from oversight.api.errors import ApiError
 from oversight.events import EventStore
 from oversight_contracts import CONTRACT_VERSION
-from oversight_contracts.commands import GraphResponse, Health
+from oversight_contracts.commands import GraphResponse, Health, MissingSetting
 
 _SEQ = re.compile(r"[0-9]{1,18}")
 
@@ -31,7 +31,11 @@ def _seq(value: str, name: str) -> int:
 
 
 def create_router(
-    store: EventStore, mode: Literal["live", "replay"], commands: Commands | None = None
+    store: EventStore,
+    mode: Literal["live", "replay"],
+    commands: Commands | None = None,
+    *,
+    missing_settings: list[MissingSetting] | None = None,
 ) -> APIRouter:
     """Live mode passes `commands`; without it, as in a replay, every command answers 501."""
     router = APIRouter()
@@ -75,6 +79,12 @@ def create_router(
 
     @router.get("/health")
     async def health() -> Health:  # pyright: ignore[reportUnusedFunction]
-        return Health(ok=True, run_id=store.run_id, contract_version=CONTRACT_VERSION, mode=mode)
+        return Health(
+            ok=True,
+            run_id=store.run_id,
+            contract_version=CONTRACT_VERSION,
+            mode=mode,
+            missing_settings=missing_settings or [],
+        )
 
     return router

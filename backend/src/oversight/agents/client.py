@@ -40,18 +40,22 @@ MUSE_SPARK_OPEN = ModelProfile(
     label="Muse Spark Open",
     provider="baseten",
     model="meta-models/muse-spark-open-1026",
-    # Not probed yet (docs/api-probe.md): which parameter sets reasoning on Baseten is unknown, so
-    # none is sent and the profile is in UNVERIFIED_PROFILES.
-    reasoning=None,
+    # docs/api-probe.md, "Baseten: Muse Spark Open": the API reports this exact id, and native tool
+    # calls, tool results and parallel calls work. Reasoning is on by default, and the top-level
+    # `reasoning_effort` is accepted with `low` and with `none`; `none` still produced reasoning
+    # tokens, so it does not turn reasoning off. `low` is sent on every call, as on agent A's
+    # profile; the probe's one sample each cannot show that it changes the cost.
+    reasoning="low",
 )
 FAKE_MODEL = ModelProfile(
     id="fake", label="Scripted fake model", provider="fake", model="fake-scripted", reasoning=None
 )
 
-UNVERIFIED_PROFILES = frozenset({MUSE_SPARK_OPEN.id})
+UNVERIFIED_PROFILES: frozenset[str] = frozenset()
 """Profiles whose reasoning setting no probe has confirmed. A run on one is refused, since the agent
-would ride the provider's default. The Baseten probe sets the mode and takes the id out. The client
-itself still accepts them, for the probe."""
+would ride the provider's default. Empty: docs/api-probe.md confirmed both Muse profiles'. A new
+profile's id goes here until tools/probe_api.py has confirmed its setting. The client itself still
+accepts such a profile, for the probe."""
 
 
 class UnverifiedProfile(Exception):
@@ -63,7 +67,8 @@ def require_verified(profile: ModelProfile) -> None:
     if profile.id in UNVERIFIED_PROFILES:
         raise UnverifiedProfile(
             f"{profile.label} ({profile.model}) cannot run agents yet: its reasoning setting is "
-            "unverified. Run the Baseten probe and set the profile's reasoning mode first."
+            "unverified. Probe its provider (tools/probe_api.py) and set the profile's reasoning "
+            "mode first."
         )
 
 

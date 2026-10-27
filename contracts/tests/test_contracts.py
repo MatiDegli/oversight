@@ -9,7 +9,15 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from oversight_contracts import CONTRACT_VERSION
-from oversight_contracts.commands import ERROR_STATUS, ErrorCode, RequestChanges, StartAgent
+from oversight_contracts.commands import (
+    ERROR_STATUS,
+    ErrorCode,
+    ErrorDetail,
+    Health,
+    MissingSetting,
+    RequestChanges,
+    StartAgent,
+)
 from oversight_contracts.events import ServerEvent
 from oversight_contracts.graph import GraphEdge
 
@@ -209,11 +217,10 @@ def event(event_type: str, seq: int = 1, **payload_changes: Any) -> dict[str, An
     return {"seq": seq, "ts": TS, "type": event_type, "payload": payload}
 
 
-def test_the_eleven_event_types_are_agents_md_list() -> None:
+def test_the_event_types_include_the_approved_level3_reservations() -> None:
     union = get_args(get_args(ServerEvent.__value__)[0])
     types = {get_args(model.model_fields["type"].annotation)[0] for model in union}
-    assert types == set(PAYLOADS)
-    assert len(PAYLOADS) == 11
+    assert types == set(PAYLOADS) | {"change.assessed", "merge_mode.changed", "plan.updated"}
 
 
 @pytest.mark.parametrize("event_type", sorted(PAYLOADS))
@@ -221,6 +228,12 @@ def test_every_event_round_trips_with_every_key_present_in_order(event_type: str
     # The examples list every field in docs/proposal.md's order, so comparing the serialized text
     # also checks the order of the keys.
     original = event(event_type)
+    defaults = {
+        "run.started": {"merge_mode": None},
+        "agent.status": {"plan_id": None},
+        "change.resolved": {"decided_by": None, "reasons": [], "assessment": None},
+    }
+    original["payload"].update(defaults.get(event_type, {}))
     parsed = EVENTS.validate_python(original)
     dumped = EVENTS.dump_json(parsed).decode()
     assert dumped == json.dumps(original, separators=(",", ":"))
@@ -327,6 +340,7 @@ def test_every_error_code_has_the_status_of_section_4_7() -> None:
         "wrong_state": 409,
         "slot_busy": 409,
         "spend_brake": 403,
+        "not_configured": 503,
         "invalid_path": 422,
         "stale_file": 409,
         "not_implemented": 501,
@@ -339,7 +353,9 @@ def test_every_error_code_has_the_status_of_section_4_7() -> None:
 def test_the_schema_forbids_extra_keys_and_requires_every_response_key() -> None:
     schema = json.loads((GENERATED / "oversight.schema.json").read_text())
     requests = {"StartAgent", "AgentMessage", "ApproveChange", "RequestChanges", "RejectChange"}
-    requests.add("SaveFile")
+    requests.update(
+        {"SaveFile", "SetMergeMode", "CreatePlan", "UpdatePlan", "PlanRevision", "RejectPlan"}
+    )
     objects = {name: d for name, d in schema["$defs"].items() if d.get("type") == "object"}
     assert "ChangeResolvedEvent" in objects
     for name, definition in objects.items():
@@ -347,7 +363,8 @@ def test_the_schema_forbids_extra_keys_and_requires_every_response_key() -> None
             continue
         assert definition["additionalProperties"] is False, name
         if name not in requests:
-            assert set(definition["required"]) == set(definition["properties"]), name
+            optional = {"missing"} if name == "ErrorDetail" else set()
+            assert set(definition["required"]) == set(definition["properties"]) - optional, name
     assert "slot" not in schema["$defs"]["StartAgent"]["required"]
 
 
@@ -355,3 +372,39 @@ def test_the_typescript_types_carry_the_contract_version() -> None:
     typescript = (GENERATED / "contracts.ts").read_text()
     assert f'export const CONTRACT_VERSION = "{CONTRACT_VERSION}";' in typescript
     assert "export type ServerEvent =" in typescript
+
+
+@pytest.mark.parametrize("version", ["1.0.0", "1.1.0", "1.2.0"])
+def test_older_recorded_events_still_validate(version: str) -> None:
+    EVENTS.validate_python(event("run.started", contract_version=version))
+
+
+def test_setup_details_and_health_defaults() -> None:
+    missing = MissingSetting(name="META_API_KEY", problem="missing", slots=["A", "B"])
+    error = ErrorDetail(
+        code="not_configured", message="Server setup is incomplete.", missing=[missing]
+    )
+    assert ErrorDetail.model_validate_json(error.model_dump_json()) == error
+    assert error.model_dump()["missing"] == [missing.model_dump()]
+    assert ErrorDetail(code="spend_brake", message="Ledger lost").model_dump() == {
+        "code": "spend_brake",
+        "message": "Ledger lost",
+    }
+    with pytest.raises(ValidationError, match="missing is set exactly"):
+        ErrorDetail(code="not_configured", message="Setup")
+    with pytest.raises(ValidationError, match="missing is set exactly"):
+        ErrorDetail(code="spend_brake", message="Brake", missing=[missing])
+    health = Health(
+        ok=True, run_id="run-20261027-140312", contract_version=CONTRACT_VERSION, mode="live"
+    )
+    assert health.missing_settings == []
+
+
+@pytest.mark.parametrize(
+    "bad", [{"name": "OTHER_KEY"}, {"problem": "secret"}, {"slots": ["C"]}, {"value": "secret"}]
+)
+def test_setup_details_reject_unknown_names_problems_slots_and_values(bad: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        MissingSetting.model_validate(
+            {"name": "META_API_KEY", "problem": "missing", "slots": ["A"], **bad}
+        )

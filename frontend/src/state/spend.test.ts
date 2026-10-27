@@ -1,8 +1,16 @@
 import type { ServerEvent, UsageTick } from "@contracts";
 import { describe, expect, it } from "vitest";
 
-import { applyEvent, createInitialState, createStateStore, selectSpend } from "./index";
+import {
+  applyEvent,
+  createInitialState,
+  createStateStore,
+  formatBudget,
+  formatUsd,
+  selectSpend,
+} from "./index";
 import { appendEvent, through } from "./panels.fixture";
+import { nextSlot } from "../agents";
 
 const tick: ServerEvent & { type: "usage.tick" } = {
   seq: 2,
@@ -21,7 +29,94 @@ const tick: ServerEvent & { type: "usage.tick" } = {
   },
 };
 
+describe("how the budget is written", () => {
+  it.each([
+    [150, "US$150"],
+    [50, "US$50"],
+    [0.5, "US$0.50"],
+    [150.5, "US$150.50"],
+    [1234, "US$1234"],
+  ])("reads %s as %s", (amount, written) => {
+    expect(formatBudget(amount)).toBe(written);
+  });
+
+  it("keeps the cents of a spent total, even when it is a round number", () => {
+    expect(formatUsd(10)).toBe("US$10.00");
+  });
+});
+
 describe("spend events and selection", () => {
+  it.each(["baseten", "fake"] as const)(
+    "keeps Meta's total known through a null-cost %s tick (K18)",
+    (provider) => {
+      const state = mixed(provider);
+      const meta = appendEvent(state, {
+        ...tick,
+        payload: { ...tick.payload, cost_usd: 0.02, spent_usd: 3 },
+      });
+      const other = appendEvent(meta, {
+        ...tick,
+        payload: { ...tick.payload, agent_id: "agent-2", cost_usd: null, spent_usd: 3 },
+      });
+      expect(other.spendUnknown).toBe(false);
+      expect(selectSpend(other)?.spentUsd).toBe(3);
+    },
+  );
+
+  it.each(["baseten", "fake"] as const)(
+    "takes the latest total and brake from %s after an unpublished Meta tick (K18)",
+    (provider) => {
+      const state = mixed(provider);
+      const other = appendEvent(state, {
+        ...tick,
+        payload: {
+          ...tick.payload,
+          agent_id: "agent-2",
+          cost_usd: null,
+          spent_usd: 3.5,
+          brake: "blocked",
+        },
+      });
+      expect(selectSpend(other)).toEqual({ spentUsd: 3.5, budgetUsd: 150, brake: "blocked" });
+      expect(nextSlot(other)).toBe("B");
+    },
+  );
+
+  it.each(["baseten", "fake"] as const)(
+    "retains unknown Meta usage through a %s tick, until Meta reports a cost (K18)",
+    (provider) => {
+      const state = mixed(provider);
+      const unknown = appendEvent(state, { ...tick, payload: { ...tick.payload, cost_usd: null } });
+      const other = appendEvent(unknown, {
+        ...tick,
+        payload: { ...tick.payload, agent_id: "agent-2", cost_usd: null, spent_usd: 3.5 },
+      });
+      expect(other.spendUnknown).toBe(true);
+      expect(other.usage?.spent_usd).toBe(3.5);
+      expect(selectSpend(other)?.spentUsd).toBeNull();
+      const known = appendEvent(other, tick);
+      expect(known.spendUnknown).toBe(false);
+      expect(selectSpend(known)?.spentUsd).toBe(12.4);
+    },
+  );
+
+  it("treats an absent agent or unrecognized profile as Meta, regardless of the tick's API model", () => {
+    for (const state of [
+      through(1),
+      { ...mixed("baseten"), agents: {} },
+      {
+        ...mixed("baseten"),
+        agents: { "agent-1": { ...mixed("baseten").agents["agent-1"], model: "unknown-profile" } },
+      },
+    ]) {
+      const next = appendEvent(state, {
+        ...tick,
+        payload: { ...tick.payload, model: "fake", cost_usd: null },
+      });
+      expect(next.spendUnknown).toBe(true);
+      expect(selectSpend(next)?.spentUsd).toBeNull();
+    }
+  });
   it.each<UsageTick["brake"]>(["ok", "warn_50", "warn_80", "blocked"])(
     "preserves the server's %s brake and cumulative balance without mutating state",
     (brake) => {
@@ -76,6 +171,44 @@ describe("spend events and selection", () => {
       },
     ]);
     expect(selectSpend(store.getState().state)?.spentUsd).toBe(expected);
+  });
+
+  describe("an agent's own cost", () => {
+    const cost = (agentId: string, usd: number | null, seq: number) => ({
+      ...tick,
+      seq,
+      payload: { ...tick.payload, agent_id: agentId, cost_usd: usd },
+    });
+
+    it("sums the agent's ticks and keeps agents apart, with no entry before a first tick", () => {
+      let state = through(1);
+      expect(state.agentCosts).toEqual({});
+      state = applyEvent(state, cost("agent-1", 0.25, 2));
+      state = applyEvent(state, cost("agent-2", 0.5, 3));
+      state = applyEvent(state, cost("agent-1", 0.125, 4));
+      expect(state.agentCosts).toEqual({ "agent-1": 0.375, "agent-2": 0.5 });
+    });
+
+    it("keeps an unreported cost unknown for good, never 0 and never a partial sum", () => {
+      let state = applyEvent(through(1), cost("agent-1", 0.25, 2));
+      state = applyEvent(state, cost("agent-1", null, 3));
+      expect(state.agentCosts["agent-1"]).toBeNull();
+      state = applyEvent(state, cost("agent-1", 0.25, 4));
+      expect(state.agentCosts["agent-1"]).toBeNull();
+      expect(applyEvent(through(1), cost("agent-2", null, 2)).agentCosts["agent-2"]).toBeNull();
+    });
+
+    it("starts again from nothing with a new run", () => {
+      const state = applyEvent(through(1), cost("agent-1", 0.25, 2));
+      if (!state.run) throw new Error("Missing run fixture");
+      const fresh = applyEvent(state, {
+        seq: 1,
+        ts: tick.ts,
+        type: "run.started",
+        payload: { ...state.run, run_id: "next-run" },
+      });
+      expect(fresh.agentCosts).toEqual({});
+    });
   });
 
   it("leaves usage unchanged on a missing sequence", () => {
@@ -170,3 +303,41 @@ describe("spend events and selection", () => {
     });
   });
 });
+
+function mixed(provider: "baseten" | "fake") {
+  const state = through(3);
+  if (!state.run) throw new Error("Missing run fixture");
+  const agent = state.agents["agent-1"];
+  if (!agent) throw new Error("Missing agent fixture");
+  return {
+    ...state,
+    run: {
+      ...state.run,
+      models: [
+        {
+          id: "meta",
+          label: "Muse Spark",
+          provider: "meta" as const,
+          model: "meta-api",
+          reasoning: null,
+        },
+        { id: "other", label: "Other", provider, model: "other-api", reasoning: null },
+      ],
+      slots: [
+        { slot: "A" as const, default_model: "meta" },
+        { slot: "B" as const, default_model: "other" },
+      ],
+    },
+    agents: {
+      "agent-1": { ...agent, model: "meta", state: "done" as const },
+      "agent-2": {
+        ...agent,
+        agent_id: "agent-2",
+        change_id: "change-2",
+        slot: "B" as const,
+        model: "other",
+        state: "done" as const,
+      },
+    },
+  };
+}

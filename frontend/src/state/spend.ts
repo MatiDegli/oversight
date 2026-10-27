@@ -2,6 +2,25 @@ import type { UsageTick } from "@contracts";
 
 import type { State } from "./types";
 
+const money = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  currencyDisplay: "code",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** `US$150.00`: the code Meta's invoices use, and no space, as the total is written. */
+export const formatUsd = (amount: number) =>
+  money.format(amount).replace("USD", "US$").replace(/\s/g, "");
+
+/**
+ * The budget as the sketches write it: `US$150` when it is a round number of dollars, `US$150.50`
+ * otherwise. A spent total always shows its cents (`formatUsd`): it is a reading, not a limit.
+ */
+export const formatBudget = (amount: number) =>
+  Number.isInteger(amount) ? `US$${String(amount)}` : formatUsd(amount);
+
 export interface Spend {
   spentUsd: number | null;
   budgetUsd: number;
@@ -14,7 +33,7 @@ export function selectSpend(state: State): Spend | null {
   if (!budget || budget.budget_usd <= 0) return null;
   if (state.usage) {
     return {
-      spentUsd: state.usage.cost_usd === null ? null : state.usage.spent_usd,
+      spentUsd: state.spendUnknown ? null : state.usage.spent_usd,
       budgetUsd: state.usage.budget_usd,
       brake: state.usage.brake,
     };

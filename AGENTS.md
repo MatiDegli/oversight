@@ -123,6 +123,7 @@ Level 3, in the contract from v1 and answering 501 until built: POST /agents/{id
 - One Playwright test over replay mode that checks the level's definition of done.
 - pre-commit (gitleaks, ruff) and GitHub Actions running everything.
 - Makefile: make dev, make check, make demo, make replay.
+- A change that leaves a file over 500 lines or a function over 80 lines says why in its hand-back, and the reviewer decides. It is a review signal, not a gate: no new check.
 
 ## Scope levels
 - Level 1 (by Thu Oct 29): graph, Monaco, one Muse agent in its worktree, watch mode with live node highlighting and the agent card (status and steps), a read-only live diff panel, the "Ready for review" pill, review mode with Approve and Reject and a graph update.
@@ -132,6 +133,8 @@ A level is done when its demo runs three times in a row from a clean start, with
 
 ## Out of scope for these 9 days
 A persistent incremental engine, more languages, runtime traces, embeddings, a sandbox, undo, and a worktree pool.
+One bounded exception to undo, in level 3: a one-click Revert of a merge made by rules, only while it applies
+without conflict; otherwise the change goes to "needs you".
 
 ## Environment
 Develop in WSL, on the Linux filesystem. The UI is opened and recorded in the Windows browser, which shares localhost with WSL.

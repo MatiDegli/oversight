@@ -27,6 +27,8 @@ from oversight_contracts.events import (
     UsageTick,
 )
 from oversight_contracts.graph import GraphDelta, GraphSnapshot
+from oversight_contracts.plans import Plan
+from oversight_contracts.policy import ChangeAssessment, MergeModeState
 
 type EventPayload = (
     RunStarted
@@ -40,6 +42,9 @@ type EventPayload = (
     | ChangeResolved
     | UsageTick
     | ErrorReport
+    | ChangeAssessment
+    | MergeModeState
+    | Plan
 )
 
 EVENT_TYPES: dict[type[EventPayload], str] = {
@@ -54,6 +59,9 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     ChangeResolved: "change.resolved",
     UsageTick: "usage.tick",
     ErrorReport: "error",
+    ChangeAssessment: "change.assessed",
+    MergeModeState: "merge_mode.changed",
+    Plan: "plan.updated",
 }
 """The event type each payload travels under; the store derives `type` from the payload."""
 

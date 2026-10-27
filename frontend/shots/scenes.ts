@@ -1,11 +1,20 @@
 // The scenes and themes `make shots` captures. This is the file to edit when a front lands: flip a
 // scene's `enabled` to true and give it a `prepare` step if the page must be put in that state.
 // A disabled entry prints "skipped" with its `needs` text and never fails the run.
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+
 import type { Page } from "@playwright/test";
+import type { GraphProbeHost } from "../src/graph";
+
+import { assertReadableFrame } from "./framing.ts";
 
 export interface Scene {
   name: string;
   enabled: boolean;
+  /** Use a derived cut or a hand-written fixture instead of the served proposal log. */
+  log?: "editing" | "one-slot" | "handwritten-two-slots-braked.jsonl";
   edgeShapes?: readonly ("bezier" | "taxi")[];
   /** What enables a disabled scene. Printed next to "skipped". */
   needs?: string;
@@ -23,20 +32,15 @@ export interface Theme {
 /**
  * Clicks the center of the first node with a pending change, as the person would, waits for the
  * left panel (`panel`, its aria-label) to show the diff's inserted lines and for the camera to
- * settle, then fails unless that node is centered in the graph area at the zoom it had before.
+ * settle, then checks the change and cone framing against watch zoom and the 12px label floor.
  * Cytoscape draws on a canvas, so the node's place on screen comes from the graph element's own
  * probe (src/graph/probe.ts), which the app exposes for this. A proposed change opens review; one
  * still being edited opens the live diff.
  */
 async function clickChangedNode(page: Page, panel: string): Promise<void> {
-  type Probe = {
-    nodeCenters(selector?: string): { id: string; x: number; y: number }[];
-    animating(): boolean;
-    zoom(): number;
-  };
   const graph = '[aria-label="Repository graph"]';
   const handle = await page.waitForFunction((selector) => {
-    const host = document.querySelector<HTMLElement & { oversightGraph?: Probe }>(selector);
+    const host = document.querySelector<GraphProbeHost>(selector);
     const node = host?.oversightGraph?.nodeCenters("node.pending")[0];
     if (!host || !node) return null;
     const box = host.getBoundingClientRect();
@@ -44,41 +48,62 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
   }, graph);
   const { id, x, y } = (await handle.jsonValue()) as { id: string; x: number; y: number };
   const zoomBefore = await page.evaluate(
-    (selector) =>
-      document
-        .querySelector<HTMLElement & { oversightGraph?: Probe }>(selector)
-        ?.oversightGraph?.zoom(),
+    (selector) => document.querySelector<GraphProbeHost>(selector)?.oversightGraph?.zoom(),
     graph,
   );
   await page.mouse.click(x, y);
   await page.locator(`[aria-label="${panel}"] .line-insert`).first().waitFor();
   await page.waitForFunction((selector) => {
-    const host = document.querySelector<HTMLElement & { oversightGraph?: Probe }>(selector);
+    const host = document.querySelector<GraphProbeHost>(selector);
     return host?.oversightGraph?.animating() === false;
   }, graph);
-  // The labels keep the size they had in watch, and the change sits in the middle of the graph area
-  // between the panel and the rail (the log's change is one node, so it always fits).
+  // Full lit bounds include labels and badges; the graph's position between panel and rail is its
+  // viewport. Distant cone nodes may be clipped once further shrinking would make labels unreadable.
   const framed = await page.evaluate(
     ({ selector, nodeId }) => {
-      const host = document.querySelector<HTMLElement & { oversightGraph?: Probe }>(selector);
-      const node = host?.oversightGraph?.nodeCenters().find((center) => center.id === nodeId);
-      return host && node
+      const host = document.querySelector<GraphProbeHost>(selector);
+      const view = host?.oversightGraph;
+      return host && view
         ? {
-            zoom: host.oversightGraph?.zoom(),
-            dx: node.x - host.clientWidth / 2,
-            dy: node.y - host.clientHeight / 2,
+            zoom: view.zoom(),
+            leftInset: (() => {
+              const card = document.querySelector('[aria-label="Possibly affected"]');
+              return card
+                ? card.getBoundingClientRect().right - host.getBoundingClientRect().left
+                : 0;
+            })(),
+            card: (() => {
+              const box = document
+                .querySelector('[aria-label="Possibly affected"]')
+                ?.parentElement?.getBoundingClientRect();
+              const graph = host.getBoundingClientRect();
+              return box
+                ? {
+                    x1: box.left - graph.left,
+                    y1: box.top - graph.top,
+                    x2: box.right - graph.left,
+                    y2: box.bottom - graph.top,
+                  }
+                : undefined;
+            })(),
+            outOfView: [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
+              .filter((row) => row.textContent.includes("Out of view"))
+              .map((row) => row.querySelector("[title]")?.getAttribute("title") ?? ""),
+            pan: view.pan(),
+            size: { width: host.clientWidth, height: host.clientHeight },
+            focus: view.nodeBounds().filter((node) => node.id === nodeId),
+            cone: view.nodeBounds("node.cone"),
           }
         : null;
     },
     { selector: graph, nodeId: id },
   );
-  if (!framed) throw new Error(`the clicked node ${id} is not on the graph`);
-  if (zoomBefore === undefined || Math.abs((framed.zoom ?? 0) - zoomBefore) > 1e-6)
-    throw new Error(`the zoom moved from ${String(zoomBefore)} to ${String(framed.zoom)}`);
-  if (Math.abs(framed.dx) > 2 || Math.abs(framed.dy) > 2)
-    throw new Error(
-      `the clicked node ${id} is not centered: off by ${String(framed.dx)}, ${String(framed.dy)}`,
-    );
+  if (!framed?.focus.length) throw new Error(`the clicked node ${id} is not on the graph`);
+  if (zoomBefore === undefined) throw new Error("the watch zoom is unavailable");
+  if (panel === "Review panel") {
+    assert(Math.abs(framed.zoom - 0.8) < 1e-6, "the demo cone must stay at the 12px floor");
+  }
+  assertReadableFrame(zoomBefore, framed);
 }
 
 export const scenes: readonly Scene[] = [
@@ -92,7 +117,7 @@ export const scenes: readonly Scene[] = [
     },
   },
   // Review: the proposed change's node opens it, with Monaco's inline diff on the left and the graph
-  // dimmed but for the change. It needs a log that ends while the change is proposed: `make shots`
+  // dimmed but for the change and its cone. It needs a log that ends while the change is proposed: `make shots`
   // serves handwritten-level1-proposed.jsonl, the hand-written log cut after seq 20.
   {
     name: "review",
@@ -101,19 +126,75 @@ export const scenes: readonly Scene[] = [
   },
   {
     name: "live-diff",
-    // Ready: `prepare` clicks a changed node and waits for Monaco's inline diff. It needs a log that
-    // ends while the change is being edited: once proposed (seq 19) the node opens review instead.
-    // Run it with LOG set to a log cut between seq 12 and 18.
-    enabled: false,
-    needs: "a log that ends while the change is being edited, before change.proposed at seq 19",
+    enabled: true,
+    log: "editing",
     prepare: (page) => clickChangedNode(page, "Live diff panel"),
   },
   {
+    name: "task-one-slot",
+    enabled: true,
+    log: "one-slot",
+    prepare: async (page) => {
+      await page.getByLabel("Task for the new agent").fill("Cap the combined discount at 30%");
+      assert.equal(await page.getByRole("group", { name: "Agent slot" }).count(), 0);
+    },
+  },
+  {
+    name: "task-two-slots-braked",
+    enabled: true,
+    log: "handwritten-two-slots-braked.jsonl",
+    prepare: async (page) => {
+      await page
+        .getByLabel("Task for the new agent")
+        .fill("Add a second task with Muse Spark Open");
+      const a = page.getByRole("button", { name: "A Muse Spark", exact: true });
+      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      assert.equal(await a.getAttribute("aria-disabled"), "false");
+      assert.equal(await b.getAttribute("aria-pressed"), "true");
+    },
+  },
+  {
     name: "file-view",
-    enabled: false,
-    // Enabled by: the editor panel's file view. Then `prepare` clicks a node with no pending
-    // change and waits for the file's text to show.
-    needs: "the editor panel's file view (not on main yet)",
+    enabled: true,
+    // The replay API has no file contents. This scene reads the demo template through a GET
+    // double; it is a capture of the file view, not a saved edit reconstructed from the log.
+    prepare: async (page) => {
+      const path = "shop/cart.py";
+      const content = await readFile(new URL(`../../demo-repo/${path}`, import.meta.url), "utf8");
+      await page.route("**/files?*", (route) =>
+        route.fulfill({
+          json: {
+            path,
+            content,
+            hash: createHash("sha256").update(content).digest("hex"),
+            agent_id: null,
+          },
+        }),
+      );
+      const point = await page.evaluate(() => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        const node = host?.oversightGraph
+          ?.nodeCenters()
+          .find(({ id }) => id === "shop.cart:Cart.add");
+        if (!host || !node) throw new Error("The untouched cart node is missing");
+        const box = host.getBoundingClientRect();
+        return { x: box.left + node.x, y: box.top + node.y };
+      });
+      await page.mouse.click(point.x, point.y);
+      const panel = page.getByRole("complementary", { name: "File view" });
+      await panel.locator(".monaco-editor .view-lines").waitFor();
+      await page.waitForFunction(
+        () =>
+          document.querySelector('[aria-label="File view"]')?.getAttribute("data-state") ===
+          "clean",
+      );
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating() === false,
+      );
+    },
   },
 ];
 

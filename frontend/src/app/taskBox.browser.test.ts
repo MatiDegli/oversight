@@ -81,6 +81,93 @@ const focused = (page: Page) =>
   page.evaluate(() => document.activeElement?.tagName.toLowerCase() ?? "none");
 
 it(
+  "shows no choice for one slot, then preselects B when A is braked; a manual A sends its slot and shows spend_brake",
+  { timeout: 40_000 },
+  async () => {
+    await withPage(async (page) => {
+      await browserExpect(page.getByRole("group", { name: "Agent slot" })).toHaveCount(0);
+      await box(page).fill("Keep the task");
+      await box(page).focus();
+      await page.evaluate(() => {
+        window.taskBoxTest.twoSlots(true);
+      });
+      const a = page.getByRole("button", { name: "A Muse Spark", exact: true });
+      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      await browserExpect(a).toHaveAttribute("aria-pressed", "false");
+      await browserExpect(b).toHaveAttribute("aria-pressed", "true");
+      await browserExpect(a).toHaveAttribute("aria-disabled", "false");
+      await browserExpect(box(page)).toBeFocused();
+      await browserExpect(page.getByRole("group", { name: "Spend", exact: true })).toContainText(
+        "US$136.00",
+      );
+      await a.click();
+      await browserExpect(a).toHaveAttribute("aria-pressed", "true");
+      await start(page).click();
+      await sent(page, 1);
+      expect(await calls(page)).toEqual([{ task: "Keep the task", slot: "A" }]);
+      // A pending selection cannot be changed, including a forced click on an aria-disabled control.
+      await b.click({ force: true });
+      await browserExpect(a).toHaveAttribute("aria-pressed", "true");
+      await answer(page, {
+        status: 403,
+        code: "spend_brake",
+        message: "Meta spending is above 90%.",
+      });
+      await browserExpect(page.getByRole("alert")).toHaveText("Meta spending is above 90%.");
+      await browserExpect(box(page)).toHaveValue("Keep the task");
+      await b.click();
+      await browserExpect(page.getByRole("alert")).toHaveCount(0);
+      await start(page).click();
+      await sent(page, 2);
+      expect((await calls(page))[1]).toEqual({ task: "Keep the task", slot: "B" });
+      await answer(page, "created");
+    });
+  },
+);
+
+it(
+  "retains an override through updates and folding, disables a held slot with its holder, and never moves focus",
+  { timeout: 40_000 },
+  async () => {
+    await withPage(async (page) => {
+      await page.evaluate(() => {
+        window.taskBoxTest.twoSlots();
+      });
+      const a = page.getByRole("button", { name: /^A Muse Spark/ });
+      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      await browserExpect(a).toHaveAttribute("aria-pressed", "true");
+      await b.click();
+      await box(page).fill("Second task");
+      await box(page).focus();
+      await page.evaluate(() => {
+        window.taskBoxTest.holdA();
+      });
+      await browserExpect(a).toHaveAttribute("aria-disabled", "true");
+      await browserExpect(a).toContainText("Agent A is working.");
+      await browserExpect(b).toHaveAttribute("aria-pressed", "true");
+      await browserExpect(box(page)).toBeFocused();
+      await a.click({ force: true });
+      await browserExpect(b).toHaveAttribute("aria-pressed", "true");
+      await apply(page, 14);
+      await page.evaluate(() => {
+        window.taskBoxTest.fold();
+      });
+      await page.getByLabel("Live diff panel").waitFor();
+      await page.evaluate(() => {
+        window.taskBoxTest.unfold();
+      });
+      await browserExpect(b).toHaveAttribute("aria-pressed", "true");
+      await browserExpect(box(page)).toHaveValue("Second task");
+      await box(page).focus();
+      await page.keyboard.press("Control+Enter");
+      await sent(page, 1);
+      expect(await calls(page)).toEqual([{ task: "Second task", slot: "B" }]);
+      await answer(page, "created");
+    });
+  },
+);
+
+it(
   "starts with Ctrl+Enter, sends the trimmed task, and keeps focus and the box through the answer and the new card",
   { timeout: 40_000 },
   async () => {
@@ -214,6 +301,33 @@ it(
         window.taskBoxTest.unfold();
       });
       await browserExpect(box(page)).toHaveValue("Cap the discount");
+    });
+  },
+);
+
+it(
+  "keeps the focus where it was when the card's step list goes at the proposal, and never takes it",
+  { timeout: 40_000 },
+  async () => {
+    await withPage(async (page) => {
+      await apply(page, 18);
+      const steps = page.getByRole("list", { name: /steps, newest first/ });
+      const card = page.getByRole("article", { name: "Agent A" });
+      // In the step list: it unmounts at the proposal, and the card, where the focus was, keeps it.
+      await steps.focus();
+      await browserExpect(steps).toBeFocused();
+      await apply(page, 20);
+      await browserExpect(steps).toHaveCount(0);
+      await browserExpect(card).toBeFocused();
+    });
+    await withPage(async (page) => {
+      await apply(page, 18);
+      // Typing in the task box when the list goes: the box keeps the focus.
+      await box(page).focus();
+      await apply(page, 20);
+      await browserExpect(page.getByRole("list", { name: /steps, newest first/ })).toHaveCount(0);
+      await browserExpect(box(page)).toBeFocused();
+      expect(await focused(page)).toBe("textarea");
     });
   },
 );

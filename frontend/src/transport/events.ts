@@ -23,6 +23,9 @@ export function parseEvent(text: string): ServerEvent {
     "change.updated",
     "change.proposed",
     "change.resolved",
+    "change.assessed",
+    "merge_mode.changed",
+    "plan.updated",
     "usage.tick",
     "error",
   ];

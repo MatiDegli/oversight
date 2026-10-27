@@ -166,6 +166,118 @@ describe("a class that gets its first method", () => {
 });
 
 describe("the box of a new node", () => {
+  it.each(
+    ["shop.orders", "shop.models", "shop.inventory", "shop.cart", "shop.pricing"].flatMap((id) => [
+      { id, withMethod: false },
+      { id, withMethod: true },
+    ]),
+  )(
+    "adds a new class to $id without stretching its module over other frames (method: $withMethod)",
+    ({ id, withMethod }) => {
+      const parent = byId(id);
+      const newClass = added(`${id}:NewClass`, "class", parent);
+      const { graph, before, overlapsAfter } = grow([
+        newClass,
+        ...(withMethod ? [added(`${id}:NewClass.method`, "method", newClass)] : []),
+      ]);
+      expect(overlapsAfter).toEqual([]);
+      for (const [nodeId, point] of before) {
+        const node = graph.getElementById(nodeId);
+        if (
+          id !== "shop.pricing" ||
+          !withMethod ||
+          !node
+            .ancestors()
+            .map((ancestor) => ancestor.id())
+            .includes(id)
+        )
+          expect(node.position()).toEqual(point);
+      }
+      if (id === "shop.pricing" && withMethod) {
+        // The new nested class is wider than pricing's corridor between models and cart.
+        // Only that module may shift, as a unit, when no anchored placement can fit.
+        const shifts = [...before]
+          .filter(([nodeId]) =>
+            graph
+              .getElementById(nodeId)
+              .ancestors()
+              .map((ancestor) => ancestor.id())
+              .includes(id),
+          )
+          .map(([nodeId, point]) => graph.getElementById(nodeId).position().y - point.y);
+        expect(new Set(shifts).size).toBe(1);
+        expect(shifts[0]).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  it("restores pricing's pre-shift leaves after nested growth is rejected, repeatedly without a preset", () => {
+    const parent = byId("shop.pricing");
+    const newClass = added(`${parent.id}:NewClass`, "class", parent);
+    const method = added(`${newClass.id}.method`, "method", newClass);
+    const { graph, before, overlapsAfter } = grow([newClass, method]);
+    expect(overlapsAfter).toEqual([]);
+    const base = graphElements({ ...createInitialState(), graph: snapshot });
+    const grown = graphElements({
+      ...createInitialState(),
+      graph: { ...snapshot, nodes: [...snapshot.nodes, newClass, method] },
+    });
+    // Intermediate events must not replace the saved pre-shift positions.
+    updateGraph(graph, grown);
+    updateGraph(graph, base);
+    for (const [id, position] of before)
+      expect(graph.getElementById(id).position(), id).toEqual(position);
+    updateGraph(graph, grown);
+    updateGraph(graph, base);
+    for (const [id, position] of before)
+      expect(graph.getElementById(id).position(), id).toEqual(position);
+  });
+
+  it("tries the sides before above when the space below a module is blocked", () => {
+    const base: GraphElement[] = [
+      {
+        group: "nodes",
+        data: { id: "module", kind: "module", label: "module" },
+        classes: "module",
+      },
+      {
+        group: "nodes",
+        data: { id: "existing", parent: "module", kind: "function", label: "existing" },
+        classes: "function",
+        position: { x: 0, y: 0 },
+      },
+      {
+        group: "nodes",
+        data: { id: "below", kind: "module", label: "below" },
+        classes: "module",
+        position: { x: 0, y: 200 },
+      },
+    ];
+    cy = cytoscape({
+      headless: true,
+      styleEnabled: true,
+      style: [
+        ...graphStyles(themes.dark),
+        { selector: "#below", style: { width: 2000, height: 100 } },
+      ],
+      elements: base,
+      layout: { name: "preset" },
+    });
+    const boundary = cy.getElementById("module").boundingBox({ includeLabels: true });
+    updateGraph(cy, [
+      ...base,
+      {
+        group: "nodes",
+        data: { id: "new", parent: "module", kind: "class", label: "new" },
+        classes: "class",
+      },
+    ]);
+    const box = cy.getElementById("new").boundingBox({ includeLabels: false });
+    expect(box.x1 > boundary.x2 || box.x2 < boundary.x1).toBe(true);
+    expect(box.y1).toBeLessThan(boundary.y2);
+    expect(box.y2).toBeGreaterThan(boundary.y1);
+  });
+
   it("uses a free spot below the graph when all 100 rings are blocked", () => {
     const node = (
       id: string,

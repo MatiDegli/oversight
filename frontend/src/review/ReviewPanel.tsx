@@ -7,6 +7,7 @@ import { selectLiveDiff } from "../state";
 import type { ChangeState, State } from "../state";
 import { decisionView } from "./decisions";
 import type { DecisionAction, DecisionAttempt, DecisionView } from "./decisions";
+import { impactSummary } from "./ImpactCone";
 
 const statusWords: Record<ChangeState["status"], string> = {
   editing: "Editing",
@@ -32,8 +33,10 @@ export interface ReviewPanelProps {
   changeId: string;
   /** The person's last decision on this change, kept by the app across panel closes. */
   attempt?: DecisionAttempt;
-  /** Absent in a recorded run: the replay build has no backend and sends no commands. */
+  /** Absent in a replay: the replay build has no backend and sends no commands. */
   onDecide?: (changeId: string, action: DecisionAction, comment: string) => void;
+  /** What a replay plays, such as "hand-written demo fixture"; absent in a live run. */
+  replayOf?: string;
   onClose: () => void;
 }
 
@@ -114,10 +117,12 @@ function Decisions({
   changeId,
   view,
   onDecide,
+  replayOf,
 }: {
   changeId: string;
   view: DecisionView;
   onDecide?: ReviewPanelProps["onDecide"];
+  replayOf?: string;
 }) {
   const [comment, setComment] = useState("");
   // Set when Approve was activated without a pointer, so the person is told why nothing happened.
@@ -130,13 +135,15 @@ function Decisions({
     );
   }
   const recorded = view.kind === "recorded";
+  // What the log is comes from its source: only a real recording may call itself one.
+  const replay = replayOf === undefined ? "Replay" : `Replay of a ${replayOf}`;
   if (recorded && view.resolution) {
     return (
       <section
         aria-label="Decision"
         className="flex flex-col gap-2.5 border-t border-page-border p-4.5"
       >
-        <p className="text-sm text-muted">Recorded run: this is the decision that was made.</p>
+        <p className="text-sm text-muted">{`${replay}: this is the decision the log holds.`}</p>
         <Resolution resolution={view.resolution} />
       </section>
     );
@@ -156,7 +163,7 @@ function Decisions({
       {view.kind === "conflict" && <Resolution resolution={view.resolution} />}
       {recorded ? (
         <p className="text-sm text-muted">
-          Recorded run: nothing here sends a decision. The recorded decision shows when it arrives.
+          {`${replay}: nothing here sends a decision. The decision in the log shows when it arrives.`}
         </p>
       ) : (
         <label className="flex flex-col gap-1.5 text-sm text-muted">
@@ -228,8 +235,8 @@ function Decisions({
         </p>
       )}
       {failure !== null && (
-        <p role="alert" className="flex items-center gap-2 text-sm text-failed-text">
-          <X aria-hidden="true" className="size-4 shrink-0" /> {failure}
+        <p role="alert" className="flex items-start gap-2 text-sm text-text">
+          <X aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> {failure}
         </p>
       )}
     </section>
@@ -240,7 +247,14 @@ function Decisions({
  * Review of one proposed change: what it is, its diff file by file, and the decisions. Opened only
  * by the person; events update it in place and never open or close it.
  */
-export function ReviewPanel({ state, changeId, attempt, onDecide, onClose }: ReviewPanelProps) {
+export function ReviewPanel({
+  state,
+  changeId,
+  attempt,
+  onDecide,
+  replayOf,
+  onClose,
+}: ReviewPanelProps) {
   const change = state.changes[changeId];
   const proposal = change?.proposal ?? null;
   const agent = change ? state.agents[change.agent_id] : undefined;
@@ -302,6 +316,9 @@ export function ReviewPanel({ state, changeId, attempt, onDecide, onClose }: Rev
             <TestsChip tests={proposal.tests} />
           </ul>
         )}
+        {proposal && (
+          <p className="text-(length:--data-size) text-muted">{impactSummary(proposal.impact)}</p>
+        )}
       </header>
       <div className="flex min-h-0 flex-1 flex-col">
         <p className="border-b border-page-border px-4.5 py-3.5 text-(length:--body-size)">
@@ -359,6 +376,7 @@ export function ReviewPanel({ state, changeId, attempt, onDecide, onClose }: Rev
           changeId={changeId}
           view={decisionView(change, state.errors, attempt, onDecide === undefined)}
           onDecide={onDecide}
+          replayOf={replayOf}
         />
       )}
     </aside>

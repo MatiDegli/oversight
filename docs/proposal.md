@@ -552,7 +552,7 @@ the single error format.
 
 | Command | Body | Success | Errors |
 | --- | --- | --- | --- |
-| `POST /agents` | `StartAgent {task, slot?, model?}` | 201 `AgentCreated {agent_id, change_id, slot}` | `slot_busy`, `spend_brake` |
+| `POST /agents` | `StartAgent {task, slot?, model?}` | 201 `AgentCreated {agent_id, change_id, slot}` | `slot_busy`, `not_configured`, `spend_brake` |
 | `POST /agents/{id}/stop` | none | 202 | `not_found`, `wrong_state` |
 | `POST /agents/{id}/message` | `{text}` | 501 until level 3 | |
 | `POST /agents/{id}/pause` | none | 501 until level 3 | |
@@ -566,11 +566,16 @@ the single error format.
 | `GET /files?path=&agent=` | none | 200 `FileContent {path, content, hash, agent_id}` | `not_found`, `invalid_path` |
 | `PUT /files` | `SaveFile {path, content, base_hash, agent_id?}` | 200 `FileSaved {path, hash}` | `invalid_path`, `stale_file`, `wrong_state` |
 | `GET /events` | none | SSE, see 4.6 | |
-| `GET /health` | none | 200 `Health {ok, run_id, contract_version, mode}`; mode is `live` or `replay` | |
+| `GET /health` | none | 200 `Health {ok, run_id, contract_version, mode, missing_settings}`; mode is `live` or `replay` | |
 
 - Every error is `ErrorResponse {error: {code, message}}`. The codes are `not_found`,
-  `wrong_state`, `slot_busy`, `spend_brake`, `invalid_path`, `stale_file`, `not_implemented`,
-  `invalid_request` and `internal`. They map to 404, 409, 409, 403, 422, 409, 501, 422 and 500.
+  `wrong_state`, `slot_busy`, `not_configured`, `spend_brake`, `invalid_path`, `stale_file`,
+  `not_implemented`, `invalid_request` and `internal`. They map to 404, 409, 409, 503, 403, 422,
+  409, 501, 422 and 500. Only `not_configured` adds `missing: list[MissingSetting]`, where
+  `MissingSetting {name: SettingName, problem: "missing" | "invalid", slots: list[Slot]}`.
+  `SettingName` is `META_API_KEY`, `BASETEN_API_KEY`, `OVERSIGHT_BUDGET_USD`,
+  `MUSE_SPARK_INPUT_USD_PER_M` or `MUSE_SPARK_OUTPUT_USD_PER_M`; values are never sent.
+  Health's `missing_settings` defaults to an empty list (contract 1.2, approved 2026-10-27).
   FastAPI's own validation error is replaced by this format, and so is an unexpected server-side
   failure, as `internal` (contract 1.1, approved by the maintainer on 2026-10-26).
 - `PUT /files` writes main, committed at once with the user as author, or the named agent's

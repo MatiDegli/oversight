@@ -10,11 +10,12 @@ NO_KEYS := env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u
 UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
-.PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
-	contracts check-contracts check-secrets demo-repo-check replay shots smoke layout test-browser
+.PHONY: help install setup dev check check-ci check-fast check-python lint-python check-frontend \
+	lint-frontend contracts check-contracts check-secrets demo-repo-check replay shots smoke layout \
+	test-browser demo demo-setup-check demo-check e2e record
 
 help: ## list the targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
 
 install: ## install the Python and Node dependencies from the lockfiles
 	uv sync --frozen
@@ -35,11 +36,50 @@ dev: ## FastAPI with reload and the Vite dev server, one origin through Vite's p
 # SPEED=0 sends everything at once. It stops only the backend it started, as dev does.
 LOG ?= fixtures/events/handwritten-level1.jsonl
 SPEED ?= 1
+RUN ?=
+
+record: ## bundle a finished run (RUN=<id>, or the latest run) into fixtures/events/recorded-demo.jsonl; reads a finished run and spends no credits
+	@if [ -n "$(RUN)" ]; then $(UV) python tools/record_run.py "$(RUN)"; else $(UV) python tools/record_run.py --latest; fi
 
 replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with the Vite dev server
 	@uv run --frozen python -m oversight replay "$(LOG)" --speed "$(SPEED)" & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
+
+# demo: the product as the judges and I run it. One origin: FastAPI serves the built frontend and the
+# API on DEMO_PORT, no Vite. It builds the UI (the normal build, not the replay one), then starts the
+# live server with the settings from .env (Muse Spark) on a fixed host and port; the workspace starts
+# clean every time (the server's reset). Starting it spends no credits: only Start agent does, and
+# setup is checked before building. The provider keys are not stripped here, as they are for check.
+# Ctrl+C stops it: uvicorn runs the server's shutdown.
+DEMO_PORT ?= 8710
+UI_BUILD := $(PNPM) build
+
+demo-setup-check: ## check offered agents' keys, budget and prices in .env before the demo
+	uv run --frozen python -m oversight.setup --check
+
+demo: demo-setup-check ## build the UI, then serve it and the API on one port (DEMO_PORT) from .env; Start agent spends credits
+	$(UI_BUILD)
+	@echo ""
+	@echo "Oversight: open http://localhost:$(DEMO_PORT)/ in the browser (from Windows too: localhost is shared with WSL). Ctrl+C stops it."
+	@echo ""
+	@env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR \
+		-u GIT_PREFIX OVERSIGHT_HOST=127.0.0.1 OVERSIGHT_PORT=$(DEMO_PORT) \
+		uv run --frozen python -m oversight serve
+
+# demo-check: the demo's path three times in a row from a clean start, on the scripted fake model, so
+# no key and no credits (tools/demo_check.py says what each run checks). It builds the UI once, then
+# runs the check, which computes its own overall deadline (--print-deadline, the worst-case sum of
+# its phase deadlines plus a margin). Its in-process deadlines are best effort: in a normal failure
+# they fail naming the phase that ran out, but they cannot promise to fire. The hard bound is this
+# outer timeout, 60 s above that deadline and 30 s later killing what is left: it leaves no process
+# behind, because the server takes SIGTERM when the check's process dies (PR_SET_PDEATHSIG).
+demo-check: ## the demo path three times from a clean start, on the fake model; no credits; not in check
+	$(UI_BUILD)
+	@deadline=$$($(UV) python tools/demo_check.py --print-deadline); \
+	backstop=$$((deadline + 60)); \
+	echo "demo-check: overall deadline $${deadline}s, outer timeout $${backstop}s"; \
+	timeout --kill-after=30 $$backstop $(UV) python tools/demo_check.py
 
 # shots: screenshots of the UI from the recorded run LOG, 1920x1080, into .shots/ (gitignored), then
 # IMPECCABLE's detector on the served URL. It serves the player and Vite on free ports, so a running
@@ -67,6 +107,15 @@ smoke: ## start the backend and check /health and /graph
 test-browser: ## the frontend's browser tests in Playwright's Chromium; not in check
 	$(PNPM) test:browser
 
+# e2e: one Playwright test over the static replay build (vite build --mode replay, served by vite
+# preview) and the hand-written log: level 1's definition of done, with no backend and no credits.
+# The build and the run share one time bound of 600 s (10 s more, then killed) and the 6 GiB memory
+# cap of make shots, which needs a user systemd: without one (CI) the run has the time bound only,
+# and tools/capped.sh says so on stderr. The preview server is run.sh's own and never outlives it.
+# It is not part of make check yet; CI runs it in its own job.
+e2e: ## Playwright over the static replay build and a hand-written log; 600 s; 6G cap only with a user systemd (not in CI); not in check
+	@$(NO_KEYS) timeout --kill-after=10 600 bash tools/capped.sh 6G bash frontend/e2e/run.sh
+
 # Two layers keep a runaway test from taking the machine. The soft one, for every pytest run
 # including a bare `uv run pytest` and CI: conftest.py loads tools/memwatch.py, which ends a run
 # whose own process passes OVERSIGHT_TEST_MEM_GB GiB resident (8 by default) with a line naming the
@@ -77,15 +126,49 @@ test-browser: ## the frontend's browser tests in Playwright's Chromium; not in c
 # included, which pytest-timeout leaves open: after RUN_TIMEOUT seconds it ends the process group,
 # 30 s later kills it, and prints one TIME BOUND line naming the bound. 900 s, not more: GitHub
 # cancels the CI job at 20 minutes, install and lint come first, and a cancelled job says nothing.
+#
+# The suite runs on WORKERS pytest-xdist workers (8; WORKERS=0 runs it in one process), and the
+# four limits above reach every one of them. The workers are children of the controller that
+# capped.sh and bounded.sh start, in its process group and in its systemd scope, so the 10G and the
+# outer bound cover the whole tree (tools/tests/test_memwatch.py checks the group and the scope).
+# memwatch gives each worker an equal share of OVERSIGHT_TEST_MEM_GB, so the workers together stay
+# inside the budget even where no scope exists. pytest-timeout runs in each worker. A worker that
+# memwatch ends makes the controller see a crashed worker, and --max-worker-restart=0 ends the run
+# there rather than starting a new worker for the same runaway test.
 RUN_TIMEOUT ?= 900
+WORKERS ?= 8
 PYTEST_RUN := bash tools/bounded.sh $(RUN_TIMEOUT) bash tools/capped.sh 10G $(UV) pytest
+XDIST := -n $(WORKERS) --max-worker-restart=0
 
-check: check-python check-contracts check-frontend check-secrets ## every gate; tests capped at 10G, 120 s each and 15 min in all; no credits
+# The one test that cannot share a tree with the other gates: it writes throwaway files into
+# frontend/src, which tsc, ESLint and Prettier read. It runs in the frontend group, after those
+# gates, alone and in one process, and the python group leaves it out. Each file is in one group.
+BOUNDARIES := tools/tests/test_eslint_boundaries.py
+
+# check runs its four groups at once: python, contracts, frontend and secrets. --output-sync=target
+# prints each target's output in one piece when it ends, so groups do not interleave. Make lets the
+# jobs already started finish after a failure, starts no other, and exits 2: the first failure still
+# fails the whole target. Inside a group the steps run in order: lint before tests, so a lint
+# error ends the group before its tests start. CI has no gitleaks in its check job (the history is
+# scanned in a job of its own), so it runs check-ci, which is check without check-secrets. Both
+# derive from the one GATES list, so a new gate added there lands in both (check-ci only ever
+# filters out check-secrets).
+GATES := check-python check-contracts check-frontend check-secrets
+PARALLEL := --no-print-directory -j4 --output-sync=target
+
+check: ## every gate, in parallel groups; tests capped at 10G, 120 s each and 15 min in all; no credits
+	@$(MAKE) $(PARALLEL) $(GATES)
+
+check-ci: ## check without gitleaks, for CI, where the history is scanned in its own job
+	@$(MAKE) $(PARALLEL) $(filter-out check-secrets,$(GATES))
 
 check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
 
+# Keep the bounded pytest command intact: its safety tests pin that invocation. Extend only
+# this gate's discovery, leaving the separately run frontend boundary tests in their own group.
+check-python: export PYTEST_ADDOPTS := $(PYTEST_ADDOPTS) -o 'testpaths=contracts/tests backend/tests tools/tests tools/eval/tests'
 check-python: lint-python
-	$(PYTEST_RUN)
+	$(PYTEST_RUN) $(XDIST) --ignore=$(BOUNDARIES)
 
 lint-python:
 	$(UV) ruff check .
@@ -95,6 +178,7 @@ lint-python:
 
 check-frontend: lint-frontend
 	$(PNPM) test
+	$(PYTEST_RUN) $(BOUNDARIES)
 
 lint-frontend:
 	$(PNPM) typecheck

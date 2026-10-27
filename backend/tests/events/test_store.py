@@ -217,14 +217,15 @@ async def test_the_file_uses_wal_and_a_busy_timeout(tmp_path: Path) -> None:
         assert timeout == (5000,)
 
 
-async def test_a_log_round_trips_through_the_store_byte_for_byte(tmp_path: Path) -> None:
+async def test_a_log_round_trips_through_the_store_with_serialized_defaults(tmp_path: Path) -> None:
     log = FIXTURES / "handwritten-level1.jsonl"
     async with open_store(tmp_path) as store:
         for event in read_jsonl(log):
             await store.publish(event.payload, ts=event.ts)
     out = tmp_path / "exported.jsonl"
     assert export_run(store.path, out) == len(read_jsonl(log))
-    assert out.read_text(encoding="utf-8") == log.read_text(encoding="utf-8")
+    expected = "".join(event.model_dump_json() + "\n" for event in read_jsonl(log))
+    assert out.read_text(encoding="utf-8") == expected
 
 
 async def test_close_can_be_repeated(tmp_path: Path) -> None:

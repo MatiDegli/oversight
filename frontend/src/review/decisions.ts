@@ -1,7 +1,7 @@
 import type { ChangeResolved, ErrorReport } from "@contracts";
 
 import type { ChangeState, State } from "../state";
-import { CommandError } from "../transport";
+import { commandFailure } from "../transport";
 
 export type DecisionAction = "approve" | "reject";
 
@@ -54,13 +54,7 @@ const verbs: Record<DecisionAction, string> = { approve: "Approve", reject: "Rej
 
 /** A 4xx shows the server's message; a 500 or a lost request shows a plain failure line. */
 export function failureMessage(action: DecisionAction, error: unknown): string {
-  if (error instanceof CommandError && error.status >= 400 && error.status < 500) {
-    return error.message;
-  }
-  if (error instanceof CommandError) {
-    return `${verbs[action]} failed: the server hit an internal error. Try again.`;
-  }
-  return `${verbs[action]} did not reach the server. Check the connection and try again.`;
+  return commandFailure(verbs[action], error);
 }
 
 export function decisionView(

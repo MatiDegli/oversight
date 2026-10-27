@@ -1,9 +1,24 @@
+import { readFileSync } from "node:fs";
+import type { ServerEvent } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { createInitialState } from "../state";
+import { applyEvent, createInitialState } from "../state";
+import { twoSlotState } from "../taskBox.fixture";
+
+import { createTaskBoxStore } from "./taskBox";
 import { TaskBox, TaskBoxView } from "./TaskBox";
 import type { TaskBoxViewProps } from "./TaskBox";
+
+const events = readFileSync(
+  new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
+  "utf8",
+)
+  .trim()
+  .split("\n")
+  .map((line) => JSON.parse(line) as ServerEvent);
+const through = (seq: number) =>
+  events.filter((event) => event.seq <= seq).reduce(applyEvent, createInitialState());
 
 const view = (props: Partial<TaskBoxViewProps> = {}) =>
   renderToStaticMarkup(
@@ -20,6 +35,150 @@ const view = (props: Partial<TaskBoxViewProps> = {}) =>
 const button = (markup: string) => /<button [^>]*>/.exec(markup)?.[0] ?? "";
 
 describe("the new-agent box", () => {
+  it("preselects A when both slots are free in the browser's normal two-slot setup", () => {
+    const markup = renderToStaticMarkup(
+      <TaskBox state={twoSlotState()} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    const slots = [...markup.matchAll(/<button [^>]*aria-pressed[^>]*>.*?<\/button>/g)].map(
+      (match) => match[0],
+    );
+    expect(slots).toHaveLength(2);
+    expect(slots[0]).toContain('aria-disabled="false"');
+    expect(slots[0]).toContain('aria-pressed="true"');
+    expect(slots[0]).toContain("aria-pressed:border-text");
+    expect(slots[0]).toMatch(/<svg[^>]*aria-hidden="true"/);
+    expect(slots[1]).toContain('aria-disabled="false"');
+    expect(slots[1]).toContain('aria-pressed="false"');
+  });
+
+  it.each(["A", "B", null] as const)(
+    "keeps slot names stable and marks only selected slot %s with a visible, decorative check and aria-pressed",
+    (selected) => {
+      const markup = view({
+        slots: [
+          { slot: "A", label: "Muse Spark", holder: null },
+          { slot: "B", label: "Muse Spark Open", holder: null },
+        ],
+        selected,
+      });
+      const buttons = [...markup.matchAll(/<button [^>]*aria-pressed[^>]*>.*?<\/button>/g)];
+      expect(buttons).toHaveLength(2);
+      for (const [index, slot] of ["A", "B"].entries()) {
+        const button = buttons[index]?.[0] ?? "";
+        expect(button).toContain(`aria-pressed="${String(selected === slot)}"`);
+        expect(button).not.toMatch(/aria-label=|aria-labelledby=|<title/);
+        expect(button.replace(/<[^>]*>/g, "").trim()).toBe(
+          slot === "A" ? "A Muse Spark" : "B Muse Spark Open",
+        );
+        if (selected === slot) {
+          expect(button).toContain("aria-pressed:border-text");
+          expect(button).toContain("lucide-check");
+          const check = /<svg[^>]*>/.exec(button)?.[0] ?? "";
+          expect(check).toContain('aria-hidden="true"');
+          expect(check).not.toContain('role="img"');
+          expect(check).toContain("inline-block size-4 text-text");
+          expect(check).not.toMatch(/class="[^"]*\b(hidden|invisible|sr-only)\b|style=/);
+        } else {
+          expect(button).not.toContain("aria-pressed:border-text");
+          expect(button).not.toContain("lucide-check");
+          expect(button).not.toContain('aria-label="Selected"');
+        }
+      }
+    },
+  );
+
+  it("shows the two offered letters and model labels, with B's token, and disables a named holder", () => {
+    const state = through(14);
+    const run = state.run;
+    if (!run) throw new Error("Missing run fixture");
+    const markup = renderToStaticMarkup(
+      <TaskBox state={state} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    expect(markup).toContain('aria-label="Agent slot"');
+    const slots = [...markup.matchAll(/<button [^>]*aria-pressed[^>]*>.*?<\/button>/g)].map(
+      (match) => match[0],
+    );
+    expect(slots).toHaveLength(2);
+    expect(slots[0]).toContain('aria-disabled="true"');
+    expect(slots[0]).toContain("Agent A is working.");
+    expect(slots[0]).toContain("text-agent-a-text");
+    expect(slots[1]).toContain('aria-disabled="false"');
+    expect(slots[1]).toContain('aria-pressed="true"');
+    expect(slots[1]).toContain("text-agent-b-text");
+    for (const info of run.slots) {
+      expect(markup).toContain(run.models.find((model) => model.id === info.default_model)?.label);
+    }
+    const one = { ...state, run: { ...run, slots: run.slots.slice(0, 1) } };
+    expect(renderToStaticMarkup(<TaskBox state={one} onStart={vi.fn()} />)).not.toContain(
+      'aria-label="Agent slot"',
+    );
+  });
+  it("draws the field once, around the text and its chips, and names the box for screen readers", () => {
+    const markup = view({ draft: "x" });
+    const box = /<div class="[^"]*bg-field[^"]*">/.exec(markup)?.[0] ?? "";
+    expect(box).toContain("border-control-edge");
+    expect(box).toContain("rounded-card");
+    expect(box).toContain("has-[textarea:focus-visible]:outline-text");
+    // The textarea has no border or fill of its own and still shows nothing without a ring on its box.
+    const textarea = /<textarea [^>]*>/.exec(markup)?.[0] ?? "";
+    expect(textarea).not.toMatch(/class="[^"]*\b(border|bg-field)\b/);
+    expect(textarea).toContain("placeholder:text-faint");
+    expect(textarea).toContain("Each agent works in its own worktree");
+    expect(markup).toMatch(/<h3 [^>]*class="[^"]*sr-only[^"]*">New agent<\/h3>/);
+    expect(markup.indexOf("<h3")).toBeLessThan(markup.indexOf("<textarea"));
+  });
+
+  it("shows the model and the step limit as chips before Start agent, which is not a chip", () => {
+    const markup = view({ draft: "x", model: "Muse Spark", maxSteps: 30 });
+    const chips = [...markup.matchAll(/<span [^>]*bg-page-raised[^>]*>.*?<\/span>/g)].map(
+      (match) => match[0],
+    );
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toContain("Muse Spark");
+    expect(chips[0]).toMatch(/<svg[^>]*aria-hidden="true"/);
+    expect(chips[0]).toContain('aria-label="Model: Muse Spark"');
+    expect(chips[1]).toContain("Up to 30 steps");
+    for (const chip of chips) {
+      expect(chip).toContain("border-page-border");
+      expect(chip).toContain("h-(--chip-height)");
+      expect(chip).toContain("rounded-control");
+    }
+    expect(markup.indexOf("Up to 30 steps")).toBeLessThan(markup.indexOf(">Start agent<"));
+    expect(markup).not.toMatch(/<button[^>]*>[^<]*(Muse Spark|Up to 30 steps)/);
+    expect(button(markup)).toContain("ml-auto");
+  });
+
+  it("leaves out a chip it has no fact for", () => {
+    const markup = view({ draft: "x" });
+    expect(markup).not.toContain("bg-page-raised");
+    expect(markup).not.toContain("Up to");
+    expect(view({ draft: "x", maxSteps: 1 })).toContain("Up to 1 step<");
+  });
+
+  it("takes the chips' facts from the run: the only model's label, and the step limit", () => {
+    const state = through(2);
+    const run = state.run;
+    if (!run) throw new Error("Missing run fixture");
+    const one = { ...state, run: { ...run, slots: run.slots.slice(0, 1) } };
+    const oneMarkup = renderToStaticMarkup(
+      <TaskBox state={one} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    expect(oneMarkup).toContain('aria-label="Model: Muse Spark"');
+    expect(oneMarkup).toContain("Up to 30 steps");
+    // With two slots the picker's own buttons name each model, so there is no third chip for it.
+    const twoMarkup = renderToStaticMarkup(
+      <TaskBox state={state} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    expect(twoMarkup).not.toContain("Model:");
+    expect(twoMarkup).toContain("Up to 30 steps");
+    // Before the server's run.started there is nothing to say.
+    const waiting = renderToStaticMarkup(
+      <TaskBox state={createInitialState()} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    expect(waiting).not.toContain("Model:");
+    expect(waiting).not.toContain("Up to");
+  });
+
   it("is disabled while the task is blank or only whitespace, and enabled with a task", () => {
     for (const draft of ["", "   ", "\n\t\n"])
       expect(button(view({ draft }))).toContain('aria-disabled="true"');
@@ -59,7 +218,8 @@ describe("the new-agent box", () => {
 
   it("shows a failure under the box as an alert with an icon, never in color alone", () => {
     const markup = view({ draft: "Cap the discount", failure: "Slot A is busy." });
-    expect(markup).toMatch(/<p role="alert"[^>]*text-failed-text[^>]*><svg[^>]*aria-hidden="true"/);
+    expect(markup).toMatch(/<p role="alert"[^>]*text-text[^>]*><svg[^>]*aria-hidden="true"/);
+    expect(markup).not.toContain("text-failed");
     expect(markup).toContain("Slot A is busy.");
     expect(button(markup)).toContain('aria-disabled="false"');
     expect(view({ draft: "x" })).not.toContain('role="alert"');
@@ -70,12 +230,26 @@ describe("the new-agent box", () => {
   });
 });
 
-describe("the new-agent box in a recorded run", () => {
-  it("says so and renders no live control", () => {
-    const markup = renderToStaticMarkup(<TaskBox state={createInitialState()} />);
+describe("the new-agent box in a replay", () => {
+  const box = (replayOf?: string) =>
+    renderToStaticMarkup(<TaskBox state={createInitialState()} replayOf={replayOf} />);
+
+  it("names a hand-written fixture as one, never as a recording, and renders no live control", () => {
+    const markup = box("hand-written demo fixture");
     expect(markup).toContain("New agent");
-    expect(markup).toContain("Recorded run: agents cannot be started here.");
+    expect(markup).toContain(
+      "Replay of a hand-written demo fixture: agents cannot be started here.",
+    );
+    expect(markup).not.toMatch(/recorded run/i);
     for (const live of ["<textarea", "<button", "Start agent", "<kbd"])
       expect(markup).not.toContain(live);
+  });
+
+  it("calls a log a real recorded run only when its source says so", () => {
+    expect(box("real recorded run")).toContain(
+      "Replay of a real recorded run: agents cannot be started here.",
+    );
+    expect(box()).toContain("Replay: agents cannot be started here.");
+    expect(box()).not.toMatch(/recorded run/i);
   });
 });

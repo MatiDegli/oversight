@@ -10,6 +10,10 @@ export type Timestamp = string;
 export type NonEmptyText = string;
 export type AgentState =
   "starting" | "working" | "ready_for_review" | "revising" | "paused" | "halted" | "done" | "stopped";
+export type PlanId = string;
+export type MergeMode = "ask_me" | "merge_when_safe";
+export type RuleId = "combined_tests" | "small_cone" | "small_change" | "known_spend" | "existing_tests_untouched";
+export type JsonValue = unknown;
 export type NodeKind = "module" | "class" | "function" | "method";
 export type EdgeId = string;
 export type EdgeKind = "imports" | "calls" | "inherits";
@@ -22,11 +26,18 @@ export type ErrorCode =
   | "wrong_state"
   | "slot_busy"
   | "spend_brake"
+  | "not_configured"
   | "invalid_path"
   | "stale_file"
   | "not_implemented"
   | "invalid_request"
   | "internal";
+export type SettingName =
+  | "META_API_KEY"
+  | "BASETEN_API_KEY"
+  | "OVERSIGHT_BUDGET_USD"
+  | "MUSE_SPARK_INPUT_USD_PER_M"
+  | "MUSE_SPARK_OUTPUT_USD_PER_M";
 export type RunId = string;
 export type ServerEvent =
   | RunStartedEvent
@@ -39,7 +50,10 @@ export type ServerEvent =
   | ChangeProposedEvent
   | ChangeResolvedEvent
   | UsageTickEvent
-  | ErrorReportEvent;
+  | ErrorReportEvent
+  | ChangeAssessedEvent
+  | MergeModeChangedEvent
+  | PlanUpdatedEvent;
 
 /**
  * 201 from `POST /agents`.
@@ -107,6 +121,10 @@ export interface AgentStatus {
    * Why it halted or stopped, in one sentence.
    */
   detail: string | null;
+  /**
+   * The originating plan; null for standalone agents or older recordings.
+   */
+  plan_id: PlanId | null;
 }
 export interface AgentStatusEvent {
   /**
@@ -188,6 +206,56 @@ export interface Budget {
    * 0.9: above it the server refuses new agents.
    */
   block_at: number;
+}
+/**
+ * One recorded change assessment.
+ */
+export interface ChangeAssessedEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "change.assessed";
+  payload: ChangeAssessment;
+}
+/**
+ * One evaluation of an exact change revision against current main.
+ */
+export interface ChangeAssessment {
+  change_id: ChangeId;
+  agent_id: AgentId;
+  revision: number;
+  base_commit: NonEmptyText;
+  head_commit: NonEmptyText;
+  main_commit: NonEmptyText;
+  candidate_tree: NonEmptyText | null;
+  policy_version: NonEmptyText;
+  mode: MergeMode;
+  mode_revision: number;
+  rules: RuleAssessment[];
+}
+/**
+ * One rule's recorded inputs, limit, outcome and evidence.
+ */
+export interface RuleAssessment {
+  rule: RuleId;
+  observed: {
+    [k: string]: JsonValue;
+  } | null;
+  threshold: {
+    [k: string]: JsonValue;
+  };
+  result: "pass" | "fail" | "unknown";
+  evidence: EvidenceRef[];
+}
+/**
+ * An event or Git object in this run, optionally narrowed to a workspace path.
+ */
+export interface EvidenceRef {
+  event_seq: number | null;
+  git_object: NonEmptyText | null;
+  path: WorkspacePath | null;
 }
 /**
  * One change against its own base commit.
@@ -350,6 +418,18 @@ export interface ChangeResolved {
    * Set exactly when the merge is "conflict".
    */
   conflict: Conflict | null;
+  /**
+   * Decision provenance; null when it was not recorded.
+   */
+  decided_by: ("person" | "rules") | null;
+  /**
+   * Recorded server-authored reasons for this decision.
+   */
+  reasons: string[];
+  /**
+   * The immutable assessment used for this decision, when available.
+   */
+  assessment: ChangeAssessment | null;
 }
 export interface Conflict {
   kind: "merge" | "tests";
@@ -411,9 +491,27 @@ export interface ChangeUpdatedEvent {
   type: "change.updated";
   payload: ChangeUpdated;
 }
+/**
+ * Request a proposed split without starting coding agents.
+ */
+export interface CreatePlan {
+  task: NonEmptyText;
+}
 export interface ErrorDetail {
   code: ErrorCode;
   message: string;
+  /**
+   * Present only for not_configured; other errors keep their existing wire shape.
+   */
+  missing?: MissingSetting[] | null;
+}
+/**
+ * A setup problem: names and affected slots only, never configuration values.
+ */
+export interface MissingSetting {
+  name: SettingName;
+  problem: "missing" | "invalid";
+  slots: Slot[];
 }
 /**
  * A failure shown without breaking the demo.
@@ -552,6 +650,7 @@ export interface Health {
   run_id: RunId;
   contract_version: string;
   mode: "live" | "replay";
+  missing_settings: MissingSetting[];
 }
 export interface Limits {
   /**
@@ -569,6 +668,25 @@ export interface Limits {
   test_timeout_s: number;
   cone_max_depth: number;
   cone_max_nodes: number;
+}
+/**
+ * The new server merge mode.
+ */
+export interface MergeModeChangedEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "merge_mode.changed";
+  payload: MergeModeState;
+}
+/**
+ * Server-owned merge mode and its monotonically increasing revision.
+ */
+export interface MergeModeState {
+  mode: MergeMode & string;
+  revision: number;
 }
 export interface ModelProfile {
   /**
@@ -590,9 +708,67 @@ export interface ModelProfile {
   reasoning: string | null;
 }
 /**
+ * The complete versioned state of a two-agent plan.
+ */
+export interface Plan {
+  plan_id: PlanId;
+  revision: number;
+  task: NonEmptyText;
+  graph_version: NonEmptyText;
+  state: "planning" | "proposed" | "starting" | "running" | "completed" | "rejected" | "failed";
+  subtasks: [PlanSubtask, PlanSubtask] | null;
+  detail: string | null;
+}
+/**
+ * A subtask and the agent assigned when the plan starts.
+ */
+export interface PlanSubtask {
+  task: NonEmptyText;
+  zone: PlanZone;
+  agent_id: AgentId | null;
+}
+/**
+ * Explicit graph nodes and workspace files selected for a subtask.
+ */
+export interface PlanZone {
+  node_ids: NodeId[];
+  paths: WorkspacePath[];
+}
+/**
+ * The created plan identifier; generation continues through events.
+ */
+export interface PlanCreated {
+  plan_id: PlanId;
+}
+/**
+ * The expected revision for a plan command.
+ */
+export interface PlanRevision {
+  revision: number;
+}
+/**
+ * The complete new plan revision.
+ */
+export interface PlanUpdatedEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "plan.updated";
+  payload: Plan;
+}
+/**
  * `POST /changes/{id}/reject`.
  */
 export interface RejectChange {
+  comment?: string | null;
+}
+/**
+ * Refuse a proposed plan without starting its agents.
+ */
+export interface RejectPlan {
+  revision: number;
   comment?: string | null;
 }
 /**
@@ -620,6 +796,10 @@ export interface RunStarted {
   slots: SlotInfo[];
   limits: Limits;
   budget: Budget;
+  /**
+   * Initial server merge mode; null in recordings without mode metadata.
+   */
+  merge_mode: MergeModeState | null;
 }
 export interface SlotInfo {
   slot: Slot;
@@ -683,6 +863,13 @@ export interface UsageTick {
   brake: "ok" | "warn_50" | "warn_80" | "blocked";
 }
 /**
+ * Select a merge mode using the last observed server revision.
+ */
+export interface SetMergeMode {
+  mode: MergeMode;
+  revision: number;
+}
+/**
  * `POST /agents`.
  */
 export interface StartAgent {
@@ -696,5 +883,24 @@ export interface StartAgent {
    */
   model?: string | null;
 }
+/**
+ * An editable subtask before the server assigns its agent.
+ */
+export interface SubtaskDraft {
+  task: NonEmptyText;
+  zone: PlanZone;
+}
+/**
+ * Replace both proposed subtasks using the expected plan revision.
+ */
+export interface UpdatePlan {
+  revision: number;
+  graph_version: NonEmptyText;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  subtasks: [SubtaskDraft, SubtaskDraft];
+}
 
-export const CONTRACT_VERSION = "1.1.0";
+export const CONTRACT_VERSION = "1.3.0";
