@@ -139,6 +139,7 @@ async def test_a_missing_or_blank_comment_is_invalid_request(
         await start(s)
         await ready(s)
         refused = await s.client.post(f"{CHANGE}/request-changes", json=body)
+        assert refused.status_code == 422, refused.text
         assert error_code(refused) == (422, "invalid_request")
         # Nothing was taken: the change is still reviewable.
         assert (await request(s)).status_code == 202
@@ -217,6 +218,7 @@ async def test_the_brake_refuses_a_revision_of_the_metered_agent_only(
         ledger = s.live.ledger
         ledger.state = LedgerState(145.0, ())  # 97% of the budget: past the block
         refused = await request(s, change="change-2")
+        assert refused.status_code == 403, refused.text
         assert error_code(refused) == (403, "spend_brake")
         assert "above 90%" in refused.json()["error"]["message"]
         assert (await request(s, change="change-1")).status_code == 202
@@ -333,7 +335,9 @@ async def test_a_stopped_run_reports_its_steps(tmp_path: Path, revising: bool) -
             await ready(s)
             assert (await request(s)).status_code == 202
             await s.until(is_type("agent.status", state="revising"))
-            expected_steps, budget = STEPS_A, 2 * LIMITS.max_steps
+            model.permits.release()  # the revision edits once, then waits for its next call
+            await s.until(is_type("agent.step", step=STEPS_A + 1))
+            expected_steps, budget = STEPS_A + 1, 2 * LIMITS.max_steps
         else:
             for _ in range(2):
                 model.permits.release()
