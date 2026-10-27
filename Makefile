@@ -10,8 +10,9 @@ NO_KEYS := env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u
 UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
-.PHONY: help install setup dev check check-fast check-python lint-python check-frontend lint-frontend \
-	contracts check-contracts check-secrets demo-repo-check replay shots smoke layout test-browser
+.PHONY: help install setup dev check check-ci check-fast check-python lint-python check-frontend \
+	lint-frontend contracts check-contracts check-secrets demo-repo-check replay shots smoke layout \
+	test-browser
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -77,15 +78,44 @@ test-browser: ## the frontend's browser tests in Playwright's Chromium; not in c
 # included, which pytest-timeout leaves open: after RUN_TIMEOUT seconds it ends the process group,
 # 30 s later kills it, and prints one TIME BOUND line naming the bound. 900 s, not more: GitHub
 # cancels the CI job at 20 minutes, install and lint come first, and a cancelled job says nothing.
+#
+# The suite runs on WORKERS pytest-xdist workers (8; WORKERS=0 runs it in one process), and the
+# four limits above reach every one of them. The workers are children of the controller that
+# capped.sh and bounded.sh start, in its process group and in its systemd scope, so the 10G and the
+# outer bound cover the whole tree (tools/tests/test_memwatch.py checks the group and the scope).
+# memwatch gives each worker an equal share of OVERSIGHT_TEST_MEM_GB, so the workers together stay
+# inside the budget even where no scope exists. pytest-timeout runs in each worker. A worker that
+# memwatch ends makes the controller see a crashed worker, and --max-worker-restart=0 ends the run
+# there rather than starting a new worker for the same runaway test.
 RUN_TIMEOUT ?= 900
+WORKERS ?= 8
 PYTEST_RUN := bash tools/bounded.sh $(RUN_TIMEOUT) bash tools/capped.sh 10G $(UV) pytest
+XDIST := -n $(WORKERS) --max-worker-restart=0
 
-check: check-python check-contracts check-frontend check-secrets ## every gate; tests capped at 10G, 120 s each and 15 min in all; no credits
+# The one test that cannot share a tree with the other gates: it writes throwaway files into
+# frontend/src, which tsc, ESLint and Prettier read. It runs in the frontend group, after those
+# gates, alone and in one process, and the python group leaves it out. Each file is in one group.
+BOUNDARIES := tools/tests/test_eslint_boundaries.py
+
+# check runs its four groups at once: python, contracts, frontend and secrets. --output-sync=target
+# prints each target's output in one piece when it ends, so groups do not interleave. Make lets the
+# jobs already started finish after a failure, starts no other, and exits 2: the first failure still
+# fails the whole target. Inside a group the steps run in order: lint before tests, so a lint
+# error ends the group before its tests start. CI has no gitleaks in its check job (the history is
+# scanned in a job of its own), so it runs check-ci, which is check without check-secrets.
+GATES := check-python check-contracts check-frontend
+PARALLEL := --no-print-directory -j4 --output-sync=target
+
+check: ## every gate, in parallel groups; tests capped at 10G, 120 s each and 15 min in all; no credits
+	@$(MAKE) $(PARALLEL) $(GATES) check-secrets
+
+check-ci: ## check without gitleaks, for CI, where the history is scanned in its own job
+	@$(MAKE) $(PARALLEL) $(GATES)
 
 check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
 
 check-python: lint-python
-	$(PYTEST_RUN)
+	$(PYTEST_RUN) $(XDIST) --ignore=$(BOUNDARIES)
 
 lint-python:
 	$(UV) ruff check .
@@ -95,6 +125,7 @@ lint-python:
 
 check-frontend: lint-frontend
 	$(PNPM) test
+	$(PYTEST_RUN) $(BOUNDARIES)
 
 lint-frontend:
 	$(PNPM) typecheck
