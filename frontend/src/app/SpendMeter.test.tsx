@@ -104,6 +104,13 @@ describe("the top bar spend meter", () => {
     expect(words(render({ ...metered(), usage: null }))).toContain("Spent US$10.00 of US$150");
   });
 
+  it("writes a round budget without cents and a spent total with them", () => {
+    const text = words(render(metered()));
+    expect(text).toMatch(/of US\$150(?!\.)/);
+    expect(text).not.toContain("US$150.00");
+    expect(text).toMatch(/Spent US\$12\.40/);
+  });
+
   it("renders nothing without a run or a positive run budget", () => {
     expect(render(createInitialState())).toBe("");
     const state = metered();
