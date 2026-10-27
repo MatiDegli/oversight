@@ -119,14 +119,19 @@ describe("panel switching over the level 1 fixture", () => {
   });
 
   it("keeps the change's nodes lit until it is decided, then none", () => {
-    expect(litNodeIds(through(20).changes["change-1"])).toEqual([edited]);
+    const ready = through(20).changes["change-1"];
+    const expected = [
+      edited,
+      ...(ready?.proposal?.impact.entries.map((entry) => entry.node_id) ?? []),
+    ];
+    expect(litNodeIds(ready)).toEqual(expected);
+    expect(litNodeIds(through(18).changes["change-1"])).toEqual([edited]);
     // change.resolved at seq 21: approved and merged, so the graph goes back to its normal lights.
     expect(through(21).changes["change-1"]?.status).toBe("approved");
     expect(litNodeIds(through(21).changes["change-1"])).toBeNull();
-    const ready = through(20).changes["change-1"];
     expect(ready && litNodeIds({ ...ready, status: "rejected" })).toBeNull();
     // An approval that did not merge still waits for the person.
-    expect(ready && litNodeIds({ ...ready, status: "conflict" })).toEqual([edited]);
+    expect(ready && litNodeIds({ ...ready, status: "conflict" })).toEqual(expected);
     expect(litNodeIds(undefined)).toBeNull();
   });
 });

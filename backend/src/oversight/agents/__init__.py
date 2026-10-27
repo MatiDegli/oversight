@@ -24,6 +24,7 @@ from oversight.agents.client import (
 from oversight.agents.fake import Script, ScriptedModel, load_script, parse_script
 from oversight.agents.loop import (
     PROMPT_VERSION,
+    REVISION_PROMPT,
     SYSTEM_PROMPT,
     AgentRun,
     AgentTask,
@@ -49,6 +50,7 @@ __all__ = [
     "MUSE_SPARK",
     "MUSE_SPARK_OPEN",
     "PROMPT_VERSION",
+    "REVISION_PROMPT",
     "SYSTEM_PROMPT",
     "TOOL_NAMES",
     "TOOL_SCHEMAS",

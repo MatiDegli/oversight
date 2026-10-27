@@ -1,4 +1,4 @@
-import type { GraphEdge, GraphNode, Point } from "@contracts";
+import type { GraphEdge, GraphNode, ImpactCone, Point } from "@contracts";
 
 import { selectNodeMarks, selectPendingChanges } from "../state";
 import type { State } from "../state";
@@ -9,6 +9,7 @@ export interface GraphElement {
     id: string;
     kind: GraphNode["kind"] | GraphEdge["kind"];
     label?: string;
+    distance?: number;
     parent?: string;
     source?: string;
     target?: string;
@@ -19,13 +20,14 @@ export interface GraphElement {
 
 /**
  * Main stays intact; unapproved additions and marks are a separate visual overlay. With `lit`, every
- * node outside it dims, except the boxes that hold a lit node (a box's opacity reaches its
- * children), and so does every edge without both ends lit.
+ * node outside it dims. Compound frames dim their paint rather than their subtree, so their
+ * children retain independent opacity. Edges with both ends lit keep full opacity.
  */
 export function graphElements(
   state: State,
   showTests = false,
   lit: ReadonlySet<string> | null = null,
+  cone: ImpactCone | null = null,
 ): GraphElement[] {
   const nodes = new Map(state.graph?.nodes.map((node) => [node.id, node]));
   const edges = new Map(state.graph?.edges.map((edge) => [edge.id, edge]));
@@ -50,25 +52,23 @@ export function graphElements(
     }
   }
   const visible = new Map([...nodes].filter(([, node]) => showTests || !node.is_test));
-  const kept = new Set<string>();
-  for (const id of lit ?? []) {
-    for (let node = nodes.get(id); node && !kept.has(node.id);) {
-      kept.add(node.id);
-      node = node.parent_id ? nodes.get(node.parent_id) : undefined;
-    }
-  }
-  const dims = (id: string) => lit !== null && !kept.has(id);
+  const distances = new Map(cone?.entries.map((entry) => [entry.node_id, entry.distance]));
+  const dims = (id: string) => lit !== null && !lit.has(id);
   const elements: GraphElement[] = [];
   for (const node of visible.values()) {
     const classes: string[] = [node.kind, ...(addedNodeSlots.get(node.id) ?? [])];
     if (dims(node.id)) classes.push("dimmed");
+    const distance = lit?.has(node.id) ? distances.get(node.id) : undefined;
+    if (distance !== undefined) classes.push("cone");
     const marks = nodeMarks[node.id];
     const badges: string[] = [];
-    for (const [slot, mode] of Object.entries(marks?.focus ?? {})) {
+    // Review’s read history must not color the cone; only pending changes keep agent marks.
+    const focus = lit !== null && !marks?.pending ? {} : (marks?.focus ?? {});
+    for (const [slot, mode] of Object.entries(focus)) {
       classes.push(`focus-${slot}-${mode}`);
       badges.push(`${slot} ${mode}`);
     }
-    if (marks?.focus.A && marks.focus.B) classes.push("focus-both");
+    if (focus.A && focus.B) classes.push("focus-both");
     if (marks?.pending) {
       classes.push("pending", ...marks.pendingSlots.map((slot) => `pending-${slot}`));
       if (marks.pendingSlots.length === 2) classes.push("pending-both");
@@ -80,6 +80,7 @@ export function graphElements(
       data: {
         id: node.id,
         kind: node.kind,
+        ...(distance !== undefined ? { distance } : {}),
         label: badges.length ? `${node.name}\n${badges.join(" · ")}` : node.name,
         ...(node.parent_id && visible.has(node.parent_id) ? { parent: node.parent_id } : {}),
       },
@@ -96,7 +97,13 @@ export function graphElements(
         edge.kind,
         edge.confidence,
         ...(addedEdgeSlots.get(edge.id) ?? []),
-        ...(lit !== null && !(lit.has(edge.src) && lit.has(edge.dst)) ? ["dimmed"] : []),
+        ...(lit === null
+          ? []
+          : lit.has(edge.src) && lit.has(edge.dst)
+            ? edge.confidence === "exact"
+              ? ["lit"]
+              : []
+            : ["dimmed"]),
       ].join(" "),
     });
   }
