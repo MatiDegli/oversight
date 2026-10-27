@@ -17,6 +17,7 @@ from oversight.workspace.files import FileRead, content_hash
 from oversight.workspace.junit import MAX_TESTS, MAX_XML_BYTES, RunProblem, parse_junit
 from oversight.workspace.junit import Outcome as JUnitOutcome
 from oversight.workspace.junit import TestRun as JUnitRun
+from oversight.workspace.probes import base_probe_checkout
 from oversight.workspace.runner import ProcessResult, run_process
 from oversight.workspace.suite import (
     SuiteInterrupted,
@@ -45,6 +46,7 @@ __all__ = [
     "Workspace",
     "WorkspaceBusy",
     "WorkspaceError",
+    "base_probe_checkout",
     "content_hash",
     "parse_junit",
     "run_process",

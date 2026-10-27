@@ -71,7 +71,7 @@ async def publish_suite(
     rec: ChangeRecord,
     run: SuiteRun,
     *,
-    phase: Literal["agent", "proposal", "combined"],
+    phase: Literal["agent", "proposal", "combined", "base_probe", "head_probe"],
     revision: int | None,
 ) -> SuiteExecution:
     cases, retained = retain_cases(run.cases, added_test_ids=added_ids(rec, run))

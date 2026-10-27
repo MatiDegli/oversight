@@ -1,4 +1,4 @@
-import type { ChangeFacts, ChangeProposed, SuiteExecution } from "@contracts";
+import type { AddedTestProbe, ChangeFacts, ChangeProposed, SuiteExecution } from "@contracts";
 
 import type { State } from "../state";
 
@@ -118,6 +118,15 @@ export function factsForRevision(state: State, proposal: ChangeProposed): Change
   );
 }
 
+const probeLabels: Record<AddedTestProbe["result"], string> = {
+  fails_before_passes_after: "fails before, passes after",
+  passes_before_and_after: "passes before and after",
+  fails_after: "fails after",
+  not_collected_after: "not collected after",
+  skipped: "skipped",
+  unknown: "unknown",
+};
+
 /** Compact, scrollable evidence; events never move focus or open it automatically. */
 export function ReviewFacts({ state, proposal }: { state: State; proposal: ChangeProposed }) {
   const facts = factsForRevision(state, proposal);
@@ -162,6 +171,16 @@ export function ReviewFacts({ state, proposal }: { state: State; proposal: Chang
               );
             })}
             <p>{detectorLine(facts)}</p>
+            {facts.added_tests.length > 0 && (
+              <ul aria-label="Added test signals">
+                {facts.added_tests.map((probe) => (
+                  <li key={probe.test_id}>
+                    <code className="break-all font-mono">{probe.test_id}</code>:{" "}
+                    {probeLabels[probe.result]}
+                  </li>
+                ))}
+              </ul>
+            )}
             {!facts.complete && <p>Incomplete: {facts.problems.join("; ")}</p>}
           </>
         </div>
