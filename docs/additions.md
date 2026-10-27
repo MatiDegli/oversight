@@ -7,6 +7,73 @@ maintainer picks which ones move into a level, and the most useful ones go in fi
 allows. An idea that touches `contracts/` needs the maintainer's approval first (see the last
 section).
 
+## Level 3 plan (decided on 2026-10-27)
+
+The maintainer placed the ideas below on Tue Oct 27. Level 3 wiring starts when level 2 closes. Pure
+cores start now: they add only new private files, change nothing the level 2 demo uses, and run on
+Muse Code and Codex. Level 2 fronts go first in the review queue. Where the notes further down
+differ, such as the condition for idea 9, this section wins; it also replaces the level 3 dates in
+docs/proposal.md.
+
+| # | Package | Ideas | Decision |
+| --- | --- | --- | --- |
+| 1 | Merge alone when safe, with its history and Revert | 7 | Yes |
+| 2 | Cross-review by the other Meta model; its blocking or should-fix findings go back as Request changes by themselves, at most one round | 1 | Yes |
+| 3 | Facts in review: said versus did, tests with ids, size, and the shortcut detector's facts line | 3, 13 | Yes |
+| 4 | Fails before, passes after, for new tests | 15 | Yes |
+| 5 | The run rule: a test failed, was loosened, then passed | 3 | Yes; in the video only if a real run shows it |
+| 6 | One task, one plan, two agents with zones, and the task queue, built on the commands the lead agent would use | 8, 2, 19 | Yes, after 1 |
+| 7 | A light lead agent: Muse Spark with the public commands as tools (start an agent with a zone, read facts and reviews, request changes, wait); it never merges | 9 | Yes, if it passes the Sunday gate; otherwise Next |
+| 8 | Graph polish and the dot-field light | | Yes, already planned |
+| 9 | Delivery: static replay, automated takes, README with this project's own numbers | front A | Yes |
+| 10 | Task bench, ten tasks, including a probe of Muse Spark as coordinator | front B | Yes, light |
+| 11 | The graph's sibling functions in Request changes | 16 | If time remains |
+| 12 | Start an agent from a function | level 3 list | If time remains |
+| 13 | Dictation with Muse Voice Transcribe | level 3 list | If time remains, last day |
+| 14 | Messages, pause and resume; the replay timeline | level 3 list | If time remains |
+
+**Out, for the README's Next section:** the TypeScript adapter (front C), the verified cone (4),
+rules on areas (6), decisions as data (5), the plan gate in protected areas (17), the Tauri shell,
+agent B on the local GPU, and agent cursors in the editor.
+
+**Limits:**
+
+- **Shortcut detector:** its neutral facts line and the run rule, yes; an alarm based only on the
+  diff, no. Under merge by rules, a removed or loosened test makes the change wait: a false alarm
+  costs one click. The branch gets one final review before it merges, since its precision round
+  has not had one.
+- **Revert:** only for merges made by rules, and only while it applies without conflict; otherwise
+  the change goes to "needs you". AGENTS.md records it as a bounded exception to "undo is out of
+  scope", not as a general undo.
+- **Demo script:** the level 2 script stays as the fallback. A new script replaces it only after it
+  runs three times in a row from a clean start; that decision is taken on Mon Nov 2.
+- **Contracts:** one proposal for everything above, with every new field optional and every new
+  endpoint answering 501 until built, out by Wed Oct 28 for approval before Thu Oct 29. After that
+  approval it is implemented in parts without another one. It reserves the agent that started
+  another, even if the lead agent never ships.
+- **Lead agent gate, Sun Nov 1 at 22:00 ART:** packages 1 to 6 on main with make check green, and a
+  probe of Muse Spark as coordinator that meets criteria written before it runs: in 5 runs, at least
+  4 valid plans whose zones do not overlap; in at least 4 of 5, a correct Request changes in
+  reaction to a review; and a cost of at most US$0.05 per run, US$0.50 for the whole probe (set by
+  the maintainer). If it fails, the lead agent goes to Next; the automatic Request changes of
+  package 2 already covers the part of it that saves the most.
+
+**Order:**
+
+- **Tue Oct 27 to Wed Oct 28:** finish level 2 and the graph polish. In parallel, the pure cores in
+  isolated fronts: the rule evaluator, the run rule, the cross-review parser and the plan
+  validator, all tested with the scripted fake model. The coordinator probe with the real API
+  (cents). The single contracts proposal. A plan to split the change manager before wiring 1 and 6.
+- **Thu Oct 29:** level 1 checkpoint and, if possible, level 2 closes.
+- **Fri Oct 30 and Sat Oct 31:** wire 3, 4, 2 and 1, in that order, with "Ask me" as the default.
+  The dot-field light. A real recorded run for the replay. The task bench.
+- **Sun Nov 1:** level 2 checkpoint (the two-agent demo, three times in a row). Plan and zones
+  (package 6). The lead agent gate at night.
+- **Mon Nov 2:** the lead agent, if it passed. The queue and the history, day mode, and the final
+  recorded runs.
+- **Tue Nov 3, until 20:00 ART:** robustness, the new demo three times in a row, and the takes.
+- **Wed Nov 4:** video, README and submission at 20:00 ART.
+
 ## Proposed order
 
 | # | Idea | What the person sees | Cost | Builds on |
