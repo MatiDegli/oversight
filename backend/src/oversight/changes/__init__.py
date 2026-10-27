@@ -4,6 +4,21 @@ Other modules import only what this file exports; everything else here is intern
 """
 
 from oversight.changes._manager import ChangeManager
+from oversight.changes._shortcut_detector import (
+    DetectionResult,
+    Finding,
+    ShortcutKind,
+    detect_shortcuts,
+)
 from oversight.changes._state import ChangeNotFound, Revision, WrongState
 
-__all__ = ["ChangeManager", "ChangeNotFound", "Revision", "WrongState"]
+__all__ = [
+    "ChangeManager",
+    "ChangeNotFound",
+    "DetectionResult",
+    "Finding",
+    "Revision",
+    "ShortcutKind",
+    "WrongState",
+    "detect_shortcuts",
+]
