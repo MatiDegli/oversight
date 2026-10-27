@@ -155,6 +155,11 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   plain 500, outside the single `ErrorResponse` format. A minor version, since it only adds a code;
   recorded logs at 1.0.0 still validate.
 
+- **Contract 1.3.0 reserves level 3 merge policy and two-agent plans** (approved by the maintainer,
+  2026-10-27): optional fields, three events (`change.assessed`, `merge_mode.changed`, `plan.updated`)
+  and seven endpoints that return 501 reserve the wire format, so a later level can add behavior
+  without a breaking change. File creation moves to 1.4.0.
+
 ## Design
 
 - **Signal lives in `DESIGN.md` at the root, with `PRODUCT.md` beside it:** the design skill
