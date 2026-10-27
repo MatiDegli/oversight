@@ -1,7 +1,7 @@
 // Which nodes the dot field lights, in which color and with what weight: DESIGN.md's tables of
 // "Dot field and rings", one function per mode. It is a pure selector over app state, so the canvas
 // has no per-node facts of its own and only draws what it is given. Every weight is a theme token.
-import type { Slot } from "@contracts";
+import type { ImpactCone, Slot } from "@contracts";
 
 import { selectPendingChanges } from "../../state";
 import type { ChangeState, State } from "../../state";
@@ -13,7 +13,7 @@ export type FieldMode = "watch" | "live-diff" | "file" | "review";
 /** What the person has open, as far as the field cares. The app derives it from its view. */
 export type FieldScope =
   | { mode: "watch" }
-  | { mode: "live-diff"; changeId: string }
+  | { mode: "live-diff"; changeId: string; cone?: ImpactCone | null }
   | { mode: "review"; changeId: string }
   | { mode: "file"; nodeId: string | null };
 
@@ -142,7 +142,12 @@ function reviewLights(state: State, changeId: string, weights: LightWeights): Li
 }
 
 /** The change's agent: its editing node 1.0, its read nodes 0.4, and the cone so far at 0.48. */
-function liveDiffLights(state: State, changeId: string, weights: LightWeights): Lights {
+function liveDiffLights(
+  state: State,
+  changeId: string,
+  weights: LightWeights,
+  cone: ImpactCone | null | undefined,
+): Lights {
   const lights = new Lights();
   const change = state.changes[changeId];
   const agent = change ? state.agents[change.agent_id] : undefined;
@@ -153,8 +158,8 @@ function liveDiffLights(state: State, changeId: string, weights: LightWeights): 
     const weight = editing ? weights["live-diff-editing-weight"] : weights["live-diff-read-weight"];
     for (const id of focus.node_ids) lights.add(id, agentSource(agent.slot), weight, editing);
   }
-  // The proposal's cone is the one the server computed; a change still being edited has none yet.
-  for (const entry of change.proposal?.impact.entries ?? [])
+  // The caller supplies the same current cone the graph shows, including before a proposal.
+  for (const entry of cone?.entries ?? [])
     lights.add(entry.node_id, "work-light", weights["live-diff-cone-weight"]);
   return lights;
 }
@@ -186,7 +191,7 @@ export function selectLights(
     case "review":
       return reviewLights(state, scope.changeId, weights).list();
     case "live-diff":
-      return liveDiffLights(state, scope.changeId, weights).list();
+      return liveDiffLights(state, scope.changeId, weights, scope.cone).list();
     case "file":
       return fileLights(state, scope.nodeId, weights).list();
     default: {

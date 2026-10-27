@@ -14,3 +14,4 @@ One line per day, in Argentina time (ART).
   task box and Start agent; spend meter; layout and transport fixes; smoke test, screenshot tooling,
   test memory and time caps, parallel check groups and pytest workers; `make demo` and
   `make demo-check`.
+- **2026-10-27:** Integrated main into the dot-field fix branch; covered failed WebGL initialization and context loss, shared the current live impact preview between graph and field, and eased field changes with reduced-motion support.

@@ -175,7 +175,7 @@ describe("live diff lights", () => {
     // Event 19 proposes the change while the agent is still at work on it.
     const state = through(19);
     expect(agentOf(state, "agent-1").state).toBe("working");
-    const lights = selectLights(state, scope);
+    const lights = selectLights(state, { ...scope, cone: changeOf(state).proposal?.impact });
     const cone = changeOf(state).proposal?.impact.entries ?? [];
     expect(lights.filter((light) => light.source === "agent-a")).toEqual([
       { id: CHANGED, source: "agent-a", weight: 1, pulses: true },

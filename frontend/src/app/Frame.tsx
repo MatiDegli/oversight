@@ -15,7 +15,8 @@ import type { State } from "../state";
 import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import { TopBar } from "./TopBar";
 import { fieldInput } from "./fieldScope";
-import { changeNodeIds, litNodeIds, panelOpen } from "./view";
+import { graphScope } from "./graphScope";
+import { changeNodeIds, panelOpen } from "./view";
 import type { View } from "./view";
 
 type AgentState = AgentStatus["state"];
@@ -251,11 +252,9 @@ export function Frame(props: FrameProps) {
   const { state, view, onNodeTap, canOpenChange, onOpenChange, onClosePanel, notice } = props;
   const open = panelOpen(view);
   // The cone and the change stay lit until the decision; events never open review themselves.
-  const reviewed = view.review === null ? undefined : state.changes[view.review];
-  const litIds = useMemo(() => litNodeIds(reviewed), [reviewed]);
+  const { cone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
   // The dot field's light follows the same state and the same view, so it never needs an event.
-  const field = useMemo(() => fieldInput(state, view), [state, view]);
-  const cone = litIds === null ? null : (reviewed?.proposal?.impact ?? null);
+  const field = useMemo(() => fieldInput(state, view, cone), [state, view, cone]);
   // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
   const shown = view.review ?? view.diff?.changeId ?? null;
   const shownChange = shown === null ? undefined : state.changes[shown];
@@ -322,7 +321,10 @@ export function Frame(props: FrameProps) {
                     cone={cone}
                     outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
                     onReveal={(id) => graphApi.current?.reveal(id)}
-                    nodes={[...(state.graph?.nodes ?? []), ...(reviewed?.graph.nodes_added ?? [])]}
+                    nodes={[
+                      ...(state.graph?.nodes ?? []),
+                      ...(shownChange?.graph.nodes_added ?? []),
+                    ]}
                   />
                 </div>
               ) : (

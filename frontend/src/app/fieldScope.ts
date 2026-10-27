@@ -1,3 +1,5 @@
+import type { ImpactCone } from "@contracts";
+import { graphScope } from "./graphScope";
 import { selectLights } from "../graph";
 import type { FieldInput, FieldScope } from "../graph";
 import type { State } from "../state";
@@ -23,7 +25,12 @@ export function fieldScope(state: State, view: View): FieldScope {
 }
 
 /** The mode and the lights for the graph's dot field. */
-export function fieldInput(state: State, view: View): FieldInput {
-  const scope = fieldScope(state, view);
+export function fieldInput(
+  state: State,
+  view: View,
+  cone: ImpactCone | null = graphScope(state, view).cone,
+): FieldInput {
+  const target = fieldScope(state, view);
+  const scope = target.mode === "live-diff" ? { ...target, cone } : target;
   return { mode: scope.mode, lights: selectLights(state, scope) };
 }

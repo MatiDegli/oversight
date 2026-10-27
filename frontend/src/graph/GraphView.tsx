@@ -59,7 +59,7 @@ export interface GraphViewProps {
   frameIds?: readonly string[] | null;
   /** The nodes that stay lit while everything else dims, as in review; null dims nothing. */
   litIds?: readonly string[] | null;
-  /** The proposal's bounded cone; live updates do not carry one in v1. */
+  /** The current bounded cone: the proposal in review, a frontend preview in live diff. */
   cone?: ImpactCone | null;
   /** Changes only when the person opens a different panel target or enters review. */
   frameKey?: string | null;
@@ -133,7 +133,10 @@ export function GraphView({
   const targetFrame = useRef<Framing | null>(null);
   const observeCard = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
-    const relit = latest.current.litIds !== litIds || latest.current.cone !== cone;
+    const relit =
+      latest.current.litIds !== litIds ||
+      latest.current.cone !== cone ||
+      latest.current.field?.mode !== field.mode;
     latest.current = {
       selectedId,
       onNodeTap,
@@ -144,10 +147,22 @@ export function GraphView({
       frameKey,
       onFramed,
       coneCardRef,
+      field,
     };
     if (relit) resync.current?.();
     else if (graph.current) showSelection(graph.current, selectedId);
-  }, [selectedId, onNodeTap, panelOpen, litIds, frameIds, cone, frameKey, onFramed, coneCardRef]);
+  }, [
+    selectedId,
+    onNodeTap,
+    panelOpen,
+    litIds,
+    frameIds,
+    cone,
+    frameKey,
+    onFramed,
+    coneCardRef,
+    field,
+  ]);
   // Panel framing follows the person's choice; watch growth has its own guarded expansion.
   useEffect(() => {
     if (framedFor.current === panelOpen && framedKey.current === frameKey) return;
@@ -230,6 +245,7 @@ export function GraphView({
             false,
             lit ? new Set(lit) : null,
             latest.current.cone,
+            latest.current.field?.mode === "live-diff",
           ),
         );
         showSelection(cy, latest.current.selectedId ?? null);

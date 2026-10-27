@@ -8,13 +8,12 @@ import type { View } from "./view";
 import type { GraphViewProps } from "../graph";
 
 const graph = vi.hoisted(() => ({ render: vi.fn() }));
-vi.mock("../graph", () => ({
+vi.mock("../graph", async (original) => ({
+  ...(await original<typeof import("../graph")>()),
   GraphView: (props: GraphViewProps) => {
     graph.render(props);
     return <div>Graph</div>;
   },
-  // The frame also derives the dot field's lights; these tests are about the cone.
-  selectLights: () => [],
 }));
 vi.mock("../editor", () => ({
   EditorDiff: () => <div>Diff</div>,
@@ -63,17 +62,27 @@ it("passes the recorded cone to the same graph, with a card and a panel summary 
   );
 });
 
-it("leaves watch and live diff without a cone, even when a proposal exists", () => {
-  for (const view of [
-    initialView,
-    { ...initialView, diff: { changeId: "change-1", path: "shop/pricing.py" } },
-  ]) {
-    const html = render(view);
-    expect(html).not.toContain('aria-label="Possibly affected"');
-    expect(graph.render).toHaveBeenLastCalledWith(
-      expect.objectContaining({ cone: null, litIds: null }),
-    );
-  }
+it("leaves watch without a cone", () => {
+  const html = render(initialView);
+  expect(html).not.toContain('aria-label="Possibly affected"');
+  expect(graph.render).toHaveBeenLastCalledWith(
+    expect.objectContaining({ cone: null, litIds: null }),
+  );
+});
+
+it("shares the current live cone with the graph, dimming and field selector before a proposal", () => {
+  render({ ...initialView, diff: { changeId: "change-1", path: "shop/pricing.py" } }, 14);
+  const props = graph.render.mock.calls.at(-1)?.[0] as GraphViewProps;
+  expect(props.cone?.entries.length).toBeGreaterThan(0);
+  expect(
+    props.field?.lights
+      .filter((light) => light.source === "work-light")
+      .map((light) => light.id)
+      .sort(),
+  ).toEqual(props.cone?.entries.map((entry) => entry.node_id).sort());
+  expect(props.litIds).toEqual(
+    expect.arrayContaining(props.cone?.entries.map((entry) => entry.node_id) ?? []),
+  );
 });
 
 it("clears the graph cone after a decision while keeping the recorded panel summary", () => {
