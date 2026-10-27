@@ -249,7 +249,7 @@ components:
 
 Oversight has two surfaces with different jobs, and they never borrow each other's materials. The
 graph is the machines' surface: it shows what the agents are doing, with nodes that light up, a
-change in its agent's color, and, after level 1, rings and a field of dots that glow like an LED
+change in its agent's color, and rings and a field of dots that glow like an LED
 panel. It is the only place where light moves. The panels are the person's surface: the agents
 panel, review, live diff and file view are dark, flat and still. They hold text, decisions and code.
 
@@ -663,7 +663,7 @@ everything else steps back.
   says what the bounds cut, for example "+12 omitted by depth". It is "possibly affected", never a
   complete list. The review panel keeps a one-line summary.
 - In level 1, before the cone exists, review dims everything except the change's nodes.
-- Once both the cone (level 2) and the dot field (after level 1) exist, the cone also casts the
+- Once both the cone (level 2) and the dot field exist, the cone also casts the
   neutral work light.
 
 ### Review panel with the matte header (signature component)
@@ -701,10 +701,10 @@ change is proposed.
   2 it is editable and edits go to main. On the graph the selected node and its direct callers and
   callees stay lit; the rest dims.
 
-### Dot field and rings (signature component, after level 1)
+### Dot field and rings (signature component)
 
-They come after level 1 and never block a level. Until they ship, and whenever WebGL is missing,
-the graph's background is plain ground.
+They were brought forward from after level 1 (DECISIONS.md) and never block a level. Whenever
+WebGL is missing, the graph's background is plain ground.
 
 - **Grid:** its own canvas under a transparent Cytoscape canvas, reading the rendered boxes of the
   lit nodes; it never draws nodes or edges. Cells are 7px, fixed to the screen (they do not pan or
