@@ -152,6 +152,8 @@ void test("exit 2 is a completed scan with findings: detect.json is kept", async
     assert.equal(await readFile(join(dir, "detect.json"), "utf8"), '[{"rule":"x"}]\n');
   });
   assert.match(outcome.stdout, /detect scanned http:\/\/x\/ \(exit 2\)/);
+  // The run's log says what the scan found, not only where the file is.
+  assert.match(outcome.stdout, /shots: detect found 1 \(1 primary, 0 advisory\)/);
 });
 
 void test("exit 1 is a failed scan: no detect.json, which would read as no findings", async () => {

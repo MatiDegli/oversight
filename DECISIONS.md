@@ -123,6 +123,16 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
     run again on a fresh worker.
 - **The frontend's lint is type-aware** (`strictTypeChecked`), with the exhaustive-switch rule on,
   so a new event type fails the build until every switch handles it.
+- **Impeccable's scan reads the replay site, not the live page** (2026-10-27). The scan failed in
+  every `make shots` run with "Navigation timeout of 30000 ms exceeded". Cause, reproduced with a
+  page of one line: the detector's navigation finishes only when the page holds no connection, and
+  the live page keeps `/events` open for as long as it runs, so it never finishes (a page without
+  the stream finished in 2 s). A longer timeout would only have waited longer. The scan now loads a
+  second Vite server in replay mode, serving the same log: the static site judges open, which
+  opens nothing after load. Replay follows a log's own gaps, so `scan-log.ts` gives every event the
+  first one's time and the page is complete at load (seq 20 at network idle, checked). The captures
+  still use the live page. The scan stays optional when the detector is missing, and `make shots`
+  now prints the findings, not only where the file is.
 
 ## Contracts v1
 
