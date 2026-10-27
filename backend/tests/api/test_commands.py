@@ -1,4 +1,5 @@
-"""POST /agents, approve and reject over a real server on the live app, with the scripted model."""
+"""POST /agents, approve and reject over a real server on the live app, with the scripted model. The
+routes of Request changes and Stop are in test_revise_stop.py."""
 
 import asyncio
 from pathlib import Path
@@ -143,5 +144,11 @@ def test_a_replay_takes_no_commands(tmp_path: Path) -> None:
     log = REPO_ROOT / "fixtures" / "events" / "handwritten-level1.jsonl"
     app = create_app(live_settings(tmp_path), ReplayConfig(log=log))
     client = TestClient(app)
-    for url in ("/agents", "/changes/change-1/approve", "/changes/change-1/reject"):
+    for url in (
+        "/agents",
+        "/agents/agent-1/stop",
+        "/changes/change-1/approve",
+        "/changes/change-1/reject",
+        "/changes/change-1/request-changes",
+    ):
         assert error_code(client.post(url, content=b"not json")) == (501, "not_implemented")
