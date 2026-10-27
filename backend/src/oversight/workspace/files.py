@@ -137,9 +137,15 @@ def _read_bytes(root: Path, path: str) -> bytes:
         if error.errno == errno.ELOOP:
             raise _refuse(path, "a component is a symbolic link") from error
         raise
-    with os.fdopen(fd, "rb") as handle:
-        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+    try:
+        # Checked on the descriptor before `fdopen`, which refuses a directory without closing it.
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise _refuse(path, "not a regular file")
+        handle = os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
+    with handle:  # from here the handle owns the descriptor and closes it, whatever the read does
         return handle.read()
 
 

@@ -187,9 +187,7 @@ async def test_a_suspect_main_refuses_a_request_but_not_a_stop(tmp_path: Path) -
         await s.until(is_type("agent.status", state="stopped"))
 
 
-async def test_the_brake_refuses_a_revision_of_the_metered_agent_only(
-    tmp_path: Path, slot_b_open: None
-) -> None:
+async def test_the_brake_refuses_a_revision_of_the_metered_agent_only(tmp_path: Path) -> None:
     # A runs the fake model and B Muse Spark, each with a revision turn. The brake closes after
     # both proposed: B's request is `spend_brake` and changes nothing, A's goes through, and B's
     # goes through once the brake opens again.

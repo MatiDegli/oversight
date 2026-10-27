@@ -1,5 +1,5 @@
 """The command routes of section 4.7: start an agent, stop it, approve, reject or request changes on
-a change; 501 for the rest.
+a change, read and save a file on main, rescan the graph; 501 for the rest.
 
 A replay takes no commands: every command route answers 501 there, its body not parsed. Live, the
 app passes an object that implements `Commands`; this module maps its errors to the contract's.
@@ -12,19 +12,20 @@ from fastapi import APIRouter, Body, Response
 
 from oversight.api.errors import ApiError
 from oversight.changes import ChangeNotFound, WrongState
+from oversight.workspace import InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
     AgentCreated,
     ApproveChange,
+    FileContent,
+    FileSaved,
     RejectChange,
     RequestChanges,
+    SaveFile,
     StartAgent,
 )
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("GET", "/impact", "The impact query"),
-    ("GET", "/files", "Reading files"),
-    ("PUT", "/files", "Saving files"),
-    ("POST", "/graph/rescan", "Rescanning the graph"),
     ("POST", "/agents/{agent_id}/message", "Messages to an agent"),
     ("POST", "/agents/{agent_id}/pause", "Pause"),
     ("POST", "/agents/{agent_id}/resume", "Resume"),
@@ -36,6 +37,9 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
     ("POST", "/changes/{change_id}/approve", "Approve"),
     ("POST", "/changes/{change_id}/reject", "Reject"),
     ("POST", "/changes/{change_id}/request-changes", "Request changes"),
+    ("GET", "/files", "Reading files"),
+    ("PUT", "/files", "Saving files"),
+    ("POST", "/graph/rescan", "Rescanning the graph"),
 )
 
 
@@ -54,6 +58,18 @@ class Commands(Protocol):
     def request_changes(self, change_id: str, comment: str) -> None: ...
 
     def stop(self, agent_id: str) -> None: ...
+
+    async def get_file(self, path: str, agent_id: str | None) -> FileContent:
+        """Raises `ChangeNotFound` (no worktree for that agent), `FileNotFoundError` and
+        `InvalidPath`."""
+        ...
+
+    async def save_file(self, request: SaveFile) -> FileSaved:
+        """Main only. Raises `InvalidPath`, `StaleFile`, `WrongState`, and `WorkspaceError` for a
+        save that failed and was undone."""
+        ...
+
+    async def rescan(self) -> None: ...
 
 
 def _not_built(what: str, why: str) -> Callable[[], Coroutine[Any, Any, None]]:
@@ -115,4 +131,37 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
             raise ApiError("not_found", f"there is no agent {agent_id!r}") from None
         except WrongState as error:
             raise ApiError("wrong_state", str(error)) from None
+        return Response(status_code=202)
+
+    @router.get("/files")
+    async def get_file(path: str, agent: str | None = None) -> FileContent:  # pyright: ignore[reportUnusedFunction]
+        try:
+            return await commands.get_file(path, agent)
+        except ChangeNotFound:
+            raise ApiError("not_found", f"there is no live worktree for {agent!r}") from None
+        except FileNotFoundError:
+            raise ApiError("not_found", f"there is no file {path[:80]!r}") from None
+        except InvalidPath as error:
+            raise ApiError("invalid_path", str(error)) from None
+
+    @router.put("/files")
+    async def save_file(request: SaveFile) -> FileSaved:  # pyright: ignore[reportUnusedFunction]
+        if request.agent_id is not None:
+            # Until the request-changes front: nothing is read or written.
+            raise ApiError("not_implemented", "Saving to an agent's worktree is not built yet")
+        try:
+            return await commands.save_file(request)
+        except InvalidPath as error:
+            raise ApiError("invalid_path", str(error)) from None
+        except StaleFile as error:
+            raise ApiError("stale_file", str(error)) from None
+        except WrongState as error:
+            raise ApiError("wrong_state", str(error)) from None
+        except WorkspaceError as error:
+            # A save that failed and was undone: the manager has sent the error event.
+            raise ApiError("internal", f"{error}; see the error events") from None
+
+    @router.post("/graph/rescan", status_code=202, response_class=Response)
+    async def rescan() -> Response:  # pyright: ignore[reportUnusedFunction]
+        await commands.rescan()
         return Response(status_code=202)

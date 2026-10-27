@@ -151,7 +151,7 @@ async def test_shutdown_before_revise_starts_ends_the_change_itself(
 
 
 async def test_shutdown_drains_decisions_that_pop_meanwhile(
-    tmp_path: Path, slot_b_open: None, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Two requests from `ready`. The first holds main's lock in its publish; the second waits for
     # that lock. The shutdown cancels both: the second ends and its `_revise` pops its entry while

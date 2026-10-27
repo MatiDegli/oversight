@@ -95,7 +95,8 @@ async def test_a_start_on_muse_spark_open_is_a_model_this_server_does_not_run(
     tmp_path: Path, configured: str
 ) -> None:
     # Muse Spark Open is verified (docs/api-probe.md), so it is no longer refused as unverified; but
-    # only slot A is offered, on the configured profile: slot B, which could run it, is closed.
+    # only the configured profiles are offered, and none of them is Open: slot B would run it only
+    # if OVERSIGHT_AGENT_MODEL_B named it.
     settings = live_settings(tmp_path) if configured == "fake" else meta_settings(tmp_path)
     scripts = Scripts()
     async with asyncio.timeout(DEADLINE_S), live_server(settings, scripts) as s:

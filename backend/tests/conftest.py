@@ -10,13 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 @pytest.fixture
-def slot_b_open(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Offer agent B. The constant stays closed until a merge on a moved main is tested; a test
-    that needs two agents opens it here, and `test_slot_b_is_closed_until_r5` keeps the real one."""
-    monkeypatch.setattr("oversight.app.OFFERED_SLOTS", ("A", "B"))
-
-
-@pytest.fixture
 def baseten_verified(monkeypatch: pytest.MonkeyPatch) -> None:
     """Muse Spark Open may run agents, whether or not the Baseten probe's branch is merged: the
     server's start check and the loop's own both read their own `UNVERIFIED_PROFILES`."""
