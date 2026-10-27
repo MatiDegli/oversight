@@ -20,6 +20,7 @@ const errorCodes: Record<ErrorCode, true> = {
   wrong_state: true,
   slot_busy: true,
   spend_brake: true,
+  not_configured: true,
   invalid_path: true,
   stale_file: true,
   not_implemented: true,

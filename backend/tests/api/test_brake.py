@@ -91,7 +91,8 @@ async def test_a_closed_brake_refuses_before_any_client(
         write_ledger(settings, ledger)
     scripts = Scripts([METERED], MUSE_SPARK)
     async with asyncio.timeout(DEADLINE_S):
-        assert await start_code(settings, scripts) == (403, "spend_brake")
+        expected = (503, "not_configured") if overrides else (403, "spend_brake")
+        assert await start_code(settings, scripts) == expected
     assert scripts.calls == 0
 
 

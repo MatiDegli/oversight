@@ -4,6 +4,9 @@ import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
+
+from oversight_contracts.commands import SettingName
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -48,13 +51,17 @@ class Settings:
     """Agent B's own script when it runs `fake`: reusing A's would propose the same edit twice, so a
     fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
     # The spending brake: no defaults. A value that is missing, not a number or not positive is
-    # `None`, and every start on a Meta profile is then refused (spend_brake).
+    # `None`, and every start on a Meta profile is then refused (not_configured).
     budget_usd: float | None = None
     """The credits, in US dollars. OVERSIGHT_BUDGET_USD."""
     input_usd_per_m: float | None = None
     """Muse Spark's input price, US dollars per million tokens. MUSE_SPARK_INPUT_USD_PER_M."""
     output_usd_per_m: float | None = None
     """Muse Spark's output price, US dollars per million tokens. MUSE_SPARK_OUTPUT_USD_PER_M."""
+    setting_problems: dict[SettingName, Literal["missing", "invalid"]] = field(
+        default_factory=dict[SettingName, Literal["missing", "invalid"]]
+    )
+    """Only the problem kind survives parsing an unusable amount; no raw values are retained."""
     demo_python: Path | None = None
     """Tests only, no variable: an interpreter with pytest, used instead of building the demo
     venv."""
@@ -82,6 +89,15 @@ class Settings:
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
             input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
             output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
+            setting_problems={
+                name: "invalid"
+                for name in (
+                    "OVERSIGHT_BUDGET_USD",
+                    "MUSE_SPARK_INPUT_USD_PER_M",
+                    "MUSE_SPARK_OUTPUT_USD_PER_M",
+                )
+                if merged.get(name) and positive_amount(merged[name]) is None
+            },
             frontend_dist=REPO_ROOT / "frontend" / "dist",
         )
 

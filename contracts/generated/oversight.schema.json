@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.1.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.2.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AgentCreated": {
@@ -768,6 +768,7 @@
         "wrong_state",
         "slot_busy",
         "spend_brake",
+        "not_configured",
         "invalid_path",
         "stale_file",
         "not_implemented",
@@ -784,6 +785,21 @@
         },
         "message": {
           "type": "string"
+        },
+        "missing": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/MissingSetting"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Present only for not_configured; other errors keep their existing wire shape."
         }
       },
       "required": [
@@ -1389,13 +1405,20 @@
             "replay"
           ],
           "type": "string"
+        },
+        "missing_settings": {
+          "items": {
+            "$ref": "#/$defs/MissingSetting"
+          },
+          "type": "array"
         }
       },
       "required": [
         "ok",
         "run_id",
         "contract_version",
-        "mode"
+        "mode",
+        "missing_settings"
       ],
       "title": "Health",
       "type": "object"
@@ -1510,6 +1533,35 @@
         "cone_max_nodes"
       ],
       "title": "Limits",
+      "type": "object"
+    },
+    "MissingSetting": {
+      "additionalProperties": false,
+      "description": "A setup problem: names and affected slots only, never configuration values.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/SettingName"
+        },
+        "problem": {
+          "enum": [
+            "missing",
+            "invalid"
+          ],
+          "type": "string"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/Slot"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "problem",
+        "slots"
+      ],
+      "title": "MissingSetting",
       "type": "object"
     },
     "ModelProfile": {
@@ -1833,6 +1885,16 @@
           "$ref": "#/$defs/ErrorReportEvent"
         }
       ]
+    },
+    "SettingName": {
+      "enum": [
+        "META_API_KEY",
+        "BASETEN_API_KEY",
+        "OVERSIGHT_BUDGET_USD",
+        "MUSE_SPARK_INPUT_USD_PER_M",
+        "MUSE_SPARK_OUTPUT_USD_PER_M"
+      ],
+      "type": "string"
     },
     "Slot": {
       "enum": [
