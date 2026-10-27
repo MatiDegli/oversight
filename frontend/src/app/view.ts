@@ -41,13 +41,18 @@ export function changeNodeIds(change: ChangeState): string[] {
 }
 
 /**
- * What review keeps lit while the change waits for the person: its nodes. Null once it is approved
+ * What review keeps lit while the change waits for the person: its nodes and the proposal’s impact cone. Null once it is approved
  * or rejected, so the graph returns to its normal lights while the panel shows the outcome; an
  * approval that did not merge (status conflict) is still waiting and stays lit.
  */
 export function litNodeIds(change: ChangeState | undefined): string[] | null {
   if (!change || change.status === "approved" || change.status === "rejected") return null;
-  return changeNodeIds(change);
+  return [
+    ...new Set([
+      ...changeNodeIds(change),
+      ...(change.proposal?.impact.entries.map((entry) => entry.node_id) ?? []),
+    ]),
+  ];
 }
 
 /** Unresolved changes, agent A's first, so a node two agents touch opens the same diff each time. */

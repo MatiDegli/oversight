@@ -7,6 +7,7 @@ import { selectLiveDiff } from "../state";
 import type { ChangeState, State } from "../state";
 import { decisionView } from "./decisions";
 import type { DecisionAction, DecisionAttempt, DecisionView } from "./decisions";
+import { impactSummary } from "./ImpactCone";
 
 const statusWords: Record<ChangeState["status"], string> = {
   editing: "Editing",
@@ -314,6 +315,9 @@ export function ReviewPanel({
             </li>
             <TestsChip tests={proposal.tests} />
           </ul>
+        )}
+        {proposal && (
+          <p className="text-(length:--data-size) text-muted">{impactSummary(proposal.impact)}</p>
         )}
       </header>
       <div className="flex min-h-0 flex-1 flex-col">

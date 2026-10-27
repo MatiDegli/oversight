@@ -47,7 +47,7 @@ jobs:
         with:
           node-version: 24
       - run: make install
-      - run: make check-python check-contracts check-frontend
+      - run: make check-ci
       - run: make smoke
 
   browser:

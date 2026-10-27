@@ -80,6 +80,14 @@ function Harness({ recorded }: { recorded: boolean }) {
 
 export const reviewTest = {
   changed: "shop.pricing:compute_price",
+  lit: events.flatMap((event) =>
+    event.type === "change.proposed"
+      ? [
+          ...event.payload.impact.seeds,
+          ...event.payload.impact.entries.map((entry) => entry.node_id),
+        ]
+      : [],
+  ),
   decisions,
   /** Mounts the frame on the recorded run up to `seq`; seq 20 is ready for review. */
   mount(recorded: boolean, seq = 20) {
