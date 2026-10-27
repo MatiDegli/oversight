@@ -120,6 +120,8 @@ function Decisions({
   onDecide?: ReviewPanelProps["onDecide"];
 }) {
   const [comment, setComment] = useState("");
+  // Set when Approve was activated without a pointer, so the person is told why nothing happened.
+  const [keyboardTried, setKeyboardTried] = useState(false);
   if (view.kind === "decided") {
     return (
       <section aria-label="Decision" className="border-t border-page-border p-4.5">
@@ -143,7 +145,9 @@ function Decisions({
   const approvable = view.kind === "open" && onDecide !== undefined;
   const rejectable = (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined;
   const failure = view.kind === "open" || view.kind === "conflict" ? view.failure : null;
-  // Buttons and the comment box answer clicks only: no key in this section makes a decision.
+  // No key in this section makes a decision. Approve answers only a pointer click: Enter and Space
+  // on the focused button arrive as a click with detail 0, which AGENTS.md forbids it to act on.
+  // Reject stays keyboard-operable, and Escape in the comment box only leaves the box.
   return (
     <section
       aria-label="Decision"
@@ -164,6 +168,13 @@ function Decisions({
             onChange={(event) => {
               setComment(event.target.value);
             }}
+            onKeyDown={(event) => {
+              // The app's Escape closes review, which would drop the comment; here it only leaves.
+              if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.currentTarget.blur();
+              }
+            }}
             placeholder="Why you approve or reject it"
             className={`resize-none rounded-card border border-control-edge bg-field p-(--input-padding) text-(length:--body-size) text-text placeholder:text-faint read-only:text-muted ${focusRing}`}
           />
@@ -173,7 +184,13 @@ function Decisions({
         <button
           type="button"
           disabled={!approvable}
-          onClick={() => {
+          onClick={(event) => {
+            // 0 for Enter, Space and a script's click; a mouse, pen or touch click is 1 or more.
+            if (event.detail === 0) {
+              setKeyboardTried(true);
+              return;
+            }
+            setKeyboardTried(false);
             onDecide?.(changeId, "approve", comment);
           }}
           className={primary}
@@ -184,6 +201,7 @@ function Decisions({
           type="button"
           disabled={!rejectable}
           onClick={() => {
+            setKeyboardTried(false);
             onDecide?.(changeId, "reject", comment);
           }}
           className={`ml-auto ${destructive}`}
@@ -191,22 +209,24 @@ function Decisions({
           <X aria-hidden="true" className="size-4" /> Reject
         </button>
       </div>
+      {/* Always mounted, so what appears under the buttons is announced where it appears. */}
+      <div role="status" className="text-sm text-muted">
+        {pending ? (
+          <p>
+            {view.action === "approve"
+              ? "Approving: waiting for the merge result."
+              : "Rejecting: waiting for the server."}
+          </p>
+        ) : (
+          keyboardTried && approvable && <p>Approve with a click: it merges into main</p>
+        )}
+      </div>
       {!recorded && view.kind !== "conflict" && (
         <p className="text-sm text-muted">
           If main moved since the agent started, the tests run again on the combined result before
           the merge.
         </p>
       )}
-      {/* Always mounted, so the server's answer is announced where it appears. */}
-      <div role="status" className="text-sm">
-        {pending && (
-          <p className="text-muted">
-            {view.action === "approve"
-              ? "Approving: waiting for the merge result."
-              : "Rejecting: waiting for the server."}
-          </p>
-        )}
-      </div>
       {failure !== null && (
         <p role="alert" className="flex items-center gap-2 text-sm text-failed-text">
           <X aria-hidden="true" className="size-4 shrink-0" /> {failure}

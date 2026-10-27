@@ -1,6 +1,6 @@
 // Browser-only test harness; never imported by the application.
 import type { ServerEvent } from "@contracts";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { useStore } from "zustand";
@@ -9,8 +9,17 @@ import { sendDecision } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
+import { useEscapeCloses } from "./escape";
 import { Frame } from "./Frame";
-import { clickNode, closePanel, initialView, nextReview, openChange, openReview } from "./view";
+import {
+  clickNode,
+  closePanel,
+  initialView,
+  nextReview,
+  openChange,
+  openReview,
+  panelOpen,
+} from "./view";
 import type { View } from "./view";
 
 const events = log
@@ -29,6 +38,10 @@ function Harness({ recorded }: { recorded: boolean }) {
   const [view, setView] = useState<View>(initialView);
   const [attempts, setAttempts] = useState<Record<string, DecisionAttempt>>({});
   const now = () => stateStore.getState().state;
+  const close = useCallback(() => {
+    setView(closePanel);
+  }, []);
+  useEscapeCloses(panelOpen(view), close);
   return (
     <Frame
       state={state}
@@ -40,9 +53,7 @@ function Harness({ recorded }: { recorded: boolean }) {
       onOpenChange={(id) => {
         setView((current) => openChange(now(), current, id) ?? current);
       }}
-      onClosePanel={() => {
-        setView(closePanel);
-      }}
+      onClosePanel={close}
       canReview={(id) => openReview(state, view, id) !== null}
       onReview={(id) => {
         setView((current) => openReview(now(), current, id) ?? current);

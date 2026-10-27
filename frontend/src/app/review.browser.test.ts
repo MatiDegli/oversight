@@ -142,6 +142,73 @@ it("never approves from the keyboard in the comment box; the click waits for cha
   });
 }, 30_000);
 
+it("approves only on a pointer click: Tab then Enter or Space says so and sends nothing", async () => {
+  await withPage(false, async (page) => {
+    await page.getByRole("button", { name: /change ready for review/ }).click();
+    const approve = panel(page).getByRole("button", { name: "Approve and merge" });
+    const comment = panel(page).getByRole("textbox", { name: "Comment (optional)" });
+    const caption = panel(page).getByText("Approve with a click: it merges into main");
+    await comment.click();
+    await page.keyboard.type("Looks right");
+    await page.keyboard.press("Tab");
+    await browserExpect(approve).toBeFocused();
+    await browserExpect(caption).toHaveCount(0);
+    for (const key of ["Enter", "Space"]) {
+      await page.keyboard.press(key);
+      await browserExpect(caption).toBeVisible();
+      expect(await page.evaluate(() => window.reviewTest.decisions.length)).toBe(0);
+      await browserExpect(approve).toBeEnabled();
+      // Pressing a key does not move focus either.
+      await browserExpect(approve).toBeFocused();
+    }
+    // A script's click has no pointer behind it, so it is refused too.
+    await approve.evaluate((button: HTMLButtonElement) => {
+      button.click();
+    });
+    expect(await page.evaluate(() => window.reviewTest.decisions.length)).toBe(0);
+
+    await approve.click();
+    await browserExpect(caption).toHaveCount(0);
+    const sent = await page.evaluate(() => window.reviewTest.decisions);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      changeId: "change-1",
+      action: "approve",
+      comment: "Looks right",
+    });
+  });
+}, 30_000);
+
+it("keeps Reject keyboard-operable", async () => {
+  await withPage(false, async (page) => {
+    await page.getByRole("button", { name: /change ready for review/ }).click();
+    const reject = panel(page).getByRole("button", { name: "Reject" });
+    await panel(page).getByRole("textbox", { name: "Comment (optional)" }).click();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await browserExpect(reject).toBeFocused();
+    await page.keyboard.press("Enter");
+    const sent = await page.evaluate(() => window.reviewTest.decisions);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ changeId: "change-1", action: "reject" });
+  });
+}, 30_000);
+
+it("Escape in the comment box only leaves it; Escape elsewhere closes review", async () => {
+  await withPage(false, async (page) => {
+    await page.getByRole("button", { name: /change ready for review/ }).click();
+    const comment = panel(page).getByRole("textbox", { name: "Comment (optional)" });
+    await comment.click();
+    await page.keyboard.type("Looks right");
+    await page.keyboard.press("Escape");
+    await browserExpect(comment).not.toBeFocused();
+    await browserExpect(panel(page)).toHaveCount(1);
+    expect(await comment.inputValue()).toBe("Looks right");
+    await page.keyboard.press("Escape");
+    await browserExpect(panel(page)).toHaveCount(0);
+  });
+}, 30_000);
+
 it("in a recorded run offers no decision and shows the recorded one when it arrives", async () => {
   await withPage(true, async (page) => {
     await page.getByRole("button", { name: /change ready for review/ }).click();

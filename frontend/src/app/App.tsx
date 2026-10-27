@@ -5,12 +5,12 @@ import { sendDecision } from "../review";
 import type { DecisionAction, DecisionAttempt, DecisionClient } from "../review";
 import { stateStore } from "../state";
 import { createCommandClient, replayBuild, replaySource } from "../transport";
+import { useEscapeCloses } from "./escape";
 import { Frame } from "./Frame";
 import { startAppSession } from "./session";
 import {
   clickNode,
   closePanel,
-  closesPanel,
   initialView,
   nextReview,
   openChange,
@@ -36,18 +36,6 @@ export function App() {
       );
     });
   }, []);
-  // Only while the panel is open: Escape closes it unless the editor inside took the key.
-  const open = panelOpen(view);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (closesPanel(event)) setView(closePanel);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
   // The graph keeps one tap handler; it reads the store when the tap happens.
   const onNodeTap = useCallback((nodeId: string) => {
     setView((current) => clickNode(stateStore.getState().state, current, nodeId));
@@ -58,6 +46,7 @@ export function App() {
   const onClosePanel = useCallback(() => {
     setView(closePanel);
   }, []);
+  useEscapeCloses(panelOpen(view), onClosePanel);
   const onReview = useCallback((changeId: string) => {
     setView((current) => openReview(stateStore.getState().state, current, changeId) ?? current);
   }, []);
