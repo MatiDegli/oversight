@@ -321,10 +321,26 @@ export function zoomBy(cy: Core, factor: number, reduceMotion: boolean): void {
   );
 }
 
+/**
+ * Moves the camera, never past the zoom range the instance was made with: a target outside it is
+ * brought to its edge about the middle of the view, so the view's middle stays where it was meant
+ * to be. The range is the person's navigation limit; no move changes it.
+ */
 function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
   cy.stop();
-  if (camera.zoom < cy.minZoom()) cy.minZoom(camera.zoom);
-  const viewport = { zoom: camera.zoom, pan: camera.pan };
+  const zoom = Math.min(cy.maxZoom(), Math.max(cy.minZoom(), camera.zoom));
+  const scale = zoom / camera.zoom;
+  const center = { x: cy.width() / 2, y: cy.height() / 2 };
+  const viewport = {
+    zoom,
+    pan:
+      scale === 1
+        ? camera.pan
+        : {
+            x: center.x + (camera.pan.x - center.x) * scale,
+            y: center.y + (camera.pan.y - center.y) * scale,
+          },
+  };
   if (reduceMotion) {
     cy.viewport(viewport);
     return;
@@ -337,7 +353,10 @@ function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
   });
 }
 
-/** Fit the lit nodes subject to the readable floor; the whole-graph watch fit has no floor. */
+/**
+ * Fit the lit nodes subject to the readable floor. The whole-graph fit has the floor of the zoom
+ * range: a graph too wide to fit above it is centered at its lower end, not fitted below it.
+ */
 function cameraFor(
   cy: Core,
   eles: CollectionReturnValue,
@@ -366,7 +385,7 @@ function cameraFor(
         : 0,
       minZoom: readable
         ? Number.parseFloat(theme["cursor-name-size"]) / Number.parseFloat(theme["body-size"])
-        : 0,
+        : cy.minZoom(),
     },
     cone ? bounds(cone) : [],
   );

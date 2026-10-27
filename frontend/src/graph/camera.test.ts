@@ -517,6 +517,75 @@ describe("zoomBy", () => {
   });
 });
 
+/** A graph far wider than the view, built as GraphView builds its instance: with the zoom range. */
+function wideGraph(spread: number): Core {
+  const cy = cytoscape({
+    headless: true,
+    styleEnabled: true,
+    layout: { name: "preset" },
+    minZoom: ZOOM_RANGE.min,
+    maxZoom: ZOOM_RANGE.max,
+    elements: [
+      { data: { id: "west" }, position: { x: 0, y: 100 } },
+      { data: { id: "east" }, position: { x: spread, y: 200 } },
+    ],
+  });
+  graphs.push(cy);
+  vi.spyOn(cy, "width").mockReturnValue(1000);
+  vi.spyOn(cy, "height").mockReturnValue(600);
+  vi.spyOn(cy, "resize").mockReturnValue(cy);
+  cy.viewport({ zoom: 1, pan: { x: 20, y: 40 } });
+  return cy;
+}
+
+describe("the zoom range after Fit", () => {
+  it("keeps the range when the graph is too wide to fit in it: Fit stops at the range's lower end", () => {
+    // 40,000 wide: fitted whole in 1,000px it would be about 2.5%.
+    const cy = wideGraph(40_000);
+    const framing = frameCamera(cy, [], true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+    // What Fit reports is what it did.
+    expect(framing?.zoom).toBe(ZOOM_RANGE.min);
+    // The middle of the graph is the middle of the view.
+    expect((500 - cy.pan().x) / cy.zoom()).toBeCloseTo(20_000, 0);
+  });
+
+  it("holds the range for the zoom buttons that follow Fit, however far they are pressed", () => {
+    const cy = wideGraph(40_000);
+    frameCamera(cy, [], true);
+    for (let press = 0; press < 20; press++) zoomBy(cy, 0.8, true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+    zoomBy(cy, 2, true);
+    expect(cy.zoom()).toBeCloseTo(ZOOM_RANGE.min * 2);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+  });
+
+  it("still fits a graph that fits inside the range, and zooms out from there", () => {
+    const cy = wideGraph(2_000);
+    frameCamera(cy, [], true);
+    expect(cy.zoom()).toBeGreaterThan(ZOOM_RANGE.min);
+    expect(cy.zoom()).toBeLessThan(1);
+    zoomBy(cy, 0.1, true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+  });
+
+  it("does not let growth in watch mode take the zoom below the range, and keeps the view's middle", () => {
+    const cy = wideGraph(40_000);
+    cy.viewport({ zoom: ZOOM_RANGE.min, pan: { x: 20, y: 40 } });
+    const middle = { x: (500 - 20) / ZOOM_RANGE.min, y: (300 - 40) / ZOOM_RANGE.min };
+    // Well past what the view shows at the lower end of the range.
+    cy.add({ data: { id: "far" }, position: { x: 400_000, y: 100 } });
+    includeNewNodes(cy, ["far"], true);
+    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+    expect((500 - cy.pan().x) / cy.zoom()).toBeCloseTo(middle.x);
+    expect((300 - cy.pan().y) / cy.zoom()).toBeCloseTo(middle.y);
+  });
+});
+
 describe("startingView", () => {
   const graph = { x1: 0, y1: 0, x2: 4000, y2: 3000 };
   const size = { width: 1000, height: 800 };
