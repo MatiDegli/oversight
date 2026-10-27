@@ -264,7 +264,9 @@ async def test_a_start_refused_by_open_is_wrong_state_and_frees_the_slot(
 
 def test_a_replay_answers_501_to_the_file_routes_without_reading_the_body(tmp_path: Path) -> None:
     log = REPO_ROOT / "fixtures" / "events" / "handwritten-level1.jsonl"
-    client = TestClient(create_app(live_settings(tmp_path), ReplayConfig(log=log)))
+    client = TestClient(
+        create_app(live_settings(tmp_path), ReplayConfig(log=log)), base_url="http://127.0.0.1:8710"
+    )
     assert error_code(client.get("/files")) == (501, "not_implemented")  # no path asked
     assert error_code(client.put("/files", content=b"not json")) == (501, "not_implemented")
     assert error_code(client.post("/graph/rescan", content=b"not json")) == (501, "not_implemented")

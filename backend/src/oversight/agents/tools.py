@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from oversight.graph import WorkspaceGraph
 from oversight.workspace import (
     FileRead,
+    FileTooLarge,
     SuiteRun,
     SuiteUnavailable,
     Tree,
@@ -243,10 +244,26 @@ class Toolbox:
     async def _read_file(self, arguments: dict[str, object]) -> ToolOutcome:
         path = cast(str, _string(arguments, "path"))
         start, end = _line(arguments, "start_line"), _line(arguments, "end_line")
-        file = await self._read(path)
-        lines = file.content.splitlines()
-        total = len(lines)
         first = start or 1
+        try:
+            file = await self._read(path)
+        except FileTooLarge:
+            if start is None and end is None:
+                raise ToolError(
+                    "file exceeds size limit; read by start_line and end_line"
+                ) from None
+            ranged = await self._tree.read_range(
+                path,
+                first,
+                min(end or first + MAX_READ_LINES - 1, first + MAX_READ_LINES - 1),
+                MAX_READ_CHARS,
+            )
+            lines, lengths, total = ranged.lines, ranged.lengths, ranged.total
+            digest, offset = ranged.hash, first
+        else:
+            lines = file.content.splitlines()
+            lengths, total = [len(line) for line in lines], len(lines)
+            digest, offset = file.hash, 1
         if total and first > total:
             raise ToolError(f"{path} has {total} lines")
         last = min(end or total, total, first + MAX_READ_LINES - 1)
@@ -255,11 +272,13 @@ class Toolbox:
         shown: list[str] = []
         size = 0
         for number in range(first, last + 1):
-            row = f"{number:>5}| {lines[number - 1]}"
-            if size + len(row) + 1 > MAX_READ_CHARS:
+            row = f"{number:>5}| {lines[number - offset]}"
+            if size + len(row) + 1 > MAX_READ_CHARS or lengths[number - offset] > len(
+                lines[number - offset]
+            ):
                 if number == first:
                     # One line over the cap: show its start, so no line is ever out of reach.
-                    note = f" [line {number} cut, {len(lines[number - 1])} characters in all]"
+                    note = f" [line {number} cut, {lengths[number - offset]} characters in all]"
                     shown.append(row[: MAX_READ_CHARS - len(note) - 1] + note)
                     last = number
                 else:
@@ -267,7 +286,7 @@ class Toolbox:
                 break
             size += len(row) + 1
             shown.append(row)
-        self._read_hashes[path] = file.hash
+        self._read_hashes[path] = digest
         whole = first == 1 and last >= total
         if not whole:
             shown.append(f"[lines {first} to {last} of {total}; read more with start_line]")

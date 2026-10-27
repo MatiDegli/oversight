@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from oversight.agents.client import Usage
+from oversight.limits import SizeLimitError, bounded_text
 from oversight_contracts.events import UsageTick
 
 _log = logging.getLogger(__name__)
@@ -145,10 +146,10 @@ class LedgerFile:
         """Synchronous. A missing file is nothing spent; an unreadable or malformed one raises
         `LedgerError`."""
         try:
-            text = self.path.read_text(encoding="utf-8")
+            text = bounded_text(self.path)
         except FileNotFoundError:
             return LedgerState()
-        except (OSError, UnicodeDecodeError) as error:
+        except (OSError, UnicodeDecodeError, SizeLimitError) as error:
             raise LedgerError(f"the ledger cannot be read: {error.__class__.__name__}") from error
         try:
             return _parse_ledger(text)

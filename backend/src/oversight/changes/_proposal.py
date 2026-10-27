@@ -75,7 +75,7 @@ async def read_files(ctx: ChangeContext, tree: Tree) -> dict[str, str]:
         try:
             files[path] = (await tree.read_text(path)).content
         except WorkspaceError:
-            continue  # not UTF-8 text: no agent tool can edit it
+            continue  # oversized or not UTF-8 text: no agent tool can edit it
     return files
 
 

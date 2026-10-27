@@ -177,6 +177,7 @@ def child_env(port: int, runtime_dir: Path) -> dict[str, str]:
     env.update(
         OVERSIGHT_HOST=HOST,
         OVERSIGHT_PORT=str(port),
+        OVERSIGHT_VITE_PORT="",
         OVERSIGHT_RUNTIME_DIR=str(runtime_dir),
         OVERSIGHT_AGENT_MODEL="fake",
         OVERSIGHT_FAKE_SCRIPT=FAKE_SCRIPT,

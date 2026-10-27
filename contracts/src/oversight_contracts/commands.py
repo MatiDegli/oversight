@@ -164,6 +164,7 @@ type ErrorCode = Literal[
     "invalid_request",
     "internal",
     "forbidden",
+    "too_large",
 ]
 
 ERROR_STATUS: dict[ErrorCode, int] = {
@@ -178,10 +179,12 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     "invalid_request": 422,
     "internal": 500,
     "forbidden": 403,
+    "too_large": 413,
 }
 """The HTTP status of each error code. FastAPI's own validation error becomes invalid_request; an
 unexpected server-side failure becomes internal (contract 1.1). forbidden refuses a request whose
-Host or Origin is not allowed (contract 1.4.0)."""
+Host or Origin is not allowed (contract 1.4.0). too_large refuses a request body or a file over
+the server's size limit."""
 
 
 class ErrorDetail(ContractModel):

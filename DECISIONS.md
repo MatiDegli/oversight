@@ -404,9 +404,33 @@ Level 3 wiring starts now. Contracts 1.4.0 delivery A was approved by the mainta
 15. **API guard refusal code** — approved by the maintainer, 2026-10-27.
     Add forbidden (HTTP 403) within this same 1.4.0 delivery for requests whose Host or Origin
     is not on the allow list, supporting the planned DNS rebinding defense. The API guard is
-    a later front; nothing returns forbidden yet.
+    a separate front that supplies enforcement.
 
 The tuple gate compares all changed array constraints with the byte-exact 1.3.0 baseline.
 It discovers fields generically and checks generated TypeScript, including local references and
 nullable unions. Four independent negative controls cover small max, min-only, historical
 findings/evidence and a newly constrained existing field. Generator and TypeScript pins stay put.
+
+## API guard — approved by the maintainer, 2026-10-27
+
+- **G1:** Add `OVERSIGHT_VITE_PORT`. One shared policy permits only literal loopback
+  authorities (`localhost`, `127.0.0.1`, `[::1]`) at the resolved backend and optional Vite ports.
+- **G2:** The backend defaults V to unset. Empty V parses as unset; invalid ports, including
+  V equal to P, fail startup. Ports are integers in 1-65535; omitted authority ports use
+  protocol defaults.
+- **G3:** Development launchers fall back to V=5710, resolve environment over `.env` once,
+  and export P/V to both servers. Shots supplies distinct free ports; demo explicitly clears V.
+- **G4:** With the terminal off, absent-Origin HTTP is allowed after Host validation, including
+  writes, preserving CLI/eval/recording callers. Every supplied Origin must be one exact allowed
+  `http://` origin. No CORS, forwarded-header trust, wildcard, suffix or DNS-based admission.
+- **G5:** Refusals use the typed `forbidden` error with HTTP 403. WebSockets are denied before
+  acceptance, by HTTP denial where supported and otherwise by closing the handshake.
+- **G6:** Use the already approved `forbidden` code from contracts 1.4.0; this front changes no
+  contracts. 1.5.0 remains reserved for safe creation, zones and inventory.
+
+The guard precedes all routing in live and server replay, including static, unknown and reserved
+routes. Pure ASGI preserves unbuffered SSE. A future terminal consumes this same policy and adds
+same-authority checks for unsafe HTTP and every WebSocket, authentication and its stricter IPv4
+listener requirement. See guard decisions G1–G3; their defaults and decline outcomes apply.
+
+too_large (413) rides in 1.4.0; limits come with the API guard front (maintainer, M6, 2026-10-27)
