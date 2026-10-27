@@ -86,6 +86,29 @@ describe("AgentCard over the level 1 fixture", () => {
     expect(render(through(23))).not.toContain("Ready for review");
   });
 
+  it("shows each step's age against the latest event, newest first, and moves it as events arrive", () => {
+    // Steps arrived at :16.975, :18.975, :21.925, :24.305 and :26.665; the latest event is the last.
+    const ages = (html: string) =>
+      [...html.matchAll(/text-muted">((?:now|\d+ s ago|\d+ min ago))<\/span>/g)].map((m) => m[1]);
+    expect(ages(render(through(18)))).toEqual(["now", "now", "now", "7 s ago", "9 s ago"]);
+    // Twenty seconds on (the done status at :46.255) every step has aged and none says "now".
+    expect(ages(render(through(23)))).toEqual([
+      "19 s ago",
+      "21 s ago",
+      "24 s ago",
+      "27 s ago",
+      "29 s ago",
+    ]);
+    // A step with no recorded time says nothing rather than a wrong age.
+    const state = { ...through(18), stepTimes: {} };
+    expect(ages(render(state))).toEqual([]);
+  });
+
+  it("keeps the duration and the result word under the summary, away from the age", () => {
+    const html = render(through(18));
+    expect(html).toMatch(/Ok<span class="font-mono text-muted"> · \d+ ms<\/span>/);
+  });
+
   it("names the model as the run does, not by its id", () => {
     const html = render(through(4));
     expect(html).toContain("Muse Spark");

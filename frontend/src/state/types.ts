@@ -32,6 +32,13 @@ export interface State {
   graph: GraphSnapshot | null;
   agents: Record<string, AgentStatus>;
   steps: Record<string, AgentStep[]>;
+  /** When each step's event arrived, by agent then step number: the age the card shows. */
+  stepTimes: Record<string, Record<number, string>>;
+  /**
+   * The timestamp of the latest event applied: "now" for every age, so a live run and a replay
+   * read the same and nothing depends on the reader's clock. Null before the first event.
+   */
+  clock: string | null;
   focus: Record<string, AgentFocus>;
   changes: Record<string, ChangeState>;
   usage: UsageTick | null;
@@ -53,6 +60,8 @@ export function createInitialState(): State {
     graph: null,
     agents: {},
     steps: {},
+    stepTimes: {},
+    clock: null,
     focus: {},
     changes: {},
     usage: null,

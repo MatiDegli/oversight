@@ -524,12 +524,17 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 ### Cards / Containers
 
 - **Agent card:** card fill, card-border border, card radius. First row: status lamp, agent name,
-  model, and the status pill on the right. Then the task in one line, what the agent is doing now
-  ("Editing restock in inventory.py"), a step progress bar with "Step 7 of 25" and the cost, and the
-  last steps from `agent.step`, each with an icon, a short summary and its age. Buttons: Live diff,
-  and from level 2 Stop and discard.
+  model (its name as the run lists it, "Muse Spark"), and the status pill on the right. Then the task
+  in one line, what the agent is doing now ("Editing restock in inventory.py"), a step progress bar
+  with "Step 7 of 25" and the cost so far, and the last steps from `agent.step`, each with an icon,
+  a short summary and its age ("now", "40 s ago", "2 min ago"), counted from the latest event's time,
+  not the reader's clock. Buttons: Live diff, and from level 2 Stop and discard.
 - **Ready for review:** the card's pill changes to "Ready for review", its border turns the agent's
-  color, and a "Review change" button appears. Nothing else on the screen changes.
+  color and its lamp fills. The card's body then gives way to a summary of what the agent finished
+  with: tests ("28 of 28 pass", with an icon), the change ("+2 -0 in 1 file"), steps and cost; the
+  steps and the progress bar go, and a "Review change" button replaces Live diff. Nothing else on
+  the screen changes, and if the person's focus was in what went, it goes to the card, never
+  elsewhere.
 - **Status pill:** the agent's state in words ("Editing", "Revising", "Ready for review") on the
   agent's tint in its text color. It belongs to one agent, so it may carry that agent's color.
 - **Status lamp:** a 10px circle in the agent's color, filled when the agent needs the person,

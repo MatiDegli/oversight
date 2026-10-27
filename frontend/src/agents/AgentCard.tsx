@@ -1,9 +1,11 @@
 import type { AgentStatus, SuiteResult } from "@contracts";
 import { Check, CircleCheck, CircleX, Eye, FileDiff, X } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { formatUsd } from "../state";
 import type { AgentCardData } from "../state";
+import { ageWords } from "./age";
 
 const labels: Record<AgentStatus["state"], string> = {
   starting: "Starting",
@@ -118,8 +120,19 @@ export interface AgentCardProps {
 }
 
 export function AgentCard({ data, onOpenDiff, onReview }: AgentCardProps) {
-  const { agent, modelLabel, steps, step, readyForReview, cost } = data;
+  const { agent, modelLabel, steps, stepTimes, now, step, readyForReview, cost } = data;
   const own = look[agent.slot];
+  // Keep the person's focus when what holds it leaves the card. The step list and Live diff go when
+  // the change is proposed, and a removed element takes focus to the page; the card is where it
+  // was, so it takes it, and only if the focus was inside it. Nothing else here moves focus.
+  const card = useRef<HTMLElement>(null);
+  const inside = useRef(false);
+  useLayoutEffect(() => {
+    const element = card.current;
+    if (inside.current && element && !element.contains(document.activeElement)) {
+      element.focus({ preventScroll: true });
+    }
+  });
   const border = readyForReview ? own.border : "border-card-border";
   // Filled when the agent needs the person, outlined otherwise; the pill says it in words.
   const lamp = readyForReview
@@ -131,7 +144,15 @@ export function AgentCard({ data, onOpenDiff, onReview }: AgentCardProps) {
   return (
     <article
       aria-label={`Agent ${agent.slot}`}
-      className={`min-w-0 rounded-card border bg-card p-4 text-text ${border}`}
+      ref={card}
+      tabIndex={-1}
+      onFocus={() => {
+        inside.current = true;
+      }}
+      onBlur={() => {
+        inside.current = false;
+      }}
+      className={`min-w-0 rounded-card border bg-card p-4 text-text ${border} ${focusRing}`}
     >
       <header className="flex flex-wrap items-center gap-2.5">
         <span
@@ -198,14 +219,15 @@ export function AgentCard({ data, onOpenDiff, onReview }: AgentCardProps) {
                   )}
                   <span className="font-mono text-muted">Step {entry.step}</span>
                   <span className="min-w-0 break-all font-mono">{entry.tool}</span>
-                  <span className="ml-auto shrink-0 font-mono text-muted">
-                    {entry.duration_ms} ms
+                  <span className="ml-auto shrink-0 text-(length:--caption-size) text-muted">
+                    {ageWords(stepTimes[entry.step], now)}
                   </span>
                 </div>
                 <p className="mt-1 break-words">{entry.summary}</p>
                 <p className={entry.result === "ok" ? "text-passed" : "text-failed-text"}>
                   {entry.result === "ok" ? "Ok" : "Error"}
                   {entry.error ? `: ${entry.error}` : ""}
+                  <span className="font-mono text-muted"> · {entry.duration_ms} ms</span>
                 </p>
               </li>
             ))}
