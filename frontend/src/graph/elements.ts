@@ -2,6 +2,9 @@ import type { GraphEdge, GraphNode, ImpactCone, Point, Slot } from "@contracts";
 
 import { selectNodeMarks, selectPendingChanges } from "../state";
 import type { NodeMarks as Touch, State } from "../state";
+import { getActiveTheme } from "../theme";
+
+import { nodeGeometry, rowWidthAt } from "./geometry";
 import type { NodeMarks, Word } from "./layers";
 
 export interface GraphElement {
@@ -13,6 +16,9 @@ export interface GraphElement {
     /** A frame's header: its title (a module's file name) and its count, drawn in place of a label. */
     title?: string;
     count?: string;
+    /** The outer size of a row, or of a frame with nothing in it; a frame with children has its own. */
+    w?: number;
+    h?: number;
     /** The state word and letter badges of a leaf an agent touches. */
     marks?: NodeMarks;
     distance?: number;
@@ -117,14 +123,38 @@ export function graphElements(
   const dims = (id: string) => lit !== null && !lit.has(id);
   // What each frame holds, for its count: the visible functions and methods below it, its classes
   // and the nodes a change adds.
-  const below = new Map<string, { callables: number; classes: number; added: number }>();
+  const below = new Map<
+    string,
+    { callables: number; classes: number; added: number; children: number }
+  >();
+  const classDepth = (node: GraphNode): number => {
+    let depth = 0;
+    let id: string | null | undefined = node.parent_id;
+    while (id && visible.has(id)) {
+      if (visible.get(id)?.kind === "class") depth += 1;
+      id = visible.get(id)?.parent_id;
+    }
+    return depth;
+  };
+  const theme = getActiveTheme();
+  const geometry = nodeGeometry(theme);
   for (const node of visible.values()) {
+    if (node.parent_id && visible.has(node.parent_id)) {
+      const parent = below.get(node.parent_id) ?? {
+        callables: 0,
+        classes: 0,
+        added: 0,
+        children: 0,
+      };
+      parent.children += 1;
+      below.set(node.parent_id, parent);
+    }
     for (
       let id: string | null | undefined = node.parent_id;
       id && visible.has(id);
       id = visible.get(id)?.parent_id
     ) {
-      const entry = below.get(id) ?? { callables: 0, classes: 0, added: 0 };
+      const entry = below.get(id) ?? { callables: 0, classes: 0, added: 0, children: 0 };
       if (node.kind === "function" || node.kind === "method") {
         entry.callables += 1;
         if (addedNodeSlots.has(node.id)) entry.added += 1;
@@ -152,6 +182,20 @@ export function graphElements(
     const marks = marksOf(touch, newFor, lit !== null);
     if (marks) classes.push("marked");
     const frame = node.kind === "module" || node.kind === "class";
+    const held = below.get(node.id) ?? { callables: 0, classes: 0, added: 0, children: 0 };
+    // A row is as wide as the frame it sits in leaves room for; a module with nothing in it is a
+    // frame's width, and a class with nothing in it the width a row would have there.
+    const size = !frame
+      ? { w: rowWidthAt(theme, classDepth(node)), h: geometry.rowHeight }
+      : held.children > 0
+        ? {}
+        : {
+            w:
+              node.kind === "module"
+                ? geometry.outer.module.left + geometry.rowWidth + geometry.outer.module.right
+                : rowWidthAt(theme, classDepth(node)),
+            h: geometry.headerHeight,
+          };
     const position = state.graph?.positions[node.id];
     elements.push({
       group: "nodes",
@@ -160,11 +204,12 @@ export function graphElements(
         kind: node.kind,
         ...(distance !== undefined ? { distance } : {}),
         label: node.name,
+        ...size,
         ...(marks ? { marks } : {}),
         ...(frame
           ? {
               title: node.kind === "module" ? (node.path.split("/").pop() ?? node.name) : node.name,
-              count: countOf(node, below.get(node.id) ?? { callables: 0, classes: 0, added: 0 }),
+              count: countOf(node, held),
             }
           : {}),
         ...(node.parent_id && visible.has(node.parent_id) ? { parent: node.parent_id } : {}),
