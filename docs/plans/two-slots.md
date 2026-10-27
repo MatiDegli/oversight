@@ -236,7 +236,10 @@ could say "the first free slot that can start, A before B", the rule the task bo
 3. `agents/two-slots-open`, cut from main once `changes/request` (R5) has merged: the constant,
    the fixture's removal, the e2e of section 7. About 20 lines and 120 of tests.
 
-## 11. Open questions, for the maintainer
+## 11. Decided by the maintainer (2026-10-27)
+
+The maintainer approved the proposed answer to each question below.
+
 
 1. Muse Spark Open on Baseten, metered against Meta's ledger? Proposed: no, as the review agreed;
    the brake guards Meta's credits, Baseten ticks carry `cost_usd` null and never write the file,
