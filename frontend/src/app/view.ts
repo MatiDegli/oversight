@@ -8,17 +8,30 @@ export interface DiffTarget {
 }
 
 /**
- * What the person has opened. The graph's selected ring follows `selected`; the left panel is open
- * exactly while `diff` is set. Only the person's actions change it, never an event.
+ * What the person has opened. The graph's selected ring follows `selected`; the left panel shows the
+ * live diff while `diff` is set and review while `review` (a change id) is set, never both. Only the
+ * person's actions change it, never an event.
  */
 export interface View {
   selected: string | null;
   diff: DiffTarget | null;
+  review: string | null;
 }
 
-export const initialView: View = { selected: null, diff: null };
+export const initialView: View = { selected: null, diff: null, review: null };
 
-function touchedNodes(change: ChangeState): string[] {
+export const panelOpen = (view: View) => view.diff !== null || view.review !== null;
+
+/** Proposed and not yet decided: what review opens on. A revising change shows its live diff. */
+export function isProposed(change: ChangeState): boolean {
+  return (
+    change.proposal !== null &&
+    (change.status === "ready_for_review" || change.status === "conflict")
+  );
+}
+
+/** The nodes a change adds, modifies or removes: what review keeps lit on the graph. */
+export function changeNodeIds(change: ChangeState): string[] {
   const { graph } = change;
   return [
     ...graph.nodes_added.map((node) => node.id),
@@ -47,7 +60,7 @@ export function diffForNode(state: State, nodeId: string): DiffTarget | null {
     }
   }
   for (const change of changes) {
-    if (!touchedNodes(change).includes(nodeId)) continue;
+    if (!changeNodeIds(change).includes(nodeId)) continue;
     const node =
       state.graph?.nodes.find((candidate) => candidate.id === nodeId) ??
       change.graph.nodes_added.find((candidate) => candidate.id === nodeId);
@@ -56,10 +69,16 @@ export function diffForNode(state: State, nodeId: string): DiffTarget | null {
   return null;
 }
 
-/** A click on a node selects it; when a pending change touches it, the panel shows that diff. */
+/**
+ * A click on a node selects it. When a pending change touches it, the panel shows that change:
+ * review once it is proposed, its live diff before. Otherwise the panel stays as it was.
+ */
 export function clickNode(state: State, view: View, nodeId: string): View {
   const diff = diffForNode(state, nodeId);
-  return { selected: nodeId, diff: diff ?? view.diff };
+  if (!diff) return { ...view, selected: nodeId };
+  const change = state.changes[diff.changeId];
+  if (change && isProposed(change)) return { selected: nodeId, diff: null, review: diff.changeId };
+  return { selected: nodeId, diff, review: null };
 }
 
 /**
@@ -73,11 +92,30 @@ export function openChange(state: State, view: View, changeId: string): View | n
   return {
     selected: change.files[path]?.node_ids[0] ?? view.selected,
     diff: { changeId, path },
+    review: null,
   };
 }
 
+/**
+ * Review of a proposed change, from the card's Review change or the queue counter, with its first
+ * changed node selected so the camera frames it. Null for a change that is not proposed.
+ */
+export function openReview(state: State, view: View, changeId: string): View | null {
+  const change = state.changes[changeId];
+  if (!change || !isProposed(change)) return null;
+  const path = Object.keys(change.files).sort()[0];
+  const node =
+    (path === undefined ? undefined : change.files[path]?.node_ids[0]) ?? changeNodeIds(change)[0];
+  return { selected: node ?? view.selected, diff: null, review: changeId };
+}
+
+/** The change the queue counter opens: the first proposed one, agent A's first. */
+export function nextReview(state: State): string | null {
+  return pendingBySlot(state).find(isProposed)?.change_id ?? null;
+}
+
 export function closePanel(view: View): View {
-  return { ...view, diff: null };
+  return { ...view, diff: null, review: null };
 }
 
 /** Escape closes the panel unless something inside it, such as Monaco's find box, took the key. */

@@ -1,13 +1,16 @@
 import type { AgentStatus } from "@contracts";
 import { GitBranch, Network, X } from "lucide-react";
+import { useMemo } from "react";
 import type { ReactNode } from "react";
 
 import { AgentCard } from "../agents";
 import { LiveDiff } from "../editor";
 import { GraphView } from "../graph";
+import { ReviewPanel } from "../review";
+import type { DecisionAction, DecisionAttempt } from "../review";
 import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
-import { readyCount } from "./view";
+import { changeNodeIds, panelOpen, readyCount } from "./view";
 import type { View } from "./view";
 
 type AgentState = AgentStatus["state"];
@@ -48,11 +51,20 @@ export interface FrameProps {
   canOpenChange: (changeId: string) => boolean;
   onOpenChange: (changeId: string) => void;
   onClosePanel: () => void;
+  /** True for a proposed change: its card offers Review change instead of the live diff. */
+  canReview?: (changeId: string) => boolean;
+  onReview?: (changeId: string) => void;
+  /** The queue counter's click: review of the next proposed change. */
+  onOpenQueue?: () => void;
+  /** The person's last decision per change. */
+  attempts?: Readonly<Record<string, DecisionAttempt>>;
+  /** Absent in a recorded run, which sends no commands: review then shows the recorded decision. */
+  onDecide?: (changeId: string, action: DecisionAction, comment: string) => void;
   /** Overlay lines on the graph, such as the replay label and a transport failure. */
   notice?: ReactNode;
 }
 
-function TopBar({ state }: { state: State }) {
+function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () => void }) {
   const ready = readyCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
   return (
@@ -74,11 +86,17 @@ function TopBar({ state }: { state: State }) {
       {/* Always mounted, so the counter's arrival is announced and nothing else moves. */}
       <div role="status" aria-label="Review queue" className="ml-auto flex items-center">
         {ready > 0 && (
-          <p className="inline-flex h-(--queue-counter-height) items-center gap-2 rounded-full bg-raised px-3.5 text-sm">
+          <button
+            type="button"
+            disabled={onOpenQueue === undefined}
+            onClick={onOpenQueue}
+            title="Open the next change in review"
+            className={`inline-flex h-(--queue-counter-height) items-center gap-2 rounded-full bg-raised px-3.5 text-sm text-text enabled:hover:bg-page-raised ${focusRing}`}
+          >
             <span aria-hidden="true" className="size-(--status-lamp-size) rounded-full bg-text" />
             <span className="font-mono">{ready}</span>{" "}
             {ready === 1 ? "change ready for review" : "changes ready for review"}
-          </p>
+          </button>
         )}
       </div>
     </header>
@@ -111,7 +129,9 @@ function AgentsPanel({
   state,
   canOpenChange,
   onOpenChange,
-}: Pick<FrameProps, "state" | "canOpenChange" | "onOpenChange">) {
+  canReview,
+  onReview,
+}: Pick<FrameProps, "state" | "canOpenChange" | "onOpenChange" | "canReview" | "onReview">) {
   const cards = selectAgents(state).flatMap((agent) => {
     const data = selectAgentCard(state, agent.agent_id);
     return data ? [data] : [];
@@ -122,13 +142,17 @@ function AgentsPanel({
       className="flex w-(--agents-panel-width) shrink-0 flex-col gap-2.5 overflow-y-auto border-l border-divider bg-panel p-3.5"
     >
       <h2 className="text-(length:--title-size) font-bold">Agents</h2>
-      {cards.map((data) => (
-        <AgentCard
-          key={data.agent.agent_id}
-          data={data}
-          onOpenDiff={canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
-        />
-      ))}
+      {cards.map((data) => {
+        const review = canReview?.(data.agent.change_id) === true;
+        return (
+          <AgentCard
+            key={data.agent.agent_id}
+            data={data}
+            onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
+            onReview={review ? onReview : undefined}
+          />
+        );
+      })}
       {cards.length === 0 && (
         <p className="text-sm text-muted">
           No agents yet. Each agent gets a card here when it starts.
@@ -228,24 +252,46 @@ function LeftPanel({ state, view, onClose }: { state: State; view: View; onClose
  */
 export function Frame(props: FrameProps) {
   const { state, view, onNodeTap, canOpenChange, onOpenChange, onClosePanel, notice } = props;
+  const open = panelOpen(view);
+  // Review dims everything but the change's nodes; the array changes only with that change.
+  const reviewed = view.review === null ? undefined : state.changes[view.review];
+  const litIds = useMemo(() => (reviewed ? changeNodeIds(reviewed) : null), [reviewed]);
   return (
     <div className="flex h-full flex-col bg-background text-text">
-      <TopBar state={state} />
+      <TopBar state={state} onOpenQueue={props.onOpenQueue} />
       <div className="flex min-h-0 flex-1">
-        <LeftRail watching={view.diff === null} onWatch={onClosePanel} />
-        {view.diff && <LeftPanel state={state} view={view} onClose={onClosePanel} />}
+        <LeftRail watching={!open} onWatch={onClosePanel} />
+        {view.review !== null ? (
+          <ReviewPanel
+            key={view.review}
+            state={state}
+            changeId={view.review}
+            attempt={props.attempts?.[view.review]}
+            onDecide={props.onDecide}
+            onClose={onClosePanel}
+          />
+        ) : (
+          view.diff && <LeftPanel state={state} view={view} onClose={onClosePanel} />
+        )}
         <main className="relative min-w-0 flex-1 bg-ground">
           <GraphView
             selectedId={view.selected}
             onNodeTap={onNodeTap}
-            panelOpen={view.diff !== null}
+            panelOpen={open}
+            litIds={litIds}
           />
           {notice && <div className="absolute top-6 left-6 text-muted">{notice}</div>}
         </main>
-        {view.diff ? (
+        {open ? (
           <AgentsRail state={state} />
         ) : (
-          <AgentsPanel state={state} canOpenChange={canOpenChange} onOpenChange={onOpenChange} />
+          <AgentsPanel
+            state={state}
+            canOpenChange={canOpenChange}
+            onOpenChange={onOpenChange}
+            canReview={props.canReview}
+            onReview={props.onReview}
+          />
         )}
       </div>
     </div>
