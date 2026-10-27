@@ -175,7 +175,13 @@ describe("graph mapping", () => {
     expect(module.style("color")).toBe(rgb(theme["module-label"]));
     expect(module.style("font-family")).toBe(theme["text-font"]);
     module.addClass("dimmed");
-    expect(Number(module.style("opacity"))).toBe(theme["dim-module"]);
+    // A frame dims through its own paint, never `opacity`: that would multiply into its children.
+    expect(Number(module.style("opacity"))).toBe(1);
+    for (const property of ["border-opacity", "text-opacity"])
+      expect(Number(module.style(property))).toBe(theme["dim-module"]);
+    expect(Number(module.style("background-opacity"))).toBeCloseTo(
+      theme["module-opacity"] * theme["dim-module"],
+    );
     const target = graph.getElementById("billing:fee").addClass("dimmed");
     expect(Number(target.style("opacity"))).toBe(theme["dim-node"]);
     const exact = graph.getElementById("edge-imports").addClass("dimmed");
@@ -191,6 +197,35 @@ describe("graph mapping", () => {
     expect(possible.style("line-style")).toBe("solid");
     expect(possible.style("opacity")).toBe(exact.style("opacity"));
     expect(Number(possible.style("opacity"))).toBeGreaterThan(theme["dim-node"]);
+  });
+
+  it("dims to the token's opacity however deep a node sits in dimmed frames", () => {
+    const graph = render(initial());
+    const [module, frame, method, leaf] = [
+      "billing",
+      "billing:Bill",
+      "billing:Bill.total",
+      "billing:fee",
+    ].map((id) => graph.getElementById(id));
+    const effective = (...elements: (typeof module)[]) =>
+      elements.map((element) => element?.effectiveOpacity());
+    expect(effective(module, frame, method, leaf)).toEqual([1, 1, 1, 1]);
+    // Everything dimmed, as review dims what the cone does not reach: each node is at the token.
+    graph.nodes().addClass("dimmed");
+    expect(effective(method, leaf)).toEqual([theme["dim-node"], theme["dim-node"]]);
+    // A lit node in a dimmed frame keeps full opacity, and a dimmed one is not dimmed twice.
+    method?.removeClass("dimmed");
+    expect(effective(method)).toEqual([1]);
+    expect(effective(leaf)).toEqual([theme["dim-node"]]);
+    // A frame that is no longer dimmed does not lift the dimming of its children either.
+    module?.removeClass("dimmed");
+    frame?.removeClass("dimmed");
+    expect(effective(module, frame)).toEqual([1, 1]);
+    leaf?.addClass("dimmed");
+    expect(effective(leaf)).toEqual([theme["dim-node"]]);
+    // Edges are never inside a frame: their own opacity is the token.
+    const edge = graph.getElementById("edge-imports").addClass("dimmed");
+    expect(edge.effectiveOpacity()).toBe(theme["dim-node"]);
   });
 
   it("nests modules, classes, functions and methods only through parent_id", () => {
