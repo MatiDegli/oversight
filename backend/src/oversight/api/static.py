@@ -52,7 +52,8 @@ def _file_under(root: Path, relative: str) -> Path | None:
     leaves `root` (`..`, or a link out of it)."""
     try:
         target = (root / relative).resolve()
-    except (OSError, ValueError):  # a NUL byte, or a loop of links
+    # A NUL byte is ValueError; a loop of links is OSError, and RuntimeError on Python 3.12.
+    except (OSError, ValueError, RuntimeError):
         return None
     if not target.is_relative_to(root) or not target.is_file():
         return None

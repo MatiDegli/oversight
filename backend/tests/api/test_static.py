@@ -163,6 +163,16 @@ async def test_a_missing_file_is_not_found_not_index_html(tmp_path: Path, dist: 
             assert_api_error(await client.get(path), 404, "not_found")
 
 
+async def test_a_loop_of_links_is_not_found_not_a_server_error(tmp_path: Path, dist: Path) -> None:
+    # Python 3.12's Path.resolve raises RuntimeError on a loop; the answer must still be a 404.
+    (dist / "assets" / "self.js").symlink_to("self.js")
+    (dist / "assets" / "ping.js").symlink_to("pong.js")
+    (dist / "assets" / "pong.js").symlink_to("ping.js")
+    async with ui_app(tmp_path, dist) as (_, client):
+        for path in ("/assets/self.js", "/assets/ping.js", "/assets/pong.js"):
+            assert_api_error(await client.get(path), 404, "not_found")
+
+
 async def test_no_path_leaves_the_build(tmp_path: Path, dist: Path) -> None:
     async with ui_app(tmp_path, dist) as (app, client):
         # A link inside the build that points out of it.
