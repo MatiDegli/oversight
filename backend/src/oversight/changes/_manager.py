@@ -138,7 +138,8 @@ class _Change:
     """The worktree and branch are gone."""
     fallback: State = "ready"
     """Where a decision that ends without settling leaves the change: the state it was taken from,
-    or `broken` once the merge may have touched main."""
+    `broken` once the merge may have touched main, or `conflict` once the approval's conflict is
+    sent. The change stays `deciding` until then, so nothing is decided while it is settled."""
     decision: int = 0
     """Counts the decisions taken; only the latest one's task may end `deciding`."""
 
@@ -892,9 +893,11 @@ class ChangeManager:
         return False
 
     async def _conflicted(self, rec: _Change, comment: str | None, conflict: Conflict) -> None:
-        """Main is back at `pre`: send the approval's conflict and leave the change `conflict`, as
-        one `_whole` step, so a cancel never leaves a resolution in the store that the record,
-        and so a second Approve or a Request changes, does not know."""
+        """Main is back at `pre`: send the approval's conflict and record it, as one `_whole` step,
+        so a cancel never leaves a resolution in the store that the record, and so a second
+        Approve or a Request changes, does not know. The change stays `deciding`, with `conflict`
+        as its fallback: the decision's end, or its recovery, makes it `conflict`, and no other
+        decision enters before."""
         resolution = self._resolution(rec, "approved", comment, conflict=conflict)
         await self._whole(self._record_conflict(rec, resolution, conflict))
 
@@ -902,7 +905,7 @@ class ChangeManager:
         self, rec: _Change, resolution: ChangeResolved, conflict: Conflict
     ) -> None:
         await self._publish(resolution)
-        rec.conflict, rec.state = conflict, "conflict"
+        rec.conflict, rec.fallback = conflict, "conflict"
 
     async def _facts(self, head_commit: str) -> _Facts:
         main = self._workspace.main
@@ -935,7 +938,8 @@ class ChangeManager:
             await self._close_out(rec)
             note = "the merge landed and is recorded"
         elif facts is not None and facts.unchanged(pre):
-            if rec.state == "conflict":  # set only by `_record_conflict`: the store has it
+            if rec.fallback == "conflict":  # set only by `_record_conflict`: the store has it
+                rec.state = "conflict"
                 note = "main is unchanged and the conflict is recorded; request changes or reject"
             else:
                 rec.state = "ready"

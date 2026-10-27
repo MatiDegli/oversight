@@ -428,6 +428,43 @@ async def test_cancel_after_the_conflict_is_stored(h: Harness, kind: str) -> Non
 
 
 @bounded
+async def test_no_decision_enters_while_the_recovery_runs(h: Harness) -> None:
+    """The approval's conflict is stored, then the approval is cancelled and its recovery waits in
+    its read of main. The change is still `deciding`: Request changes, Approve and Reject answer
+    WrongState, and the recovery then leaves it `conflict` rather than a `ready` that would let
+    Approve send a second resolution while the base moves."""
+    await h.run_agent(1, EDIT)
+    main_mod = TEMPLATE["shop/mod.py"].replace("return 1", "return 5")
+    main_head = await commit_on_main(h, {"shop/mod.py": main_mod})
+    h.hold = ChangeResolved
+    # The first `status` is the conflict's own check; the second is the recovery's.
+    h.workspace.arm("status", mode="hold", skip=1)
+    approval = h.manager.approve("change-1", None)
+    try:
+        await h.held.wait()
+        approval.cancel()
+        await queued_callbacks_ran()
+        h.release.set()
+        await h.workspace.entered.wait()  # the recovery waits in its read of main
+
+        for decide in (h.manager.request_changes, h.manager.approve, h.manager.reject):
+            with pytest.raises(WrongState, match="is deciding"):
+                decide("change-1", "While it recovers.")
+    finally:
+        h.workspace.resume.set()
+    with pytest.raises(asyncio.CancelledError):
+        await approval
+
+    with pytest.raises(WrongState, match="is conflict"):
+        h.manager.approve("change-1", None)
+    revision = await h.manager.request_changes("change-1", "Redo.")
+    assert revision is not None and revision.note is not None
+    parents = (await worktree_git(h, "rev-list", "--parents", "-n", "1", "HEAD")).split()[1:]
+    assert parents[1] == main_head
+    assert decisions(h) == ["approved", "changes_requested"]
+
+
+@bounded
 async def test_redo_keeps_mains_callers(h: Harness) -> None:
     """R4: main added a caller of the changed function in a file the agent never touched; the
     revision's head comes from the merged tree, so the caller stays in the graph and the cone."""

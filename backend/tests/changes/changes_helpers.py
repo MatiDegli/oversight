@@ -39,7 +39,7 @@ NOW = datetime(2026, 10, 26, 12, 0, tzinfo=UTC)
 GIT_TIMEOUT_S = 29.0
 SERVER_EVENT: TypeAdapter[Any] = TypeAdapter(ServerEvent)
 
-type Mode = Literal["fail", "timeout", "after", "cancel", "cut"]
+type Mode = Literal["fail", "timeout", "after", "cancel", "cut", "hold"]
 
 
 @dataclass
@@ -48,6 +48,8 @@ class Fault:
     tree: str
     mode: Mode
     left: int
+    skip: int = 0
+    """Matching calls to let through first."""
 
 
 @dataclass(frozen=True)
@@ -61,16 +63,20 @@ class Call:
 class FaultyWorkspace(Workspace):
     """Records every git call, and fails or times out the armed ones: "fail" and "timeout" never
     run git, "after" runs it and then reports a timeout, "cancel" runs it and then cancels the
-    calling task, which waits on an event that never comes, and "cut" cancels the calling task
-    before git runs."""
+    calling task, which waits on an event that never comes, "cut" cancels the calling task
+    before git runs, and "hold" sets `entered`, waits for `resume`, then runs git."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.faults: list[Fault] = []
         self.calls: list[Call] = []
+        self.entered = asyncio.Event()
+        self.resume = asyncio.Event()
 
-    def arm(self, subcommand: str, *, tree: str = "main", mode: Mode = "fail") -> None:
-        self.faults.append(Fault(subcommand, tree, mode, 1))
+    def arm(
+        self, subcommand: str, *, tree: str = "main", mode: Mode = "fail", skip: int = 0
+    ) -> None:
+        self.faults.append(Fault(subcommand, tree, mode, 1, skip))
 
     async def git(
         self,
@@ -89,9 +95,16 @@ class FaultyWorkspace(Workspace):
         self.calls.append(Call(name, args, timeout_s, held))
         for fault in self.faults:
             if fault.left and fault.subcommand == args[0] and fault.tree == name:
+                if fault.skip:
+                    fault.skip -= 1
+                    continue
                 fault.left -= 1
                 if not self.operations.holds(main=tree.agent_id is None, agent_id=tree.agent_id):
                     raise LockOrderError("an armed git call without the tree's lock")
+                if fault.mode == "hold":
+                    self.entered.set()
+                    await self.resume.wait()
+                    break  # then the real git
                 if fault.mode == "cut":
                     current = asyncio.current_task()
                     assert current is not None
