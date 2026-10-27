@@ -40,7 +40,7 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 - One graph, always visible, with a side panel that changes with what I am doing. Dark theme everywhere.
 - Watch mode: the graph and the agents panel. Each agent has a card with its status, task and steps. The nodes it reads or edits light up in its color.
 - Review mode: on the left, a panel about half the width with Monaco's inline diff; from level 2 its new side is editable. On the right, the same graph with the impact cone highlighted and everything else dimmed. The agents panel folds into a narrow rail.
-- The live diff (read-only) and the file view use that same panel. There is no third screen.
+- The live diff (read-only) and the file view use that same panel. The live diff, the file view and review open as tabs of one focus panel beside the graph (the shell zones, DESIGN.md), and the graph stays visible except in an explicit maximize.
 - Never steal focus. When an agent finishes, the screen does not change: a "Ready for review" pill appears and the agent's card shows it.
 - Three decisions: Approve and Reject (level 1), Request changes (level 2). Approve has no keyboard shortcut, not even Ctrl+Enter: it merges into main and must never fire while I type a comment.
 - A dashed node border means one thing only: a pending change, in the agent's color. "Possible" call edges are thinner and grey, never dashed.
