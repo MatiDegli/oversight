@@ -96,13 +96,14 @@ export function updateGraph(
     // places the nodes and the camera fits them, as before.
     if (preset) {
       cy.layout({ name: "preset", fit: false }).run();
-      startCamera(cy);
     } else {
       const fallback = { name: "fcose", animate: false, fit: true, padding: FIT_PADDING };
       cy.layout(fallback).run();
     }
   }
   settle(cy, theme);
+  // Header bands change frame bounds: choose the start camera only after they are final.
+  if (initial && elements.some((element) => element.position !== undefined)) startCamera(cy);
 }
 
 /** After nodes are placed or moved: the frames' header bands and the edges' routes, in that order. */

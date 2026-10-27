@@ -14,6 +14,7 @@ import {
   nodesInViewport,
   prefersReducedMotion,
   revealNode,
+  startCamera,
   ZOOM_RANGE,
   zoomBy,
 } from "./camera";
@@ -69,6 +70,8 @@ export interface GraphViewProps {
   coneCardRef?: RefObject<HTMLDivElement | null>;
   /** Filled while the graph exists, for the zoom buttons; empty before it is created and after. */
   apiRef?: RefObject<GraphApi | null>;
+  /** The initial watch area between the heading/notices and the bottom overlays. */
+  startAreaRef?: RefObject<HTMLDivElement | null>;
 }
 
 function reportFraming(
@@ -119,6 +122,7 @@ export function GraphView({
   onFramed,
   coneCardRef,
   apiRef,
+  startAreaRef,
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
   const graph = useRef<Core | undefined>(undefined);
@@ -214,21 +218,37 @@ export function GraphView({
         quietUntil = performance.now() + NAVIGATION_QUIET_MS;
       });
       const folding = foldController(cy);
+      let startFrame: number | undefined;
       const sync = () => {
         // A second addition can arrive before the first ease ends. Include both targets when
         // replacing that animation, rather than leaving the first addition outside the view.
         if (!cy.animated() || latest.current.panelOpen) arriving.clear();
         const existing = new Set(cy.nodes().map((node) => node.id()));
+        const state = stateStore.getState().state;
         const lit = latest.current.litIds;
         const foldsChanged = folding.render(
-          stateStore.getState().state,
-          graphElements(
-            stateStore.getState().state,
-            false,
-            lit ? new Set(lit) : null,
-            latest.current.cone,
-          ),
+          state,
+          graphElements(state, false, lit ? new Set(lit) : null, latest.current.cone),
         );
+        if (
+          existing.size === 0 &&
+          Object.keys(state.graph?.positions ?? {}).length > 0 &&
+          startAreaRef?.current
+        ) {
+          // SSE may populate the graph before React commits the heading and legend. Measure
+          // after that commit, so the initial camera sees the overlays the person will see.
+          startFrame = requestAnimationFrame(() => {
+            if (latest.current.panelOpen || !startAreaRef.current) return;
+            const area = startAreaRef.current.getBoundingClientRect();
+            const box = host.getBoundingClientRect();
+            startCamera(cy, {
+              x1: area.left - box.left,
+              y1: area.top - box.top,
+              x2: area.right - box.left,
+              y2: area.bottom - box.top,
+            });
+          });
+        }
         showSelection(cy, latest.current.selectedId ?? null);
         if (
           existing.size > 0 &&
@@ -305,6 +325,7 @@ export function GraphView({
         if (card === observedCard) return;
         observedCard = card;
         resize.disconnect();
+        if (startFrame !== undefined) cancelAnimationFrame(startFrame);
         resize.observe(host);
         if (card) resize.observe(card);
       };
@@ -332,7 +353,7 @@ export function GraphView({
       cancelled = true;
       dispose?.();
     };
-  }, [apiRef]);
+  }, [apiRef, startAreaRef]);
   return (
     <div
       ref={container}

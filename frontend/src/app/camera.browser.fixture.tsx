@@ -1,5 +1,5 @@
 // Browser-only test harness; never imported by the application.
-import type { ServerEvent } from "@contracts";
+import type { GraphSnapshot, ServerEvent } from "@contracts";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 
@@ -8,6 +8,8 @@ import { initialView, openChange } from "./view";
 import type { View } from "./view";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
+import demoGraph from "../../../fixtures/graph/demo-repo.json";
+import demoPreset from "../../../fixtures/layouts/demo-repo.json";
 
 const CHANGED = "shop.pricing:compute_price";
 
@@ -53,6 +55,16 @@ function render(view: View) {
 export const graphTest = {
   changed: CHANGED,
   mount() {
+    render(initialView);
+  },
+  mountEmpty() {
+    stateStore.setState({ state: createInitialState() });
+    render(initialView);
+  },
+  loadDemo() {
+    stateStore.setState({
+      state: { ...recorded, graph: { ...demoGraph, positions: demoPreset } as GraphSnapshot },
+    });
     render(initialView);
   },
   /** Opens the card's Live diff, as the person would; the camera should follow. */

@@ -41,9 +41,13 @@ afterAll(async () => {
 async function withPage(
   reducedMotion: "reduce" | "no-preference",
   test: (page: Page) => Promise<void>,
+  demo = false,
 ) {
   if (!browser) throw new Error("Browser was not started");
-  const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, reducedMotion });
+  const page = await browser.newPage({
+    viewport: demo ? { width: 1920, height: 1080 } : { width: 1600, height: 900 },
+    reducedMotion,
+  });
   page.setDefaultTimeout(15_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -56,15 +60,37 @@ async function withPage(
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     await page.goto(url);
     await page.waitForFunction(() => "graphTest" in window);
-    await page.evaluate(() => {
-      window.graphTest.mount();
-    });
+    await page.evaluate((demo) => {
+      if (demo) window.graphTest.mountEmpty();
+      else window.graphTest.mount();
+    }, demo);
+    if (demo) {
+      await page.waitForFunction(
+        () =>
+          !!document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph,
+      );
+      // Like SSE: update the store before React commits the heading and footer for that graph.
+      await page.evaluate(() => {
+        window.graphTest.loadDemo();
+      });
+    }
     // The graph is created once its font settles.
     await page.waitForFunction(
       () =>
         (document
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
+    );
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              resolve();
+            });
+          });
+        }),
     );
     await test(page);
     expect(errors).toEqual([]);
@@ -101,6 +127,58 @@ async function settled(page: Page) {
     .poll(async () => (await report(page, [])).animating, { timeout: 15_000 })
     .toBe(false);
 }
+
+it("starts the demo preset without splitting frames at canvas, heading or footer edges", async () => {
+  await withPage(
+    "reduce",
+    async (page) => {
+      const view = await page.evaluate(() => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        const probe = host?.oversightGraph;
+        const overlays = document.querySelector("main")?.lastElementChild;
+        if (!host || !probe || !overlays) throw new Error("Missing watch graph");
+        const screen = host.getBoundingClientRect();
+        const top = overlays.firstElementChild?.getBoundingClientRect();
+        const bottom = overlays.lastElementChild?.getBoundingClientRect();
+        const bounds = overlays.getBoundingClientRect();
+        if (!top || !bottom) throw new Error("Missing watch overlays");
+        const gap = Number.parseFloat(getComputedStyle(overlays).rowGap);
+        const area = {
+          x1: bounds.left - screen.left,
+          y1: top.bottom + gap - screen.top,
+          x2: bounds.right - screen.left,
+          y2: bottom.top - gap - screen.top,
+        };
+        const pan = probe.pan();
+        return {
+          area,
+          size: { width: host.clientWidth, height: host.clientHeight },
+          zoom: probe.zoom(),
+          frames: probe.nodeBounds(".module, .class").map((b) => ({
+            id: b.id,
+            x1: b.x1 + pan.x,
+            y1: b.y1 + pan.y,
+            x2: b.x2 + pan.x,
+            y2: b.y2 + pan.y,
+          })),
+        };
+      });
+      expect(view.zoom).toBe(1);
+      expect(view.area.y1).toBeGreaterThan(0);
+      for (const b of view.frames) {
+        const a = view.area;
+        const contained = b.x1 >= a.x1 && b.y1 >= a.y1 && b.x2 <= a.x2 && b.y2 <= a.y2;
+        const excluded =
+          b.x2 <= 0 || b.y2 <= 0 || b.x1 >= view.size.width || b.y1 >= view.size.height;
+        expect(contained || excluded, `${b.id}: ${JSON.stringify(b)}`).toBe(true);
+      }
+      const hub = view.frames.find((b) => b.id === "shop.pricing");
+      expect(hub?.y1).toBeGreaterThanOrEqual(view.area.y1);
+      expect(hub?.y2).toBeLessThanOrEqual(view.area.y2);
+    },
+    true,
+  );
+}, 30_000);
 
 /** The nodes the camera frames when the change opens: the change's own, in the recorded run. */
 const wanted = (page: Page) => page.evaluate(() => [window.graphTest.changed]);

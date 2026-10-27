@@ -175,6 +175,15 @@ export const scenes: readonly Scene[] = [
     // double; it is a capture of the file view, not a saved edit reconstructed from the log.
     prepare: async (page) => {
       const path = "shop/cart.py";
+      // The uncut start camera may leave Cart wholly outside the view. Reveal it as a person
+      // would before opening the file; a screenshot must not click an offscreen class row.
+      await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating() === false,
+      );
       const content = await readFile(new URL(`../../demo-repo/${path}`, import.meta.url), "utf8");
       await page.route("**/files?*", (route) =>
         route.fulfill({
