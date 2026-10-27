@@ -12,7 +12,8 @@ section).
 The maintainer placed the ideas below on Tue Oct 27. Level 3 wiring starts when level 2 closes. Pure
 cores start now: they add only new private files, change nothing the level 2 demo uses, and run on
 Muse Code and Codex. Level 2 fronts go first in the review queue. Where the notes further down
-differ, such as the condition for idea 9, this section wins.
+differ, such as the condition for idea 9, this section wins; it also replaces the level 3 dates in
+docs/proposal.md.
 
 | # | Package | Ideas | Decision |
 | --- | --- | --- | --- |
@@ -51,11 +52,11 @@ agent B on the local GPU, and agent cursors in the editor.
   approval it is implemented in parts without another one. It reserves the agent that started
   another, even if the lead agent never ships.
 - **Lead agent gate, Sun Nov 1 at 22:00 ART:** packages 1 to 6 on main with make check green, and a
-  probe of Muse Spark as coordinator that meets criteria written before it runs: in 5 runs, at
-  least 4 valid plans whose zones do not overlap; in at least 4 of 5, a correct Request changes in
-  reaction to a review; and a cost per run under a cap the maintainer sets. If it fails, the lead
-  agent goes to Next; the automatic Request changes of package 2 already covers the part of it
-  that saves the most.
+  probe of Muse Spark as coordinator that meets criteria written before it runs: in 5 runs, at least
+  4 valid plans whose zones do not overlap; in at least 4 of 5, a correct Request changes in
+  reaction to a review; and a cost of at most US$0.05 per run, US$0.50 for the whole probe (set by
+  the maintainer). If it fails, the lead agent goes to Next; the automatic Request changes of
+  package 2 already covers the part of it that saves the most.
 
 **Order:**
 
