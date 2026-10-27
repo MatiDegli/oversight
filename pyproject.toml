@@ -180,6 +180,7 @@ name = "Changes helpers never import the manager, including typing imports"
 type = "forbidden"
 source_modules = [
     "oversight.changes._approval", "oversight.changes._merge", "oversight.changes._recovery",
+    "oversight.changes._delivery", "oversight.changes._fidelity",
     "oversight.changes._proposal",
     "oversight.changes._state", "oversight.changes._support",
     "oversight.changes._diff", "oversight.changes._versions",

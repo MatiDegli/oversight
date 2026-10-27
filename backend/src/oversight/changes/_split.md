@@ -63,3 +63,13 @@ base and must be redone over it later. No API run, push, merge, stash or rebase 
 PR 2 checker correction: normalize local stage names only in function/callback positions. In
 `read_base`, the local parameter `commit` must not be mistaken for the moved `commit` function.
 No additional rename is needed and no product statement changes.
+
+Final inventory: `_manager.py` is 652 lines. File/save transactions and revision/base-move
+transactions deliberately remain there (full inventory in docs/plans/changes.md); no function
+exceeds 80 lines. All test files, including the drain spies and facade monkeypatches, are
+byte-identical to the baseline: there are no test renames. The final resolution port is removed
+with the other temporary ports. The `_policy`, `_zones` and `_beforeafter` cores remain unwired.
+
+Review availability: the local Sonnet CLI returned HTTP 401 (expired OAuth token). No review
+verdict is claimed. Branches are prepared with green gates for the coordinator's Sonnet review;
+none is pushed or merged. This access failure is not a lifecycle/fidelity rejection.

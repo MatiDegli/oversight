@@ -1,5 +1,6 @@
 import logging
 
+from oversight.changes import _delivery as delivery
 from oversight.changes._state import ChangeRecord, Facts
 from oversight.changes._support import ChangeContext
 
@@ -36,10 +37,10 @@ async def recover(
     except Exception:
         facts = None
     if facts is not None and facts.merged:
-        await ctx.ports.record_merge(rec, comment, facts.head)
+        await delivery.record_merge(ctx, rec, comment, facts.head)
         if error is not None:
             return  # the approval closes out and cleans up
-        await ctx.ports.close_out(rec)
+        await delivery.close_out(ctx, rec)
         note = "the merge landed and is recorded"
     elif facts is not None and facts.unchanged(pre):
         if rec.fallback == "conflict":  # set only by `_record_conflict`: the store has it

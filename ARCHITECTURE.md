@@ -148,9 +148,29 @@ mapping, SSE framing and static serving. Enforced by `private-api`, `layers` and
 ### Changes
 
 [Public exports](backend/src/oversight/changes/__init__.py): `ChangeManager`,
-`ChangeNotFound`, `WrongState`. The manager implements the agents' change sink and owns
-proposal, decision, graph-refresh and cleanup state. Enforced by `private-changes`,
-`layers`, `model-gate` and `web-at-the-edge`.
+`ChangeNotFound`, `Revision`, `WrongState`. The manager implements the agents' change sink.
+Its stage split (2026-10-27) keeps the same signatures, tasks and event ordering:
+
+- `_state.ChangeState` exclusively owns changes, agents, bases, pending work, tracked tasks,
+  suspect state and the published snapshot. Records and transitions live here without I/O.
+- `_support.ChangeContext` holds dependencies and utilities, with a reference to that state.
+- `_proposal` opens and versions worktrees, publishes live diffs and proposals and settles run end.
+- `_approval`, `_merge` and `_recovery` retain the approval transaction, combined tests and
+  fact-based recovery under the same locks. Recovery still makes main permanently suspect when
+  its state cannot be established.
+- `_delivery` owns close-out, receipts, retries, cleanup and shutdown. Its only facade callback,
+  `ChangePorts.drain`, resolves the static `_drain` dynamically; the three delivery wait sites all
+  use it. Other stage calls use direct imports.
+- `_manager` keeps synchronous admission, file/save transactions, review edits, Request changes,
+  Reject, Stop and main checks. Its assignable compatibility properties delegate to the owners;
+  `request_changes` continues resolving `_request_changes` when called.
+
+The move manifest and AST fidelity check are described in
+[`_split.md`](backend/src/oversight/changes/_split.md); the residual file/revision inventory is in
+[the change plan](docs/plans/changes.md#1-facade-and-callers). The original logger name is retained.
+Existing tests and contracts are unchanged. `_policy`, `_zones` and `_beforeafter` remain unwired.
+Enforced by `private-changes`, `layers`, `model-gate`, `web-at-the-edge` and the forbidden
+`changes-no-facade-backedge` contract: helpers cannot import `_manager`, including typing imports.
 
 ### Events
 

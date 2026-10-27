@@ -3,7 +3,7 @@ import logging
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
 from datetime import UTC
-from typing import Any, Literal, Protocol
+from typing import Any
 
 from oversight.agents import Publish
 from oversight.changes._state import ChangeRecord, ChangeState, Source
@@ -18,8 +18,6 @@ from oversight.workspace import (
     WorkspaceError,
 )
 from oversight_contracts.events import (
-    ChangeResolved,
-    Conflict,
     ErrorReport,
 )
 from oversight_contracts.graph import GraphSnapshot
@@ -27,27 +25,11 @@ from oversight_contracts.graph import GraphSnapshot
 _log = logging.getLogger("oversight.changes._manager")
 
 
-class ResolutionPort(Protocol):
-    def __call__(
-        self,
-        rec: ChangeRecord,
-        decision: Literal["approved", "rejected"],
-        comment: str | None,
-        conflict: Conflict | None = None,
-    ) -> ChangeResolved: ...
-
-
 @dataclass
 class ChangePorts:
     """Lambdas resolve facade methods at call time, including class-level spies."""
 
-    finish_pending: Callable[[], Awaitable[None]]
-    send_requested: Callable[[ChangeRecord], Awaitable[str]]
-    drain_pending: Callable[[], Awaitable[None]]
-    finish: Callable[[ChangeRecord], Awaitable[None]]
-    record_merge: Callable[[ChangeRecord, str | None, str], Awaitable[None]]
-    close_out: Callable[[ChangeRecord], Awaitable[None]]
-    resolution: ResolutionPort
+    drain: Callable[[ChangeRecord], Awaitable[None]]
 
 
 @dataclass

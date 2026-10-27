@@ -94,7 +94,8 @@ class Canonical(ast.NodeTransformer):
                     dest = "operation_" + str(old)
         if dest is not None:
             replacement = ast.parse(dest, mode="eval").body
-            replacement.ctx = node.ctx  # type: ignore[attr-defined]
+            assert isinstance(replacement, (ast.Attribute, ast.Name))
+            replacement.ctx = node.ctx
             return replacement
         return self.generic_visit(node)
 

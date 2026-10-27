@@ -314,3 +314,36 @@ Ours wins in every case below.
   exposing credentials. Keys are opaque nonempty strings without whitespace; authenticity is not
   checked by calling a provider. The optional error `missing` field is omitted for other codes,
   preserving their existing wire shape; recorded 1.0 and 1.1 events remain valid.
+
+
+## Change manager stages
+
+- **Split by stage behind the same facade (maintainer, 2026-10-27):** the 1,565-line manager mixes
+  proposal work with authority, recovery and event delivery. Four stacked refactors introduce
+  state/support, proposal, approval/merge/recovery, then delivery, without changing behavior,
+  contracts or test expectations. `_state.ChangeState` is the sole mutable owner; the facade
+  holds a `_support.ChangeContext` with dependencies and that state, rather than copied aliases.
+  Assignable compatibility properties preserve private test access. Public signatures and tasks,
+  lock/await order, combined tests, permanent main suspicion and receipt ordering remain intact.
+- **Typed ports only while needed:** ports are a record of lambdas that resolve facade methods
+  on each invocation, preserving class-level monkeypatches without making the facade implement a
+  protocol. PR 2 adds finish_pending/send_requested for proposal; PR 3 adds drain_pending/finish
+  for approval, record_merge for merge/recovery, close_out for recovery and resolution for merge.
+  The resolution port exposes only its consumed conflict argument. PR 4 replaces all of these
+  with direct stage calls. The permanent drain port serves delivery's three wait sites, keeping
+  `_drain` static and patchable. No unused publish_main, request_changes or supersede_pending port
+  is introduced; Request changes retains its existing dynamic facade dispatch.
+- **Prove movement separately from scaffold review:** the data manifest lists every owner path,
+  moved operation and rename, including read_facts/unsent_events and the three record classes.
+  The AST checker compares operations and records while preserving callbacks, locks, awaits and
+  exception boundaries; its three seeded mutations must fail. Moving a method out of its class
+  changes only docstring indentation, normalized with cleandoc. Constructors, forwarding methods,
+  compatibility properties, imports and port registration remain explicit reviewer scope.
+  Helpers are forbidden from importing the facade, even in TYPE_CHECKING. Logger names stay
+  `oversight.changes._manager`. There are no new behavioral seams or policy integrations.
+- **Create-files follows this split:** it is absent from the base, so `_save_main`, `_settle_save`
+  and `_restore_save` remain on the facade. Create-files must be redone over it later. The facade
+  remains over 500 lines to keep the residual file and revision transactions within this agreed
+  scope; no function exceeds 80 lines. Two unsuccessful fidelity/review repair rounds stop the
+  sequence for a coordinator decision. Integration still requires the independent Sonnet review;
+  preparing branches does not approve or merge them.
