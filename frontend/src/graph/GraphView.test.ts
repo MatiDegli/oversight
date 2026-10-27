@@ -264,7 +264,7 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   rerender(live);
   expect(frame).toHaveBeenLastCalledWith(cy, live.frameIds, false, {
     coneIds: undefined,
-    watchZoom: 0.5,
+
     restoreCamera: undefined,
   });
   // The narrowed live diff needed to zoom out. Review must retain the original watch zoom.
@@ -288,7 +288,7 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   rerender(review);
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, live.frameIds, false, {
     coneIds: ["billing:fee"],
-    watchZoom: 0.5,
+
     restoreCamera: undefined,
   });
   paint();
@@ -309,7 +309,7 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   rerender({ panelOpen: false, frameKey: null });
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, [], false, {
     coneIds: undefined,
-    watchZoom: 0.5,
+
     restoreCamera: watchCamera,
   });
 });
@@ -348,7 +348,7 @@ it("restores the person's exact watch camera after opening and closing review", 
   expect(cy.pan()).toEqual(watch.pan);
 });
 
-it("reframes a second review at the saved watch zoom while the panel remains open", async () => {
+it("reframes a second review while the panel remains open", async () => {
   setLabel("Caller");
   const { settle } = mount();
   await settle("resolved");
@@ -362,7 +362,7 @@ it("reframes a second review at the saved watch zoom while the panel remains ope
   rerender({ panelOpen: true, frameKey: "review:change-2", frameIds: ["second"] });
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, ["second"], false, {
     coneIds: undefined,
-    watchZoom: 0.9,
+
     restoreCamera: undefined,
   });
 });

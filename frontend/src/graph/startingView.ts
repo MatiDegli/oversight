@@ -49,10 +49,11 @@ function candidates(
   start: "x1" | "y1",
   end: "x2" | "y2",
   room: number,
+  bounded: boolean,
 ) {
   if (range.lo > range.hi) return [range.preferred];
-  const lo = focus[end] - room;
-  const hi = focus[start];
+  const lo = Math.max(focus[end] - room, bounded ? range.lo : -Infinity);
+  const hi = Math.min(focus[start], bounded ? range.hi : Infinity);
   if (lo > hi) return [range.preferred];
   const clamp = (value: number) => Math.max(lo, Math.min(hi, value));
   return [
@@ -83,6 +84,7 @@ export function startingView(
   padding = FIT_PADDING,
   frames: readonly Box[] = [],
   area: Box = { x1: 0, y1: 0, x2: size.width, y2: size.height },
+  bounded = false,
 ): Camera {
   const width = area.x2 - area.x1;
   const height = area.y2 - area.y1;
@@ -91,8 +93,8 @@ export function startingView(
   const vertical = axis(graph.y1, graph.y2, focus.y1, focus.y2, height, padding);
   let origin = { x: horizontal.preferred, y: vertical.preferred };
   let best = Infinity;
-  const xs = candidates(frames, focus, margins, padding, horizontal, "x1", "x2", width);
-  const ys = candidates(frames, focus, margins, padding, vertical, "y1", "y2", height);
+  const xs = candidates(frames, focus, margins, padding, horizontal, "x1", "x2", width, bounded);
+  const ys = candidates(frames, focus, margins, padding, vertical, "y1", "y2", height, bounded);
   for (const x of xs) {
     for (const y of ys) {
       const distance = (x - horizontal.preferred) ** 2 + (y - vertical.preferred) ** 2;

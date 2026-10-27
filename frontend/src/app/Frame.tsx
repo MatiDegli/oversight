@@ -342,7 +342,7 @@ export function Frame(props: FrameProps) {
               {notice && <div className="pointer-events-auto text-muted">{notice}</div>}
             </div>
             {/* The start camera uses the space between overlays, measured after fonts load. */}
-            <div ref={startAreaRef} className="min-h-0 flex-1" />
+            <div data-graph-clear-area ref={startAreaRef} className="min-h-0 flex-1" />
             <div className="flex items-end justify-between gap-(--spacing-lg)">
               <div className="pointer-events-auto min-w-0">
                 <Legend state={state} />

@@ -18,7 +18,8 @@ import {
   ZOOM_RANGE,
   zoomBy,
 } from "./camera";
-import type { Camera, Framing } from "./camera";
+import type { Box, Camera, Framing } from "./camera";
+import { FIT_PADDING } from "./geometry";
 import { graphElements } from "./elements";
 import { foldController } from "./foldController";
 import { visibleId } from "./foldVisibility";
@@ -55,7 +56,7 @@ export interface GraphViewProps {
    */
   panelOpen?: boolean;
   /**
-   * The change's nodes, framed with the cone at watch zoom or smaller down to the readable floor.
+   * The change's nodes, framed with the cone between 100% and 40%.
    * Read only when the panel target changes; incoming events move nothing. Empty falls back to the
    * selected node, then to the whole graph.
    */
@@ -64,7 +65,7 @@ export interface GraphViewProps {
   litIds?: readonly string[] | null;
   /** The review proposal's cone, used for its card, framing and out-of-view report. */
   cone?: ImpactCone | null;
-  /** Live preview for node dimming and distance badges only; never moves the camera. */
+  /** Live preview: framed once on opening, then updates badges and dimming without following edits. */
   liveCone?: ImpactCone | null;
   /** Changes only when the person opens a different panel target or enters review. */
   frameKey?: string | null;
@@ -119,6 +120,39 @@ function reportFraming(
   });
 }
 
+/** Snapshot panel geometry only when the person opens it, before the single camera move. */
+function panelGeometry(host: HTMLElement, props: GraphViewProps): { occlusion?: Box; area?: Box } {
+  const graph = host.getBoundingClientRect();
+  const card = props.coneCardRef?.current?.getBoundingClientRect();
+  const clear = props.startAreaRef?.current?.getBoundingClientRect();
+  const occlusion = card
+    ? {
+        x1: card.left - graph.left,
+        y1: card.top - graph.top,
+        x2: card.right - graph.left,
+        y2: card.bottom - graph.top,
+      }
+    : undefined;
+  return {
+    ...(occlusion ? { occlusion } : {}),
+    ...(clear
+      ? {
+          area: {
+            x1: (occlusion?.x2 ?? 0) + FIT_PADDING,
+            y1: FIT_PADDING,
+            x2: graph.width - FIT_PADDING,
+            y2: Math.min(graph.height - FIT_PADDING, clear.bottom - graph.top),
+          },
+        }
+      : {}),
+  };
+}
+
+function openingCone(props: GraphViewProps): readonly string[] | undefined {
+  const cone = props.cone ?? props.liveCone;
+  return cone?.entries.filter((entry) => entry.distance <= cone.max_depth).map((e) => e.node_id);
+}
+
 export function GraphView({
   selectedId = null,
   onNodeTap,
@@ -163,6 +197,7 @@ export function GraphView({
       frameKey,
       onFramed,
       coneCardRef,
+      startAreaRef,
       field,
     };
     if (relit) resync.current?.();
@@ -178,6 +213,7 @@ export function GraphView({
     frameKey,
     onFramed,
     coneCardRef,
+    startAreaRef,
     field,
   ]);
   // Panel framing follows the person's choice; watch growth has its own guarded expansion.
@@ -189,11 +225,11 @@ export function GraphView({
     if (graph.current) {
       if (!wasOpen && panelOpen)
         watchCamera.current = { zoom: graph.current.zoom(), pan: { ...graph.current.pan() } };
-      const { frameIds: framed, selectedId: selected, cone: impact } = latest.current;
+      const { frameIds: framed, selectedId: selected } = latest.current;
       const focus = framed?.length ? framed : selected ? [selected] : [];
       const framing = frameCamera(graph.current, panelOpen ? focus : [], prefersReducedMotion(), {
-        coneIds: panelOpen ? impact?.entries.map((entry) => entry.node_id) : undefined,
-        watchZoom: watchCamera.current?.zoom,
+        coneIds: panelOpen ? openingCone(latest.current) : undefined,
+        ...(panelOpen && container.current ? panelGeometry(container.current, latest.current) : {}),
         restoreCamera: panelOpen ? undefined : watchCamera.current,
       });
       targetFrame.current = framing;
@@ -358,8 +394,8 @@ export function GraphView({
       if (latest.current.panelOpen) {
         watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
         const framing = frameCamera(cy, latest.current.frameIds ?? [], true, {
-          coneIds: latest.current.cone?.entries.map((entry) => entry.node_id),
-          watchZoom: watchCamera.current.zoom,
+          coneIds: openingCone(latest.current),
+          ...panelGeometry(host, latest.current),
         });
         targetFrame.current = framing;
         reportSoon();

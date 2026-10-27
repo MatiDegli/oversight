@@ -293,7 +293,7 @@ describe("frameCamera", () => {
     const watch = { zoom: 1.017, pan: { x: -17, y: 52 } };
     cy.viewport(watch);
     const width = vi.spyOn(cy, "width").mockReturnValue(904);
-    frameCamera(cy, ["a"], true, { coneIds: ["c", "d"], watchZoom: watch.zoom });
+    frameCamera(cy, ["a"], true, { coneIds: ["c", "d"] });
     expect(cy.zoom()).not.toBe(watch.zoom);
     width.mockReturnValue(1600);
     frameCamera(cy, [], true, { restoreCamera: watch });
@@ -301,49 +301,45 @@ describe("frameCamera", () => {
     expect(cy.pan()).toEqual(watch.pan);
   });
 
-  it("applies the review floor even to an empty cone, preserving live diff at a smaller watch zoom", () => {
+  it("uses the 100% ceiling for empty cones in live diff and review", () => {
     const cy = narrowedGraph(600);
     cy.zoom(0.5);
     frameCamera(cy, ["c"], true);
-    expect(cy.zoom()).toBe(0.5);
-    frameCamera(cy, ["c"], true, { coneIds: [], watchZoom: 0.5 });
-    expect(cy.zoom()).toBe(0.8);
+    expect(cy.zoom()).toBe(1);
+    frameCamera(cy, ["c"], true, { coneIds: [] });
+    expect(cy.zoom()).toBe(1);
   });
 
-  it("keeps the readable floor and the change centered when even the nearest distance cannot fit", () => {
+  it("keeps the change visible at 40% when even the first ring cannot fit", () => {
     const cy = narrowedGraph(504);
-    cy.minZoom(0.4);
     frameCamera(cy, ["a"], true, { coneIds: ["c", "d"] });
-    expect(cy.zoom()).toBe(0.8);
-    expect(cy.minZoom()).toBe(0.4);
+    expect(cy.zoom()).toBe(0.4);
     expect(inView(cy, ["a"])).toBe(true);
     expect(inView(cy, ["c", "d"])).toBe(false);
-    expect(cy.getElementById("a").renderedPosition().x).toBeCloseTo(404);
   });
-  it("maximizes complete callers at the floor including badges without moving nodes", () => {
+
+  it("frames full caller boxes including badges without moving nodes", () => {
     const cy = narrowedGraph(804);
     const before = positions(cy);
     cy.getElementById("b").data("distance", 1).style("bounds-expansion", 10);
     cy.getElementById("d").data("distance", 2);
-    frameCamera(cy, ["a"], true, { coneIds: ["d", "b"], watchZoom: 1 });
-    expect(inView(cy, ["a", "b"])).toBe(true);
-    expect(inView(cy, ["d"])).toBe(false);
-    expect(cy.zoom()).toBe(0.8);
+    frameCamera(cy, ["a"], true, { coneIds: ["d", "b"] });
+    expect(inView(cy, ["a", "b", "d"])).toBe(true);
+    expect(cy.zoom()).toBeGreaterThanOrEqual(0.4);
+    expect(cy.zoom()).toBeLessThan(0.8);
     const bounds = cy
       .nodes()
-      .filter((node) => ["a", "b"].includes(node.id()))
+      .filter((node) => ["a", "b", "d"].includes(node.id()))
       .renderedBoundingBox();
-    expect(bounds.x1).toBeGreaterThanOrEqual(344 - 0.5);
+    expect(bounds.x1).toBeGreaterThanOrEqual(40 - 0.5);
     expect(bounds.x2).toBeLessThanOrEqual(804 - 40 + 0.5);
-    // With one visible caller, choose the closest pan to centering the change.
-    expect(cy.getElementById("a").renderedPosition().x).toBeCloseTo(423.2);
     expect(positions(cy)).toEqual(before);
   });
 
-  it("uses the original watch zoom when switching from a narrowed live diff to review", () => {
+  it("frames review independently of the live diff zoom", () => {
     const cy = narrowedGraph(904);
     cy.zoom(0.2);
-    frameCamera(cy, ["c"], true, { coneIds: ["d"], watchZoom: 1 });
+    frameCamera(cy, ["c"], true, { coneIds: ["d"] });
     expect(cy.zoom()).toBe(1);
     expect(inView(cy, ["c", "d"])).toBe(true);
   });
