@@ -1,0 +1,15 @@
+Command: make test-browser
+Exit code: 0
+Source tip: 2ba4b80e872021ac3977512491fbc6fb9133c645
+Execution: unpiped; before documentation-only evidence commit
+
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX pnpm -C frontend test:browser
+$ vitest run --project browser
+
+ RUN  v5.0.4 /home/matidegli/Projects/oversight-clones/frontend/field-cost/frontend
+
+
+ Test Files  10 passed (10)
+      Tests  74 passed (74)
+   Start at  23:36:28
+   Duration  70.46s (tests 98%, import 2%)

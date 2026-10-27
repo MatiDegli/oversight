@@ -1,0 +1,155 @@
+Command: make check
+Exit code: 0
+Source tip: 2ba4b80e872021ac3977512491fbc6fb9133c645
+Execution: unpiped; before documentation-only evidence commit
+
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX uv run --frozen python contracts/generate.py --check
+gitleaks git --config .gitleaks.toml --redact --no-banner --log-level warn .
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX uv run --frozen ruff check .
+All checks passed!
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX uv run --frozen ruff format --check .
+251 files already formatted
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX uv run --frozen pyright
+0 errors, 0 warnings, 0 informations
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX uv run --frozen lint-imports
+
+╔══╗─────────▶╔╗ ╔╗      ╔╗◀───┐
+╚╣╠╝◀─────┐  ╔╝╚╗║║────▶╔╝╚╗   │
+ ║║   ╔══╦══╦╩╗╔╝║║  ╔╦═╩╗╔╝╔═╦══╗
+ ║║╔══╣╔╗║╔╗║╔╣║ ║║ ╔╬╣╔╗║║ ║│║╔═╝
+╔╣╠╣║║║╚╝║╚╝║║║╚╗║╚═╝║║║║║╚╗║═╣║
+╚══╩╩╩╣╔═╩══╩╝╚═╝╚═══╩╩╝╚╩═╩╩═╩╝
+  └──▶║║                    ▲
+      ╚╝────────────────────┘
+
+
+---------
+Contracts
+---------
+
+Analyzed 129 files, 531 dependencies.
+-------------------------------------
+
+1. Backend layers, with the bottom three independent of each other KEPT
+2. Only oversight.api imports its own internals; others use its facade KEPT
+2. Only oversight.events imports its own internals; others use its facade KEPT
+2. Only oversight.graph imports its own internals; others use its facade KEPT
+2. Only oversight.workspace imports its own internals; others use its facade KEPT
+2. Only oversight.agents imports its own internals; others use its facade KEPT
+2. Only oversight.changes imports its own internals; others use its facade KEPT
+3. Contracts import neither the backend nor a web or model framework KEPT
+4. Only oversight.agents imports openai KEPT
+5. Only api and app import the web framework KEPT
+Changes helpers never import the manager, including typing imports KEPT
+
+Contracts: 11 kept, 0 broken.
+$ tsc --noEmit
+$ eslint --max-warnings 0 .
+$ prettier --check .
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX pnpm -C frontend typecheck
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX pnpm -C frontend lint
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX pnpm -C frontend format:check
+Checking formatting...
+All matched files use Prettier code style!
+env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX pnpm -C frontend test
+
+ RUN  v5.0.4 /home/matidegli/Projects/oversight-clones/frontend/field-cost/frontend
+
+
+ Test Files  57 passed (57)
+      Tests  653 passed (653)
+   Start at  23:38:31
+   Duration  10.95s (tests 53%, transform 30%, import 16%, worker 1%)
+
+✔ a detector that hangs is stopped at the deadline, leaves no detect.json, and the run goes on (1020.271485ms)
+✔ a child that ignores SIGTERM dies with the detector at the deadline (3143.686901ms)
+✔ a signal to the shell during the scan stops the whole group before the shell goes (2149.504589ms)
+✔ exit 2 is a completed scan with findings: detect.json is kept (71.652877ms)
+✔ exit 1 is a failed scan: no detect.json, which would read as no findings (17.300487ms)
+✔ a missing detector is one line and the run goes on (3.438193ms)
+✔ no findings: one line saying so (0.801007ms)
+✔ each finding is a line with its rule, place and detail, after a count by kind (0.562112ms)
+✔ a finding with missing fields still prints, and a non-list is refused (0.327995ms)
+✔ both panels must frame the change and cone; live has no review card or rows (1.947871ms)
+✔ shots requires the zoom needed for the full cone with legible labels (0.652326ms)
+✔ shots falls back to distance 1 if farther callers cannot fit legibly (2.338864ms)
+✔ shots accepts the legibility floor when no distance 1 member fits (0.49706ms)
+✔ shots checks the clear area and the card's actual occlusion separately (0.801521ms)
+✔ shots rejects changes that cannot fit at the legibility floor (0.176022ms)
+✔ shots rejects an off-center camera even when every target is clear (0.263018ms)
+✔ shots centers within graph bounds, including graphs smaller than the clear area (0.36703ms)
+✔ shots prefers the nearest uncut module view over a centered cut (0.721205ms)
+✔ shots marks a caller behind bottom overlays even inside the full viewport (0.578757ms)
+✔ a job is named <scene>-<theme>.png, scene by scene (1.367844ms)
+✔ a disabled scene or theme is skipped with the reason, never dropped (0.239199ms)
+✔ the real list: watch, review, live diff, task slots and file view run in dark; light remains skipped (0.317279ms)
+✔ lastSeq reads the last event, ignoring trailing blank lines (0.197404ms)
+✔ lastSeq rejects an empty log and a last line without a seq (0.470138ms)
+✔ live diff uses a derived cut through the last edit before the proposal at seq 19 (1.099388ms)
+✔ a log without a pre-proposal edit still captures watch, review and file view, skipping only live diff (0.266434ms)
+✔ task scenes replay one offered slot and two with a non-Meta tick carrying A's brake (0.913298ms)
+✔ the build refuses fixture instead of bundling it as a real recording (270.924489ms)
+✔ the build refuses fake instead of bundling it as a real recording (203.90224ms)
+✔ the build refuses invalid JSON instead of bundling it as a real recording (185.162006ms)
+✔ the build refuses invalid payload instead of bundling it as a real recording (228.75778ms)
+✔ the build refuses stale receipt instead of bundling it as a real recording (224.976952ms)
+✔ the build bundles the exact bytes and provenance emitted by the exporter (1028.549205ms)
+✔ the editing player streams the cut by cursor and stays open until the browser disconnects (1.184757ms)
+✔ the app's bundled log import is replaced by the scan's log, whatever relative path it has (123.970989ms)
+✔ without a log the config refuses to resolve, so the scan never plays the wrong one (55.483038ms)
+✔ every event takes the first one's time, and nothing else changes (4.157876ms)
+✔ an empty log, or one whose first event has no ts, is refused (0.466912ms)
+✔ OVERSIGHT_VITE_CACHE_DIR moves Vite's cache (123.771445ms)
+✔ without it, the cache stays in node_modules/.vite, as make dev has it (44.918528ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6498.830153
+bash tools/bounded.sh 900 bash tools/capped.sh 10G env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX uv run --frozen pytest tools/tests/test_eslint_boundaries.py
+.................                                                        [100%]
+17 passed in 2.23s
+$ vitest run --project unit --passWithNoTests && node --test "shots/*.test.ts"
+capped.sh: no memory cap of 10G: this machine has no user systemd, so the command runs without one
+capped.sh: no memory cap of 10G: this machine has no user systemd, so the command runs without one
+bash tools/bounded.sh 900 bash tools/capped.sh 10G env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR -u GIT_PREFIX uv run --frozen pytest -n 8 --max-worker-restart=0 --ignore=tools/tests/test_eslint_boundaries.py
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  3%]
+........................................................................ [  6%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+........................................................................ [ 15%]
+........................................................................ [ 18%]
+........................................................................ [ 21%]
+........................................................................ [ 24%]
+........................................................................ [ 27%]
+........................................................................ [ 31%]
+........................................................................ [ 34%]
+........................................................................ [ 37%]
+........................................................................ [ 40%]
+........................................................................ [ 43%]
+........................................................................ [ 46%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 55%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 65%]
+........................................................................ [ 68%]
+........................................................................ [ 71%]
+........................................................................ [ 74%]
+........................................................................ [ 77%]
+........................................................................ [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+........................................................................ [ 93%]
+........................................................................ [ 96%]
+........................................................................ [ 99%]
+.............                                                            [100%]
+2317 passed in 54.85s

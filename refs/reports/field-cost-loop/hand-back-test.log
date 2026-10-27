@@ -1,0 +1,12 @@
+Command: python3 refs/reports/field-cost-loop/verify_hand_back.py
+Before fix: exit code 1 (expected failure)
+Traceback (most recent call last):
+  File "/home/matidegli/Projects/oversight-clones/frontend/field-cost/refs/reports/field-cost-loop/verify_hand_back.py", line 37, in <module>
+    main()
+  File "/home/matidegli/Projects/oversight-clones/frontend/field-cost/refs/reports/field-cost-loop/verify_hand_back.py", line 12, in main
+    assert report.is_file(), f"Missing review hand-back: {report}"
+           ^^^^^^^^^^^^^^^^
+AssertionError: Missing review hand-back: /home/matidegli/Projects/oversight-clones/frontend/field-cost/refs/reports/field-cost-loop/hand-back.md
+
+After fix: exit code 0
+PASS: hand-back, commits, visual comparison, two PNGs and three gate outputs
