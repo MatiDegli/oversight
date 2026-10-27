@@ -1,12 +1,13 @@
-// The browser run over replay: `make e2e` builds the static replay site into dist/replay, then
-// Playwright serves it with `vite preview` on a free port (OVERSIGHT_E2E_PORT) and runs this folder.
-// No backend is started.
-import { fileURLToPath } from "node:url";
-
+// The browser run over replay: `make e2e` (run.sh) builds the static replay site into dist/replay,
+// serves it with `vite preview` on a free port (OVERSIGHT_E2E_PORT) that it owns and stops, and runs
+// this folder over it. No backend is started, and no web server is configured here: a server
+// Playwright starts lives in a process group of its own and outlives a run that `timeout` ended.
 import { defineConfig } from "@playwright/test";
 
-const port = Number(process.env.OVERSIGHT_E2E_PORT ?? "4310");
-const origin = `http://127.0.0.1:${String(port)}`;
+const port = process.env.OVERSIGHT_E2E_PORT;
+if (port === undefined || port === "")
+  throw new Error("OVERSIGHT_E2E_PORT is not set: run `make e2e`, which serves the site first");
+const origin = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: ".",
@@ -20,12 +21,4 @@ export default defineConfig({
   reporter: [["list"]],
   outputDir: "../test-results",
   use: { baseURL: origin, viewport: { width: 1920, height: 1080 }, trace: "retain-on-failure" },
-  webServer: {
-    command: `./node_modules/.bin/vite preview --host 127.0.0.1 --port ${String(port)} --strictPort --outDir dist/replay --configLoader runner`,
-    cwd: fileURLToPath(new URL("..", import.meta.url)),
-    url: origin,
-    reuseExistingServer: false,
-    timeout: 60_000,
-    gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
-  },
 });
