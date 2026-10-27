@@ -74,6 +74,8 @@ async function withPage(
     // camera test depend on unrelated module/editor startup under machine load.
     expect(editorRequests).toEqual([]);
     await test(page);
+    // Loading the cone for review or isolated focus checks must also stay editor-free.
+    expect(editorRequests).toEqual([]);
     expect(errors).toEqual([]);
   } finally {
     await page.close();

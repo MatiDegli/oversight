@@ -36,9 +36,10 @@ host.style.height = "100vh";
 document.body.replaceChildren(host);
 const root = createRoot(host);
 type Mode = "watch" | "panel" | "review";
-let ImpactConeCard: typeof import("../review").ImpactConeCard;
+let ImpactConeCard: typeof import("../review/ImpactCone").ImpactConeCard;
 async function loadCone() {
-  ({ ImpactConeCard } = await import("../review"));
+  // eslint-disable-next-line no-restricted-syntax -- Browser-only isolation: the review barrel also loads Monaco.
+  ({ ImpactConeCard } = await import("../review/ImpactCone"));
 }
 
 /** Exercise the camera without importing Frame's unrelated Monaco editor and workers. */
