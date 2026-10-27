@@ -8,10 +8,13 @@ main's state cannot be read. `closing` becomes `closed` once its resolution, del
 all sent; until then the change is pending, keeps its worktree until the resolution is out, and the
 next decision or `open` sends the rest. Request changes takes `ready` or `conflict` back to
 `working` and discards nothing; from `conflict` it first merges main into the agent's branch, so
-the agent redoes its change on the new base. Every git call is `Workspace.git`, async with a
-timeout; decisions hold main's lock, then the agent's, throughout. Once a change enters `broken`,
-`main_suspect` stays true until the process restarts; `check_main` reads main's state, and `aclose`
-drains the close-outs before the store closes.
+the agent redoes its change on the new base. In `ready`, the person's save in review commits to the
+agent's worktree and re-proposes; Approve merges only the revision it was clicked on, with the
+worktree at that revision's head. Stop takes what Reject takes, or a `working` change, whose run
+it cancels and waits for, then discards it as Reject does. Every git call is `Workspace.git`, async
+with a timeout; decisions hold main's lock, then the agent's, throughout. Once a change enters
+`broken`, `main_suspect` stays true until the process restarts; `check_main` reads main's state,
+and `aclose` drains the close-outs before the store closes.
 """
 
 import asyncio
@@ -56,11 +59,15 @@ APPROVABLE: frozenset[State] = frozenset({"ready"})
 REJECTABLE: frozenset[State] = frozenset({"ready", "conflict", "unproposed", "broken"})
 """`broken`: the merge failed and main's state is unknown; Reject still closes the change."""
 REVISABLE: frozenset[State] = frozenset({"ready", "conflict"})
+STOPPABLE: frozenset[State] = frozenset({*REJECTABLE, "working"})
+"""`working`: the run is cancelled first, and the change's outcome waits for its end."""
+STOPPED = "Stopped by the user."
 CLOSE_OUT_ATTEMPTS = 2
 """Tries per event on each occasion (a decision, a retry before the next decision or `open`, the
 drain)."""
 EVENT_TYPES = {
     "requested": "change.resolved changes_requested",
+    "stopped": "agent.status stopped",
     "resolved": "change.resolved",
     "delta": "graph.delta",
     "done": "agent.status done",
@@ -142,6 +149,10 @@ class _Change:
     sent. The change stays `deciding` until then, so nothing is decided while it is settled."""
     decision: int = 0
     """Counts the decisions taken; only the latest one's task may end `deciding`."""
+    taken: int = 0
+    """The revision Approve was clicked on (R1): a later one is reviewed before any merge."""
+    stopped: bool = False
+    """The decision is a Stop: its close-out sends `stopped` before the resolution, no `done`."""
 
     @property
     def agent_id(self) -> AgentId:
@@ -476,13 +487,17 @@ class ChangeManager:
         rec.revision, rec.head_commit = proposal.revision, proposal.head_commit
         rec.proposed_now, rec.summary = True, proposal.summary
 
-    async def _commit(self, rec: _Change) -> tuple[str, dict[str, FileStatus]]:
-        """Commit the worktree as the agent; HEAD, and the files that differ from the base."""
+    async def _commit(self, rec: _Change, by: By = "agent") -> tuple[str, dict[str, FileStatus]]:
+        """Commit the worktree as the agent, or as the user for edits in review; HEAD, and the
+        files that differ from the base."""
         tree = rec.tree
         await self._git(tree, "add", "-A")
         if (await self._git(tree, "status", "--porcelain")).strip():
-            message = f"{rec.change_id} ({rec.agent_id})"
-            await self._git(tree, "commit", "-q", "-m", message, commit_as=rec.agent_id)
+            if by == "agent":
+                message, author = f"{rec.change_id} ({rec.agent_id})", rec.agent_id
+            else:
+                message, author = f"{rec.change_id}: edited in review", "user"
+            await self._git(tree, "commit", "-q", "-m", message, commit_as=author)
         head = (await self._git(tree, "rev-parse", "HEAD")).strip()
         names = await self._git(
             tree, "diff", "--name-status", "--no-renames", "-z", rec.base_commit, head
@@ -503,17 +518,105 @@ class ChangeManager:
 
     def run_ended(self, agent_id: AgentId, end: RunEnd | None, *, steps: int | None = None) -> None:
         """The run is over (`end` is `None` when it raised or was cancelled): `ready` if this run
-        proposed, else `unproposed`. `steps`, the run's own count, wins over `end.steps`."""
+        proposed, else `unproposed`. `steps`, the run's own count, wins over `end.steps`. A run
+        that a Stop cancelled finds its change `deciding`: that outcome becomes the Stop's
+        `fallback`, where a Stop that ends without settling leaves the change."""
         rec = self._agents.get(agent_id)
         if rec is None:
             raise ChangeNotFound(agent_id)
-        if rec.state != "working":
+        stopping = rec.state == "deciding" and rec.fallback == "working"
+        if rec.state != "working" and not stopping:
             return
         if steps is not None:
             rec.steps = steps
         elif end is not None:
             rec.steps = end.steps
-        rec.state = "ready" if rec.proposed_now else "unproposed"
+        outcome: State = "ready" if rec.proposed_now else "unproposed"
+        if stopping:
+            rec.fallback = outcome
+        else:
+            rec.state = outcome
+
+    def _unreported(self, rec: _Change) -> None:
+        """Settle a run that will never report its end, as `run_ended` does for one that did: none
+        was passed to a Stop, or the one passed was cancelled before its first step and so never
+        ran its `finally`. Without it a Stop cancelled before its body, or in its wait for the run,
+        leaves the change `working` with no run. A no-op once a run has reported."""
+        self.run_ended(rec.agent_id, None)
+
+    # --- The person's edits in review ---------------------------------------------------------
+
+    async def save_for_review(
+        self, agent_id: AgentId, path: str, content: str, base_hash: str
+    ) -> str:
+        """The person's save on the new side in review: write `path` in the agent's worktree,
+        commit it as the user and re-propose (R6), so Approve never merges an untested edit; the
+        file's new hash. Only from `ready`, checked again under the agent's lock, which the save
+        holds throughout (`WrongState`); `StaleFile` when the file is not the one `base_hash` names.
+        R9: with nothing to commit and HEAD still the last proposal's, nothing is sent. A save cut
+        short after its write is re-proposed by the next Approve (R1)."""
+        rec = self._agents.get(agent_id)
+        if rec is None:
+            raise ChangeNotFound(agent_id)
+        self._check_editable(rec)
+        async with self._workspace.locks(agent_id=agent_id):
+            self._check_editable(rec)  # a decision may have taken it while the save waited
+            saved = await rec.tree.write_text(path, content, expected_hash=base_hash)
+            rec.touched.add(path)
+            head, files = await self._commit(rec, "user")
+            if head != rec.head_commit:
+                await self._proposal(rec, head, files, "user", rec.summary)
+        return saved
+
+    @staticmethod
+    def _check_editable(rec: _Change) -> None:
+        if rec.state != "ready":
+            raise WrongState(f"{rec.change_id} is {rec.state}; a save in review needs ready")
+
+    async def _as_clicked(self, rec: _Change) -> bool:
+        """R1: merge only the revision Approve was clicked on, with the worktree exactly at its
+        head. A save proposed after the click is left for review; one cut short, whose write or
+        commit landed without its proposal, is re-proposed from what the worktree holds, leftovers
+        committed as the user. Either way an `error` names the revision to review and nothing
+        merges: main is untouched, so the decision's end puts the change back to `ready`. The
+        caller holds both locks."""
+        if rec.revision != rec.taken:
+            await self._error(
+                "server",
+                f"Revision {rec.revision} of {rec.change_id} arrived after you clicked; "
+                "review it and approve again.",
+                rec,
+                fatal=False,
+            )
+            return False
+        tree = rec.tree
+        try:
+            head = (await self._git(tree, "rev-parse", "HEAD")).strip()
+            if (
+                head == rec.head_commit
+                and not (await self._git(tree, "status", "--porcelain")).strip()
+            ):
+                return True
+            head, files = await self._commit(rec, "user")
+            await self._proposal(rec, head, files, "user", rec.summary)
+        except Exception as error:
+            source: Source = "git" if isinstance(error, WorkspaceError) else "server"
+            await self._error(
+                source,
+                f"Approving {rec.change_id} merged nothing: its worktree could not be checked or "
+                f"re-proposed ({error}); approve again or reject.",
+                rec,
+                fatal=False,
+            )
+            return False
+        await self._error(
+            "server",
+            f"Revision {rec.revision} of {rec.change_id} holds edits that were not proposed when "
+            "you clicked; review it and approve again.",
+            rec,
+            fatal=False,
+        )
+        return False
 
     # --- Decisions ----------------------------------------------------------------------------
 
@@ -555,6 +658,7 @@ class ChangeManager:
 
     def approve(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
         rec = self._take(change_id, APPROVABLE, "approve")
+        rec.taken = rec.revision
         return self._decide(rec, self._approve(rec, comment))
 
     def reject(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
@@ -568,6 +672,24 @@ class ChangeManager:
         move, the change still `conflict` (or `broken`, when the worktree's state is unknown)."""
         rec = self._take(change_id, REVISABLE, "request changes")
         return self._decide(rec, self._request_changes(rec, comment))
+
+    def stop(self, agent_id: AgentId, run: asyncio.Task[None] | None) -> asyncio.Task[None]:
+        """Stop the agent and discard its change: from what Reject takes, or from `working`, whose
+        live `run` is cancelled in this same call. The task waits for the run's end, so the
+        resolution names the revision the store took (R7), then closes out as Reject does, with
+        `reason="stopped"`, `agent.status` `stopped` before the resolution, and no `done`."""
+        rec = self._agents.get(agent_id)
+        if rec is None:
+            raise ChangeNotFound(agent_id)
+        self._take(rec.change_id, STOPPABLE, "stop")
+        if run is None:
+            self._unreported(rec)
+        else:
+            run.cancel()
+            # Registered here, not in the Stop's task, which a cancel can end before its body or in
+            # its wait for the run. Before the wait's own callback, so it settles first.
+            run.add_done_callback(lambda _: self._unreported(rec))
+        return self._decide(rec, self._stop(rec, run))
 
     async def check_main(self) -> bool | None:
         """Under main's lock: True when main has no `MERGE_HEAD` and `status --porcelain` is empty,
@@ -624,6 +746,8 @@ class ChangeManager:
             # merge's delta starts from, and must find its own delta still there: wait for it.
             for other in list(self._pending.values()):
                 await self._drain(other)
+            if not await self._as_clicked(rec):
+                return
             pre: str | None = None
             try:
                 pre = (await self._git(self._workspace.main, "rev-parse", "HEAD")).strip()
@@ -652,7 +776,12 @@ class ChangeManager:
                 except Exception as error:
                     await self._settle_move(rec, move, error)
                     return None
-        return await self._whole(self._requested(rec, comment, note))
+            return await self._whole(self._requested(rec, comment, note))
+        # From `ready`, under both locks as every decision: a save in review holds the agent's
+        # lock until its revision is proposed, so the request names that revision and precedes
+        # the revision run.
+        async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+            return await self._whole(self._requested(rec, comment, note))
 
     async def _move_base(self, rec: _Change, move: _Move) -> str:
         """Merge main's HEAD into the agent's branch, committing as the agent; unmerged paths are
@@ -810,6 +939,20 @@ class ChangeManager:
             rec.resolution = self._resolution(rec, "rejected", comment)
             await self._finish(rec)  # main did not change: no rescan and no delta
 
+    async def _stop(self, rec: _Change, run: asyncio.Task[None] | None) -> None:
+        if run is not None:
+            # Its end calls `run_ended`, which records its steps and sets `fallback`; a run cut in
+            # its proposal's publish records the proposal first (R7). A run that never started
+            # reports nothing: `stop` settled it with a done-callback, which ran before this wait
+            # returned, so `fallback` is ready or unproposed from here on.
+            await asyncio.wait([run])
+        await self._finish_pending()
+        async with self._workspace.locks(main=True, agent_id=rec.agent_id):
+            # Under the agent's lock: a save in review proposes first, and this closes its revision.
+            rec.resolution = self._resolution(rec, "rejected", None, reason="stopped")
+            rec.stopped = True
+            await self._finish(rec)
+
     def _resolution(
         self,
         rec: _Change,
@@ -818,6 +961,7 @@ class ChangeManager:
         *,
         merge_commit: str | None = None,
         conflict: Conflict | None = None,
+        reason: Literal["stopped"] | None = None,
     ) -> ChangeResolved:
         merge: Literal["merged", "conflict"] | None = None
         if decision == "approved":
@@ -827,7 +971,7 @@ class ChangeManager:
             agent_id=rec.agent_id,
             revision=rec.revision,
             decision=decision,
-            reason=None,
+            reason=reason,
             comment=comment,
             merge=merge,
             merge_commit=merge_commit,
@@ -968,7 +1112,7 @@ class ChangeManager:
         rec.merged = True
         rec.resolution = self._resolution(rec, "approved", comment, merge_commit=post)
 
-    def _done(self, rec: _Change) -> AgentStatus:
+    def _status(self, rec: _Change, state: Literal["done", "stopped"]) -> AgentStatus:
         task = rec.task
         return AgentStatus(
             agent_id=task.agent_id,
@@ -976,10 +1120,10 @@ class ChangeManager:
             change_id=task.change_id,
             task=task.task,
             model=rec.model_id,
-            state="done",
+            state=state,
             step=rec.steps,
             max_steps=task.limits.max_steps * (rec.requests + 1),
-            detail=None,
+            detail=STOPPED if state == "stopped" else None,
         )
 
     async def _finish(self, rec: _Change) -> None:
@@ -1028,13 +1172,22 @@ class ChangeManager:
 
     def _unsent(self, rec: _Change) -> list[tuple[str, EventPayload]]:
         """The close-out events not yet sent, in order: an unsent request for changes, the
-        resolution, the delta, `done`."""
-        events: list[tuple[str, EventPayload | None]] = [
-            ("requested", rec.requested),
-            ("resolved", rec.resolution),
-            ("delta", rec.delta),
-            ("done", self._done(rec)),
-        ]
+        resolution, the delta, `done`; for a Stop, the request, `stopped`, then the resolution, so
+        the agent's last status precedes the resolution that frees its slot."""
+        events: list[tuple[str, EventPayload | None]]
+        if rec.stopped:
+            events = [
+                ("requested", rec.requested),
+                ("stopped", self._status(rec, "stopped")),
+                ("resolved", rec.resolution),
+            ]
+        else:
+            events = [
+                ("requested", rec.requested),
+                ("resolved", rec.resolution),
+                ("delta", rec.delta),
+                ("done", self._status(rec, "done")),
+            ]
         return [(n, p) for n, p in events if p is not None and n not in rec.sent]
 
     async def _send_close_out(self, rec: _Change) -> str:
