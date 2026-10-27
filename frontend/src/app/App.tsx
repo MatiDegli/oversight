@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStore } from "zustand";
 
 import { sendDecision } from "../review";
-import type { DecisionAction, DecisionAttempt, DecisionClient } from "../review";
+import type { DecisionAction, DecisionAttempt } from "../review";
 import { stateStore } from "../state";
 import { createCommandClient, replayBuild, replaySource } from "../transport";
 import { useEscapeCloses } from "./escape";
@@ -23,8 +23,9 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>(initialView);
   const [attempts, setAttempts] = useState<Record<string, DecisionAttempt>>({});
-  // The replay build has no backend: it never sends a command, and review shows recorded decisions.
-  const commands = useMemo<DecisionClient | null>(
+  // The replay build has no backend: it never sends a command or starts an agent, and review shows
+  // recorded decisions.
+  const commands = useMemo<ReturnType<typeof createCommandClient> | null>(
     () => (replayBuild ? null : createCommandClient()),
     [],
   );
@@ -79,6 +80,7 @@ export function App() {
       canOpenChange={(changeId) => openChange(state, view, changeId) !== null}
       onOpenChange={onOpenChange}
       onClosePanel={onClosePanel}
+      onStartAgent={commands?.startAgent}
       canReview={(changeId) => openReview(state, view, changeId) !== null}
       onReview={onReview}
       onOpenQueue={onOpenQueue}
