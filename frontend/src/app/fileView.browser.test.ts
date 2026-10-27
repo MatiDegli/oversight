@@ -97,6 +97,16 @@ async function withPage(
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
     );
+    // Cart is outside the hub-centered start view; navigate to it with the real fit control.
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    // These tests begin after the person opens Cart; opening a file itself must move no rows.
+    await clickGraphNode(page, "shop.cart:Cart");
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+          ?.oversightGraph?.animating() === false,
+    );
     await test(page, calls, serverFile);
     expect(errors).toEqual([]);
   } finally {
@@ -196,7 +206,7 @@ it("an untouched cone node only selects: review, comment and cone lighting survi
     await page.getByRole("button", { name: /change ready for review/ }).click();
     const review = page.getByRole("complementary", { name: "Review panel" });
     await review.locator(".line-insert").first().waitFor();
-    const comment = review.getByRole("textbox", { name: "Comment (optional)" });
+    const comment = review.getByRole("textbox", { name: "Comment (required for Request changes)" });
     await comment.fill("Keep this request for changes while I inspect the cone.");
     await page.waitForFunction(
       () =>
@@ -210,8 +220,12 @@ it("an untouched cone node only selects: review, comment and cone lighting survi
       if (!host || !graph) throw new Error("Graph missing");
       const { width, height } = host.getBoundingClientRect();
       const cone = graph.nodeCenters("node.cone:not(.dimmed)");
+      const callableIds = new Set(
+        graph.nodeCenters("node.function.cone, node.method.cone").map((node) => node.id),
+      );
       const visible = cone.find(
-        ({ x, y }) => x > 20 && x < width - 20 && y > 20 && y < height - 20,
+        ({ id, x, y }) =>
+          callableIds.has(id) && x > 20 && x < width - 20 && y > 20 && y < height - 20,
       );
       if (!visible) throw new Error("Visible untouched cone node missing");
       return {
@@ -261,7 +275,9 @@ it("a review and Escape preserve drafts; Ctrl+S in review sends nothing and neve
     const review = page.getByRole("complementary", { name: "Review panel" });
     await review.locator(".line-insert").first().waitFor();
     await browserExpect(filePanel(page)).toHaveCount(0);
-    await review.getByRole("textbox", { name: "Comment (optional)" }).fill("Keep typing");
+    await review
+      .getByRole("textbox", { name: "Comment (required for Request changes)" })
+      .fill("Keep typing");
     await page.keyboard.press("Control+s");
     await page.keyboard.press("Control+Enter");
     expect(calls).toEqual([]);

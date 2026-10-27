@@ -13,9 +13,15 @@ what the one before left, as `make demo` does):
      long cache header; a client route falls back to index.html; an unknown API path is the API's
      404, not the UI;
   3. the graph is the same as the first run's: the workspace really started clean;
-  4. POST /agents with the fake script's task, then on /events wait for change.proposed;
-  5. POST approve, then wait for change.resolved (merged) and graph.delta (cause merge);
-  6. stop the server (SIGTERM, with STOP_DEADLINE to exit before SIGKILL), then check it exited 0,
+  4. start fake A/B concurrently with explicit scripts; require first steps before each other's
+     proposals, pending overlays, passing tests, impact and usage.tick (unknown cost, brake ok);
+  5. save the editable new side while A is idle: require user attribution, pending graph and
+     re-proposal; request changes, require stale edit failures until re-read and a revision
+     preserving the user edit; refuse the same save while A works and after its change closes;
+  6. resume B and stop it during work; require stopped/rejected, no pending overlay or worktree;
+  7. approve A's revision: require merged and its graph.delta from the clean graph;
+  8. PUT /files on main adding a function: require user_edit graph.delta containing that node;
+  9. stop the server (SIGTERM, with STOP_DEADLINE to exit before SIGKILL), then check it exited 0,
      no process of its tree is left, and the runtime lock is free.
 The server runs in a session of its own, and this check is a child subreaper (prctl): whatever the
 server's tree leaves behind, in its session or out of it (a child that started a session of its own
@@ -35,199 +41,78 @@ timeout, plus that parent-death signal, promises that no process is left behind.
 import contextlib
 import ctypes
 import fcntl
-import http.client
-import json
 import os
-import queue
-import re
 import signal
 import subprocess
 import sys
 import tempfile
-import threading
 import time
-import urllib.error
-import urllib.request
-from collections.abc import Callable, Generator
-from dataclasses import dataclass, field
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
-from pydantic import TypeAdapter, ValidationError
-
 import smoke
-from oversight_contracts.commands import AgentCreated, GraphResponse
-from oversight_contracts.events import ServerEvent
+from demo_check_io import (
+    DECIDE_DEADLINE as DECIDE_DEADLINE,
+)
+from demo_check_io import (
+    OVERALL_DEADLINE as OVERALL_DEADLINE,
+)
+from demo_check_io import (
+    OVERALL_MARGIN as OVERALL_MARGIN,
+)
+from demo_check_io import (
+    PER_RUN_DEADLINE as PER_RUN_DEADLINE,
+)
+from demo_check_io import (
+    PROPOSE_DEADLINE as PROPOSE_DEADLINE,
+)
+from demo_check_io import (
+    REQUEST_TIMEOUT as REQUEST_TIMEOUT,
+)
+from demo_check_io import (
+    REQUESTS_PER_RUN as REQUESTS_PER_RUN,
+)
+from demo_check_io import (
+    RUNS as RUNS,
+)
+from demo_check_io import (
+    START_AGENT_DEADLINE as START_AGENT_DEADLINE,
+)
+from demo_check_io import (
+    START_DEADLINE as START_DEADLINE,
+)
+from demo_check_io import (
+    STOP_DEADLINE as STOP_DEADLINE,
+)
+from demo_check_io import (
+    EventStream as EventStream,
+)
+from demo_check_io import (
+    OverallClock as OverallClock,
+)
+from demo_check_io import (
+    Reply as Reply,
+)
+from demo_check_io import (
+    asset_refs as asset_refs,
+)
+from demo_check_io import (
+    expect as expect,
+)
+from demo_check_io import (
+    request as request,
+)
+from demo_check_phases import BUDGET_USD, SCRIPTS, check_level2
+from demo_check_phases import graph_of as graph_of
+from demo_check_phases import start_agent as start_agent
+from oversight_contracts.commands import GraphResponse
 
 REPO_ROOT = smoke.REPO_ROOT
 DIST = REPO_ROOT / "frontend" / "dist"
-FAKE_TASK = json.loads((REPO_ROOT / smoke.FAKE_SCRIPT).read_text(encoding="utf-8"))["task"]
-RUNS = 3
-REQUEST_TIMEOUT = 10.0  # seconds one HTTP request may take
-START_DEADLINE = 30.0  # seconds /health and /graph have to answer within
-# POST /agents answers only once the demo venv is built, which the first run does: up to the
-# server's own bounds for it (a 60 s probe, 120 s to create the venv, 300 s to install pytest).
-START_AGENT_DEADLINE = 480.0
-PROPOSE_DEADLINE = 240.0  # the agent's run: from the answer to POST /agents to change.proposed
-DECIDE_DEADLINE = 60.0  # approve to change.resolved and graph.delta
-STOP_DEADLINE = 20.0  # seconds the server gets after SIGTERM before SIGKILL
-# Plain requests in one run (GET /, its assets, the fallback, an API 404, GET /graph, POST
-# approve, plus headroom for more assets), each allowed REQUEST_TIMEOUT.
-REQUESTS_PER_RUN = 10
-OVERALL_MARGIN = 60.0  # slack over the worst-case sum, for process start and cleanup
-# Worst case: every phase in every run takes its full deadline. START_AGENT_DEADLINE (the cold
-# 480 s venv build, once in practice but allowed per run here) and PROPOSE_DEADLINE drive it.
-PER_RUN_DEADLINE = (
-    2 * START_DEADLINE
-    + START_AGENT_DEADLINE
-    + PROPOSE_DEADLINE
-    + 2 * DECIDE_DEADLINE
-    + 2 * STOP_DEADLINE  # SIGTERM wait, then the SIGKILL wait in smoke.stop_child
-    + REQUESTS_PER_RUN * REQUEST_TIMEOUT
-)
-OVERALL_DEADLINE = RUNS * PER_RUN_DEADLINE + OVERALL_MARGIN
-GRACEFUL_EXITS = (0, -signal.SIGTERM)  # uvicorn ends a SIGTERM stop by raising the signal again
-STREAM_IDLE = 120.0  # seconds a read on /events may wait: the server pings every 15
 PR_SET_PDEATHSIG = 1  # linux/prctl.h
 PR_SET_CHILD_SUBREAPER = 36  # linux/prctl.h
-ASSET = re.compile(r'(?:src|href)="(/assets/[^"]+)"')
-EVENTS: TypeAdapter[Any] = TypeAdapter(ServerEvent)
-
-
-@dataclass
-class OverallClock:
-    """The check's own overall deadline, from OVERALL_DEADLINE. `phase` names the step in
-    progress, so in a normal failure passing the deadline fails naming that step. Best effort
-    only: the hard bound is the Makefile's outer timeout (see the module docstring)."""
-
-    started: float = field(default_factory=time.monotonic)
-    deadline_s: float = OVERALL_DEADLINE
-    phase: str = "startup"
-
-    def check(self, now: float | None = None) -> None:
-        elapsed = (time.monotonic() if now is None else now) - self.started
-        if elapsed > self.deadline_s:
-            raise smoke.SmokeError(
-                f"overall deadline {self.deadline_s:g} s exceeded during {self.phase} "
-                f"after {elapsed:.0f} s"
-            )
-
-    def remaining(self, now: float | None = None) -> float:
-        return self.deadline_s - ((time.monotonic() if now is None else now) - self.started)
-
-    def bounded(self, timeout_s: float) -> float:
-        """A wait inside this phase may take the smaller of its own timeout and what the
-        overall deadline has left; an expired overall deadline fails here, naming the phase."""
-        self.check()
-        return min(timeout_s, self.remaining())
-
-    def set_phase(self, phase: str) -> None:
-        self.check()  # before renaming: an expiry belongs to the phase that ran out
-        self.phase = phase
-
-
-@dataclass(frozen=True)
-class Reply:
-    status: int
-    headers: dict[str, str]
-    body: bytes
-
-    @property
-    def text(self) -> str:
-        return self.body.decode("utf-8", errors="replace")
-
-
-def request(
-    base: str,
-    path: str,
-    *,
-    post: object | None = None,
-    timeout: float = REQUEST_TIMEOUT,
-    clock: OverallClock | None = None,
-) -> Reply:
-    """GET, or POST with a JSON body when `post` is given. An error status is a reply, not an
-    exception; no answer at all within `timeout` seconds is SmokeError. The timeout bounds the
-    reply in total, not just idleness between bytes, and never outlives `clock`."""
-    method = "GET" if post is None else "POST"
-    data = None if post is None else json.dumps(post).encode("utf-8")
-    headers = {} if data is None else {"Content-Type": "application/json"}
-    call = urllib.request.Request(base + path, data=data, headers=headers, method=method)
-    timeout = timeout if clock is None else clock.bounded(timeout)
-    deadline = time.monotonic() + timeout
-    try:
-        with urllib.request.urlopen(call, timeout=timeout) as response:
-            body = _read_body(response, deadline, clock, method, path, timeout)
-            return Reply(response.status, _lower(response.headers.items()), body)
-    except urllib.error.HTTPError as error:
-        with error:
-            try:
-                body = _read_body(error, deadline, clock, method, path, timeout)
-            except OSError as read_error:
-                if clock is not None:
-                    clock.check()
-                raise smoke.SmokeError(
-                    f"{method} {path} got no answer: {read_error}"
-                ) from read_error
-            return Reply(error.code, _lower(error.headers.items()), body)
-    except smoke.SmokeError:
-        raise
-    except OSError as error:
-        if clock is not None:
-            clock.check()  # the overall deadline, not this phase's timeout, may have run out
-        raise smoke.SmokeError(f"{method} {path} got no answer: {error}") from error
-
-
-def _read_body(
-    stream: Any,
-    deadline: float,
-    clock: OverallClock | None,
-    method: str,
-    path: str,
-    timeout: float,
-) -> bytes:
-    """Read to EOF, checking `deadline` after every chunk: `urlopen`'s socket timeout alone
-    bounds only the gap between bytes, so a trickling reply would outlive it. Closing the
-    caller's `with` lets the socket go; no thread is left behind."""
-    read_chunk = getattr(stream, "read1", None)
-    if read_chunk is None:  # a stand-in with only read(): it answers at once or not at all
-        body: bytes = stream.read()
-        if time.monotonic() > deadline:
-            _overdue(clock, method, path, timeout)
-        return body
-    chunks: list[bytes] = []
-    while chunk := read_chunk(65536):
-        chunks.append(chunk)
-        if time.monotonic() > deadline:
-            _overdue(clock, method, path, timeout)
-    return b"".join(chunks)
-
-
-def _overdue(clock: OverallClock | None, method: str, path: str, timeout: float) -> None:
-    if clock is not None:
-        clock.check()  # raises, naming the phase, when the overall deadline was the binding one
-    raise smoke.SmokeError(f"{method} {path} did not finish within {timeout:g} s")
-
-
-def _lower(items: Any) -> dict[str, str]:
-    return {str(name).lower(): str(value) for name, value in items}
-
-
-def expect(reply: Reply, what: str, status: int = 200, **headers: str) -> Reply:
-    """The reply must have this status and these headers (`content_type` for Content-Type, an
-    exact match unless the value ends in `*`, a prefix)."""
-    if reply.status != status:
-        raise smoke.SmokeError(f"{what} answered {reply.status}, not {status}: {reply.text[:200]}")
-    for name, want in headers.items():
-        key = name.replace("_", "-")
-        got = reply.headers.get(key, "")
-        if not (got.startswith(want[:-1]) if want.endswith("*") else got == want):
-            raise smoke.SmokeError(f"{what} has {key}: {got!r}, not {want!r}")
-    return reply
-
-
-def asset_refs(html: str) -> list[str]:
-    """The `/assets/...` files an index.html names, in order, without repeats."""
-    return list(dict.fromkeys(ASSET.findall(html)))
+GRACEFUL_EXITS = (0, -signal.SIGTERM)
 
 
 def check_ui(base: str, clock: OverallClock | None = None) -> None:
@@ -266,84 +151,6 @@ def check_ui(base: str, clock: OverallClock | None = None) -> None:
     )
     if b"<!doctype" in unknown.body.lower():
         raise smoke.SmokeError("an unknown API path was answered with index.html")
-
-
-class EventStream:
-    """GET /events on a thread of its own, each envelope validated against `ServerEvent`.
-
-    A read that times out poisons a socket's file object, so the waiting is done on a queue with a
-    deadline, and the thread only reads. `seen` is every event so far, from seq 1.
-    """
-
-    def __init__(self, base: str, clock: OverallClock | None = None) -> None:
-        host, _, port = base.removeprefix("http://").partition(":")
-        self._clock = clock
-        opened = STREAM_IDLE if clock is None else clock.bounded(STREAM_IDLE)
-        self._connection = http.client.HTTPConnection(host, int(port), timeout=opened)
-        self._queue: queue.Queue[Any] = queue.Queue()
-        self.seen: list[Any] = []
-        try:
-            self._connection.request("GET", "/events", headers={"Accept": "text/event-stream"})
-            self._response = self._connection.getresponse()
-        except (OSError, http.client.HTTPException) as error:
-            if clock is not None:
-                clock.check()
-            raise smoke.SmokeError(f"GET /events got no answer: {error}") from error
-        if clock is not None:
-            clock.check()
-        if self._response.status != 200:
-            raise smoke.SmokeError(f"GET /events answered {self._response.status}, not 200")
-        threading.Thread(target=self._pump, daemon=True).start()
-
-    def _pump(self) -> None:
-        data: list[str] = []
-        try:
-            for raw in self._response:
-                line = raw.decode("utf-8").rstrip("\r\n")
-                if line.startswith("data:"):
-                    data.append(line.removeprefix("data:").removeprefix(" "))
-                elif not line and data:
-                    self._queue.put(json.loads("\n".join(data)))
-                    data = []
-        except Exception as error:  # a thread's end: whatever broke the stream goes to the waiter
-            self._queue.put(error)
-        self._queue.put(None)  # the stream ended
-
-    def wait(self, match: Callable[[Any], bool], deadline_s: float, what: str) -> Any:
-        """The first event `match` accepts, among those already seen and then those that arrive,
-        within the deadline, and within the overall deadline when this stream has a clock. An
-        `error` event, or the stream ending, ends the wait at once."""
-        clock = self._clock
-        end = time.monotonic() + (deadline_s if clock is None else clock.bounded(deadline_s))
-        index = 0
-        while True:
-            while index < len(self.seen):
-                event = self.seen[index]
-                index += 1
-                if match(event):
-                    return event
-            try:
-                item = self._queue.get(timeout=max(end - time.monotonic(), 0.0))
-            except queue.Empty:
-                if clock is not None:
-                    clock.check()  # raises, naming the phase, if the overall deadline ran out
-                raise smoke.SmokeError(f"no {what} on /events within {deadline_s:g} s") from None
-            if item is None or isinstance(item, Exception):
-                raise smoke.SmokeError(f"/events ended before {what}: {item or 'closed'}")
-            try:
-                event = EVENTS.validate_python(item)
-            except ValidationError as error:
-                raise smoke.SmokeError(
-                    f"an event does not validate: {error.errors()[0]}"
-                ) from error
-            self.seen.append(event)
-            if event.type == "error":
-                raise smoke.SmokeError(
-                    f"an error event came before {what}: {event.payload.message}"
-                )
-
-    def close(self) -> None:
-        self._connection.close()
 
 
 def proc_table() -> dict[int, tuple[str, int, int, int]]:
@@ -421,20 +228,15 @@ def lock_is_free(runtime_dir: Path) -> bool:
 def server_env(port: int, runtime_dir: Path) -> dict[str, str]:
     """The smoke test's child environment, on the fake model, with the provider keys set to empty:
     an empty variable beats a value in .env, so no key reaches the child from anywhere."""
-    return smoke.child_env(port, runtime_dir) | {"META_API_KEY": "", "BASETEN_API_KEY": ""}
-
-
-def start_agent(base: str, clock: OverallClock | None = None) -> AgentCreated:
-    """POST /agents with the fake script's task. The server answers only after the demo venv is
-    built, which the first run waits for, so the request has START_AGENT_DEADLINE."""
-    reply = expect(
-        request(
-            base, "/agents", post={"task": FAKE_TASK}, timeout=START_AGENT_DEADLINE, clock=clock
-        ),
-        "POST /agents",
-        201,
-    )
-    return AgentCreated.model_validate(json.loads(reply.body))
+    return smoke.child_env(port, runtime_dir) | {
+        "META_API_KEY": "",
+        "BASETEN_API_KEY": "",
+        "OVERSIGHT_AGENT_MODEL": "fake",
+        "OVERSIGHT_AGENT_MODEL_B": "fake",
+        "OVERSIGHT_FAKE_SCRIPT": SCRIPTS["A"],
+        "OVERSIGHT_FAKE_SCRIPT_B": SCRIPTS["B"],
+        "OVERSIGHT_BUDGET_USD": str(BUDGET_USD),
+    }
 
 
 def _die_with_parent(expected_parent: int) -> None:
@@ -484,23 +286,10 @@ def stop_server(child: subprocess.Popen[Any], clock: OverallClock | None = None)
             child.wait(timeout=max(end - time.monotonic(), 0.0))
 
 
-def graph_of(base: str, clock: OverallClock | None = None) -> GraphResponse:
-    timeout = REQUEST_TIMEOUT if clock is None else clock.bounded(REQUEST_TIMEOUT)
-    status, body = smoke.fetch_json(f"{base}/graph", time.monotonic() + timeout)
-    if status != 200:
-        if clock is not None:
-            clock.check()
-        raise smoke.SmokeError(f"GET /graph answered {status}, not 200")
-    try:
-        return GraphResponse.model_validate(body)
-    except ValidationError as error:
-        raise smoke.SmokeError(f"/graph does not validate: {error.errors()[0]['msg']}") from error
-
-
 def serve_and_decide(
-    base: str, first: GraphResponse | None, clock: OverallClock, run: int
+    base: str, first: GraphResponse | None, clock: OverallClock, run: int, runtime_dir: Path
 ) -> GraphResponse:
-    """Steps 1 to 5 against a server that is up: the UI, the clean graph, one approved change."""
+    """The served UI, clean initial graph and all implemented level 2 API phases."""
     clock.set_phase(f"run {run}: wait for /graph")
     try:
         smoke.wait_for_graph(base, clock.bounded(START_DEADLINE))
@@ -521,32 +310,7 @@ def serve_and_decide(
         )
     stream = EventStream(base, clock=clock)
     try:
-        clock.set_phase(f"run {run}: POST /agents (venv build)")
-        mine = start_agent(base, clock).change_id
-        clock.set_phase(f"run {run}: wait for change.proposed")
-        stream.wait(
-            lambda e: e.type == "change.proposed" and e.payload.change_id == mine,
-            PROPOSE_DEADLINE,
-            "change.proposed",
-        )
-        clock.set_phase(f"run {run}: POST approve")
-        expect(request(base, f"/changes/{mine}/approve", post={}, clock=clock), "POST approve", 202)
-        clock.set_phase(f"run {run}: wait for change.resolved")
-        resolved = stream.wait(
-            lambda e: e.type == "change.resolved" and e.payload.change_id == mine,
-            DECIDE_DEADLINE,
-            "change.resolved",
-        )
-        if resolved.payload.merge != "merged":
-            raise smoke.SmokeError(f"the change was {resolved.payload.merge}, not merged")
-        clock.set_phase(f"run {run}: wait for graph.delta")
-        delta = stream.wait(
-            lambda e: e.type == "graph.delta" and e.payload.cause == "merge",
-            DECIDE_DEADLINE,
-            "graph.delta",
-        )
-        if delta.payload.from_version != graph.graph.version:
-            raise smoke.SmokeError("the merge's graph.delta does not start at the clean graph")
+        check_level2(base, graph, stream, clock, runtime_dir)
     finally:
         stream.close()
     return first if first is not None else graph
@@ -560,6 +324,7 @@ def run_once(
     clock: OverallClock,
 ) -> GraphResponse:
     """One full run; the first run's graph, which the later runs must match."""
+    started = time.monotonic()
     port = smoke.free_port()
     base = smoke.base_url(port)
     log = scratch / f"server-{number}.log"
@@ -572,7 +337,7 @@ def run_once(
         except smoke.SmokeError:
             clock.check()  # raises, naming this phase, if the overall deadline bound the wait
             raise
-        graph = serve_and_decide(base, first, clock, number)
+        graph = serve_and_decide(base, first, clock, number, runtime_dir)
     except smoke.SmokeError as error:
         raise smoke.SmokeError(f"run {number}: {error}\n{_tail(log)}") from error
     finally:
@@ -590,7 +355,7 @@ def run_once(
         raise smoke.SmokeError(f"run {number}: processes left after the server stopped: {left}")
     if not lock_is_free(runtime_dir):
         raise smoke.SmokeError(f"run {number}: the runtime lock is still held after the stop")
-    print(f"demo-check: run {number}: ok on port {port}")
+    print(f"demo-check: run {number}: ok in {time.monotonic() - started:.2f} s on port {port}")
     return graph
 
 

@@ -14,6 +14,8 @@ import type { GraphNode, GraphSnapshot, Point } from "../../contracts/generated/
 import { FIT_PADDING, nodeGeometry, rowWidthAt } from "../src/graph/geometry.ts";
 import { themes } from "../src/theme/index.ts";
 
+import { callColumns } from "./callColumns.ts";
+
 const px = (token: string) => Number.parseFloat(token);
 const geometry = nodeGeometry(themes.dark);
 /**
@@ -57,8 +59,8 @@ const SWEEPS = 4;
 
 /**
  * Pass 1: the modules' blocks, in columns. A module's column is how many calls separate it from a
- * module nobody calls; modules that only receive calls go in the last column, so the callees sit
- * together at the right. Within a column the order follows the height of connected modules, and
+ * module nobody calls. Cycles share a column; terminal modules retain their actual depth, so
+ * pricing, the demo hub, occupies the rightmost column. Within a column the order follows the height of connected modules, and
  * each column is centered on one line, so the graph reads left to right.
  */
 function arrange(modules: readonly Tree[], calls: readonly (readonly [string, string])[]): Block[] {
@@ -72,24 +74,8 @@ function arrange(modules: readonly Tree[], calls: readonly (readonly [string, st
     required(callees.get(a)).add(b);
     required(callers.get(b)).add(a);
   }
-  // Longest chain of calls into each module: one relaxation pass per module, each capped at the
-  // last possible column, so a cycle of calls ends the search instead of growing it.
-  const depth = new Map(ids.map((id) => [id, 0]));
-  for (let pass = 0; pass < ids.length; pass++)
-    for (const [a, b] of links)
-      depth.set(
-        b,
-        Math.max(required(depth.get(b)), Math.min(required(depth.get(a)) + 1, ids.length - 1)),
-      );
-  const last = Math.max(0, ...ids.map((id) => required(depth.get(id))));
-  const column = new Map(
-    ids.map((id) => [
-      id,
-      required(callees.get(id)).size === 0 && required(callers.get(id)).size > 0
-        ? last
-        : Math.min(required(depth.get(id)), last),
-    ]),
-  );
+  const column = callColumns(ids, links);
+  const last = Math.max(0, ...column.values());
   const tree = new Map(modules.map((m) => [m.id, m]));
   const columns = Array.from({ length: last + 1 }, (_, k) =>
     ids.filter((id) => column.get(id) === k).sort(compare),

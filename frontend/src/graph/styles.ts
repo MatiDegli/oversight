@@ -338,7 +338,7 @@ export function graphStyles(
     // The sketch draws calls only: a module's imports say which files it uses, not which functions
     // a change may reach, so they stay in the graph's data and off its picture.
     {
-      selector: "edge.imports",
+      selector: "edge.imports, edge.unroutable",
       style: { "target-arrow-shape": "chevron", display: "none" },
     },
     { selector: "edge.inherits", style: { "target-arrow-shape": "triangle-tee" } },

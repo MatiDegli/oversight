@@ -179,13 +179,13 @@ describe("review mode over the level 1 fixture", () => {
       "+2",
       "compute_price now caps",
       'aria-label="Diff of shop/pricing.py"',
-      "Comment (optional)",
+      "Comment (required for Request changes)",
       "If main moved since the agent started, the tests run again",
     ])
       expect(markup).toContain(text);
     expect(button(markup, "Approve and merge")).not.toContain('disabled=""');
     expect(button(markup, "Reject")).not.toContain('disabled=""');
-    expect(markup).not.toContain("Request changes");
+    expect(button(markup, "Request changes")).toContain('disabled=""');
     expect(markup).not.toContain("Live diff panel");
     expect(tag(markup, "Agents")).toContain("w-(--agents-rail-width)");
     expect(tag(markup, "Repository graph")).toBe(tag(render(20), "Repository graph"));

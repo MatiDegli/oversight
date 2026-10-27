@@ -1,73 +1,11 @@
-import { fileURLToPath } from "node:url";
-
-import { chromium, expect as browserExpect } from "@playwright/test";
-import type { Browser, Page } from "@playwright/test";
-import { createServer } from "vite";
-import type { ViteDevServer } from "vite";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { expect as browserExpect } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, it } from "vitest";
 
 import type {} from "./review.browser.fixture";
 import type { GraphProbeHost } from "../graph";
 import { assertReadableFrame } from "../../shots/framing";
-
-let server: ViteDevServer | undefined;
-let browser: Browser | undefined;
-let url: string;
-let html: string;
-beforeAll(async () => {
-  server = await createServer({
-    root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/review-vite-cache", import.meta.url)),
-    server: {
-      host: "127.0.0.1",
-      port: 0,
-      strictPort: false,
-      fs: { allow: [fileURLToPath(new URL("../../../", import.meta.url))] },
-    },
-  });
-  html = await server.transformIndexHtml(
-    "/",
-    '<!doctype html><html><body><script type="module">import "/src/theme/index.css"; import { reviewTest } from "/src/app/review.browser.fixture.tsx"; window.reviewTest = reviewTest;</script></body></html>',
-  );
-  await server.listen();
-  url = server.resolvedUrls?.local[0] ?? "";
-  browser = await chromium.launch();
-}, 60_000);
-afterAll(async () => {
-  await browser?.close();
-  await server?.close();
-});
-
-async function withPage(recorded: boolean, test: (page: Page) => Promise<void>) {
-  if (!browser) throw new Error("Browser was not started");
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-  page.setDefaultTimeout(15_000);
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  page.on("console", (message) => {
-    if (message.type() === "error" && !message.location().url.endsWith("/@vite/client"))
-      errors.push(message.text());
-  });
-  try {
-    // Only the frame is mounted: no transport, so nothing reaches a server.
-    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
-    await page.goto(url);
-    await page.waitForFunction(() => "reviewTest" in window);
-    await page.evaluate((flag) => {
-      window.reviewTest.mount(flag);
-    }, recorded);
-    await page.waitForFunction(
-      () =>
-        (document
-          .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-          ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
-    );
-    await test(page);
-    expect(errors).toEqual([]);
-  } finally {
-    await page.close();
-  }
-}
+import { panel, withPage } from "./review.browser.support";
 
 /** The graph's read-only probe: which nodes match a selector, and every node's layout position. */
 function probe(page: Page, selector: string) {
@@ -85,7 +23,12 @@ function camera(page: Page, id: string) {
     const element = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
     const view = element?.oversightGraph;
     if (!element || !view) throw new Error("The graph is not mounted");
+    const outside = [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
+      .filter((row) => row.textContent.includes("Out of view"))
+      .map((row) => row.querySelector("[title]")?.getAttribute("title") ?? "");
     return {
+      representative: view.representative(wanted),
+      representedOutOfView: [...new Set(outside.map((id) => view.representative(id)))],
       zoom: view.zoom(),
       leftInset: (() => {
         const card = document.querySelector('[aria-label="Possibly affected"]');
@@ -111,14 +54,12 @@ function camera(page: Page, id: string) {
       pan: view.pan(),
       animating: view.animating(),
       size: { width: element.clientWidth, height: element.clientHeight },
-      node: view.nodeCenters().find((center) => center.id === wanted),
-      focus: view.nodeBounds().filter((node) => node.id === wanted),
+      node: view.nodeCenters().find((center) => center.id === view.representative(wanted)),
+      focus: view.nodeBounds().filter((node) => node.id === view.representative(wanted)),
       cone: view.nodeBounds("node.cone"),
     };
   }, id);
 }
-
-const panel = (page: Page) => page.getByRole("complementary", { name: "Review panel" });
 
 it("the queue counter reframes each proposal while review stays open and keeps keyboard focus", async () => {
   await withPage(false, async (page) => {
@@ -135,7 +76,7 @@ it("the queue counter reframes each proposal while review stays open and keeps k
     await browserExpect.poll(async () => (await camera(page, target)).animating).toBe(false);
     const second = await camera(page, target);
     expect(second.pan).not.toEqual(first.pan);
-    assertReadableFrame(second.zoom, second);
+    assertReadableFrame(second.zoom, { ...second, outOfView: second.representedOutOfView });
     expect((await probe(page, ":childless")).positions).toEqual(positions);
     await browserExpect(queue).toBeFocused();
     await queue.click();
@@ -159,7 +100,12 @@ it("opens review only from the person's click, keeps the change and cone lit, di
     // Compound frames dim too, while each lit child keeps full opacity independently.
     const dimmed = new Set((await probe(page, "node.dimmed")).ids);
     const nodes = (await probe(page, "node")).ids;
-    const lit = await page.evaluate(() => window.reviewTest.lit);
+    const lit = await page.evaluate(() => {
+      const probe = document.querySelector<GraphProbeHost>(
+        '[aria-label="Repository graph"]',
+      )?.oversightGraph;
+      return [...new Set(window.reviewTest.lit.map((id) => probe?.representative(id) ?? id))];
+    });
     expect(nodes.filter((id) => !dimmed.has(id)).sort()).toEqual([...lit].sort());
     expect((await probe(page, "node.cone")).ids.sort()).toEqual(
       lit.filter((id) => id !== changed).sort(),
@@ -182,12 +128,13 @@ it("maximizes callers by distance at zoom 0.8, clears the card, and marks only c
     const review = await camera(page, changed);
     expect(review.leftInset).toBeCloseTo(304);
     expect(review.zoom).toBeCloseTo(0.8, 6);
-    assertReadableFrame(watch.zoom, review);
+    assertReadableFrame(watch.zoom, { ...review, outOfView: review.representedOutOfView });
     expect(review.outOfView.length).toBeGreaterThan(0);
-    expect(review.outOfView).not.toContain("shop.models:Product.price_for");
     // All excluded nodes remain lit and listed; the camera never removes cone entries.
     for (const id of review.outOfView) {
-      expect((await probe(page, "node.cone:not(.dimmed)")).ids).toContain(id);
+      expect((await probe(page, "node.cone:not(.dimmed)")).ids).toContain(
+        (await camera(page, id)).representative,
+      );
       await browserExpect(
         page
           .getByRole("region", { name: "Possibly affected", exact: true })
@@ -245,7 +192,9 @@ it("never approves from the keyboard in the comment box; the click waits for cha
     await page.getByRole("button", { name: /change ready for review/ }).click();
     const approve = panel(page).getByRole("button", { name: "Approve and merge" });
     const reject = panel(page).getByRole("button", { name: "Reject" });
-    const comment = panel(page).getByRole("textbox", { name: "Comment (optional)" });
+    const comment = panel(page).getByRole("textbox", {
+      name: "Comment (required for Request changes)",
+    });
     await comment.click();
     await page.keyboard.type("Looks right");
     for (const key of ["Control+Enter", "Enter", "Meta+Enter", "Shift+Enter", "Alt+Enter"])
@@ -259,9 +208,9 @@ it("never approves from the keyboard in the comment box; the click waits for cha
     await approve.click();
     await browserExpect(approve).toBeDisabled();
     await browserExpect(reject).toBeDisabled();
-    await browserExpect(panel(page).getByRole("status")).toHaveText(
-      "Approving: waiting for the merge result.",
-    );
+    await browserExpect(
+      panel(page).getByRole("region", { name: "Decision", exact: true }).getByRole("status"),
+    ).toHaveText("Approving: waiting for the merge result.");
     const sent = await page.evaluate(() => window.reviewTest.decisions);
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ changeId: "change-1", action: "approve" });
@@ -284,7 +233,9 @@ it("approves only on a pointer click: Tab then Enter or Space says so and sends 
   await withPage(false, async (page) => {
     await page.getByRole("button", { name: /change ready for review/ }).click();
     const approve = panel(page).getByRole("button", { name: "Approve and merge" });
-    const comment = panel(page).getByRole("textbox", { name: "Comment (optional)" });
+    const comment = panel(page).getByRole("textbox", {
+      name: "Comment (required for Request changes)",
+    });
     const caption = panel(page).getByText("Approve with a click: it merges into main");
     await comment.click();
     await page.keyboard.type("Looks right");
@@ -321,7 +272,9 @@ it("keeps Reject keyboard-operable", async () => {
   await withPage(false, async (page) => {
     await page.getByRole("button", { name: /change ready for review/ }).click();
     const reject = panel(page).getByRole("button", { name: "Reject" });
-    await panel(page).getByRole("textbox", { name: "Comment (optional)" }).click();
+    await panel(page)
+      .getByRole("textbox", { name: "Comment (required for Request changes)" })
+      .click();
     await page.keyboard.press("Tab");
     await page.keyboard.press("Tab");
     await browserExpect(reject).toBeFocused();
@@ -335,7 +288,9 @@ it("keeps Reject keyboard-operable", async () => {
 it("Escape in the comment box only leaves it; Escape elsewhere closes review", async () => {
   await withPage(false, async (page) => {
     await page.getByRole("button", { name: /change ready for review/ }).click();
-    const comment = panel(page).getByRole("textbox", { name: "Comment (optional)" });
+    const comment = panel(page).getByRole("textbox", {
+      name: "Comment (required for Request changes)",
+    });
     await comment.click();
     await page.keyboard.type("Looks right");
     await page.keyboard.press("Escape");

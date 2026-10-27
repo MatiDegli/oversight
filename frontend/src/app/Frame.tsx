@@ -14,7 +14,9 @@ import { selectAgentCard, selectAgents, selectLiveDiff } from "../state";
 import type { State } from "../state";
 import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import { TopBar } from "./TopBar";
-import { changeNodeIds, litNodeIds, panelOpen } from "./view";
+import { fieldInput } from "./fieldScope";
+import { graphScope } from "./graphScope";
+import { changeNodeIds, panelOpen } from "./view";
 import type { View } from "./view";
 
 type AgentState = AgentStatus["state"];
@@ -58,6 +60,7 @@ export interface FrameProps {
   onClosePanel: () => void;
   /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
+  onStopAgent?: (agentId: string) => Promise<unknown>;
   /** True for a proposed change: its card offers Review change instead of the live diff. */
   canReview?: (changeId: string) => boolean;
   onReview?: (changeId: string) => void;
@@ -100,6 +103,7 @@ function AgentsPanel({
   canOpenChange,
   onOpenChange,
   onStartAgent,
+  onStopAgent,
   canReview,
   onReview,
   replayOf,
@@ -108,6 +112,7 @@ function AgentsPanel({
   | "state"
   | "canOpenChange"
   | "onOpenChange"
+  | "onStopAgent"
   | "onStartAgent"
   | "canReview"
   | "onReview"
@@ -138,6 +143,7 @@ function AgentsPanel({
             <AgentCard
               key={data.agent.agent_id}
               data={data}
+              onStop={onStopAgent}
               onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
               onReview={review ? onReview : undefined}
             />
@@ -250,9 +256,9 @@ export function Frame(props: FrameProps) {
   const { state, view, onNodeTap, canOpenChange, onOpenChange, onClosePanel, notice } = props;
   const open = panelOpen(view);
   // The cone and the change stay lit until the decision; events never open review themselves.
-  const reviewed = view.review === null ? undefined : state.changes[view.review];
-  const litIds = useMemo(() => litNodeIds(reviewed), [reviewed]);
-  const cone = litIds === null ? null : (reviewed?.proposal?.impact ?? null);
+  const { cone, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
+  // The dot field's light follows the same state and the same view, so it never needs an event.
+  const field = useMemo(() => fieldInput(state, view, liveCone), [state, view, liveCone]);
   // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
   const shown = view.review ?? view.diff?.changeId ?? null;
   const shownChange = shown === null ? undefined : state.changes[shown];
@@ -260,6 +266,7 @@ export function Frame(props: FrameProps) {
   const frameKey = view.review === null ? shown : `review:${view.review}`;
   const [framing, setFraming] = useState<{ key: string | null; outOfView: ReadonlySet<string> }>();
   const coneCardRef = useRef<HTMLDivElement>(null);
+  const startAreaRef = useRef<HTMLDivElement>(null);
   const graphApi = useRef<GraphApi | null>(null);
   const onFramed = useCallback(
     (result: Framing | null) => {
@@ -278,6 +285,7 @@ export function Frame(props: FrameProps) {
             state={state}
             changeId={view.review}
             attempt={props.attempts?.[view.review]}
+            files={props.files}
             onDecide={props.onDecide}
             replayOf={props.replayOf}
             onClose={onClosePanel}
@@ -300,14 +308,17 @@ export function Frame(props: FrameProps) {
             litIds={litIds}
             frameIds={frameIds}
             cone={cone}
+            liveCone={liveCone}
             frameKey={frameKey}
             onFramed={onFramed}
             coneCardRef={coneCardRef}
             apiRef={graphApi}
+            startAreaRef={startAreaRef}
+            field={field}
           />
           {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
               review) top left, the legend bottom left, the zoom controls bottom right. */}
-          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col justify-between gap-(--spacing-md)">
+          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
             <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
               {cone ? (
                 <div
@@ -318,7 +329,10 @@ export function Frame(props: FrameProps) {
                     cone={cone}
                     outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
                     onReveal={(id) => graphApi.current?.reveal(id)}
-                    nodes={[...(state.graph?.nodes ?? []), ...(reviewed?.graph.nodes_added ?? [])]}
+                    nodes={[
+                      ...(state.graph?.nodes ?? []),
+                      ...(shownChange?.graph.nodes_added ?? []),
+                    ]}
                   />
                 </div>
               ) : (
@@ -332,6 +346,8 @@ export function Frame(props: FrameProps) {
               )}
               {notice && <div className="pointer-events-auto text-muted">{notice}</div>}
             </div>
+            {/* The start camera uses the space between overlays, measured after fonts load. */}
+            <div ref={startAreaRef} className="min-h-0 flex-1" />
             <div className="flex items-end justify-between gap-(--spacing-lg)">
               <div className="pointer-events-auto min-w-0">
                 <Legend state={state} />
@@ -350,6 +366,7 @@ export function Frame(props: FrameProps) {
             canOpenChange={canOpenChange}
             onOpenChange={onOpenChange}
             onStartAgent={props.onStartAgent}
+            onStopAgent={props.onStopAgent}
             canReview={props.canReview}
             onReview={props.onReview}
             replayOf={props.replayOf}

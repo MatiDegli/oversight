@@ -180,21 +180,24 @@ def write_file(
     `tmp_dir`, then `os.replace` swaps it in, so a reader never sees half a file.
     """
     data = content.encode("utf-8")
-    _make_parents(root, path)
-    target = resolve_in(root, path)
     mode = FILE_MODE
     current_hash: str | None = None
     try:
+        target = resolve_in(root, path)
         info = os.lstat(target)
     except FileNotFoundError:
         pass
+    except NotADirectoryError:
+        raise _refuse(path, "a parent is not a directory") from None
     else:
         if not stat.S_ISREG(info.st_mode):
             raise _refuse(path, "not a regular file")
         mode = stat.S_IMODE(info.st_mode)
         current_hash = content_hash(_read_bytes(root, path))
     if current_hash != expected_hash:
-        raise StaleFile(f"{path} changed since it was read" if current_hash else f"{path} exists")
+        message = "changed since it was read" if current_hash is not None else "no longer exists"
+        raise StaleFile(f"{path} {message}")
+    _make_parents(root, path)
     tmp = tmp_dir / f".write-{uuid.uuid4().hex}"
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:

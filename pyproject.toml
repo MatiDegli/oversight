@@ -173,3 +173,10 @@ source_modules = [
     "oversight.workspace",
 ]
 forbidden_modules = ["fastapi", "starlette"]
+
+[[tool.importlinter.contracts]]
+id = "changes-no-facade-backedge"
+name = "Changes helpers never import the manager, including typing imports"
+type = "forbidden"
+source_modules = ["oversight.changes.**"]
+forbidden_modules = ["oversight.changes._manager"]

@@ -1,6 +1,8 @@
 import cytoscape from "cytoscape";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { crosses } from "./orthogonal";
+
 import { themes } from "../theme";
 
 import { applyRoutes, routeEdges, tuningFrom } from "./routes";
@@ -86,95 +88,94 @@ function route(edges: [string, string, string][], list = boxes) {
 }
 
 describe("routeEdges", () => {
-  it("leaves a caller's right border and enters its callee's left border, through the gutter", () => {
-    const { line, from, to } = route([["e", "a:f", "b:h"]])("e");
-    expect(orthogonal(line)).toBe(true);
-    expect(line[0]?.x).toBe(from.x2);
-    expect(line.at(-1)?.x).toBe(to.x1);
-    // The vertical run sits in the gap between the two frames, not over either.
-    const lane = line[1]?.x ?? 0;
-    expect(lane).toBeGreaterThan(a.x2);
-    expect(lane).toBeLessThan(b.x1);
+  it("leaves right and enters left on forward, back, internal and stacked calls", () => {
+    const c1 = row("c:k", 27, 400, "c");
+    const c = frame("c", [c1]);
+    for (const [source, target] of [
+      ["a:f", "b:h"],
+      ["b:h", "a:f"],
+      ["a:g", "a:f"],
+      ["a:f", "c:k"],
+    ] as const) {
+      const { line, from, to } = route([["e", source, target]], [...boxes, c, c1])("e");
+      expect(orthogonal(line)).toBe(true);
+      expect(line[0]?.x).toBe(from.x2);
+      expect(line[1]?.x).toBeGreaterThan(from.x2);
+      expect(line.at(-1)?.x).toBe(to.x1);
+      expect(line.at(-2)?.x).toBeLessThan(to.x1);
+      // Apart from the endpoint taps, even the endpoint frames are obstacles.
+      for (let i = 1; i < line.length - 2; i++)
+        for (const obstacle of [a, b, c])
+          expect(
+            crosses(line[i] ?? { x: 0, y: 0 }, line[i + 1] ?? { x: 0, y: 0 }, obstacle),
+            `${source}>${target} crosses ${obstacle.id}`,
+          ).toBe(false);
+    }
   });
 
-  it("draws a call between two rows at one height as one straight line", () => {
-    const level = row("b:level", 500, 100, "b");
-    const { found, line } = route(
-      [["e", "a:f", "b:level"]],
-      [a, a1, a2, frame("b", [level]), level],
-    )("e");
-    expect(found.w).toEqual([]);
-    expect(line).toHaveLength(2);
-    expect(line[0]?.y).toBe(line[1]?.y);
+  it("merges eight callers into one target trunk and one target port", () => {
+    const callers = Array.from({ length: 8 }, (_, i) =>
+      row(`a:${String(i)}`, 27, 100 + i * 57, "a"),
+    );
+    const calls = route(
+      callers.map((r, i) => [String(i), r.id, "b:h"]),
+      [frame("a", callers), ...callers, b, b1, b2],
+    );
+    const lines = callers.map((_, i) => calls(String(i)).line);
+    expect(new Set(lines.map((line) => line.at(-2)?.x.toFixed(6))).size).toBe(1);
+    expect(new Set(lines.map((line) => line.at(-1)?.y)).size).toBe(1);
+    expect(lines[0]?.at(-2)?.x).toBeLessThan(b.x1);
+    expect(lines[0]?.at(-2)?.x).toBeGreaterThan(a.x2);
+    for (const line of lines) expect(orthogonal(line)).toBe(true);
   });
 
-  it("leaves a callee at the left by the caller's left border and enters it at the right", () => {
-    const { line, from, to } = route([["e", "b:h", "a:f"]])("e");
-    expect(orthogonal(line)).toBe(true);
-    expect(line[0]?.x).toBe(from.x1);
-    expect(line.at(-1)?.x).toBe(to.x2);
-    const lane = line[1]?.x ?? 0;
-    expect(lane).toBeGreaterThan(a.x2);
-    expect(lane).toBeLessThan(b.x1);
-  });
-
-  it("gives each call into one gutter its own lane, at least the lane gap apart", () => {
+  it("assigns different targets their own trunks", () => {
     const calls = route([
       ["one", "a:f", "b:h"],
       ["two", "a:g", "b:i"],
       ["three", "a:g", "b:h"],
     ]);
-    const lanes = ["one", "two", "three"].map((id) => calls(id).line[1]?.x ?? 0);
-    expect(new Set(lanes).size).toBe(3);
-    const sorted = [...lanes].sort((p, q) => p - q);
-    for (const [i, lane] of sorted.entries())
-      if (i > 0) expect(lane - (sorted[i - 1] ?? 0)).toBeGreaterThanOrEqual(tuning.laneGap - 1e-6);
-    for (const id of ["one", "two", "three"]) expect(orthogonal(calls(id).line)).toBe(true);
+    expect(calls("one").line.at(-2)?.x).toBeCloseTo(calls("three").line.at(-2)?.x ?? 0);
+    expect(
+      Math.abs((calls("one").line.at(-2)?.x ?? 0) - (calls("two").line.at(-2)?.x ?? 0)),
+    ).toBeGreaterThanOrEqual(tuning.laneGap - 1e-6);
   });
 
-  it("spreads the calls that meet one side of a row along its height, inside its border", () => {
-    const calls = route([
-      ["one", "a:f", "b:h"],
-      ["two", "a:g", "b:h"],
-      ["three", "b:i", "b:h"],
-    ]);
-    // Into b:h's left side: the first two from the left; the loop from b:i also joins at the left.
-    const ys = ["one", "two", "three"].map((id) => calls(id).line.at(-1)?.y ?? 0);
-    expect(new Set(ys).size).toBe(3);
-    for (const y of ys) {
-      expect(y).toBeGreaterThan(b1.y1);
-      expect(y).toBeLessThan(b1.y2);
-    }
-  });
-
-  it("loops a call between two rows of one module through a lane at the left, inside its frame", () => {
-    const { line, from, to } = route([["e", "a:g", "a:f"]])("e");
+  it("detours around a frame in a skipped column instead of cutting its header or interior", () => {
+    const far = row("far:h", 1000, 300, "far");
+    const obstacle = { ...b, y1: 0, y2: 500 };
+    const { line } = route(
+      [["e", "a:f", "far:h"]],
+      [a, a1, a2, obstacle, frame("far", [far]), far],
+    )("e");
     expect(orthogonal(line)).toBe(true);
-    expect(line[0]?.x).toBe(from.x1);
-    expect(line.at(-1)?.x).toBe(to.x1);
-    const lane = line[1]?.x ?? 0;
-    expect(lane).toBeGreaterThan(a.x1);
-    expect(lane).toBeLessThan(a1.x1);
+    for (let i = 0; i < line.length - 1; i++)
+      expect(crosses(line[i] ?? { x: 0, y: 0 }, line[i + 1] ?? { x: 0, y: 0 }, obstacle)).toBe(
+        false,
+      );
   });
 
-  it("runs a call between two modules in one column through a lane at the left of both", () => {
-    const c1 = row("c:k", 27, 400, "c");
-    const c = frame("c", [c1]);
-    const { line } = route([["e", "a:f", "c:k"]], [a, a1, a2, c, c1])("e");
-    expect(orthogonal(line)).toBe(true);
-    expect(line[1]?.x).toBeLessThan(Math.min(a.x1, c.x1));
+  it("is independent of edge input order", () => {
+    const edges = [
+      { id: "one", source: "a:f", target: "b:h" },
+      { id: "two", source: "a:g", target: "b:i" },
+    ];
+    const one = routeEdges(boxes, edges, tuning);
+    const two = routeEdges(boxes, [...edges].reverse(), tuning);
+    for (const [id, value] of one) expect(two.get(id)).toEqual(value);
   });
 
   it("routes nothing for a self call or an end it cannot find", () => {
-    const routes = routeEdges(
-      boxes,
-      [
-        { id: "self", source: "a:f", target: "a:f" },
-        { id: "ghost", source: "a:f", target: "nowhere" },
-      ],
-      tuning,
-    );
-    expect(routes.size).toBe(0);
+    expect(
+      routeEdges(
+        boxes,
+        [
+          { id: "self", source: "a:f", target: "a:f" },
+          { id: "ghost", source: "a:f", target: "nowhere" },
+        ],
+        tuning,
+      ).size,
+    ).toBe(0);
   });
 });
 

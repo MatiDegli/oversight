@@ -5,10 +5,11 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
+import type { ServerEvent } from "@contracts";
 import type { Page } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
 
-import { assertReadableFrame } from "./framing.ts";
+import { assertPanelFrame } from "./framing.ts";
 
 export interface Scene {
   name: string;
@@ -32,7 +33,8 @@ export interface Theme {
 /**
  * Clicks the center of the first node with a pending change, as the person would, waits for the
  * left panel (`panel`, its aria-label) to show the diff's inserted lines and for the camera to
- * settle, then checks the change and cone framing against watch zoom and the 12px label floor.
+ * settle, then checks the change framing (with the cone only in review) against watch zoom and
+ * the 12px label floor.
  * Cytoscape draws on a canvas, so the node's place on screen comes from the graph element's own
  * probe (src/graph/probe.ts), which the app exposes for this. A proposed change opens review; one
  * still being edited opens the live diff.
@@ -86,9 +88,15 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
                   }
                 : undefined;
             })(),
-            outOfView: [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
-              .filter((row) => row.textContent.includes("Out of view"))
-              .map((row) => row.querySelector("[title]")?.getAttribute("title") ?? ""),
+            outOfView: [
+              ...new Set(
+                [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
+                  .filter((row) => row.textContent.includes("Out of view"))
+                  .map((row) =>
+                    view.representative(row.querySelector("[title]")?.getAttribute("title") ?? ""),
+                  ),
+              ),
+            ],
             pan: view.pan(),
             size: { width: host.clientWidth, height: host.clientHeight },
             focus: view.nodeBounds().filter((node) => node.id === nodeId),
@@ -103,7 +111,7 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
   if (panel === "Review panel") {
     assert(Math.abs(framed.zoom - 0.8) < 1e-6, "the demo cone must stay at the 12px floor");
   }
-  assertReadableFrame(zoomBefore, framed);
+  assertPanelFrame(zoomBefore, framed, panel === "Review panel" ? "review" : "live-diff");
 }
 
 export const scenes: readonly Scene[] = [
@@ -134,7 +142,43 @@ export const scenes: readonly Scene[] = [
   {
     name: "review",
     enabled: true,
-    prepare: (page) => clickChangedNode(page, "Review panel"),
+    prepare: async (page) => {
+      // The replay API has no worktrees. Read only the diff already present in this fixture.
+      const text = await readFile(
+        new URL("../../fixtures/events/handwritten-level1-proposed.jsonl", import.meta.url),
+        "utf8",
+      );
+      const updates = text
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as ServerEvent)
+        .filter((event) => event.type === "change.updated");
+      await page.route("**/files?*", (route) => {
+        const path = new URL(route.request().url()).searchParams.get("path");
+        const update = updates.findLast((event) => event.payload.file.path === path);
+        if (!update) return route.abort();
+        const content = update.payload.file.modified ?? "";
+        return route.fulfill({
+          json: {
+            path,
+            content,
+            agent_id: update.payload.agent_id,
+            hash: createHash("sha256").update(content).digest("hex"),
+          },
+        });
+      });
+      await clickChangedNode(page, "Review panel");
+      await page
+        .getByLabel("Editable review file")
+        .getByText("Edits go to the agent’s worktree")
+        .waitFor();
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector('[aria-label="Editable review file"]')
+            ?.getAttribute("data-state") === "clean",
+      );
+    },
   },
   {
     name: "live-diff",
@@ -172,6 +216,15 @@ export const scenes: readonly Scene[] = [
     // double; it is a capture of the file view, not a saved edit reconstructed from the log.
     prepare: async (page) => {
       const path = "shop/cart.py";
+      // The uncut start camera may leave Cart wholly outside the view. Reveal it as a person
+      // would before opening the file; a screenshot must not click an offscreen class row.
+      await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating() === false,
+      );
       const content = await readFile(new URL(`../../demo-repo/${path}`, import.meta.url), "utf8");
       await page.route("**/files?*", (route) =>
         route.fulfill({
@@ -183,6 +236,23 @@ export const scenes: readonly Scene[] = [
           },
         }),
       );
+      const folded = await page.evaluate(() => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        const row = host?.oversightGraph
+          ?.nodeCenters(".folded")
+          .find(({ id }) => id === "shop.cart:Cart");
+        const box = host?.getBoundingClientRect();
+        return row && box ? { x: box.left + row.x, y: box.top + row.y } : null;
+      });
+      if (folded) {
+        await page.mouse.click(folded.x, folded.y);
+        await page.waitForFunction(
+          () =>
+            document
+              .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+              ?.oversightGraph?.animating() === false,
+        );
+      }
       const point = await page.evaluate(() => {
         const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
         const node = host?.oversightGraph

@@ -99,6 +99,14 @@ def test_write_text_hash_rules_leave_no_temp_file(tree: Path, tmp_path: Path) ->
     assert list(tmp_dir.iterdir()) == []
 
 
+@pytest.mark.parametrize("path", ["missing.py", "a/b/c/missing.py"])
+def test_stale_missing_file_creates_no_directories(tree: Path, tmp_path: Path, path: str) -> None:
+    with pytest.raises(StaleFile, match=f"{path} no longer exists"):
+        write_file(tree, tmp_path / "tmp", path, "x = 2\n", content_hash(b"x = 1\n"))
+    assert list(tree.iterdir()) == []
+    assert list((tmp_path / "tmp").iterdir()) == []
+
+
 def test_write_text_keeps_the_mode_of_an_existing_file_and_hashes_bytes_on_disk(
     tree: Path, tmp_path: Path
 ) -> None:
