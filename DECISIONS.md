@@ -213,6 +213,17 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   draws calls, and with 36 functions the imports doubled the lines without saying what a change
   reaches. Cost of the whole: in review, at the 12px floor, only the nearest callers of the demo's
   hub fit beside the cone card; the rest are lit and listed as out of view.
+- **Answers on the graph at the sketch (maintainer, 2026-10-27):** edges at a lit node stay grey,
+  and only a change's own edges take the agent's color; imports stay hidden; a cone row that says
+  "Out of view" pans the camera to its node only when clicked (at the zoom it has, never on its
+  own, and the card then lists what is still out of view); the start view is the module of the hub
+  (pricing).
+- **Fit stops at the zoom range (2026-10-27):** a graph too wide for 20% is framed at 20%, centered,
+  and is not fitted below it, rather than letting Fit go below the range for its own framing and
+  restoring the limit afterwards. A wheel or button zoom that started below the range would have
+  jumped up to it on the first step, which reads as the opposite of the press. Every camera move
+  (Fit, review framing, growth in watch mode, a reveal) stops at the range's edge about the view's
+  middle and never changes the range itself. Cost: on a very wide graph Fit does not show it all.
 - **Visual parity round 1 (maintainer, 2026-10-27).** Nothing moves; each answer below is built.
   Edges draw under leaf nodes and quiet down (0.45) unless an agent is at them or the person
   selects a node; frame headers can still be crossed by an edge (a frame is one node, and its fill
