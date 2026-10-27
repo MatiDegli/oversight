@@ -264,7 +264,7 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   rerender(live);
   expect(frame).toHaveBeenLastCalledWith(cy, live.frameIds, false, {
     coneIds: undefined,
-    watchZoom: 0.5,
+
     restoreCamera: undefined,
   });
   // The narrowed live diff needed to zoom out. Review must retain the original watch zoom.
@@ -288,7 +288,7 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   rerender(review);
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, live.frameIds, false, {
     coneIds: ["billing:fee"],
-    watchZoom: 0.5,
+
     restoreCamera: undefined,
   });
   paint();
@@ -296,6 +296,8 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
     ...result,
     zoom: cy.zoom(),
     pan: cy.pan(),
+    // The live viewport report replaces the opening target's stale framed set too.
+    framed: new Set(),
     outOfView: new Set(["billing:changed", "billing:fee"]),
   });
   onFramed.mockClear();
@@ -309,7 +311,7 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   rerender({ panelOpen: false, frameKey: null });
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, [], false, {
     coneIds: undefined,
-    watchZoom: 0.5,
+
     restoreCamera: watchCamera,
   });
 });
@@ -348,7 +350,46 @@ it("restores the person's exact watch camera after opening and closing review", 
   expect(cy.pan()).toEqual(watch.pan);
 });
 
-it("reframes a second review at the saved watch zoom while the panel remains open", async () => {
+it.each([false, true])(
+  "mounting with a panel open respects reduced motion (%s) and restores the measured start camera",
+  async (reduced) => {
+    setLabel("Caller");
+    vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
+    const startAreaRef = {
+      current: {
+        getBoundingClientRect: () => ({ left: 24, top: 80, right: 876, bottom: 810 }),
+      } as HTMLDivElement,
+    };
+    const start = vi.spyOn(camera, "startCamera");
+    const frame = vi.spyOn(camera, "frameCamera").mockImplementation((cy) => {
+      cy.viewport({ zoom: 0.5, pan: { x: -100, y: -200 } });
+      return null;
+    });
+    const { settle } = mount({ panelOpen: true, frameIds: ["billing:fee"], startAreaRef });
+    await settle("resolved");
+    const cy = mocks.instances[0];
+    if (!cy) throw new Error("Graph was not created");
+    expect(frame).toHaveBeenCalledOnce();
+    expect(frame.mock.calls[0]?.[1]).toEqual(["billing:fee"]);
+    expect(frame.mock.calls[0]?.[2]).toBe(reduced);
+    // The initial overlay measurement must precede framing, rather than being skipped in a panel.
+    expect(start.mock.calls.at(-1)?.[1]).toEqual({ x1: 24, y1: 80, x2: 876, y2: 810 });
+    const openingPositions = cy.nodes().map((node) => ({ ...node.position() }));
+    // Compute the real start at that same measured area, independently of the saved ref.
+    camera.startCamera(cy, { x1: 24, y1: 80, x2: 876, y2: 810 });
+    const expected = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+    cy.viewport({ zoom: 0.6, pan: { x: -500, y: 300 } });
+    frame.mockClear();
+    rerender({ panelOpen: false, startAreaRef });
+    expect(frame).toHaveBeenCalledExactlyOnceWith(cy, [], reduced, {
+      coneIds: undefined,
+      restoreCamera: expected,
+    });
+    expect(cy.nodes().map((node) => ({ ...node.position() }))).toEqual(openingPositions);
+  },
+);
+
+it("reframes a second review while the panel remains open", async () => {
   setLabel("Caller");
   const { settle } = mount();
   await settle("resolved");
@@ -362,7 +403,7 @@ it("reframes a second review at the saved watch zoom while the panel remains ope
   rerender({ panelOpen: true, frameKey: "review:change-2", frameIds: ["second"] });
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, ["second"], false, {
     coneIds: undefined,
-    watchZoom: 0.9,
+
     restoreCamera: undefined,
   });
 });

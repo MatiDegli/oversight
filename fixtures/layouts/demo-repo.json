@@ -1,358 +1,358 @@
 {
   "shop": {
     "x": 163.0,
-    "y": 257.5
+    "y": 342.5
   },
   "shop.cart": {
     "x": 609.0,
-    "y": 539.0
+    "y": 286.0
   },
   "shop.cart:Cart": {
     "x": 614.0,
-    "y": 557.5
+    "y": 304.5
   },
   "shop.cart:Cart.__init__": {
     "x": 614.0,
-    "y": 374.0
+    "y": 121.0
   },
   "shop.cart:Cart.add": {
     "x": 614.0,
-    "y": 431.0
+    "y": 178.0
   },
   "shop.cart:Cart.describe": {
     "x": 614.0,
-    "y": 773.0
+    "y": 520.0
   },
   "shop.cart:Cart.lines": {
     "x": 614.0,
-    "y": 545.0
+    "y": 292.0
   },
   "shop.cart:Cart.quote_add": {
     "x": 614.0,
-    "y": 716.0
+    "y": 463.0
   },
   "shop.cart:Cart.remove": {
     "x": 614.0,
-    "y": 488.0
+    "y": 235.0
   },
   "shop.cart:Cart.subtotals": {
     "x": 614.0,
-    "y": 602.0
+    "y": 349.0
   },
   "shop.cart:Cart.total": {
     "x": 614.0,
-    "y": 659.0
+    "y": 406.0
   },
   "shop.inventory": {
-    "x": 1501.0,
-    "y": 780.0
+    "x": 609.0,
+    "y": 950.0
   },
   "shop.inventory:Inventory": {
-    "x": 1506.0,
-    "y": 867.5
+    "x": 614.0,
+    "y": 1037.5
   },
   "shop.inventory:Inventory.__init__": {
-    "x": 1506.0,
-    "y": 741.0
+    "x": 614.0,
+    "y": 911.0
   },
   "shop.inventory:Inventory.available": {
-    "x": 1506.0,
-    "y": 798.0
+    "x": 614.0,
+    "y": 968.0
   },
   "shop.inventory:Inventory.low_stock": {
-    "x": 1506.0,
-    "y": 1026.0
+    "x": 614.0,
+    "y": 1196.0
   },
   "shop.inventory:Inventory.release": {
-    "x": 1506.0,
-    "y": 969.0
+    "x": 614.0,
+    "y": 1139.0
   },
   "shop.inventory:Inventory.reserve": {
-    "x": 1506.0,
-    "y": 912.0
+    "x": 614.0,
+    "y": 1082.0
   },
   "shop.inventory:Inventory.restock": {
-    "x": 1506.0,
-    "y": 855.0
+    "x": 614.0,
+    "y": 1025.0
   },
   "shop.inventory:OutOfStock": {
-    "x": 1506.0,
-    "y": 571.0
+    "x": 614.0,
+    "y": 741.0
   },
   "shop.inventory:_check_quantity": {
-    "x": 1506.0,
-    "y": 640.0
+    "x": 614.0,
+    "y": 810.0
   },
   "shop.models": {
     "x": 1055.0,
-    "y": 539.0
+    "y": 624.0
   },
   "shop.models:Customer": {
     "x": 1060.0,
-    "y": 655.0
+    "y": 740.0
   },
   "shop.models:Customer.__init__": {
     "x": 1060.0,
-    "y": 557.0
+    "y": 642.0
   },
   "shop.models:Customer.discount_percent": {
     "x": 1060.0,
-    "y": 728.0
+    "y": 813.0
   },
   "shop.models:Customer.email": {
     "x": 1060.0,
-    "y": 614.0
+    "y": 699.0
   },
   "shop.models:Customer.email#2": {
     "x": 1060.0,
-    "y": 671.0
+    "y": 756.0
   },
   "shop.models:Customer.quote": {
     "x": 1060.0,
-    "y": 785.0
+    "y": 870.0
   },
   "shop.models:OrderLine": {
     "x": 1060.0,
-    "y": 444.0
+    "y": 529.0
   },
   "shop.models:PremiumCustomer": {
     "x": 1060.0,
-    "y": 882.0
+    "y": 967.0
   },
   "shop.models:PremiumCustomer.discount_percent": {
     "x": 1060.0,
-    "y": 898.0
+    "y": 983.0
   },
   "shop.models:Product": {
     "x": 1060.0,
-    "y": 318.5
+    "y": 403.5
   },
   "shop.models:Product.label": {
     "x": 1060.0,
-    "y": 306.0
+    "y": 391.0
   },
   "shop.models:Product.price_for": {
     "x": 1060.0,
-    "y": 363.0
+    "y": 448.0
   },
   "shop.models:format_cents": {
     "x": 1060.0,
-    "y": 205.0
+    "y": 290.0
   },
   "shop.orders": {
     "x": 163.0,
-    "y": 614.0
+    "y": 699.0
   },
   "shop.orders:Order": {
     "x": 168.0,
-    "y": 461.5
+    "y": 546.5
   },
   "shop.orders:_release_lines": {
     "x": 168.0,
-    "y": 587.5
+    "y": 672.5
   },
   "shop.orders:cancel_order": {
     "x": 168.0,
-    "y": 701.5
+    "y": 786.5
   },
   "shop.orders:order_total": {
     "x": 168.0,
-    "y": 530.5
+    "y": 615.5
   },
   "shop.orders:place_order": {
     "x": 168.0,
-    "y": 644.5
+    "y": 729.5
   },
   "shop.orders:reorder_quote": {
     "x": 168.0,
-    "y": 758.5
+    "y": 843.5
   },
   "shop.orders:revenue_by_category": {
     "x": 168.0,
-    "y": 815.5
+    "y": 900.5
   },
   "shop.pricing": {
     "x": 1501.0,
-    "y": 201.0
+    "y": 624.0
   },
   "shop.pricing:add_tax": {
     "x": 1506.0,
-    "y": 305.0
+    "y": 728.0
   },
   "shop.pricing:apply_coupon": {
     "x": 1506.0,
-    "y": 248.0
+    "y": 671.0
   },
   "shop.pricing:compute_price": {
     "x": 1506.0,
-    "y": 77.0
+    "y": 500.0
   },
   "shop.pricing:coupon_percent": {
     "x": 1506.0,
-    "y": 191.0
+    "y": 614.0
   },
   "shop.pricing:price_breaks": {
     "x": 1506.0,
-    "y": 134.0
+    "y": 557.0
   },
   "shop.pricing:shipping_cost": {
     "x": 1506.0,
-    "y": 362.0
+    "y": 785.0
   },
   "tests.conftest": {
     "x": 609.0,
-    "y": 2346.0
+    "y": 2516.0
   },
   "tests.conftest:customer": {
     "x": 614.0,
-    "y": 2364.5
+    "y": 2534.5
   },
   "tests.conftest:gadget": {
     "x": 614.0,
-    "y": 2307.5
+    "y": 2477.5
   },
   "tests.conftest:premium": {
     "x": 614.0,
-    "y": 2421.5
+    "y": 2591.5
   },
   "tests.conftest:stocked": {
     "x": 614.0,
-    "y": 2478.5
+    "y": 2648.5
   },
   "tests.conftest:widget": {
     "x": 614.0,
-    "y": 2250.5
+    "y": 2420.5
   },
   "tests.test_cart": {
     "x": 163.0,
-    "y": 1410.5
+    "y": 1580.5
   },
   "tests.test_cart:test_add_merges_lines_with_the_same_sku": {
     "x": 168.0,
-    "y": 1315.0
+    "y": 1485.0
   },
   "tests.test_cart:test_add_rejects_quantities_below_one": {
     "x": 168.0,
-    "y": 1372.0
+    "y": 1542.0
   },
   "tests.test_cart:test_quote_add_prices_the_extra_units_across_a_tier": {
     "x": 168.0,
-    "y": 1543.0
+    "y": 1713.0
   },
   "tests.test_cart:test_remove_drops_the_line_and_describe_lists_the_rest": {
     "x": 168.0,
-    "y": 1429.0
+    "y": 1599.0
   },
   "tests.test_cart:test_total_applies_the_bulk_discount": {
     "x": 168.0,
-    "y": 1486.0
+    "y": 1656.0
   },
   "tests.test_inventory": {
     "x": 163.0,
-    "y": 1835.5
+    "y": 2005.5
   },
   "tests.test_inventory:test_low_stock_lists_skus_at_or_below_the_threshold": {
     "x": 168.0,
-    "y": 1968.0
+    "y": 2138.0
   },
   "tests.test_inventory:test_release_returns_units_but_never_more_than_held": {
     "x": 168.0,
-    "y": 1854.0
+    "y": 2024.0
   },
   "tests.test_inventory:test_reserve_more_than_available_raises": {
     "x": 168.0,
-    "y": 1797.0
+    "y": 1967.0
   },
   "tests.test_inventory:test_reserve_reduces_available": {
     "x": 168.0,
-    "y": 1740.0
+    "y": 1910.0
   },
   "tests.test_inventory:test_restock_adds_units_and_rejects_non_positive_quantities": {
     "x": 168.0,
-    "y": 1911.0
+    "y": 2081.0
   },
   "tests.test_models": {
     "x": 163.0,
-    "y": 2232.0
+    "y": 2402.0
   },
   "tests.test_models:test_email_is_lowercased_and_the_setter_rejects_bad_addresses": {
     "x": 168.0,
-    "y": 2279.0
+    "y": 2449.0
   },
   "tests.test_models:test_format_cents": {
     "x": 168.0,
-    "y": 2165.0
+    "y": 2335.0
   },
   "tests.test_models:test_premium_customers_get_an_extra_discount": {
     "x": 168.0,
-    "y": 2336.0
+    "y": 2506.0
   },
   "tests.test_models:test_product_label_and_price": {
     "x": 168.0,
-    "y": 2222.0
+    "y": 2392.0
   },
   "tests.test_orders": {
     "x": 163.0,
-    "y": 2657.0
+    "y": 2827.0
   },
   "tests.test_orders:test_cancel_order_returns_the_stock": {
     "x": 168.0,
-    "y": 2704.0
+    "y": 2874.0
   },
   "tests.test_orders:test_cancelling_an_order_twice_keeps_other_orders_reserved": {
     "x": 168.0,
-    "y": 2761.0
+    "y": 2931.0
   },
   "tests.test_orders:test_place_order_prices_and_reserves": {
     "x": 168.0,
-    "y": 2533.0
+    "y": 2703.0
   },
   "tests.test_orders:test_place_order_releases_earlier_lines_when_stock_runs_out": {
     "x": 168.0,
-    "y": 2647.0
+    "y": 2817.0
   },
   "tests.test_orders:test_place_order_with_premium_discount_and_coupon": {
     "x": 168.0,
-    "y": 2590.0
+    "y": 2760.0
   },
   "tests.test_orders:test_reorder_quote_and_revenue_by_category": {
     "x": 168.0,
-    "y": 2818.0
+    "y": 2988.0
   },
   "tests.test_pricing": {
     "x": 163.0,
-    "y": 3196.0
+    "y": 3366.0
   },
   "tests.test_pricing:test_coupons_ignore_case_and_unknown_codes": {
     "x": 168.0,
-    "y": 3357.0
+    "y": 3527.0
   },
   "tests.test_pricing:test_extra_percent_stacks_with_the_tier": {
     "x": 168.0,
-    "y": 3243.0
+    "y": 3413.0
   },
   "tests.test_pricing:test_forty_nine_units_still_get_the_first_tier": {
     "x": 168.0,
-    "y": 3129.0
+    "y": 3299.0
   },
   "tests.test_pricing:test_price_breaks_lists_sample_quantities": {
     "x": 168.0,
-    "y": 3300.0
+    "y": 3470.0
   },
   "tests.test_pricing:test_sixty_units_get_the_second_tier": {
     "x": 168.0,
-    "y": 3186.0
+    "y": 3356.0
   },
   "tests.test_pricing:test_small_quantities_have_no_discount": {
     "x": 168.0,
-    "y": 3015.0
+    "y": 3185.0
   },
   "tests.test_pricing:test_tax_is_added_and_shipping_is_free_from_the_threshold": {
     "x": 168.0,
-    "y": 3414.0
+    "y": 3584.0
   },
   "tests.test_pricing:test_twenty_units_get_the_first_tier": {
     "x": 168.0,
-    "y": 3072.0
+    "y": 3242.0
   }
 }

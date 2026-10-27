@@ -790,6 +790,11 @@ class LiveRun:
     async def save_file(self, request: SaveFile) -> FileSaved:
         if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving
             raise ApiError("wrong_state", "the run has not started")
+        if request.agent_id is not None:
+            saved = await self._manager.save_for_review(
+                request.agent_id, request.path, request.content, request.base_hash
+            )
+            return FileSaved(path=request.path, hash=saved)
         return await self._manager.save_main(request.path, request.content, request.base_hash)
 
     async def rescan(self) -> None:

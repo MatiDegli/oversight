@@ -249,9 +249,9 @@ components:
 
 Oversight has two surfaces with different jobs, and they never borrow each other's materials. The
 graph is the machines' surface: it shows what the agents are doing, with nodes that light up, a
-change in its agent's color, and, after level 1, rings and a field of dots that glow like an LED
-panel. It is the only place where light moves. The panels are the person's surface: the agents
-panel, review, live diff and file view are dark, flat and still. They hold text, decisions and code.
+change in its agent's color, and rings and a field of dots that glow like an LED panel. It is the
+only place where light moves. The panels are the person's surface: the agents panel, review, live
+diff and file view are dark, flat and still. They hold text, decisions and code.
 
 The product is a tool someone operates for long stretches while agents work, and the demo is
 recorded on video. So the screen is dense but calm, every color means something, and nothing moves
@@ -282,7 +282,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Title weight of a frame | light, Mono | 600, Next | AGENTS.md: graph labels use Next; at 17px a light weight does not keep 4.5:1 |
 | Import edges | not drawn | in the data, not drawn | the sketch draws calls; imports say which files, not which functions |
 | Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed border or line means a pending change in the agent's color, and color is an agent only on its own change |
-| Skip-column edges | routed around the frames | run through the gutters and cross a frame they do not join, under its rows | the router has no channel search for frames that stand between two columns; the edge still ends on its two rows |
+| Skip-column edges | routed around the frames | visibility-grid routes outside frames, sharing one trunk per target | only short endpoint taps traverse their own containing frame; back calls use an outside detour |
 | First view | the whole demo in view | 100% on the module of the hub, more beyond the edges | the graph is a canvas to pan and zoom; the demo has 36 functions, not the sketch's 19 |
 | State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
 | Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
@@ -493,6 +493,16 @@ person is doing.
   on its own only where it already does by design (opening and closing review, a node added while
   the person is not navigating); no node ever moves. A cone row that says "Out of view" pans the
   camera to its node when clicked, and never otherwise.
+- **Opening a change:** review and live diff frame the changed nodes and the cone up to its
+  depth limit, zooming out only as needed from 100%, with a floor derived from the smaller of
+  the node-name-size and node-word-size tokens so names and state words stay at least 11 CSS px.
+  If the full cone cannot fit at that floor, frame the changes and distance 1; if that still cannot
+  fit, keep the changes and add distance 1 members in order of their shortest box-to-change gap,
+  as many as fit at the floor. Other members stay listed in review's out-of-view rows.
+  The measured cone overlay column and bottom controls stay clear of every framed node.
+  Hidden methods frame their folded class row. Center within the graph bounds and prefer
+  uncut module frames as at the start. One 240ms eased move, or a reduced-motion jump; a person's
+  navigation interrupts it. Live edits never repeat that move. Closing restores the saved camera.
 - **The preset's arrangement:** modules in columns, calls flowing from left to right, in two passes
   (blocks first, then each module's contents inside its block), so that a zoom view can later shrink
   a module to a dot at its center. Gutters of 120px between columns and 80px between stacked
@@ -623,8 +633,8 @@ node ("read", "editing", "changed", "new"):
 - **Editing:** the node is in the agent's current focus: the `node_ids` of its latest `agent.focus`
   event, when that event's mode is edit and the agent is working or revising. Only that latest
   focus counts; when the agent moves on, the previous nodes become "changed". Dashed 1.5px border
-  in the agent's color, the agent's node fill, a filled letter badge, the word "editing". After
-  level 1, rings spread from it.
+  in the agent's color, the agent's node fill, a filled letter badge, the word "editing". Rings
+  spread from it.
 - **Pending (changed or new):** the node carries the agent's change and is not its current edit
   focus. Dashed 1.5px border, dash 6px and gap 4px, in the agent's color; the agent's node fill
   (`-new` for a node the agent added); a filled badge; the word "changed" or "new". An edge the
@@ -663,8 +673,7 @@ everything else steps back.
   says what the bounds cut, for example "+12 omitted by depth". It is "possibly affected", never a
   complete list. The review panel keeps a one-line summary.
 - In level 1, before the cone exists, review dims everything except the change's nodes.
-- Once both the cone (level 2) and the dot field (after level 1) exist, the cone also casts the
-  neutral work light.
+- Once both the cone (level 2) and the dot field exist, the cone also casts the neutral work light.
 
 ### Review panel with the matte header (signature component)
 
@@ -700,11 +709,18 @@ change is proposed.
 - **File view:** the file in main with the function's lines marked as a highlighted span; from level
   2 it is editable and edits go to main. On the graph the selected node and its direct callers and
   callees stay lit; the rest dims.
+- **Start from a function (level 3):** a quiet Bot icon and "Start an agent here" in the file
+  header, only for functions and methods in a live run. Clicking opens the existing agents panel
+  beside the file, prefills `In {path}, {qualified name}: ` and focuses the task box at its end.
+  The file, local edits and graph selection stay in place. Slot choice, model and Start agent
+  stay as they are; this action sends no command. With no free slot, show the task box's reason.
+  An occupied or starting task box keeps its text and explains why the action is unavailable.
+  Events and later mounts never repeat the click's focus request.
 
-### Dot field and rings (signature component, after level 1)
+### Dot field and rings (signature component)
 
-They come after level 1 and never block a level. Until they ship, and whenever WebGL is missing,
-the graph's background is plain ground.
+They were brought forward from after level 1 (DECISIONS.md) and never block a level. Whenever
+WebGL is missing, the graph's background is plain ground.
 
 - **Grid:** its own canvas under a transparent Cytoscape canvas, reading the rendered boxes of the
   lit nodes; it never draws nodes or edges. Cells are 7px, fixed to the screen (they do not pan or
@@ -736,6 +752,17 @@ the graph's background is plain ground.
   a time, growing at 55px per second from the node's center to 340px, then starting again; a soft
   band about 10px wide at 90% strength, fading out between 60px and 340px. No rings in review or
   file view.
+
+### Class folding
+
+Classes start as one header row with their method count. A click toggles the class; a fresh change
+adding or modifying a method opens it, and the person can fold it again. Reading a hidden method
+lights the class row with the read badge. Cone membership projects onto that row at the nearest
+distance; calls to hidden methods merge onto the row. Imports remain hidden.
+
+Preset coordinates and fold state determine positions. Only the later rows and modules in the
+same column slide when a class toggles, for 240ms with `cubic-bezier(0.2, 0.7, 0.2, 1)`; under reduced
+motion they jump. Mode changes move the camera alone.
 
 ### Motion
 
@@ -808,8 +835,9 @@ Each item is a target checked on the built result:
 
 | Level | Design elements |
 | --- | --- |
-| 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the queue counter; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain black graph and plain review header |
+| 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the queue counter; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
 | 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
-| After level 1, never blocking | the dot field with its light, the rings, the matte header's grain |
+| Brought forward to level 1, never blocking | the dot field with its light, the rings and the breathing light; plain black ground whenever WebGL is missing |
+| After level 1, never blocking | the matte header's grain |
 | Mon Nov 2, only with level 2 closed | day mode |

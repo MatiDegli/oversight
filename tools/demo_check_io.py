@@ -28,7 +28,7 @@ PROPOSE_DEADLINE = 240.0  # the agent's run: from the answer to POST /agents to 
 DECIDE_DEADLINE = 60.0  # approve to change.resolved and graph.delta
 STOP_DEADLINE = 20.0  # seconds the server gets after SIGTERM before SIGKILL
 # UI assets, command boundaries (GET /graph), decisions, files and cleanup probes.
-REQUESTS_PER_RUN = 30
+REQUESTS_PER_RUN = 60
 OVERALL_MARGIN = 60.0  # slack over the worst-case sum, for process start and cleanup
 # Worst case: every phase in every run takes its full deadline. START_AGENT_DEADLINE (the cold
 # 480 s venv build, once in practice but allowed per run here) and PROPOSE_DEADLINE drive it.
@@ -36,7 +36,7 @@ PER_RUN_DEADLINE = (
     2 * START_DEADLINE
     + 2 * START_AGENT_DEADLINE
     + 3 * PROPOSE_DEADLINE  # initial A/B proposals and A's revision
-    + 20 * DECIDE_DEADLINE  # correlated steps, usage, decisions, deltas and discard
+    + 40 * DECIDE_DEADLINE  # correlated steps, usage, decisions, deltas and discard
     + 2 * STOP_DEADLINE  # SIGTERM wait, then the SIGKILL wait in smoke.stop_child
     + REQUESTS_PER_RUN * REQUEST_TIMEOUT
 )
@@ -58,7 +58,7 @@ class OverallClock:
 
     def check(self, now: float | None = None) -> None:
         elapsed = (time.monotonic() if now is None else now) - self.started
-        if elapsed > self.deadline_s:
+        if elapsed >= self.deadline_s:
             raise smoke.SmokeError(
                 f"overall deadline {self.deadline_s:g} s exceeded during {self.phase} "
                 f"after {elapsed:.0f} s"
@@ -70,8 +70,9 @@ class OverallClock:
     def bounded(self, timeout_s: float) -> float:
         """A wait inside this phase may take the smaller of its own timeout and what the
         overall deadline has left; an expired overall deadline fails here, naming the phase."""
-        self.check()
-        return min(timeout_s, self.remaining())
+        now = time.monotonic()
+        self.check(now)
+        return min(timeout_s, self.remaining(now))
 
     def set_phase(self, phase: str) -> None:
         self.check()  # before renaming: an expiry belongs to the phase that ran out
@@ -147,15 +148,21 @@ def _read_body(
     read_chunk = getattr(stream, "read1", None)
     if read_chunk is None:  # a stand-in with only read(): it answers at once or not at all
         body: bytes = stream.read()
+        if clock is not None:
+            clock.check()
         if time.monotonic() > deadline:
             _overdue(clock, method, path, timeout)
         return body
     chunks: list[bytes] = []
-    while chunk := read_chunk(65536):
-        chunks.append(chunk)
+    while True:
+        chunk = read_chunk(65536)
+        if clock is not None:
+            clock.check()  # EOF can arrive just as the overall deadline expires, too
         if time.monotonic() > deadline:
             _overdue(clock, method, path, timeout)
-    return b"".join(chunks)
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
 
 
 def _overdue(clock: OverallClock | None, method: str, path: str, timeout: float) -> None:
@@ -266,6 +273,8 @@ class EventStream:
                 if clock is not None:
                     clock.check()  # raises, naming the phase, if the overall deadline ran out
                 raise smoke.SmokeError(f"no {what} on /events within {deadline_s:g} s") from None
+            if clock is not None:
+                clock.check()  # the reader's timeout or EOF can beat the queue's own timeout
             if item is None or isinstance(item, Exception):
                 raise smoke.SmokeError(f"/events ended before {what}: {item or 'closed'}")
             try:

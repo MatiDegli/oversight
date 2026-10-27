@@ -12,6 +12,7 @@ import pytest
 from live_helpers import (
     DEADLINE_S,
     BySlot,
+    LiveServer,
     Stepped,
     error_code,
     is_type,
@@ -50,15 +51,38 @@ from oversight.agents import (
 )
 from oversight.api import ApiError
 from oversight.app import LIMITS, LiveRun
-from oversight.changes import ChangeManager
+from oversight.changes import ChangeManager, _revision
 from oversight_contracts.events import ChangeProposed
+from oversight_contracts.graph import ParseError
 
 pytestmark = pytest.mark.anyio
 
 # --- A revision in the kept run -------------------------------------------------------------------
 
 
-async def test_a_revision_resumes_the_kept_run_with_the_comment(tmp_path: Path) -> None:
+def fail_graph_context(s: LiveServer, monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
+    if failure == "exception":
+
+        def unavailable(*_args: Any) -> str:
+            raise RuntimeError("graph lookup failed")
+
+        monkeypatch.setattr(_revision, "graph_context", unavailable)
+    else:
+        manager = s.live._manager  # pyright: ignore[reportPrivateUsage]
+        assert manager is not None
+        rec = manager._agents["agent-1"]  # pyright: ignore[reportPrivateUsage]
+        rec.head.graph.parse_errors.append(
+            ParseError(path="shop/pricing.py", line=1, message="invalid syntax")
+        )
+
+
+@pytest.mark.parametrize("graph_failure", [None, "exception", "parse"])
+async def test_a_revision_resumes_the_kept_run_with_the_comment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    graph_failure: str | None,
+) -> None:
     model = scripted_a()
     async with (
         asyncio.timeout(DEADLINE_S),
@@ -66,7 +90,10 @@ async def test_a_revision_resumes_the_kept_run_with_the_comment(tmp_path: Path) 
     ):
         assert (await start(s)).status_code == 201
         first = await ready(s)
-        answer = await request(s, "Say less.")
+        comment = "  Say less.\nKeep this spacing.  "
+        if graph_failure:
+            fail_graph_context(s, monkeypatch, graph_failure)
+        answer = await request(s, comment)
         assert (answer.status_code, answer.content) == (202, b"")
         events = await ready(s, after=first[-1].seq)
         # The request, then the revision from `revising`, then the same change proposed again.
@@ -78,9 +105,28 @@ async def test_a_revision_resumes_the_kept_run_with_the_comment(tmp_path: Path) 
         assert order == ["changes_requested", 2]
         assert states(events) == ["revising", "ready_for_review"]
         [requested] = resolutions(events)
-        assert (requested.revision, requested.comment) == (1, "Say less.")
+        assert (requested.revision, requested.comment) == (1, comment)
         # The model that built the first run answers the revision, and was sent the comment.
-        assert "Say less." in str(model.requests[MODEL_TURNS_A][-1]["content"])
+        message = str(model.requests[MODEL_TURNS_A][-1]["content"])
+        assert comment in message
+        heading = (
+            "Functions one call away from your change; "
+            "check whether the comment applies to them too"
+        )
+        if graph_failure:
+            assert heading not in message
+            assert "Graph context unavailable for change-1; sending comment alone:" in caplog.text
+            reason = (
+                "graph lookup failed"
+                if graph_failure == "exception"
+                else "parse errors in shop/pricing.py"
+            )
+            assert reason in caplog.text
+        else:
+            assert message.count(heading) == 1
+            assert comment + "\n\n" + heading in message
+            assert "apply_coupon (shop/pricing.py)" in message
+            assert "Callers:" in message and "Siblings:" in message
         [proposal] = [e.payload for e in events if isinstance(e.payload, ChangeProposed)]
         assert proposal.change_id == "change-1" and proposal.summary == "Shortened the docstring."
         assert (await s.client.post(f"{CHANGE}/approve")).status_code == 202

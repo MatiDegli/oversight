@@ -1,6 +1,7 @@
 import { LockKeyhole, TriangleAlert, X } from "lucide-react";
 import type { editor, IDisposable } from "monaco-editor";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { getActiveTheme } from "../theme";
 import { FileDocument } from "./fileDocument";
@@ -15,6 +16,7 @@ export interface FileViewProps {
   files: FileAccess;
   commit: string;
   onClose: () => void;
+  startAgentAction?: ReactNode;
 }
 
 const control =
@@ -43,7 +45,7 @@ export function showFile(
 }
 
 /** One locally bundled editor; opening and revealing a span never takes keyboard focus. */
-export function FileView({ target, files, commit, onClose }: FileViewProps) {
+export function FileView({ target, files, commit, onClose, startAgentAction }: FileViewProps) {
   const host = useRef<HTMLDivElement>(null);
   const current = useRef<editor.IStandaloneCodeEditor | null>(null);
   const shown = useRef<FileDocument | null>(null);
@@ -216,6 +218,7 @@ export function FileView({ target, files, commit, onClose }: FileViewProps) {
             )}
           </>
         )}
+        {startAgentAction}
         <button
           type="button"
           aria-label="Close file"

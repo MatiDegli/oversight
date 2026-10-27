@@ -439,11 +439,15 @@ it.each(["review", "live-diff"] as const)(
           cone: probe?.nodeCenters("node.cone:not(.dimmed)").length ?? 0,
           dimmed: probe?.nodeCenters("node.dimmed").length ?? 0,
           zoom: probe?.zoom() ?? 0,
+          labelSizes: ["--node-name-size", "--node-word-size"].map((token) =>
+            Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(token)),
+          ),
         };
       });
       expect(graph.cone).toBeGreaterThan(0);
       expect(graph.dimmed).toBeGreaterThan(0);
-      expect(graph.zoom).toBeGreaterThanOrEqual(0.8);
+      expect(Math.min(...graph.labelSizes) * graph.zoom).toBeGreaterThanOrEqual(11);
+      expect(graph.zoom).toBeLessThanOrEqual(1);
     });
   },
   30_000,

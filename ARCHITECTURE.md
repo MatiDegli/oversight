@@ -1,307 +1,265 @@
 # Architecture
 
-This document describes main as of the end of day 1 (2026-10-26).
-Contracts can describe operations that are not implemented yet.
+This document describes main at the level 2 close on Tue Oct 27, 2026,
+and the current validation tooling.
 
-## Overview
+## Startup and serving
 
-The backend is a Python 3.12 FastAPI application. Its composition root is
-[app.py](backend/src/oversight/app.py). It wires the workspace, graph, event store, model
-client and change manager together. Configuration comes from
-[settings.py](backend/src/oversight/settings.py), including the environment and `.env`.
+[app.py](backend/src/oversight/app.py) composes the Python 3.12 FastAPI backend.
+[settings.py](backend/src/oversight/settings.py) reads configuration from the environment
+and `.env`. [setup.py](backend/src/oversight/setup.py) checks the offered slots' setup
+without calling a provider. Health reports missing settings without exposing their values.
 
-[Makefile](Makefile) provides the process entry points:
+[Makefile](Makefile) provides the entry points:
 
-- `make dev` starts FastAPI with reload and the Vite development server.
-- Vite serves the browser on port 5710 and proxies API routes to FastAPI, normally on 8710.
-  The proxy streams SSE responses as they arrive. See [vite.config.ts](frontend/vite.config.ts).
-- `make demo` builds the normal frontend, then starts FastAPI on `DEMO_PORT`, default 8710.
-  FastAPI serves both the built UI and API on one origin. No Vite server runs in this mode.
-- Starting the demo does not call a model. Starting a configured Meta agent does.
+- `make dev` starts FastAPI with reload and Vite. Vite serves port 5710 and proxies API
+  routes to FastAPI, normally on 8710. The SSE proxy streams without buffering.
+- `make demo` checks setup, builds the frontend and serves it with the API on one origin.
+  `DEMO_PORT` defaults to 8710. Starting the server spends no model credits.
+- `make replay` plays JSONL through the event store and SSE, with Vite serving the UI.
 
-The [workspace package](backend/src/oversight/workspace) owns runtime files and git operations.
-At live startup it takes a runtime lock, removes the previous workspace, worktrees and temporary
-files, copies [demo-repo](demo-repo), and runs `git init` with an initial commit on `main`.
-The copy lives at `.runtime/workspace/`. Agent worktrees live at
-`.runtime/worktrees/{agent_id}`, outside the parsed main tree. These are product worktrees.
-Run logs, the spending ledger and the separate demo test environment survive this reset.
+At live startup, the workspace takes a runtime lock, removes the previous workspace and
+worktrees, copies [demo-repo](demo-repo) and creates an initial git commit on `main`.
+Main lives at `.runtime/workspace/`; product agent worktrees live at
+`.runtime/worktrees/{agent_id}`, outside the parsed main tree. Run logs, the spend ledger
+and the separate demo test environment survive this reset.
 
 ## Data flow
 
-1. Live startup resets the workspace and publishes `run.started`. The
-   [graph package](backend/src/oversight/graph) scans Python files into module, class, function
-   and method nodes, then resolves call edges. Node IDs derive from qualified names.
-   File content hashes let later parses reuse unchanged files. A span index maps source lines
-   to their innermost node. Startup publishes `graph.snapshot`, including saved layout positions.
-2. `GET /graph` returns `run_id`, `seq` and the current main graph together. The
-   [API routes](backend/src/oversight/api/routes.py) read this pair from the event store without
-   an intervening await. The graph is folded from committed snapshots and deltas; `seq` is the
-   last committed event, including events that do not alter the graph.
-3. The browser sends `POST /agents`. The composition root checks the model, task, budget and
-   single slot A, then opens an agent worktree through the change manager. The
-   [agents package](backend/src/oversight/agents) runs `AgentRun` against a `ModelClient`.
-   The live default uses the official OpenAI SDK at Meta's endpoint in Contributor mode.
-   A scripted client supplies fixed replies in tests. The graph is not a model tool.
+1. `LiveRun` publishes `run.started` with model profiles, slots, prompt version, limits and
+   budget. It scans main and publishes `graph.snapshot` with the saved demo positions.
+2. `POST /agents` checks the task, model, setup, spend brake and slot availability.
+   Slots A and B can run in parallel, each with its own worktree and model client.
+   A slot stays held until its change is merged or rejected, including Stop/discard.
+3. `AgentRun` drives `ModelClient`. Muse Spark uses the official OpenAI SDK at Meta's
+   endpoint in Contributor mode. Muse Spark Open uses the same interface at Baseten's
+   endpoint. Each slot has its own configured profile. Tests use scripted fake clients;
+   fake B needs its own script.
 4. The loop offers `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`.
-   There is no shell tool. Reads are bounded; edits require a unique old-text match and the
-   hash from the agent's previous read. Test execution uses the demo environment and a timeout.
-   Tools validate paths against the worktree. Agent status follows tool execution.
-5. Each completed tool call emits `agent.step`. Reads with source focus emit `agent.focus`
-   before the step. A successful edit records `change.updated`, then edit focus, then the step.
-   The change manager reparses the agent version and sends complete original and modified
-   file contents. Usage replies produce `usage.tick`; the loop does not stream model text.
-6. Producers publish to the [events package](backend/src/oversight/events). One writer assigns
-   increasing `seq` values and timestamps, drains queued events into batched SQLite transactions,
-   and exposes them only after commit. SQLite uses WAL and a busy timeout. Each live run gets
-   an append-only database. Disk work runs in a thread.
-7. `/events` streams committed envelopes over SSE with `id: seq`. Resume precedence is a
-   different run ID resetting to zero, then `Last-Event-ID`, then the `after` query, then zero.
-   The response disables cache transformation and sends keepalive comments when idle.
-8. The [live transport](frontend/src/transport/live.ts) streams from seq 1 on a fresh store,
-   opening `/events?after=0`. It adds the run ID when known and owns retries, closing failed
-   streams and reconnecting with backoff and jitter from the last applied seq. A missing seq
-   or graph-version mismatch also reconnects from that cursor. This departure from AGENTS.md
-   was approved by the maintainer in [docs/proposal.md](docs/proposal.md), section 8, row 1:
-   agent and change state exist only in events. `GET /graph` remains for the smoke test and
-   debugging; the live transport does not read it first or fetch a snapshot on a gap.
-9. Live and replay transports feed the same pure `applyEvent` reducer in
-   [state](frontend/src/state). A vanilla Zustand store reduces event batches and exposes
-   selectors. The reducer tracks the run, main graph, agents, steps, diffs, proposals and usage.
-   The [graph view](frontend/src/graph) owns one Cytoscape instance and batches updates.
-   The [app](frontend/src/app) selects watch, live diff or review panels. Agent cards in
-   [agents](frontend/src/agents) show status and steps; [review](frontend/src/review) shows
-   decisions and the cone. Local [Monaco integration](frontend/src/editor) displays inline,
-   read-only original and modified models without needing the old worktree.
-10. `finish` leads the [change manager](backend/src/oversight/changes) to commit the agent's
-    changes, run tests and publish `change.proposed`. The proposal includes changed files and
-    nodes, line counts, test results and a bounded impact cone on the agent version.
-    The cone follows only exact call edges in reverse and reports truncation; possible edges
-    are ignored. It means possibly affected.
-11. Approve and Reject return HTTP 202 for an accepted decision. The result arrives through
-    events. Approve takes main's lock and the agent lock, merges through the git CLI, rescans
-    main, then publishes `change.resolved`, `graph.delta` and terminal `agent.status` in order.
-    A failed merge can leave a conflict for review. Main-state uncertainty blocks new starts
-    and approvals. Tests run at proposal time; this version does not test a combined merge.
-12. Reject discards the agent worktree and resolves the change. Main is unchanged, so this
-    implementation does not reparse main or publish a graph delta after discard. On
-    `change.resolved`, [applyEvent](frontend/src/state/applyEvent.ts) keeps the change record and
-    sets its status to approved, rejected, conflict or revising.
-    [selectPendingChanges](frontend/src/state/selectors.ts) excludes only approved and rejected
-    from pending changes. Shutdown waits for decisions and drains pending close-out events
-    before closing SQLite and releasing the runtime lock.
+   There is no shell tool. Paths stay within the worktree. Reads are bounded. An edit needs
+   a unique old-text match and the hash from the agent's last read. Tests use the demo's
+   own environment and a fixed command with a timeout. Status follows tool execution.
+5. Every completed tool call emits `agent.step`. Read focus precedes the step. Successful
+   edits publish `change.updated`, edit focus and then the step. Updates carry full original
+   and modified file contents, author and a pending graph overlay. Model replies produce
+   `usage.tick`; the loop does not stream model text.
+6. The event store assigns increasing `seq` values and timestamps. One writer batches
+   SQLite transactions and exposes events only after commit. SQLite uses WAL and a busy
+   timeout. Each run has its own append-only database. Disk work runs in a thread.
+7. `/events` streams committed envelopes over SSE with `id: seq`. Another run ID resets
+   the cursor to zero; otherwise resume uses `Last-Event-ID`, then `after`, then zero.
+   The response disables cache transformation and sends idle keepalive comments.
+8. The browser starts at `/events?after=0`. It reconnects from the last applied seq, with
+   backoff and jitter, after disconnects, sequence gaps or graph-version mismatches.
+   It does not fetch a snapshot first or on a gap. This approved departure is recorded in
+   [docs/proposal.md](docs/proposal.md), section 8, row 1: agent and change state need events.
+9. Live and replay feed the same pure `applyEvent` reducer in Zustand. It folds main's
+   snapshots and deltas and keeps agent state, steps, diffs, proposals and usage separately.
+   Pending graphs overlay main visually. Events update the open view without opening review
+   or taking focus. A finished agent shows Ready for review.
+10. `finish` commits the worktree, runs tests and publishes `change.proposed`. The proposal
+    contains files, nodes, line counts, tests and an impact cone on the agent's version.
+    The cone follows exact call edges in reverse. It reports depth and node-count omissions
+    and means possibly affected. Possible edges are not followed.
+11. Approve, Reject, Request changes and Stop return HTTP 202 for accepted commands.
+    Their results arrive as events. Approve holds main's lock and then the agent's lock.
+    It checks that the worktree matches the clicked revision before merging through git.
+    If main moved since the agent's base, it tests the staged combination before committing.
+    Merge conflicts or failed combined tests abort the merge and leave the change in conflict.
+12. A successful approval rescans main and publishes `change.resolved`, `graph.delta` and
+    terminal `agent.status` in order. Reject discards the worktree. Stop cancels and waits
+    for a working agent, then discards it. Stop emits stopped status and a rejected resolution
+    with reason stopped. Discard leaves main unchanged, so it emits no main graph delta.
+13. Request changes requires a comment. It keeps the worktree and resumes the same agent run
+    with that comment. The resolution records changes_requested and agent status becomes
+    revising. The next proposal has a higher revision on the same change. From conflict,
+    the manager first merges current main into the agent branch for the agent to resolve.
+14. `GET /files?path=...` reads main; adding `agent` reads a worktree. Both return a hash.
+    `PUT /files` with `agent_id` and `base_hash` saves the review's modified side only while
+    ready. It commits as the user, reparses, tests and re-proposes with user attribution.
+    A stale hash fails. The agent must re-read a user-edited file before editing it again.
+15. Without `agent_id`, `PUT /files` commits an existing file on main as the user and publishes
+    a user_edit `graph.delta`. It runs no tests. A later approval tests the combination if
+    main moved. `POST /graph/rescan` rescans main and emits a delta when it changed.
+    Suspect, dirty or mid-merge main cannot take these writes or rescans.
 
-```text
-+----------------------------------+      +----------------------------------+
-| LiveRun: app.py startup          |      | Event store: one writer          |
-| run.started, graph.snapshot      |----->|                                  |
-+----------------------------------+      | SQLite -> committed events       |
-                                          |                                  |
-+----------------------------------+      |                                  |
-| AgentRun                         |      |                                  |
-| status, step, focus, usage       |----->|                                  |
-+----------------------------------+      |                                  |
-                                          |                                  |
-+----------------------------------+      |                                  |
-| ChangeManager                    |      |                                  |
-| changes, graph.delta, status     |----->|                                  |
-+----------------------------------+      +----------------------------------+
+`GET /graph` returns `run_id`, main's graph and the last committed event seq together,
+without an intervening await. The event store folds the graph from committed snapshots and
+deltas; seq includes events that do not change the graph. The endpoint serves smoke checks
+and debugging. The live frontend uses the event stream instead.
 
-Browser --HTTP--> FastAPI / LiveRun --runs--> AgentRun
-AgentRun --change sink--> ChangeManager --git--> Workspace
-LiveRun and ChangeManager --scan/cone--> Graph (publishes nothing)
-
-Event store --SSE--> Browser -> pure reducer -> Zustand -> graph, cards and diff
-Replay JSONL -> same reducer -> same views
-```
+Unknown main state blocks new starts, revisions and approvals until restart. Shutdown waits
+for decisions, drains pending close-out events, checks main, closes SQLite and releases the
+runtime lock. Rejected and approved change records remain in frontend state for inspection,
+but stop contributing pending marks.
 
 ## Backend module contracts
 
-Cross-package imports use the exports of each package's `__init__.py`.
-The import-linter rules live in the root [pyproject.toml](pyproject.toml).
-`layers` orders `app -> api -> changes -> agents -> graph | events | workspace`.
-The bottom three packages are mutually independent. Each package below has a
-`private-<package>` protected contract that prevents imports of its internals by other packages.
-`pure-contracts` keeps contracts independent of the backend and web/model frameworks.
-`model-gate` allows only agents to import OpenAI directly. `web-at-the-edge` keeps FastAPI and
-Starlette out of changes, agents, graph, events and workspace.
+Cross-package imports use each package's `__init__.py`. The import-linter rules in
+[pyproject.toml](pyproject.toml) enforce `app -> api -> changes -> agents -> graph | events |
+workspace`. The bottom three packages are independent. Protected contracts keep package
+internals private. Contracts import neither the backend nor web/model frameworks. Only agents
+may import OpenAI; only app and API may import FastAPI or Starlette.
 
-### Agents
+- [API](backend/src/oversight/api/__init__.py) exports `Commands`, route construction, error
+  mapping and static serving. `Commands` covers start, stop, approve, reject, request_changes,
+  get_file, save_file and rescan. The package owns HTTP responses and SSE framing.
+- [Agents](backend/src/oversight/agents/__init__.py) exports the loop, model interface, SDK
+  client, scripted fake client, tool schemas, profiles and usage ledger. Provider calls set
+  reasoning explicitly. Retries use backoff and jitter for 429 and 5xx. Unverified profiles
+  are refused. The same call with the same result four times, or six consecutive tool
+  failures, halts the run.
+- [Graph](backend/src/oversight/graph/__init__.py) exports `WorkspaceGraph`, version parsing,
+  graph deltas, change graphs, layout loading and cones. `WorkspaceGraph.node_at` returns
+  the innermost node at a source line.
+  It publishes no events and starts no processes. Callers offload expensive parsing.
+  File hashes reuse unchanged parses; no file watcher drives updates. IDs use qualified
+  names rather than lines. The cone bridges constructors to their classes, walks through
+  tests and counts reaching test functions without listing tests as entries.
+- [Events](backend/src/oversight/events/__init__.py) exports the store, committed subscriptions,
+  clock helpers, JSONL import/export and playback. It also folds main's published graph.
+- [Workspace](backend/src/oversight/workspace/__init__.py) owns safe paths, hashes, async git
+  and test subprocesses with timeouts, locks, worktrees and the demo test environment.
+  These product worktrees are separate from worktrees used to develop Oversight.
+- [Settings](backend/src/oversight/settings.py), [setup](backend/src/oversight/setup.py) and
+  [app](backend/src/oversight/app.py) own configuration, readiness and composition.
+  [The CLI](backend/src/oversight/__main__.py) owns serve, replay and ledger commands.
 
-[Public exports](backend/src/oversight/agents/__init__.py):
-`AgentRun`, `AgentTask`, `RunEnd`, `Publish`, `ChangeSink`, `ModelClient`, `OpenAIClient`,
-`Message`, `ModelReply`, `ModelAPIError`, `ToolCall`, `ToolSchema`, `Usage`, `RetryPolicy`,
-`Script`, `ScriptedModel`, `load_script`, `parse_script`, `TOOL_NAMES`, `TOOL_SCHEMAS`,
-`SYSTEM_PROMPT`, `REVISION_PROMPT`, `PROMPT_VERSION`, `META_BASE_URL`, `BASETEN_BASE_URL`,
-`MUSE_SPARK`, `MUSE_SPARK_OPEN`, `FAKE_MODEL`, `UNVERIFIED_PROFILES`, `UnverifiedProfile`,
-`Brake`, `Pricing`, `UsageLedger`, `UnknownUsage`, `LedgerError`, `LedgerFile`, `LedgerState`.
-These cover the model boundary, tool loop, change sink and spending ledger.
-Enforced by `private-agents`, `layers` and `web-at-the-edge`.
-Profiles exported here do not all run in the live app: it accepts Muse Spark or fake only.
+### Change manager stages
 
-### API
+[changes/__init__.py](backend/src/oversight/changes/__init__.py) exports only `ChangeManager`,
+`ChangeNotFound`, `Revision` and `WrongState`. The manager implements the agents' change sink.
+Its facade delegates to private stages:
 
-[Public exports](backend/src/oversight/api/__init__.py): `Commands`, `ApiError`,
-`create_router`, `add_static`, `error_response`, `install_error_handlers`.
-`Commands` exposes start, approve and reject to the routes. The package owns HTTP error
-mapping, SSE framing and static serving. Enforced by `private-api`, `layers` and `model-gate`.
+- `_state.ChangeState` owns records, bases, pending delivery, tasks, suspect state and the
+  published snapshot. Its transitions do no I/O. `_support.ChangeContext` holds dependencies
+  and utilities with a reference to that state.
+- `_proposal` opens and versions worktrees, publishes live diffs and proposals and settles
+  run end. `_diff` counts file changes; `_versions` parses versions and builds deltas.
+- `_approval`, `_merge` and `_recovery` own revision checks, merge transactions, combined tests
+  and recovery from git facts under the same locks. Unknown main state stays suspect.
+- `_delivery` owns close-out, receipts, retries, cleanup and shutdown. Its `ChangePorts.drain`
+  callback resolves the facade's static `_drain` dynamically at its three wait sites.
+  Other stage calls use direct imports.
+- `_files` owns file reads, review saves, main saves, rescans and main checks.
+  `_revision` owns Request changes and moves to a new base.
+- `_manager` retains admission, Reject, Stop and forwarding. Compatibility properties delegate
+  to state. `request_changes` dynamically calls `_request_changes`.
 
-### Changes
+`changes-no-facade-backedge` prevents helpers from importing `_manager`, including typing imports.
+The [stage plan](docs/plans/changes.md#1-facade-and-callers) records the split and fidelity checks.
 
-[Public exports](backend/src/oversight/changes/__init__.py): `ChangeManager`,
-`ChangeNotFound`, `WrongState`. The manager implements the agents' change sink and owns
-proposal, decision, graph-refresh and cleanup state. Enforced by `private-changes`,
-`layers`, `model-gate` and `web-at-the-edge`.
+### Usage and the spend brake
 
-### Events
+[usage.py](backend/src/oversight/agents/usage.py) owns pricing, the in-memory usage ledger
+and the durable ledger file. `usage.tick` carries tokens, cost, spend, the budget and
+brake state. Missing usage or pricing stays unknown, never zero. The frontend shows total
+spend and each agent's cost from these events.
 
-[Public exports](backend/src/oversight/events/__init__.py): `EventStore`, `StoredEvent`,
-`EventPayload`, `EVENT_TYPES`, `StoreClosedError`, `Clock`, `system_clock`, `format_ts`,
-`parse_ts`, `LogError`, `read_jsonl`, `write_jsonl`, `export_run`, `read_store`, `play`,
-`replay_delays`, `MAX_GAP_S`, `Sleep`, `run_store_path`.
-The package owns persistence, committed subscriptions, graph folding and log playback.
-Enforced by `private-events`, `layers`, `model-gate` and `web-at-the-edge`.
-
-### Graph
-
-[Public exports](backend/src/oversight/graph/__init__.py): `WorkspaceGraph`, `CodeVersion`,
-`DeltaCause`, `NodeNotFoundError`, `parse_version`, `read_layout`, `graph_delta`,
-`change_graph`, `impact_cone`, `change_cone`, `node_cone`.
-These functions are synchronous and start no processes. Callers offload expensive parsing.
-Enforced by `private-graph`, `layers`, `model-gate` and `web-at-the-edge`.
-
-### Workspace
-
-[Public exports](backend/src/oversight/workspace/__init__.py): `Workspace`, `Tree`, `Author`,
-`FileRead`, `content_hash`, `ProcessResult`, `run_process`, `SuiteRun`, `WorkspaceError`,
-`InvalidPath`, `StaleFile`, `UnsafeDeletion`, `WorkspaceBusy`, `LockOrderError`.
-This package owns async subprocesses with timeouts, git, locks, safe paths and the demo test
-suite. Enforced by `private-workspace`, `layers`, `model-gate` and `web-at-the-edge`.
-
-### Settings and app
-
-These are modules, not packages with their own `__init__` facades.
-[settings.py](backend/src/oversight/settings.py) provides `Settings` and configuration helpers.
-[app.py](backend/src/oversight/app.py) provides `create_app`, `ReplayConfig`, `LiveRun` and
-application wiring; [__main__.py](backend/src/oversight/__main__.py) owns CLI entry points.
-`layers` places app at the top; `model-gate` also covers settings and the CLI.
-There is no separate protected-import contract for settings or app.
+The app records Meta costs before publishing their ticks. The durable ledger survives resets.
+Unknown costs block further Meta starts and revisions until settled. A ledger write failure
+halts the affected run and blocks Meta starts. Warnings begin at 50% and 80%; spend above 90%
+refuses new Meta runs and revisions. It does not cancel other runs already working.
+Baseten and fake calls do not debit Meta's credit ledger.
 
 ## Frontend module contracts
 
 [eslint.config.js](frontend/eslint.config.js) requires cross-feature imports through `index.ts`,
-including dynamic imports. Only transport may use `fetch` or `EventSource` globals.
-Only graph may import Cytoscape/fcose; only editor may import Monaco packages.
-State cannot import React or React DOM. These are ESLint rules, not import-linter contracts.
+including dynamic imports. Only transport may use `fetch` or `EventSource`. Only graph imports
+Cytoscape/fcose; only editor imports Monaco. State cannot import React or React DOM.
 
-### State
+- [State](frontend/src/state/index.ts) exports the pure reducer, Zustand store, selectors and
+  spend helpers. Main's graph and pending change graphs stay separate.
+- [Transport](frontend/src/transport/index.ts) owns live SSE, replay and command requests.
+  It checks event envelopes; generated TypeScript types do not validate payloads at runtime.
+- [App](frontend/src/app/index.ts) composes panels, owns transport lifetime and local view
+  selection, and keeps file drafts and saves across panel changes.
+- [Agents](frontend/src/agents/index.ts) presents both slots, status, steps, per-agent spend,
+  task entry and Stop and discard.
+- [Review](frontend/src/review/index.ts) presents proposals, impact and the three decisions.
+  Accepted decisions stay pending until an event or error settles them. Unsaved review edits
+  block Approve and Request changes until saved or discarded. Approve has no keyboard shortcut.
+- [Editor](frontend/src/editor/index.ts) exports `LiveDiff`, `EditorDiff`, `ReviewEditor`,
+  `FileView` and file helpers. Monaco and its worker are bundled locally. Fonts load before
+  creation. The live diff and original side stay read-only; the modified side is editable
+  in ready review. File view saves to main. Replay sends no edits or decisions.
+- [Theme](frontend/src/theme/index.ts) and [theme CSS](frontend/src/theme/index.css) supply
+  fonts, Tailwind and tokens selected through root `data-theme`. Graph, editor and dot field
+  receive their colors through the shared theme interface.
 
-[state/index.ts](frontend/src/state/index.ts) exports `applyEvent`, `createInitialState`,
-`createStateStore`, `stateStore`, state/store types, `AgentCardData`, `LiveDiffData`, and selectors:
-`selectSpend`, `selectAgentCard`, `selectLiveDiff`, `selectAgents`, `selectChangeForAgent`,
-`selectHasReadyForReview`, `selectLitNodes`, `selectNodeMarks`, `selectPendingChanges`.
+### Graph folding and camera
 
-### Transport
+[GraphView](frontend/src/graph/GraphView.tsx) owns one Cytoscape instance.
+`graphElements` overlays pending additions and agent marks on main without changing state's
+main graph. Pending borders are dashed in the agent's color. Review dims nodes outside its
+change and cone. Live diff derives an exact-call cone from the current overlay; review uses
+the proposal's cone. Tests are hidden in the graph by default.
 
-[transport/index.ts](frontend/src/transport/index.ts) exports `startLive`, `startReplay`,
-`startAppTransport`, `createCommandClient`, `CommandError`, `replayBuild`, `replaySource` and
-`Transport`, `TransportStore`, `EventStream`, `LiveOptions`, `ReplayOptions`, `ReplaySource` types.
-The command client includes contract routes that currently answer 501.
+`updateGraph` batches updates by ID and retains saved or dragged positions. Modules and classes
+are compound frames. New nodes use free space; if a frame cannot grow, only that root moves.
+The initial view uses the demo preset, with fcose as fallback.
 
-### Graph
+Opening a left panel folds the agents panel into a rail and moves the camera without running
+a layout. Review saves the watch camera and frames the change and cone down to a readable zoom
+floor. Closing restores it. Cone rows report out-of-view nodes and reveal them on click.
+Incoming review events do not reframe. In watch, new nodes can expand the view after a navigation
+quiet period. Zoom controls move the camera, never nodes.
 
-[graph/index.ts](frontend/src/graph/index.ts) exports `GraphView`, `graphElements`,
-`loadGraphEvents` and `GraphViewProps`, `GraphProbe`, `GraphProbeHost`, `NodeBounds`, `Framing`.
+### Dot field
 
-### App
+[The dot field](frontend/src/graph/field) is a separate WebGL canvas below transparent Cytoscape.
+It reads rendered node boxes and the app's watch, live diff, review or file scope. It takes no
+pointer or focus. Colors and motion settings come from theme tokens. Animation pauses for hidden
+tabs and reduced motion. Missing WebGL, draw failures or context loss leave plain black ground.
+It adds no server events.
 
-[app/index.ts](frontend/src/app/index.ts) exports `App` and `startAppSession`.
-It composes panels and owns the transport lifetime and local view selection.
-
-### Agents
-
-[agents/index.ts](frontend/src/agents/index.ts) exports `AgentCard`, `TaskBox`,
-`AgentCardProps` and `TaskBoxProps`. These present agent progress and submit tasks.
-
-### Review
-
-[review/index.ts](frontend/src/review/index.ts) exports `ReviewPanel`, `ImpactConeCard`,
-`decisionView`, `failureMessage`, `sendDecision`, `startAttempt`, `ReviewPanelProps`,
-`DecisionAction`, `DecisionAttempt`, `DecisionClient`, `DecisionView`.
-Accepted decisions stay pending until events or an error settle the attempt.
-
-### Editor
-
-[editor/index.ts](frontend/src/editor/index.ts) exports `EditorDiff`, `LiveDiff`,
-`createEditorTheme`, `LiveDiffProps` and `EditorColors`. Monaco and its worker are bundled locally.
-The current diff stays read-only in both live diff and review modes.
-
-### Theme
-
-[theme/index.ts](frontend/src/theme/index.ts) exports `themes` and `getActiveTheme`.
-[theme/index.css](frontend/src/theme/index.css) supplies Tailwind, fonts and root theme tokens.
-Graph and editor receive their palette through this shared theme interface.
-
-## Wire contracts
+## Wire contracts and routes
 
 Pydantic models in [contracts/src/oversight_contracts](contracts/src/oversight_contracts) are the
-source. [generate.py](contracts/generate.py) generates
-[oversight.schema.json](contracts/generated/oversight.schema.json) and
-[contracts.ts](contracts/generated/contracts.ts) with json-schema-to-typescript.
-TypeScript and the generator are pinned in [package.json](frontend/package.json).
-`make check-contracts` regenerates in memory and compares both outputs byte for byte.
-[CI](.github/workflows/ci.yml) runs this through `make check-ci`.
+source. [generate.py](contracts/generate.py) generates JSON Schema and TypeScript with pinned
+json-schema-to-typescript. `make check-contracts` compares both generated outputs byte for byte.
 
-[events.py](contracts/src/oversight_contracts/events.py) defines the event union:
-`run.started`, `graph.snapshot`, `graph.delta`, `agent.status`, `agent.step`, `agent.focus`,
-`change.updated`, `change.proposed`, `change.resolved`, `change.assessed`, `merge_mode.changed`,
-`plan.updated`, `usage.tick`, `error`.
-Every envelope has `seq`, `ts`, `type` and `payload`. Graph payload models live in
-[graph.py](contracts/src/oversight_contracts/graph.py).
+Live events are `run.started`, `graph.snapshot`, `graph.delta`, `agent.status`, `agent.step`,
+`agent.focus`, `change.updated`, `change.proposed`, `change.resolved`, `usage.tick` and `error`.
+Every envelope has `seq`, `ts`, `type` and `payload`.
 
-[commands.py](contracts/src/oversight_contracts/commands.py) defines request/response bodies.
-[Command routes](backend/src/oversight/api/commands.py) implement `POST /agents`,
-`POST /changes/{change_id}/approve` and `POST /changes/{change_id}/reject` live.
-`GET /graph`, `GET /health` and `GET /events` are in the API routes cited above.
-The remaining contract routes return 501: `POST /agents/{agent_id}/stop`,
-`POST /changes/{change_id}/request-changes`, `GET /impact`, `GET /files`, `PUT /files`,
-`POST /graph/rescan`, and `POST /agents/{agent_id}/message`, `/pause`, `/resume`,
-`GET /merge-mode`, `PUT /merge-mode`, `POST /plans`, `GET /plans/{plan_id}`,
-`PUT /plans/{plan_id}`, `POST /plans/{plan_id}/start`, `POST /plans/{plan_id}/reject`.
-Backend replay mode also refuses start, approve and reject with 501.
+Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
+`POST /changes/{change_id}/approve`, `POST /changes/{change_id}/reject`,
+`POST /changes/{change_id}/request-changes`, `GET /files`, `PUT /files` and `POST /graph/rescan`.
+`GET /graph`, `GET /health` and `GET /events` provide graph, readiness and events.
 
-## Testing and gates
+`GET /impact`, agent message/pause/resume, merge-mode and plan routes still return 501.
+Proposal cones and the frontend's live preview work without `GET /impact`.
+Backend replay returns 501 for all command routes, including file reads and rescans.
 
-[The fake model](backend/src/oversight/agents/fake.py) returns scripted tool calls without
-provider credits. [conftest.py](conftest.py) strips provider keys and blocks non-loopback HTTP
-transports in tests. [The fixture schema test](backend/tests/events/test_fixtures.py) validates
-every event-log line against Pydantic `ServerEvent`, checks seq order and rejects absolute paths.
-Generated TypeScript types do not validate payloads at runtime; the browser checks envelopes.
+## Testing and replay
 
-`make check` runs four groups in parallel: Python, contracts, frontend and secrets.
-Python runs Ruff lint/format, Pyright, import-linter and pytest. Frontend runs strict TypeScript,
-ESLint, Prettier, unit tests and the boundary regression test. Secrets runs gitleaks.
-CI runs the same groups through `check-ci`, with gitleaks in its own job, then `make smoke`.
-Browser tests run separately through `make test-browser`; they are outside `make check` and CI.
+[conftest.py](conftest.py) strips provider keys and blocks non-loopback HTTP in tests.
+Scripted fake models spend no credits. Fixture tests validate every recorded envelope against
+Pydantic `ServerEvent`, check seq order and reject absolute paths.
 
-`make demo-check` builds the UI and runs [demo_check.py](tools/demo_check.py).
-It starts the real server three times with the fake model, verifies clean graphs and static
-serving, starts an agent, approves its proposal and checks resolution and graph delta events.
-It also checks shutdown, subprocess cleanup and release of the runtime lock. It is outside check.
+`make check` runs Python, contracts, frontend and secrets groups in parallel. It runs Ruff,
+Pyright, import-linter, pytest, strict TypeScript, ESLint, Prettier, Vitest, boundary tests and
+gitleaks. CI runs `check-ci` with gitleaks in its own job, then smoke checks. The browser job
+runs `make e2e` over the static replay build and Monaco/graph browser tests. Browser tests and
+e2e are outside `make check`.
 
-`make replay` plays JSONL through the backend event store and SSE with Vite serving the UI.
-For a static site, `pnpm -C frontend build --mode replay` bundles
-[handwritten-level1.jsonl](fixtures/events/handwritten-level1.jsonl) without a backend.
-The transport labels it `Replay · hand-written demo fixture`. It is not a real recorded run.
-The static replay build is manual and not gated yet: no make target, check group or CI step
-builds with `--mode replay`.
+`make demo-check` builds the UI and starts the real server three times with two scripted fake
+agents from clean workspaces. It checks concurrent steps, pending overlays, impact, usage ticks,
+review saves and attribution, stale edits, Request changes and higher revisions, Stop/discard,
+approval and main file edits. It also checks static serving, shutdown, subprocess cleanup and
+release of the runtime lock. It is outside `make check`.
 
-## In progress
+The static build, `pnpm -C frontend build --mode replay`, needs no backend. It bundles a verified
+real recording when present, otherwise a labeled fixture. `make record` exports a finished real
+run with a provenance sidecar. The build checks provenance, contracts and secrets. No real run
+is bundled yet. `make e2e` runs two Playwright tests over level 1 and scripted level 2 replays.
 
-These level 2 flows are not on main. The existing plans describe extension points, not delivery.
+## Private level 3 cores
 
-- Request changes: [plan](docs/plans/changes.md#6-level-2-kept-out-but-not-blocked);
-  the loop has revision support, but the HTTP route still returns 501.
-- Two agents in parallel: [plan](docs/plans/changes.md#6-level-2-kept-out-but-not-blocked);
-  the live application still admits only slot A.
-- File editing: [plan](docs/plans/changes.md#6-level-2-kept-out-but-not-blocked)
-  and [API plan](docs/plans/api.md); file routes return 501 and the review diff is read-only.
+Main contains `changes/_policy`, `_zones`, `_runrule`, `_beforeafter`, `_reviewfacts` and
+`agents/_crossreview`. They cover merge rules, plan zones, test-run evidence, before/after
+results, review facts and cross-review parsing. They are private and not wired into the live
+flow. Reserved `change.assessed`, `merge_mode.changed` and `plan.updated` events only advance
+the frontend sequence. Contracts are at 1.3.0; 1.4.0 awaits the maintainer's approval.
+Level 3 wiring starts after this level 2 close.

@@ -19,6 +19,15 @@ from demo_check_io import (
     expect,
     request,
 )
+from demo_check_review import (
+    LONG_DOC,
+    SHORT_DOC,
+    read_file,
+    refuse_save,
+    revision_steps,
+    save_review,
+    user_node,
+)
 from oversight_contracts.commands import AgentCreated, FileContent, GraphResponse
 
 SCRIPTS = {
@@ -49,9 +58,9 @@ def start_agent(base: str, clock: OverallClock | None = None, slot: str = "A") -
 def graph_of(base: str, clock: OverallClock | None = None) -> GraphResponse:
     timeout = REQUEST_TIMEOUT if clock is None else clock.bounded(REQUEST_TIMEOUT)
     status, body = smoke.fetch_json(f"{base}/graph", time.monotonic() + timeout)
+    if clock is not None:
+        clock.check()
     if status != 200:
-        if clock is not None:
-            clock.check()
         raise smoke.SmokeError(f"GET /graph answered {status}, not 200")
     try:
         return GraphResponse.model_validate(body)
@@ -186,6 +195,7 @@ def stop_working_b(
     while tree.exists() and time.monotonic() < end:
         clock.check()
         time.sleep(0.05)
+    clock.check()
     if tree.exists():
         raise smoke.SmokeError("B worktree still exists after Stop")
     if pending_nodes(stream.seen, b.agent_id):
@@ -284,11 +294,6 @@ def edit_main(base: str, stream: EventStream, clock: OverallClock) -> None:
         raise smoke.SmokeError("file view save is absent from main's file or graph")
 
 
-def todo_editable_review_save() -> None:
-    """TODO_EDITABLE_REVIEW_SAVE: PUT /files with agent_id, owned by the parallel front."""
-    print("demo-check: SKIP TODO_EDITABLE_REVIEW_SAVE (PUT /files with agent_id; parallel front)")
-
-
 def check_level2(
     base: str,
     initial: GraphResponse,
@@ -300,7 +305,12 @@ def check_level2(
     before = graph_of(base, clock).seq
     with ThreadPoolExecutor(max_workers=2) as pool:
         jobs = [pool.submit(start_agent, base, clock, slot) for slot in ("A", "B")]
-        a, b = [job.result(timeout=clock.bounded(START_AGENT_DEADLINE)) for job in jobs]
+        try:
+            a, b = [job.result(timeout=clock.bounded(START_AGENT_DEADLINE)) for job in jobs]
+        except (TimeoutError, smoke.SmokeError):
+            clock.check()
+            raise
+        clock.check()
     if (a.slot, b.slot) != ("A", "B") or a.agent_id == b.agent_id or a.change_id == b.change_id:
         raise smoke.SmokeError("parallel starts did not create distinct A/B agents and changes")
     clock.set_phase("A/B: first steps, proposals and overlap")
@@ -323,24 +333,35 @@ def check_level2(
         wait_for(stream, who, "agent.status", proposal.seq, state="ready_for_review")
         tick = wait_for(stream, who, "usage.tick", before)
         check_usage(tick, who.slot)
-    revising = request_revision(base, stream, clock, a, proposals[0])
+    saved, edited = save_review(base, stream, clock, a, proposals[0], graph_of(base, clock).seq)
+    if user_node(saved) not in pending_nodes(stream.seen, a.agent_id):
+        raise smoke.SmokeError("A pending overlay lost the user edit")
+    revising = request_revision(base, stream, clock, a, saved)
+    revision_steps(base, stream, clock, a, revising.seq, edited)
     clock.set_phase("A: higher revision of the same change")
     revised = wait_for(
         stream,
         a,
         "change.proposed",
         revising.seq,
-        revision=proposals[0].payload.revision + 1,
+        revision=saved.payload.revision + 1,
         deadline=PROPOSE_DEADLINE,
     )
     if revised.payload.tests.outcome != "passed":
         raise smoke.SmokeError("A revised proposal tests did not pass")
+    user_node(revised)
     wait_for(stream, a, "agent.status", revised.seq, state="ready_for_review")
     stop_working_b(base, stream, clock, b, proposals[1], runtime_dir)
     approve_a(base, stream, clock, a, revised, initial)
+    clock.set_phase("A: refuse review save with no open change")
+    before = graph_of(base, clock)
+    refuse_save(base, clock, a, read_file(base, clock), closed=True)
+    if graph_of(base, clock) != before:
+        raise smoke.SmokeError("refused closed review save changed the graph or emitted events")
+    if read_file(base, clock).content != edited.content.replace(LONG_DOC, SHORT_DOC):
+        raise smoke.SmokeError("A approval lost the user edit or later revision")
     edit_main(base, stream, clock)
     for who in (a, b):
         for event in stream.seen:
             if event.type == "usage.tick" and event.payload.agent_id == who.agent_id:
                 check_usage(event, who.slot)
-    todo_editable_review_save()

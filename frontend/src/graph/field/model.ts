@@ -106,26 +106,30 @@ export function fieldConfig(theme: FieldTheme, mode: FieldMode): FieldConfig {
   };
 }
 
-/** The lights whose nodes are on the graph, each at its rendered box and in its token's color. */
+/** One light per visible row and source, keeping the strongest projected light and its motion. */
 export function placeLights(
   theme: Record<LightSource, string>,
   lights: readonly FieldLight[],
   boxes: ReadonlyMap<string, Box>,
 ): PlacedLight[] {
-  return lights.flatMap((light) => {
+  const placed = new Map<string, PlacedLight>();
+  for (const light of lights) {
     const box = boxes.get(light.id);
-    return box
-      ? [
-          {
-            box,
-            color: parseHex(theme[light.source]),
-            weight: light.weight,
-            pulses: light.pulses,
-            pulseWeight: light.pulseWeight,
-          },
-        ]
-      : [];
-  });
+    if (!box) continue;
+    // Folded methods have distinct ids but share the class row's rendered bounds.
+    const key = [light.source, box.x1, box.y1, box.x2, box.y2].join(":");
+    const known = placed.get(key);
+    if (!known || light.weight > known.weight) {
+      placed.set(key, {
+        box,
+        color: parseHex(theme[light.source]),
+        weight: light.weight,
+        pulses: light.pulses,
+        pulseWeight: light.pulseWeight,
+      });
+    }
+  }
+  return [...placed.values()];
 }
 
 const matrices = new Map<number, Uint8Array>();

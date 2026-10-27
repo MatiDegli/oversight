@@ -25,6 +25,10 @@ export interface FileAccess {
   saveFile: (body: SaveFile) => Promise<FileSaved>;
 }
 
+/** Main and parallel worktrees must never share a draft or an in-flight save. */
+export const fileKey = (path: string, agentId?: string | null) =>
+  agentId == null ? path : JSON.stringify([agentId, path]);
+
 export const staleMessage =
   "This file changed on the server since you started editing. Your edits are still here.";
 
@@ -51,6 +55,8 @@ export class FileDocument {
   private following: Promise<FileSaved> | undefined;
   private readonly subscription: { dispose: () => void };
   private replacing = false;
+  private readonly key: string;
+  private readonly writable: boolean;
   private lineEndings: string[] = [];
 
   constructor(
@@ -61,8 +67,11 @@ export class FileDocument {
     private readonly replaceModel: (text: string) => void = (text) => {
       model.setValue(text);
     },
+    review = false,
   ) {
-    const draft = target.agentId === null ? files.drafts.get(target.path) : undefined;
+    this.key = fileKey(target.path, target.agentId);
+    this.writable = target.agentId === null || review;
+    const draft = this.writable ? files.drafts.get(this.key) : undefined;
     if (draft) this.replace(draft.content);
     this.subscription = model.onDidChangeContent((event) => {
       if (this.replacing) return;
@@ -87,25 +96,19 @@ export class FileDocument {
   }
 
   private pending() {
-    return this.target.agentId === null
-      ? this.files.inFlightSaves.get(this.target.path)
-      : undefined;
+    return this.writable ? this.files.inFlightSaves.get(this.key) : undefined;
   }
 
   get state(): FileState {
     const dirty = this.loaded
       ? this.model.getValue() !== this.loaded.content
-      : this.target.agentId === null && this.files.drafts.has(this.target.path);
+      : this.writable && this.files.drafts.has(this.key);
     return {
       dirty,
       loaded: this.loaded !== undefined,
       retryLoad: this.failedRead,
       canSave:
-        this.target.agentId === null &&
-        this.loaded !== undefined &&
-        dirty &&
-        !this.pending() &&
-        !this.stale,
+        this.writable && this.loaded !== undefined && dirty && !this.pending() && !this.stale,
       phase: this.pending()
         ? "saving"
         : this.failure
@@ -126,13 +129,13 @@ export class FileDocument {
   }
 
   private syncDraft() {
-    if (this.target.agentId !== null || !this.loaded) return;
+    if (!this.writable || !this.loaded) return;
     if (this.state.dirty || this.pending()) {
-      this.files.drafts.set(this.target.path, {
+      this.files.drafts.set(this.key, {
         content: this.content(),
         baseHash: this.loaded.hash,
       });
-    } else this.files.drafts.delete(this.target.path);
+    } else this.files.drafts.delete(this.key);
   }
 
   private content() {
@@ -175,8 +178,7 @@ export class FileDocument {
     try {
       const answer = await this.files.readFile(this.target.path, this.target.agentId ?? undefined);
       if (!this.active || generation !== this.generation || model !== this.model) return;
-      const draft =
-        this.target.agentId === null ? this.files.drafts.get(this.target.path) : undefined;
+      const draft = this.writable ? this.files.drafts.get(this.key) : undefined;
       this.fetched = answer;
       const unchanged = model.getVersionId() === version;
       if (unchanged && (reload || clean) && (!draft || reload)) {
@@ -217,14 +219,7 @@ export class FileDocument {
   }
 
   save() {
-    if (
-      this.target.agentId !== null ||
-      !this.loaded ||
-      !this.state.dirty ||
-      this.pending() ||
-      this.stale
-    )
-      return;
+    if (!this.writable || !this.loaded || !this.state.dirty || this.pending() || this.stale) return;
     this.syncDraft();
     ++this.generation;
     this.failure = null;
@@ -234,6 +229,7 @@ export class FileDocument {
       path: this.target.path,
       content: this.content(),
       base_hash: this.loaded.hash,
+      ...(this.target.agentId === null ? {} : { agent_id: this.target.agentId }),
     });
     this.followSave(pending);
     this.emit();
@@ -246,7 +242,7 @@ export class FileDocument {
       () => {
         if (!this.active) return;
         ++this.generation;
-        const saved = this.files.saved.get(this.target.path);
+        const saved = this.files.saved.get(this.key);
         if (saved) {
           this.loaded = { content: this.normalized(saved.content), hash: saved.hash };
           this.fetched = saved;

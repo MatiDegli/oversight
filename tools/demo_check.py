@@ -15,11 +15,12 @@ what the one before left, as `make demo` does):
   3. the graph is the same as the first run's: the workspace really started clean;
   4. start fake A/B concurrently with explicit scripts; require first steps before each other's
      proposals, pending overlays, passing tests, impact and usage.tick (unknown cost, brake ok);
-  5. request changes on A with a comment; require revising and the same change's next revision;
+  5. save the editable new side while A is idle: require user attribution, pending graph and
+     re-proposal; request changes, require stale edit failures until re-read and a revision
+     preserving the user edit; refuse the same save while A works and after its change closes;
   6. resume B and stop it during work; require stopped/rejected, no pending overlay or worktree;
   7. approve A's revision: require merged and its graph.delta from the clean graph;
   8. PUT /files on main adding a function: require user_edit graph.delta containing that node;
-     TODO_EDITABLE_REVIEW_SAVE is explicitly skipped (parallel front: PUT with agent_id);
   9. stop the server (SIGTERM, with STOP_DEADLINE to exit before SIGKILL), then check it exited 0,
      no process of its tree is left, and the runtime lock is free.
 The server runs in a session of its own, and this check is a child subreaper (prctl): whatever the

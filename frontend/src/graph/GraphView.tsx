@@ -14,17 +14,21 @@ import {
   nodesInViewport,
   prefersReducedMotion,
   revealNode,
+  startCamera,
   ZOOM_RANGE,
   zoomBy,
 } from "./camera";
-import type { Camera, Framing } from "./camera";
+import type { Box, Camera, Framing } from "./camera";
+import { FIT_PADDING } from "./geometry";
 import { graphElements } from "./elements";
+import { foldController } from "./foldController";
+import { visibleId } from "./foldVisibility";
 import { createBoxSource, DotField } from "./field";
 import type { FieldInput } from "./field";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
 import { edgeShape, graphStyles } from "./styles";
-import { settle, updateGraph } from "./updateGraph";
+import { settle } from "./updateGraph";
 
 cytoscape.use(fcose);
 
@@ -52,7 +56,7 @@ export interface GraphViewProps {
    */
   panelOpen?: boolean;
   /**
-   * The change's nodes, framed with the cone at watch zoom or smaller down to the readable floor.
+   * The change's nodes, framed with the cone while keeping names and state words legible.
    * Read only when the panel target changes; incoming events move nothing. Empty falls back to the
    * selected node, then to the whole graph.
    */
@@ -61,7 +65,7 @@ export interface GraphViewProps {
   litIds?: readonly string[] | null;
   /** The review proposal's cone, used for its card, framing and out-of-view report. */
   cone?: ImpactCone | null;
-  /** Live preview for node dimming and distance badges only; never moves the camera. */
+  /** Live preview: framed once on opening, then updates badges and dimming without following edits. */
   liveCone?: ImpactCone | null;
   /** Changes only when the person opens a different panel target or enters review. */
   frameKey?: string | null;
@@ -71,6 +75,8 @@ export interface GraphViewProps {
   coneCardRef?: RefObject<HTMLDivElement | null>;
   /** Filled while the graph exists, for the zoom buttons; empty before it is created and after. */
   apiRef?: RefObject<GraphApi | null>;
+  /** The initial watch area between the heading/notices and the bottom overlays. */
+  startAreaRef?: RefObject<HTMLDivElement | null>;
   /** The lights of the dot field behind the graph and the mode that shapes them. */
   field?: FieldInput;
 }
@@ -89,15 +95,22 @@ function reportFraming(
   }
   const graphBox = host.getBoundingClientRect();
   const card = props.coneCardRef?.current?.getBoundingClientRect();
+  const clear = props.startAreaRef?.current?.getBoundingClientRect();
   const ids = [...(props.frameIds ?? []), ...props.cone.entries.map((entry) => entry.node_id)];
-  const nodes = cy.nodes().filter((node) => ids.includes(node.id()));
+  const shown = ids.map((id) => visibleId(cy, id));
+  const nodes = cy.nodes().filter((node) => shown.includes(node.id()));
   const visible = nodesInViewport(
     nodes.map((node) => ({
       id: node.id(),
       ...node.boundingBox({ includeLabels: true, includeOverlays: false }),
     })),
     framing,
-    { x1: 0, y1: 0, x2: cy.width(), y2: cy.height() },
+    {
+      x1: 0,
+      y1: 0,
+      x2: cy.width(),
+      y2: clear ? Math.min(cy.height(), clear.bottom - graphBox.top) : cy.height(),
+    },
     card
       ? {
           x1: card.left - graphBox.left,
@@ -107,7 +120,44 @@ function reportFraming(
         }
       : undefined,
   );
-  props.onFramed?.({ ...framing, outOfView: new Set(ids.filter((id) => !visible.has(id))) });
+  props.onFramed?.({
+    ...framing,
+    framed: new Set(shown.filter((id) => visible.has(id))),
+    outOfView: new Set(ids.filter((id) => !visible.has(visibleId(cy, id)))),
+  });
+}
+
+/** Snapshot panel geometry only when the person opens it, before the single camera move. */
+function panelGeometry(host: HTMLElement, props: GraphViewProps): { occlusion?: Box; area?: Box } {
+  const graph = host.getBoundingClientRect();
+  const card = props.coneCardRef?.current?.getBoundingClientRect();
+  const clear = props.startAreaRef?.current?.getBoundingClientRect();
+  const occlusion = card
+    ? {
+        x1: card.left - graph.left,
+        y1: card.top - graph.top,
+        x2: card.right - graph.left,
+        y2: card.bottom - graph.top,
+      }
+    : undefined;
+  return {
+    ...(occlusion ? { occlusion } : {}),
+    ...(clear
+      ? {
+          area: {
+            x1: (occlusion?.x2 ?? 0) + FIT_PADDING,
+            y1: FIT_PADDING,
+            x2: graph.width - FIT_PADDING,
+            y2: Math.min(graph.height - FIT_PADDING, clear.bottom - graph.top),
+          },
+        }
+      : {}),
+  };
+}
+
+function openingCone(props: GraphViewProps): readonly string[] | undefined {
+  const cone = props.cone ?? props.liveCone;
+  return cone?.entries.filter((entry) => entry.distance <= cone.max_depth).map((e) => e.node_id);
 }
 
 export function GraphView({
@@ -122,6 +172,7 @@ export function GraphView({
   onFramed,
   coneCardRef,
   apiRef,
+  startAreaRef,
   field = NO_LIGHTS,
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
@@ -153,6 +204,7 @@ export function GraphView({
       frameKey,
       onFramed,
       coneCardRef,
+      startAreaRef,
       field,
     };
     if (relit) resync.current?.();
@@ -168,6 +220,7 @@ export function GraphView({
     frameKey,
     onFramed,
     coneCardRef,
+    startAreaRef,
     field,
   ]);
   // Panel framing follows the person's choice; watch growth has its own guarded expansion.
@@ -179,11 +232,11 @@ export function GraphView({
     if (graph.current) {
       if (!wasOpen && panelOpen)
         watchCamera.current = { zoom: graph.current.zoom(), pan: { ...graph.current.pan() } };
-      const { frameIds: framed, selectedId: selected, cone: impact } = latest.current;
+      const { frameIds: framed, selectedId: selected } = latest.current;
       const focus = framed?.length ? framed : selected ? [selected] : [];
       const framing = frameCamera(graph.current, panelOpen ? focus : [], prefersReducedMotion(), {
-        coneIds: panelOpen ? impact?.entries.map((entry) => entry.node_id) : undefined,
-        watchZoom: watchCamera.current?.zoom,
+        coneIds: panelOpen ? openingCone(latest.current) : undefined,
+        ...(panelOpen && container.current ? panelGeometry(container.current, latest.current) : {}),
         restoreCamera: panelOpen ? undefined : watchCamera.current,
       });
       targetFrame.current = framing;
@@ -256,26 +309,60 @@ export function GraphView({
         cy.stop();
         quietUntil = performance.now() + NAVIGATION_QUIET_MS;
       });
+      const folding = foldController(cy);
+      let startFrame: number | undefined;
+      const mountedWithPanel = latest.current.panelOpen;
+      const frameInitialPanel = () => {
+        watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+        const framing = frameCamera(cy, latest.current.frameIds ?? [], prefersReducedMotion(), {
+          coneIds: openingCone(latest.current),
+          ...panelGeometry(host, latest.current),
+        });
+        targetFrame.current = framing;
+        reportSoon();
+      };
       const sync = () => {
         // A second addition can arrive before the first ease ends. Include both targets when
         // replacing that animation, rather than leaving the first addition outside the view.
         if (!cy.animated() || latest.current.panelOpen) arriving.clear();
         const existing = new Set(cy.nodes().map((node) => node.id()));
+        const state = stateStore.getState().state;
         const lit = latest.current.litIds;
-        updateGraph(
-          cy,
+        const foldsChanged = folding.render(
+          state,
           graphElements(
-            stateStore.getState().state,
+            state,
             false,
             lit ? new Set(lit) : null,
             latest.current.cone ?? latest.current.liveCone,
             latest.current.field?.mode === "live-diff",
           ),
         );
+        if (
+          existing.size === 0 &&
+          Object.keys(state.graph?.positions ?? {}).length > 0 &&
+          startAreaRef?.current
+        ) {
+          // SSE may populate the graph before React commits the heading and legend. Measure
+          // after that commit, so the initial camera sees the overlays the person will see.
+          startFrame = requestAnimationFrame(() => {
+            if (!startAreaRef.current || (latest.current.panelOpen && !mountedWithPanel)) return;
+            const area = startAreaRef.current.getBoundingClientRect();
+            const box = host.getBoundingClientRect();
+            startCamera(cy, {
+              x1: area.left - box.left,
+              y1: area.top - box.top,
+              x2: area.right - box.left,
+              y2: area.bottom - box.top,
+            });
+            if (latest.current.panelOpen) frameInitialPanel();
+          });
+        }
         showSelection(cy, latest.current.selectedId ?? null);
         reportSoon();
         if (
           existing.size > 0 &&
+          !foldsChanged &&
           !latest.current.panelOpen &&
           !interacting &&
           performance.now() >= quietUntil
@@ -292,7 +379,9 @@ export function GraphView({
       };
       resync.current = sync;
       cy.on("tap", "node", (event) => {
-        latest.current.onNodeTap?.((event.target as NodeSingular).id());
+        const id = (event.target as NodeSingular).id();
+        if (folding.toggle(id)) sync();
+        else latest.current.onNodeTap?.(id);
       });
       graph.current = cy;
       if (apiRef) {
@@ -304,7 +393,7 @@ export function GraphView({
             zoomBy(cy, 1 / ZOOM_STEP, prefersReducedMotion());
           },
           fit: () => {
-            frameCamera(cy, [], prefersReducedMotion());
+            frameCamera(cy, [], prefersReducedMotion(), panelGeometry(host, latest.current));
           },
           reveal: (nodeId) => {
             const target = revealNode(cy, nodeId, prefersReducedMotion());
@@ -320,15 +409,7 @@ export function GraphView({
       source.attach(cy);
       const unsubscribe = stateStore.subscribe(sync);
       sync();
-      if (latest.current.panelOpen) {
-        watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
-        const framing = frameCamera(cy, latest.current.frameIds ?? [], true, {
-          coneIds: latest.current.cone?.entries.map((entry) => entry.node_id),
-          watchZoom: watchCamera.current.zoom,
-        });
-        targetFrame.current = framing;
-        reportSoon();
-      }
+      if (latest.current.panelOpen && startFrame === undefined) frameInitialPanel();
       const resize = new ResizeObserver(() => {
         cy.resize();
         reportSoon();
@@ -350,6 +431,8 @@ export function GraphView({
         unsubscribe();
         unexpose();
         resize.disconnect();
+        // Card observation must leave the initial overlay-aware camera scheduled until unmount.
+        if (startFrame !== undefined) cancelAnimationFrame(startFrame);
         resync.current = undefined;
         observeCard.current = undefined;
         graph.current = undefined;
@@ -370,7 +453,7 @@ export function GraphView({
       cancelled = true;
       dispose?.();
     };
-  }, [apiRef]);
+  }, [apiRef, startAreaRef]);
   // The dot field is its own canvas under Cytoscape's transparent one: first in the tree, so
   // everything the graph draws is painted over it.
   return (

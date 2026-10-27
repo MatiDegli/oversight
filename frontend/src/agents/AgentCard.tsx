@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { formatUsd } from "../state";
 import type { AgentCardData } from "../state";
 import { ageWords } from "./age";
+import { StopControl } from "./StopControl";
 
 const labels: Record<AgentStatus["state"], string> = {
   starting: "Starting",
@@ -117,9 +118,10 @@ export interface AgentCardProps {
   data: AgentCardData;
   onOpenDiff?: (changeId: string) => void;
   onReview?: (changeId: string) => void;
+  onStop?: (agentId: string) => Promise<unknown>;
 }
 
-export function AgentCard({ data, onOpenDiff, onReview }: AgentCardProps) {
+export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps) {
   const { agent, modelLabel, steps, stepTimes, now, step, readyForReview, cost } = data;
   const own = look[agent.slot];
   // Keep the person's focus when what holds it leaves the card. The step list and Live diff go when
@@ -257,6 +259,9 @@ export function AgentCard({ data, onOpenDiff, onReview }: AgentCardProps) {
           >
             <Eye aria-hidden="true" className="size-4" /> Review change
           </button>
+        )}
+        {onStop && ["working", "revising", "ready_for_review", "halted"].includes(agent.state) && (
+          <StopControl agentId={agent.agent_id} onStop={onStop} />
         )}
       </footer>
     </article>

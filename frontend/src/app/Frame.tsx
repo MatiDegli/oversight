@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { AgentCard, slotUsage, TaskBox } from "../agents";
+import type { TaskBoxProps } from "../agents";
 import { FileView, LiveDiff } from "../editor";
 import type { FileAccess } from "../editor";
 import { GraphView } from "../graph";
@@ -18,6 +19,7 @@ import { fieldInput } from "./fieldScope";
 import { graphScope } from "./graphScope";
 import { changeNodeIds, panelOpen } from "./view";
 import type { View } from "./view";
+import { useFunctionTask } from "./useFunctionTask";
 
 type AgentState = AgentStatus["state"];
 
@@ -60,6 +62,7 @@ export interface FrameProps {
   onClosePanel: () => void;
   /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
+  onStopAgent?: (agentId: string) => Promise<unknown>;
   /** True for a proposed change: its card offers Review change instead of the live diff. */
   canReview?: (changeId: string) => boolean;
   onReview?: (changeId: string) => void;
@@ -102,19 +105,23 @@ function AgentsPanel({
   canOpenChange,
   onOpenChange,
   onStartAgent,
+  onStopAgent,
   canReview,
   onReview,
   replayOf,
+  inputRef,
 }: Pick<
   FrameProps,
   | "state"
   | "canOpenChange"
   | "onOpenChange"
+  | "onStopAgent"
   | "onStartAgent"
   | "canReview"
   | "onReview"
   | "replayOf"
->) {
+> &
+  Pick<TaskBoxProps, "inputRef">) {
   const cards = selectAgents(state).flatMap((agent) => {
     const data = selectAgentCard(state, agent.agent_id);
     return data ? [data] : [];
@@ -140,6 +147,7 @@ function AgentsPanel({
             <AgentCard
               key={data.agent.agent_id}
               data={data}
+              onStop={onStopAgent}
               onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
               onReview={review ? onReview : undefined}
             />
@@ -154,7 +162,7 @@ function AgentsPanel({
       {/* Pinned to the bottom, as in the sketch: a card appearing above never moves it, or the
           person's focus in it. */}
       <div className="shrink-0 border-t border-divider p-3.5">
-        <TaskBox state={state} onStart={onStartAgent} replayOf={replayOf} />
+        <TaskBox state={state} onStart={onStartAgent} replayOf={replayOf} inputRef={inputRef} />
       </div>
     </aside>
   );
@@ -251,6 +259,7 @@ function LeftPanel({ state, view, onClose }: { state: State; view: View; onClose
 export function Frame(props: FrameProps) {
   const { state, view, onNodeTap, canOpenChange, onOpenChange, onClosePanel, notice } = props;
   const open = panelOpen(view);
+  const functionTask = useFunctionTask(state, view, props.onStartAgent !== undefined);
   // The cone and the change stay lit until the decision; events never open review themselves.
   const { cone, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
   // The dot field's light follows the same state and the same view, so it never needs an event.
@@ -262,6 +271,7 @@ export function Frame(props: FrameProps) {
   const frameKey = view.review === null ? shown : `review:${view.review}`;
   const [framing, setFraming] = useState<{ key: string | null; outOfView: ReadonlySet<string> }>();
   const coneCardRef = useRef<HTMLDivElement>(null);
+  const startAreaRef = useRef<HTMLDivElement>(null);
   const graphApi = useRef<GraphApi | null>(null);
   const onFramed = useCallback(
     (result: Framing | null) => {
@@ -280,6 +290,7 @@ export function Frame(props: FrameProps) {
             state={state}
             changeId={view.review}
             attempt={props.attempts?.[view.review]}
+            files={props.files}
             onDecide={props.onDecide}
             replayOf={props.replayOf}
             onClose={onClosePanel}
@@ -289,6 +300,7 @@ export function Frame(props: FrameProps) {
         ) : view.file && props.files ? (
           <FileView
             target={view.file}
+            startAgentAction={functionTask.action}
             files={props.files}
             commit={state.graph?.commit ?? ""}
             onClose={onClosePanel}
@@ -307,11 +319,12 @@ export function Frame(props: FrameProps) {
             onFramed={onFramed}
             coneCardRef={coneCardRef}
             apiRef={graphApi}
+            startAreaRef={startAreaRef}
             field={field}
           />
           {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
               review) top left, the legend bottom left, the zoom controls bottom right. */}
-          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col justify-between gap-(--spacing-md)">
+          <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
             <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
               {cone ? (
                 <div
@@ -339,6 +352,8 @@ export function Frame(props: FrameProps) {
               )}
               {notice && <div className="pointer-events-auto text-muted">{notice}</div>}
             </div>
+            {/* The start camera uses the space between overlays, measured after fonts load. */}
+            <div data-graph-clear-area ref={startAreaRef} className="min-h-0 flex-1" />
             <div className="flex items-end justify-between gap-(--spacing-lg)">
               <div className="pointer-events-auto min-w-0">
                 <Legend state={state} />
@@ -349,14 +364,16 @@ export function Frame(props: FrameProps) {
             </div>
           </div>
         </main>
-        {open ? (
+        {open && !functionTask.expanded ? (
           <AgentsRail state={state} />
         ) : (
           <AgentsPanel
+            inputRef={functionTask.inputRef}
             state={state}
             canOpenChange={canOpenChange}
             onOpenChange={onOpenChange}
             onStartAgent={props.onStartAgent}
+            onStopAgent={props.onStopAgent}
             canReview={props.canReview}
             onReview={props.onReview}
             replayOf={props.replayOf}

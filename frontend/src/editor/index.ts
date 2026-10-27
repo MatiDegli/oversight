@@ -5,3 +5,6 @@ export type { EditorColors } from "./theme";
 export { FileView } from "./FileView";
 export type { FileViewProps } from "./FileView";
 export type { FileAccess, FileDraft } from "./fileDocument";
+
+export { fileKey } from "./fileDocument";
+export { ReviewEditor } from "./ReviewEditor";
