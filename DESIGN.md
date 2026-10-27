@@ -468,8 +468,9 @@ person is doing.
   letter avatar 36px; status lamp 10px; distance badge 20px.
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
-  every take. Switching modes changes the camera, never node positions. Orthogonal ("taxi") edges
-  are tried on Tue Oct 27 and kept if they read better than curves.
+  every take. Switching modes changes the camera, never node positions. Edges are curves: orthogonal
+  ("taxi") edges were compared on the preset layout and curves read better (DECISIONS.md,
+  2026-10-26).
 
 ## Elevation & Depth
 
