@@ -33,8 +33,7 @@ export interface Theme {
 /**
  * Clicks the center of the first node with a pending change, as the person would, waits for the
  * left panel (`panel`, its aria-label) to show the diff's inserted lines and for the camera to
- * settle, then checks the change framing (with the cone only in review) against watch zoom and
- * the 12px label floor.
+ * settle, then checks the change and cone framing with legible labels and state words.
  * Cytoscape draws on a canvas, so the node's place on screen comes from the graph element's own
  * probe (src/graph/probe.ts), which the app exposes for this. A proposed change opens review; one
  * still being edited opens the live diff.
@@ -49,10 +48,6 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
     return { id: node.id, x: box.left + node.x, y: box.top + node.y };
   }, graph);
   const { id, x, y } = (await handle.jsonValue()) as { id: string; x: number; y: number };
-  const zoomBefore = await page.evaluate(
-    (selector) => document.querySelector<GraphProbeHost>(selector)?.oversightGraph?.zoom(),
-    graph,
-  );
   await page.mouse.click(x, y);
   await page.locator(`[aria-label="${panel}"] .line-insert`).first().waitFor();
   await page.waitForFunction((selector) => {
@@ -60,14 +55,38 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
     return host?.oversightGraph?.animating() === false;
   }, graph);
   // Full lit bounds include labels and badges; the graph's position between panel and rail is its
-  // viewport. Distant cone nodes may be clipped once further shrinking would make labels unreadable.
+  // viewport. Distant cone nodes use the out-of-view rows when the full cone cannot fit legibly.
   const framed = await page.evaluate(
-    ({ selector, nodeId }) => {
+    ({ selector }) => {
       const host = document.querySelector<GraphProbeHost>(selector);
       const view = host?.oversightGraph;
       return host && view
         ? {
             zoom: view.zoom(),
+            labelSizes: {
+              name: Number.parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--node-name-size"),
+              ),
+              state: Number.parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--node-word-size"),
+              ),
+            },
+            area: (() => {
+              const clear = document
+                .querySelector("[data-graph-clear-area]")
+                ?.getBoundingClientRect();
+              if (!clear) throw new Error("Missing graph clear area");
+              const graph = host.getBoundingClientRect();
+              const card = document
+                .querySelector('[aria-label="Possibly affected"]')
+                ?.getBoundingClientRect();
+              return {
+                x1: (card ? card.right - graph.left : 0) + 40,
+                y1: 40,
+                x2: host.clientWidth - 40,
+                y2: Math.min(host.clientHeight - 40, clear.bottom - graph.top),
+              };
+            })(),
             leftInset: (() => {
               const card = document.querySelector('[aria-label="Possibly affected"]');
               return card
@@ -99,19 +118,78 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
             ],
             pan: view.pan(),
             size: { width: host.clientWidth, height: host.clientHeight },
-            focus: view.nodeBounds().filter((node) => node.id === nodeId),
+            focus: view.nodeBounds("node.pending"),
             cone: view.nodeBounds("node.cone"),
+            graph: view.nodeBounds(),
+            modules: view.nodeBounds(".module"),
           }
         : null;
     },
-    { selector: graph, nodeId: id },
+    { selector: graph },
   );
   if (!framed?.focus.length) throw new Error(`the clicked node ${id} is not on the graph`);
-  if (zoomBefore === undefined) throw new Error("the watch zoom is unavailable");
-  if (panel === "Review panel") {
-    assert(Math.abs(framed.zoom - 0.8) < 1e-6, "the demo cone must stay at the 12px floor");
+  assertPanelFrame(framed, panel === "Review panel" ? "review" : "live-diff");
+}
+
+async function openFileView(page: Page): Promise<void> {
+  const path = "shop/cart.py";
+  // The uncut start camera may leave Cart wholly outside the view. Reveal it as a person
+  // would before opening the file; a screenshot must not click an offscreen class row.
+  await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+        ?.oversightGraph?.animating() === false,
+  );
+  const content = await readFile(new URL(`../../demo-repo/${path}`, import.meta.url), "utf8");
+  await page.route("**/files?*", (route) =>
+    route.fulfill({
+      json: {
+        path,
+        content,
+        hash: createHash("sha256").update(content).digest("hex"),
+        agent_id: null,
+      },
+    }),
+  );
+  const folded = await page.evaluate(() => {
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const row = host?.oversightGraph
+      ?.nodeCenters(".folded")
+      .find(({ id }) => id === "shop.cart:Cart");
+    const box = host?.getBoundingClientRect();
+    return row && box ? { x: box.left + row.x, y: box.top + row.y } : null;
+  });
+  if (folded) {
+    await page.mouse.click(folded.x, folded.y);
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+          ?.oversightGraph?.animating() === false,
+    );
   }
-  assertPanelFrame(zoomBefore, framed, panel === "Review panel" ? "review" : "live-diff");
+  const point = await page.evaluate(() => {
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const node = host?.oversightGraph?.nodeCenters().find(({ id }) => id === "shop.cart:Cart.add");
+    if (!host || !node) throw new Error("The untouched cart node is missing");
+    const box = host.getBoundingClientRect();
+    return { x: box.left + node.x, y: box.top + node.y };
+  });
+  await page.mouse.click(point.x, point.y);
+  const panel = page.getByRole("complementary", { name: "File view" });
+  await panel.locator(".monaco-editor .view-lines").waitFor();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[aria-label="File view"]')?.getAttribute("data-state") === "clean",
+  );
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+        ?.oversightGraph?.animating() === false,
+  );
 }
 
 export const scenes: readonly Scene[] = [
@@ -214,68 +292,17 @@ export const scenes: readonly Scene[] = [
     enabled: true,
     // The replay API has no file contents. This scene reads the demo template through a GET
     // double; it is a capture of the file view, not a saved edit reconstructed from the log.
+    prepare: openFileView,
+  },
+  {
+    name: "file-view-task",
+    enabled: true,
     prepare: async (page) => {
-      const path = "shop/cart.py";
-      // The uncut start camera may leave Cart wholly outside the view. Reveal it as a person
-      // would before opening the file; a screenshot must not click an offscreen class row.
-      await page.getByRole("button", { name: "Fit the graph to the view" }).click();
-      await page.waitForFunction(
-        () =>
-          document
-            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-            ?.oversightGraph?.animating() === false,
-      );
-      const content = await readFile(new URL(`../../demo-repo/${path}`, import.meta.url), "utf8");
-      await page.route("**/files?*", (route) =>
-        route.fulfill({
-          json: {
-            path,
-            content,
-            hash: createHash("sha256").update(content).digest("hex"),
-            agent_id: null,
-          },
-        }),
-      );
-      const folded = await page.evaluate(() => {
-        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
-        const row = host?.oversightGraph
-          ?.nodeCenters(".folded")
-          .find(({ id }) => id === "shop.cart:Cart");
-        const box = host?.getBoundingClientRect();
-        return row && box ? { x: box.left + row.x, y: box.top + row.y } : null;
-      });
-      if (folded) {
-        await page.mouse.click(folded.x, folded.y);
-        await page.waitForFunction(
-          () =>
-            document
-              .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-              ?.oversightGraph?.animating() === false,
-        );
-      }
-      const point = await page.evaluate(() => {
-        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
-        const node = host?.oversightGraph
-          ?.nodeCenters()
-          .find(({ id }) => id === "shop.cart:Cart.add");
-        if (!host || !node) throw new Error("The untouched cart node is missing");
-        const box = host.getBoundingClientRect();
-        return { x: box.left + node.x, y: box.top + node.y };
-      });
-      await page.mouse.click(point.x, point.y);
-      const panel = page.getByRole("complementary", { name: "File view" });
-      await panel.locator(".monaco-editor .view-lines").waitFor();
-      await page.waitForFunction(
-        () =>
-          document.querySelector('[aria-label="File view"]')?.getAttribute("data-state") ===
-          "clean",
-      );
-      await page.waitForFunction(
-        () =>
-          document
-            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-            ?.oversightGraph?.animating() === false,
-      );
+      await openFileView(page);
+      await page.getByRole("button", { name: "Start an agent here" }).click();
+      const box = page.getByLabel("Task for the new agent");
+      assert.equal(await box.inputValue(), "In shop/cart.py, Cart.add: ");
+      assert.equal(await box.evaluate((element) => document.activeElement === element), true);
     },
   },
 ];

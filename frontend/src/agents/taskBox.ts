@@ -119,6 +119,8 @@ export function startFailure(error: unknown): string {
 
 export interface TaskBoxModel {
   draft: string;
+  /** The action that supplied this draft, retained while file actions unmount. */
+  prefilled: { nodeId: string; text: string } | null;
   /** From the request's departure until the server's answer. */
   pending: boolean;
   /** The last start's failure; the next edit or start clears it. */
@@ -126,6 +128,8 @@ export interface TaskBoxModel {
   choice: SlotChoice | null;
   choose: (choice: SlotChoice) => void;
   setDraft: (text: string) => void;
+  /** Fill only an empty, idle box; even whitespace belongs to the person. */
+  prefill: (text: string, nodeId: string) => boolean;
   /** Sends the trimmed task and the selected slot when the box offers a choice. */
   start: (send: (body: StartAgent) => Promise<unknown>, slot?: Slot | null) => Promise<void>;
 }
@@ -137,6 +141,7 @@ export interface TaskBoxModel {
 export function createTaskBoxStore() {
   return createStore<TaskBoxModel>()((set, get) => ({
     draft: "",
+    prefilled: null,
     pending: false,
     failure: null,
     choice: null,
@@ -144,7 +149,12 @@ export function createTaskBoxStore() {
       if (!get().pending) set({ choice, failure: null });
     },
     setDraft: (draft) => {
-      set({ draft, failure: null });
+      set({ draft, prefilled: null, failure: null });
+    },
+    prefill: (draft, nodeId) => {
+      if (get().pending || get().draft !== "") return false;
+      set({ draft, prefilled: { nodeId, text: draft }, failure: null });
+      return true;
     },
     start: async (send, slot) => {
       const task = get().draft.trim();
@@ -153,7 +163,7 @@ export function createTaskBoxStore() {
       try {
         await send(slot ? { task, slot } : { task });
         // The agent's card arrives as events; the box only empties.
-        set({ draft: "", pending: false });
+        set({ draft: "", prefilled: null, pending: false });
       } catch (error) {
         set({ pending: false, failure: startFailure(error) });
       }

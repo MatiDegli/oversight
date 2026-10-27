@@ -2,6 +2,7 @@ import type { AnimationOptions, Core, CollectionReturnValue } from "cytoscape";
 
 import { getActiveTheme } from "../theme";
 
+import { changeFrame } from "./changeFrame";
 import { visibleId } from "./foldVisibility";
 import { FIT_PADDING } from "./geometry";
 import { startingView } from "./startingView";
@@ -31,6 +32,7 @@ interface Limits {
   leftInset?: number;
   /** The overlay's actual rendered box; independent of the column reserved for fitting. */
   occlusion?: Box;
+  area?: Box;
 }
 
 export interface FrameNode extends Box {
@@ -54,7 +56,7 @@ export interface Framing extends Camera {
 
 const EPSILON = 1e-7;
 
-/** Full boxes only: the fit area has padding; the visible area does not. */
+/** Full boxes only: visibility excludes overlays, without the fit area's side padding. */
 export function nodesInViewport(
   nodes: readonly FrameNode[],
   camera: Camera,
@@ -91,8 +93,8 @@ export function frameBox(
   limits: Limits,
   cone: readonly FrameNode[] = [],
 ): Framing | null {
-  const visible = { x1: 0, y1: 0, x2: size.width, y2: size.height };
-  const area = {
+  const visible = { x1: 0, y1: 0, x2: size.width, y2: limits.area?.y2 ?? size.height };
+  const area = limits.area ?? {
     x1: (limits.leftInset ?? 0) + limits.padding,
     y1: limits.padding,
     x2: size.width - limits.padding,
@@ -345,84 +347,92 @@ export function revealNode(cy: Core, id: string, reduceMotion: boolean): Camera 
   return camera;
 }
 
-/**
- * Fit the lit nodes subject to the readable floor. The whole-graph fit has the floor of the zoom
- * range: a graph too wide to fit above it is centered at its lower end, not fitted below it.
- */
-function cameraFor(
-  cy: Core,
-  eles: CollectionReturnValue,
-  zoom: number,
-  cone?: CollectionReturnValue,
-  readable = false,
-  occlusion?: Box,
-): Framing | null {
-  const theme = getActiveTheme();
-  const bounds = (nodes: CollectionReturnValue) =>
-    nodes.map((node) => ({
+/** Fit all nodes for the explicit Fit control, within the person's navigation range. */
+function fitCamera(cy: Core, area?: Box, occlusion?: Box): Framing | null {
+  return frameBox(
+    cy.nodes().map((node) => ({
       id: node.id(),
       ...node.boundingBox({ includeLabels: true, includeOverlays: false }),
-      distance: node.data("distance") as number | undefined,
-    }));
-  return frameBox(
-    bounds(eles),
+    })),
     { width: cy.width(), height: cy.height() },
-    zoom,
-    {
-      padding: PADDING,
-      occlusion,
-      maxZoom: cy.maxZoom(),
-      leftInset: readable ? coneInset(theme) : 0,
-      minZoom: readable
-        ? Number.parseFloat(theme["cursor-name-size"]) / Number.parseFloat(theme["body-size"])
-        : cy.minZoom(),
-    },
-    cone ? bounds(cone) : [],
+    Infinity,
+    { padding: PADDING, minZoom: cy.minZoom(), maxZoom: cy.maxZoom(), area, occlusion },
   );
 }
 
-/**
- * Moves the camera after the left panel opened or closed, and nothing else: no node moves and no
- * layout runs. Opening keeps the zoom the watch view had, so labels stay at their size, and centers
- * the nodes in `focusIds` (the change's nodes) in the graph's visible area, between the panel and
- * the rail. With a review cone, it zooms out only as far as needed, keeping labels at least 12px.
- * At the floor, maximize complete callers by distance in the area to the right of the cone card.
- * Farther callers stay lit and listed in the cone card. Closing, or opening with no node to frame,
- * restores the saved watch camera, or fits the whole graph if none was saved. The move eases over
- * the theme's transition and jumps under reduced motion.
- */
+/** One mode-change move; closing restores the person's exact camera. No node is positioned. */
 export function frameCamera(
   cy: Core,
   focusIds: readonly string[],
   reduceMotion: boolean,
   {
     coneIds,
-    watchZoom = cy.zoom(),
+    maxDepth = Infinity,
     restoreCamera,
     occlusion,
+    area,
   }: {
     coneIds?: readonly string[];
-    watchZoom?: number;
+    maxDepth?: number;
     restoreCamera?: Camera;
     occlusion?: Box;
+    area?: Box;
   } = {},
 ): Framing | null {
   // The container just changed size; Cytoscape only learns it when told.
   cy.resize();
-  const focus = focusIds.reduce(
-    (nodes, id) => nodes.union(cy.getElementById(visibleId(cy, id))),
-    cy.collection(),
+  const nodes = cy.nodes().map((node) => ({
+    id: node.id(),
+    ...node.boundingBox({ includeLabels: true, includeOverlays: false }),
+  }));
+  const available = [...focusIds, ...(coneIds ?? [])].some((id) =>
+    cy.getElementById(visibleId(cy, id)).nonempty(),
   );
-  const shownCone = coneIds?.map((id) => visibleId(cy, id));
-  const cone = cy.nodes().filter((node) => shownCone?.includes(node.id()) ?? false);
-  // Empty review cones still reserve their card and use the label floor.
-  const camera: Framing | null = restoreCamera
-    ? { ...restoreCamera, framed: new Set(), outOfView: new Set() }
-    : focus.nonempty() || cone.nonempty()
-      ? cameraFor(cy, focus, watchZoom, cone, coneIds !== undefined, occlusion)
-      : cy.nodes().nonempty()
-        ? cameraFor(cy, cy.nodes().filter("node"), Number.POSITIVE_INFINITY)
-        : null;
+  const target =
+    restoreCamera ??
+    (available
+      ? changeFrame({
+          nodes,
+          changed: focusIds,
+          cone: (coneIds ?? []).map((id) => ({
+            node_id: id,
+            distance:
+              (cy.getElementById(visibleId(cy, id)).data("distance") as number | undefined) ?? 1,
+          })),
+          maxDepth,
+          representatives: cy.scratch("foldAliases") as ReadonlyMap<string, string> | undefined,
+          graph: cy.nodes().boundingBox({ includeLabels: true, includeOverlays: false }),
+          frames: cy
+            .nodes(".module")
+            .map((node) => node.boundingBox({ includeLabels: true, includeOverlays: false })),
+          size: { width: cy.width(), height: cy.height() },
+          area: area ?? {
+            x1: (occlusion ? occlusion.x2 : 0) + PADDING,
+            y1: PADDING,
+            x2: cy.width() - PADDING,
+            y2: cy.height() - PADDING,
+          },
+        })
+      : fitCamera(cy, area, occlusion));
+  const onScreen = target
+    ? nodesInViewport(
+        nodes,
+        target,
+        { x1: 0, y1: 0, x2: cy.width(), y2: area?.y2 ?? cy.height() },
+        occlusion,
+      )
+    : new Set<string>();
+  const camera = target
+    ? {
+        ...target,
+        framed: new Set(
+          [...focusIds, ...(coneIds ?? [])]
+            .map((id) => visibleId(cy, id))
+            .filter((id) => onScreen.has(id)),
+        ),
+        outOfView: new Set(nodes.filter((node) => !onScreen.has(node.id)).map((node) => node.id)),
+      }
+    : null;
   if (!camera) return null;
   camera.outOfView = new Set(
     [...focusIds, ...(coneIds ?? [])].filter(

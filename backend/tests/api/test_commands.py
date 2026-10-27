@@ -5,6 +5,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from decision_helpers import observed_body
 from fastapi.testclient import TestClient
 from live_helpers import (
     DEADLINE_S,
@@ -27,8 +28,18 @@ pytestmark = pytest.mark.anyio
 
 async def test_unknown_and_malformed_change_ids_are_not_found(tmp_path: Path) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
-        assert error_code(await s.client.post("/changes/change-9/approve")) == (404, "not_found")
-        assert error_code(await s.client.post("/changes/not-an-id/reject")) == (404, "not_found")
+        assert error_code(
+            await s.client.post(
+                "/changes/change-9/approve",
+                json={
+                    **observed_body(s, "change-9"),
+                    "revision": max(1, observed_body(s, "change-9")["revision"]),
+                },
+            )
+        ) == (404, "not_found")
+        assert error_code(
+            await s.client.post("/changes/not-an-id/reject", json=observed_body(s, "not-an-id"))
+        ) == (404, "not_found")
 
 
 async def test_approve_before_the_proposal_is_wrong_state_and_a_racing_start_slot_busy(
@@ -50,7 +61,13 @@ async def test_approve_before_the_proposal_is_wrong_state_and_a_racing_start_slo
         created = AgentCreated.model_validate((second if busy is first else first).json())
         assert created.slot == "A"
         await model.entered.wait()  # the run is working: nothing is proposed yet
-        response = await s.client.post(f"/changes/{created.change_id}/approve")
+        response = await s.client.post(
+            f"/changes/{created.change_id}/approve",
+            json={
+                **observed_body(s, created.change_id),
+                "revision": max(1, observed_body(s, created.change_id)["revision"]),
+            },
+        )
         assert error_code(response) == (409, "wrong_state")
         assert error_code(await s.client.post("/agents", json={"task": "x"})) == (409, "slot_busy")
 
@@ -64,11 +81,20 @@ async def test_a_second_decision_is_wrong_state_and_one_resolution_is_logged(
         )
         await s.until(is_type("agent.status", state="ready_for_review"))
         approve = await s.client.post(
-            f"/changes/{created.change_id}/approve", json={"comment": "ok"}
+            f"/changes/{created.change_id}/approve",
+            json={
+                **{
+                    **observed_body(s, created.change_id),
+                    "revision": max(1, observed_body(s, created.change_id)["revision"]),
+                },
+                "comment": "ok",
+            },
         )
         assert approve.status_code == 202
         assert approve.content == b""
-        again = await s.client.post(f"/changes/{created.change_id}/reject")
+        again = await s.client.post(
+            f"/changes/{created.change_id}/reject", json=observed_body(s, created.change_id)
+        )
         assert error_code(again) == (409, "wrong_state")
         await s.until(is_type("agent.status", state="done"))
         resolved = [e for e in s.events() if e.type == "change.resolved"]

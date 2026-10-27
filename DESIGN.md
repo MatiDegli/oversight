@@ -493,6 +493,16 @@ person is doing.
   on its own only where it already does by design (opening and closing review, a node added while
   the person is not navigating); no node ever moves. A cone row that says "Out of view" pans the
   camera to its node when clicked, and never otherwise.
+- **Opening a change:** review and live diff frame the changed nodes and the cone up to its
+  depth limit, zooming out only as needed from 100%, with a floor derived from the smaller of
+  the node-name-size and node-word-size tokens so names and state words stay at least 11 CSS px.
+  If the full cone cannot fit at that floor, frame the changes and distance 1; if that still cannot
+  fit, keep the changes and add distance 1 members in order of their shortest box-to-change gap,
+  as many as fit at the floor. Other members stay listed in review's out-of-view rows.
+  The measured cone overlay column and bottom controls stay clear of every framed node.
+  Hidden methods frame their folded class row. Center within the graph bounds and prefer
+  uncut module frames as at the start. One 240ms eased move, or a reduced-motion jump; a person's
+  navigation interrupts it. Live edits never repeat that move. Closing restores the saved camera.
 - **The preset's arrangement:** modules in columns, calls flowing from left to right, in two passes
   (blocks first, then each module's contents inside its block), so that a zoom view can later shrink
   a module to a dot at its center. Gutters of 120px between columns and 80px between stacked
@@ -699,6 +709,13 @@ change is proposed.
 - **File view:** the file in main with the function's lines marked as a highlighted span; from level
   2 it is editable and edits go to main. On the graph the selected node and its direct callers and
   callees stay lit; the rest dims.
+- **Start from a function (level 3):** a quiet Bot icon and "Start an agent here" in the file
+  header, only for functions and methods in a live run. Clicking opens the existing agents panel
+  beside the file, prefills `In {path}, {qualified name}: ` and focuses the task box at its end.
+  The file, local edits and graph selection stay in place. Slot choice, model and Start agent
+  stay as they are; this action sends no command. With no free slot, show the task box's reason.
+  An occupied or starting task box keeps its text and explains why the action is unavailable.
+  Events and later mounts never repeat the click's focus request.
 
 ### Dot field and rings (signature component)
 

@@ -40,6 +40,8 @@ from oversight.agents import (
     UnknownUsage,
     UsageLedger,
     load_script,
+    validate_agent_status,
+    validate_usage_tick,
 )
 from oversight.api import ApiError, add_static, create_router, install_error_handlers
 from oversight.changes import ChangeManager, ChangeNotFound, Revision, WrongState
@@ -57,7 +59,16 @@ from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
 from oversight.workspace import Tree, Workspace
 from oversight_contracts import CONTRACT_VERSION
-from oversight_contracts.commands import AgentCreated, FileContent, FileSaved, SaveFile, StartAgent
+from oversight_contracts.commands import (
+    AgentCreated,
+    ApproveChange,
+    FileContent,
+    FileSaved,
+    RejectChange,
+    RequestChanges,
+    SaveFile,
+    StartAgent,
+)
 from oversight_contracts.common import Slot
 from oversight_contracts.events import (
     AgentStatus,
@@ -105,6 +116,7 @@ type ClientFactory = Callable[[ModelProfile, Slot], ModelClient]
 @dataclass(frozen=True)
 class ReplayConfig:
     log: Path
+    allow_fake_provider: bool = False
     speed: float = 1.0
     """1 follows the log's gaps, each capped at 2 seconds; 2 is twice as fast; 0 has no pauses."""
 
@@ -183,7 +195,15 @@ class LiveRun:
             demo_python=settings.demo_python,
         )
         self.run_id = new_run_id(settings.runtime_dir, datetime.now(UTC))
-        self.store = EventStore(run_store_path(settings.runtime_dir, self.run_id), self.run_id)
+        self.store = EventStore(
+            run_store_path(settings.runtime_dir, self.run_id),
+            self.run_id,
+            allow_fake_provider=bool(self._scripts)
+            and all(
+                profile.provider == "fake" and slot in self._scripts
+                for slot, profile in self._slot_profiles.items()
+            ),
+        )
         self.ledger = LedgerFile(settings.runtime_dir / "ledger.json")
         self._usage = UsageLedger(0.0)
         self._manager: ChangeManager | None = None
@@ -388,8 +408,14 @@ class LiveRun:
         """The store's publish for the runtime and the manager: a metered agent's tick is written
         to the ledger before it goes out, and a closed change frees its slot once its event is
         out."""
+        if isinstance(payload, UsageTick):
+            validate_usage_tick(payload)
         if isinstance(payload, UsageTick) and self._is_metered(payload.agent_id):
             await self._persist(payload)
+        if isinstance(payload, AgentStatus):
+            base = self._manager.agent_base(payload.agent_id) if self._manager else None
+            payload = payload.model_copy(update={"base_commit": base})
+            validate_agent_status(payload, base_commit=base)
         stored = await self.store.publish(payload)
         if isinstance(payload, ChangeResolved) and (
             payload.decision == "rejected" or payload.merge == "merged"
@@ -734,19 +760,23 @@ class LiveRun:
         except Exception as error:
             _log.error("could not publish %s's halt: %s", task.agent_id, _describe(error))
 
-    def approve(self, change_id: str, comment: str | None) -> None:
+    def approve(self, change_id: str, request: ApproveChange) -> None:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
         if self._manager.main_suspect:
             raise ApiError("wrong_state", MAIN_SUSPECT)
-        self._manager.approve(change_id, comment)
+        self._manager.approve(
+            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+        )
 
-    def reject(self, change_id: str, comment: str | None) -> None:
+    def reject(self, change_id: str, request: RejectChange) -> None:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
-        self._manager.reject(change_id, comment)
+        self._manager.reject(
+            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+        )
 
-    def request_changes(self, change_id: str, comment: str) -> None:
+    def request_changes(self, change_id: str, request: RequestChanges) -> None:
         """Send the comment back to the agent, which resumes in its kept run. A revision spends
         credits like a start, so a metered agent is refused while the brake is closed, and nothing
         revises while main is suspect. The checks come before the manager's, so a refusal changes
@@ -754,7 +784,7 @@ class LiveRun:
         manager = self._manager
         if manager is None:
             raise ApiError("wrong_state", "the run has not started")
-        if not comment.strip():
+        if not request.comment.strip():
             raise ApiError("invalid_request", "the comment is empty")
         owner = next(
             ((agent_id, a) for agent_id, a in self._agents.items() if a.change_id == change_id),
@@ -769,7 +799,9 @@ class LiveRun:
         run = self._kept.get(agent_id)
         if run is None:  # resolved, or its run never started: no state takes a request
             raise ApiError("wrong_state", f"{change_id} has no run to resume")
-        decision = manager.request_changes(change_id, comment)
+        decision = manager.request_changes(
+            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+        )
         # No `await` from the manager's flip to the registration: a shutdown finds both.
         self._decisions[agent_id] = decision
         self._runs[agent_id] = asyncio.create_task(
@@ -887,7 +919,7 @@ def _replay_app(settings: Settings, replay: ReplayConfig) -> FastAPI:
     run_id = events[0].payload.run_id
     # A replay gets its own file, so replaying an exported run never touches that run's own log.
     path = settings.runtime_dir / "replays" / f"{run_id}.sqlite"
-    store = EventStore(path, run_id)
+    store = EventStore(path, run_id, mode="replay", allow_fake_provider=replay.allow_fake_provider)
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:

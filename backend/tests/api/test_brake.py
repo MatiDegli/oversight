@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from decision_helpers import observed_body
 from live_helpers import (
     DEADLINE_S,
     Scripts,
@@ -142,7 +143,10 @@ async def test_replies_without_usage_refuse_the_next_start_until_settled(tmp_pat
             [entry] = read_ledger(settings)["unknown"]
             assert entry["run_id"] == s.live.run_id and entry["agent_id"] == "agent-1"
             assert (
-                await s.client.post(f"/changes/{created['change_id']}/reject")
+                await s.client.post(
+                    f"/changes/{created['change_id']}/reject",
+                    json=observed_body(s, created["change_id"]),
+                )
             ).status_code == 202
             await s.until(is_type("agent.status", state="done"))
             refused = await s.client.post("/agents", json={"task": "t"})
@@ -292,7 +296,9 @@ async def test_a_tick_the_ledger_cannot_record_stops_the_run_and_closes_the_brak
         assert (refused.status_code, body.code) == (403, "spend_brake")
         assert "settle with Meta's console total before the next run" in body.message
         # The slot is released the usual way, by rejecting the change.
-        rejected = await s.client.post(f"/changes/{created['change_id']}/reject")
+        rejected = await s.client.post(
+            f"/changes/{created['change_id']}/reject", json=observed_body(s, created["change_id"])
+        )
         assert rejected.status_code == 202
         await s.until(is_type("agent.status", state="done"))
         assert s.live._slots["A"] is None  # pyright: ignore[reportPrivateUsage]
@@ -385,7 +391,11 @@ async def expect_lost_ledger(
     assert (refused.status_code, body.code) == (403, "spend_brake")
     assert "settle with Meta's console total before the next run" in body.message
     # The change stays rejectable, and rejecting it frees the slot.
-    assert (await s.client.post(f"/changes/{created['change_id']}/reject")).status_code == 202
+    assert (
+        await s.client.post(
+            f"/changes/{created['change_id']}/reject", json=observed_body(s, created["change_id"])
+        )
+    ).status_code == 202
     await s.until(is_type("agent.status", state="done"))
     assert s.live._slots["A"] is None  # pyright: ignore[reportPrivateUsage]
 

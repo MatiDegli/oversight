@@ -138,7 +138,11 @@ def request_revision(
         request(
             base,
             f"/changes/{who.change_id}/request-changes",
-            post={"comment": comment},
+            post={
+                "comment": comment,
+                "revision": proposal.payload.revision,
+                "head_commit": proposal.payload.head_commit,
+            },
             clock=clock,
         ),
         f"{who.slot} POST request changes",
@@ -176,7 +180,16 @@ def stop_working_b(
     if not tree.is_dir():
         raise smoke.SmokeError("B worktree missing before Stop")
     before = graph_of(base, clock).seq
-    expect(request(base, f"/agents/{b.agent_id}/stop", post={}, clock=clock), "B POST stop", 202)
+    expect(
+        request(
+            base,
+            f"/agents/{b.agent_id}/stop",
+            post={},
+            clock=clock,
+        ),
+        "B POST stop",
+        202,
+    )
     stopped = wait_for(stream, b, "agent.status", before, state="stopped")
     resolved = wait_for(
         stream, b, "change.resolved", stopped.seq, revision=proposal.payload.revision
@@ -228,7 +241,15 @@ def approve_a(
     clock.set_phase("A: approve revised change and wait for merge delta")
     before = graph_of(base, clock).seq
     expect(
-        request(base, f"/changes/{a.change_id}/approve", post={}, clock=clock),
+        request(
+            base,
+            f"/changes/{a.change_id}/approve",
+            post={
+                "revision": proposal.payload.revision,
+                "head_commit": proposal.payload.head_commit,
+            },
+            clock=clock,
+        ),
         "A POST approve",
         202,
     )

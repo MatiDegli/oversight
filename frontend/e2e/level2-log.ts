@@ -58,6 +58,10 @@ export const approved = eventOf(
   "change.resolved",
   (e) => e.payload.agent_id === a.agent_id && e.payload.merge === "merged",
 );
+export const approvedProposal = eventOf(
+  "change.proposed",
+  (e) => e.payload.change_id === a.change_id && e.payload.revision === approved.payload.revision,
+).payload;
 export const mainEdit = events.findLast(
   (e) => e.type === "graph.delta" && e.payload.cause === "user_edit",
 );

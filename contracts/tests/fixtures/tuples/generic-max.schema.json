@@ -1,0 +1,19 @@
+{
+  "$defs": {
+    "GenericSmallList": {
+      "type": "object",
+      "properties": {
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "values"
+      ]
+    }
+  }
+}

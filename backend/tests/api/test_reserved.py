@@ -35,7 +35,9 @@ async def test_reserved_routes_never_read_bodies_or_cause_effects(
     # A real store and the production router; any command call is observable. `receive` is the
     # body source, so even trying to read malformed JSON fails this test before a 501 is returned.
     commands = Mock(spec=Commands)
-    async with EventStore(tmp_path / "events.sqlite", "run-20261027-140312") as store:
+    async with EventStore(
+        tmp_path / "events.sqlite", "run-20261027-140312", mode="replay"
+    ) as store:
         app = FastAPI()
         app.include_router(create_router(store, mode, commands if mode == "live" else None))
         install_error_handlers(app)
@@ -77,7 +79,7 @@ async def test_reserved_prefixes_do_not_fall_back_to_the_static_ui(
     dist.mkdir()
     (dist / "index.html").write_text("<title>UI</title>")
     app = FastAPI()
-    store = EventStore(tmp_path / "unused.sqlite", "run-20261027-140312")
+    store = EventStore(tmp_path / "unused.sqlite", "run-20261027-140312", mode="replay")
     app.include_router(create_router(store, "replay"))
     install_error_handlers(app)
     add_static(app, dist)

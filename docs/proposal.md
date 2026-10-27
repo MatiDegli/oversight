@@ -552,17 +552,29 @@ the single error format.
 
 | Command | Body | Success | Errors |
 | --- | --- | --- | --- |
-| `POST /agents` | `StartAgent {task, slot?, model?}` | 201 `AgentCreated {agent_id, change_id, slot}` | `slot_busy`, `not_configured`, `spend_brake` |
+| `POST /agents` | `StartAgent {task, slot?, model?, zone?}` | 201 `AgentCreated {agent_id, change_id, slot}` | `slot_busy`, `not_configured`, `spend_brake` |
 | `POST /agents/{id}/stop` | none | 202 | `not_found`, `wrong_state` |
 | `POST /agents/{id}/message` | `{text}` | 501 until level 3 | |
 | `POST /agents/{id}/pause` | none | 501 until level 3 | |
 | `POST /agents/{id}/resume` | none | 501 until level 3 | |
-| `POST /changes/{id}/approve` | `{comment?}` | 202 | `not_found`, `wrong_state` |
-| `POST /changes/{id}/request-changes` | `{comment}`, not empty | 202 | `not_found`, `wrong_state` |
-| `POST /changes/{id}/reject` | `{comment?}` | 202 | `not_found`, `wrong_state` |
+| `POST /changes/{id}/approve` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
+| `POST /changes/{id}/request-changes` | `{revision, head_commit, comment}`, not empty | 202 | `not_found`, `wrong_state` |
+| `POST /changes/{id}/reject` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
+| `GET /agents/{id}` | none | Reserved: 501; then 200 `AgentStatus` for coding agents | `not_implemented` |
+| `POST /changes/{id}/review` | `ReviewChange {revision, head_commit, main_commit}` | Reserved: 501; then 202 | `not_implemented` |
+| `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | Reserved: 501; then 202 | `not_implemented` |
+| `GET /changes/{id}` | none | Reserved: 501; then 200 `ChangeView` | `not_implemented` |
+| `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | Reserved: 501; then 200 `HistoryPage` | `not_implemented` |
+| `POST /queue` | `EnqueueTask` | Reserved: 501; then 201 `QueuedTask` | `not_implemented` |
+| `GET /queue`, `GET /queue/{id}` | none | Reserved: 501; then 200 `QueueSnapshot` / `QueuedTask` | `not_implemented` |
+| `POST /queue/{id}/cancel` | `QueueRevision {revision}` | Reserved: 501; then 202 | `not_implemented` |
+| `POST /leads` | `StartLead {task, model?}` | Reserved: 501; then 201 `LeadCreated` | `not_implemented` |
+| `GET /leads/{id}` | none | Reserved: 501; then 200 `LeadStatus` | `not_implemented` |
+| `POST /leads/{id}/stop` | `StopLead {revision}` | Reserved: 501; then 202 | `not_implemented` |
 | `GET /graph` | none | 200 `GraphResponse {run_id, seq, graph}` | |
 | `POST /graph/rescan` | none | 202 | |
 | `GET /impact?node=&depth=&change=` | none | 200 `ImpactCone`; on main, or on a change's version | `not_found` |
+| `GET /tree?agent=` | none | Reserved: 501 until built; then 200 `TreeResponse {run_id, agent_id, directories, files: TreeFile[], graph_version, truncated}`, jointly capped at 2,000 entries; `TreeFile {path, hash}` has required nullable SHA-256 | `not_implemented`; when built: `not_found`, `invalid_path` |
 | `GET /files?path=&agent=` | none | 200 `FileContent {path, content, hash, agent_id}` | `not_found`, `invalid_path` |
 | `PUT /files` | `SaveFile {path, content, base_hash, agent_id?}` | 200 `FileSaved {path, hash}` | `invalid_path`, `stale_file`, `wrong_state` |
 | `GET /events` | none | SSE, see 4.6 | |
@@ -570,8 +582,8 @@ the single error format.
 
 - Every error is `ErrorResponse {error: {code, message}}`. The codes are `not_found`,
   `wrong_state`, `slot_busy`, `not_configured`, `spend_brake`, `invalid_path`, `stale_file`,
-  `not_implemented`, `invalid_request` and `internal`. They map to 404, 409, 409, 503, 403, 422,
-  409, 501, 422 and 500. Only `not_configured` adds `missing: list[MissingSetting]`, where
+  `not_implemented`, `invalid_request`, `internal`, `forbidden` and `too_large`. They map to 404, 409, 409, 503, 403, 422,
+  409, 501, 422, 500, 403 and 413. Only `not_configured` adds `missing: list[MissingSetting]`, where
   `MissingSetting {name: SettingName, problem: "missing" | "invalid", slots: list[Slot]}`.
   `SettingName` is `META_API_KEY`, `BASETEN_API_KEY`, `OVERSIGHT_BUDGET_USD`,
   `MUSE_SPARK_INPUT_USD_PER_M` or `MUSE_SPARK_OUTPUT_USD_PER_M`; values are never sent.
@@ -611,6 +623,15 @@ the single error format.
   still validate; a new endpoint; a new event type, which the reducer's exhaustive switch then
   forces the UI to handle. Renames, removals and type changes would be 2.0; they are avoided during
   the hackathon.
+- **Bounded exception, approved by the maintainer, 2026-10-27:** 1.4.0 extends reserved
+  enums and requires observed `revision` and `head_commit` in Approve, Reject and Request
+  changes. Approve and Request changes require a positive revision; Reject alone accepts zero,
+  guarded by the agent's recorded base rather than current main. Historical events still load
+  without provenance; live resolutions explicitly name their principal and head. Requests and
+  TypeScript consumers must migrate together. 1.4.0 keeps `SaveFile.base_hash` a required string.
+  The separately delivered 1.5.0 makes it required and nullable only together with safe creation,
+  zones and inventory. No alternate schema may reuse either version string. These approved
+  changes are exceptions to the ordinary minor-version rule, not a general relaxation.
 - **To propose a change:**
   1. The front that needs it stops and writes a short request: what, why, the modules it affects,
      and whether it is compatible.
