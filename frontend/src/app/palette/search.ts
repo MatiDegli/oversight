@@ -13,6 +13,8 @@ export interface PaletteItem {
   group: (typeof groups)[number];
   name: string;
   detail: string;
+  qualname?: string;
+  path?: string;
   kind: string;
   unavailable?: string;
   run: () => void;
@@ -33,6 +35,8 @@ export function paletteItems(
         group: groups[0],
         name: node.name,
         detail: `${node.qualname} · ${node.path}`,
+        qualname: node.qualname,
+        path: node.path,
         kind: node.kind,
         run: () => {
           onNode(node.id);
@@ -43,6 +47,7 @@ export function paletteItems(
       group: groups[1],
       name: path.split("/").at(-1) ?? path,
       detail: path,
+      path,
       kind: "file",
       run: () => {
         onFile(path);
@@ -79,7 +84,13 @@ function fuzzy(query: string, value: string): number {
 export function searchItems(items: readonly PaletteItem[], query: string): PaletteItem[] {
   const normalized = query.trim().toLowerCase();
   const score = (item: PaletteItem) =>
-    normalized ? Math.min(fuzzy(normalized, item.name), 100 + fuzzy(normalized, item.detail)) : 0;
+    normalized
+      ? Math.min(
+          fuzzy(normalized, item.name),
+          item.qualname ? 1 + fuzzy(normalized, item.qualname) : Infinity,
+          item.path ? (item.kind === "file" ? 99 : 100) + fuzzy(normalized, item.path) : Infinity,
+        )
+      : 0;
   const ranked = items
     .map((item) => ({ item, score: score(item) }))
     .filter((entry) => Number.isFinite(entry.score))

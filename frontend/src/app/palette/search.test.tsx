@@ -62,7 +62,14 @@ describe("palette catalog", () => {
     const base = items[0];
     if (!base) throw new Error("Missing symbol");
     const candidates = [
-      { ...base, id: "path", name: "another", detail: "shop/compute_price.py" },
+      {
+        ...base,
+        id: "path",
+        name: "another",
+        qualname: "another",
+        path: "shop/compute_price.py",
+        detail: "shop/compute_price.py",
+      },
       { ...base, id: "fuzzy", name: "compute_price", detail: "shop/pricing.py" },
       { ...base, id: "prefix", name: "cmpr_extra", detail: "shop/misc.py" },
     ];
@@ -74,6 +81,12 @@ describe("palette catalog", () => {
     expect(searchItems(items, "")).toHaveLength(items.length);
     expect(searchItems(items, "no-such-symbol")).toEqual([]);
     expect(searchItems(items, "CART.ADD")[0]?.detail).toContain("Cart.add");
+    expect(
+      searchItems(items, "cart")
+        .filter((item) => item.group === groups[0])
+        .slice(0, 3)
+        .map((item) => item.kind),
+    ).toEqual(["class", "method", "method"]);
     expect(searchItems(items, "shop/pricing.py")[0]?.kind).toBe("file");
     expect(searchItems(items, "Rescan graph")[0]?.kind).toBe("command");
   });

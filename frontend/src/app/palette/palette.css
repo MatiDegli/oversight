@@ -54,6 +54,14 @@
 .palette::backdrop {
   background: var(--sheet-backdrop);
 }
+.palette,
+.palette-results {
+  scrollbar-color: var(--control-edge) var(--panel);
+}
+.palette ::selection {
+  background: var(--text);
+  color: var(--page);
+}
 .palette-field {
   display: flex;
   align-items: center;
