@@ -27,6 +27,53 @@ export function foldPositions(
     const parent = node.data.parent ?? "";
     children.set(parent, [...(children.get(parent) ?? []), node]);
   }
+  const roots = children.get("") ?? [];
+  const full = measureExpanded(roots, children, g);
+  const maxHeight = 9 * (g.headerHeight + g.rowGap);
+  const compact = compactModules(roots, full, maxHeight);
+  const positions = new Map<string, Point>();
+  const heights = new Map<string, number>();
+  const visible = representatives(nodes, expanded, foldedModules);
+  const place = (node: GraphElement, dy: number, hiddenBy?: string): number => {
+    const box = full.get(node.data.id);
+    if (!box) return 0;
+    const moduleFold = node.data.kind === "module" && foldedModules.has(node.data.id);
+    const folded = moduleFold || (node.data.kind === "class" && !expanded.has(node.data.id));
+    visible.set(node.data.id, hiddenBy ?? node.data.id);
+    const kids = [...(children.get(node.data.id) ?? [])].sort(
+      (a, b) =>
+        (full.get(a.data.id)?.y ?? 0) - (full.get(b.data.id)?.y ?? 0) ||
+        (a.data.id < b.data.id ? -1 : 1),
+    );
+    let removed = 0;
+    for (const kid of kids)
+      removed += place(kid, dy - removed, hiddenBy ?? (folded ? node.data.id : undefined));
+    const height = folded ? g.headerHeight : box.height - removed;
+    positions.set(node.data.id, { x: box.x + box.width / 2, y: box.y + dy + height / 2 });
+    heights.set(node.data.id, height);
+    // Small presets reserve the module's open slot; toggling its header must not move neighbors.
+    return moduleFold && !compact.has(node.data.id) ? removed : box.height - height;
+  };
+  const columns = new Map<number, GraphElement[]>();
+  for (const root of roots) {
+    const x = full.get(root.data.id)?.x ?? 0;
+    columns.set(x, [...(columns.get(x) ?? []), root]);
+  }
+  for (const column of columns.values()) {
+    column.sort((a, b) => (full.get(a.data.id)?.y ?? 0) - (full.get(b.data.id)?.y ?? 0));
+    let removed = 0;
+    for (const root of column) removed += place(root, -removed);
+  }
+  if (foldedModules.size) boundColumns(roots, children, full, heights, positions, g, maxHeight);
+  return { positions, visible };
+}
+
+/** Expanded bounds remain the source for both compact and reserved preset columns. */
+function measureExpanded(
+  roots: GraphElement[],
+  children: ReadonlyMap<string, GraphElement[]>,
+  g: ReturnType<typeof nodeGeometry>,
+) {
   const full = new Map<string, Box>();
   const measure = (node: GraphElement): Box => {
     const kids = children.get(node.data.id) ?? [];
@@ -51,42 +98,23 @@ export function foldPositions(
     full.set(node.data.id, box);
     return box;
   };
-  const roots = children.get("") ?? [];
   roots.forEach(measure);
-  const positions = new Map<string, Point>();
-  const heights = new Map<string, number>();
-  const visible = representatives(nodes, expanded, foldedModules);
-  const place = (node: GraphElement, dy: number, hiddenBy?: string): number => {
-    const box = full.get(node.data.id);
-    if (!box) return 0;
-    const moduleFold = node.data.kind === "module" && foldedModules.has(node.data.id);
-    const folded = moduleFold || (node.data.kind === "class" && !expanded.has(node.data.id));
-    visible.set(node.data.id, hiddenBy ?? node.data.id);
-    const kids = [...(children.get(node.data.id) ?? [])].sort(
-      (a, b) =>
-        (full.get(a.data.id)?.y ?? 0) - (full.get(b.data.id)?.y ?? 0) ||
-        (a.data.id < b.data.id ? -1 : 1),
-    );
-    let removed = 0;
-    for (const kid of kids)
-      removed += place(kid, dy - removed, hiddenBy ?? (folded ? node.data.id : undefined));
-    const height = folded ? g.headerHeight : box.height - removed;
-    positions.set(node.data.id, { x: box.x + box.width / 2, y: box.y + dy + height / 2 });
-    heights.set(node.data.id, height);
-    return box.height - height;
-  };
-  const columns = new Map<number, GraphElement[]>();
+  return full;
+}
+
+/** Choose from the expanded preset, so toggling a module never changes the compaction policy. */
+function compactModules(roots: GraphElement[], full: ReadonlyMap<string, Box>, limit: number) {
+  const columns = new Map<number, { top: number; bottom: number; ids: string[] }>();
   for (const root of roots) {
-    const x = full.get(root.data.id)?.x ?? 0;
-    columns.set(x, [...(columns.get(x) ?? []), root]);
+    const box = full.get(root.data.id);
+    if (!box) continue;
+    const column = columns.get(box.x) ?? { top: Infinity, bottom: -Infinity, ids: [] };
+    column.top = Math.min(column.top, box.y);
+    column.bottom = Math.max(column.bottom, box.y + box.height);
+    column.ids.push(root.data.id);
+    columns.set(box.x, column);
   }
-  for (const column of columns.values()) {
-    column.sort((a, b) => (full.get(a.data.id)?.y ?? 0) - (full.get(b.data.id)?.y ?? 0));
-    let removed = 0;
-    for (const root of column) removed += place(root, -removed);
-  }
-  if (foldedModules.size) boundColumns(roots, children, full, heights, positions, g);
-  return { positions, visible };
+  return new Set([...columns.values()].flatMap((c) => (c.bottom - c.top > limit ? c.ids : [])));
 }
 
 function representatives(
@@ -122,8 +150,8 @@ function boundColumns(
   heights: ReadonlyMap<string, number>,
   positions: Map<string, Point>,
   g: ReturnType<typeof nodeGeometry>,
+  maxHeight: number,
 ) {
-  const maxHeight = 9 * (g.headerHeight + g.rowGap);
   const cards = roots.map((root) => ({
     id: root.data.id,
     width: full.get(root.data.id)?.width ?? g.rowWidth,
