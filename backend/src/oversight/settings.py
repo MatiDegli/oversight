@@ -11,6 +11,9 @@ from oversight.limits import bounded_text
 from oversight_contracts.commands import SettingName
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+type ParsedSettingName = (
+    SettingName | Literal["BASETEN_INPUT_USD_PER_M", "BASETEN_OUTPUT_USD_PER_M"]
+)
 
 
 def read_env_file(path: Path) -> dict[str, str]:
@@ -25,14 +28,6 @@ def read_env_file(path: Path) -> dict[str, str]:
         key, _, value = line.partition("=")
         values[key.strip()] = value.strip().strip("\"'")
     return values
-
-
-def harness_pack_enabled(env_file: Path = REPO_ROOT / ".env") -> bool:
-    """The process-wide harness arm; set before startup so prompt/version agree with tools."""
-    value = os.environ.get("OVERSIGHT_HARNESS_PACK")
-    if value is None:
-        value = read_env_file(env_file).get("OVERSIGHT_HARNESS_PACK", "false")
-    return value.lower() == "true"
 
 
 @dataclass(frozen=True)
@@ -64,6 +59,8 @@ class Settings:
     fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
     cross_review: bool = False
     """Opt-in only. Runtime review additionally requires an injected call transport."""
+    behavior_diff: bool = False
+    """OVERSIGHT_BEHAVIOR_DIFF: private, finite behavior measurements; never published."""
     harness_pack: bool = False
     """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
     reviewer_fake_script: Path | None = None
@@ -78,8 +75,12 @@ class Settings:
     """Muse Spark's input price, US dollars per million tokens. MUSE_SPARK_INPUT_USD_PER_M."""
     output_usd_per_m: float | None = None
     """Muse Spark's output price, US dollars per million tokens. MUSE_SPARK_OUTPUT_USD_PER_M."""
-    setting_problems: dict[SettingName, Literal["missing", "invalid"]] = field(
-        default_factory=dict[SettingName, Literal["missing", "invalid"]]
+    baseten_input_usd_per_m: float | None = None
+    """Optional Baseten input price, US dollars per million tokens. BASETEN_INPUT_USD_PER_M."""
+    baseten_output_usd_per_m: float | None = None
+    """Optional Baseten output price, US dollars per million tokens. BASETEN_OUTPUT_USD_PER_M."""
+    setting_problems: dict[ParsedSettingName, Literal["missing", "invalid"]] = field(
+        default_factory=dict[ParsedSettingName, Literal["missing", "invalid"]]
     )
     """Only the problem kind survives parsing an unusable amount; no raw values are retained."""
     demo_python: Path | None = None
@@ -112,18 +113,23 @@ class Settings:
             agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
             fake_script_b=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_B")),
             cross_review=merged.get("OVERSIGHT_CROSS_REVIEW", "false").lower() == "true",
+            behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
             harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "false").lower() == "true",
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
             input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
             output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
+            baseten_input_usd_per_m=positive_amount(merged.get("BASETEN_INPUT_USD_PER_M")),
+            baseten_output_usd_per_m=positive_amount(merged.get("BASETEN_OUTPUT_USD_PER_M")),
             setting_problems={
                 name: "invalid"
                 for name in (
                     "OVERSIGHT_BUDGET_USD",
                     "MUSE_SPARK_INPUT_USD_PER_M",
                     "MUSE_SPARK_OUTPUT_USD_PER_M",
+                    "BASETEN_INPUT_USD_PER_M",
+                    "BASETEN_OUTPUT_USD_PER_M",
                 )
                 if merged.get(name) and positive_amount(merged[name]) is None
             },

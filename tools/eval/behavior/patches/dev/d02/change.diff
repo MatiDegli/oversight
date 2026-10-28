@@ -1,0 +1,18 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -23,10 +23,13 @@
+ 
+ 
+ def price_breaks(
+-    unit_price: int, quantities: tuple[int, ...] = (1, 5, 20)
++    unit_price: int, quantities: tuple[int, ...] = (1, 5, 20), extra_percent: int = 0
+ ) -> dict[int, int]:
+     """Price for a few sample quantities, handy for a price list."""
+-    return {quantity: compute_price(unit_price, quantity) for quantity in quantities}
++    return {
++        quantity: compute_price(unit_price, quantity, extra_percent)
++        for quantity in quantities
++    }
+ 
+ 
+ @lru_cache(maxsize=256)

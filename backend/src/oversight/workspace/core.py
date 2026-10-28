@@ -17,6 +17,11 @@ from functools import partial
 from pathlib import Path
 
 from oversight.limits import bounded_text
+from oversight.workspace.behavior_run import (
+    BehaviorObservation,
+    BehaviorTarget,
+    run_behavior_worker,
+)
 from oversight.workspace.capability import (
     IsolationCapability,
     IsolationPolicy,
@@ -229,6 +234,7 @@ class Workspace:
         self._demo_python = demo_python or runtime_root / "demo-venv" / "bin" / "python"
         self._demo_python_given = demo_python is not None
         self._locks = Locks()
+        self.harness_pack = False
         self.integrity = IntegrityState()
         self._isolation = SessionIsolation(runtime_root, self.integrity)
         self.git_identities: dict[Path, GitIdentity] = {}
@@ -571,6 +577,38 @@ class Workspace:
         await self._remove_worktree(agent_id, merged=True, delete_branch=delete_branch)
 
     # --- Tests ------------------------------------------------------------------------------
+
+    async def run_behavior(
+        self, tree: Tree, targets: Sequence[BehaviorTarget], *, timeout_s: float
+    ) -> dict[str, BehaviorObservation]:
+        """Private computation in the demo venv, with required C and run_tests' locks.
+
+        C removes network access only; callers supply throwaway detached checkouts.
+        There is deliberately no best-effort/open-network policy for this operation.
+        """
+        async with (
+            self.locks(main=True, agent_id=tree.agent_id),
+            tree.section(locked=False),
+            self.git_lease(),
+        ):
+            runner = self._isolation.select("required", None, run_process)
+            try:
+                return await run_behavior_worker(
+                    self,
+                    tree,
+                    python=self._demo_python,
+                    targets=targets,
+                    timeout_s=timeout_s,
+                    spawn=runner,
+                )
+            except IsolationUnavailable as error:
+                self._isolation.invalidate(str(error))
+                raise
+            finally:
+                if isinstance(runner, IsolatedRunner) and (
+                    runner.failure is not None or not runner.cleanup_complete
+                ):
+                    self._isolation.invalidate(runner.failure or "namespace cleanup unverified")
 
     async def run_tests(
         self,

@@ -1,0 +1,1 @@
+Make Inventory.reserve reject zero and negative quantities with ValueError before touching state. Preserve positive reservations and OutOfStock on insufficient stock.

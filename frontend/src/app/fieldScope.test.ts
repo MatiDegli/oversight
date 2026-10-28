@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
+import type { State } from "../state";
 import { graphScope } from "./graphScope";
 import { fieldInput, fieldScope } from "./fieldScope";
 import { through } from "./replay.fixture";
@@ -111,16 +112,7 @@ it.each([initialView, watching, reviewing, reading])(
       node_ids: ["current-b", "extra-b"],
     };
     state.lastReads = { "agent-1": "last-a", "agent-2": "last-b" };
-    const lights = fieldInput(state, view, {
-      seeds: ["current-a"],
-      entries: [{ node_id: "cone", distance: 1 }],
-      max_depth: 2,
-      max_nodes: 10,
-      omitted_by_depth: 0,
-      omitted_by_limit: 0,
-      edges_followed: "exact",
-      tests_reaching: 0,
-    }).lights;
+    const lights = fieldInput(state, view).lights;
     expect(lights.map(({ id, source, weight }) => [id, source, weight])).toEqual([
       ["current-a", "agent-a", 1],
       ["last-a", "agent-a", 0.4],
@@ -130,3 +122,7 @@ it.each([initialView, watching, reviewing, reading])(
     expect(lights.every((light) => light.steady)).toBe(true);
   },
 );
+
+it("takes only state and view, without a cone dependency", () => {
+  expectTypeOf<Parameters<typeof fieldInput>>().toEqualTypeOf<[State, View]>();
+});

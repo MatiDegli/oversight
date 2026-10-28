@@ -1,427 +1,402 @@
-# Possible additions
+# Beyond level 2
 
-Candidates beyond the three scope levels in AGENTS.md. They follow one idea, scalable oversight:
-when agents produce more than a person can read, the tool has to show what needs the person's
-attention. None of them starts before level 2 is done, and the cut rules still apply. The
-maintainer picks which ones move into a level, and the most useful ones go in first, as time
-allows. An idea that touches `contracts/` needs the maintainer's approval first (see the last
-section).
+## Decided queue
 
-## Level 3 plan (decided on 2026-10-27)
+This is the working home for everything beyond level 2. The maintainer set this order on
+2026-10-28. When capacity opens, take the first unfinished item that can proceed; dates do not
+supersede priority. Level 2 closed on Oct 27; its demo remains the fallback. Queue numbers replace
+the old idea numbers. Package numbers identify the Oct 27 work packages.
 
-The maintainer placed the ideas below on Tue Oct 27. Level 3 wiring starts when level 2 closes. Pure
-cores start now: they add only new private files, change nothing the level 2 demo uses, and run on
-Muse Code and Codex. Level 2 fronts go first in the review queue. Where the notes further down
-differ, such as the condition for idea 9, this section wins; it also replaces the level 3 dates in
-docs/proposal.md.
+States were checked against main at `535e6f6`, including its code and merge history. In-progress
+branches are the coordinator's assigned fronts, not merged work. Queued rows describe what remains,
+including where part is already on main. The descriptions give code evidence and boundaries.
 
-| # | Package | Ideas | Decision |
+**In contracts proposal:** **Yes** means included in the requested Oct 28 proposal, not approved
+or already reserved; **No** means no addition is needed; **Pending** means a contract question
+needs the maintainer's decision. Existing reservations are noted below. This document does not
+amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
+
+| # | Item | State and commit or branch | In contracts proposal |
 | --- | --- | --- | --- |
-| 1 | Merge alone when safe, with its history and Revert | 7 | Yes |
-| 2 | Cross-review by the other Meta model; its blocking or should-fix findings go back as Request changes by themselves, at most one round | 1 | Yes |
-| 3 | Facts in review: said versus did, tests with ids, size, and the shortcut detector's facts line | 3, 13 | Yes |
-| 4 | Fails before, passes after, for new tests | 15 | Yes |
-| 5 | The run rule: a test failed, was loosened, then passed | 3 | Yes; in the video only if a real run shows it |
-| 6 | One task, one plan, two agents with zones, and the task queue, built on the commands the lead agent would use | 8, 2, 19 | Yes, after 1 |
-| 7 | A light lead agent: Muse Spark with the public commands as tools (start an agent with a zone, read facts and reviews, request changes, wait); it never merges | 9 | Yes, if it passes the Sunday gate; otherwise Next |
-| 8 | Graph polish and the dot-field light | | Yes, already planned |
-| 9 | Delivery: static replay, automated takes, README with this project's own numbers | front A | Yes |
-| 10 | Task bench, ten tasks, including a probe of Muse Spark as coordinator | front B | Yes, light |
-| 11 | The graph's sibling functions in Request changes | 16 | If time remains |
-| 12 | Start an agent from a function | level 3 list | If time remains |
-| 13 | Dictation with Muse Voice Transcribe | level 3 list | If time remains, last day |
-| 14 | Messages, pause and resume; the replay timeline | level 3 list | If time remains |
-
-**Out, for the README's Next section:** the TypeScript adapter (front C), the verified cone (4),
-rules on areas (6), decisions as data (5), the plan gate in protected areas (17), the Tauri shell,
-agent B on the local GPU, and agent cursors in the editor.
-
-**Limits:**
-
-- **Shortcut detector:** its neutral facts line and the run rule, yes; an alarm based only on the
-  diff, no. Under merge by rules, a removed or loosened test makes the change wait: a false alarm
-  costs one click. The branch gets one final review before it merges, since its precision round
-  has not had one.
-- **Revert:** only for merges made by rules, and only while it applies without conflict; otherwise
-  the change goes to "needs you". AGENTS.md records it as a bounded exception to "undo is out of
-  scope", not as a general undo.
-- **Demo script:** the level 2 script stays as the fallback. A new script replaces it only after it
-  runs three times in a row from a clean start; that decision is taken on Mon Nov 2.
-- **Contracts:** one proposal for everything above, with every new field optional and every new
-  endpoint answering 501 until built, out by Wed Oct 28 for approval before Thu Oct 29. After that
-  approval it is implemented in parts without another one. It reserves the agent that started
-  another, even if the lead agent never ships.
-- **Lead agent gate, Sun Nov 1 at 22:00 ART:** packages 1 to 6 on main with make check green, and a
-  probe of Muse Spark as coordinator that meets criteria written before it runs: in 5 runs, at least
-  4 valid plans whose zones do not overlap; in at least 4 of 5, a correct Request changes in
-  reaction to a review; and a cost of at most US$0.05 per run, US$0.50 for the whole probe (set by
-  the maintainer). If it fails, the lead agent goes to Next; the automatic Request changes of
-  package 2 already covers the part of it that saves the most.
-
-**Order:**
-
-- **Tue Oct 27 to Wed Oct 28:** finish level 2 and the graph polish. In parallel, the pure cores in
-  isolated fronts: the rule evaluator, the run rule, the cross-review parser and the plan
-  validator, all tested with the scripted fake model. The coordinator probe with the real API
-  (cents). The single contracts proposal. A plan to split the change manager before wiring 1 and 6.
-- **Thu Oct 29:** level 1 checkpoint and, if possible, level 2 closes.
-- **Fri Oct 30 and Sat Oct 31:** wire 3, 4, 2 and 1, in that order, with "Ask me" as the default.
-  The dot-field light. A real recorded run for the replay. The task bench.
-- **Sun Nov 1:** level 2 checkpoint (the two-agent demo, three times in a row). Plan and zones
-  (package 6). The lead agent gate at night.
-- **Mon Nov 2:** the lead agent, if it passed. The queue and the history, day mode, and the final
-  recorded runs.
-- **Tue Nov 3, until 20:00 ART:** robustness, the new demo three times in a row, and the takes.
-- **Wed Nov 4:** video, README and submission at 20:00 ART.
-
-## Proposed order
-
-| # | Idea | What the person sees | Cost | Builds on |
-| --- | --- | --- | --- | --- |
-| 1 | Cross-review with Muse | One line per caller in the cone: how it depends on the change, which edge test is missing | small to medium | impact cone, agent B |
-| 2 | Work zone, warn mode | Edits outside the zone the person drew, live on the graph and apart in review | small to medium | "start an agent from a function" (level 3) |
-| 3 | Risk and "needs you" | A score per change with its reasons, and a line: "would approve alone" or "needs you" | small | cone, tests, zone |
-| 4 | Verified cone | Each node of the cone checked by the tests that reach it: passed, failed or no tests | medium | run_tests, the "no tests" badge |
-| 5 | Decisions as data | Rejected and approved versions with the comment, exported as preference pairs | small | Request changes |
-| 6 | Rules on areas | Rules tied to nodes or modules, loaded by an agent when it enters that area | small to medium | Request changes, cross-review |
-| 7 | Merge alone when safe | A mode in which a change that passes every rule merges by itself, with its reasons in the history; the rest waits as "needs you" | small to medium | tests on the combined result; 1 to 3 when approved |
-| 8 | One task, one plan, two agents | A large task split into two subtasks with their zones, drawn on the graph and started with one click | medium | 2, 7, two agent slots |
-| 9 | Lead agent | An agent that starts agents and requests changes on their work, never merges | medium to large | 7, 8 |
-
-Ideas 7 to 9 go at the top of level 3, in that order, ahead of the other level 3 items; 9 only if
-7 and 8 are done before the freeze.
-
-Smaller ones that fit beside these: "B reads compute_price, which A is changing" (a cheap form of
-the cone overlap alert, level 3), and "said versus did": `finish` declares the files it touched and
-the tests it ran, and the server compares that with the events ("says it ran the tests; it did
-not").
-
-## 1. Cross-review with Muse
-
-When agent A proposes a change, agent B on Muse Spark Open, or a separate Muse Spark call, reads
-every caller in the cone and writes one line per caller: how it depends on the change and which
-edge test is missing (for example, exactly 10 and 50 units). The lines are marked as written by a
-model. It brings the development rule "the author's model never reviews its own change" into the
-product, and it puts both Meta models to work beyond the agent loop.
-
-## 2. Work zone
-
-Choosing a zone up front cannot know every edit the task will need, and a hard wall makes an
-agent work around it: copied logic inside the zone, or a patch somewhere else. That is hidden
-drift, worse than the edit it was meant to stop. So:
-
-- **Reading is never limited.** The zone limits only what the agent edits.
-- **The agent asks to leave.** A `request_scope` tool asks for a node outside the zone, with a
-  reason ("compute_price needs a new argument for inventory"). The node shows as requested, in the
-  agent's color, and the person approves or refuses it on the graph.
-- **An edit outside without asking is marked.** Live on the graph in warn mode, and as "outside
-  the zone" lines in review. In the demo, B leaves inventory.py, it shows at once, and Request
-  changes follows.
-- **Hard fences only where the person sets them**, such as a public API or a frozen module.
-- **The zone grows with approvals**: an approved node stays inside it for the rest of the task.
-
-## 3. Risk and "needs you"
-
-Each change carries a score and its reasons: cone size, tests, edits outside the zone, cost. A
-policy marks "would approve alone" or "needs you". It is one line in the review header. In the
-default mode it never approves by itself; idea 7 is the mode in which it does.
-
-**Test shortcuts: facts from the diff, the alarm from the run.** A detector that reads only the
-diff cannot tell a weakened test from an intended behavior change. The measurement is in
-`tools/shortcut_corpus_report.md` on the branch `review/shortcut-detector` (read it with
-`git show review/shortcut-detector:tools/shortcut_corpus_report.md`). On this repository's own
-history, pinned at `f377dd4` (174 non-merge commits, 90 with Python changes), the diff-only
-detector gave 101 findings, all labeled by a reviewer: 16% of them (1 shortcut and 15 useful) were
-worth a reviewer's time. A precision round brought it to 24 findings, with 70 of the 85 noise rows
-gone and 14 of the 15 useful rows kept. Of those 24, 1 is labeled a shortcut, 10 useful and 9 only
-noise, and 4 are new and still unlabeled. So 11 of the 20 labeled ones (55%) are signal, which the
-report itself does not call a complete precision estimate for all 24. Most test changes are
-legitimate and real shortcuts are rare (one labeled in 101), so the diff alone has a ceiling. The
-product knows what a diff does not: the task, every `run_tests` result with its failed test ids,
-and the order of the agent's edits. So the work splits in two:
-
-- **Facts in review, never an alarm:** the detector's output as a neutral line in the review
-  header: "tests in this change: 1 removed, 2 checks changed, 1 expected value changed".
-- **"Needs you" from the run:** a test that failed in one of the agent's `run_tests` calls, whose
-  checks the agent then removed, loosened, skipped or deleted, and which no longer fails in a
-  later run. Optionally, only for those, one Muse Spark call with the task, the test diff and the
-  results writes the reason ("loosened the assertion so it passes; the task did not ask for it").
-
-Integrating the detector into the product is a level 3 decision. Closing level 2 does not
-authorize it: it needs the maintainer's own decision, inside level 3.
-
-The detector stays a pure function over plain data. The rule takes the change set and a small run
-trace, built by an adapter in the change manager from events that already exist, so it needs no
-contract change for its inputs and is tested without the runtime:
-
-- **Failed test ids** come from `AgentStep.tests` on each `run_tests` step.
-- **Edited paths, in order,** come from `agent.focus` in edit mode and from `change.updated`.
-  `AgentStep` has no structured edited paths: its summary is text built from the tool arguments.
-- **A truncated list is not "fixed".** `failed_tests` holds at most 20 ids. A test missing from a
-  list shorter than the run's `failed` count is unknown, not "no longer fails". Only a run that
-  finished with its whole list (`failed` equals the list length) can show that a test passes again.
-
-The task bench (front B below) measures the rule with tasks built to tempt a shortcut, such as a
-test that cannot pass without touching it.
-
-## 4. Verified cone
-
-Like test impact analysis: run only the tests that reach the cone's nodes, in the agent's
-worktree, and mark each node passed, failed or without tests, so "possibly affected" becomes
-"checked" where a test covers it.
-
-## 5. Decisions as data
-
-Every Request changes leaves a natural pair: the rejected version, the revised one that was
-approved, and the comment. Exporting them as JSONL preference pairs makes them usable to evaluate
-or tune an open model such as Muse Spark Open. During the hackathon, only the export.
-
-## 6. Rules on areas
-
-A rule tied to an area also saves context: the agent receives it only when it works there.
-
-- **Not on the graph by default**, since every mark on the graph has one meaning. A "Rules" lens in
-  the top bar lights the nodes and modules that have rules with the neutral work light, dims the
-  rest, and shows a count on each module frame ("2 rules"). No color: color is for agents and
-  states.
-- **The detail lives in the side panel.** A selected node lists "Rules here": its own, the ones
-  inherited from its class or module, and where each came from ("from Request changes on
-  compute_price"). A list by area highlights a rule's scope on the graph when clicked.
-- **Loading shows on the agent**, as a step on its card: "Loaded 2 rules for pricing".
-- **Review lists only the rules that apply**; cross-review checks them, and a violation feeds
-  "needs you".
-- **Created** from Request changes ("Keep as a rule", scope suggested from the change's nodes) or
-  by hand from a node. A module rule applies to all its nodes; repository-wide rules already live
-  in AGENTS.md. Node ids come from qualified names, so a rule survives edits; a deleted or renamed
-  node leaves the rule orphaned in the list, never lost silently. The agent receives rules as its
-  own message when it enters the area, never inside a tool result.
-
-## 7. Merge alone when safe
-
-The person who runs several agents is held up by approving every change by hand, not by the
-agents. This repository is built the other way: since `docs/approvals`, the coordinator merges a
-front once the checks pass and a reviewer from another provider has no open blocking or should-fix
-finding (for frontend views and docs, a should-fix off the demo path becomes a follow-up front;
-see docs/proposal.md, section 7), and only the critical decisions reach the maintainer. The product
-is stricter than the process that builds it. This idea brings that process into the product.
-
-- **Two modes:** "Ask me", the default and today's behavior, and "Merge alone when safe". The
-  level 1 and level 2 demos run in "Ask me".
-- **A change merges alone only if every rule holds:** the tests pass on main as it is now; no test
-  is removed, skipped or loosened (the detector's facts from idea 3, used here as a condition: a
-  false alarm only makes the change wait, which is today's cost); every changed function is
-  reached by a test in the call graph; every edit is inside its zone and none touches a protected
-  area; the other model's review (idea 1) has nothing blocking; size, cone and spend are under
-  their limits. A change to a function with a large cone, such as `compute_price`, always waits.
-- **Anything else is "needs you"**, with the failed rule as the first line of the review header.
-- **Ideas 1 to 3 are still not approved.** Approving ideas 7 to 9 does not approve them. The first
-  version of 7 works without them: the rules above that come from them (the detector's facts from
-  idea 3, the zone and the protected areas from idea 2, the other model's review from idea 1) are
-  added only as each of those ideas is approved and lands. The maintainer will set the initial
-  required rules in a separate plan. An unavailable required check means "needs you". For tests:
-  until idea 3's detector lands, any change that edits or deletes an existing test file needs you;
-  added tests are fine.
-- **A model can call the person in; only code lets a change through without them.** A model's
-  output can add a reason to wait, never remove one.
-- **Every merge by rules is in the history with its reasons**, and has a one-click Revert while it
-  applies cleanly. Undo is out of scope in AGENTS.md, so the Revert needs the maintainer's OK.
-- **Merge as in the repository's integration flow:** test the combined result first, then move
-  main.
-- **The pitch line:** decide the rules once and the exceptions live. If the idea ships, the
-  success sentence in PRODUCT.md ("nothing reaches main without their decision") would need to
-  change. Proposed: "nothing reaches main without their decision or a rule they set, and they can
-  see why each change merged". PRODUCT.md stays as it is until the maintainer approves this
-  sentence on its own.
-
-## 8. One task, one plan, two agents
-
-The person writes one larger task. Muse Spark proposes two subtasks, each with its zone and its
-text, and the plan is drawn on the graph in A's and B's colors before anything starts. One click
-starts both; the person can edit or refuse the plan. Overlapping zones are flagged before the start,
-which avoids most conflicts later. The server runs the plan, not a model: the model only proposes
-the split, and idea 7 decides the merges. This mirrors the repository's process, where the
-maintainer approves the proposal before any code and the coordinator integrates after, and it is
-deterministic enough for a demo that runs three times in a row.
-
-## 9. Lead agent
-
-An agent with tools to start agents, read their changes and request changes on them. It never
-merges and never approves: merges stay with idea 7 or the person. Only if 7 and 8 are done before
-the freeze. It runs on Meta models like every agent in the product.
-
-## Ideas 10 to 21: oversight as a property of the harness
-
-Proposed on 2026-10-27 and not yet placed: the maintainer decides which ones move into the
-hackathon and which stay out of scope.
-
-In a multi-agent coding workflow built from command-line agents, scripts and a chat, the effort
-goes to the same five places: the coordinating agent's context, which rereads the whole state on
-every turn; claims in hand-backs that someone checks by hand; rules that only an agent remembers;
-state written by hand in markdown; and the person, who carries messages between sessions and finds
-overspending and drift late. The harness, the coordination and the person's surface are three
-separate pieces, glued together by a model and by the person. Oversight is the three in one
-process: its agents run inside it with fixed tools, and every step is an event. What such a
-workflow keeps as a rule, Oversight can enforce as a property of the harness.
-
-The principle behind all of them: the server holds the state, starts the agents, waits and merges.
-A model is called without state for one judgment at a time (split a task, review a change, write a
-handoff), on a small context the server builds. Idea 8 already works this way.
-
-| # | Idea | What changes | Cost | Builds on |
-| --- | --- | --- | --- | --- |
-| 10 | Task with "done when" | The task form takes a goal, a "done when" line and the zone; the harness supplies the rest | small | 2, `POST /agents` |
-| 11 | Budget check and reserve | The agent hears at half its step budget, and the last steps stay reserved for `finish` | small | the tool loop, `halted` |
-| 12 | Context cap | The runtime owns the history and caps it; past the cap, the run continues from a generated handoff | small to medium | the tool loop |
-| 13 | Generated hand-back | The change's report is built from events; the agent writes only what is still open | small | "said versus did" |
-| 14 | Review tied to the version | A review or assessment belongs to one revision of the change; a new edit voids it | small | change revisions, 7 |
-| 15 | Fails before, passes after | New tests also run on the base; one that passes there does not count as testing the change | small to medium | run_tests, 7 |
-| 16 | Fresh fix round with siblings | Request changes can start a fresh run from a generated handoff, with the callers and siblings of each finding's node | medium | Request changes, the graph |
-| 17 | Plan before code in protected areas | In a protected area, `edit_file` stays blocked until the person approves the agent's plan | medium | 2, 6 |
-| 18 | Follow main by itself | When main moves, the server retests the change on the new main; a conflict goes back to the agent or to "needs you" | medium | tests on the combined result, 7 |
-| 19 | Task queue | Waiting tasks start by themselves when an agent slot frees up | small | 8 |
-| 20 | Cost and rounds per accepted change | Spend and review rounds per accepted change, per role and per model, and the pace against the budget | small | the spend meter |
-| 21 | Decision cards | "Needs you" as a card with options and a recommended one, kept as data | small | 3, 5 |
-
-Where they could go, as a proposal: 13, 14, 15 and 20 are cheap and add rules to idea 7; 19 goes
-with idea 8; 16, 17 and focused tests by cone (idea 4) only if time remains after level 2. The rest
-is the maintainer's call.
-
-**10. Task with "done when".** The task is three fields: the goal, one "done when" line and the
-zone. The base is main's HEAD by construction; the step budget, the checks, the report format and
-what stays untouched come from the harness, not from the text. At start, the server checks the
-task's premises against the graph: every node the zone names exists.
-
-**11. Budget check and reserve.** At half the step budget, the loop adds one message with the steps
-used and left. The last steps are kept for `finish`, so a run near its limit proposes what it has
-instead of being cut off mid-edit. A run that stops already tries to propose its change as it is
-(`halted`), while its worktree is still there.
-
-**12. Context cap.** Every step resends the whole history, so cost grows with the length of the
-run. The runtime owns that history: past a cap, it closes the run's context and starts a fresh one
-from a generated handoff (the task, the files changed, the last test result), shown as a step on
-the agent's card.
-
-**13. Generated hand-back.** Oversight saw every edit and every test run, so the report is facts,
-not claims: the files and nodes changed, the tests run with their ids and results, the steps, the
-duration and the cost. The agent writes only what is still open. Where its `finish` disagrees with
-the events, the review shows it ("said versus did").
-
-**14. Review tied to the version.** A model's review, an assessment for idea 7 or the person's
-comment names the revision and commit it saw. A later edit marks it stale, and a stale review never
-counts toward a merge.
-
-**15. Fails before, passes after.** The tests a change adds also run on its base. A new test that
-already passes there does not prove the change: the review says so, and under idea 7 the change
-needs you.
-
-**16. Fresh fix round with siblings.** In level 2, Request changes sends the comment into the
-agent's own history, as AGENTS.md says. The level 3 option: start a fresh run from a generated
-handoff with the findings, the diff and the failing tests, instead of the whole earlier history.
-The graph adds the callers and siblings of each finding's node, since a fix round often finds the
-same problem one function away.
-
-**17. Plan before code in protected areas.** In an area marked protected (ideas 2 and 6), the agent
-may read, but `edit_file` fails until the person approves a short plan the agent writes. The gate
-belongs to the tool, not to a rule the agent has to remember.
-
-**18. Follow main by itself.** In "Merge alone when safe", a change whose base moved is retested on
-the new main by the server, never by the agent. A conflict sends the change back to its agent with
-the conflicting files, or to "needs you". In "Ask me", the person still chooses, as today.
-
-**19. Task queue.** The person queues tasks; when an agent finishes or stops and its slot frees up,
-the server starts the next one. Overlapping zones are flagged before the start, as in idea 8.
-
-**20. Cost and rounds per accepted change.** Every model call goes through one gate, so cost can be
-split by change, by role (writer or reviewer) and by model, live, together with the review rounds
-per accepted change and the pace of spend against the budget. Overspending shows while it happens,
-not after.
-
-**21. Decision cards.** An escalation becomes a card in the "needs you" list: the question, two or
-three options with the recommended one first, and the evidence. The answer is kept as data with the
-change, next to idea 5's pairs.
-
-**Already covered elsewhere:** a reviewer from the other Meta model with a clean context (idea 1:
-it receives the task, the diff and the cone, never the author's reasoning); overlap by node, live
-(the level 3 cone overlap alert, and idea 8); rules loaded only where they apply (idea 6); focused
-tests by cone (idea 4); measured comparisons on the same task set (front B); outside agents on the
-same graph (the README's Next section).
-
-**Already true, for the pitch:** agents have no shell; each agent has its own worktree; the server
-runs the tests with a timeout; the event log is the state, and replay is its audit; a halted run
-tries to propose its change while its worktree is still there; every model call goes through one
-gate; the spend brake refuses new Meta runs above 90% of the Meta credits. The gap is the same as in any such tool, and worth saying: tests run code with
-the user's permissions, and a sandbox is out of scope.
-
-## Isolated fronts outside the product
-
-Fronts that never touch the product's code or contracts. Each lives in its own folder, worktree and
-branch, and is reviewed like any other front. Unlike the ideas above, A and B may start now.
-
-| # | Front | Why | Starts | Lives in |
-| --- | --- | --- | --- | --- |
-| A | Automated takes | The demo is 25%: identical, repeatable 1080p takes to edit, and a compression check | now | `tools/` and one recorded log |
-| B | Task bench with numbers | Measured data for the pitch: tasks solved per agent, steps, cost, Muse Spark versus Muse Spark Open, later the shortcuts flagged | now, without the detector numbers | `tools/eval/` |
-| C | TypeScript adapter | A second language for the graph, the most recognizable after Python | closed until level 2 closes | its adapter folder, `fixtures/`, its tests |
-
-**A. Automated takes.** A Playwright script drives replay mode and records video at 1080p along a
-fixed path (clicks, zoom, review). It reuses the e2e replay setup. The takes come from a log
-recorded from a real run, since only those may be labeled as a recorded run. The same takes serve
-the compression check: encode at a low bitrate, or upload unlisted and watch at 720p.
-
-**B. Task bench.** 15 to 20 scripted tasks on the demo repository, run through Oversight itself
-(`POST /agents`), never by calling Meta's API directly, with results in a fixed format. A few of
-the tasks are built to tempt a shortcut. Agents run in Contributor mode. A cap in USD of API and
-Baseten credits is proposed to the maintainer before the first paid run. The line "the detector
-flagged X shortcuts in N tasks" waits for the shortcut detector; the task set, the script and the
-result format do not.
-
-**C. TypeScript adapter.** tree-sitter (MIT) for TypeScript: modules, classes, functions and
-methods with the same node kinds and stable ids as Python. Calls through explicit imports resolve
-as "exact", the rest as "possible". It stays closed until level 2 closes: no worktree, no branch and
-no work before then, not only no merge. It is written as a standalone adapter that reads graph core
-stage 2 from main without editing it, and it never touches the product's code, including the
-parser. Plugging it into the product means putting the Python parser behind a language-adapter
-interface, which edits the parser: that is a separate product front, outside C, and it needs the
-maintainer's decision after level 2 closes. The new dependency also needs the maintainer's OK. A
-separate orchestrator runs it: Muse Code writes, Codex reviews each PR, with a weekly cap on Muse
-Code usage, and it reports only when done or blocked. Off by default. The bar before it is shown:
-at least 70% of the test repository's calls resolved as "exact", and the cone checked by hand in
-three cases. If it passes, 5 seconds in the video and one line in the README; if not, it stays
-future work.
-
-## Later, for the README's Next section
-
-- **Behavior diff:** run the tests on the base and on the change, recording calls to the changed
-  function, and show `compute_price(10): 90.0 -> 85.0`. The most useful for a reviewer, and the
-  most costly.
-- **Dependency guard:** when an agent adds a package, a node shows its license, age, known
-  vulnerabilities (OSV) and whether it exists on PyPI, which catches hallucinated packages.
-- **Bring your own agent:** other coding agents report their edits through hooks or MCP and are
-  supervised on the same graph. It is the bridge to supervising the multi-agent development
-  workflows that today run in terminals and a chat. After the hackathon, since during the event the
-  product runs only Meta models.
-- **Team integrations:** a pull request with evidence (cone, tests, a link to the replay), tasks
-  from an issue tracker with their acceptance criteria, production errors on the graph, owners
-  warned when the cone crosses their module.
-- **Share a run as a link:** any run exported as a static replay.
-- **Zoom levels** (already in the README).
-
-## Contract impact, for the maintainer
-
-Ideas 1 to 3 and 6 need contract additions: the agent's zone, the scope request as an event and a
-command, an edit-outside-the-zone event, `finish` with declared fields, a risk score, and rules as
-an entity with create, change and delete events and commands to read and write them. Proposed:
-reserve them now as optional fields and as endpoints that answer 501, like the level 3 commands,
-so a later level adds behavior without a breaking change. Nothing here is reserved until the
-maintainer approves it.
-
-Ideas 7 to 9 add: who decided a change (`decided_by`, the person or the rules) and the reasons on
-`change.resolved`; the merge mode as a setting; a Revert command with its own graph delta cause;
-a plan entity with its subtasks and zones, and the plan an agent belongs to; for idea 9, the agent
-that started another one.
-
-Ideas 10 to 21 would add: a "done when" field on the task; the revision a review saw (idea 7's
-assessment already records it); the base result of added tests; a handoff and a round number on a
-run; a plan-approval state for an agent in a protected area; a queued task; cost per change and per
-role; and decision cards with their answers. None of them is reserved until the maintainer approves
-it.
+| 1 | Facts and a summary from events (package 3) | Queued — summary remains; facts on main `366d0e5`, facts row/steps `ae9822d` | Yes — summary; report check needs no field |
+| 2 | Behavior diff | In progress — `changes/behavior-diff`, core behind a setting; absent on main `535e6f6` | Yes |
+| 3 | Agent harness pack | In progress — `agents/harness-pack`; current tools on main `535e6f6` | No |
+| 4 | Measured impact cone | Queued — caller recording absent at `535e6f6`; isolation on main `19443e8` | Yes |
+| 5 | Live overlap between agents | Queued — card facts/read history remain; shared pending-node marks on main `535e6f6` | No |
+| 6 | Fails before, passes after (package 4) | Queued — assertion versus import/setup error only; probes on main `b7122ef`, isolated in `19443e8` | No — conservative classification uses existing fields; exception type declined |
+| 7 | Cross-review and automatic Request changes (package 2) | On main — `95e4723`, `9b81d0b`, `13f955c`, `7da6fa9`; no new front | No |
+| 8 | Merge by rules, follow main and Revert (package 1) | In progress — `changes/rules-reservation` (P2b-2); scheduler on main `9f70622`, isolation `19443e8`; merge/Revert remain | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
+| 9 | A change card with three states | Queued — full card absent at `535e6f6`; cross-review Needs you note on main `7da6fa9` | Yes |
+| 10 | Cost and rounds per accepted change | Queued — aggregates remain; writer/reviewer attribution on main `13f955c` and `535e6f6` | Yes — stored aggregates; event-derived totals need none |
+| 11 | One plan, server-computed zones and task queue (package 6) | Queued — main `535e6f6` has validator/reservations, no partitioner or dispatcher | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
+| 12 | Examples before code | Queued — no examples phase on main `535e6f6` | Yes |
+| 13 | Pinned examples and graph lenses | Queued — no pins or lens control on main `535e6f6` | Yes |
+| 14 | Node card explained by examples | Queued — observed call inputs/results absent at `535e6f6`; navigation is on main | Yes |
+| 15 | Shape guard | Queued — no structural comparison producer on main `535e6f6` | Yes |
+| 16 | Bounded one-hop context for initial tasks | Queued — broader slice waits for bench; revision callers/siblings on main `ee92691` | No |
+| 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
+| 18 | Remaining packages 11–14, time permitting | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
+
+**Not ranked, goes in regardless:** delivery (package 9; static replay on main `a0a4624`, challenge
+queued after item 2), graph polish (8; graph and palette on main `535e6f6`, polish continues), and
+the task bench (10; eight-task base on main `9a1772f`, arms in progress on `tools/bench-arms`).
+
+## Undecided candidates
+
+These retain useful ideas from the old inventory without approving a front or changing the freeze.
+
+- Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
+- Fresh revision context built from facts, distinct from the existing retained-history revision.
+- A dependency guard for package existence, license and vulnerability evidence.
+- Export reviewed revisions/comments as decision pairs; no training during this event.
+- A person-approved plan before editing protected areas; item 8's deterministic veto is separate.
+- Person-drawn work zones that limit edits, with a scope-request tool, warn mode and zone growth by approval; item 11's server-computed zones and the reserved `within_zone` rule are separate.
+- A TypeScript graph adapter; another language/dependency needs a separate scope decision.
+- Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
+- Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
+- Zoom levels (see README), a Tauri shell, a local model in slot B, and named editor cursors.
+
+## Next
+
+- Lead agent: deferred; the former Sunday gate required packages 1–6, and the run rule now comes later; lead routes and plan `started_by` remain reserved even if the lead never ships.
+- Hidden test sets: extend beyond the external hidden grading already present in `tools/eval`.
+- A red agent to look for counterexamples to a proposed change.
+- A specialist engine for checks that need a dedicated tool.
+- Two independent attempts on one task: twice the generation cost; separate from the existing automatic revision round.
+- Executable disagreement between the two models, resolved with an example.
+- Canary changes: a product workflow beyond the seeded defects already in the task bench.
+- Fork a run from a recorded step.
+- Answer a review question from a phone.
+- Text rules attached to areas of the repository.
+- Tell the later agent about an overlap in its next tool result; each agent already has a worktree.
+- Select tests from the graph inside the agent loop, starting in shadow mode.
+- Per-test coverage, beyond the per-test outcomes already recorded.
+- Mask older tool results on long runs; measure dollars and correctness before adoption.
+- Generate inputs for behavior that the bounded probes did not reach.
+- Run the bench on a real repository.
+
+## No
+
+- Mutation testing: focus on behavior comparisons rather than add another test-generation pipeline.
+- Uncertainty from token logprobs: token likelihood is not evidence of a behavioral defect.
+- Test pending changes together before first approval: preserve one candidate's evidence and decision at a time.
+- Voice approval: a merge needs an explicit review decision; dictation may enter task text only.
+- Autonomy learned from approval history: permission comes from rules the person chose.
+- 3D or city views: retain the single readable graph as the supervision surface.
+- A learned risk score: expose deterministic reasons and missing evidence instead of an opaque score.
+- An agent graph query language or slices of two or more hops: keep context bounded and the graph primarily for the person.
+- Free-form agent chat: dependencies and handoffs belong to the server's state machine.
+- Agent-owned locks: the server owns scheduling and git locks.
+- Prompts requesting several approaches: use one evidence-led path with a stopping point.
+- Hypothesis: its MPL-2.0 license is outside the dependency allowlist.
+- Trained verifiers: no training pipeline within this hackathon.
+- Tree search: branching does not fit the bounded workflow and budget.
+
+## Item descriptions
+
+### 1. Facts and a summary from events
+
+Give the person at most three lines covering the request, actual edits, tests added/run, other
+results changed and cost. Derive them from task/status, change, execution and usage events, never
+the author's `finish` prose. Missing paired results must say they were not compared.
+
+Package 3 already publishes source facts and execution references. The shared facts row and recent
+steps landed in `ae9822d` (`frontend/src/review/ChangeFactsRow.tsx:76`). Recognized report claims
+such as “tests pass” already produce contradictions against the last agent run
+(`frontend/src/review/ReviewFacts.tsx:66`, `backend/src/oversight/changes/_reviewfacts.py:209`).
+Reuse these checks: they do not understand arbitrary prose and need no new field. A stored
+generated summary belongs in the requested optional additions. Do not put report contradictions
+into `ChangeFacts.integrity`, whose kinds describe test-source observations.
+
+### 2. Behavior diff
+
+Show a difference count and up to eight input/before/after rows per changed function on its node
+and in review. Run base and candidate in separate fresh processes on identical bounded inputs:
+literal test arguments, plus `c-1`, `c`, `c+1` for integer constants in either module, and `0`/`-1`
+for integer arguments. Bind by parameter name; compare typed values and supported exceptions.
+Execute each differing input twice in total on each side. Results varying between runs are
+unstable, not an established change.
+
+Build the core first behind a setting on `changes/behavior-diff`; publish only after its optional
+per-node contract field, including unstable/not-probed outcomes, is approved. Reuse the demo
+interpreter, asynchronous bounded runner, guarded base checkout and C3 session isolation
+(`19443e8`; `backend/src/oversight/workspace/capability.py:116`). Never fall back to an open network.
+Apply time/output/input caps across the whole probe, not a full suite allowance per input. Write
+fresh implementation; exploratory prototypes supply no product code.
+
+Report non-literal arguments, unsupported signatures, side effects, I/O and randomness as not
+probed, with reasons. Network isolation is not filesystem isolation. This makes no model calls and
+proves no equivalence. Empty output reads “no difference measured on these inputs”.
+
+### 3. Agent harness pack
+
+Reduce avoidable failures without changing the six tools. Under one setting: reject a Python edit
+that breaks previously valid syntax, return the error line and preserve old bytes; summarize broad
+searches with per-file match counts and a narrowing hint; retain a bounded whole failure block
+with test/assertion/relevant frame; remind `finish` once to run tests if edits followed the last
+run; prompt for one evidence-led path and a stopping point.
+
+`agents/harness-pack` builds on current hash/uniqueness checks and bounded observations
+(`backend/src/oversight/agents/tools.py:388`, `backend/src/oversight/agents/_observations.py:13`).
+Preserve failures before the runner discards text. No contract addition or tool is needed. One
+setting lets the bench compare both arms with the same model, reasoning and limits. This does
+not replace independent server proposal tests.
+
+### 4. Measured impact cone
+
+Distinguish callers with observed result changes from those only possibly affected. Extend item 2
+through the external pytest reporting plugin: run the same tests on both implementations, record
+inputs/results at caller boundaries, match by test/caller/order, and compare only equal inputs.
+Tests construct the objects; do not serialize/rebuild arbitrary objects to invoke callers.
+
+Main's plugin records phases/outcomes only
+(`backend/src/oversight/workspace/report_plugin/oversight_report.py:26`). Add bounded recording
+and proposed optional measured-cone evidence, including unmatched calls/incompleteness. Both runs
+require session network isolation, never open-network execution. Unsupported or unmatched calls
+are not compared; other nodes stay “possible, no change measured”. This is neither per-test
+coverage nor proof that all callers behave identically.
+
+### 5. Live overlap between agents
+
+Identify same-node edits on the node and both cards. If B has read something A is changing, say so
+on B's card and retain observed reads for the whole change. Edits inside another agent's cone
+become a fact at review. Never interrupt the person or move focus for overlap.
+
+Reuse `pending-both` (`frontend/src/graph/styles.ts:302`), pending-node sets and live/proposal cones.
+Add pure selectors and change-lifetime read sets to the reducer; main retains only latest focus
+(`frontend/src/state/applyEvent.ts:89`). No contract addition; replay must agree with live runs.
+Search focus is capped, so observed reads are not a complete audit. Once item 18 supplies messages,
+notify the later agent as a separate turn; notification in its next tool result remains Next.
+
+### 6. Fails before, passes after
+
+Tell the person whether a new test demonstrates the change or merely failed to import or set up
+on base. Keep package 4's case discovery, selected base/head probes and review output (`b7122ef`);
+C3 already requires isolated probes (`backend/src/oversight/changes/_probes.py:229`). Only evidence
+classification remains.
+
+Today a base `error` counts as failure (`backend/src/oversight/changes/_beforeafter.py:95`). Classify
+import/setup errors as unknown with their diagnostic, using existing probe results/problems;
+the merge-alone evaluator must never use them as evidence of failure on base. Build this before
+merge-alone can activate, with no contract change. An exception-type field was declined for the
+Oct 28 proposal. Do not rebuild the functioning probes or claim assertion evidence from an error.
+
+### 7. Cross-review and automatic Request changes
+
+An adverse independent review can send one revision back without the person relaying it. This is
+on main through `7da6fa9`, following `95e4723`, `9b81d0b` and `13f955c`
+(`backend/src/oversight/runtime_review.py:167`, `backend/src/oversight/changes/_cross_review.py:19`).
+Drop it as a front. Reuse target validation, durable accounting, human preemption and the one-round
+limit in item 8. It is opt-in and needs a different model in the opposite slot
+(`backend/src/oversight/review_config.py:37`); another call to the author's model is not a fallback.
+The manual review route remains 501, which does not mean automatic review is missing. No new
+contract is needed for this item.
+
+### 8. Merge by rules, follow main and Revert
+
+Ask me still waits on every change. Optional rules mode merges only with complete, current passing
+evidence, recorded reasons and clean one-click Revert. The server retests a moved base; failures
+or conflicts become Needs you. Models can add reasons to wait, never waive a deterministic rule.
+
+Before enabling rules mode, `PRODUCT.md` needs a maintainer-approved success sentence covering the person's decision or a rule they set as the authority for every merge.
+
+Main has policy profiles, the closed mode controller and P2b-1 scheduler (`9f70622`). Admission
+explicitly waits for reservation (`backend/src/oversight/changes/_assessment.py:39`); P2b-2 is in
+progress on `changes/rules-reservation`. Finish reservation, merge transaction/final race barriers,
+Revert recovery/history, routes and UI before enabling the mode. C3 landed in `19443e8`; rules
+and probes require it. Human approval already retests moved bases
+(`backend/src/oversight/changes/_merge.py:45`), and revision can merge main into the retained branch.
+Reuse those paths; rules must test the combined result even when base has not moved.
+Enable cross-review with the other model before merge-alone can activate; the merge-alone evaluator
+must consume its result and require no blocking finding, alongside the deterministic checks.
+
+Manifest/lockfile, CI, test-configuration and security-path edits always wait for the person and
+receive cross-review. The maintainer included a named `protected_paths` rule in the Oct 28 contract
+proposal, with a new policy profile version: `RuleId` is closed and profiles validate against it
+(`contracts/src/oversight_contracts/common.py:44`). A server-only veto would hide the policy reason.
+This approves its inclusion in the proposal, not a change to the current contracts. Revert and
+resolution provenance are already reserved. Revert covers only rules merges that apply cleanly;
+conflicts wait for the person. This is not general undo; unknown required evidence never passes.
+
+### 9. A change card with three states
+
+The card says merged by rules, Needs you for a choice, or Needs you because a check was unavailable.
+A rules merge shows the summary, scope of results checked as unchanged, and Revert. For an
+unrequested choice, put one plain question and its smallest before/after example ahead of unchanged
+facts. Yes confirms the choice; No requests changes with the example as comment; Unsure waits.
+Ask me keeps the summary on top and requires Approve for every change.
+
+One Muse Spark advisory call ties measured differences to task text or confirmed examples.
+Confirmed-example results are decided deterministically. Unexplained/uncertain differences wait;
+the model can only add reasons to wait. Oversight asks selectively, never through the agent's
+report. Reuse target-aware notes (`frontend/src/review/CrossReviewNote.tsx:11`); full projection
+is absent and the reducer ignores assessments/Revert (`frontend/src/state/applyEvent.ts:227`).
+Optional questions and persisted Yes/No/Unsure answers belong in the proposal. Yes never converts
+an unavailable check to passing evidence.
+
+### 10. Cost and rounds per accepted change
+
+Count failed, stopped, rejected and review work too, divide all spend by accepted changes, and show
+role/model breakdowns, revision rounds and budget pace. Keep unsuccessful buckets visible. With
+no accepted changes the ratio is unavailable.
+
+Writer/reviewer ticks already carry attribution (`contracts/src/oversight_contracts/events.py:358`,
+`backend/src/oversight/runtime_accounting.py:68`). Fold individual costs and resolution events;
+never sum cumulative `spent_usd`. Main keeps agent totals, not these aggregates
+(`frontend/src/state/applyEvent.ts:175`). Live/replay derivation needs no addition; optional archived
+change/role totals and rounds belong in the proposal. Unknown usage/unpriced Baseten work stays
+unknown, never free. The cumulative product Meta ledger is separate from the bench ledger.
+
+### 11. One plan, server-computed zones and task queue
+
+The person reviews one editable plan; independent subtasks can then run in two slots. The server
+computes zones, keeping import/call cycles together and cross-zone edges few, and checks that
+their impact cones do not overlap. The model writes subtask text only. Dependent work starts after
+its prerequisite merges. Use one agent when no independent split exists. Queue dispatch waits until a slot is actually released.
+
+Main validates/expands supplied zones, not partitions (`backend/src/oversight/changes/_zones.py:40`).
+Reuse that after deterministic cycle contraction; uncertain calls and same-file zones still need
+conservative handling. Plan/queue routes remain 501 (`backend/src/oversight/api/commands.py:30`);
+finishing alone does not free a retained worktree's slot. Plans reserve exactly two subtasks and
+require both assigned agents while running (`contracts/src/oversight_contracts/plans.py:60`).
+The Oct 28 proposal includes subtask dependencies and a relaxed plan validator for sequential
+starts and one-agent fallback; implement them only after that contract extension is approved.
+A partition heuristic does not prove independence; speed claims wait for the split bench.
+
+### 12. Examples before code
+
+When task text, tests and pins leave ambiguity, or the task touches a large cone or a pin, offer
+one Muse Spark call proposing three to five distinguishing examples. The person confirms, edits
+or rejects them before coding; confirmed examples become the task's done-when criteria. Offer at
+most three alternative meanings; beyond that, ask for clearer task text.
+
+Today's form starts coding directly (`frontend/src/agents/TaskBox.tsx:134`). Enforce a no-edit,
+one-call examples phase in the server, then carry confirmations into the task. Optional task/example
+fields belong in the proposal. Unconfirmed prose is not acceptance evidence. This is selective,
+not an extra call for every task; a confirmed example's result needs no model judgment.
+
+### 13. Pinned examples and graph lenses
+
+After a choice, offer an ordinary generated repository test retaining input, expected result,
+confirmer and originating task. Pins can be amended; breaking one fails the rules. One control
+switches Tests, Hubs and Pinned examples; clicking a gap starts a task with its zone.
+Use neutral work light and show the maintainer a shot before merging. Text rules remain Next.
+
+Reuse test nodes/caller counts/files/task entry; main has no pins or lens registry
+(`frontend/src/graph/elements.ts:94`, `frontend/src/graph/camera.ts:197`). Optional pin provenance
+belongs in the proposal. The Cost per node lens was dropped: cost is measured per call and per agent,
+so a node lens would present an allocation estimate as a measurement. The cost-per-node field in
+usage events was declined too. Do not treat a file-naming convention alone as confirmed-pin enforcement.
+
+### 14. Node card explained by examples
+
+The node card first shows the test source where the function is called,
+labeled as source. Real argument values wait for item 4's recorder; then distinguish observed test
+inputs/results from proposed or confirmed examples using item 13's pins. Propose optional node
+examples with origin so the person can tell source text from recorded execution.
+
+Main opens node source/diffs (`frontend/src/app/view.ts:99`); the palette (`535e6f6`) adds navigation,
+not runtime observations. Static edges carry no argument/result values
+(`contracts/src/oversight_contracts/graph.py:45`). Source excerpts are the first delivery, not
+observed executions. Capture excerpts and later recorded example data for replay: recordings need
+not contain unchanged source. This is not a general runtime tracer.
+
+### 15. Shape guard
+
+Ask about duplicated logic instead of reuse, new import cycles/module dependencies, and functions
+growing past a size threshold. Build a deterministic before/after analyzer over captured AST/source
+and graph data. Spans/import edges exist (`backend/src/oversight/graph/_workspace.py:77`,
+`backend/src/oversight/graph/_link.py:129`), but no shape producer is wired on main.
+
+Propose optional findings, evidence and completeness, then render card questions. State dynamic
+or unsupported cases. Size remains a review signal under AGENTS.md, not an automatic rejection
+gate or learned risk score.
+
+### 16. Bounded one-hop context for initial tasks
+
+Give the agent a fixed-order slice of target signatures, direct callers/callees and module constants,
+about 1,500 tokens at most, explicitly listing omissions. Adopt only after the bench shows fewer
+steps and tokens with tasks still solved. The server builds this context as text, never a graph tool
+for agents, following AGENTS.md and the existing Request changes context. No contract addition is needed.
+
+Revision callers/siblings already work (`ee92691`, `backend/src/oversight/changes/_neighbors.py:23`,
+`backend/src/oversight/changes/_revision.py:26`). Reuse ordering/uncertainty labels, add callees/constants
+and a global budget for initial context. Do not rebuild package 11 or confuse a per-list cap with
+a global token bound. This is a bounded exception to the human-facing graph, not general agent
+access or a two-hop expansion.
+
+### 17. Run rule
+
+A test failed, its checks were weakened later, and it no longer fails in a subsequent complete run:
+that sequence deserves attention. Source detector counts stay neutral; the diff alone is not an
+alarm. Include this in the video only if a real run supplies the evidence.
+
+The [historical precision measurement](../tools/shortcut_corpus_report.md#labeled-oversight-evaluation) on this repository's history reduced 101 findings to 24, with signal in 11/20 labeled identities and four unlabeled identities, so it does not establish precision for all 24.
+
+The core/event adapter exist (`aaa9af8`, `backend/src/oversight/changes/_runrule.py:1`), but facts
+publish no temporal findings (`backend/src/oversight/changes/_facts.py:375`). Wire the reserved
+assertion-loosening case first, with matching facts and ordered references
+(`contracts/src/oversight_contracts/review.py:253`). The core also handles skipped/deleted tests:
+absence of failure does not prove passing. Never infer recovery from truncated failure lists or
+force broader kinds into the current wire shape. First wiring needs no addition; the Oct 28
+proposal adds the run-rule finding kind for removed, skipped and deleted checks. That extension
+must be approved before publishing the broader cases.
+
+### 18. Remaining small packages, if time remains
+
+Package 11's revision callers/siblings (`ee92691`) and package 12's Start an agent here (`c1c19c6`,
+`frontend/src/agents/StartAgentHere.tsx:10`) are complete. Keep them for traceability, not new work.
+
+Package 13 is Muse Voice Transcribe task dictation, last day only, never merge approval. Its
+separate audio-upload command/response is included in the Oct 28 proposal as an endpoint answering
+501 until built; message/pause/resume reservations do not cover it. Contract implementation still
+requires approval of that proposal.
+Package 14 is person-to-agent messages, pause/resume and replay timeline. Message/pause/resume routes are
+reserved and still 501 (`backend/src/oversight/api/commands.py:51`); playback already consumes ordered
+events. Reuse those interfaces/local controls without claiming messaging or seeking already works.
+Earlier-today history belongs to item 8; usage views belong to item 10.
+
+### Delivery, graph polish and bench
+
+**Delivery (package 9).** After item 2 lands, prioritize a static “Would you approve it?” challenge:
+three changes, local Approve/Reject choices, findings and score. Main has verified backend-free
+replay (`a0a4624`), with two bundled proposals, no third challenge or scoring. Use replay cuts and a
+companion challenge manifest; no product contract addition. Label planted bugs and preserve real-run
+provenance only for unmodified recordings. Automated 1080p replay takes and a 720p compression check
+remain delivery work, not another roadmap.
+
+The maintainer chooses the video script Mon Nov 2: start with a real clean-looking change and green
+tests, ask for a decision, reveal an unrequested result and measured cone, then scale with real-run
+counts. Keep editor/file view/editable side out of the video. Replace the level 2 fallback only
+after three clean one-command runs without manual fixes. Robustness/takes freeze Tue Nov 3 at
+20:00 ART; submission target Wed Nov 4 at 20:00 ART.
+
+**Graph polish (package 8).** Continue readability/performance within DESIGN.md's tokens, saved
+layout and single graph. Dot-field and palette exist; `535e6f6` includes Ctrl K navigation. No new
+visual system, focus-stealing alerts or lens colors. Without WebGL the background stays black.
+
+**Task bench (package 10).** Eight tasks, independent hidden checks, reference patches, API-only
+execution through Oversight and durable reservations already exist (`9a1772f`;
+`tools/eval/README.md:3`). Earlier ten or 15–20 task counts are not present coverage. Arms are in
+progress on `tools/bench-arms`; main keys attempts by task/profile (`tools/eval/ledger.py:112`).
+Keep charges, unknowns and reservations in one ledger keyed by task, profile, arm and repetition;
+never reset it or change output directories to manufacture another attempt.
+
+Declare criteria before paid execution. Combined paid bench work has a US$20 ceiling within the
+US$150 budget; agent B's Baseten cost stays unknown until its price per million tokens is set in
+`.env`, and enforcing the cap requires that explicit tariff. Pilot one task per arm and project
+total cost; cut repetitions before arms if over cap. Higher reasoning runs only if the rest fits.
+This docs front runs no paid bench or provider
+call. Required comparisons:
+
+- Behavior detection and task-intent classification: freeze 10 unrequested-difference changes
+  (none let through) and 10 requested-difference changes (at most two needless questions).
+  The maintainer labels expected behavior before detector output. Compare tests only, Muse Spark
+  diff review, and behavior diff plus advisory call on the same patches. Report detection and
+  classification separately; include unprobed cases in denominators; exclude development examples.
+- Harness: eight tasks, three repetitions per task/arm, randomized arm order, same model/reasoning/
+  limits. Primary outcome is solved tasks; also report turns/tokens/dollars/wall time. Current tools
+  versus pack; current tools at higher reasoning only if the cap allows.
+- Plan/zones: graph split versus one agent doing both tasks and naive split; joint correctness,
+  wall time, tokens and dollars. Parallelism alone does not establish speed.
+- One-hop context: steps, tokens and solved tasks with and without the bounded slice.

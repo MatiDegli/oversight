@@ -1,0 +1,14 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -44,6 +44,9 @@
+     return total + total * TAX_PERCENT // 100
+ 
+ 
+-def shipping_cost(total: int) -> int:
++def shipping_cost(total: int, surcharge: int = 0) -> int:
+     """Flat rate, free once the items reach the threshold."""
+-    return 0 if total >= FREE_SHIPPING_FROM else FLAT_SHIPPING
++    charge = FLAT_SHIPPING + surcharge
++    if total < FLAT_SHIPPING:
++        charge = charge // 100 * 100
++    return 0 if total >= FREE_SHIPPING_FROM else charge

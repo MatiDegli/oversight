@@ -17,6 +17,12 @@ import type {
 
 import type { NeedsYou } from "./needsYou";
 
+/** Retained envelope order; older in-memory fixtures can omit the timestamp. */
+export interface EventPosition {
+  seq: number;
+  ts?: string;
+}
+
 export interface ChangeState {
   change_id: string;
   agent_id: string;
@@ -30,6 +36,8 @@ export interface ChangeState {
   lines_removed: number;
   proposal: ChangeProposed | null;
   resolution: ChangeResolved | null;
+  proposalEvent?: EventPosition;
+  resolutionEvent?: EventPosition | null;
   /** Applied event order for recorded file contents after successive merges. */
   resolutionSeq?: number;
   /** Evidence survives new revisions; only the current note is invalidated. */
@@ -49,6 +57,7 @@ export interface State {
   steps: Record<string, AgentStep[]>;
   /** When each step's event arrived, by agent then step number: the age the card shows. */
   stepTimes: Record<string, Record<number, string>>;
+  stepSeqs: Record<string, Record<number, number>>;
   /**
    * The timestamp of the latest event applied: "now" for every age, so a live run and a replay
    * read the same and nothing depends on the reader's clock. Null before the first event.
@@ -67,6 +76,8 @@ export interface State {
    */
   agentCosts: Record<string, number | null>;
   errors: ErrorReport[];
+  /** Envelopes parallel to errors, including its needs-you deduplication. */
+  errorEvents: EventPosition[];
   testExecutions: Record<number, SuiteExecution>;
   changeFacts: Record<string, ChangeFacts[]>;
 }
@@ -80,6 +91,7 @@ export function createInitialState(): State {
     agents: {},
     steps: {},
     stepTimes: {},
+    stepSeqs: {},
     clock: null,
     focus: {},
     lastReads: {},
@@ -88,6 +100,7 @@ export function createInitialState(): State {
     spendUnknown: false,
     agentCosts: {},
     errors: [],
+    errorEvents: [],
     testExecutions: {},
     changeFacts: {},
   };

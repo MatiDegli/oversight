@@ -7,6 +7,7 @@ import { getActiveTheme } from "../theme";
 import { FileDocument } from "./fileDocument";
 import type { FileAccess, FileLocation, FileState } from "./fileDocument";
 import { loadEditorFonts } from "./fonts";
+import { languageForPath } from "./language";
 import { diffEditorOptions, modelOptions } from "./LiveDiff";
 import { monaco } from "./monaco";
 import { createEditorTheme } from "./theme";
@@ -31,7 +32,7 @@ export function showFile(
   changed: (state: FileState) => void,
   decorate: () => void = () => undefined,
 ) {
-  const model = monaco.editor.createModel("", target.path.endsWith(".py") ? "python" : "plaintext");
+  const model = monaco.editor.createModel("", languageForPath(target.path));
   model.updateOptions(modelOptions);
   code.setModel(model);
   old?.dispose();
@@ -189,6 +190,9 @@ export function FileView({ target, files, commit, onClose, startAgentAction }: F
     >
       <header className="flex flex-wrap items-center gap-2.5 border-b border-page-border px-4 py-2.5">
         <h2 className="min-w-0 break-all text-base font-bold">{target.path}</h2>
+        {languageForPath(target.path) !== "python" && (
+          <span className="text-sm text-muted">No impact analysis</span>
+        )}
         {state.dirty && <span className="text-sm text-muted">Unsaved edits</span>}
         {files.readOnly || target.agentId !== null ? (
           <span className="inline-flex items-center gap-2 text-sm text-muted">

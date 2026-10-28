@@ -63,6 +63,23 @@ static build requires the recording and its receipt; UI tests select their own f
 
 ## Next
 
+- Lead agent: deferred; the former Sunday gate required packages 1–6, and the run rule now comes later; lead routes and plan `started_by` remain reserved even if the lead never ships.
+- Hidden test sets: extend beyond the external hidden grading already present in `tools/eval`.
+- A red agent to look for counterexamples to a proposed change.
+- A specialist engine for checks that need a dedicated tool.
+- Two independent attempts on one task: twice the generation cost; separate from the existing automatic revision round.
+- Executable disagreement between the two models, resolved with an example.
+- Canary changes: a product workflow beyond the seeded defects already in the task bench.
+- Fork a run from a recorded step.
+- Answer a review question from a phone.
+- Text rules attached to areas of the repository.
+- Tell the later agent about an overlap in its next tool result; each agent already has a worktree.
+- Select tests from the graph inside the agent loop, starting in shadow mode.
+- Per-test coverage, beyond the per-test outcomes already recorded.
+- Mask older tool results on long runs; measure dollars and correctness before adoption.
+- Generate inputs for behavior that the bounded probes did not reach.
+- Run the bench on a real repository.
+
 ### Zoom levels
 
 For a repository too large to read at once, the graph would switch between three levels as you zoom:
@@ -82,8 +99,7 @@ labels keep their size on screen. Not built yet; it comes after the core feature
 Oversight's look on 2026-10-26. It is a picture of the idea, not the product: its name and numbers
 are placeholders.*
 
-More candidates beyond the scope levels, in the order proposed, are in
-[docs/additions.md](docs/additions.md). None is built yet.
+See [docs/additions.md](docs/additions.md) for the queue and candidates.
 
 ## License
 

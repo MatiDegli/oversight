@@ -1,0 +1,1 @@
+Reject negative shipping totals with ValueError. Preserve shipping for nonnegative totals and keep other pricing rules unchanged.

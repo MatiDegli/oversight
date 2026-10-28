@@ -6,6 +6,10 @@ vi.mock("@monaco-editor/react", () => ({ loader: { config: vi.fn() } }));
 vi.mock("monaco-editor/editor", () => ({ editor: {} }));
 vi.mock("monaco-editor/features/register.all", () => ({}));
 vi.mock("monaco-editor/languages/definitions/python/register", () => ({}));
+vi.mock("monaco-editor/languages/definitions/yaml/register", () => ({}));
+vi.mock("monaco-editor/languages/definitions/markdown/register", () => ({}));
+vi.mock("monaco-editor/languages/definitions/shell/register", () => ({}));
+vi.mock("monaco-editor/languages/definitions/ini/register", () => ({}));
 vi.mock("monaco-editor/editor/editor.worker.js?worker", () => ({
   default: class LocalEditorWorker {
     readonly name = "local-worker";

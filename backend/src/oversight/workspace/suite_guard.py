@@ -19,6 +19,11 @@ if TYPE_CHECKING:
     from oversight.workspace.core import Tree, Workspace
 
 
+def configure_suite(workspace: "Workspace", *, harness_pack: bool) -> None:
+    """Select this workspace's output arm at composition time; never inspect process settings."""
+    workspace.harness_pack = harness_pack
+
+
 async def guarded_suite(
     workspace: "Workspace",
     tree: "Tree",
@@ -54,6 +59,7 @@ async def guarded_suite(
                 redact=workspace.redact,
                 spawn=runner,
                 case_ids=case_ids,
+                harness_pack=workspace.harness_pack,
             )
         except (SuiteInterrupted, SuiteUnavailable) as error:
             problems = await offload(partial(file_problems, tree.root, before))

@@ -1,0 +1,1 @@
+Let shipping_cost accept a surcharge argument defaulting to zero. Add it only when shipping is charged; free shipping stays zero.

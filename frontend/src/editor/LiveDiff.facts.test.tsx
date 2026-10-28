@@ -47,6 +47,7 @@ function fact(html: string, label: string) {
   expect(row).toContain("--data-size");
   return row ?? "";
 }
+const words = (html: string) => html.replace(/<[^>]*>/g, "");
 for (const surface of ["review", "live diff"])
   describe(`${surface} facts`, () => {
     it("keeps the file count chip", () => {
@@ -59,7 +60,7 @@ for (const surface of ["review", "live diff"])
     });
     it("keeps tests with a result icon and mono count", () => {
       const row = fact(render(surface), "Tests");
-      expect(row).toContain("28 passed");
+      expect(words(row)).toContain("28 passed");
       expect(row).toContain("lucide-check");
       expect(row).toContain("font-mono");
     });
@@ -78,13 +79,13 @@ for (const surface of ["review", "live diff"])
     });
     it("keeps neutral step counts from the agent and run limit", () => {
       const row = fact(render(surface), "Steps");
-      expect(row).toMatch(/Step 5 of 30/);
+      expect(words(row)).toMatch(/Step 5 of 30/);
       expect(row).toContain("font-mono");
       expect(row).not.toMatch(/text-agent|bg-agent/);
     });
     it("keeps the bounded possibly-affected summary neutral", () => {
       const row = fact(render(surface), "Impact cone");
-      expect(row).toContain("9 functions possibly affected, up to distance 2");
+      expect(words(row)).toContain("9 functions possibly affected, up to distance 2");
       expect(row).toContain("font-mono");
       expect(row).not.toMatch(/text-agent|bg-agent/);
     });
@@ -135,10 +136,10 @@ for (const surface of ["review", "live diff"])
           },
         },
       });
-      expect(fact(html, "Cone depth bound")).toContain(
+      expect(words(fact(html, "Cone depth bound"))).toContain(
         surface === "review" ? "+12 omitted by depth" : "+2 omitted by depth",
       );
-      expect(fact(html, "Cone node bound")).toContain(
+      expect(words(fact(html, "Cone node bound"))).toContain(
         surface === "review" ? "+3 omitted by the node limit" : "+6 omitted by the node limit",
       );
     });
@@ -162,7 +163,7 @@ for (const surface of ["review", "live diff"])
         });
         const row = fact(html, "Tests");
         expect(row).toContain("lucide-x");
-        expect(row).toContain(
+        expect(words(row)).toContain(
           outcome === "failed"
             ? "2 failed"
             : outcome === "error"
@@ -177,7 +178,7 @@ it("derives the live cone before a proposal without borrowing the run's initial 
   const html = render("live diff", value);
   expect(fact(html, "Tests")).toContain("Tests unknown");
   expect(fact(html, "Base commit")).toContain("Unknown");
-  expect(fact(html, "Impact cone")).toContain("9 functions possibly affected");
+  expect(words(fact(html, "Impact cone"))).toContain("9 functions possibly affected");
 });
 it("uses the last recorded agent test execution before proposing", () => {
   const value = through(12);
@@ -195,7 +196,7 @@ it("uses the last recorded agent test execution before proposing", () => {
       },
     },
   });
-  expect(fact(html, "Tests")).toContain("28 passed");
+  expect(words(fact(html, "Tests"))).toContain("28 passed");
 });
 it("keeps the live update and proposal banner", () => {
   expect(render("live diff")).toContain(
@@ -230,7 +231,7 @@ it("uses the current edit's cone and counts while revising, rather than the earl
     },
   };
   const html = render("live diff", value);
-  expect(fact(html, "Impact cone")).toContain("9 functions possibly affected");
+  expect(words(fact(html, "Impact cone"))).toContain("9 functions possibly affected");
   expect(fact(html, "Lines")).toContain("+17");
   expect(fact(html, "Lines")).toContain("−4");
   expect(fact(html, "Tests")).toContain("Tests unknown");

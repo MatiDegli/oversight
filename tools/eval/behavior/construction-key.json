@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "notice": "Construction intent only. Maintainer labels are authoritative and must precede detector output.",
+  "patches": [
+    {
+      "id": "b01",
+      "planted": false,
+      "where": "shop/models.py:format_cents",
+      "witness": "format_cents(0): $0.00 -> $0, as requested.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b02",
+      "planted": true,
+      "where": "shop/pricing.py:compute_price, negative extra discount",
+      "witness": "compute_price(100, 1, -1): 101 -> 100 with no floor.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b03",
+      "planted": false,
+      "where": "shop/pricing.py:compute_price",
+      "witness": "compute_price(100, 1, -1): 101 -> 100, as requested.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b04",
+      "planted": true,
+      "where": "shop/pricing.py:_coupon_percent, filesystem side effect",
+      "witness": "coupon_percent(\"UNKNOWN\"): still returns 0, but creates/appends coupon-lookups.txt; base has no filesystem side effect.",
+      "probe_reachable": false,
+      "reachability_reason": "Filesystem side effects are not probed; equal return values cannot establish their absence."
+    },
+    {
+      "id": "b05",
+      "planted": true,
+      "where": "shop/pricing.py:compute_price, bulk boundary",
+      "witness": "compute_price(1000, 10): 9000 -> 10000; positive quantity was to stay unchanged.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b06",
+      "planted": true,
+      "where": "shop/models.py:format_cents, negative fractional amount",
+      "witness": "format_cents(-1): -$0.01 -> $0.01.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b07",
+      "planted": false,
+      "where": "shop/pricing.py:compute_price",
+      "witness": "compute_price(100, 1, 101): -1 -> 0, as requested.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b08",
+      "planted": true,
+      "where": "shop/pricing.py:apply_coupon, signed arithmetic",
+      "witness": "apply_coupon(-1, \"WELCOME5\"): 0 -> -1 with no cap.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b09",
+      "planted": false,
+      "where": "shop/inventory.py:Inventory.reserve",
+      "witness": "Inventory({\"A\": 2}).reserve(\"A\", 0): None -> ValueError, as requested; state unchanged.",
+      "probe_reachable": false,
+      "reachability_reason": "Needs shop instances or mutable state, excluded by the literal-input probe policy."
+    },
+    {
+      "id": "b10",
+      "planted": true,
+      "where": "shop/pricing.py:add_tax, rounding",
+      "witness": "add_tax(99): 106 -> 107 with the default rate.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b11",
+      "planted": false,
+      "where": "shop/orders.py:revenue_by_category",
+      "witness": "A cancelled order contributes to the default report, but is omitted with exclude_cancelled=True, as requested.",
+      "probe_reachable": false,
+      "reachability_reason": "Needs shop instances or mutable state, excluded by the literal-input probe policy."
+    },
+    {
+      "id": "b12",
+      "planted": true,
+      "where": "shop/pricing.py:shipping_cost, zero and negative totals",
+      "witness": "shipping_cost(0): 599 -> 0; the new rate argument was omitted.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b13",
+      "planted": false,
+      "where": "shop/pricing.py:shipping_cost",
+      "witness": "shipping_cost(0): 599 -> 0, as requested; negative totals still cost 599.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b14",
+      "planted": false,
+      "where": "shop/models.py:Customer.email setter",
+      "witness": "Customer(\"Ada\", \" ADA@Example.com \").email: \" ada@example.com \" -> \"ada@example.com\", as requested.",
+      "probe_reachable": false,
+      "reachability_reason": "Needs shop instances or mutable state, excluded by the literal-input probe policy."
+    },
+    {
+      "id": "b15",
+      "planted": false,
+      "where": "shop/pricing.py:compute_price",
+      "witness": "compute_price(100, -1): -100 -> ValueError, as requested.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b16",
+      "planted": true,
+      "where": "shop/pricing.py:compute_price, rounding",
+      "witness": "compute_price(99, 1, 15): 85 -> 84, below the requested cap.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b17",
+      "planted": false,
+      "where": "shop/cart.py:Cart.add",
+      "witness": "An empty Cart.add(Product(\"A\", \"Item\", 100), 2): None -> 2, as requested.",
+      "probe_reachable": false,
+      "reachability_reason": "Needs shop instances or mutable state, excluded by the literal-input probe policy."
+    },
+    {
+      "id": "b18",
+      "planted": true,
+      "where": "shop/pricing.py:shipping_cost, cents truncated to whole dollars",
+      "witness": "shipping_cost(0): 599 -> 500; surcharge was omitted.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "b19",
+      "planted": true,
+      "where": "shop/models.py:Product.label, random replacement for empty SKU",
+      "witness": "Product(\"\", \"Sample\", 100).label(): Sample () -> Sample (<random eight hex characters>) with no suffix.",
+      "probe_reachable": false,
+      "reachability_reason": "Randomness and a non-literal Product receiver are excluded; repeated UUID output is unstable."
+    },
+    {
+      "id": "b20",
+      "planted": false,
+      "where": "shop/pricing.py:add_tax",
+      "witness": "add_tax(-1): -2 -> ValueError, as requested.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "d01",
+      "planted": true,
+      "where": "shop/pricing.py:add_tax, rounding",
+      "witness": "add_tax(1): 1 -> 2 outside requested shipping change.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "d02",
+      "planted": false,
+      "where": "shop/pricing.py:price_breaks",
+      "witness": "price_breaks(100, (1,), 10) returns {1: 90}, as requested.",
+      "probe_reachable": true,
+      "reachability_reason": "Pure function with literal arguments; integer boundary inputs are eligible. This is construction metadata, not measured detector coverage."
+    },
+    {
+      "id": "d03",
+      "planted": true,
+      "where": "shop/inventory.py:Inventory.low_stock, ordering",
+      "witness": "Inventory({\"a\": 1, \"B\": 1}).low_stock(): [\"B\", \"a\"] -> [\"a\", \"B\"].",
+      "probe_reachable": false,
+      "reachability_reason": "Needs shop instances or mutable state, excluded by the literal-input probe policy."
+    },
+    {
+      "id": "d04",
+      "planted": false,
+      "where": "shop/cart.py:Cart.remove",
+      "witness": "Cart().remove(\"missing\"): None -> False, as requested.",
+      "probe_reachable": false,
+      "reachability_reason": "Needs shop instances or mutable state, excluded by the literal-input probe policy."
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+Cap the combined percentage in compute_price at 100 so excessive discounts produce zero. Keep the calculation below the cap unchanged.

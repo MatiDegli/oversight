@@ -1,0 +1,17 @@
+--- a/shop/models.py
++++ b/shop/models.py
+@@ -5,11 +5,11 @@
+ from .pricing import compute_price
+ 
+ 
+-def format_cents(cents: int) -> str:
++def format_cents(cents: int, currency: str = "$") -> str:
+     """Format an amount in cents as dollars, for example 1250 -> '$12.50'."""
+-    sign = "-" if cents < 0 else ""
++    sign = "-" if cents <= -100 else ""
+     dollars, rest = divmod(abs(cents), 100)
+-    return f"{sign}${dollars}.{rest:02d}"
++    return f"{sign}{currency}{dollars}.{rest:02d}"
+ 
+ 
+ @dataclass(frozen=True)

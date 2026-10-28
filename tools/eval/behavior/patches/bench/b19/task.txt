@@ -1,0 +1,1 @@
+Let Product.label accept an optional suffix string, default empty. Append it to the existing label so callers can annotate display text.

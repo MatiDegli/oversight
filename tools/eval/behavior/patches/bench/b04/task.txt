@@ -1,0 +1,1 @@
+Make coupon_percent share cached lookups across spellings that normalize to the same coupon code. Keep case and surrounding-whitespace normalization and existing return values.

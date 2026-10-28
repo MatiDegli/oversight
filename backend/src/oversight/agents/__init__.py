@@ -7,6 +7,7 @@ from oversight.agents._crossreview import ConeEntry
 from oversight.agents._crossreview import Inputs as ReviewInputs
 from oversight.agents._crossreview import TestResult as ReviewTests
 from oversight.agents._lifecycle import TaskClients
+from oversight.agents._prompts import prompt_version, system_prompt
 from oversight.agents._review_call import run_review_call
 from oversight.agents._status import validate_agent_status
 from oversight.agents.client import (
@@ -97,8 +98,10 @@ __all__ = [
     "UsageLedger",
     "load_script",
     "parse_script",
+    "prompt_version",
     "review_candidate",
     "run_review_call",
+    "system_prompt",
     "validate_agent_status",
     "validate_usage_tick",
 ]

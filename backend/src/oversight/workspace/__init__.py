@@ -4,6 +4,12 @@ Other modules import only what this file exports; everything else here is intern
 imports only `oversight_contracts`, shared byte limits and the standard library.
 """
 
+from oversight.workspace.behavior_run import (
+    PER_CALL_TIMEOUT_S,
+    BehaviorObservation,
+    BehaviorTarget,
+    TypedResult,
+)
 from oversight.workspace.capability import OPEN_NOTICE, IsolationCapability, IsolationPolicy
 from oversight.workspace.core import Author, Tree, Workspace
 from oversight.workspace.errors import (
@@ -36,14 +42,18 @@ from oversight.workspace.suite import (
     SuiteUnavailable,
     validate_suite_execution,
 )
+from oversight.workspace.suite_guard import configure_suite
 from oversight.workspace.tree import TREE_TIMEOUT_S, list_tree
 
 __all__ = [
     "MAX_TESTS",
     "MAX_XML_BYTES",
     "OPEN_NOTICE",
+    "PER_CALL_TIMEOUT_S",
     "TREE_TIMEOUT_S",
     "Author",
+    "BehaviorObservation",
+    "BehaviorTarget",
     "FileRead",
     "FileTooLarge",
     "IntegrityError",
@@ -63,12 +73,14 @@ __all__ = [
     "SuiteRun",
     "SuiteUnavailable",
     "Tree",
+    "TypedResult",
     "UnsafeDeletion",
     "Workspace",
     "WorkspaceBusy",
     "WorkspaceError",
     "base_probe_checkout",
     "check_content",
+    "configure_suite",
     "content_hash",
     "list_tree",
     "parse_junit",

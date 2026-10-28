@@ -1,0 +1,11 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -41,6 +41,8 @@
+ 
+ 
+ def add_tax(total: int) -> int:
++    if total < 0:
++        raise ValueError(f"total must be nonnegative, got {total}")
+     return total + total * TAX_PERCENT // 100
+ 
+ 

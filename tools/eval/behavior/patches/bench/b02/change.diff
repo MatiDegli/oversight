@@ -1,0 +1,24 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -11,15 +11,18 @@
+ _COUPONS = {"WELCOME5": 5, "SPRING10": 10}
+ 
+ 
+-def compute_price(unit_price: int, quantity: int, extra_percent: int = 0) -> int:
++def compute_price(
++    unit_price: int, quantity: int, extra_percent: int = 0, floor: int | None = None
++) -> int:
+     """Price of `quantity` units: the bulk tier and `extra_percent` are both taken off."""
+     base = unit_price * quantity
+-    percent = extra_percent
++    percent = max(0, extra_percent)
+     for minimum, tier_percent in BULK_TIERS:
+         if quantity >= minimum:
+             percent += tier_percent
+             break
+-    return base - base * percent // 100
++    result = base - base * percent // 100
++    return result if floor is None else max(floor, result)
+ 
+ 
+ def price_breaks(

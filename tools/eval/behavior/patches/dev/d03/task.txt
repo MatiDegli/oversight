@@ -1,0 +1,1 @@
+Reject negative low_stock thresholds with ValueError and preserve the existing listing for nonnegative thresholds.

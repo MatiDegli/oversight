@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
 import { expect as check } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { expect, it } from "vitest";
 import { withPage, filePanel, input, clickUntouched } from "../fileView.browser.support";
 import { through } from "../replay.fixture";
+
+const paletteCss = readFileSync(new URL("./palette.css", import.meta.url), "utf8");
 
 const palette = (page: Page) =>
   page.getByRole("dialog", { name: "Find a function, file or command" });
@@ -19,6 +22,97 @@ async function command(page: Page, name: string) {
     .click();
   await check(palette(page)).toHaveCount(0);
 }
+
+it("the top bar search uses field radius and body typography", async () => {
+  await withPage(async (page) => {
+    const trigger = page.getByRole("button", {
+      name: "Find a function, file or command",
+      exact: true,
+    });
+    const tokens = await page.locator("html").evaluate((root) => {
+      const style = getComputedStyle(root);
+      return {
+        radius: style.getPropertyValue("--radius-card").trim(),
+        size: style.getPropertyValue("--body-size").trim(),
+        font: style.getPropertyValue("--text-font").trim(),
+      };
+    });
+    await check(trigger).toHaveCSS("border-radius", tokens.radius);
+    await check(trigger).toHaveCSS("font-size", tokens.size);
+    await check(trigger).toHaveCSS("font-family", tokens.font);
+  });
+});
+
+it("keeps paths and qualified names in Mono, and commands in the text face", async () => {
+  await withPage(async (page) => {
+    await page.route("**/tree?*", (route) =>
+      route.fulfill({
+        status: 501,
+        json: {
+          error: { code: "not_implemented", message: "Replay" },
+        },
+      }),
+    );
+    await open(page);
+    const fonts = await page.locator("html").evaluate((root) => {
+      const style = getComputedStyle(root);
+      return {
+        code: style.getPropertyValue("--code-font").trim(),
+        text: style.getPropertyValue("--text-font").trim(),
+      };
+    });
+    for (const group of ["Functions, methods and classes", "Files", "Commands"]) {
+      const rows = palette(page).getByRole("group", { name: group, exact: true });
+      const copy = rows.locator(".palette-copy > span");
+      expect(await copy.count()).toBeGreaterThan(0);
+      if (group !== "Commands") {
+        const details = await rows.locator(".palette-detail").allTextContents();
+        expect(details.some((text) => text.includes("shop/"))).toBe(true);
+        if (group.startsWith("Functions"))
+          expect(details.some((text) => text.includes("Cart."))).toBe(true);
+      }
+      for (const span of await copy.all())
+        await check(span).toHaveCSS("font-family", group === "Commands" ? fonts.text : fonts.code);
+    }
+  });
+});
+
+it("every palette color comes from a theme token", async () => {
+  await withPage(async (page) => {
+    const rawColors = await page.evaluate((css) => {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(css);
+      if (sheet.cssRules.length === 0) throw new Error("Palette rules were not parsed");
+      const raw: string[] = [];
+      function inspect(rules: CSSRuleList) {
+        for (const rule of rules) {
+          if (rule instanceof CSSGroupingRule) inspect(rule.cssRules);
+          if (!(rule instanceof CSSStyleRule)) continue;
+          inspect(rule.cssRules);
+          for (const property of rule.style) {
+            const value = rule.style.getPropertyValue(property);
+            const literals = value.replace(/var\(--[\w-]+\)/g, "");
+            const candidates =
+              literals.match(
+                /#[\da-f]+\b|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^)]*\)|[a-z][\w-]*/gi,
+              ) ?? [];
+            if (
+              candidates.some(
+                (candidate) =>
+                  !["initial", "inherit", "unset", "revert", "revert-layer"].includes(candidate) &&
+                  CSS.supports("color", candidate),
+              )
+            )
+              raw.push(`${rule.selectorText} { ${property}: ${value} }`);
+          }
+        }
+      }
+      inspect(sheet.cssRules);
+      return raw;
+    }, paletteCss);
+    expect(rawColors).toEqual([]);
+  });
+});
 
 it("clicking the top bar search opens the palette with Group typography", async () => {
   await withPage(async (page) => {

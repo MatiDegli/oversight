@@ -1,0 +1,22 @@
+--- a/shop/models.py
++++ b/shop/models.py
+@@ -1,6 +1,7 @@
+ """Core data types shared by the rest of the shop."""
+ 
+ from dataclasses import dataclass
++from uuid import uuid4
+ 
+ from .pricing import compute_price
+ 
+@@ -19,8 +20,9 @@
+     unit_price: int  # cents
+     category: str = "general"
+ 
+-    def label(self) -> str:
+-        return f"{self.name} ({self.sku})"
++    def label(self, suffix: str = "") -> str:
++        sku = self.sku or uuid4().hex[:8]
++        return f"{self.name} ({sku}){suffix}"
+ 
+     def price_for(self, quantity: int) -> int:
+         """Price in cents for `quantity` units at the list price."""

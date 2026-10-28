@@ -1,0 +1,16 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -13,10 +13,12 @@
+ 
+ def compute_price(unit_price: int, quantity: int, extra_percent: int = 0) -> int:
+     """Price of `quantity` units: the bulk tier and `extra_percent` are both taken off."""
++    if quantity < 0:
++        raise ValueError("quantity must be nonnegative")
+     base = unit_price * quantity
+     percent = extra_percent
+     for minimum, tier_percent in BULK_TIERS:
+-        if quantity >= minimum:
++        if quantity > minimum:
+             percent += tier_percent
+             break
+     return base - base * percent // 100

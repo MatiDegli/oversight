@@ -37,6 +37,14 @@ async def closed_rules_transaction(rec: ChangeRecord, evidence: WriteEvidence) -
     return "Rules merge transaction is unavailable; review this change yourself (P3a)."
 
 
+class RulesFailure(WorkspaceError):
+    """A rules refusal with an existing L20 code, returned to the person after recovery."""
+
+    def __init__(self, code: str, reason: str) -> None:
+        super().__init__(reason)
+        self.code = code
+
+
 @dataclass
 class ChangePorts:
     """Lambdas resolve facade methods at call time, including class-level spies."""
@@ -62,6 +70,7 @@ class ChangeContext:
     state: ChangeState
     ports: ChangePorts
     mode: ModeController
+    behavior_diff: bool = False
     assessment: "RulesScheduler" = field(init=False)
 
     def date(self) -> str:

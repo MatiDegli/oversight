@@ -3,6 +3,7 @@ from dataclasses import replace
 
 from oversight.agents import AgentTask, RunEnd
 from oversight.changes import _delivery as delivery
+from oversight.changes._behavior import probe_behavior, unavailable_behavior
 from oversight.changes._diff import count_lines_async, file_status, parse_name_status
 from oversight.changes._facts import FactsEvidence, build_change_facts, capture_facts
 from oversight.changes._probes import added_cases, probe_added_tests
@@ -293,6 +294,20 @@ async def record_probe_facts(
         cancelled = True
     except Exception as error:
         probes, problems = (), (f"added tests: probes unavailable ({type(error).__name__})",)
+    if ctx.behavior_diff:
+        try:
+            if interrupted or cancelled:
+                raise asyncio.CancelledError
+            rec.behavior_diffs[revision] = await probe_behavior(
+                ctx, rec, head=head, revision=revision
+            )
+        except asyncio.CancelledError:
+            rec.behavior_diffs[revision] = unavailable_behavior(rec, revision, "interrupted")
+            cancelled = True
+        except Exception as error:
+            rec.behavior_diffs[revision] = unavailable_behavior(
+                rec, revision, f"probe unavailable ({type(error).__name__})"
+            )
     evidence = replace(
         evidence,
         added_tests=probes,

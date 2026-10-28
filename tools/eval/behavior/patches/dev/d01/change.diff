@@ -1,0 +1,15 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -41,9 +41,11 @@
+ 
+ 
+ def add_tax(total: int) -> int:
+-    return total + total * TAX_PERCENT // 100
++    return total + (total * TAX_PERCENT + 99) // 100
+ 
+ 
+ def shipping_cost(total: int) -> int:
+     """Flat rate, free once the items reach the threshold."""
++    if total < 0:
++        raise ValueError("total must be nonnegative")
+     return 0 if total >= FREE_SHIPPING_FROM else FLAT_SHIPPING

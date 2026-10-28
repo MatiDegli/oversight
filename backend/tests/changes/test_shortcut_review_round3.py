@@ -1,7 +1,5 @@
 """Recall and uncertainty regressions from Sonnet's final gate."""
 
-import time
-
 import pytest
 
 from oversight.changes import ShortcutKind, detect_shortcuts
@@ -183,13 +181,29 @@ def test_uncomparable_construct_unknown(source: str) -> None:
     assert result and result.status == "unknown" and result.reasons
 
 
-def test_renamed_test_matching_is_bounded() -> None:
+def test_renamed_test_matching_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    from oversight.changes import _shortcuts_tests as matching
+    from oversight.changes._shortcuts_common import Source
+
     old = "\n".join(f"def test_old_{i}():\n    assert f({i}) == {i}\n" for i in range(300))
     new = old.replace("test_old_", "test_new_")
-    started = time.monotonic()
-    result = detect_shortcuts([("tests/test_calc.py", old, new)])
-    assert time.monotonic() - started < 2
+    keys = 0
+    rename_key = matching._rename_key
+
+    def counted(source, func):
+        nonlocal keys
+        keys += 1
+        return rename_key(source, func)
+
+    monkeypatch.setattr(matching, "_rename_key", counted)
+    # Matching fingerprints each old/new body once, rather than for every pair.
+    # Deadline behavior has its own patched-clock tests; CPU speed is irrelevant here.
+    result, matches = matching.match_tests(
+        {"tests/test_calc.py": Source(old)}, {"tests/test_calc.py": Source(new)}
+    )
+    assert keys == 2 * 300
     assert result == []
+    assert len(matches) == 300
 
 
 def test_expired_analysis_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:

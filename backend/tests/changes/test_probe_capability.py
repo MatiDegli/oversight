@@ -22,7 +22,11 @@ async def test_harness_isolation_is_explicit(h: Harness, session_c: bool):
 async def test_probes_skip_unknown_without_c(h: Harness, monkeypatch):
     monkeypatch.setattr(
         "oversight.workspace.capability.check_effect",
-        AsyncMock(side_effect=IsolationUnavailable("host unavailable")),
+        AsyncMock(
+            side_effect=IsolationUnavailable(
+                f"host unavailable at {h.workspace.runtime_root}/launcher"
+            )
+        ),
     )
     await h.workspace.check_isolation()
     assert not h.workspace.isolation.born_with_c
@@ -42,5 +46,10 @@ async def test_probes_skip_unknown_without_c(h: Harness, monkeypatch):
     assert not facts.added_tests
     assert any("base_probe unavailable" in p for p in facts.problems)
     assert any("head_probe unavailable" in p for p in facts.problems)
+    assert all(
+        "host unavailable at .runtime/launcher" in p and str(h.workspace.runtime_root) not in p
+        for p in facts.problems
+        if "_probe unavailable" in p
+    )
     assert not any(e.phase.endswith("_probe") for e in h.payloads(SuiteExecution))
     assert calls == ["required", "required"]

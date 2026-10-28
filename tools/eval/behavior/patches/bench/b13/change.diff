@@ -1,0 +1,9 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -46,4 +46,6 @@
+ 
+ def shipping_cost(total: int) -> int:
+     """Flat rate, free once the items reach the threshold."""
++    if total == 0:
++        return 0
+     return 0 if total >= FREE_SHIPPING_FROM else FLAT_SHIPPING

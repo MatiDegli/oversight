@@ -1,0 +1,1 @@
+Add a flat_rate argument to shipping_cost, defaulting to FLAT_SHIPPING. Use it for paid shipping and preserve the free-shipping threshold.

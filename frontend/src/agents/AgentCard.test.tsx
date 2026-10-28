@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { applyEvent, createInitialState } from "../state";
 import type { State } from "../state";
 import { selectAgentCard } from "./selectors";
-import { AgentCard } from "./AgentCard";
+import { AgentCard, DataWords } from "./AgentCard";
 
 const events = readFileSync(
   new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
@@ -231,8 +231,12 @@ describe("AgentCard over the level 1 fixture", () => {
 
   it("puts the cost so far beside the step count while working, and keeps a small cost off zero", () => {
     // 0.005296 so far rounds to a cent; 0.001264 is under half a cent.
-    expect(render(through(11))).toMatch(/title="Cost so far"[^>]*>US\$0\.01</);
-    expect(render(through(5))).toMatch(/title="Cost so far"[^>]*>&lt;US\$0\.01</);
+    expect(render(through(11))).toMatch(
+      /title="Cost so far"[^>]*><span><span class="font-mono">US\$0\.01</,
+    );
+    expect(render(through(5))).toMatch(
+      /title="Cost so far"[^>]*><span><span class="font-mono">&lt;US\$0\.01</,
+    );
   });
 
   it("offers Review change in the agent's color only when the change is ready and can be opened", () => {
@@ -273,3 +277,12 @@ it("offers Stop and discard on working, revising, ready and halted cards with a 
   }
   expect(renderToStaticMarkup(<AgentCard data={data} />)).not.toContain("Stop and discard");
 });
+
+it.each(["US$1,234.56", "US$12,345,678.90", "1,234", "−1,234.56"])(
+  "keeps the grouped reading %s entirely in Mono",
+  (text) => {
+    expect(renderToStaticMarkup(<DataWords text={`Cost ${text} so far`} />)).toBe(
+      `<span>Cost <span class="font-mono">${text}</span> so far</span>`,
+    );
+  },
+);

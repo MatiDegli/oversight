@@ -1,0 +1,10 @@
+--- a/shop/inventory.py
++++ b/shop/inventory.py
+@@ -25,6 +25,7 @@
+ 
+     def reserve(self, sku: str, quantity: int) -> None:
+         """Hold units for an order. Fails if fewer are available."""
++        _check_quantity(quantity)
+         if quantity > self.available(sku):
+             raise OutOfStock(f"{sku}: wanted {quantity}, have {self.available(sku)}")
+         self._reserved[sku] = self._reserved.get(sku, 0) + quantity

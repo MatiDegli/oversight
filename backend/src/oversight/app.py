@@ -26,7 +26,6 @@ from oversight.agents import (
     META_BASE_URL,
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
-    PROMPT_VERSION,
     UNVERIFIED_PROFILES,
     AgentRun,
     AgentTask,
@@ -42,6 +41,7 @@ from oversight.agents import (
     TaskClients,
     UsageLedger,
     load_script,
+    prompt_version,
     validate_agent_status,
     validate_usage_tick,
 )
@@ -75,6 +75,7 @@ from oversight.workspace import (
     Tree,
     Workspace,
     WorkspaceError,
+    configure_suite,
     list_tree,
     valid_agent_id,
 )
@@ -220,6 +221,16 @@ class LiveRun:
             self._pricing = Pricing(
                 settings.input_usd_per_m, settings.output_usd_per_m, settings.input_usd_per_m
             )
+        self._baseten_pricing: Pricing | None = None
+        if (
+            settings.baseten_input_usd_per_m is not None
+            and settings.baseten_output_usd_per_m is not None
+        ):
+            self._baseten_pricing = Pricing(
+                settings.baseten_input_usd_per_m,
+                settings.baseten_output_usd_per_m,
+                settings.baseten_input_usd_per_m,
+            )
         self.layout = read_layout(settings.layout)
         self.workspace = Workspace(
             settings.runtime_dir,
@@ -227,6 +238,7 @@ class LiveRun:
             pytest_pin=pytest_pin(),
             demo_python=settings.demo_python,
         )
+        configure_suite(self.workspace, harness_pack=settings.harness_pack)
         self.run_id = new_run_id(settings.runtime_dir, datetime.now(UTC))
         self.store = EventStore(
             run_store_path(settings.runtime_dir, self.run_id),
@@ -313,7 +325,7 @@ class LiveRun:
             RunStarted(
                 run_id=self.run_id,
                 contract_version=CONTRACT_VERSION,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=prompt_version(settings.harness_pack),
                 workspace=TEMPLATE.name,
                 base_commit=base,
                 models=list({profile.id: profile for profile in profiles}.values()),
@@ -345,6 +357,7 @@ class LiveRun:
             main_snapshot=snapshot,
             git_timeout_s=GIT_TIMEOUT_S,
             review=self,
+            behavior_diff=self._settings.behavior_diff,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
 
@@ -707,6 +720,12 @@ class LiveRun:
         )
         return AgentCreated(agent_id=task.agent_id, change_id=task.change_id, slot=slot)
 
+    def _price_for(self, profile: ModelProfile) -> Pricing | None:
+        """Price receipts by provider; only Meta calls debit the credits ledger."""
+        if profile.provider == "meta":
+            return self._pricing
+        return self._baseten_pricing if profile.provider == "baseten" else None
+
     async def _run(
         self,
         manager: ChangeManager,
@@ -726,7 +745,8 @@ class LiveRun:
                 sink=manager,
                 publish=self._publish,
                 ledger=self._usage,
-                pricing=self._pricing if agent.metered else None,
+                pricing=self._price_for(agent.profile),
+                harness_pack=self._settings.harness_pack,
             )
             self._kept[task.agent_id] = run
             end = await run.run()

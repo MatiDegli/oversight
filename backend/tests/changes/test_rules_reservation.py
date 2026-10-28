@@ -23,6 +23,7 @@ from test_mode import available, select
 from test_policy_profiles import policy_inputs
 
 from oversight.changes import ChangeManager, WrongState, _approval, _rules
+from oversight.changes._support import closed_rules_transaction
 from oversight.events import format_needs_you, parse_needs_you
 from oversight_contracts.commands import ERROR_STATUS
 from oversight_contracts.events import ChangeResolved, ErrorReport, SuiteExecution
@@ -34,6 +35,7 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 async def armed(h: Harness, monkeypatch):
     clock = make_clock(h, monkeypatch)
+    h.manager._ctx.ports.rules_transaction = closed_rules_transaction
     available(h)
     await select(h, "merge_when_safe", 0)
     full_evidence(h, policy_inputs())
@@ -71,6 +73,27 @@ async def start(h, armed):
     await settled(h)
     assert len(armed[1]) == 1
     return armed[1][0]
+
+
+async def test_completed_decision_restores_before_done_callbacks(h: Harness, armed):
+    # A completed task can be awaited without yielding to its queued done-callbacks.
+    # Eager execution makes that ordering deterministic, without scheduler sleeps.
+    record = rec(h)
+    record.fallback, record.state = "ready", "deciding"
+
+    async def completed():
+        pass
+
+    loop = asyncio.get_running_loop()
+    factory = loop.get_task_factory()
+    loop.set_task_factory(asyncio.eager_task_factory)
+    try:
+        task = ChangeManager._decide(h.manager, record, completed())
+        assert task.done()
+        await task
+        assert record.state == "ready"
+    finally:
+        loop.set_task_factory(factory)
 
 
 async def test_atomic_reservation_declines_restores_and_never_retries(h: Harness, armed):

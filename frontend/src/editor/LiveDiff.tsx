@@ -10,6 +10,7 @@ import { stateStore } from "../state";
 import type { LiveDiffData } from "../state";
 import { getActiveTheme } from "../theme";
 import { loadEditorFonts } from "./fonts";
+import { languageForPath } from "./language";
 import { DiffViewport } from "./diffViewport";
 import { monaco } from "./monaco";
 import { createEditorTheme } from "./theme";
@@ -97,8 +98,8 @@ export function showDiff(
   return { key, models };
 }
 
-function createPythonModel(text: string): editor.ITextModel {
-  const model = monaco.editor.createModel(text, "python");
+function createFileModel(text: string, path: string): editor.ITextModel {
+  const model = monaco.editor.createModel(text, languageForPath(path));
   model.updateOptions(modelOptions);
   return model;
 }
@@ -127,7 +128,7 @@ export function InlineDiff({
     viewport.current.update(
       { changeId, path, original, modified, author },
       () => {
-        shown.current = showDiff(created, undefined, data, createPythonModel);
+        shown.current = showDiff(created, undefined, data, (text) => createFileModel(text, path));
       },
       follow,
     );
@@ -166,7 +167,7 @@ export function InlineDiff({
           current,
           shown.current,
           { changeId, path, original, modified },
-          createPythonModel,
+          (text) => createFileModel(text, path),
           managedModified,
         );
       },
@@ -261,6 +262,9 @@ export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
     >
       <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-page-border bg-page p-4">
         <h2 className="min-w-0 break-all text-base font-bold">{data?.path ?? "Live diff"}</h2>
+        {data && languageForPath(data.path) !== "python" && (
+          <span className="text-sm text-muted">No impact analysis</span>
+        )}
         {data && (
           <span aria-label="File lines" className="font-mono text-sm">
             <span className="text-added">+{data.linesAdded}</span>{" "}

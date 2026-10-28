@@ -4,7 +4,6 @@ import hashlib
 import json
 
 from oversight.agents.tools import TOOL_SCHEMAS
-from oversight.settings import harness_pack_enabled
 
 _BASE_PROMPT = """You are a coding agent working on a small Python repository, in your own copy.
 Use the tools to do the task you are given. Read the code before you change it: prefer one read
@@ -23,7 +22,12 @@ Stop when the requested change is implemented and tested, or evidence shows you 
 within the limits. Call finish with a short note on the change, tests and any remaining blocker.
 A person reviews the change before it is merged."""
 
-SYSTEM_PROMPT = _PACK_SYSTEM_PROMPT if harness_pack_enabled() else _BASE_PROMPT
+
+def system_prompt(harness_pack: bool = False) -> str:
+    return _PACK_SYSTEM_PROMPT if harness_pack else _BASE_PROMPT
+
+
+SYSTEM_PROMPT = system_prompt()
 
 REVISION_PROMPT = """The reviewer has requested changes to the change you proposed.
 
@@ -34,10 +38,20 @@ Read a file again before editing it, even if you read or edited it earlier: the 
 changed since you last saw it. Make the requested changes, run the tests, and call finish with \
 a short note for the reviewer."""
 
-PROMPT_VERSION = (
-    "agent-v1-"
-    + hashlib.sha256(
-        (SYSTEM_PROMPT + REVISION_PROMPT + json.dumps(TOOL_SCHEMAS, sort_keys=True)).encode()
-    ).hexdigest()[:12]
-)
-"""A name and a hash of the system prompt and tool schemas, for `run.started`."""
+
+def prompt_version(harness_pack: bool = False) -> str:
+    """A hash of the selected system prompt, revision prompt and tool schemas."""
+    return (
+        "agent-v1-"
+        + hashlib.sha256(
+            (
+                system_prompt(harness_pack)
+                + REVISION_PROMPT
+                + json.dumps(TOOL_SCHEMAS, sort_keys=True)
+            ).encode()
+        ).hexdigest()[:12]
+    )
+
+
+PROMPT_VERSION = prompt_version()
+"""The baseline version; configured runs select their version explicitly."""
