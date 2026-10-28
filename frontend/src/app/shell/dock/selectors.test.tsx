@@ -5,6 +5,7 @@ import { createInitialState } from "../../../state";
 import { through } from "../../replay.fixture";
 import { LOG_LIMIT, selectActivity, selectTestRuns } from "./selectors";
 import { Tests } from "./Tests";
+import { Activity } from "./Activity";
 
 const suite: SuiteResult = {
   outcome: "failed",
@@ -73,7 +74,9 @@ it("supports old recordings, the latest agent step, and the state before any tes
       },
     ],
   };
-  expect(selectTestRuns(state)[0]?.suite.passed).toBe(12);
+  // With no proposal or execution, the latest agent step is the fallback.
+  state.changes = {};
+  expect(selectTestRuns(state)[0]?.suite?.passed).toBe(12);
   expect(selectTestRuns(createInitialState())).toEqual([]);
   expect(renderToStaticMarkup(<Tests state={createInitialState()} />)).toContain(
     "Test results will appear here.",
@@ -116,6 +119,9 @@ it("orders two agents' steps chronologically, caps them and states how much is o
       duration_ms: i,
       tests: null,
     }));
+    state.stepSeqs[agent] = Object.fromEntries(
+      state.steps[agent].map((step) => [step.step, step.step * 2 + offset + 1]),
+    );
     state.stepTimes[agent] = Object.fromEntries(
       state.steps[agent].map((step) => [
         step.step,
@@ -143,6 +149,9 @@ it.each([
   const change = state.changes["change-1"];
   if (!change?.resolution) throw new Error("Missing resolution");
   change.resolution = { ...change.resolution, decision, merge, comment: "Review comment" };
+  change.proposalEvent = { seq: 19 };
+  change.resolutionEvent = { seq: 21 };
+  state.errorEvents = [{ seq: 23 }];
   state.errors = [
     { source: "tools", message: "Read failed", agent_id: "agent-1", change_id: null, fatal: false },
   ];
@@ -181,10 +190,12 @@ it("retains step tool, summary, error, duration and its source time", () => {
     ],
   };
   state.stepTimes = { "agent-1": { 99: "2026-10-28T14:00:00Z" } };
+  state.stepSeqs = { "agent-1": { 99: 100 } };
   expect(selectActivity(state).entries).toEqual([
     {
       id: "step:agent-1:99",
       agentId: "agent-1",
+      seq: 100,
       time: "2026-10-28T14:00:00Z",
       title: "edit_file · error",
       summary: "Edit cart.py · Read the file again",
@@ -192,4 +203,51 @@ it("retains step tool, summary, error, duration and its source time", () => {
       duration: 215,
     },
   ]);
+});
+
+it("keeps a proposal's own result instead of borrowing a later run's tests", () => {
+  const state = through(22);
+  const change = state.changes["change-1"];
+  if (!change?.proposal) throw new Error("Missing proposal");
+  const step = state.steps["agent-1"]?.[0];
+  if (!step) throw new Error("Missing step");
+  state.steps["agent-1"] = [{ ...step, tests: suite }];
+  expect(selectTestRuns(state)[0]?.suite).toEqual(change.proposal.tests);
+  // Tolerate retained state without test evidence; do not invent another run's result.
+  change.proposal = { ...change.proposal, tests: null } as unknown as typeof change.proposal;
+  expect(selectTestRuns(state)[0]?.suite).toBeNull();
+  const html = renderToStaticMarkup(<Tests state={state} />);
+  expect(html).toContain("no test result");
+  expect(html).not.toContain("9</span> passed");
+});
+
+it("places undated entries by seq so old records do not crowd the bounded window", () => {
+  const state = through(22);
+  const change = state.changes["change-1"];
+  if (!change) throw new Error("Missing change");
+  change.proposalEvent = { seq: 1 };
+  change.resolutionEvent = { seq: 303 };
+  const step = state.steps["agent-1"]?.[0];
+  if (!step) throw new Error("Missing step");
+  state.steps = { "agent-1": Array.from({ length: 300 }, (_, i) => ({ ...step, step: i + 3 })) };
+  state.stepSeqs = {
+    "agent-1": Object.fromEntries((state.steps["agent-1"] ?? []).map((s) => [s.step, s.step])),
+  };
+  state.stepTimes = { "agent-1": { 4: "2026-10-28T14:00:00Z" } };
+  state.errors = [
+    { source: "tools", message: "Old error", agent_id: null, change_id: null, fatal: false },
+  ];
+  state.errorEvents = [{ seq: 2 }];
+  const activity = selectActivity(state);
+  expect(activity.omitted).toBe(3);
+  expect(activity.entries).toHaveLength(LOG_LIMIT);
+  expect(activity.entries[0]?.id).toBe("step:agent-1:4");
+  expect(activity.entries.at(-1)?.id).toBe("resolution:change-1");
+  expect(activity.entries.map((entry) => entry.seq)).toEqual(
+    Array.from({ length: 300 }, (_, i) => i + 4),
+  );
+  const html = renderToStaticMarkup(<Activity state={state} />);
+  expect(html).toContain("No time");
+  expect(html).not.toContain("Order unavailable");
+  expect(html).not.toContain("shown after steps");
 });

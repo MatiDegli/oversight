@@ -346,3 +346,23 @@ it("checks WCAG reference pairs so a broken calculation cannot pass", () => {
   expect(contrast("#000000", "#ffffff")).toBe(21);
   expect(contrast("#777777", "#ffffff")).toBeLessThan(4.5);
 });
+
+it("retires unused per-mode emitter weights from TypeScript and CSS", () => {
+  for (const name of [
+    "watch-changed-weight",
+    "watch-read-weight",
+    "review-changed-weight",
+    "review-new-weight",
+    "review-cone-near-weight",
+    "review-cone-far-weight",
+    "live-diff-editing-weight",
+    "live-diff-cone-weight",
+    "file-view-selected-weight",
+    "file-view-neighbor-weight",
+  ]) {
+    expect(tokens).not.toHaveProperty(name);
+    expect(shared).not.toHaveProperty(name);
+  }
+  expect(tokens["watch-editing-weight"]).toBe(1);
+  expect(tokens["live-diff-read-weight"]).toBe(0.4);
+});

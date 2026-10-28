@@ -26,8 +26,6 @@ export function Activity({ state }: { state: State }) {
       <p className="dock-note">
         Limit <span className="dock-number">{LOG_LIMIT}</span> entries; omitted:{" "}
         <span className="dock-number">{omitted}</span>.
-        {entries.some((entry) => !entry.time) &&
-          " Steps are chronological. Latest change records and errors have no event order in stored state; shown after steps."}
       </p>
       <div
         ref={viewport}
@@ -65,7 +63,7 @@ export function Activity({ state }: { state: State }) {
                     {clock.format(new Date(entry.time))} ART
                   </time>
                 ) : (
-                  <span className="dock-note">Order unavailable</span>
+                  <span className="dock-note">No time</span>
                 )}
               </li>
             );

@@ -85,6 +85,11 @@ export const dockTest = {
         state: {
           ...state,
           steps: { "agent-1": [...before, ...added] },
+          stepSeqs: {
+            "agent-1": Object.fromEntries(
+              [...before, ...added].map((step) => [step.step, step.step]),
+            ),
+          },
           stepTimes: {
             "agent-1": Object.fromEntries(
               [...before, ...added].map((step) => [

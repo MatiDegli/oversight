@@ -80,6 +80,10 @@ export function applyEvent(state: State, event: ServerEvent): State {
           ...state.steps,
           [step.agent_id]: [...(state.steps[step.agent_id] ?? []), step],
         },
+        stepSeqs: {
+          ...state.stepSeqs,
+          [step.agent_id]: { ...state.stepSeqs[step.agent_id], [step.step]: event.seq },
+        },
         stepTimes: {
           ...state.stepTimes,
           [step.agent_id]: { ...state.stepTimes[step.agent_id], [step.step]: event.ts },
@@ -143,7 +147,9 @@ export function applyEvent(state: State, event: ServerEvent): State {
               : {}),
             status: "ready_for_review",
             proposal,
+            proposalEvent: { seq: event.seq, ts: event.ts },
             resolution: null,
+            resolutionEvent: null,
             graph: proposal.graph,
             files_changed: proposal.files.length,
             lines_added: proposal.lines_added,
@@ -165,6 +171,7 @@ export function applyEvent(state: State, event: ServerEvent): State {
             ...change,
             resolution,
             resolutionSeq: event.seq,
+            resolutionEvent: { seq: event.seq, ts: event.ts },
             crossReviewRound:
               resolution.decided_by === "cross_review" ? resolution : change.crossReviewRound,
             ...((resolution.decided_by ?? "person") === "person"
@@ -257,6 +264,9 @@ export function applyEvent(state: State, event: ServerEvent): State {
       return {
         ...next,
         errors: duplicate ? state.errors : [...state.errors, report],
+        errorEvents: duplicate
+          ? state.errorEvents
+          : [...state.errorEvents, { seq: event.seq, ts: event.ts }],
         changes:
           change &&
           !change.personActed &&

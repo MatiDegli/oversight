@@ -114,7 +114,7 @@ it("renders live counts, named failure icons and Mono data without moving focus 
     await check(panel).toContainText("Proposed · change-1");
     await check(panel).toContainText("Approved · merged · change-1");
     await check(panel).toContainText("Error · tools");
-    await check(panel).toContainText("Order unavailable");
+    await check(panel).toContainText("No time");
     await check(panel.locator('.dock-letter[data-slot="A"]')).toHaveCount(3);
   });
 });
