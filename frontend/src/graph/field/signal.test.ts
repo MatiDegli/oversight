@@ -50,6 +50,22 @@ describe("R4 sources", () => {
     expect(lights.some((light) => light.source === "work-light")).toBe(false);
   });
 
+  it("keeps both agents' signals on a shared node and clears a rejected agent's light", () => {
+    const state = through(13);
+    const agent = state.agents["agent-1"];
+    const focus = state.focus["agent-1"];
+    const change = state.changes["change-1"];
+    if (!agent || !focus || !change) throw new Error("Missing agent focus or change");
+    state.agents["agent-2"] = { ...agent, agent_id: "agent-2", slot: "B", change_id: "change-2" };
+    state.focus["agent-2"] = { ...focus, agent_id: "agent-2" };
+    expect(selectSignalLights(state).map(({ id, source }) => [id, source])).toEqual([
+      ["shop.pricing:compute_price", "agent-a"],
+      ["shop.pricing:compute_price", "agent-b"],
+    ]);
+    change.status = "rejected";
+    expect(selectSignalLights(state).map((light) => light.source)).toEqual(["agent-b"]);
+  });
+
   it("starts and stops a work ring from agent.status, including reads and revising", () => {
     const state = through(9);
     const agent = state.agents["agent-1"];
@@ -87,6 +103,26 @@ it.each([0.5, 1, 2])("scales the 26/72 px box spread with zoom %s", (zoom) => {
   const scaled = signalConfig(config, zoom);
   expect(scaled.profile).toEqual({ near: 26 * zoom, far: 72 * zoom, gain: config.profile.gain });
 });
+
+it.each(["watch", "live-diff", "file", "review"] as const)(
+  "uses the shared spread tokens before zoom in %s",
+  (mode) => {
+    const custom = fieldConfig(
+      { ...themes.dark, "signal-light-near": "19px", "signal-light-far": "63px" },
+      mode,
+    );
+    expect(custom.profile).toEqual({
+      near: 19,
+      far: 63,
+      gain: fieldConfig(themes.dark, mode).profile.gain,
+    });
+    expect(signalConfig(custom, 1.5).profile).toEqual({
+      near: 28.5,
+      far: 94.5,
+      gain: custom.profile.gain,
+    });
+  },
+);
 
 it("fades marker and light together on approval, stops the ring immediately, and jumps under reduced motion", () => {
   const transition = new FieldTransition({ lights: selectSignalLights(through(20)), config });

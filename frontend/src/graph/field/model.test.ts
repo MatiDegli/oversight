@@ -66,12 +66,12 @@ describe("the dither matrix", () => {
 });
 
 describe("the field's numbers", () => {
-  it("come from the tokens, per mode, as DESIGN.md's table gives them", () => {
+  it("use the R4 spread tokens in every mode and keep each mode's gain", () => {
     const profile = (mode: FieldMode) => fieldConfig(themes.dark, mode).profile;
-    expect(profile("watch")).toEqual({ near: 34, far: 90, gain: 0.92 });
-    expect(profile("live-diff")).toEqual({ near: 34, far: 90, gain: 0.92 });
-    expect(profile("file")).toEqual({ near: 22, far: 50, gain: 0.8 });
-    expect(profile("review")).toEqual({ near: 16, far: 34, gain: 0.7 });
+    expect(profile("watch")).toEqual({ near: 26, far: 72, gain: 0.92 });
+    expect(profile("live-diff")).toEqual({ near: 26, far: 72, gain: 0.92 });
+    expect(profile("file")).toEqual({ near: 26, far: 72, gain: 0.8 });
+    expect(profile("review")).toEqual({ near: 26, far: 72, gain: 0.7 });
     expect(config).toMatchObject({
       cell: 7,
       levels: 4,
@@ -171,7 +171,7 @@ describe("the lamps", () => {
     const weak = sum(lamps(config, 600, 400, [light(BOX, { weight: 0.36 })], null));
     const held = sum(lamps(fieldConfig(themes.dark, "review"), 600, 400, [light(BOX)], null));
     expect(weak).toBeLessThan(strong);
-    // Review holds the light in: a smaller reach and a gain of 0.70.
+    // Review holds the light in with its gain of 0.70.
     expect(held).toBeLessThan(strong);
   });
 

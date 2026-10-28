@@ -171,12 +171,13 @@ describe("field transitions", () => {
     expect(last()[3][0]?.weight).toBe(1);
     expect(canvas.oversightField?.animating()).toBe(false);
     controller.update({ ...light, mode: "review" });
-    expect(last()[0].profile.near).toBe(34);
+    expect(last()[0].profile.gain).toBe(0.92);
     advance(360);
-    expect(last()[0].profile.near).toBeGreaterThan(16);
-    expect(last()[0].profile.near).toBeLessThan(34);
+    expect(last()[0].profile.gain).toBeGreaterThan(0.7);
+    expect(last()[0].profile.gain).toBeLessThan(0.92);
     advance(480);
-    expect(last()[0].profile.near).toBe(16);
+    expect(last()[0].profile.gain).toBe(0.7);
+    expect(last()[0].profile.near).toBe(26);
     expect(canvas.oversightField?.animating()).toBe(false);
     controller.dispose();
   });
@@ -209,7 +210,8 @@ describe("field transitions", () => {
     expect(last()[3][0]?.weight).toBe(1);
     expect(canvas.oversightField?.animating()).toBe(false);
     controller.update({ ...light, mode: "review" });
-    expect(last()[0].profile.near).toBe(16);
+    expect(last()[0].profile.gain).toBe(0.7);
+    expect(last()[0].profile.near).toBe(26);
     expect(canvas.oversightField?.animating()).toBe(false);
     expect(themes.dark["transition-duration"]).toBe("240ms");
     controller.dispose();

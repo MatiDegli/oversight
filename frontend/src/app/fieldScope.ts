@@ -1,16 +1,14 @@
 import type { ImpactCone } from "@contracts";
 import { graphScope } from "./graphScope";
-import { selectLights } from "../graph";
+import { selectSignalLights } from "../graph";
 import type { FieldInput, FieldScope } from "../graph";
 import type { State } from "../state";
 import { litNodeIds } from "./view";
 import type { View } from "./view";
 
 /**
- * What the dot field lights for what the person has open: review and the live diff light their
- * change, the file view its node, and watch is the default. A change the person has decided is
- * resolved, and the graph goes back to its normal lights while the panel shows the outcome, as
- * `litNodeIds` does for the dimming.
+ * The field's presentation mode follows the open panel; a decided change returns to watch,
+ * as `litNodeIds` does for graph dimming. R4 emitters are independent of this navigation.
  */
 export function fieldScope(state: State, view: View): FieldScope {
   const changeId = view.review ?? view.diff?.changeId ?? null;
@@ -32,5 +30,5 @@ export function fieldInput(
 ): FieldInput {
   const target = fieldScope(state, view);
   const scope = target.mode === "live-diff" ? { ...target, cone: liveCone } : target;
-  return { mode: scope.mode, lights: selectLights(state, scope) };
+  return { mode: scope.mode, lights: selectSignalLights(state, state.lastReads) };
 }

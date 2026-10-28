@@ -86,8 +86,16 @@ export function applyEvent(state: State, event: ServerEvent): State {
         },
       };
     }
-    case "agent.focus":
-      return { ...next, focus: { ...state.focus, [event.payload.agent_id]: event.payload } };
+    case "agent.focus": {
+      const focus = event.payload;
+      const lastReads = { ...state.lastReads };
+      if (focus.mode === "read") {
+        const id = focus.node_ids[0];
+        if (id) lastReads[focus.agent_id] = id;
+        else Reflect.deleteProperty(lastReads, focus.agent_id);
+      }
+      return { ...next, focus: { ...state.focus, [focus.agent_id]: focus }, lastReads };
+    }
     case "change.updated": {
       const update = event.payload;
       const change =
