@@ -764,8 +764,9 @@ Harness improvements and observed overlap need no contract addition.
 The report contradiction check fits existing events and review derivation; do not invent an
 integrity kind for prose. A fixed protected-path server veto fits the existing boundary, but a
 named deterministic policy rule needs an addition to the closed `RuleId` and profile validation
-(`contracts/src/oversight_contracts/common.py:44`). Leave that decision pending. The code also shows
-that dependent starts and a single-agent fallback exceed the two-agent running-plan validator
+(`contracts/src/oversight_contracts/common.py:44`). This open question is superseded by the dated
+contract-proposal approval below. The code also shows that dependent starts and a single-agent
+fallback exceed the two-agent running-plan validator
 (`contracts/src/oversight_contracts/plans.py:60`); propose that extension before wiring it. These
 questions prevent optional properties from hiding changes to the meaning of a contract.
 
@@ -887,18 +888,73 @@ accounting would evade the shared cap and make the measurements irreproducible.
 Coordinator ruling: queue item 7 is implemented through `7da6fa9`, after `95e4723`, `9b81d0b` and
 `13f955c`; do not open another automatic-cross-review front. Package 11 is on main in `ee92691`
 (revision callers/siblings), and package 12 in `c1c19c6` (start from a function); remove them from
-remaining package work. Retain their rows and code evidence in additions for traceability. This
+remaining package work. Turning cross-review on with the other model and using its result in the
+merge-alone evaluator belong to item 8. Retain their rows and code evidence in additions for traceability. This
 corrects the older inventory without confusing unavailable manual routes with missing automation.
 
 ## 2026-10-28 — Implement the remainder supported by current code
 
 The code audit narrows item 6 to distinguishing assertion failures from import/setup errors:
 `b7122ef` already supplies base/head probes, and `19443e8` requires isolation. Conservative unknown
-classification fits existing facts; positive assertion identity may require a proposed field.
+classification fits existing facts. The later contract-proposal ruling below declines an
+exception-type field and keeps this correction within the current contract.
 Item 1 reuses report contradictions and `ae9822d`'s facts row rather than reimplementing package 3.
 Item 5 reuses shared pending-node marks but still needs change-lifetime observed reads. Item 17
 starts with the wire's assertion-loosening case: the pure core also handles tests that disappear
 or skip, which cannot be described as observed passes. Source-only node examples cannot be
-labeled observed execution, and node-cost allocations must be labeled estimates. These choices
-preserve the decided user outcomes and queue while declining stronger claims than the code supports;
+labeled observed execution; the later lens ruling below drops node-cost allocation entirely.
+These choices preserve the decided user outcomes and queue while declining stronger claims than the code supports;
 contract, look, spending or acceptance-criterion changes still go to the maintainer first.
+
+## 2026-10-28 — Approved additions to the Oct 28 contract proposal
+
+The maintainer approved including `protected_paths` as a new `RuleId` in a new policy profile
+version for item 8. The identifier set is closed and profiles validate against it; a server-only
+veto would omit the named policy reason. This supersedes the pending protected-path question above.
+The report check in item 1 uses existing shapes, including contradictions between a passing-tests
+claim and the last failing run. Keep the optional generated summary for historical use.
+
+Also include optional subtask dependencies with a relaxed plan validator for item 11; a run-rule
+finding kind distinguishing removed, skipped and deleted checks for item 17; Yes/No/Unsure answers
+on approve for item 9; an examples-only start for item 12; cost and rounds stored on each change
+for item 10; and a separate dictation endpoint answering 501 until implemented for item 18.
+These cover the decided workflows while preserving compatibility and explicit unbuilt responses.
+The cost per node field in usage events and the exception type field in test results were declined:
+node costs lack direct attribution, and conservative base-error handling needs no new field.
+This approves proposal scope, not edits to the approved proposal or current contracts on this front.
+
+## 2026-10-28 — Graph lenses use directly attributable evidence
+
+The Cost per node lens is dropped. Spending is measured per call and per agent; assigning it to
+nodes would make an estimate look like a measurement. Keep only Tests, Hubs and Pinned examples
+in item 13's lens control. The related usage-event field is also excluded from the proposal.
+This supersedes the earlier allowance for labeled node-cost estimates.
+
+## 2026-10-28 — Node examples begin with labeled test source
+
+Deliver item 14 first as the test source at the function's call site, explicitly labeled source.
+Real argument values depend on item 4's recorder and appear only after that evidence exists.
+Keep recorded, proposed and confirmed examples distinguishable. This gives the person a useful
+first card without turning a static call edge or code excerpt into claimed execution evidence.
+
+## 2026-10-28 — Base import and setup errors are unknown evidence
+
+Move item 6's remaining base-error correction ahead of merge-alone activation, with no contract
+change. An import or setup error on base means unknown, never evidence that the test failed before
+the change. The merge-alone evaluator must exclude it as supporting evidence. Existing diagnostics
+can carry this distinction, so the correction neither waits for an exception-type field nor lets
+unexecuted assertions justify an automatic merge.
+
+## 2026-10-28 — Baseten comparisons require an explicit tariff
+
+Agent B's Baseten spend stays unknown until its price per million tokens is configured in `.env`.
+Require that explicit tariff before paid bench comparisons: the shared US$20 ceiling cannot be
+enforced with an unpriced arm. Unknown cost is never zero and never debits the Meta credit ledger.
+This makes the budget rule apply to both providers without inventing a price.
+
+## 2026-10-28 — Agents receive graph context as server-built text
+
+Item 16 passes its bounded graph context only as text assembled by the server, never a graph tool
+for an agent. AGENTS.md reserves the graph as the person's supervision surface; Request changes
+already supplies related source context as text. Reuse that precedent for initial tasks so the
+agent gets a bounded hint without acquiring a new graph interface or unbounded traversal.

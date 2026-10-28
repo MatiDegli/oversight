@@ -23,19 +23,19 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 3 | Agent harness pack | In progress — `agents/harness-pack`; current tools on main `535e6f6` | No |
 | 4 | Measured impact cone | Queued — caller recording absent at `535e6f6`; isolation on main `19443e8` | Yes |
 | 5 | Live overlap between agents | Queued — card facts/read history remain; shared pending-node marks on main `535e6f6` | No |
-| 6 | Fails before, passes after (package 4) | Queued — assertion versus import/setup error only; probes on main `b7122ef`, isolated in `19443e8` | Pending — conservative classification fits; structured assertion evidence may need fields |
+| 6 | Fails before, passes after (package 4) | Queued — assertion versus import/setup error only; probes on main `b7122ef`, isolated in `19443e8` | No — conservative classification uses existing fields; exception type declined |
 | 7 | Cross-review and automatic Request changes (package 2) | On main — `95e4723`, `9b81d0b`, `13f955c`, `7da6fa9`; no new front | No |
-| 8 | Merge by rules, follow main and Revert (package 1) | In progress — `changes/rules-reservation` (P2b-2); scheduler on main `9f70622`, isolation `19443e8`; merge/Revert remain | Pending — named protected-path rule needs approval; merge/Revert shapes reserved |
+| 8 | Merge by rules, follow main and Revert (package 1) | In progress — `changes/rules-reservation` (P2b-2); scheduler on main `9f70622`, isolation `19443e8`; merge/Revert remain | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
 | 9 | A change card with three states | Queued — full card absent at `535e6f6`; cross-review Needs you note on main `7da6fa9` | Yes |
 | 10 | Cost and rounds per accepted change | Queued — aggregates remain; writer/reviewer attribution on main `13f955c` and `535e6f6` | Yes — stored aggregates; event-derived totals need none |
-| 11 | One plan, server-computed zones and task queue (package 6) | Queued — main `535e6f6` has validator/reservations, no partitioner or dispatcher | Pending — dependencies and single-agent fallback exceed current plan shape |
+| 11 | One plan, server-computed zones and task queue (package 6) | Queued — main `535e6f6` has validator/reservations, no partitioner or dispatcher | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
 | 12 | Examples before code | Queued — no examples phase on main `535e6f6` | Yes |
 | 13 | Pinned examples and graph lenses | Queued — no pins or lens control on main `535e6f6` | Yes |
 | 14 | Node card explained by examples | Queued — observed call inputs/results absent at `535e6f6`; navigation is on main | Yes |
 | 15 | Shape guard | Queued — no structural comparison producer on main `535e6f6` | Yes |
 | 16 | Bounded one-hop context for initial tasks | Queued — broader slice waits for bench; revision callers/siblings on main `ee92691` | No |
-| 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | No — reserved finding supports narrower first wiring |
-| 18 | Remaining packages 11–14, time permitting | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Pending — dictation needs its own contract decision; message/pause/resume reserved; replay/input controls local |
+| 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
+| 18 | Remaining packages 11–14, time permitting | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
 
 **Not ranked, goes in regardless:** delivery (package 9; static replay on main `a0a4624`, challenge
 queued after item 2), graph polish (8; graph and palette on main `535e6f6`, polish continues), and
@@ -175,10 +175,11 @@ on base. Keep package 4's case discovery, selected base/head probes and review o
 C3 already requires isolated probes (`backend/src/oversight/changes/_probes.py:229`). Only evidence
 classification remains.
 
-Today a base `error` counts as failure (`backend/src/oversight/changes/_beforeafter.py:95`). First
-classify it as weak/unknown with its diagnostic, using existing probe results/problems. Positive
-assertion evidence needs call phase and exception identity; propose those fields if required.
-Do not equate setup/import errors with regression evidence or rebuild the functioning probes.
+Today a base `error` counts as failure (`backend/src/oversight/changes/_beforeafter.py:95`). Classify
+import/setup errors as unknown with their diagnostic, using existing probe results/problems;
+the merge-alone evaluator must never use them as evidence of failure on base. Build this before
+merge-alone can activate, with no contract change. An exception-type field was declined for the
+Oct 28 proposal. Do not rebuild the functioning probes or claim assertion evidence from an error.
 
 ### 7. Cross-review and automatic Request changes
 
@@ -206,11 +207,14 @@ Revert recovery/history, routes and UI before enabling the mode. C3 landed in `1
 and probes require it. Human approval already retests moved bases
 (`backend/src/oversight/changes/_merge.py:45`), and revision can merge main into the retained branch.
 Reuse those paths; rules must test the combined result even when base has not moved.
+Enable cross-review with the other model before merge-alone can activate; the merge-alone evaluator
+must consume its result and require no blocking finding, alongside the deterministic checks.
 
 Manifest/lockfile, CI, test-configuration and security-path edits always wait for the person and
-receive cross-review. A fixed server veto fits existing boundaries, but a separately identified
-rule needs a new `RuleId` and profile validation: the literal is closed
-(`contracts/src/oversight_contracts/common.py:44`). That contract decision is pending. Revert and
+receive cross-review. The maintainer included a named `protected_paths` rule in the Oct 28 contract
+proposal, with a new policy profile version: `RuleId` is closed and profiles validate against it
+(`contracts/src/oversight_contracts/common.py:44`). A server-only veto would hide the policy reason.
+This approves its inclusion in the proposal, not a change to the current contracts. Revert and
 resolution provenance are already reserved. Revert covers only rules merges that apply cleanly;
 conflicts wait for the person. This is not general undo; unknown required evidence never passes.
 
@@ -255,7 +259,8 @@ Reuse that after deterministic cycle contraction; uncertain calls and same-file 
 conservative handling. Plan/queue routes remain 501 (`backend/src/oversight/api/commands.py:30`);
 finishing alone does not free a retained worktree's slot. Plans reserve exactly two subtasks and
 require both assigned agents while running (`contracts/src/oversight_contracts/plans.py:60`).
-Dependencies, sequential starts and one-agent fallback therefore need an approved plan extension.
+The Oct 28 proposal includes subtask dependencies and a relaxed plan validator for sequential
+starts and one-agent fallback; implement them only after that contract extension is approved.
 A partition heuristic does not prove independence; speed claims wait for the split bench.
 
 ### 12. Examples before code
@@ -274,24 +279,26 @@ not an extra call for every task; a confirmed example's result needs no model ju
 
 After a choice, offer an ordinary generated repository test retaining input, expected result,
 confirmer and originating task. Pins can be amended; breaking one fails the rules. One control
-switches Tests, Hubs, Pinned examples and Cost per node; clicking a gap starts a task with its zone.
+switches Tests, Hubs and Pinned examples; clicking a gap starts a task with its zone.
 Use neutral work light and show the maintainer a shot before merging. Text rules remain Next.
 
 Reuse test nodes/caller counts/files/task entry; main has no pins or lens registry
 (`frontend/src/graph/elements.ts:94`, `frontend/src/graph/camera.ts:197`). Optional pin provenance
-belongs in the proposal. Usage is per call/agent/change; node allocation can only be an explicitly
-labeled estimate until an attribution method exists. Do not claim causal cost per node or treat a
-file-naming convention alone as confirmed-pin enforcement.
+belongs in the proposal. The Cost per node lens was dropped: cost is measured per call and per agent,
+so a node lens would present an allocation estimate as a measurement. The cost-per-node field in
+usage events was declined too. Do not treat a file-naming convention alone as confirmed-pin enforcement.
 
 ### 14. Node card explained by examples
 
-Show actual test calls/results and pinned examples before code, labeled observed in tests, proposed
-or confirmed. Reuse item 4's recorder and item 13's pins; propose optional node examples with origin.
+The node card first shows the test source where the function is called,
+labeled as source. Real argument values wait for item 4's recorder; then distinguish observed test
+inputs/results from proposed or confirmed examples using item 13's pins. Propose optional node
+examples with origin so the person can tell source text from recorded execution.
 
 Main opens node source/diffs (`frontend/src/app/view.ts:99`); the palette (`535e6f6`) adds navigation,
 not runtime observations. Static edges carry no argument/result values
-(`contracts/src/oversight_contracts/graph.py:45`). Source-linked test excerpts can help during
-implementation but are not observed executions. Capture example data for replay: recordings need
+(`contracts/src/oversight_contracts/graph.py:45`). Source excerpts are the first delivery, not
+observed executions. Capture excerpts and later recorded example data for replay: recordings need
 not contain unchanged source. This is not a general runtime tracer.
 
 ### 15. Shape guard
@@ -309,7 +316,8 @@ gate or learned risk score.
 
 Give the agent a fixed-order slice of target signatures, direct callers/callees and module constants,
 about 1,500 tokens at most, explicitly listing omissions. Adopt only after the bench shows fewer
-steps and tokens with tasks still solved. Bounded task text needs no query tool or contract addition.
+steps and tokens with tasks still solved. The server builds this context as text, never a graph tool
+for agents, following AGENTS.md and the existing Request changes context. No contract addition is needed.
 
 Revision callers/siblings already work (`ee92691`, `backend/src/oversight/changes/_neighbors.py:23`,
 `backend/src/oversight/changes/_revision.py:26`). Reuse ordering/uncertainty labels, add callees/constants
@@ -330,8 +338,9 @@ publish no temporal findings (`backend/src/oversight/changes/_facts.py:375`). Wi
 assertion-loosening case first, with matching facts and ordered references
 (`contracts/src/oversight_contracts/review.py:253`). The core also handles skipped/deleted tests:
 absence of failure does not prove passing. Never infer recovery from truncated failure lists or
-force broader kinds into the current wire shape. First wiring needs no addition; broader kinds
-need a later contract decision.
+force broader kinds into the current wire shape. First wiring needs no addition; the Oct 28
+proposal adds the run-rule finding kind for removed, skipped and deleted checks. That extension
+must be approved before publishing the broader cases.
 
 ### 18. Remaining small packages, if time remains
 
@@ -339,7 +348,9 @@ Package 11's revision callers/siblings (`ee92691`) and package 12's Start an age
 `frontend/src/agents/StartAgentHere.tsx:10`) are complete. Keep them for traceability, not new work.
 
 Package 13 is Muse Voice Transcribe task dictation, last day only, never merge approval. Its
-audio-upload command/response needs its own contract decision; message/pause/resume reservations do not cover it.
+separate audio-upload command/response is included in the Oct 28 proposal as an endpoint answering
+501 until built; message/pause/resume reservations do not cover it. Contract implementation still
+requires approval of that proposal.
 Package 14 is person-to-agent messages, pause/resume and replay timeline. Message/pause/resume routes are
 reserved and still 501 (`backend/src/oversight/api/commands.py:51`); playback already consumes ordered
 events. Reuse those interfaces/local controls without claiming messaging or seeking already works.
@@ -372,8 +383,10 @@ Keep charges, unknowns and reservations in one ledger keyed by task, profile, ar
 never reset it or change output directories to manufacture another attempt.
 
 Declare criteria before paid execution. Combined paid bench work has a US$20 ceiling within the
-US$150 budget. Pilot one task per arm and project total cost; cut repetitions before arms if over
-cap. Higher reasoning runs only if the rest fits. This docs front runs no paid bench or provider
+US$150 budget; agent B's Baseten cost stays unknown until its price per million tokens is set in
+`.env`, and enforcing the cap requires that explicit tariff. Pilot one task per arm and project
+total cost; cut repetitions before arms if over cap. Higher reasoning runs only if the rest fits.
+This docs front runs no paid bench or provider
 call. Required comparisons:
 
 - Behavior detection and task-intent classification: freeze 10 unrequested-difference changes
