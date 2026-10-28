@@ -22,10 +22,10 @@ from oversight_contracts.commands import (
     RequestChanges,
     SaveFile,
     StartAgent,
+    TreeResponse,
 )
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
-    ("GET", "/tree", "Reserved /tree"),
     ("GET", "/history", "Reserved /history"),
     ("POST", "/queue", "Reserved /queue"),
     ("GET", "/queue", "Reserved /queue"),
@@ -52,6 +52,7 @@ NOT_BUILT: tuple[tuple[str, str, str], ...] = (
 )
 """Routes in the contract that this level does not build: 501, whatever the body."""
 LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/tree", "Listing files"),
     ("POST", "/agents", "Starting an agent"),
     ("POST", "/agents/{agent_id}/stop", "Stop"),
     ("POST", "/changes/{change_id}/approve", "Approve"),
@@ -90,6 +91,8 @@ class Commands(Protocol):
         ...
 
     async def rescan(self) -> None: ...
+
+    async def get_tree(self, agent_id: str | None) -> TreeResponse: ...
 
 
 def _not_built(what: str, why: str) -> Callable[[], Coroutine[Any, Any, None]]:
@@ -166,6 +169,17 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
             raise ApiError("too_large", str(error)) from None
         except InvalidPath as error:
             raise ApiError("invalid_path", str(error)) from None
+
+    @router.get("/tree")
+    async def get_tree(agent: str | None = None) -> TreeResponse:  # pyright: ignore[reportUnusedFunction]
+        try:
+            return await commands.get_tree(agent)
+        except InvalidPath as error:
+            raise ApiError("invalid_path", str(error)) from None
+        except TimeoutError:
+            raise ApiError(
+                "internal", "listing files exceeded 2 seconds; retry the Files sidebar"
+            ) from None
 
     @router.put("/files")
     async def save_file(request: SaveFile) -> FileSaved:  # pyright: ignore[reportUnusedFunction]

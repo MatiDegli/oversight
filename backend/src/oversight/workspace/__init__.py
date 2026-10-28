@@ -28,6 +28,7 @@ from oversight.workspace.suite import (
     SuiteUnavailable,
     validate_suite_execution,
 )
+from oversight.workspace.tree import list_tree
 
 __all__ = [
     "MAX_TESTS",
@@ -55,6 +56,7 @@ __all__ = [
     "base_probe_checkout",
     "check_content",
     "content_hash",
+    "list_tree",
     "parse_junit",
     "print_isolation_probe",
     "run_process",
