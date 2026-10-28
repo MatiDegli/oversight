@@ -20,6 +20,29 @@ async function command(page: Page, name: string) {
   await check(palette(page)).toHaveCount(0);
 }
 
+it("clicking the top bar search opens the palette with Group typography", async () => {
+  await withPage(async (page) => {
+    await page.route("**/tree?*", (route) =>
+      route.fulfill({
+        status: 501,
+        json: { error: { code: "not_implemented", message: "Replay" } },
+      }),
+    );
+    await page
+      .getByRole("button", { name: "Find a function, file or command", exact: true })
+      .click();
+    await check(palette(page)).toBeVisible();
+    await check(search(page)).toBeFocused();
+    for (const name of ["Functions, methods and classes", "Files", "Commands"]) {
+      const heading = palette(page).getByRole("heading", { name, exact: true });
+      await check(heading).toHaveCSS("font-size", "11.5px");
+      await check(heading).toHaveCSS("font-weight", "600");
+      await check(heading).toHaveCSS("letter-spacing", "0.92px");
+      await check(heading).toHaveCSS("text-transform", "uppercase");
+    }
+  });
+});
+
 it("Ctrl K opens from shell controls; arrows, count, empty results and Enter follow combobox semantics", async () => {
   await withPage(async (page) => {
     await page.route("**/tree?*", (route) =>

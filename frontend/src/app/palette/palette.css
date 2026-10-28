@@ -97,7 +97,6 @@
 }
 .palette h2 {
   margin: 18px 10px 6px;
-  font-size: var(--caption-size);
   color: var(--muted);
   font-weight: 600;
 }

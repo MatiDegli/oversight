@@ -111,7 +111,9 @@ export function Palette({
           return (
             rows.length > 0 && (
               <div key={group} role="group" aria-labelledby={`${id}-group-${String(index)}`}>
-                <h2 id={`${id}-group-${String(index)}`}>{group}</h2>
+                <h2 id={`${id}-group-${String(index)}`} className="group-label">
+                  {group}
+                </h2>
                 {rows.map((item) => (
                   <div
                     key={item.id}
