@@ -1,11 +1,34 @@
 # Beyond level 2
 
+## Three proofs
+
+The freeze is organized around three proofs. Judge each front by the proof it serves.
+
+1. **Would you approve it?** Package 9's static challenge is the submission link and opens the
+   video. It must work at phone width so a judge can try it on a phone. The maintainer sees a
+   phone-width shot before merge.
+2. **One person, many agents.** Run for a few hours on a real open-source repository with a
+   permissive license, credited in the video. The coordinator proposes the repository and tasks
+   to the maintainer first and reports budget pace before starting. End with counts of changes
+   merged by rules, questions asked and differences tests missed, plus cost per accepted change.
+   Paid calls for this run have a US$25 Meta-budget cap, separate from the bench's US$20.
+3. **Unrequested behavior among green patches.** From that same run, measure the share of patches
+   with passing tests whose behavior diff reveals a difference the task did not request. Fix the
+   reporting rule before measuring: if the share is low or the sample too small, tell the scale
+   story without a percentage. Do not repeat the run to improve that result.
+
+Checkpoint: Sat Oct 31 at 23:00 ART. Items 1, 2, 4 and 9, the behavior-diff bench and proof 1
+must all be on main. If any is missing, cut work from item 12 down and tell the maintainer what
+was cut.
+
 ## Decided queue
 
 This is the working home for everything beyond level 2. The maintainer set this order on
 2026-10-28. When capacity opens, take the first unfinished item that can proceed; dates do not
 supersede priority. Level 2 closed on Oct 27; its demo remains the fallback. Queue numbers replace
-the old idea numbers. Package numbers identify the Oct 27 work packages.
+the old idea numbers. Package numbers identify the Oct 27 work packages. Keep the item numbers:
+work through 1–11, then the lead agent, saved flows, 12, 13, 17 and 18; take 14–16 only if time
+remains. The two additions after item 11 are unnumbered.
 
 States were checked against main at `535e6f6`, including its code and merge history. In-progress
 branches are the coordinator's assigned fronts, not merged work. Queued rows describe what remains,
@@ -29,13 +52,20 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 9 | A change card with three states | Queued — full card absent at `535e6f6`; cross-review Needs you note on main `7da6fa9` | Yes |
 | 10 | Cost and rounds per accepted change | Queued — aggregates remain; writer/reviewer attribution on main `13f955c` and `535e6f6` | Yes — stored aggregates; event-derived totals need none |
 | 11 | One plan, server-computed zones and task queue (package 6) | Queued — main `535e6f6` has validator/reservations, no partitioner or dispatcher | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
+| — | [Lead agent](#lead-agent) | Queued — after items 8 and 11 reach main; thin layer on item 11 | No — lead routes and `started_by` reserved |
+| — | [Saved agent flows](#saved-agent-flows) | Queued — after the lead agent; extends package 12, on main `c1c19c6` | No while filling task text; a distinct role or tool limits need maintainer review |
 | 12 | Examples before code | Queued — no examples phase on main `535e6f6` | Yes |
 | 13 | Pinned examples and graph lenses | Queued — no pins or lens control on main `535e6f6` | Yes |
+| 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
+| 18 | Remaining packages 11–14 | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
+
+### Only if time remains
+
+| # | Item | State and commit or branch | In contracts proposal |
+| --- | --- | --- | --- |
 | 14 | Node card explained by examples | Queued — observed call inputs/results absent at `535e6f6`; navigation is on main | Yes |
 | 15 | Shape guard | Queued — no structural comparison producer on main `535e6f6` | Yes |
 | 16 | Bounded one-hop context for initial tasks | Queued — broader slice waits for bench; revision callers/siblings on main `ee92691` | No |
-| 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
-| 18 | Remaining packages 11–14, time permitting | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
 
 **Not ranked, goes in regardless:** delivery (package 9; static replay on main `a0a4624`, challenge
 queued after item 2), graph polish (8; graph and palette on main `535e6f6`, polish continues), and
@@ -58,7 +88,6 @@ These retain useful ideas from the old inventory without approving a front or ch
 
 ## Next
 
-- Lead agent: deferred; the former Sunday gate required packages 1–6, and the run rule now comes later; lead routes and plan `started_by` remain reserved even if the lead never ships.
 - Hidden test sets: extend beyond the external hidden grading already present in `tools/eval`.
 - A red agent to look for counterexamples to a proposed change.
 - A specialist engine for checks that need a dedicated tool.
@@ -78,7 +107,9 @@ These retain useful ideas from the old inventory without approving a front or ch
 ## No
 
 - Mutation testing: focus on behavior comparisons rather than add another test-generation pipeline.
-- Uncertainty from token logprobs: token likelihood is not evidence of a behavioral defect.
+- Uncertainty from token logprobs: likelihood over code tokens is not evidence of a behavioral
+  defect. Item 9's constrained Spark Open choice is separate: probability over a finite decision
+  can only add a reason to wait, never approve a change.
 - Test pending changes together before first approval: preserve one candidate's evidence and decision at a time.
 - Voice approval: a merge needs an explicit review decision; dictation may enter task text only.
 - Autonomy learned from approval history: permission comes from rules the person chose.
@@ -189,6 +220,8 @@ on main through `7da6fa9`, following `95e4723`, `9b81d0b` and `13f955c`
 Drop it as a front. Reuse target validation, durable accounting, human preemption and the one-round
 limit in item 8. It is opt-in and needs a different model in the opposite slot
 (`backend/src/oversight/review_config.py:37`); another call to the author's model is not a fallback.
+Both authors, A and B, write code with hosted Muse Spark. Muse Spark Open is the cross-reviewer
+and item 9's deciding model; the cross-review mechanism stays unchanged.
 The manual review route remains 501, which does not mean automatic review is missing. No new
 contract is needed for this item.
 
@@ -226,11 +259,23 @@ unrequested choice, put one plain question and its smallest before/after example
 facts. Yes confirms the choice; No requests changes with the example as comment; Unsure waits.
 Ask me keeps the summary on top and requires Approve for every change.
 
-One Muse Spark advisory call ties measured differences to task text or confirmed examples.
-Confirmed-example results are decided deterministically. Unexplained/uncertain differences wait;
-the model can only add reasons to wait. Oversight asks selectively, never through the agent's
-report. Reuse target-aware notes (`frontend/src/review/CrossReviewNote.tsx:11`); full projection
-is absent and the reducer ignores assessments/Revert (`frontend/src/state/applyEvent.ts:227`).
+For each measured behavior difference, Muse Spark Open chooses asked for, not asked for or
+cannot tell against the task text or confirmed examples. Constrain the output with a `json_schema`
+enum or a grammar. Log probabilities over those options supply a decision probability only if
+the probe and development examples support it. Below a threshold, or on cannot tell, the change
+waits. This decision can add a reason to wait, never approve. Confirmed-example results remain
+deterministic. Oversight asks selectively, never through the agent's report.
+
+Probe first with `tools/probe_api.py`: check log probabilities and structured output on both
+endpoints, with reasoning off for this call. Then use about ten development examples to check
+whether the probability separates correct from incorrect answers. Build probability handling only
+if both checks hold. Otherwise retain the constrained choice, with cannot tell as its only reason
+to wait, and report the findings to the maintainer. Set the threshold from development examples,
+never from the 20 frozen bench patches. Hosted Muse Spark writes code for both A and B and runs
+the lead; Spark Open supplies cross-review and this decision. Cross-review stays as it is.
+
+Reuse target-aware notes (`frontend/src/review/CrossReviewNote.tsx:11`); full projection is absent
+and the reducer ignores assessments/Revert (`frontend/src/state/applyEvent.ts:227`).
 Optional questions and persisted Yes/No/Unsure answers belong in the proposal. Yes never converts
 an unavailable check to passing evidence.
 
@@ -262,6 +307,27 @@ require both assigned agents while running (`contracts/src/oversight_contracts/p
 The Oct 28 proposal includes subtask dependencies and a relaxed plan validator for sequential
 starts and one-agent fallback; implement them only after that contract extension is approved.
 A partition heuristic does not prove independence; speed claims wait for the split bench.
+
+### Lead agent
+
+After items 8 and 11 are on main, add a thin lead layer on item 11 so proof 2 can start many
+agents without the person starting each one. Hosted Muse Spark writes the plan and subtask text
+and starts agents through public commands, using the reserved lead routes and `started_by`.
+The server still computes zones and owns the task queue. The lead never merges or reviews and
+sees only what the person can see. This supersedes its earlier deferral to Next.
+
+### Saved agent flows
+
+After the lead, extend package 12's shipped Start an agent here with a short list of repository
+files. Each flow names task text, a target (selected node, selected change, or files changed since
+the last commit) and expected checks. The person picks a flow, sees the filled task text, may edit
+it, then starts the agent. Its result uses the same card, rules and evidence as any change.
+
+Start with three flows: write tests for the selected function or changed files; seek a
+counterexample to the selected change; explain the selected change from its facts. Counterexample
+search is a light version of the red agent, whose broader workflow stays in Next. Filling task
+text needs no contract change; a separate role or tool limits go to the maintainer first. The
+picker changes the look, so the maintainer sees a shot before merge.
 
 ### 12. Examples before code
 
@@ -342,7 +408,9 @@ force broader kinds into the current wire shape. First wiring needs no addition;
 proposal adds the run-rule finding kind for removed, skipped and deleted checks. That extension
 must be approved before publishing the broader cases.
 
-### 18. Remaining small packages, if time remains
+<a id="18-remaining-small-packages-if-time-remains"></a>
+
+### 18. Remaining small packages
 
 Package 11's revision callers/siblings (`ee92691`) and package 12's Start an agent here (`c1c19c6`,
 `frontend/src/agents/StartAgentHere.tsx:10`) are complete. Keep them for traceability, not new work.
@@ -356,10 +424,20 @@ reserved and still 501 (`backend/src/oversight/api/commands.py:51`); playback al
 events. Reuse those interfaces/local controls without claiming messaging or seeking already works.
 Earlier-today history belongs to item 8; usage views belong to item 10.
 
+### Shipped editor language highlighting
+
+Non-Python highlighting shipped on main in `e1e5599` and `b238a6c`: YAML, Markdown, JSON, TOML,
+shell and INI use language by extension in the file view and live diff, without language-service
+workers (`frontend/src/editor/language.ts`, `FileView.tsx:193`, `LiveDiff.tsx:266`). Files producing
+no graph nodes have a discreet “No impact analysis” header label. This improves file reading
+without claiming graph analysis for another language.
+
 ### Delivery, graph polish and bench
 
 **Delivery (package 9).** After item 2 lands, prioritize a static “Would you approve it?” challenge:
-three changes, local Approve/Reject choices, findings and score. Main has verified backend-free
+three changes, local Approve/Reject choices, findings and score. This is proof 1, the submission
+link and the opening of the video. It must work at phone width; show the maintainer a phone-width
+shot before merge so judges can try it from a phone. Main has verified backend-free
 replay (`a0a4624`), with two bundled proposals, no third challenge or scoring. Use replay cuts and a
 companion challenge manifest; no product contract addition. Label planted bugs and preserve real-run
 provenance only for unmodified recordings. Automated 1080p replay takes and a 720p compression check
@@ -394,9 +472,16 @@ call. Required comparisons:
   The maintainer labels expected behavior before detector output. Compare tests only, Muse Spark
   diff review, and behavior diff plus advisory call on the same patches. Report detection and
   classification separately; include unprobed cases in denominators; exclude development examples.
+  Add an arm on the same 20 frozen patches replacing Muse Spark's advisory call with Spark Open's
+  constrained decision. Alongside detection and classification, report calibration: whether a
+  probability above the threshold means the decision was right, if the probe-first condition in
+  item 9 supports probabilities. Choose the threshold from development examples, never the 20.
+  This arm shares the bench's US$20 cap and waits for the configured Baseten tariff.
 - Harness: eight tasks, three repetitions per task/arm, randomized arm order, same model/reasoning/
   limits. Primary outcome is solved tasks; also report turns/tokens/dollars/wall time. Current tools
   versus pack; current tools at higher reasoning only if the cap allows.
 - Plan/zones: graph split versus one agent doing both tasks and naive split; joint correctness,
   wall time, tokens and dollars. Parallelism alone does not establish speed.
 - One-hop context: steps, tokens and solved tasks with and without the bounded slice.
+
+PRODUCT and video wording for these model roles will be proposed to the maintainer later.
