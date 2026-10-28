@@ -243,6 +243,7 @@ interface Work extends Accumulated {
   /** Per column, for the light being added: the distance to its box, and the offset from its center. */
   colX: Float32Array;
   ringX: Float32Array;
+  decay: Float64Array;
 }
 
 /** A light that reaches the screen, with what its glow and ring need. */
@@ -302,7 +303,8 @@ function addLight(
       let intensity = 0;
       if (distanceSquared <= glowBound) {
         const distance = Math.sqrt(distanceSquared);
-        if (distance <= glow) intensity = amplitude * falloff(config, distance);
+        if (distance <= glow)
+          intensity = amplitude * cachedFalloff(config, distance, row * cols + col, work.decay);
       }
       if (ringRow) {
         const rx = ringX[col] ?? 0;
@@ -329,17 +331,9 @@ function addLight(
  * grid it returns is one of them: it is valid until the next call.
  */
 export function createLampField() {
-  const empty = () => new Float32Array(0);
   let cells = 0;
-  const work: Work = {
-    sum: empty(),
-    red: empty(),
-    green: empty(),
-    blue: empty(),
-    data: new Uint8ClampedArray(0),
-    colX: empty(),
-    ringX: empty(),
-  };
+  let decays = new Map<string, Float64Array>();
+  const work = emptyWork();
 
   /**
    * Lights the cells of a `width` by `height` screen. `time` is the clock in seconds, or null for
@@ -381,8 +375,14 @@ export function createLampField() {
       return onScreen && (glow >= 0 || ring) ? [{ light, amplitude, glow, ring, box }] : [];
     });
     reaching.sort((a, b) => b.light.weight - a.light.weight);
-    for (const one of reaching.slice(0, config.limit))
+    const retained = new Map<string, Float64Array>();
+    for (const one of reaching.slice(0, config.limit)) {
+      const key = decayKey(config, one.light.box, cols, rows);
+      work.decay = decays.get(key) ?? new Float64Array(cells);
+      retained.set(key, work.decay);
       addLight(config, cols, rows, one, time, work);
+    }
+    decays = retained;
     quantize(config, cols, rows, work, work.data);
     return { cols, rows, data: work.data };
   };
@@ -452,4 +452,48 @@ function quantize(
 /** R4 uses the same physical spread in every view; only the graph camera scales it. */
 export function signalConfig(config: FieldConfig, zoom: number): FieldConfig {
   return { ...config, profile: { near: 26 * zoom, far: 72 * zoom, gain: config.profile.gain } };
+}
+
+/** Box falloff is unchanged while the clock moves; keep exact doubles, bounded to visible sources. */
+function cachedFalloff(
+  config: FieldConfig,
+  distance: number,
+  index: number,
+  decay: Float64Array,
+): number {
+  const known = decay[index] ?? 0;
+  if (known !== 0) return known;
+  const value = falloff(config, distance);
+  decay[index] = value;
+  return value;
+}
+
+function emptyWork(): Work {
+  const empty = () => new Float32Array(0);
+  return {
+    sum: empty(),
+    red: empty(),
+    green: empty(),
+    blue: empty(),
+    data: new Uint8ClampedArray(0),
+    colX: empty(),
+    ringX: empty(),
+    decay: new Float64Array(0),
+  };
+}
+
+function decayKey(config: FieldConfig, box: Box, cols: number, rows: number): string {
+  return [
+    cols,
+    rows,
+    config.cell,
+    config.profile.near,
+    config.profile.far,
+    config.nearShare,
+    config.farShare,
+    box.x1,
+    box.y1,
+    box.x2,
+    box.y2,
+  ].join(":");
 }

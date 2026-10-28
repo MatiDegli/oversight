@@ -81,6 +81,8 @@ class FieldRuntime implements FieldController {
   private readonly markers = new MarkerMotion();
   private readonly markerLayer: MarkerLayer;
   private masks: Box[] = [];
+  private masksDirty = true;
+  private maskSize = "";
   private readonly overlayObserver?: MutationObserver;
   private readonly frozen =
     import.meta.env.DEV && typeof location !== "undefined" ? fieldClock(location.search) : null;
@@ -113,10 +115,14 @@ class FieldRuntime implements FieldController {
     if (stage) {
       this.overlayObserver = new MutationObserver((records) => {
         // Ignore our own paint and Cytoscape; their lifecycle already calls onGraph.
-        if (records.some((record) => !canvas.parentElement?.contains(record.target))) this.redraw();
+        if (records.some((record) => !canvas.parentElement?.contains(record.target))) {
+          this.masksDirty = true;
+          this.redraw();
+        }
       });
       this.overlayObserver.observe(stage.closest(".shell-frame") ?? stage, {
         childList: true,
+        characterData: true,
         subtree: true,
         attributes: true,
         attributeFilter: ["class", "style", "hidden"],
@@ -182,7 +188,12 @@ class FieldRuntime implements FieldController {
       this.renderer.resize(width, height, Math.min(window.devicePixelRatio || 1, 1));
       const boxes = this.markers.boxes(lights, this.source, now);
       const placed = placeLights(this.theme, lights, boxes);
-      this.masks = overlayBoxes(this.canvas);
+      const maskSize = `${String(width)}:${String(height)}`;
+      if (this.masksDirty || this.maskSize !== maskSize) {
+        this.masks = overlayBoxes(this.canvas);
+        this.masksDirty = false;
+        this.maskSize = maskSize;
+      }
       this.grid = this.lamps(
         this.source.zoom ? signalConfig(config, this.source.zoom()) : config,
         width,

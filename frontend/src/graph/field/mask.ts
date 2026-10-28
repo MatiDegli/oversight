@@ -1,4 +1,4 @@
-import type { Box } from "./model";
+import type { Box, LampGrid } from "./model";
 
 /** Measure the painted overlay children, never their full-stage positioning wrapper. */
 export function overlayBoxes(canvas: HTMLCanvasElement): Box[] {
@@ -61,4 +61,19 @@ export function unmaskedPath(boxes: readonly Box[], width: number, height: numbe
     add(height);
   }
   return paths.join("");
+}
+
+/** Suppress whole LEDs at mask boundaries: a mask never leaves a chopped square or a guide dot. */
+export function maskLamps(grid: LampGrid, cell: number, boxes: readonly Box[]) {
+  for (const box of boxes) {
+    const c0 = Math.max(0, Math.floor(box.x1 / cell));
+    const c1 = Math.min(grid.cols, Math.ceil(box.x2 / cell));
+    const r0 = Math.max(0, Math.floor(box.y1 / cell));
+    const r1 = Math.min(grid.rows, Math.ceil(box.y2 / cell));
+    for (let row = r0; row < r1; row++)
+      for (let col = c0; col < c1; col++) {
+        // Alpha 1/255 is reserved: lit levels start at 85/255; off remains zero for guide dots.
+        grid.data[(row * grid.cols + col) * 4 + 3] = 1;
+      }
+  }
 }

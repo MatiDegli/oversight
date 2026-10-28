@@ -67,10 +67,6 @@ function context(failure: string) {
     uniform4f: vi.fn(),
     clearColor: vi.fn(),
     clear: vi.fn(),
-    enable: vi.fn(),
-    scissor: vi.fn(),
-    SCISSOR_TEST: 3089,
-    COLOR_BUFFER_BIT: 16384,
     drawArrays: vi.fn(),
   };
   const canvas = { getContext: () => gl } as unknown as HTMLCanvasElement;
@@ -271,19 +267,17 @@ describe("field diagnostics", () => {
   });
 });
 
-it("clears overlay rectangles after every lamp, guide and ring, rounding outward at DPR 1.5", () => {
+it("uploads masked cells in the same draw as the LEDs and guides, without additional clears", () => {
   const { canvas, gl } = context("");
   const renderer = createLampRenderer(canvas);
   renderer?.resize(100, 100, 1.5);
-  renderer?.draw({ cols: 15, rows: 15, data: new Uint8ClampedArray(900) }, look, [
-    { x1: 10.2, y1: 20.3, x2: 30.4, y2: 40.5 },
-  ]);
-  expect(gl.enable).toHaveBeenCalledWith(gl.SCISSOR_TEST);
-  expect(gl.scissor).toHaveBeenCalledWith(15, 89, 31, 31);
-  expect(gl.clear).toHaveBeenCalledTimes(2);
-  expect(gl.clear.mock.invocationCallOrder[1]).toBeGreaterThan(
-    gl.drawArrays.mock.invocationCallOrder[0] ?? 0,
-  );
-  expect(gl.disable).toHaveBeenLastCalledWith(gl.SCISSOR_TEST);
+  const grid = { cols: 15, rows: 15, data: new Uint8ClampedArray(900) };
+  renderer?.draw(grid, look, [{ x1: 10.2, y1: 20.3, x2: 30.4, y2: 40.5 }]);
+  expect(grid.data[(2 * 15 + 1) * 4 + 3]).toBe(1);
+  expect(grid.data[(5 * 15 + 4) * 4 + 3]).toBe(1);
+  expect(grid.data[(6 * 15 + 4) * 4 + 3]).toBe(0);
+  expect(gl.texImage2D).toHaveBeenCalledOnce();
+  expect(gl.drawArrays).toHaveBeenCalledOnce();
+  expect(gl.clear).toHaveBeenCalledOnce();
   renderer?.dispose();
 });

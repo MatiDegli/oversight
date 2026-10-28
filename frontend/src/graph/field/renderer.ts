@@ -3,6 +3,7 @@
 // them: each fragment finds its cell, keeps the lamp's square (72% of the cell) and, on a lamp that
 // is off, the guide dot every few cells. The gaps between lamps stay transparent, so the ground
 // behind the canvas shows. Where WebGL2 is missing this returns null and the graph shows plain ground.
+import { maskLamps } from "./mask";
 import type { Box, LampGrid, Rgb } from "./model";
 
 /** What the shader draws besides the grid: sizes in CSS px and the guide dot's color. */
@@ -64,6 +65,7 @@ void main() {
   vec2 origin = cell * uCell;
   if (!inside(p, snap(origin + 0.5 * (uCell - uLamp)), snap(vec2(uLamp)))) return;
   vec4 lamp = texelFetch(uCells, ivec2(cell), 0);
+  if (lamp.a > 0.0 && lamp.a < 0.01) return;
   vec3 color = lamp.rgb;
   ivec2 index = ivec2(cell);
   if (lamp.a < 0.001 && index.x % uEvery == 0 && index.y % uEvery == 0
@@ -207,10 +209,10 @@ function renderer(
     },
     draw(grid, look, masks = []) {
       gl.activeTexture(gl.TEXTURE0);
+      maskLamps(grid, look.cell, masks);
       upload(gl, grid, texture, uploaded);
       uploaded = { cols: grid.cols, rows: grid.rows };
       paint(gl, canvas, initialized, grid, look, ratio);
-      clearMasks(gl, canvas.height, ratio, masks);
     },
     pixel(x, y) {
       const px = Math.floor(x * ratio);
@@ -283,24 +285,4 @@ function paint(
   gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
-}
-
-/** Clear after the lamps and guides, including travelling light. */
-function clearMasks(
-  gl: WebGL2RenderingContext,
-  height: number,
-  ratio: number,
-  boxes: readonly Box[],
-) {
-  if (boxes.length === 0) return;
-  gl.enable(gl.SCISSOR_TEST);
-  for (const box of boxes) {
-    const left = Math.floor(box.x1 * ratio);
-    const top = Math.floor(box.y1 * ratio);
-    const right = Math.ceil(box.x2 * ratio);
-    const bottom = Math.ceil(box.y2 * ratio);
-    gl.scissor(left, height - bottom, right - left, bottom - top);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-  }
-  gl.disable(gl.SCISSOR_TEST);
 }
