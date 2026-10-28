@@ -276,3 +276,27 @@ describe("applyRoutes", () => {
     vi.restoreAllMocks();
   });
 });
+
+it("counts every hidden unroutable non-import edge, including inheritance", () => {
+  const cy = cytoscape({
+    headless: true,
+    elements: [
+      { data: { id: "a" } },
+      { data: { id: "b" } },
+      ...["calls", "inherits", "imports"].map((kind) => ({
+        data: { id: kind, source: "a", target: "b" },
+        classes: `${kind} unroutable`,
+      })),
+      { data: { id: "routed", source: "a", target: "b" }, classes: "inherits" },
+    ],
+  });
+  try {
+    expect(routingOmissions(cy.edges(".inherits"))).toBe(1);
+    expect(routingOmissions(cy.edges(".imports"))).toBe(0);
+    expect(routingOmissions(cy.edges())).toBe(2);
+    cy.getElementById("inherits").removeClass("unroutable");
+    expect(routingOmissions(cy.edges())).toBe(1);
+  } finally {
+    cy.destroy();
+  }
+});

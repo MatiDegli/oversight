@@ -93,13 +93,18 @@ export function updateGraph(
       element.classes([...definition.classes.split(/\s+/).filter(Boolean), ...owned]);
     }
   });
-  if (initial && cy.nodes().nonempty()) {
-    const preset = elements.some((element) => element.position !== undefined);
+  if (initial) initialLayout(cy, elements, theme);
+  else settle(cy, theme);
+}
+
+/** Choose the initial layout, then settle header bands and routes before choosing the camera. */
+function initialLayout(cy: Core, elements: GraphElement[], theme: GeometryTheme): void {
+  const preset = elements.some((element) => element.position !== undefined);
+  if (cy.nodes().nonempty()) {
     // The preset shows the graph at 100% on its hub; nothing is fitted. Without one, the layout
     // places the nodes and the camera fits them, as before.
-    if (preset) {
-      cy.layout({ name: "preset", fit: false }).run();
-    } else {
+    if (preset) cy.layout({ name: "preset", fit: false }).run();
+    else {
       const fallback = { name: "fcose", animate: false, fit: true, padding: FIT_PADDING };
       cy.layout(fallback).run();
       packFallback(cy, theme);
@@ -107,7 +112,7 @@ export function updateGraph(
   }
   settle(cy, theme);
   // Header bands change frame bounds: choose the start camera only after they are final.
-  if (initial && elements.some((element) => element.position !== undefined)) startCamera(cy);
+  if (preset) startCamera(cy);
 }
 
 /** After nodes are placed or moved: the frames' header bands and the edges' routes, in that order. */

@@ -18,7 +18,7 @@ import {
   zoomBy,
 } from "./camera";
 import type { Camera, Framing } from "./camera";
-import { graphElements } from "./elements";
+import { elementSnapshot } from "./elementSnapshot";
 import { foldController } from "./foldController";
 import { createBoxSource, DotField } from "./field";
 import type { FieldInput } from "./field";
@@ -74,6 +74,8 @@ export interface GraphViewProps {
   onFramed?: (framing: Framing | null) => void;
   /** The actual overlay box, measured independently from the column used for fitting. */
   coneCardRef?: RefObject<HTMLDivElement | null>;
+  /** Retained by the shell so a remounted cone card receives the last routing count. */
+  onRoutingOmissions?: (count: number) => void;
   /** Filled while the graph exists, for the zoom buttons; empty before it is created and after. */
   apiRef?: RefObject<GraphApi | null>;
   /** The initial watch area between the heading/notices and the bottom overlays. */
@@ -96,6 +98,7 @@ export function GraphView({
   frameKey = null,
   onFramed,
   coneCardRef,
+  onRoutingOmissions,
   apiRef,
   startAreaRef,
   field = NO_LIGHTS,
@@ -281,23 +284,14 @@ export function GraphView({
         targetFrame.current = framing;
         reportSoon();
       };
+      const snapshot = elementSnapshot();
       const sync = () => {
         // A second addition can arrive before the first ease ends. Include both targets when
         // replacing that animation, rather than leaving the first addition outside the view.
         if (!cy.animated() || latest.current.panelOpen) arriving.clear();
         const existing = new Set(cy.nodes().map((node) => node.id()));
         const state = stateStore.getState().state;
-        const lit = latest.current.litIds;
-        const foldsChanged = folding.render(
-          state,
-          graphElements(
-            state,
-            false,
-            lit ? new Set(lit) : null,
-            latest.current.cone ?? latest.current.liveCone,
-            latest.current.field?.mode === "live-diff",
-          ),
-        );
+        const foldsChanged = folding.render(state, snapshot(state, latest.current));
         if (
           existing.size === 0 &&
           Object.keys(state.graph?.positions ?? {}).length > 0 &&
@@ -440,7 +434,7 @@ export function GraphView({
         role="img"
         aria-label="Repository graph"
       />
-      <RoutingOmissions hostRef={container} coneCardRef={coneCardRef} />
+      <RoutingOmissions hostRef={container} inCone={cone !== null} onCount={onRoutingOmissions} />
     </div>
   );
 }

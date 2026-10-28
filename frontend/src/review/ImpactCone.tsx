@@ -1,5 +1,6 @@
 import type { GraphNode, ImpactCone } from "@contracts";
 import { ScanEye } from "lucide-react";
+import { routingOmissionText } from "../graph";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
@@ -28,12 +29,14 @@ export function ImpactConeCard({
   nodes,
   outOfView,
   onReveal,
+  routingOmissions = 0,
 }: {
   cone: ImpactCone;
   nodes: readonly GraphNode[];
   outOfView?: ReadonlySet<string>;
   /** A click on a row that says "Out of view" asks the camera to pan there; nothing else does. */
   onReveal?: (nodeId: string) => void;
+  routingOmissions?: number;
 }) {
   const names = new Map(nodes.map((node) => [node.id, node.qualname]));
   const groups = new Map<number, ImpactCone["entries"]>();
@@ -123,6 +126,11 @@ export function ImpactConeCard({
             </p>
           )}
         </div>
+      )}
+      {routingOmissions > 0 && (
+        <p role="status" className="mt-(--spacing-sm) text-sm text-muted">
+          {routingOmissionText(routingOmissions)}
+        </p>
       )}
     </section>
   );
