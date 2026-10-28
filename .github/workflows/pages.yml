@@ -39,9 +39,7 @@ jobs:
         with:
           node-version: 24
       # The Vite plugin validates the real recording against Python's source contracts.
-      - run: uv sync --frozen
-      - run: pnpm -C frontend fetch --frozen-lockfile
-      - run: pnpm -C frontend install --offline --frozen-lockfile
+      - run: make install
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Build the recorded replay and deep-link fallback
         run: |
