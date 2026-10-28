@@ -92,8 +92,32 @@ function trunks(boxes: readonly RouteBox[], edges: readonly RouteEdge[], tuning:
     );
     const room = left - previousRight;
     const inset = Math.min(tuning.loopInset, room / 3);
-    const gap = Math.min(tuning.laneGap, (room - inset * 2) / Math.max(1, targets.length));
-    targets.forEach((target, rank) => lanes.set(target.id, left - inset - rank * gap));
+    const occupied: number[] = [];
+    const spans = targets
+      .map((target) => {
+        const ys = [
+          target.anchorY,
+          ...edges
+            .filter((e) => e.target === target.id)
+            .flatMap((e) => {
+              const source = byId.get(e.source);
+              return source ? [source.anchorY] : [];
+            }),
+        ];
+        return { target, low: Math.min(...ys), high: Math.max(...ys) };
+      })
+      .sort(
+        (a, b) =>
+          a.low - b.low ||
+          a.target.anchorY - b.target.anchorY ||
+          a.target.id.localeCompare(b.target.id),
+      );
+    for (const { target, low, high } of spans) {
+      let rank = occupied.findIndex((end) => end < low - tuning.laneGap);
+      if (rank < 0) rank = occupied.length;
+      occupied[rank] = high;
+      lanes.set(target.id, left - inset - rank * tuning.laneGap);
+    }
   }
   return lanes;
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { useStore } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 
 import type { FileSaved } from "@contracts";
 
@@ -10,7 +12,7 @@ import { stateStore } from "../state";
 import { createCommandClient, replayBuild, replaySource } from "../transport";
 import { createFileSession } from "./files";
 import { useEscapeCloses } from "./escape";
-import { Frame } from "./Frame";
+import { ConnectedFrame } from "./Frame";
 import { startAppSession } from "./session";
 import {
   clickNode,
@@ -51,7 +53,14 @@ export function App() {
         )
       : undefined,
   );
-  const state = useStore(stateStore, (store) => store.state);
+  const decisionState = useStore(
+    stateStore,
+    useShallow(({ state }) => ({
+      changes: state.changes,
+      agents: state.agents,
+      errors: state.errors,
+    })),
+  );
   useEffect(() => {
     return startAppSession(
       document.getElementById("root"),
@@ -113,6 +122,7 @@ export function App() {
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {
       if (!commands) return;
+      const state = { ...stateStore.getState().state, ...decisionState };
       const change = state.changes[changeId];
       const proposal = change?.proposal;
       const base = change ? state.agents[change.agent_id]?.base_commit : null;
@@ -130,15 +140,14 @@ export function App() {
         target,
       );
     },
-    [commands, state],
+    [commands, decisionState],
   );
   return (
-    <Frame
+    <ConnectedFrame
       files={files}
-      state={state}
       view={view}
       onNodeTap={onNodeTap}
-      canOpenChange={(changeId) => openChange(state, view, changeId) !== null}
+      canOpenChange={(changeId) => openChange(stateStore.getState().state, view, changeId) !== null}
       onOpenChange={onOpenChange}
       onClosePanel={onClosePanel}
       onTabAction={(action) => {
@@ -146,7 +155,7 @@ export function App() {
       }}
       onStartAgent={commands?.startAgent}
       onStopAgent={commands?.stopAgent}
-      canReview={(changeId) => openReview(state, view, changeId) !== null}
+      canReview={(changeId) => openReview(stateStore.getState().state, view, changeId) !== null}
       onReview={onReview}
       onOpenQueue={onOpenQueue}
       attempts={attempts}

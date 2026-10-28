@@ -69,6 +69,14 @@ export async function withPage(
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
     );
+    // Existing review assertions exercise expanded modules; use the person's detail control.
+    await page.getByRole("button", { name: "Functions", exact: true }).click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+          ?.oversightGraph?.animating() === false,
+    );
     await test(page);
     expect(errors).toEqual(expectedErrors);
   } finally {

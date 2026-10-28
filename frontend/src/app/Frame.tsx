@@ -1,3 +1,6 @@
+import { useStore } from "zustand";
+import { useShallow } from "zustand/react/shallow";
+import { stateStore } from "../state";
 import type { StartAgent } from "@contracts";
 import type { ReactNode } from "react";
 import type { FileAccess } from "../editor";
@@ -118,4 +121,18 @@ export function Frame(props: FrameProps) {
       )}
     </div>
   );
+}
+
+/** App owns navigation; event presentation subscribes only to the slices the shell uses. */
+export function ConnectedFrame(props: Omit<FrameProps, "state">) {
+  const state = useStore(
+    stateStore,
+    useShallow(({ state }) => ({
+      ...state,
+      // Transport cursors are applied synchronously by the session and never drive rendering.
+      lastSeq: 0,
+      gap: false,
+    })),
+  );
+  return <Frame {...props} state={state} />;
 }

@@ -113,3 +113,42 @@ export function ZoomControls({ api }: { api: RefObject<GraphApi | null> }) {
     </div>
   );
 }
+
+/** Presentation choices keep the preset; they never run a layout. */
+export function DetailControls({
+  level,
+  zoom,
+  onChange,
+}: {
+  level: "Modules" | "Functions" | "Details";
+  zoom: number;
+  onChange: (level: "Modules" | "Functions" | "Details") => void;
+}) {
+  return (
+    <div
+      className={`flex h-(--button-small-height) overflow-hidden rounded-card text-sm ${surface}`}
+    >
+      <div role="group" aria-label="Graph detail" className="flex">
+        {(["Modules", "Functions", "Details"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={level === value}
+            onClick={() => {
+              onChange(value);
+            }}
+            className={`px-3.5 text-muted hover:bg-raised aria-pressed:bg-raised aria-pressed:text-text ${focusRing}`}
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+      <output
+        aria-label="Zoom percentage"
+        className="flex min-w-16 items-center justify-center border-l border-border px-3 font-mono text-muted"
+      >
+        {zoom}%
+      </output>
+    </div>
+  );
+}
