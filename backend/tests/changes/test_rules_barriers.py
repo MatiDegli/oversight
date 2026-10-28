@@ -8,7 +8,7 @@ import pytest
 import test_rules_transaction as tx_tests
 from changes_helpers import assert_main_clean, bounded
 from git_attack_helpers import malicious_sub
-from test_assessment import head, latest, rec, settled, terminals, wait
+from test_assessment import head, rec, settled, terminals, wait
 from test_git_integrity import (
     monitor_every_server_git,
 )
@@ -117,13 +117,24 @@ async def test_authority_loss_at_every_await(
             rec(h).revision += 1
 
     if boundary == "admission":
-        ctx.ports.rules_admission = lambda record, policy: None
+
+        def admit(record, policy):
+            invalidate()
+            return h.manager._admit_rules(record, policy)
+
+        ctx.ports.rules_admission = admit
         h.manager.run_ended("agent-1", None)
         await settled(h)
-        invalidate()
-        h.manager._admit_rules(rec(h), latest(h))
-        await settled(h)
         assert not reserved[1] and not rec(h).rules_consumed
+        assert not h.payloads(ChangeResolved) and await h.main_head() == h.base_commit
+        assert rec(h).state == "ready"
+        if guard != "revision":
+            assert terminal_code(h) == (
+                "isolation_unavailable" if guard in {"C", "startup"} else "policy_invalid"
+            )
+        else:
+            assert not terminals(h)
+        await assert_main_clean(h)
         return
     original = {
         "lease": _transaction.Transaction.authorize,

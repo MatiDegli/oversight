@@ -56,6 +56,10 @@ async def reserved(h, monkeypatch):
 
 @pytest.fixture
 async def transaction(h, reserved, monkeypatch):
+    return configure_transaction(h, monkeypatch)
+
+
+def configure_transaction(h, monkeypatch):
     ctx = h.manager._ctx
     policies, captures, barriers = [], [], []
     select = h.workspace._isolation.select
@@ -416,7 +420,10 @@ async def test_admission_catches_wrong_state_and_documents_unexpected_bucket(
     h.manager.run_ended("agent-1", None)
     await settled(h)
     monkeypatch.setattr(_rules, "capture", raced)
-    assert h.manager._admit_rules(rec(h), latest(h)) == "Target changed during capture"
+    assert h.manager._admit_rules(rec(h), latest(h)) == (
+        "policy_invalid",
+        "Target changed during capture",
+    )
     assert rec(h).state == "ready" and not rec(h).rules_consumed
     assert _approval.approve_rules.__doc__ is not None
     assert "unexpected" in _approval.approve_rules.__doc__

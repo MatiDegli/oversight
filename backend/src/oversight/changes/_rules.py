@@ -6,7 +6,7 @@ from oversight.changes._assessment import PROFILE, AssessmentWait
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._state import APPROVABLE, WrongState
-from oversight.changes._support import ChangeContext
+from oversight.changes._support import ChangeContext, RulesFailure
 from oversight_contracts.policy import POLICY_RULES, ChangeAssessment
 
 
@@ -37,7 +37,7 @@ def capture(
 ) -> RulesReservation:
     rec = wait.rec
     if failure := availability(ctx):
-        raise ValueError(f"code={failure[0]}; reason={failure[1]}")
+        raise RulesFailure(*failure)
     if (
         not pending_policy(assessment)
         or assessment != wait.latest
