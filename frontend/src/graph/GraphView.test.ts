@@ -685,4 +685,13 @@ it("limits the zoom to the buttons' range, and routes a call again when a node i
   cy.getElementById("b").emit("free");
   paint();
   expect(route()).not.toBe(before);
+  // Exercise the per-frame drag path as well as the drop-only reroute.
+  const scratch = vi.spyOn(cy, "scratch");
+  const module = cy.getElementById("b");
+  module.emit("grab");
+  module.position({ x: 710, y: 20 });
+  module.emit("drag");
+  paint();
+  expect(scratch.mock.calls.filter((call: unknown[]) => call.length === 2)).toEqual([]);
+  expect(cy.scratch("dragCosts")).toEqual([expect.any(Number)]);
 });

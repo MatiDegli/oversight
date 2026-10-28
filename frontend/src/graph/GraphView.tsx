@@ -24,6 +24,7 @@ import { createBoxSource, DotField } from "./field";
 import type { FieldInput } from "./field";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
+import { setScratch } from "./scratch";
 import { edgeShape, graphStyles } from "./styles";
 import { openingCone, panelGeometry, reportFraming } from "./viewFraming";
 import { applyRoutes, dragRoutes } from "./routes";
@@ -237,7 +238,7 @@ export function GraphView({
           translations.clear();
           const samples = (cy.scratch("dragCosts") as number[] | undefined) ?? [];
           samples.push(performance.now() - start);
-          cy.scratch("dragCosts", samples.slice(-120));
+          setScratch(cy, "dragCosts", samples.slice(-120));
         });
       };
       const moved = new Map<string, { x: number; y: number }>();

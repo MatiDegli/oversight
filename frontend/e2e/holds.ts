@@ -53,11 +53,10 @@ export function installHolds(holds: Hold[]) {
   });
 }
 
-export async function engaged(page: Page, hold: Hold) {
+export async function engaged(page: Page, hold: Hold, timeout?: number) {
   await expect
-    // Recorded suite steps and software canvas rendering can stretch the replay's timers.
     .poll(() => page.evaluate(() => (window as unknown as Holding).e2eHolds.held), {
-      timeout: 60_000,
+      ...(timeout === undefined ? {} : { timeout }),
     })
     .toContain(hold.delay);
   await expect(page.locator("#root")).toHaveAttribute("data-seq", String(hold.seq - 1));
