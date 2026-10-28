@@ -150,6 +150,8 @@ The durable ledger is written before results are materialized; reopening repairs
 JSONL without duplicate rows. `manifest.json` retains each server advertisement, configuration,
 prompt/limits, fingerprints, prices and reservation assumptions. `events-{run_id}.jsonl` retains
 validated raw events and full diffs. Test evidence is under `{run_id}/{task_id}/{attempt_id}/`.
+Paid children's runtime ledgers and SQLite stores remain under `server-*/.runtime/` for billing
+reconciliation if a start response or SSE usage is lost. Fake children's scratch runtimes are removed.
 `--trace` correlates evaluator and server timing with that same attempt id. No output artifacts
 belong in commits.
 

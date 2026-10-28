@@ -70,7 +70,8 @@ def output_path(out: Path, *, paid: bool) -> Path:
         older = [
             p
             for p in PAID_OUTPUT.parent.parent.rglob("ledger.json")
-            if p.parent not in {PAID_OUTPUT.parent, PAID_OUTPUT.parent.parent / "lead"}
+            if not p.is_relative_to(PAID_OUTPUT.parent)
+            and p.parent != PAID_OUTPUT.parent.parent / "lead"
         ]
         if older:
             raise BenchError("legacy bench ledgers need consolidation before paid runs")

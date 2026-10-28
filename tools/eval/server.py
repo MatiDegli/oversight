@@ -7,8 +7,8 @@ import os
 import socket
 import sys
 import tempfile
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import replace
 from pathlib import Path
 
@@ -56,6 +56,17 @@ async def stop(child: asyncio.subprocess.Process) -> None:
         await asyncio.wait_for(child.wait(), 5)
 
 
+@contextmanager
+def runtime_directory(arm: Arm, directory: Path) -> Iterator[Path]:
+    if arm.profile == "fake":
+        with tempfile.TemporaryDirectory(prefix="bench-", dir=directory) as scratch:
+            yield Path(scratch)
+    else:
+        # Keep the product's ledger and SQLite events, even when SSE or start recovery fails.
+        # The cumulative bench ledger remains authoritative; this is billing evidence only.
+        yield Path(tempfile.mkdtemp(prefix="server-", dir=directory))
+
+
 @asynccontextmanager
 async def dedicated(
     arm: Arm,
@@ -70,8 +81,8 @@ async def dedicated(
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    with tempfile.TemporaryDirectory(prefix="bench-", dir=directory) as scratch:
-        env = environment(arm, Path(scratch) / ".runtime", port, cap)
+    with runtime_directory(arm, directory) as scratch:
+        env = environment(arm, scratch / ".runtime", port, cap)
         if fake_script:
             env["OVERSIGHT_FAKE_SCRIPT"] = str(await asyncio.to_thread(fake_script.resolve))
         if trace:

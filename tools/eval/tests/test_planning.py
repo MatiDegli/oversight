@@ -11,7 +11,7 @@ from tools.eval.grade import Tests as SuiteResults
 from tools.eval.ledger import Ledger
 from tools.eval.planning import project, schedule
 from tools.eval.report import report
-from tools.eval.server import environment
+from tools.eval.server import environment, runtime_directory
 from tools.eval.tasks import BenchError, load_tasks
 from tools.eval.tests.test_arms import OFF, ON
 from tools.eval.tests.test_runner import TASK, script
@@ -170,6 +170,10 @@ def test_paid_output_is_pinned_and_legacy_ledgers_cannot_be_ignored(tmp_path, mo
             output_path(new, paid=True)
         assert not new.exists()
     assert output_path(canonical, paid=True) == canonical
+    product_evidence = canonical.parent / "server-retained" / ".runtime" / "ledger.json"
+    product_evidence.parent.mkdir(parents=True)
+    product_evidence.write_text('{"spent_usd": 0.5}')
+    assert output_path(canonical, paid=True) == canonical
     old = canonical.parent.parent / "meta" / "ledger.json"
     old.parent.mkdir(parents=True)
     old.write_text("{}")
@@ -288,3 +292,15 @@ def test_report_retains_an_unsettled_reservation_without_inventing_zero_cost(tmp
         assert group["reservations"][0]["allowance_usd"] == 0.1
     finally:
         ledger.close()
+
+
+def test_paid_runtime_preserves_product_billing_evidence_without_a_provider_call(tmp_path):
+    paid = Arm(arm_id="retention", profile="muse-spark", reasoning="low", harness_pack="off")
+    with runtime_directory(paid, tmp_path) as directory:
+        evidence = directory / ".runtime" / "ledger.json"
+        evidence.parent.mkdir()
+        evidence.write_text('{"spent_usd": 0.5}')
+    assert evidence.read_text() == '{"spent_usd": 0.5}'
+    with runtime_directory(OFF, tmp_path) as fake_directory:
+        assert fake_directory.exists()
+    assert not fake_directory.exists()
