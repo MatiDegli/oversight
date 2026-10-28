@@ -722,3 +722,16 @@ A future Content Security Policy must allow `blob:` in `img-src`.
 While the camera or elements animate, request a render from a microtask after each animation
 step: Cytoscape 3.34 clears the step's redraw flag (cytoscape.js#3544). Install once per core and
 guard the private animation pool with a test; remove the helper with Cytoscape 3.34.5 or later.
+
+## 2026-10-28 — Release-age exception for certifi
+
+certifi 2026.7.22 bundled the emSign root CAs whose intermediate keys were compromised
+(GHSA-6q48-6c7w-9gw2, critical); 2026.10.18 removes them. That release is ten days old, short of
+the 14-day rule, so `pyproject.toml` exempts certifi alone with a cutoff that admits 2026.10.18 and
+nothing later. certifi is transitive (through the dev-only httpx 0.28.1 and httpcore 1.0.9), its
+license is unchanged, and every other package keeps the 14-day rule. Drop the exception after
+Nov 1, when the release passes 14 days on its own.
+
+Audit blind spot: `make audit` exports only the Python runtime closure (`--no-dev`), so dev-only
+certifi is outside its pip-audit coverage. Dependabot detected GHSA-6q48-6c7w-9gw2; the exception
+affects development and tests, not runtime TLS. A dev-inclusive audit remains follow-up work.

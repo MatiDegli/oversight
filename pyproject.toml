@@ -22,6 +22,9 @@ dev = [
 package = false
 # A release is adopted only once it is 14 days old (docs/proposal.md, rule 2).
 exclude-newer = "14 days"
+# Exception (DECISIONS.md): certifi 2026.10.18 removes the emSign roots with compromised
+# intermediate keys (GHSA-6q48-6c7w-9gw2); the cutoff admits that release and nothing later.
+exclude-newer-package = { certifi = "2026-10-18T17:00:00Z" }
 
 [tool.uv.workspace]
 members = ["contracts", "backend"]
