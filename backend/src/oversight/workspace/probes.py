@@ -50,6 +50,7 @@ async def base_probe_checkout(
         await workspace.git_ok(
             workspace.main, "worktree", "add", "--detach", str(root), base, timeout_s=timeout_s
         )
+        await offload(tree.git_identity.verify_registration)
         for path in paths:
             tree.resolve(path)  # Validate every target, including parents, before checkout.
         await workspace.git_ok(

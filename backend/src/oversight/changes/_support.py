@@ -67,6 +67,8 @@ class ChangeContext:
     async def yes_no(self, tree: Tree, *args: str) -> bool:
         """A git query that answers with its exit code: 0 yes, 1 no, anything else fails."""
         result = await self.run(tree, *args)
+        if result.truncated:
+            raise WorkspaceError(f"git {args[0]} failed: output was truncated")
         if result.timed_out or result.returncode not in (0, 1):
             raise WorkspaceError(f"git {args[0]} failed: {self.workspace.redact(result.stderr)}")
         return result.returncode == 0
