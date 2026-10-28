@@ -1,0 +1,19 @@
+{
+  "$defs": {
+    "GenericMinList": {
+      "type": "object",
+      "properties": {
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "values"
+      ]
+    }
+  }
+}

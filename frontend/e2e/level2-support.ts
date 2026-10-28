@@ -11,7 +11,7 @@ export async function interceptCommands(page: Page) {
   const saved = new Map<string, string>();
   const key = (path: string | null, agent: string | null) => JSON.stringify([path, agent]);
   await page.route(
-    /\/(agents|changes|files|graph|events|health|impact|plans|merge-mode)(\/|\?|$)/,
+    /\/(agents|changes|files|graph|events|health|impact|plans|merge-mode|tree|history|queue|leads)(\/|\?|$)/,
     async (route) => {
       const req = route.request();
       const url = new URL(req.url());

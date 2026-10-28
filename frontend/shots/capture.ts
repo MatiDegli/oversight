@@ -6,6 +6,7 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { once } from "node:events";
 import { createServer } from "node:http";
+import type { ServerResponse } from "node:http";
 import { join, resolve } from "node:path";
 import { exit, stdout } from "node:process";
 import { parseArgs } from "node:util";
@@ -14,7 +15,7 @@ import { chromium } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph/probe.ts";
 
-import { logForScene, lastSeq, planJobs } from "./plan.ts";
+import { logForScene, lastSeq, planJobs, replayEventsAfter } from "./plan.ts";
 import { streamReplay } from "./replay.ts";
 import { scenes, themes } from "./scenes.ts";
 
@@ -76,7 +77,12 @@ async function main(): Promise<number> {
   await clearPreviousSet();
 
   // This tiny player serves each scene's cut or fixture. Keep SSE open through reconnects.
+  const streams = new Set<ServerResponse>();
   const player = createServer((request, response) => {
+    streams.add(response);
+    response.on("close", () => {
+      streams.delete(response);
+    });
     const after = Number(
       new URL(request.url ?? "/", "http://localhost").searchParams.get("after") ?? 0,
     );
@@ -129,7 +135,15 @@ async function main(): Promise<number> {
         target.searchParams.set("field-time", FIELD_TIME);
         await page.goto(target.href, { waitUntil: "load" });
         await waitUntilReady(page, lastSeq(captureLog));
-        await scene?.prepare?.(page);
+        await scene?.prepare?.(page, async () => {
+          liveLog = sourceLog;
+          for (const stream of streams)
+            stream.write(replayEventsAfter(sourceLog, lastSeq(captureLog)));
+          await page.waitForFunction(
+            (seq) => document.getElementById("root")?.dataset.seq === String(seq),
+            expectedSeq,
+          );
+        });
         await page.evaluate((theme) => {
           document.documentElement.dataset.theme = theme;
         }, job.theme);

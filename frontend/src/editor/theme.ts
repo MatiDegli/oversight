@@ -9,7 +9,6 @@ const solidTokens = [
   "muted",
   "faint",
   "page-border",
-  "border",
   "added",
   "removed",
   "code-dim",
@@ -20,7 +19,7 @@ const solidTokens = [
   "syntax-builtin",
   "syntax-definition",
 ] as const;
-const tintTokens = ["added-tint", "removed-tint", "span-highlight", "fold-tint"] as const;
+const tintTokens = ["border", "added-tint", "removed-tint", "span-highlight", "fold-tint"] as const;
 /** The tokens Monaco receives: every color the editor paints is one of these. */
 export const editorTokens = [...solidTokens, ...tintTokens];
 export type EditorColors = Record<(typeof solidTokens)[number], string> &
@@ -35,7 +34,8 @@ export function tint(token: { color: string; alpha: number }): string {
 
 /** The only translation from received theme tokens into Monaco colors. */
 export function createEditorTheme(colors: EditorColors): editor.IStandaloneThemeData {
-  const { page, raised, text, muted, faint, border, added, removed } = colors;
+  const { page, raised, text, muted, faint, added, removed } = colors;
+  const border = tint(colors.border);
   return {
     base: "vs-dark",
     inherit: false,

@@ -6,6 +6,7 @@ import json
 import os
 import threading
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from agent_helpers import write_tree
@@ -169,7 +170,9 @@ async def test_unknown_tools_and_bad_arguments_are_errors(small_tree: Opened) ->
     broken = await tools.call("read_file", '{"path": ')
     assert broken.content == "Error: arguments are not valid JSON"
     typed = await tools.call("read_file", '{"path": 3}')
-    assert typed.content == "Error: argument 'path' must be a string"
+    assert typed.content == (
+        "Error: argument 'path' must be string; expected read_file(path, start_line, end_line)"
+    )
 
 
 # --- paths -------------------------------------------------------------------------------------
@@ -255,3 +258,124 @@ async def test_a_cancelled_scan_keeps_the_lock_until_its_thread_ends(
         await scan
     await other
     assert seen_ended == [True]
+
+
+@pytest.mark.parametrize("outcome", ["passed", "failed", "timeout", "error"])
+async def test_suite_summary_precedes_large_output(
+    small_tree: Opened,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: Literal["passed", "failed", "timeout", "error"],
+) -> None:
+    from oversight.workspace import SuiteRun
+    from oversight_contracts.events import SuiteResult
+
+    async def run_tests(self: Workspace, tree: Tree, *, timeout_s: float) -> SuiteRun:
+        return SuiteRun(
+            result=SuiteResult(
+                outcome=outcome,
+                passed=3,
+                failed=2,
+                skipped=1,
+                duration_ms=5,
+                failed_tests=["tests/test_a.py::test_first", "tests/test_b.py::test_second"],
+            ),
+            output="early traceback\n" + "x" * 5000 + "end of traceback",
+        )
+
+    monkeypatch.setattr(Workspace, "run_tests", run_tests)
+    result = await call(await toolbox(small_tree), "run_tests")
+    assert result.ok  # running the tool succeeded even when the suite failed
+    assert result.suite_run is not None and result.suite_run.result == result.tests
+    assert result.suite_run.output.startswith("early traceback\n")
+    assert result.content.startswith(f"Suite outcome: {outcome}; 3 passed, 2 failed, 1 skipped")
+    assert result.content.index("tests/test_a.py::test_first") < result.content.index(
+        "Output truncated"
+    )
+    assert "tests/test_b.py::test_second" in result.content
+    assert "early traceback" not in result.content and result.content.endswith("end of traceback")
+
+
+@pytest.mark.parametrize("output_size, truncated", [(3999, False), (4000, False), (4001, True)])
+async def test_suite_output_truncation_boundary(
+    small_tree: Opened,
+    monkeypatch: pytest.MonkeyPatch,
+    output_size: int,
+    truncated: bool,
+) -> None:
+    from oversight.workspace import SuiteRun
+    from oversight_contracts.events import SuiteResult
+
+    async def run_tests(self: Workspace, tree: Tree, *, timeout_s: float) -> SuiteRun:
+        return SuiteRun(
+            result=SuiteResult(
+                outcome="passed", passed=1, failed=0, skipped=0, duration_ms=5, failed_tests=[]
+            ),
+            output="x" * output_size,
+        )
+
+    monkeypatch.setattr(Workspace, "run_tests", run_tests)
+    result = await call(await toolbox(small_tree), "run_tests")
+    expected = "Suite outcome: passed; 1 passed, 0 failed, 0 skipped\nFailed tests: none reported"
+    if truncated:
+        expected += "\nOutput truncated: showing the last 4000 characters."
+    expected += "\n\n" + "x" * min(output_size, 4000)
+    assert result.ok and result.content == expected
+
+
+async def test_zero_match_error_explains_exact_text_recovery(small_tree: Opened) -> None:
+    tools = await toolbox(small_tree)
+    await call(tools, "read_file", path="shop/mod.py")
+    result = await call(tools, "edit_file", path="shop/mod.py", old_text="absent", new_text="x")
+    assert not result.ok
+    assert "read the file again and copy the exact text without line numbers" in result.content
+
+
+@pytest.mark.parametrize(
+    "name, args",
+    [
+        ("read_file", {"path": "shop/mod.py", "start_line": None}),
+        ("search", {"query": "value", "path": None}),
+        ("finish", {}),
+        ("read_file", {"path": "shop/mod.py", "end_line": True}),
+    ],
+)
+async def test_advertised_types_and_required_fields_are_enforced(
+    small_tree: Opened, name: str, args: dict[str, object]
+) -> None:
+    result = await call(await toolbox(small_tree), name, **args)
+    assert not result.ok and "expected " + name + "(" in result.content
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        {"files": ["shop/mod.py"], "tests_run": True, "tests": ["tests/test_mod.py::test_value"]},
+        {"files": [], "tests_run": False, "tests": []},
+        {"files": None, "tests_run": None, "tests": None},
+    ],
+)
+async def test_finish_accepts_advertised_declaration_types(
+    small_tree: Opened, declaration: dict[str, object]
+) -> None:
+    result = await call(await toolbox(small_tree), "finish", summary="Done.", **declaration)
+    assert result.ok and result.finish_summary == "Done."
+    assert result.declaration is not None and result.declaration.model_dump() == declaration
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        {"files": "shop/mod.py"},
+        {"files": [123]},
+        {"tests_run": 1},
+        {"tests_run": "true"},
+        {"tests": "tests/test_mod.py::test_value"},
+        {"tests": [123]},
+    ],
+)
+async def test_finish_rejects_invalid_declaration_types(
+    small_tree: Opened, declaration: dict[str, object]
+) -> None:
+    result = await call(await toolbox(small_tree), "finish", summary="Done.", **declaration)
+    assert not result.ok and result.content.startswith("Error:")
+    assert result.finish_summary is None and result.declaration is None

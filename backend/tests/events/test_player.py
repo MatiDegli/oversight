@@ -35,7 +35,9 @@ async def test_play_publishes_the_log_in_order_with_its_ts_and_waits_between(
     async def record_sleep(seconds: float) -> None:
         waits.append(seconds)
 
-    async with EventStore(tmp_path / "replay.sqlite", "run-20261027-140312") as store:
+    async with EventStore(
+        tmp_path / "replay.sqlite", "run-20261027-140312", mode="replay"
+    ) as store:
         await play(store, events, speed=1, sleep=record_sleep)
 
     rows = read_store(store.path)

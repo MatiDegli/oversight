@@ -12,10 +12,13 @@ import json
 import time
 from collections import Counter
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, cast
 
+from oversight.agents._replies import ReplyError, ReplyRecovery
 from oversight.agents.client import (
+    CALL_SCOPE,
+    CallScope,
     Message,
     ModelAPIError,
     ModelClient,
@@ -26,7 +29,7 @@ from oversight.agents.sink import ChangeSink
 from oversight.agents.tools import TOOL_SCHEMAS, Toolbox, ToolOutcome, interrupted
 from oversight.agents.usage import Pricing, UsageLedger
 from oversight.events import EventPayload
-from oversight.workspace import Tree, Workspace, WorkspaceError
+from oversight.workspace import SuiteInterrupted, Tree, Workspace, WorkspaceError
 from oversight_contracts.common import AgentId, ChangeId, Slot
 from oversight_contracts.events import (
     AgentFocus,
@@ -37,6 +40,7 @@ from oversight_contracts.events import (
     Limits,
     UsageTick,
 )
+from oversight_contracts.review import FinishDeclaration
 
 SYSTEM_PROMPT = """You are a coding agent working on a small Python repository, in your own copy.
 Use the tools to do the task you are given. Read the code before you change it: prefer one read
@@ -145,10 +149,12 @@ class AgentRun:
         self._pricing = pricing
         self._monotonic = monotonic
         self._tools = Toolbox(workspace, tree, test_timeout_s=task.limits.test_timeout_s)
+        self._declaration: FinishDeclaration | None = None
         self._step = 0
         self._halted = False
         self._turns = 0
         """Model calls so far. Bounded on their own, so the run ends even if a stop rule fails."""
+        self._recovery = ReplyRecovery()
         self._failures = 0
         self._seen: Counter[tuple[str, str, str]] = Counter()
         self._messages: list[Message] | None = None
@@ -228,7 +234,9 @@ class AgentRun:
             )
             self._max_steps += self._task.limits.max_steps
             self._max_turns += self._task.limits.max_steps
+            self._recovery = ReplyRecovery()
             self._failures = 0
+            self._declaration = None
             self._seen.clear()
             return await self._drive("revising")
         finally:
@@ -265,7 +273,7 @@ class AgentRun:
         root_lost = False
         try:
             # The clock starts before the scan, so a slow scan cannot spend the budget unseen.
-            async with asyncio.timeout(self._task.limits.max_wall_clock_s):
+            async with asyncio.timeout(self._task.limits.max_wall_clock_s) as deadline:
                 try:
                     await self._tools.refresh_graph()
                 except WorkspaceError as error:
@@ -273,14 +281,18 @@ class AgentRun:
                     raise _RootLost(f"The worktree cannot be used: {reason}.") from error
                 if first_status == "starting":
                     await self._status("working")
-                summary = await self._loop(messages)
+                token = CALL_SCOPE.set(CallScope(deadline.when(), self._usage))
+                try:
+                    summary = await self._loop(messages)
+                finally:
+                    CALL_SCOPE.reset(token)
         except _Halt as halt:
             detail = halt.detail
             root_lost = isinstance(halt, _RootLost)
         except TimeoutError:
             detail = f"Ran past the time limit of {self._task.limits.max_wall_clock_s} s."
         except ModelAPIError as error:
-            detail = "The model API failed."
+            detail = f"The model API failed: {error}."
             await self._publish(
                 ErrorReport(
                     source="model_api",
@@ -320,7 +332,9 @@ class AgentRun:
         """Whether the sink proposed the change. A sink that returns `False` has sent its own
         `error`; one that raises has not, so the runtime reports it."""
         try:
-            return await self._sink.proposed(self._task.agent_id, summary)
+            return await self._sink.proposed(
+                self._task.agent_id, summary, declaration=self._declaration
+            )
         except Exception as error:
             await self._publish(
                 ErrorReport(
@@ -342,6 +356,13 @@ class AgentRun:
             self._turns += 1
             reply = await self._model.complete(messages, TOOL_SCHEMAS)
             await self._usage(reply)
+            try:
+                recovering = self._recovery.recover(reply, messages)
+            except ReplyError as error:
+                raise _Halt(str(error)) from error
+            if recovering:
+                self._fail_or_halt(ok=False)
+                continue
             messages.append(_assistant(reply))
             if not reply.tool_calls:
                 self._fail_or_halt(ok=False)
@@ -351,12 +372,15 @@ class AgentRun:
                 started = self._monotonic()
                 try:
                     outcome = await self._tools.call(call.name, call.arguments)
-                except asyncio.CancelledError:
+                except asyncio.CancelledError as error:
                     # The time limit or Stop cut the call short: it is still a step, an error.
                     self._step += 1
                     stopped = interrupted(call.name, call.arguments)
+                    if isinstance(error, SuiteInterrupted):
+                        stopped = replace(stopped, suite_run=error.run)
                     await self._report(call.name, stopped, self._since(started))
                     raise
+
                 duration_ms = self._since(started)
                 self._step += 1
                 messages.append(
@@ -364,6 +388,7 @@ class AgentRun:
                 )
                 await self._report(call.name, outcome, duration_ms)
                 if outcome.finish_summary is not None:
+                    self._declaration = outcome.declaration
                     return outcome.finish_summary
                 try:
                     self._check(call.name, call.arguments, outcome)
@@ -413,6 +438,8 @@ class AgentRun:
         agent_id = self._task.agent_id
         # The edit is on disk either way. A lost record only changes what the UI is told: the
         # model's result, the failure count and the stop rules still follow `outcome`.
+        if outcome.suite_run is not None:
+            await self._sink.tests_executed(self._task.agent_id, outcome.suite_run)
         recorded = outcome.edited_path is None
         cut_short: asyncio.CancelledError | None = None
         if outcome.edited_path is not None:
@@ -458,6 +485,8 @@ class AgentRun:
         await self._publish(
             UsageTick(
                 agent_id=self._task.agent_id,
+                role="agent",
+                change_id=self._task.change_id,
                 model=reply.model,
                 input_tokens=reply.usage.input_tokens,
                 output_tokens=reply.usage.output_tokens,

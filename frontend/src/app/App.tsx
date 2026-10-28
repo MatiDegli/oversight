@@ -15,7 +15,9 @@ import { startAppSession } from "./session";
 import {
   clickNode,
   closePanel,
-  initialView,
+  tabbedView,
+  navigateView,
+  viewReducer,
   nextReview,
   openChange,
   openReview,
@@ -24,8 +26,10 @@ import {
 import type { View } from "./view";
 
 export function App() {
+  const [retry, setRetry] = useState(0);
+  const [connection, setConnection] = useState<"connecting" | "connected" | "lost">("connecting");
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<View>(initialView);
+  const [view, setView] = useState<View>(tabbedView);
   const [attempts, setAttempts] = useState<Record<string, DecisionAttempt>>({});
   // The replay build has no backend: it never sends a command or starts an agent, and review shows
   // recorded decisions.
@@ -49,53 +53,84 @@ export function App() {
   );
   const state = useStore(stateStore, (store) => store.state);
   useEffect(() => {
-    return startAppSession(document.getElementById("root"), (failure) => {
-      setError(
-        failure === null ? null : failure instanceof Error ? failure.message : "Transport failed",
-      );
-    });
-  }, []);
+    return startAppSession(
+      document.getElementById("root"),
+      (failure) => {
+        setConnection(failure === null ? "connected" : "lost");
+        setError(
+          failure === null ? null : failure instanceof Error ? failure.message : "Transport failed",
+        );
+      },
+      () => {
+        setConnection("connected");
+      },
+    );
+  }, [retry]);
   // The graph keeps one tap handler; it reads the store when the tap happens.
   const onNodeTap = useCallback(
     (nodeId: string) => {
       setView((current) =>
-        clickNode(stateStore.getState().state, current, nodeId, commands !== null),
+        navigateView(
+          current,
+          clickNode(stateStore.getState().state, current, nodeId, commands !== null),
+          stateStore.getState().state,
+        ),
       );
     },
     [commands],
   );
   const onOpenChange = useCallback((changeId: string) => {
-    setView((current) => openChange(stateStore.getState().state, current, changeId) ?? current);
+    setView((current) =>
+      navigateView(
+        current,
+        openChange(stateStore.getState().state, current, changeId) ?? current,
+        stateStore.getState().state,
+      ),
+    );
   }, []);
   const onClosePanel = useCallback(() => {
     setView(closePanel);
   }, []);
   useEscapeCloses(panelOpen(view), onClosePanel);
   const onReview = useCallback((changeId: string) => {
-    setView((current) => openReview(stateStore.getState().state, current, changeId) ?? current);
+    setView((current) =>
+      navigateView(
+        current,
+        openReview(stateStore.getState().state, current, changeId) ?? current,
+        stateStore.getState().state,
+      ),
+    );
   }, []);
   const onOpenQueue = useCallback(() => {
     const state = stateStore.getState().state;
     setView((current) => {
       const changeId = nextReview(state, current.review);
-      return changeId === null ? current : (openReview(state, current, changeId) ?? current);
+      return changeId === null
+        ? current
+        : navigateView(current, openReview(state, current, changeId) ?? current, state);
     });
   }, []);
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {
       if (!commands) return;
+      const change = state.changes[changeId];
+      const proposal = change?.proposal;
+      const base = change ? state.agents[change.agent_id]?.base_commit : null;
+      const head = proposal?.head_commit ?? base;
+      const target = head ? { revision: proposal?.revision ?? 0, head_commit: head } : undefined;
       void sendDecision(
         commands,
-        stateStore.getState().state,
+        state,
         changeId,
         action,
         comment,
         (attempt) => {
           setAttempts((current) => ({ ...current, [changeId]: attempt }));
         },
+        target,
       );
     },
-    [commands],
+    [commands, state],
   );
   return (
     <Frame
@@ -106,6 +141,9 @@ export function App() {
       canOpenChange={(changeId) => openChange(state, view, changeId) !== null}
       onOpenChange={onOpenChange}
       onClosePanel={onClosePanel}
+      onTabAction={(action) => {
+        setView((current) => viewReducer(current, action));
+      }}
       onStartAgent={commands?.startAgent}
       onStopAgent={commands?.stopAgent}
       canReview={(changeId) => openReview(state, view, changeId) !== null}
@@ -114,14 +152,14 @@ export function App() {
       attempts={attempts}
       onDecide={commands ? onDecide : undefined}
       replayOf={replayBuild ? replaySource.kind : undefined}
-      notice={
-        replayBuild || error !== null ? (
-          <>
-            {replayBuild && <p>{replaySource.label}</p>}
-            {error !== null && <p role="alert">{error}</p>}
-          </>
-        ) : undefined
-      }
+      replayLabel={replayBuild ? replaySource.label : undefined}
+      connection={replayBuild ? undefined : connection}
+      onRetry={() => {
+        setConnection("connecting");
+        setError(null);
+        setRetry((value) => value + 1);
+      }}
+      notice={error !== null ? <p role="alert">{error}</p> : undefined}
     />
   );
 }

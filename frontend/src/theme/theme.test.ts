@@ -46,6 +46,7 @@ const colors = Object.entries(tokens).filter(
     !tsOnly.some((token) => token === name) &&
     (typeof value === "object" || (typeof value === "string" && value.startsWith("#"))),
 );
+const effects = ["top-highlight", "card-shadow"];
 const radii = Object.fromEntries(
   Object.entries(tokens).filter(([name]) => name.startsWith("radius-")),
 );
@@ -132,7 +133,7 @@ describe("theme", () => {
   });
 
   it("scopes only colors to dark and keeps all theme-independent tokens global", () => {
-    expect(Object.keys(dark).sort()).toEqual(colors.map(([name]) => name).sort());
+    expect(Object.keys(dark).sort()).toEqual([...colors.map(([name]) => name), ...effects].sort());
     expect(global).toEqual(
       Object.fromEntries(
         Object.entries(tokens)
@@ -140,6 +141,7 @@ describe("theme", () => {
             ([name]) =>
               !tsOnly.some((token) => token === name) &&
               !colors.some(([color]) => color === name) &&
+              !effects.includes(name) &&
               !name.startsWith("radius-"),
           )
           .map(([name, value]) => [name, typeof value === "number" ? String(value) : value]),
@@ -163,12 +165,45 @@ describe("theme", () => {
       (match) => !required(match[1]).startsWith("day-"),
     );
     expect(entries.length).toBeGreaterThan(0);
+    // DECISIONS.md: Shell-frame docs front (DESIGN.md parity) removes these on landing.
+    const approved: Record<string, string> = {
+      shell: "#09090a",
+      panel: "#0d0d0f",
+      page: "#101012",
+      card: "#151518",
+      raised: "#1b1b1f",
+      divider: "rgba(255, 255, 255, 0.06)",
+      border: "rgba(255, 255, 255, 0.1)",
+    };
     for (const [, name, value] of entries) {
-      expect(tokens[name as keyof typeof tokens], name).toEqual(cssValue(required(value)));
+      if (approved[required(name)])
+        expect(value, `Remove the landed DESIGN.md override for ${required(name)}`).not.toBe(
+          approved[required(name)],
+        );
+      expect(tokens[name as keyof typeof tokens], name).toEqual(
+        cssValue(approved[required(name)] ?? required(value)),
+      );
     }
     expect(tokens["dim-node"]).toBe(0.16);
     expect(tokens["dim-module"]).toBe(0.6);
     expect(tokens["quiet-edge"]).toBe(0.45);
+  });
+
+  it("removes the obsolete pre-M8 overlay opacity tokens from both token sets", () => {
+    for (const name of ["shell-opacity", "cone-card-opacity"]) {
+      expect(tokens).not.toHaveProperty(name);
+      expect(shared).not.toHaveProperty(name);
+    }
+  });
+
+  it("ties temporary DESIGN.md overrides to the shell-frame docs front", () => {
+    const decisions = readFileSync(new URL("../../../DECISIONS.md", import.meta.url), "utf8");
+    const note = required(
+      decisions.split("Approved shell frame and Chrome close-tab key")[1],
+    ).split("At 1920 px")[0];
+    expect(note).toContain("Shell-frame docs front (DESIGN.md parity)");
+    expect(note).toContain("remove the seven-token `approved` override");
+    expect(note).toContain("frontend/src/theme/theme.test.ts");
   });
 
   it("loads the documented font weights from the installed packages", () => {
@@ -192,4 +227,122 @@ describe("theme", () => {
     root.dataset.theme = "dark";
     expect(getActiveTheme(root)).toBe(themes.dark);
   });
+});
+
+// WCAG 2.x relative luminance, using the lighter gradient end as well as its dark end.
+function luminance(hex: string): number {
+  const channels = [1, 3, 5].map(
+    (offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255,
+  );
+  const linear = channels.map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  return (linear[0] ?? 0) * 0.2126 + (linear[1] ?? 0) * 0.7152 + (linear[2] ?? 0) * 0.0722;
+}
+function contrast(a: string, b: string) {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+}
+const surfaces = [
+  "shell",
+  "panel",
+  "field",
+  "page",
+  "page-raised",
+  "card",
+  "card-end",
+  "raised",
+  "inset",
+  "matte-top",
+  "matte-bottom",
+] as const;
+const bodyText = [
+  "text",
+  "muted",
+  "faint",
+  "agent-a-text",
+  "agent-b-text",
+  "passed",
+  "failed",
+  "failed-text",
+] as const;
+it.each(surfaces)("meets body contrast for every shell text token on %s", (surface) => {
+  for (const text of bodyText)
+    expect(contrast(tokens[text], tokens[surface]), `${text} on ${surface}`).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  for (const mark of ["agent-a", "agent-b", "text", "passed", "failed"] as const)
+    expect(
+      contrast(tokens[mark], tokens[surface]),
+      `${mark} UI mark on ${surface}`,
+    ).toBeGreaterThanOrEqual(3);
+});
+
+it.each([
+  ["module-label", "ground"],
+  ["text-hover", "raised"],
+] as const)("meets body contrast for %s on %s", (text, surface) => {
+  expect(contrast(tokens[text], tokens[surface])).toBeGreaterThanOrEqual(4.5);
+});
+
+// CSS alpha compositing happens in sRGB before relative luminance is calculated.
+function composite(foreground: { color: string; alpha: number }, background: string): string {
+  return `#${[1, 3, 5]
+    .map((offset) => {
+      const front = Number.parseInt(foreground.color.slice(offset, offset + 2), 16);
+      const back = Number.parseInt(background.slice(offset, offset + 2), 16);
+      return Math.round(front * foreground.alpha + back * (1 - foreground.alpha))
+        .toString(16)
+        .padStart(2, "0");
+    })
+    .join("")}`;
+}
+
+it.each(["agent-a", "agent-b"] as const)(
+  "meets body contrast for %s text on its tint and letters on its fill",
+  (agent) => {
+    // Card badges include both gradient ends; the collapsed agent rail uses shell.
+    for (const surface of ["shell", "card", "card-end", "matte-top"] as const) {
+      const background = composite(tokens[`${agent}-tint`], tokens[surface]);
+      expect(
+        contrast(tokens[`${agent}-text`], background),
+        `${agent}-text on ${agent}-tint over ${surface}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(
+      contrast(tokens["on-agent"], tokens[agent]),
+      `on-agent on ${agent}`,
+    ).toBeGreaterThanOrEqual(4.5);
+  },
+);
+
+it.each(["text", "muted"] as const)("meets body contrast for %s on frosted overlays", (text) => {
+  // Bound any blurred graph content, including agent lights, between black and white.
+  for (const backdrop of ["#000000", "#ffffff"]) {
+    const background = composite(tokens["overlay-panel"], backdrop);
+    expect(
+      contrast(tokens[text], background),
+      `${text} on overlay-panel over ${backdrop}`,
+    ).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+it("checks alpha compositing against reference colors", () => {
+  expect(composite({ color: "#ffffff", alpha: 0.5 }, "#000000")).toBe("#808080");
+  expect(composite({ color: "#ff0000", alpha: 0 }, "#123456")).toBe("#123456");
+  expect(composite({ color: "#ff0000", alpha: 1 }, "#123456")).toBe("#ff0000");
+});
+it.each(["text", "muted", "faint"] as const)(
+  "meets body contrast for %s on M8 overlay fills",
+  (text) => {
+    expect(tokens["overlay-fill"].alpha).toBeGreaterThanOrEqual(0.94);
+    for (const backdrop of ["#000000", "#ffffff"])
+      expect(
+        contrast(tokens[text], composite(tokens["overlay-fill"], backdrop)),
+      ).toBeGreaterThanOrEqual(4.5);
+  },
+);
+it("checks WCAG reference pairs so a broken calculation cannot pass", () => {
+  expect(contrast("#000000", "#ffffff")).toBe(21);
+  expect(contrast("#777777", "#ffffff")).toBeLessThan(4.5);
 });

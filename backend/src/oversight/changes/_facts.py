@@ -1,0 +1,305 @@
+"""Candidate facts: captured source observations, never a merge verdict."""
+
+import asyncio
+from collections.abc import Mapping
+from dataclasses import dataclass
+from functools import partial
+
+from oversight.changes._probes import comparison
+from oversight.changes._shortcut_detector import Finding, ShortcutKind, detect_shortcuts
+from oversight.changes._shortcuts_common import FuncNode, Source
+from oversight.changes._shortcuts_skips import DECORATOR_SKIP, module_markers
+from oversight.changes._state import ChangeRecord
+from oversight.changes._support import ChangeContext
+from oversight.workspace import SuiteRun, validate_suite_execution
+from oversight_contracts.events import SuiteExecution
+from oversight_contracts.policy import EvidenceRef
+from oversight_contracts.review import (
+    AddedTestProbe,
+    ChangeFacts,
+    ChangeTarget,
+    FinishDeclaration,
+    IntegrityFact,
+)
+
+MISSING_PRODUCERS = (
+    "run_findings producer unavailable (package 5)",
+    "zone producer unavailable",
+    "reach producer unavailable",
+)
+
+
+@dataclass(frozen=True)
+class FactsEvidence:
+    agent_id: str
+    target: ChangeTarget
+    declared: FinishDeclaration | None
+    edited_paths: tuple[str, ...]
+    integrity: tuple[IntegrityFact, ...]
+    problems: tuple[str, ...]
+    executions: Mapping[int, SuiteExecution]
+    runs: Mapping[int, SuiteRun]
+    added_tests: tuple[AddedTestProbe, ...] = ()
+
+
+def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
+    """Check the exact captured candidate and its individual execution/source evidence.
+
+    Package 5, zones and reach have no producer here: their empty values cannot
+    certify completeness. A list of execution seqs alone establishes no success.
+    """
+    if (
+        ChangeTarget.model_validate(facts.model_dump(include=set(ChangeTarget.model_fields)))
+        != evidence.target
+    ):
+        raise ValueError("facts target differs from captured candidate")
+    if facts.declared != evidence.declared or facts.edited_paths != list(evidence.edited_paths):
+        raise ValueError("facts declaration or edits differ from captured evidence")
+    if facts.test_runs != sorted(evidence.executions) or set(evidence.runs) != set(
+        evidence.executions
+    ):
+        raise ValueError("facts executions differ from captured evidence")
+    for seq, execution in evidence.executions.items():
+        if execution.revision is not None and execution.revision > facts.revision:
+            raise ValueError("execution belongs to a future revision")
+        validate_suite_execution(
+            execution,
+            evidence.runs[seq],
+            change_id=facts.change_id,
+            agent_id=evidence.agent_id,
+            revision=execution.revision,
+            phase=execution.phase,
+        )
+        # The candidate's verification is tied to its committed tree, not just a seq.
+        if (
+            execution.phase == "proposal"
+            and execution.revision == facts.revision
+            and (
+                execution.tested_commit != facts.head_commit
+                or execution.tested_tree != facts.candidate_tree
+            )
+        ):
+            raise ValueError("proposal execution tested another candidate")
+    if facts.integrity != list(evidence.integrity):
+        raise ValueError("facts integrity differs from captured source observations")
+    if facts.added_tests != list(evidence.added_tests):
+        raise ValueError("facts probes differ from captured evidence")
+    for probe in facts.added_tests:
+        before = evidence.executions.get(probe.before_seq)
+        after = evidence.executions.get(probe.after_seq)
+        if (
+            before is None
+            or after is None
+            or (
+                before.phase != "base_probe"
+                or after.phase != "head_probe"
+                or before.revision != facts.revision
+                or after.revision != facts.revision
+                or after.tested_commit != facts.head_commit
+                or after.tested_tree != facts.candidate_tree
+            )
+        ):
+            raise ValueError("probe execution differs from candidate")
+        if comparison((probe.test_id,), before, after)[0][1] != probe.result:
+            raise ValueError("probe result differs from captured evidence")
+    if facts.run_findings or facts.zone is not None or facts.reach is not None:
+        raise ValueError("unbuilt producers cannot supply facts")
+    if facts.complete or facts.problems != list(evidence.problems):
+        raise ValueError("facts completeness differs from captured evidence")
+
+
+def _identities(
+    finding: Finding,
+    files: Mapping[str, str],
+    runs: Mapping[int, SuiteRun],
+) -> tuple[list[str | None], str | None]:
+    """Resolve removals in base and modifications in head; never invent parameter ids."""
+    try:
+        source = Source(files[finding.path])
+    except (KeyError, SyntaxError, ValueError, RecursionError):
+        return [None], f"integrity identity unresolved: {finding.path}:{finding.line}"
+    enclosing = [
+        (qual, node)
+        for qual, node in source.tests.items()
+        if min([node.lineno, *[d.lineno for d in node.decorator_list]])
+        <= finding.line
+        <= (node.end_lineno or node.lineno)
+    ]
+    if not enclosing and finding.kind == ShortcutKind.SKIP_ADDED:
+        # A class decorator affects its collected methods; a module marker affects
+        # its tests. Keep one observation per test rather than collapsing the file.
+        classes = [
+            qual
+            for qual, node in source.classes.items()
+            if any(
+                d.lineno == finding.line and source.resolve(d) in DECORATOR_SKIP
+                for d in node.decorator_list
+            )
+        ]
+        if len(classes) == 1:
+            enclosing = [
+                (qual, node)
+                for qual, node in source.tests.items()
+                if qual.startswith(classes[0] + ".")
+            ]
+        elif any(line == finding.line for _, line in module_markers(source)):
+            enclosing = list(source.tests.items())
+    if not enclosing:
+        return [None], f"integrity identity ambiguous: {finding.path}:{finding.line}"
+    ids: list[str | None] = []
+    problems: list[str] = []
+    for qual, node in enclosing:
+        resolved, problem = _test_ids(finding.path, source, qual, node, runs)
+        ids.extend(resolved)
+        if problem:
+            problems.append(problem)
+    return ids, "; ".join(problems) or None
+
+
+def _test_ids(
+    path: str,
+    source: Source,
+    qual: str,
+    node: FuncNode,
+    runs: Mapping[int, SuiteRun],
+) -> tuple[list[str | None], str | None]:
+    prefix = "::".join([path, *qual.split(".")])
+    if "#" in qual:
+        return [None], f"integrity duplicate definition: {prefix}"
+    # Collection/decorator semantics can change ids. Only reports from this exact
+    # source version verify parametrizations, never a report from the other tree.
+    parametrized = any(source.resolve(d) == "pytest.mark.parametrize" for d in node.decorator_list)
+    if parametrized:
+        ids = sorted(
+            {
+                case.test_id
+                for run in runs.values()
+                for case in run.cases
+                if case.test_id.startswith(prefix + "[") and not run.problems
+            }
+        )
+        if ids:
+            return [str(test_id) for test_id in ids], None
+        return [None], f"integrity parameter ids unavailable: {prefix}"
+    return [prefix], None
+
+
+def source_facts(
+    rec: ChangeRecord,
+    *,
+    base_tree: str,
+    head_tree: str,
+) -> tuple[tuple[IntegrityFact, ...], tuple[str, ...]]:
+    changes = [
+        (path, rec.base_files.get(path), rec.head_files.get(path))
+        for path in sorted(rec.base_files.keys() | rec.head_files.keys())
+        if rec.base_files.get(path) != rec.head_files.get(path)
+    ]
+    detected = detect_shortcuts(changes, grouped=False)
+    problems = [f"detector unknown: {reason}" for reason in detected.reasons]
+    facts: list[IntegrityFact] = []
+    for finding in detected:
+        if finding.kind == ShortcutKind.UNKNOWN:
+            continue  # No contract kind for unknown: preserve it in problems, never certify it.
+        removed = finding.kind == ShortcutKind.TEST_REMOVED
+        tree = base_tree if removed else head_tree
+        test_ids: list[str | None] = [None]
+        if finding.kind in {
+            ShortcutKind.TEST_REMOVED,
+            ShortcutKind.ASSERTION_LOOSENED,
+            ShortcutKind.SKIP_ADDED,
+            ShortcutKind.EXPECTED_VALUE_CHANGED,
+        }:
+            runs = {seq: run for seq, run in rec.suite_runs.items() if run.tested_tree == tree}
+            test_ids, problem = _identities(
+                finding, rec.base_files if removed else rec.head_files, runs
+            )
+            if problem:
+                problems.append(problem)
+        for test_id in test_ids:
+            facts.append(
+                IntegrityFact(
+                    kind=finding.kind.value,
+                    path=finding.path,
+                    line=finding.line,
+                    text=finding.message,
+                    test_id=test_id,
+                    node_id=None,
+                    evidence=[EvidenceRef(git_object=tree, path=finding.path)],
+                )
+            )
+    return tuple(facts), tuple(problems)
+
+
+async def capture_facts(
+    ctx: ChangeContext, rec: ChangeRecord, *, head: str, revision: int
+) -> FactsEvidence:
+    """Capture under main and agent locks, before the proposal publication task."""
+    tree = (await ctx.git(rec.tree, "rev-parse", f"{head}^{{tree}}")).strip()
+    base_tree = (await ctx.git(rec.tree, "rev-parse", f"{rec.base_commit}^{{tree}}")).strip()
+    main = (await ctx.git(ctx.workspace.main, "rev-parse", "HEAD")).strip()
+    target = ChangeTarget(
+        change_id=rec.change_id,
+        revision=revision,
+        base_commit=rec.base_commit,
+        head_commit=head,
+        main_commit=main,
+        candidate_tree=tree,
+    )
+    integrity, diagnostics = await ctx.whole(_source_facts(ctx, rec, base_tree, tree))
+    problems = list(MISSING_PRODUCERS) + list(diagnostics)
+    for seq, execution in sorted(rec.executions.items()):
+        run = rec.suite_runs[seq]
+        problems.extend(f"suite {seq}: {problem}" for problem in run.problems)
+        if execution.suite.cases_complete is not True:
+            problems.append(f"suite {seq}: incomplete retained cases")
+    if rec.declared is None:
+        problems.append("finish declaration unavailable")
+    if not any(e.phase == "proposal" and e.revision == revision for e in rec.executions.values()):
+        problems.append("proposal suite evidence unavailable")
+    edited = tuple(
+        sorted(
+            rec.observed_paths
+            | rec.touched
+            | {
+                p
+                for p in rec.base_files.keys() | rec.head_files.keys()
+                if rec.base_files.get(p) != rec.head_files.get(p)
+            }
+        )
+    )
+    return FactsEvidence(
+        rec.agent_id,
+        target,
+        rec.declared,
+        edited,
+        integrity,
+        tuple(problems),
+        dict(rec.executions),
+        dict(rec.suite_runs),
+    )
+
+
+def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
+    """Construct and validate after change.proposed, with no I/O or mutable reads."""
+    facts = ChangeFacts(
+        **evidence.target.model_dump(),
+        declared=evidence.declared,
+        edited_paths=list(evidence.edited_paths),
+        test_runs=sorted(evidence.executions),
+        integrity=list(evidence.integrity),
+        added_tests=list(evidence.added_tests),
+        run_findings=[],
+        zone=None,
+        reach=None,
+        complete=False,
+        problems=list(evidence.problems),
+    )
+    validate_change_facts(facts, evidence)
+    return facts
+
+
+async def _source_facts(
+    ctx: ChangeContext, rec: ChangeRecord, base: str, head: str
+) -> tuple[tuple[IntegrityFact, ...], tuple[str, ...]]:
+    return await asyncio.to_thread(partial(source_facts, rec, base_tree=base, head_tree=head))

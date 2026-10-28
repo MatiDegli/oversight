@@ -3,6 +3,7 @@
 Other modules import only what this file exports; everything else here is internal.
 """
 
+from oversight.agents._status import validate_agent_status
 from oversight.agents.client import (
     BASETEN_BASE_URL,
     FAKE_MODEL,
@@ -41,6 +42,7 @@ from oversight.agents.usage import (
     Pricing,
     UnknownUsage,
     UsageLedger,
+    validate_usage_tick,
 )
 
 __all__ = [
@@ -81,4 +83,6 @@ __all__ = [
     "UsageLedger",
     "load_script",
     "parse_script",
+    "validate_agent_status",
+    "validate_usage_tick",
 ]

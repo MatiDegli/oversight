@@ -42,7 +42,17 @@ type NonEmptyText = Annotated[str, StringConstraints(min_length=1)]
 type MergeMode = Literal["ask_me", "merge_when_safe"]
 
 type RuleId = Literal[
-    "combined_tests", "small_cone", "small_change", "known_spend", "existing_tests_untouched"
+    "combined_tests",
+    "small_cone",
+    "small_change",
+    "known_spend",
+    "existing_tests_untouched",
+    "cross_review",
+    "test_integrity",
+    "added_tests_fail_before",
+    "run_test_integrity",
+    "tests_reach_changes",
+    "within_zone",
 ]
 
 
@@ -66,3 +76,10 @@ type Slot = Literal["A", "B"]
 """The UI maps a slot to its color."""
 
 type FileStatus = Literal["added", "modified", "deleted"]
+
+
+type ReviewSeverity = Literal["BLOCKING", "SHOULD-FIX", "NIT"]
+
+type QueuedTaskId = Annotated[str, StringConstraints(pattern=r"^queued-task-[1-9]\d*$")]
+
+type CaseOutcome = Literal["passed", "failed", "error", "skipped"]

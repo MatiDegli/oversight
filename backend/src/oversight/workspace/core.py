@@ -11,10 +11,11 @@ import re
 import shutil
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 
+from oversight.limits import bounded_text
 from oversight.workspace.errors import (
     LockOrderError,
     UnsafeDeletion,
@@ -37,8 +38,10 @@ from oversight.workspace.files import (
     write_file,
 )
 from oversight.workspace.locks import Locks, offload
+from oversight.workspace.ranges import FileRange, read_range
 from oversight.workspace.runner import ProcessResult, run_process
-from oversight.workspace.suite import SuiteRun, run_suite
+from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
+from oversight.workspace.test_tree import capture_test_tree
 from oversight_contracts.common import AgentId
 
 PLUGIN_DIR = Path(__file__).resolve().parent / "report_plugin"
@@ -147,6 +150,10 @@ class Tree:
     async def read_text(self, path: str) -> FileRead:
         async with self.section(locked=self.agent_id is not None):
             return await offload(partial(read_file, self.root, path))
+
+    async def read_range(self, path: str, first: int, last: int, chars: int) -> FileRange:
+        async with self.section(locked=self.agent_id is not None):
+            return await offload(partial(read_range, self.root, path, first, last, chars))
 
     async def write_text(self, path: str, content: str, *, expected_hash: str | None) -> str:
         """Write under the tree's lock; return the new hash. `StaleFile` if the file is not the one
@@ -386,7 +393,7 @@ class Workspace:
 
         def read_stamp() -> str | None:
             try:
-                return stamp.read_text(encoding="utf-8").strip()
+                return bounded_text(stamp).strip()
             except FileNotFoundError:
                 return None
 
@@ -485,19 +492,34 @@ class Workspace:
 
     # --- Tests ------------------------------------------------------------------------------
 
-    async def run_tests(self, tree: Tree, *, timeout_s: float) -> SuiteRun:
+    async def run_tests(
+        self, tree: Tree, *, timeout_s: float, case_ids: tuple[str, ...] = ()
+    ) -> SuiteRun:
         """Run the demo repo's tests in `tree`, under its lock, in the demo venv."""
         async with tree.section(locked=True):
             await offload(lambda: self.tmp_dir.mkdir(mode=DIR_MODE, parents=True, exist_ok=True))
-            return await run_suite(
-                python=self._demo_python,
-                plugin_dir=PLUGIN_DIR,
-                runtime_root=self._root,
-                tree_root=tree.root,
+            tested_tree, tested_commit = await capture_test_tree(
+                tree.root,
+                self.tmp_dir,
+                env=self._git_env(None, None),
+                flags=GIT_FLAGS,
                 timeout_s=timeout_s,
-                redact=self.redact,
-                spawn=run_process,
             )
+            try:
+                run = await run_suite(
+                    python=self._demo_python,
+                    plugin_dir=PLUGIN_DIR,
+                    runtime_root=self._root,
+                    tree_root=tree.root,
+                    timeout_s=timeout_s,
+                    redact=self.redact,
+                    spawn=run_process,
+                    case_ids=case_ids,
+                )
+            except (SuiteInterrupted, SuiteUnavailable) as error:
+                error.run = replace(error.run, tested_tree=tested_tree, tested_commit=tested_commit)
+                raise
+            return replace(run, tested_tree=tested_tree, tested_commit=tested_commit)
 
 
 __all__ = ["Author", "Tree", "Workspace"]

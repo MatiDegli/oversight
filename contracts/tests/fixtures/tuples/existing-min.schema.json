@@ -1,0 +1,58 @@
+{
+  "$defs": {
+    "AgentFocus": {
+      "type": "object",
+      "properties": {
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FocusRange"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ranges"
+      ]
+    },
+    "FocusRange": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "start_line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null: the whole file."
+        },
+        "end_line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "start_line",
+        "end_line"
+      ],
+      "title": "FocusRange",
+      "type": "object"
+    },
+    "WorkspacePath": {
+      "type": "string"
+    }
+  }
+}

@@ -8,6 +8,7 @@ import type { ViteDevServer } from "vite";
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from "vitest";
 
 import type {} from "./fileView.browser.fixture";
+import { fixtureCacheDir } from "../../shots/browserCache.support";
 import type { GraphProbeHost } from "../graph";
 
 let server: ViteDevServer | undefined;
@@ -21,7 +22,7 @@ export const original = readFileSync(
 beforeAll(async () => {
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/files-vite-cache", import.meta.url)),
+    cacheDir: fixtureCacheDir(expect.getState().testPath),
     server: {
       host: "127.0.0.1",
       port: 0,

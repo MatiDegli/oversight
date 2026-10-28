@@ -24,6 +24,9 @@ export interface View {
   diff: DiffTarget | null;
   review: string | null;
   file: FileTarget | null;
+  tabs?: readonly FocusTab[];
+  activeTab?: string | null;
+  history?: readonly string[];
 }
 
 export const initialView: View = { selected: null, diff: null, review: null, file: null };
@@ -160,6 +163,7 @@ export function nextReview(state: State, current: string | null = null): string 
 }
 
 export function closePanel(view: View): View {
+  if (view.tabs) return viewReducer(view, { type: "close", id: view.activeTab ?? "" });
   return { ...view, diff: null, review: null, file: null };
 }
 
@@ -175,4 +179,108 @@ export function readyCount(state: State): number {
   return selectPendingChanges(state).filter(
     (change) => change.status === "ready_for_review" || change.status === "conflict",
   ).length;
+}
+
+/** Tab state is owned by navigation, never by the event reducer. */
+export interface FocusTab {
+  id: string;
+  selected: string | null;
+  diff: DiffTarget | null;
+  review: string | null;
+  file: FileTarget | null;
+  frameIds: readonly string[];
+  frameKey: string;
+}
+export type ViewAction =
+  | { type: "open"; tab: FocusTab }
+  | { type: "activate"; id: string }
+  | { type: "close"; id: string }
+  | { type: "watch" };
+
+export const tabbedView: View = { ...initialView, tabs: [], activeTab: null, history: [] };
+
+function activate(view: View, tabs: readonly FocusTab[], id: string | null): View {
+  const tab = tabs.find((candidate) => candidate.id === id);
+  const history = (view.history ?? []).filter(
+    (key) => key !== id && tabs.some((t) => t.id === key),
+  );
+  return {
+    ...view,
+    selected: tab?.selected ?? view.selected,
+    diff: tab?.diff ?? null,
+    review: tab?.review ?? null,
+    file: tab?.file ?? null,
+    tabs,
+    activeTab: tab?.id ?? null,
+    history: tab ? [...history, tab.id] : history,
+  };
+}
+
+/** Six tabs, oldest inactive eviction, and last-used activation on close. */
+export function viewReducer(view: View, action: ViewAction): View {
+  const tabs = view.tabs ?? [];
+  switch (action.type) {
+    case "watch":
+      return { ...tabbedView, selected: view.selected };
+    case "activate":
+      return tabs.some((tab) => tab.id === action.id) ? activate(view, tabs, action.id) : view;
+    case "open": {
+      const exists = tabs.some((tab) => tab.id === action.tab.id);
+      let next = exists
+        ? tabs.map((tab) => (tab.id === action.tab.id ? action.tab : tab))
+        : [...tabs, action.tab];
+      if (next.length > 6) {
+        const oldest = next.find((tab) => tab.id !== view.activeTab && tab.id !== action.tab.id);
+        next = next.filter((tab) => tab !== oldest);
+      }
+      return activate(view, next, action.tab.id);
+    }
+    case "close": {
+      if (!tabs.some((tab) => tab.id === action.id)) return view;
+      const next = tabs.filter((tab) => tab.id !== action.id);
+      if (action.id !== view.activeTab)
+        return { ...view, tabs: next, history: view.history?.filter((id) => id !== action.id) };
+      const previous = [...(view.history ?? [])]
+        .reverse()
+        .find((id) => next.some((tab) => tab.id === id));
+      return activate(view, next, previous ?? next.at(-1)?.id ?? null);
+    }
+  }
+}
+
+/** Capture camera scope at the person's navigation, not on later agent events. */
+export function navigateView(view: View, next: View, state: State): View {
+  if (
+    JSON.stringify([view.diff, view.review, view.file]) ===
+    JSON.stringify([next.diff, next.review, next.file])
+  )
+    return { ...view, selected: next.selected };
+  if (!panelOpen(next)) return { ...view, selected: next.selected };
+  const changeId = next.review ?? next.diff?.changeId;
+  const change = changeId ? state.changes[changeId] : undefined;
+  const id = next.review
+    ? `review:${next.review}`
+    : next.diff
+      ? `diff:${next.diff.changeId}:${next.diff.path}`
+      : `file:${next.file?.agentId ?? "main"}:${next.file?.path ?? ""}`;
+  return viewReducer(view, {
+    type: "open",
+    tab: {
+      id,
+      selected: next.selected,
+      diff: next.diff,
+      review: next.review,
+      file: next.file,
+      frameKey: id,
+      frameIds: change
+        ? changeNodeIds(change)
+        : (state.graph?.nodes
+            .filter(
+              (node) =>
+                node.path === next.file?.path &&
+                (node.id === next.selected || node.kind === "module"),
+            )
+            .map((node) => node.id) ?? []),
+    },
+  });
 }

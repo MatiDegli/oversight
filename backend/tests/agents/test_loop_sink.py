@@ -11,6 +11,7 @@ from oversight.agents import ModelReply, RunEnd, ScriptedModel, parse_script
 from oversight.agents.tools import Toolbox, ToolOutcome
 from oversight.workspace import Tree, Workspace
 from oversight_contracts.events import AgentFocus, AgentStatus, AgentStep, ErrorReport
+from oversight_contracts.review import FinishDeclaration
 
 pytestmark = pytest.mark.anyio
 
@@ -219,7 +220,9 @@ class Held(Recorder):
             await asyncio.Event().wait()
         return await super().file_edited(agent_id, path)
 
-    async def proposed(self, agent_id: str, summary: str | None) -> bool:
+    async def proposed(
+        self, agent_id: str, summary: str | None, *, declaration: FinishDeclaration | None = None
+    ) -> bool:
         if self.hold == "proposed":
             self.entered.set()
             await asyncio.Event().wait()

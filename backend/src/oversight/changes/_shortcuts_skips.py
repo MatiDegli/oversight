@@ -87,7 +87,7 @@ def _test_false(body: list[ast.stmt]) -> list[tuple[str, int]]:
     return markers
 
 
-def _module_markers(source: Source) -> list[tuple[str, int]]:
+def module_markers(source: Source) -> list[tuple[str, int]]:
     markers: set[tuple[str, int]] = set(_test_false(source.tree.body))
     stack: list[ast.AST] = list(source.tree.body)
     while stack:
@@ -148,7 +148,7 @@ def detect_skips(
             else []
         )
         pairs.append((before, _definition_markers(new, qual)))
-    pairs.append((_module_markers(old) if old else [], _module_markers(new)))
+    pairs.append((module_markers(old) if old else [], module_markers(new)))
     findings: list[Finding] = []
     for before, after in pairs:
         counts = Counter(name for name, _line in before)

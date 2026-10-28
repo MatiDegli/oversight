@@ -5,6 +5,7 @@ import { startAppTransport } from "../transport";
 export function startAppSession(
   root: Pick<HTMLElement, "dataset"> | null,
   onError: (error: unknown) => void,
+  onOpen?: () => void,
 ) {
   let active = true;
   if (root) root.dataset.seq = String(stateStore.getState().state.lastSeq);
@@ -19,7 +20,7 @@ export function startAppSession(
   const report = (error: unknown) => {
     if (active) onError(error);
   };
-  const transport = startAppTransport(stateStore, report);
+  const transport = startAppTransport(stateStore, report, onOpen);
   void transport.ready.catch(report);
   return () => {
     active = false;

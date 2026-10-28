@@ -8,21 +8,28 @@
 :root:not([data-theme]),
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --top-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   --ground: #000000;
-  --shell: #060606;
-  --panel: #080808;
+  --shell: #09090a;
+  --panel: #0d0d0f;
   --field: #0b0b0b;
-  --page: #0c0c0c;
-  --card: #0e0e0e;
-  --raised: #121212;
+  --page: #101012;
+  --card: #151518;
+  --card-end: #111113;
+  --inset: #09090b;
+  --overlay-panel: rgba(13, 13, 15, 0.84);
+  --overlay-fill: rgba(13, 13, 15, 0.96);
+  --sheet-backdrop: rgba(0, 0, 0, 0.6);
+  --raised: #1b1b1f;
   --page-raised: #131313;
   --text: #ededea;
   --text-hover: #ffffff;
   --muted: #a3a39e;
   --faint: #85857f;
   --module-label: #d2d2cd;
-  --divider: #1c1c1c;
-  --border: #2a2a2a;
+  --divider: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.1);
   --page-border: #262626;
   --card-border: #242424;
   --node-border: #2e2e2e;
@@ -99,6 +106,13 @@
   --spacing-lg: 14px;
   --spacing-xl: 18px;
   --spacing-overlay: 24px;
+  --sidebar-width: 280px;
+  --graph-min-width: 560px;
+  --dock-height: 280px;
+  --status-line-height: 24px;
+  --overlay-blur: 12px;
+  --group-label-size: 11.5px;
+  --group-label-tracking: 0.08em;
   --top-bar-height: 52px;
   --left-rail-width: 56px;
   --agents-panel-width: 400px;
@@ -161,8 +175,6 @@
   --pending-dash-gap: 4px;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
-  --shell-opacity: 0.9;
-  --cone-card-opacity: 0.94;
   --module-opacity: 0.9;
   --node-opacity: 0.94;
   --dim-node: 0.16;
@@ -238,6 +250,11 @@
   --color-field: var(--field);
   --color-page: var(--page);
   --color-card: var(--card);
+  --color-card-end: var(--card-end);
+  --color-inset: var(--inset);
+  --color-overlay-panel: var(--overlay-panel);
+  --color-overlay-fill: var(--overlay-fill);
+  --color-sheet-backdrop: var(--sheet-backdrop);
   --color-raised: var(--raised);
   --color-page-raised: var(--page-raised);
   --color-text: var(--text);
@@ -308,7 +325,17 @@ body {
   background-color: var(--page);
 }
 
+/* Closing find disables its field during the transition; Monaco hardcodes that surface. */
+:root .monaco-editor .monaco-findInput.disabled {
+  background-color: var(--field);
+}
+
 /* The file's selected source span uses the same neutral token as Monaco's range highlight. */
 .file-span {
   background-color: var(--file-span);
+}
+
+/* Monaco ships a literal grey for disabled find inputs, including during find dismissal. */
+.monaco-editor.vs-dark .monaco-findInput.disabled {
+  background-color: var(--field);
 }

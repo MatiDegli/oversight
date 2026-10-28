@@ -20,7 +20,7 @@ export interface Scene {
   /** What enables a disabled scene. Printed next to "skipped". */
   needs?: string;
   /** Puts the page in this scene's state, after the shell is ready. Nothing to do when omitted. */
-  prepare?: (page: Page) => Promise<void>;
+  prepare?: (page: Page, resume?: () => Promise<void>) => Promise<void>;
 }
 
 export interface Theme {
@@ -263,6 +263,53 @@ export const scenes: readonly Scene[] = [
     enabled: true,
     log: "editing",
     prepare: (page) => clickChangedNode(page, "Live diff panel"),
+  },
+  {
+    name: "focus",
+    enabled: true,
+    log: "editing",
+    prepare: async (page, resume) => {
+      await clickChangedNode(page, "Live diff panel");
+      await openFileView(page);
+      if (!resume) throw new Error("Focus scene needs the rest of the proposal stream");
+      await resume();
+      await page.getByRole("button", { name: /change ready for review/ }).click();
+      await page.getByRole("complementary", { name: "Review panel", exact: true }).waitFor();
+      await page.getByRole("tab", { name: /Live diff ·/ }).click();
+      await page.getByRole("button", { name: "Files", exact: true }).click();
+      await page.getByRole("button", { name: "Toggle bottom dock", exact: true }).click();
+      assert.equal(
+        await page
+          .getByRole("tablist", { name: "Open files and changes" })
+          .getByRole("tab")
+          .count(),
+        3,
+      );
+      await page.locator('[aria-label="Live diff panel"] .line-insert').first().waitFor();
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating() === false,
+      );
+      const framed = await page.evaluate(() => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        const pending = host?.oversightGraph?.nodeCenters("node.pending") ?? [];
+        return (
+          !!host &&
+          pending.length > 0 &&
+          pending.every(
+            (node) =>
+              node.x > 0 && node.x < host.clientWidth && node.y > 0 && node.y < host.clientHeight,
+          )
+        );
+      });
+      assert.equal(
+        framed,
+        true,
+        "The active live diff stays framed after sidebar and dock toggles",
+      );
+    },
   },
   {
     name: "task-one-slot",
