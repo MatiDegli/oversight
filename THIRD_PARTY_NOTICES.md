@@ -14,7 +14,7 @@ Development-only packages and this repository's workspace members are excluded.
 | Frontend | cose-base | 2.2.0 | MIT | https://github.com/iVis-at-Bilkent/cose-base#readme |
 | Frontend | cytoscape | 3.34.3 | MIT | http://js.cytoscape.org |
 | Frontend | cytoscape-fcose | 2.2.0 | MIT | https://github.com/iVis-at-Bilkent/cytoscape.js-fcose |
-| Frontend | dompurify | 3.4.15 | (MPL-2.0 OR Apache-2.0) | https://github.com/cure53/DOMPurify |
+| Frontend | dompurify | 3.4.17 | (MPL-2.0 OR Apache-2.0) | https://github.com/cure53/DOMPurify |
 | Frontend | layout-base | 2.0.1 | MIT | https://github.com/iVis-at-Bilkent/layout-base#readme |
 | Frontend | lucide-react | 1.55.0 | ISC | https://lucide.dev |
 | Frontend | marked | 14.0.0 | MIT | https://marked.js.org |
@@ -293,7 +293,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### dompurify 3.4.15 — LICENSE
+### dompurify 3.4.17 — LICENSE
 
 ```text
 Apache License

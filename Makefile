@@ -63,13 +63,14 @@ UI_BUILD := $(PNPM) build
 demo-setup-check: ## check offered agents' keys, budget and prices in .env before the demo
 	uv run --frozen python -m oversight.setup --check
 
+demo: export OVERSIGHT_VITE_PORT :=
 demo: demo-setup-check ## build the UI, then serve it and the API on one port (DEMO_PORT) from .env; Start agent spends credits
 	$(UI_BUILD)
 	@echo ""
 	@echo "Oversight: open http://localhost:$(DEMO_PORT)/ in the browser (from Windows too: localhost is shared with WSL). Ctrl+C stops it."
 	@echo ""
 	@env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_COMMON_DIR \
-		-u GIT_PREFIX OVERSIGHT_HOST=127.0.0.1 OVERSIGHT_PORT=$(DEMO_PORT) OVERSIGHT_VITE_PORT= \
+		-u GIT_PREFIX OVERSIGHT_HOST=127.0.0.1 OVERSIGHT_PORT=$(DEMO_PORT) \
 		uv run --frozen python -m oversight serve
 
 # demo-check: the demo's path three times in a row from a clean start, on the scripted fake model, so

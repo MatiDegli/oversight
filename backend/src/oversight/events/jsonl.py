@@ -6,7 +6,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 from oversight.events.store import StoredEvent, read_store
-from oversight.limits import MAX_BODY_BYTES
+from oversight.limits import MAX_EVENT_LINE_BYTES
 from oversight_contracts.events import ServerEvent
 
 SERVER_EVENT: TypeAdapter[ServerEvent] = TypeAdapter(ServerEvent)
@@ -21,9 +21,10 @@ def read_jsonl(path: Path) -> list[ServerEvent]:
     events: list[ServerEvent] = []
     with path.open("rb") as handle:
         number = 0
-        while line := handle.readline(MAX_BODY_BYTES + 1):
+        while line := handle.readline(MAX_EVENT_LINE_BYTES + 2):
             number += 1
-            if len(line) > MAX_BODY_BYTES:
+            content = line.removesuffix(b"\r\n").removesuffix(b"\n")
+            if len(content) > MAX_EVENT_LINE_BYTES:
                 raise LogError(f"{path.name}, line {number}: event exceeds size limit")
             if not line.strip():
                 continue
@@ -37,9 +38,12 @@ def read_jsonl(path: Path) -> list[ServerEvent]:
 def write_jsonl(path: Path, events: Iterable[StoredEvent]) -> int:
     """Write the envelopes as stored, one per line; returns how many were written."""
     count = 0
-    with path.open("w", encoding="utf-8", newline="\n") as out:
+    with path.open("wb") as out:
         for event in events:
-            out.write(event.envelope + "\n")
+            line = event.envelope.encode("utf-8")
+            if len(line) > MAX_EVENT_LINE_BYTES:
+                raise LogError(f"{path.name}, line {count + 1}: event exceeds size limit")
+            out.write(line + b"\n")
             count += 1
     return count
 

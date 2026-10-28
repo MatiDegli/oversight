@@ -2,7 +2,7 @@
 
 Malformed output fails closed. Size truncation is reported in problems; an excess of findings
 also invalidates the review, since the retained subset cannot represent the whole decision.
-The 300-character limit covers each finding's complete rendered line, including its location.
+The 1,000-character limit covers each finding's complete rendered line, including its location.
 """
 
 import json
@@ -17,7 +17,7 @@ type Action = Literal["request_changes", "none", "needs_you"]
 
 MAX_DIFF_CHARS = 24_000
 MAX_FINDINGS = 20
-MAX_FINDING_CHARS = 300
+MAX_FINDING_CHARS = 1_000
 MAX_COMMENT_CHARS = 2_000
 
 
@@ -38,11 +38,12 @@ class ConeEntry:
 @dataclass(frozen=True)
 class Inputs:
     reviewer_model: str
-    summary: str
+    summary: str | None
     diff: str
     files: tuple[str, ...]
     tests: TestResult
     cone: tuple[ConeEntry, ...]
+    task: str = ""
     omitted_by_depth: int = 0
     omitted_by_limit: int = 0
 
@@ -85,7 +86,8 @@ def build_prompt(inputs: Inputs) -> str:
     omitted = max(0, len(inputs.diff) - MAX_DIFF_CHARS)
     data = {
         "reviewer_model": inputs.reviewer_model,
-        "summary": inputs.summary,
+        "task": inputs.task,
+        "summary": inputs.summary or "",
         "unified_diff": inputs.diff[:MAX_DIFF_CHARS],
         "diff_omitted_chars": omitted,
         "files": inputs.files,
@@ -145,7 +147,9 @@ def _finding(line: str, files: Collection[str]) -> tuple[Finding | None, str | N
     if available < 1:
         return None, "finding location leaves no room within the character limit"
     finding = Finding(cast(Severity, severity), path, line_number, message[:available])
-    problem = "finding cut to 300 characters" if len(message) > available else None
+    problem = (
+        f"finding cut to {MAX_FINDING_CHARS:,} characters" if len(message) > available else None
+    )
     return finding, problem
 
 
@@ -198,7 +202,8 @@ def parse(text: str, files: Collection[str], *, reviewer_model: str) -> Review:
 
 def _comment(review: Review) -> str:
     header = f"Cross-review written by a model ({review.reviewer_model}).\n"
-    body = "\n".join(finding.text for finding in review.findings if finding.severity != "NIT")
+    ranked = sorted(review.findings, key=lambda finding: finding.severity != "BLOCKING")
+    body = "\n".join(finding.text for finding in ranked if finding.severity != "NIT")
     comment = header + body
     if len(comment) <= MAX_COMMENT_CHARS:
         return comment

@@ -5,7 +5,7 @@ import math
 from collections.abc import Mapping
 from pathlib import Path
 
-from oversight.agents import FAKE_MODEL, MUSE_SPARK, MUSE_SPARK_OPEN
+from oversight.agents import FAKE_MODEL, FAKE_MODEL_B, MUSE_SPARK, MUSE_SPARK_OPEN
 from oversight.settings import REPO_ROOT, Settings
 from oversight_contracts.commands import MissingSetting, SettingName
 from oversight_contracts.common import Slot
@@ -61,7 +61,7 @@ def missing_settings(
 
 def offered_profiles(settings: Settings) -> dict[Slot, ModelProfile]:
     """The same defaults as LiveRun._offer, without loading scripts or creating a runtime."""
-    profiles = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL)}
+    profiles = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL, FAKE_MODEL_B)}
     offered: dict[Slot, ModelProfile] = {}
     names: dict[Slot, str] = {
         "A": settings.agent_model,
