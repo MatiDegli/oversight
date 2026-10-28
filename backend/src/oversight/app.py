@@ -43,7 +43,15 @@ from oversight.agents import (
     validate_agent_status,
     validate_usage_tick,
 )
-from oversight.api import ApiError, add_static, create_router, install_error_handlers
+from oversight.api import (
+    ApiError,
+    ApiGuard,
+    AuthorityPolicy,
+    BodyLimit,
+    add_static,
+    create_router,
+    install_error_handlers,
+)
 from oversight.changes import ChangeManager, ChangeNotFound, Revision, WrongState
 from oversight.events import (
     EventPayload,
@@ -55,6 +63,7 @@ from oversight.events import (
     run_store_path,
 )
 from oversight.graph import WorkspaceGraph, read_layout
+from oversight.limits import bounded_text
 from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
 from oversight.workspace import Tree, Workspace
@@ -122,7 +131,7 @@ class ReplayConfig:
 
 
 def pytest_pin(requirements: Path = VENV_REQUIREMENTS) -> str:
-    for line in requirements.read_text(encoding="utf-8").splitlines():
+    for line in bounded_text(requirements).splitlines():
         name, separator, version = line.strip().partition("==")
         if separator and name.strip() == "pytest":
             return version.strip()
@@ -851,6 +860,9 @@ def create_app(
     and the fake model its slot's script."""
     settings = settings or Settings.load()
     app = _live_app(settings, client_factory) if replay is None else _replay_app(settings, replay)
+    # Last added runs first: guard -> bounded body -> routing (live and replay).
+    app.add_middleware(BodyLimit)
+    app.add_middleware(ApiGuard, policy=AuthorityPolicy(settings.port, settings.vite_port))
     app.state.settings = settings
     install_error_handlers(app)
     return app
@@ -891,7 +903,7 @@ def ledger_command(settings: Settings, settle_usd: float | None) -> str:
     ledger = LedgerFile(settings.runtime_dir / "ledger.json")
     if settle_usd is None:
         try:
-            return ledger.path.read_text(encoding="utf-8").rstrip()
+            return bounded_text(ledger.path).rstrip()
         except FileNotFoundError:
             return "no ledger yet: nothing spent"
     workspace = Workspace(settings.runtime_dir, TEMPLATE, pytest_pin=pytest_pin())
@@ -904,7 +916,7 @@ def ledger_command(settings: Settings, settle_usd: float | None) -> str:
             workspace.release_runtime()
 
     asyncio.run(settle())
-    return ledger.path.read_text(encoding="utf-8").rstrip()
+    return bounded_text(ledger.path).rstrip()
 
 
 def _remove_stale_files(path: Path) -> None:

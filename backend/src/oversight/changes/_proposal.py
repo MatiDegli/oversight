@@ -1,6 +1,11 @@
+import asyncio
+from dataclasses import replace
+
 from oversight.agents import AgentTask, RunEnd
 from oversight.changes import _delivery as delivery
-from oversight.changes._diff import count_lines, file_status, parse_name_status
+from oversight.changes._diff import count_lines_async, file_status, parse_name_status
+from oversight.changes._facts import FactsEvidence, build_change_facts, capture_facts
+from oversight.changes._probes import added_cases, probe_added_tests
 from oversight.changes._state import (
     SUSPECT,
     By,
@@ -10,6 +15,7 @@ from oversight.changes._state import (
     State,
     WrongState,
 )
+from oversight.changes._suite_evidence import publish_suite
 from oversight.changes._support import ChangeContext
 from oversight.changes._versions import (
     nodes_in_path,
@@ -21,6 +27,8 @@ from oversight.graph import (
     change_graph,
 )
 from oversight.workspace import (
+    SuiteInterrupted,
+    SuiteUnavailable,
     Tree,
     WorkspaceError,
 )
@@ -71,7 +79,7 @@ async def read_files(ctx: ChangeContext, tree: Tree) -> dict[str, str]:
         try:
             files[path] = (await tree.read_text(path)).content
         except WorkspaceError:
-            continue  # not UTF-8 text: no agent tool can edit it
+            continue  # oversized or not UTF-8 text: no agent tool can edit it
     return files
 
 
@@ -124,17 +132,18 @@ async def refresh(ctx: ChangeContext, rec: ChangeRecord, paths: set[str]) -> Non
 
 
 async def update(ctx: ChangeContext, rec: ChangeRecord, path: str) -> None:
+    rec.observed_paths.add(path)
     rec.touched.add(path)
     await refresh(ctx, rec, {path})
     await send_file(ctx, rec, path)
 
 
-def totals(ctx: ChangeContext, rec: ChangeRecord) -> tuple[int, int, int]:
+async def totals(ctx: ChangeContext, rec: ChangeRecord) -> tuple[int, int, int]:
     files = added = removed = 0
     for path in rec.base_files.keys() | rec.head_files.keys():
         original, modified = rec.base_files.get(path), rec.head_files.get(path)
         if original != modified:
-            plus, minus = count_lines(original, modified)
+            plus, minus = await count_lines_async(original, modified)
             files, added, removed = files + 1, added + plus, removed + minus
     return files, added, removed
 
@@ -145,8 +154,8 @@ async def send_file(ctx: ChangeContext, rec: ChangeRecord, path: str, author: By
     if status is None:  # in neither version: nothing to show
         rec.unpublished.discard(path)
         return
-    added, removed = count_lines(original, modified)
-    files, total_added, total_removed = totals(ctx, rec)
+    added, removed = await count_lines_async(original, modified)
+    files, total_added, total_removed = await totals(ctx, rec)
     await ctx.publish(
         ChangeUpdated(
             change_id=rec.change_id,
@@ -177,7 +186,7 @@ async def proposed(ctx: ChangeContext, agent_id: AgentId, summary: str | None) -
     try:
         if rec is None or rec.state != "working":
             raise WrongState(f"{agent_id} has no change in progress")
-        async with ctx.workspace.locks(agent_id=agent_id):
+        async with ctx.workspace.locks(main=True, agent_id=agent_id):
             if rec.requested is not None:
                 # R2: revision n + 1 never precedes its request in the log.
                 failure = await delivery.send_requested(ctx, rec)
@@ -219,11 +228,10 @@ async def proposal(
         max_depth=limits.cone_max_depth,
         max_nodes=limits.cone_max_nodes,
     )
-    stats = [
-        FileStat(path=path, status=status, lines_added=plus, lines_removed=minus)
-        for path, status in sorted(files.items())
-        for plus, minus in [count_lines(rec.base_files.get(path), rec.head_files.get(path))]
-    ]
+    stats: list[FileStat] = []
+    for path, status in sorted(files.items()):
+        plus, minus = await count_lines_async(rec.base_files.get(path), rec.head_files.get(path))
+        stats.append(FileStat(path=path, status=status, lines_added=plus, lines_removed=minus))
     proposal = ChangeProposed(
         change_id=rec.change_id,
         agent_id=rec.agent_id,
@@ -239,7 +247,52 @@ async def proposal(
         tests=tests,
         impact=impact,
     )
-    await ctx.whole(record_proposal(ctx, rec, proposal))
+    evidence = await capture_facts(ctx, rec, head=head, revision=proposal.revision)
+    interrupted = False
+    try:
+        await ctx.whole(record_proposal(ctx, rec, proposal))
+    except asyncio.CancelledError:
+        if rec.revision != proposal.revision:
+            raise
+        interrupted = True
+    await record_probe_facts(ctx, rec, head, proposal.revision, evidence, interrupted=interrupted)
+
+
+async def record_probe_facts(
+    ctx: ChangeContext,
+    rec: ChangeRecord,
+    head: str,
+    revision: int,
+    evidence: FactsEvidence,
+    *,
+    interrupted: bool,
+) -> None:
+    cancelled = False
+    try:
+        if interrupted:
+            raise asyncio.CancelledError
+        probes, problems = await probe_added_tests(ctx, rec, head=head, revision=revision)
+    except asyncio.CancelledError:
+        ids, diagnostics = await asyncio.to_thread(added_cases, rec, revision)
+        probes = ()
+        problems = (*diagnostics, "added tests: probes interrupted") if ids or diagnostics else ()
+        cancelled = True
+    except Exception as error:
+        probes, problems = (), (f"added tests: probes unavailable ({type(error).__name__})",)
+    evidence = replace(
+        evidence,
+        added_tests=probes,
+        problems=evidence.problems + problems,
+        executions=dict(rec.executions),
+        runs=dict(rec.suite_runs),
+    )
+    await ctx.whole(publish_facts(ctx, evidence))
+    if cancelled:
+        raise asyncio.CancelledError
+
+
+async def publish_facts(ctx: ChangeContext, evidence: FactsEvidence) -> None:
+    await ctx.publish(build_change_facts(evidence))
 
 
 async def record_proposal(ctx: ChangeContext, rec: ChangeRecord, proposal: ChangeProposed) -> None:
@@ -272,12 +325,18 @@ async def commit(
 async def run_tests(ctx: ChangeContext, rec: ChangeRecord) -> SuiteResult:
     try:
         run = await ctx.workspace.run_tests(rec.tree, timeout_s=rec.task.limits.test_timeout_s)
+    except SuiteInterrupted as error:
+        await publish_suite(ctx, rec, error.run, phase="proposal", revision=rec.revision + 1)
+        raise
     except (WorkspaceError, OSError) as error:
+        if isinstance(error, SuiteUnavailable):
+            await publish_suite(ctx, rec, error.run, phase="proposal", revision=rec.revision + 1)
         await ctx.error("tests", f"The tests could not run: {error}", rec, fatal=False)
         return SuiteResult(
             outcome="error", passed=0, failed=0, skipped=0, duration_ms=0, failed_tests=[]
         )
-    return run.result
+    execution = await publish_suite(ctx, rec, run, phase="proposal", revision=rec.revision + 1)
+    return execution.suite
 
 
 def run_ended(

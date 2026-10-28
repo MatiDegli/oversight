@@ -78,7 +78,12 @@ async def test_save_commits_as_the_user(h: Harness) -> None:
     commit = (await worktree_git(h, "log", "-1", "--format=%an <%ae> %P")).strip()
     assert commit == f"User <user@oversight.invalid> {first.head_commit}"
     assert await worktree_git(h, "status", "--porcelain") == ""
-    assert h.types()[-2:] == ["change.updated", "change.proposed"]
+    assert h.types()[-4:] == [
+        "change.updated",
+        "tests.executed",
+        "change.proposed",
+        "change.facts_recorded",
+    ]
     update = h.payloads(ChangeUpdated)[-1]
     assert (update.author, update.file.modified, update.node_ids) == ("user", content, [VALUE])
     second = h.payloads(ChangeProposed)[-1]

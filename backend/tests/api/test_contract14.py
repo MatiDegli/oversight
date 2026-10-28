@@ -18,7 +18,7 @@ def test_all_reservations_ignore_malformed_bodies_and_queries(tmp_path: Path, re
         ReplayConfig(log=REPO_ROOT / "fixtures/events/handwritten-level1.jsonl") if replay else None
     )
     app = create_app(live_settings(tmp_path), replay=config)
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1:8710")
     for method, route, _ in NOT_BUILT:
         response = client.request(
             method,
@@ -50,7 +50,7 @@ def test_all_reservations_ignore_malformed_bodies_and_queries(tmp_path: Path, re
 def test_decision_guards_are_required_before_lookup(
     tmp_path: Path, decision: str, body: object
 ) -> None:
-    client = TestClient(create_app(live_settings(tmp_path)))
+    client = TestClient(create_app(live_settings(tmp_path)), base_url="http://127.0.0.1:8710")
     response = client.post(f"/changes/absent/{decision}", json=body)
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_request"
@@ -70,7 +70,7 @@ def test_save_file_null_or_missing_hash_never_reaches_the_handler(
     body = {"path": "new.py", "content": "x", "agent_id": agent}
     if with_hash:
         body["base_hash"] = None
-    response = TestClient(app).put("/files", json=body)
+    response = TestClient(app, base_url="http://127.0.0.1:8710").put("/files", json=body)
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_request"
 

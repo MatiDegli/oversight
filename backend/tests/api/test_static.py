@@ -239,5 +239,7 @@ async def test_a_replay_never_serves_the_ui(tmp_path: Path, dist: Path) -> None:
     app = create_app(settings, ReplayConfig(log=REPLAY_LOG, speed=0))
     async with app.router.lifespan_context(app):
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport, base_url=f"http://localhost:{settings.port}"
+        ) as client:
             assert_api_error(await client.get("/"), 404, "not_found")

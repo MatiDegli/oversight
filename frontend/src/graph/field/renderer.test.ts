@@ -4,6 +4,7 @@ import type { BoxSource } from "./boxSource";
 import { createFieldController } from "./controller";
 import type { FieldHost } from "./controller";
 import { createLampRenderer } from "./renderer";
+import type { LampLook } from "./renderer";
 
 /** WebGL entry points for initialization and drawing; handles are tracked by identity. */
 function context(failure: string) {
@@ -53,7 +54,7 @@ function context(failure: string) {
     texParameteri: vi.fn(),
     pixelStorei: vi.fn(),
     disable: vi.fn(),
-    getError: vi.fn(() => (failure === "gl-error" ? 1285 : 0)),
+    getError: vi.fn((): number => (failure === "gl-error" ? 1285 : 0)),
     isContextLost: vi.fn(() => failure === "context-lost"),
     activeTexture: vi.fn(),
     texImage2D: vi.fn(),
@@ -159,7 +160,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.each(["draw-error", "texture-allocation"])(
+it.each(["draw-throws", "texture-allocation"])(
   "falls back through the controller and frees GL resources after a runtime %s",
   (failure) => {
     const test = context("");
@@ -187,7 +188,10 @@ it.each(["draw-error", "texture-allocation"])(
     if (failure === "texture-allocation") {
       Object.assign(canvas, { clientWidth: 140 });
       test.gl.texImage2D.mockImplementationOnce(fail);
-    } else test.gl.drawArrays.mockImplementationOnce(fail);
+    } else
+      test.gl.drawArrays.mockImplementationOnce(() => {
+        throw new Error("driver");
+      });
     controller.redraw();
     expect(error).toHaveBeenCalledOnce();
     expect(canvas.hidden).toBe(true);
@@ -204,3 +208,61 @@ it.each(["draw-error", "texture-allocation"])(
     expect(test.deleted.shaders).toEqual([...test.shaders].reverse());
   },
 );
+
+const look: LampLook = {
+  cell: 7,
+  coverage: 0.72,
+  guideSize: 1,
+  guideEvery: 4,
+  guide: { color: [237, 237, 234], alpha: 0.1 },
+};
+
+describe("field diagnostics", () => {
+  it("checks initialization and allocations, without polling errors on repeated draws", () => {
+    const { canvas, gl } = context("");
+    const renderer = createLampRenderer(canvas);
+    expect(renderer).not.toBeNull();
+    expect(gl.getError).toHaveBeenCalledOnce();
+    renderer?.resize(70, 70, 1);
+    expect([canvas.width, canvas.height]).toEqual([70, 70]);
+    expect(gl.getError).toHaveBeenCalledTimes(2);
+    const grid = { cols: 10, rows: 10, data: new Uint8ClampedArray(400) };
+    renderer?.draw(grid, look);
+    expect(gl.getError).toHaveBeenCalledTimes(3);
+    gl.getError.mockClear();
+    for (let frame = 0; frame < 3; frame++) {
+      renderer?.resize(70, 70, 1);
+      renderer?.draw(grid, look);
+    }
+    expect(gl.getError).not.toHaveBeenCalled();
+    expect(gl.texSubImage2D).toHaveBeenCalledTimes(3);
+    renderer?.draw({ cols: 20, rows: 10, data: new Uint8ClampedArray(800) }, look);
+    expect(gl.getError).toHaveBeenCalledOnce();
+    renderer?.dispose();
+  });
+
+  it("checks errors on loss and restore while retaining the plain fallback", () => {
+    const test = context("");
+    const canvas = mountCanvas(test.gl);
+    const source = {
+      boxes: () => new Map(),
+      subscribe: () => () => undefined,
+    } as unknown as BoxSource;
+    const controller = createFieldController(canvas, source);
+    test.gl.getError.mockClear();
+    test.gl.isContextLost.mockReturnValue(true);
+    test.gl.getError.mockReturnValue(0x9242);
+    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+    expect(test.gl.getError).toHaveBeenCalledOnce();
+    expect(canvas.hidden).toBe(true);
+    expect(canvas.oversightField?.state()).toBe("plain");
+    test.gl.isContextLost.mockReturnValue(false);
+    test.gl.getError.mockReturnValue(0);
+    canvas.dispatchEvent(new Event("webglcontextrestored"));
+    expect(test.gl.getError).toHaveBeenCalledTimes(2);
+    expect(canvas.oversightField?.state()).toBe("plain");
+    controller.dispose();
+    canvas.dispatchEvent(new Event("webglcontextrestored"));
+    expect(test.gl.getError).toHaveBeenCalledTimes(2);
+  });
+});

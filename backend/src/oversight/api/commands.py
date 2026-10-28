@@ -12,7 +12,7 @@ from fastapi import APIRouter, Response
 
 from oversight.api.errors import ApiError
 from oversight.changes import ChangeNotFound, WrongState
-from oversight.workspace import InvalidPath, StaleFile, WorkspaceError
+from oversight.workspace import FileTooLarge, InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
     AgentCreated,
     ApproveChange,
@@ -162,6 +162,8 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
             raise ApiError("not_found", f"there is no live worktree for {agent!r}") from None
         except FileNotFoundError:
             raise ApiError("not_found", f"there is no file {path[:80]!r}") from None
+        except FileTooLarge as error:
+            raise ApiError("too_large", str(error)) from None
         except InvalidPath as error:
             raise ApiError("invalid_path", str(error)) from None
 
@@ -173,6 +175,8 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
             raise ApiError(
                 "not_found", f"there is no live worktree for {request.agent_id!r}"
             ) from None
+        except FileTooLarge as error:
+            raise ApiError("too_large", str(error)) from None
         except InvalidPath as error:
             raise ApiError("invalid_path", str(error)) from None
         except StaleFile as error:
