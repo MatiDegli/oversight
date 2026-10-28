@@ -10,7 +10,7 @@ from oversight.agents import (
     load_script,
 )
 from oversight.settings import Settings
-from oversight.setup import offered_profiles
+from oversight.setup import offered_profiles, resolve_profile
 from oversight_contracts.common import Slot
 from oversight_contracts.events import ModelProfile
 
@@ -26,20 +26,18 @@ class ReviewerUnavailable(ValueError):
 def configured_reviewer(
     settings: Settings, author_slot: Slot, author: ModelProfile
 ) -> ModelClient | None:
-    """A fresh client for the opposite slot's profile; never reuse an author client or script.
+    """A fresh client for the configured reviewer; never reuse an author client or script.
 
     Off returns before profile resolution, script I/O, SDK construction or any async work.
-    The opposite profile can review without an active agent in that slot.
+    Reviewer selection is independent of author slots and active agents.
     """
     if not settings.cross_review:
         return None
-    profiles = offered_profiles(settings)
-    profile = profiles.get("B" if author_slot == "A" else "A")
-    if profile is None:
-        raise ReviewerUnavailable("reviewer_missing", "The opposite slot has no reviewer profile.")
+    profile = resolve_profile(settings.review_model)
     if profile.model == author.model:
         raise ReviewerUnavailable("reviewer_same", "Reviewer and author have the same model.")
     if profile.provider == "fake":
+        profiles = offered_profiles(settings)
         if author.provider != "fake" or any(p.provider != "fake" for p in profiles.values()):
             raise ReviewerUnavailable(
                 "reviewer_credentials", "Fake review requires all-fake profiles."
