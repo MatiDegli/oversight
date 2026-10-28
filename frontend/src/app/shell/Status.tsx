@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PanelBottom, X } from "lucide-react";
 import type { FrameProps } from "../Frame";
-import { selectSpend } from "../../state";
+import { selectBudgetLine } from "./statusSelectors";
 import { focusRing } from "./shared";
 
 export function BottomDock({ onClose }: { onClose: () => void }) {
@@ -45,19 +45,15 @@ export function BottomDock({ onClose }: { onClose: () => void }) {
 }
 
 export function StatusLine(props: FrameProps & { dock: boolean; onToggleDock: () => void }) {
-  const spend = selectSpend(props.state);
-  const brake =
-    spend && spend.brake !== "ok"
-      ? {
-          warn_50: "Budget: 50% used",
-          warn_80: "Budget: 80% used",
-          blocked: "Budget brake: new runs blocked",
-        }[spend.brake]
-      : null;
+  const budget = selectBudgetLine(props.state);
   return (
     <footer aria-label="Status line" className="status-line">
       <span>{props.replayLabel ?? (props.replayOf ? `Replay · ${props.replayOf}` : "Live")}</span>
-      {brake && <span role="status">{brake}</span>}
+      {budget && (
+        <span role="status" className="text-muted">
+          {budget}
+        </span>
+      )}
       {props.notice && (
         <div role="status" className="truncate">
           {props.notice}
