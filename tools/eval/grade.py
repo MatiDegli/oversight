@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from tools.eval.identity import Identity
 from tools.eval.tasks import BenchError, Task, resource, safe_path
 
 from oversight_contracts.events import ChangeProposed, FileDiff, UsageTick
@@ -34,11 +35,13 @@ class Tests(BaseModel):
     policy: Verdict
 
 
-class Result(BaseModel):
+class Result(Identity):
     model_config = ConfigDict(extra="forbid")
+    profile: str = Field(default="legacy", frozen=True)
     task_id: str
     agent_model: str
     outcome: Literal["solved", "failed", "stopped"]
+    turns: int = Field(default=0, ge=0)
     steps: int = Field(ge=0)
     duration_s: float = Field(ge=0, allow_inf_nan=False)
     tokens: Tokens

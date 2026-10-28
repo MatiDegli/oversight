@@ -4,17 +4,15 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from oversight.telemetry import CURRENT, Observer, annotate, mark, span
 
 
 @contextmanager
-def attempt_trace(api: Any, run_id: str, directory: Path) -> Generator[None]:
+def attempt_trace(api: Any, run_id: str, directory: Path, attempt_id: str) -> Generator[None]:
     if not getattr(api, "trace_enabled", False):
         yield
         return
-    attempt_id = uuid4().hex
     observer = Observer(
         directory / f"timing-{attempt_id}.jsonl",
         {"run": run_id, "attempt": attempt_id},
