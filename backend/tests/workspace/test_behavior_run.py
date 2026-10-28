@@ -1,6 +1,7 @@
 """Required isolation, demo interpreter, metadata guard and worker lifecycle."""
 
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -8,11 +9,28 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from oversight.workspace import BehaviorTarget, IsolationUnavailable, Workspace, base_probe_checkout
+from oversight.workspace import (
+    BehaviorTarget,
+    IsolationUnavailable,
+    Workspace,
+    WorkspaceError,
+    base_probe_checkout,
+)
+from oversight.workspace.behavior_run import _read_report
 from oversight.workspace.integrity import IntegrityError
 
 pytestmark = pytest.mark.anyio
 TARGET = BehaviorTarget("value", "shop.mod", "value", ("((), {})",))
+
+
+@pytest.mark.parametrize("calls", [("((), {})",), ()])
+async def test_report_row_requires_problem_key(tmp_path, calls):
+    report = tmp_path / "report.json"
+    results = [{"kind": "value", "value": ["int", "0x1"]} for _ in calls]
+    report.write_text(json.dumps({"value": {"results": results}}))
+    target = BehaviorTarget("value", "shop.mod", "value", calls)
+    with pytest.raises(WorkspaceError, match=r"missing.*problem"):
+        _read_report(report, (target,))
 
 
 async def test_required_isolation_selects_before_spawning(workspace, monkeypatch):

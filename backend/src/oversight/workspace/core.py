@@ -234,6 +234,7 @@ class Workspace:
         self._demo_python = demo_python or runtime_root / "demo-venv" / "bin" / "python"
         self._demo_python_given = demo_python is not None
         self._locks = Locks()
+        self.harness_pack = False
         self.integrity = IntegrityState()
         self._isolation = SessionIsolation(runtime_root, self.integrity)
         self.git_identities: dict[Path, GitIdentity] = {}

@@ -11,6 +11,9 @@ from oversight.limits import bounded_text
 from oversight_contracts.commands import SettingName
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+type ParsedSettingName = (
+    SettingName | Literal["BASETEN_INPUT_USD_PER_M", "BASETEN_OUTPUT_USD_PER_M"]
+)
 
 
 def read_env_file(path: Path) -> dict[str, str]:
@@ -76,8 +79,8 @@ class Settings:
     """Optional Baseten input price, US dollars per million tokens. BASETEN_INPUT_USD_PER_M."""
     baseten_output_usd_per_m: float | None = None
     """Optional Baseten output price, US dollars per million tokens. BASETEN_OUTPUT_USD_PER_M."""
-    setting_problems: dict[SettingName, Literal["missing", "invalid"]] = field(
-        default_factory=dict[SettingName, Literal["missing", "invalid"]]
+    setting_problems: dict[ParsedSettingName, Literal["missing", "invalid"]] = field(
+        default_factory=dict[ParsedSettingName, Literal["missing", "invalid"]]
     )
     """Only the problem kind survives parsing an unusable amount; no raw values are retained."""
     demo_python: Path | None = None
@@ -125,6 +128,8 @@ class Settings:
                     "OVERSIGHT_BUDGET_USD",
                     "MUSE_SPARK_INPUT_USD_PER_M",
                     "MUSE_SPARK_OUTPUT_USD_PER_M",
+                    "BASETEN_INPUT_USD_PER_M",
+                    "BASETEN_OUTPUT_USD_PER_M",
                 )
                 if merged.get(name) and positive_amount(merged[name]) is None
             },

@@ -37,10 +37,17 @@ def test_baseten_prices_parse_positive_amounts(tmp_path, monkeypatch, raw, expec
     settings = Settings.load(env_file)
     assert settings.baseten_input_usd_per_m == expected
     assert settings.baseten_output_usd_per_m == expected
+    for name in ("BASETEN_INPUT_USD_PER_M", "BASETEN_OUTPUT_USD_PER_M"):
+        if raw and expected is None:
+            assert settings.setting_problems.get(name) == "invalid"
+        else:
+            assert name not in settings.setting_problems
     monkeypatch.setenv("BASETEN_INPUT_USD_PER_M", "2")
     monkeypatch.setenv("BASETEN_OUTPUT_USD_PER_M", "4")
     settings = Settings.load(env_file)
     assert (settings.baseten_input_usd_per_m, settings.baseten_output_usd_per_m) == (2, 4)
+    assert "BASETEN_INPUT_USD_PER_M" not in settings.setting_problems
+    assert "BASETEN_OUTPUT_USD_PER_M" not in settings.setting_problems
 
 
 @pytest.mark.anyio

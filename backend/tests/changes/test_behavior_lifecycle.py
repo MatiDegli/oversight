@@ -6,7 +6,7 @@ from dataclasses import replace
 from unittest.mock import AsyncMock
 
 import pytest
-from changes_helpers import EDIT, Harness, start_harness
+from changes_helpers import EDIT, TEMPLATE, Harness, start_harness
 from decision_helpers import observed_target
 
 from oversight.changes import BehaviorDiff
@@ -18,6 +18,56 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 def session_c() -> bool:
     return True
+
+
+async def test_base_and_proposed_workers_have_distinct_pids(tmp_path, monkeypatch):
+    monkeypatch.setitem(
+        TEMPLATE,
+        "shop/mod.py",
+        "import os\nfrom pathlib import Path\n"
+        "(Path(os.environ['HOME']).parent / 'base-pid').write_text(str(os.getpid()))\n\n"
+        + TEMPLATE["shop/mod.py"],
+    )
+    h = await start_harness(tmp_path)
+    base_pid = h.workspace.tmp_dir / "base-pid"
+    proposed_pid = h.workspace.tmp_dir / "proposed-pid"
+    try:
+        await h.workspace.check_isolation()
+        h.manager._ctx.behavior_diff = True
+        await h.open(1)
+        assert await h.edit(1, "shop/mod.py", "base-pid", "proposed-pid")
+        assert await h.edit(1, *EDIT)
+        original = h.workspace.run_behavior
+        workers = []
+
+        async def worker(tree, targets, *, timeout_s):
+            # Proposal pytest imports the same module: retain only behavior-worker PIDs.
+            pid_file = (
+                base_pid
+                if tree.base_commit == h.manager._agents["agent-1"].base_commit
+                else proposed_pid
+            )
+            pid_file.unlink(missing_ok=True)
+            observation = await original(tree, targets, timeout_s=timeout_s)
+            workers.append(
+                ("base" if pid_file == base_pid else "proposed", int(pid_file.read_text()))
+            )
+            return observation
+
+        monkeypatch.setattr(h.workspace, "run_behavior", worker)
+        assert await h.finish(1)
+        result = next(
+            r
+            for r in h.manager._agents["agent-1"].behavior_diffs[1].functions
+            if r.node_id == "shop.mod:value"
+        )
+        assert result.compared == result.differing == 1
+        assert [side for side, _ in workers] == ["base", "proposed"] * 3
+        pids = [pid for _, pid in workers]
+        assert all(pid != os.getpid() for pid in pids)
+        assert all(base != proposed for base, proposed in zip(pids[::2], pids[1::2], strict=True))
+    finally:
+        await h.close()
 
 
 async def test_revisions_keep_independent_results(h: Harness):

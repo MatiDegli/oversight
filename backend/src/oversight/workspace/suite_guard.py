@@ -5,7 +5,6 @@ from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
-from weakref import WeakKeyDictionary
 
 from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.isolation import IsolatedRunner
@@ -20,16 +19,9 @@ if TYPE_CHECKING:
     from oversight.workspace.core import Tree, Workspace
 
 
-_HARNESS_PACK: WeakKeyDictionary["Workspace", bool] = WeakKeyDictionary()
-
-
 def configure_suite(workspace: "Workspace", *, harness_pack: bool) -> None:
-    """Select this workspace's output arm at composition time; never inspect process settings.
-
-    Keep configuration beside the suite boundary so the Git workspace core stays independent.
-    Weak keys release it with the workspace, including isolated test instances.
-    """
-    _HARNESS_PACK[workspace] = harness_pack
+    """Select this workspace's output arm at composition time; never inspect process settings."""
+    workspace.harness_pack = harness_pack
 
 
 async def guarded_suite(
@@ -67,7 +59,7 @@ async def guarded_suite(
                 redact=workspace.redact,
                 spawn=runner,
                 case_ids=case_ids,
-                harness_pack=_HARNESS_PACK.get(workspace, False),
+                harness_pack=workspace.harness_pack,
             )
         except (SuiteInterrupted, SuiteUnavailable) as error:
             problems = await offload(partial(file_problems, tree.root, before))
