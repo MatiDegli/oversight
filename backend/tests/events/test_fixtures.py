@@ -154,9 +154,19 @@ def test_scripted_run_has_valid_suite_and_facts_evidence_for_every_proposal() ->
     assert len(facts) == len(proposals) > 0
     for proposed, recorded in zip(proposals, facts, strict=True):
         p, f = proposed.payload, recorded.payload
-        assert recorded.seq == proposed.seq + 1
+        assert recorded.seq > proposed.seq
         assert (p.change_id, p.revision, p.head_commit) == (f.change_id, f.revision, f.head_commit)
-        assert not f.complete and len(f.problems) >= 4
+        assert not f.complete and len(f.problems) >= 3
+        assert not any("package 4" in problem for problem in f.problems)
+        for probe in f.added_tests:
+            assert proposed.seq < probe.before_seq < probe.after_seq < recorded.seq
+            before, after = suites[probe.before_seq], suites[probe.after_seq]
+            assert before.phase == "base_probe" and after.phase == "head_probe"
+            assert before.revision == after.revision == p.revision
+            assert after.tested_commit == p.head_commit
+            assert probe.result == "passes_before_and_after"
+            assert [case.test_id for case in before.suite.cases or []] == [probe.test_id]
+            assert [case.test_id for case in after.suite.cases or []] == [probe.test_id]
         assert f.test_runs and all(seq < recorded.seq for seq in f.test_runs)
         for seq in f.test_runs:
             execution = suites[seq]

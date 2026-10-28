@@ -1,7 +1,11 @@
+import asyncio
+from dataclasses import replace
+
 from oversight.agents import AgentTask, RunEnd
 from oversight.changes import _delivery as delivery
 from oversight.changes._diff import count_lines, file_status, parse_name_status
 from oversight.changes._facts import FactsEvidence, build_change_facts, capture_facts
+from oversight.changes._probes import added_cases, probe_added_tests
 from oversight.changes._state import (
     SUSPECT,
     By,
@@ -245,17 +249,58 @@ async def proposal(
         impact=impact,
     )
     evidence = await capture_facts(ctx, rec, head=head, revision=proposal.revision)
-    await ctx.whole(record_proposal(ctx, rec, proposal, evidence))
+    interrupted = False
+    try:
+        await ctx.whole(record_proposal(ctx, rec, proposal))
+    except asyncio.CancelledError:
+        if rec.revision != proposal.revision:
+            raise
+        interrupted = True
+    await record_probe_facts(ctx, rec, head, proposal.revision, evidence, interrupted=interrupted)
 
 
-async def record_proposal(
-    ctx: ChangeContext, rec: ChangeRecord, proposal: ChangeProposed, evidence: FactsEvidence
+async def record_probe_facts(
+    ctx: ChangeContext,
+    rec: ChangeRecord,
+    head: str,
+    revision: int,
+    evidence: FactsEvidence,
+    *,
+    interrupted: bool,
 ) -> None:
+    cancelled = False
+    try:
+        if interrupted:
+            raise asyncio.CancelledError
+        probes, problems = await probe_added_tests(ctx, rec, head=head, revision=revision)
+    except asyncio.CancelledError:
+        ids, diagnostics = await asyncio.to_thread(added_cases, rec, revision)
+        probes = ()
+        problems = (*diagnostics, "added tests: probes interrupted") if ids or diagnostics else ()
+        cancelled = True
+    except Exception as error:
+        probes, problems = (), (f"added tests: probes unavailable ({type(error).__name__})",)
+    evidence = replace(
+        evidence,
+        added_tests=probes,
+        problems=evidence.problems + problems,
+        executions=dict(rec.executions),
+        runs=dict(rec.suite_runs),
+    )
+    await ctx.whole(publish_facts(ctx, evidence))
+    if cancelled:
+        raise asyncio.CancelledError
+
+
+async def publish_facts(ctx: ChangeContext, evidence: FactsEvidence) -> None:
+    await ctx.publish(build_change_facts(evidence))
+
+
+async def record_proposal(ctx: ChangeContext, rec: ChangeRecord, proposal: ChangeProposed) -> None:
     """R7: a run cancelled during this publish still finds the record matching the store."""
     await ctx.publish(proposal)
     rec.revision, rec.head_commit = proposal.revision, proposal.head_commit
     rec.proposed_now, rec.summary = True, proposal.summary
-    await ctx.publish(build_change_facts(evidence))
 
 
 async def commit(

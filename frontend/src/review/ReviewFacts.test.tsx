@@ -61,6 +61,47 @@ const execution: SuiteExecution = {
 };
 
 describe("review evidence", () => {
+  it("lists every added case with neutral before/after signals", () => {
+    const kinds = [
+      "fails_before_passes_after",
+      "passes_before_and_after",
+      "fails_after",
+      "not_collected_after",
+      "skipped",
+      "unknown",
+    ] as const;
+    const view = {
+      ...state,
+      changeFacts: {
+        [facts.change_id]: [
+          {
+            ...facts,
+            added_tests: kinds.map((result, index) => ({
+              test_id: `tests/test_added.py::test_${String(index)}`,
+              before_seq: 21,
+              after_seq: 22,
+              result,
+            })),
+          },
+        ],
+      },
+    };
+    const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
+    for (const label of [
+      "fails before, passes after",
+      "passes before and after",
+      "fails after",
+      "not collected after",
+      "skipped",
+      "unknown",
+    ])
+      expect(html).toContain(label);
+    kinds.forEach((_, index) => {
+      expect(html).toContain(`tests/test_added.py::test_${String(index)}`);
+    });
+    expect(html).toContain('aria-label="Added test signals"');
+    expect(html).not.toMatch(/verdict|text-passed|text-failed|amber/);
+  });
   it("keeps executions by seq and facts by revision through replay; a new run resets them", () => {
     const withSuite = appendEvent(state, {
       seq: 21,

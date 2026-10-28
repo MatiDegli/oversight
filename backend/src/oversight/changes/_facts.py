@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial
 
+from oversight.changes._probes import comparison
 from oversight.changes._shortcut_detector import Finding, ShortcutKind, detect_shortcuts
 from oversight.changes._shortcuts_common import FuncNode, Source
 from oversight.changes._shortcuts_skips import DECORATOR_SKIP, module_markers
@@ -13,10 +14,15 @@ from oversight.changes._support import ChangeContext
 from oversight.workspace import SuiteRun, validate_suite_execution
 from oversight_contracts.events import SuiteExecution
 from oversight_contracts.policy import EvidenceRef
-from oversight_contracts.review import ChangeFacts, ChangeTarget, FinishDeclaration, IntegrityFact
+from oversight_contracts.review import (
+    AddedTestProbe,
+    ChangeFacts,
+    ChangeTarget,
+    FinishDeclaration,
+    IntegrityFact,
+)
 
 MISSING_PRODUCERS = (
-    "added_tests producer unavailable (package 4)",
     "run_findings producer unavailable (package 5)",
     "zone producer unavailable",
     "reach producer unavailable",
@@ -33,12 +39,13 @@ class FactsEvidence:
     problems: tuple[str, ...]
     executions: Mapping[int, SuiteExecution]
     runs: Mapping[int, SuiteRun]
+    added_tests: tuple[AddedTestProbe, ...] = ()
 
 
 def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
     """Check the exact captured candidate and its individual execution/source evidence.
 
-    Packages 4/5, zones and reach have no producer here: their empty values cannot
+    Package 5, zones and reach have no producer here: their empty values cannot
     certify completeness. A list of execution seqs alone establishes no success.
     """
     if (
@@ -75,7 +82,27 @@ def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
             raise ValueError("proposal execution tested another candidate")
     if facts.integrity != list(evidence.integrity):
         raise ValueError("facts integrity differs from captured source observations")
-    if facts.added_tests or facts.run_findings or facts.zone is not None or facts.reach is not None:
+    if facts.added_tests != list(evidence.added_tests):
+        raise ValueError("facts probes differ from captured evidence")
+    for probe in facts.added_tests:
+        before = evidence.executions.get(probe.before_seq)
+        after = evidence.executions.get(probe.after_seq)
+        if (
+            before is None
+            or after is None
+            or (
+                before.phase != "base_probe"
+                or after.phase != "head_probe"
+                or before.revision != facts.revision
+                or after.revision != facts.revision
+                or after.tested_commit != facts.head_commit
+                or after.tested_tree != facts.candidate_tree
+            )
+        ):
+            raise ValueError("probe execution differs from candidate")
+        if comparison((probe.test_id,), before, after)[0][1] != probe.result:
+            raise ValueError("probe result differs from captured evidence")
+    if facts.run_findings or facts.zone is not None or facts.reach is not None:
         raise ValueError("unbuilt producers cannot supply facts")
     if facts.complete or facts.problems != list(evidence.problems):
         raise ValueError("facts completeness differs from captured evidence")
@@ -261,7 +288,7 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
         edited_paths=list(evidence.edited_paths),
         test_runs=sorted(evidence.executions),
         integrity=list(evidence.integrity),
-        added_tests=[],
+        added_tests=list(evidence.added_tests),
         run_findings=[],
         zone=None,
         reach=None,

@@ -335,3 +335,17 @@ def test_remove_tree_refuses_a_symlinked_target_or_ancestor_and_never_follows_in
     assert (outside / "keep.txt").exists()
     assert (outside / "agent-1" / "keep.txt").exists()
     assert os.path.islink(runtime / "tmp")
+
+
+def test_only_uuid_probe_checkouts_are_deletable_under_tmp(runtime: Path) -> None:
+    probe = runtime / "tmp" / ("base-probe-" + "a" * 32)
+    probe.mkdir()
+    (probe / "file").write_text("temporary checkout")
+    remove_tree(runtime, probe)
+    assert not probe.exists()
+    for name in ("base-probe-bad", "other", "base-probe-" + "A" * 32):
+        target = runtime / "tmp" / name
+        target.mkdir()
+        with pytest.raises(UnsafeDeletion):
+            remove_tree(runtime, target)
+        assert target.exists()

@@ -134,6 +134,7 @@ async def run_suite(
     timeout_s: float,
     redact: Callable[[str], str],
     spawn: Spawn,
+    case_ids: tuple[str, ...] = (),
 ) -> SuiteRun:
     report = runtime_root / "tmp" / f"{uuid.uuid4().hex}.jsonl"
     junit = report.with_suffix(".xml")
@@ -158,6 +159,7 @@ async def run_suite(
         "-o",
         "junit_family=xunit1",
         f"--junitxml={junit}",
+        *(["--", *case_ids] if case_ids else []),
     ]
     failure: OSError | asyncio.CancelledError | None = None
     try:

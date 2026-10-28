@@ -490,7 +490,9 @@ class Workspace:
 
     # --- Tests ------------------------------------------------------------------------------
 
-    async def run_tests(self, tree: Tree, *, timeout_s: float) -> SuiteRun:
+    async def run_tests(
+        self, tree: Tree, *, timeout_s: float, case_ids: tuple[str, ...] = ()
+    ) -> SuiteRun:
         """Run the demo repo's tests in `tree`, under its lock, in the demo venv."""
         async with tree.section(locked=True):
             await offload(lambda: self.tmp_dir.mkdir(mode=DIR_MODE, parents=True, exist_ok=True))
@@ -510,6 +512,7 @@ class Workspace:
                     timeout_s=timeout_s,
                     redact=self.redact,
                     spawn=run_process,
+                    case_ids=case_ids,
                 )
             except (SuiteInterrupted, SuiteUnavailable) as error:
                 error.run = replace(error.run, tested_tree=tested_tree, tested_commit=tested_commit)

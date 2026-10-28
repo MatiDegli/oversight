@@ -72,7 +72,7 @@ async def publish_suite(
     rec: ChangeRecord,
     run: SuiteRun,
     *,
-    phase: Literal["agent", "proposal", "combined"],
+    phase: Literal["agent", "proposal", "combined", "base_probe", "head_probe"],
     revision: int | None,
 ) -> SuiteExecution:
     # Keep the caller's locks and record the run even if cancellation arrives during parsing.
@@ -84,7 +84,7 @@ async def _publish_suite(
     rec: ChangeRecord,
     run: SuiteRun,
     *,
-    phase: Literal["agent", "proposal", "combined"],
+    phase: Literal["agent", "proposal", "combined", "base_probe", "head_probe"],
     revision: int | None,
 ) -> SuiteExecution:
     retention_ids = await asyncio.to_thread(added_ids, rec, run)

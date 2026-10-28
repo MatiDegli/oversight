@@ -299,6 +299,8 @@ def validate_runtime_root(root: Path) -> None:
 def _is_deletable(root: Path, target: Path) -> bool:
     if target in (root / "workspace", root / "worktrees", root / "tmp", root / "demo-venv"):
         return True
+    if target.parent == root / "tmp" and re.fullmatch(r"base-probe-[0-9a-f]{32}", target.name):
+        return True
     return target.parent == root / "worktrees" and valid_agent_id(target.name)
 
 
