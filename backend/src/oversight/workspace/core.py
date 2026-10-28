@@ -282,6 +282,8 @@ class Workspace:
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": "/dev/null",
+            # Read-only status queries must not normalize a suite-tampered real index.
+            "GIT_OPTIONAL_LOCKS": "0",
             # The runtime directory sits inside the IDE's own repository: never look above it.
             "GIT_CEILING_DIRECTORIES": str(self._root),
             "GIT_AUTHOR_NAME": who.name,
@@ -425,6 +427,8 @@ class Workspace:
                 await git(self._main, "commit", "-q", "-m", INITIAL_MESSAGE, date=INITIAL_DATE)
                 commit = (await git(self._main, "rev-parse", "HEAD")).strip()
                 self._trees.clear()
+                self.git_identities.clear()
+                self.git_identities[self._main.root] = self._main.git_identity
                 self._reset_done = True
                 return commit
 

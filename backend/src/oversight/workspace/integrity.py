@@ -1,6 +1,7 @@
 """Pre-Git filesystem guards. No Git process is used to discover repository identity."""
 
 import asyncio
+import hashlib
 import json
 import os
 import stat
@@ -10,8 +11,12 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from oversight.limits import bounded_text
+if TYPE_CHECKING:
+    from oversight.workspace.core import Tree, Workspace
+
+from oversight.limits import SizeLimitError, bounded_text
 from oversight.workspace.errors import WorkspaceError
 from oversight.workspace.locks import offload
 from oversight.workspace.runner import ProcessResult, Spawn
@@ -52,6 +57,21 @@ class GitIdentity:
     directory: Path
     common: Path
 
+    def verify_root_entry(self) -> None:
+        """The walk exemption requires the registered kind and exact linked-tree pointer."""
+        entry = self.root / ".git"
+        try:
+            mode = entry.lstat().st_mode
+            valid = (
+                stat.S_ISDIR(mode)
+                if self.directory == self.common
+                else stat.S_ISREG(mode) and bounded_text(entry) == f"gitdir: {self.directory}\n"
+            )
+            if not valid:
+                raise IntegrityError("Git root entry differs from registration", ".git")
+        except (OSError, UnicodeError, SizeLimitError) as error:
+            raise IntegrityError("unreadable registered Git root entry", ".git") from error
+
     def verify_registration(self) -> None:
         """Check the newly server-created checkout once; never discover pins from its pointer."""
         try:
@@ -76,11 +96,11 @@ class GitIdentity:
         }
 
 
-def scan_nested_git(identity: GitIdentity, deadline: float) -> None:
+def scan_nested_git(identity: GitIdentity, deadline: float, *, initializing: bool = False) -> None:
     """Walk every directory (including ignored files), without following symbolic links.
 
-    The sole exemption is the registered root's literal .git entry. Its contents belong
-    to the metadata barrier, not this working-tree scan. Errors never grant permission.
+    The sole exemption is the registered root's literal .git entry of the registered kind
+    and, for linked trees, exact pointer content. Only init may start without that entry.
     """
     root = identity.root
     try:
@@ -109,6 +129,8 @@ def scan_nested_git(identity: GitIdentity, deadline: float) -> None:
                 f"Git scan failed ({type(error).__name__})",
                 directory.relative_to(root).as_posix(),
             ) from error
+    if not initializing or os.path.lexists(root / ".git"):
+        identity.verify_root_entry()
     remaining(deadline)
 
 
@@ -144,7 +166,8 @@ async def guarded_git(
     async with lease_until(lease, deadline):
         await offload(verify)
         if not skips_scan(args):
-            await offload(partial(scan_nested_git, scan_identity, deadline))
+            scan = partial(scan_nested_git, scan_identity, deadline)
+            await offload(partial(scan, initializing=True) if args[0] == "init" else scan)
         submodules = ("--ignore-submodules=all",) if args[0] in {"status", "diff"} else ()
         result = await spawn(
             ["git", *flags, args[0], *submodules, *args[1:]],
@@ -195,3 +218,141 @@ def veto_gitmodules(root: Path, deadline: float) -> None:
             raise IntegrityError(
                 "Git modules scan failed", str(directory.relative_to(root))
             ) from error
+
+
+def _plain_bytes(path: Path, limit: int, deadline: float) -> bytes:
+    """Read bounded regular metadata without following the final symlink or opening a FIFO."""
+    remaining(deadline)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        with os.fdopen(fd, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+                raise IntegrityError("invalid merge metadata", path.name)
+            data = handle.read(limit + 1)
+        if len(data) > limit:
+            raise IntegrityError("oversized merge metadata", path.name)
+    except OSError as error:
+        raise IntegrityError("unreadable merge metadata", path.name) from error
+    remaining(deadline)
+    return data
+
+
+def verify_merge_metadata(identity: GitIdentity, pre: str, head: str, deadline: float) -> None:
+    """Only a merge still pointing at the captured main may commit or use Git's abort."""
+    identity.verify_root_entry()
+    directory, common = identity.directory, identity.common
+    for path in (
+        directory / "index.lock",
+        directory / "HEAD.lock",
+        common / "refs/heads/main.lock",
+    ):
+        if os.path.lexists(path):
+            raise IntegrityError("unknown merge lock", path.name)
+    expected = {
+        directory / "HEAD": b"ref: refs/heads/main\n",
+        common / "refs/heads/main": f"{pre}\n".encode(),
+        directory / "ORIG_HEAD": f"{pre}\n".encode(),
+        directory / "MERGE_HEAD": f"{head}\n".encode(),
+    }
+    for path, wanted in expected.items():
+        if _plain_bytes(path, 4096, deadline) != wanted:
+            raise IntegrityError("merge metadata differs from preparation", path.name)
+
+
+def _index_digest(identity: GitIdentity, deadline: float) -> bytes:
+    # A digest is a tamper tripwire, not a restorable snapshot (C2b owns restoration).
+    return hashlib.sha256(
+        _plain_bytes(identity.directory / "index", 64 * 1024 * 1024, deadline)
+    ).digest()
+
+
+@dataclass(frozen=True)
+class MergeGuard:
+    identity: GitIdentity
+    pre: str
+    head: str
+    candidate_tree: str
+    index_digest: bytes
+
+    def verify(self, deadline: float) -> None:
+        verify_merge_metadata(self.identity, self.pre, self.head, deadline)
+        if _index_digest(self.identity, deadline) != self.index_digest:
+            raise IntegrityError("real index changed after merge preparation", "index")
+
+
+async def prepare_merge_guard(
+    workspace: "Workspace", tree: "Tree", *, pre: str, head: str, timeout_s: float
+) -> MergeGuard:
+    deadline = time.monotonic() + timeout_s
+    async with lease_until(workspace.git_lease(), deadline):
+        await offload(partial(verify_merge_metadata, tree.git_identity, pre, head, deadline))
+        candidate = (
+            await workspace.git_ok(tree, "write-tree", timeout_s=remaining(deadline))
+        ).strip()
+        digest = await offload(partial(_index_digest, tree.git_identity, deadline))
+        return MergeGuard(tree.git_identity, pre, head, candidate, digest)
+
+
+def _veto_dirty_status(output: str) -> None:
+    records = iter(output.split("\0"))
+    for record in records:
+        if not record:
+            continue
+        if len(record) < 4 or record[2] != " ":
+            raise IntegrityError("invalid merge status query", ".", code="git_failed")
+        if record[:2] == "??" or record[1] != " ":
+            raise IntegrityError("working tree or untracked files changed", record[3:])
+        if record[0] in "RC" and next(records, None) is None:
+            raise IntegrityError("incomplete merge status query", ".", code="git_failed")
+
+
+async def verify_merge_guard(
+    workspace: "Workspace",
+    tree: "Tree",
+    guard: MergeGuard,
+    *,
+    tested_tree: str | None,
+    timeout_s: float,
+) -> None:
+    """Check raw index/markers before any refreshing query, then the exact tree and files."""
+    deadline = time.monotonic() + timeout_s
+    async with lease_until(workspace.git_lease(), deadline):
+        await offload(partial(guard.verify, deadline))
+        current = (
+            await workspace.git_ok(tree, "write-tree", timeout_s=remaining(deadline))
+        ).strip()
+        if current != guard.candidate_tree or current != tested_tree:
+            raise IntegrityError("index, tested tree and candidate tree differ", "index")
+        await workspace.veto_index(tree, timeout_s=remaining(deadline))
+        head = (
+            await workspace.git_ok(tree, "rev-parse", "HEAD", timeout_s=remaining(deadline))
+        ).strip()
+        if head != guard.pre:
+            raise IntegrityError("HEAD changed after merge preparation", "HEAD")
+        _veto_dirty_status(
+            await workspace.git_ok(
+                tree,
+                "status",
+                "--porcelain",
+                "-z",
+                "--untracked-files=all",
+                timeout_s=remaining(deadline),
+            )
+        )
+        for args in (
+            ("diff-files", "--name-only", "-z"),
+            ("diff", "--cached", "--name-only", "-z", guard.candidate_tree),
+            ("ls-files", "--others", "--exclude-standard", "-z"),
+        ):
+            if await workspace.git_ok(tree, *args, timeout_s=remaining(deadline)):
+                raise IntegrityError("merge working tree, index or untracked files changed", ".")
+        await offload(partial(guard.verify, deadline))
+
+
+async def verify_merge_abort(
+    workspace: "Workspace", tree: "Tree", *, pre: str, head: str, timeout_s: float
+) -> None:
+    deadline = time.monotonic() + timeout_s
+    async with lease_until(workspace.git_lease(), deadline):
+        await offload(partial(verify_merge_metadata, tree.git_identity, pre, head, deadline))

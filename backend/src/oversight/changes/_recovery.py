@@ -2,6 +2,7 @@ from oversight.changes import _delivery as delivery
 from oversight.changes._state import ChangeRecord, Facts
 from oversight.changes._support import ChangeContext
 from oversight.events import EventRejected
+from oversight.workspace import IntegrityError, WorkspaceError, verify_merge_abort
 
 
 async def read_facts(ctx: ChangeContext, head_commit: str) -> Facts:
@@ -32,7 +33,18 @@ async def recover(
     main = ctx.workspace.main
     facts: Facts | None = None
     try:
-        if await ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
+        merging = await ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+        if merging or isinstance(error, IntegrityError):
+            if pre is None:
+                raise WorkspaceError("cannot verify the main preceding this merge")
+            await verify_merge_abort(
+                ctx.workspace,
+                main,
+                pre=pre,
+                head=rec.head_commit or rec.base_commit,
+                timeout_s=ctx.timeout,
+            )
+        if merging:
             await ctx.git(main, "merge", "--abort")
         facts = await read_facts(ctx, rec.head_commit or rec.base_commit)
     except Exception:

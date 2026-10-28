@@ -14,6 +14,7 @@ from oversight.workspace import (
     ProcessResult,
     SuiteInterrupted,
     Workspace,
+    WorkspaceError,
     core,
     integrity,
     test_tree,
@@ -43,7 +44,7 @@ async def test_scan_entries(
     else:
         target.symlink_to(tmp_path / "absent", target_is_directory=kind == "directory_link")
     identity = GitIdentity(root, root / ".git", root / ".git")
-    if at_root and name == ".git" and "link" not in kind:
+    if at_root and name == ".git" and kind == "directory":
         scan_nested_git(identity, time.monotonic() + 1)
     else:
         with pytest.raises(IntegrityError, match="code=integrity_invalid") as failure:
@@ -252,6 +253,49 @@ async def test_lease_order_and_reentrancy(workspace: Workspace) -> None:
         with pytest.raises(LockOrderError):
             await workspace.run_tests(workspace.main, timeout_s=1)
     assert workspace.operations.idle
+
+
+@pytest.mark.parametrize("main", [False, True])
+@pytest.mark.parametrize("replacement", ["wrong_kind", "wrong_pointer", "missing"])
+async def test_root_exemption_requires_registered_kind_and_pointer(
+    workspace: Workspace, monkeypatch: pytest.MonkeyPatch, main: bool, replacement: str
+) -> None:
+    tree = workspace.main if main else await workspace.create_worktree("agent-1")
+    entry = tree.root / ".git"
+    saved = tree.root.parent / f"saved-git-{tree.root.name}"
+    entry.rename(saved)
+    try:
+        if replacement == "wrong_kind":
+            if main:
+                entry.write_text(f"gitdir: {saved}\n")
+            else:
+                entry.mkdir()
+        elif replacement == "wrong_pointer":
+            entry.write_text("gitdir: /unregistered\n")
+        spawn = AsyncMock()
+        monkeypatch.setattr(core, "run_process", spawn)
+        async with workspace.locks(main=main, agent_id=tree.agent_id):
+            with pytest.raises(IntegrityError, match=r"\.git"):
+                await workspace.git(tree, "status", "--porcelain")
+        spawn.assert_not_awaited()
+    finally:
+        if entry.is_dir():
+            entry.rmdir()
+        else:
+            entry.unlink(missing_ok=True)
+        saved.rename(entry)
+
+
+async def test_reset_drops_stale_registered_identities(make_workspace: Any) -> None:
+    workspace = make_workspace()
+    stale = workspace.runtime_root / "worktrees" / "agent-1"
+    workspace.git_identities[stale] = GitIdentity(stale, stale / ".git", stale / ".git")
+    await workspace.acquire_runtime()
+    await workspace.reset()
+    assert workspace.git_identities == {workspace.main.root: workspace.main.git_identity}
+    async with workspace.locks(main=True):
+        with pytest.raises(WorkspaceError, match="requires a registered tree"):
+            await workspace.git(workspace.main, "worktree", "remove", str(stale))
 
 
 async def test_scan_deadline_expires_during_walk_before_git(

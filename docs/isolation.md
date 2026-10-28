@@ -2,7 +2,7 @@
 
 C1 is opt-in: `Workspace.run_tests(..., spawn=IsolatedRunner(runtime_root))`.
 Existing callers keep their current runner. Availability policy and UI notices belong to C3;
-Git leases and pins to C2a; metadata snapshots and the final integrity barrier to C2b.
+Git leases, pins and merge commit checks belong to C2a; metadata snapshots/restoration to C2b.
 There are no contract changes.
 
 ## Pre-Git integrity (C2a)
@@ -20,8 +20,9 @@ and diff are a second layer; they do not protect add, diff-files or capture.
 
 Before each tree-reading Git, a filesystem walk checks all entries, including ignored ones,
 without following symlinks. Names are compared casefolded; only the registered root's literal
-non-symlink `.git` entry is exempt. Capture walks once before its first Git. Each walk and
-lease wait uses the caller's Git deadline; an unreadable directory or an expired scan cannot
+non-symlink `.git` entry is exempt, with its registered kind and exact linked-tree pointer.
+Reset drops stale registrations and keeps only main. Capture walks once before its first Git.
+Each walk and lease wait uses the caller's Git deadline; an unreadable directory or an expired scan cannot
 launch Git. Ordinary symlinks are not traversed. Concurrent filesystem writers outside the
 suite remain the filesystem-isolation residual described below.
 
@@ -41,8 +42,21 @@ Scan I/O errors use `integrity_invalid`; deadline exhaustion and incomplete inde
 repository left on main blocks `merge --abort` as well: main stays suspect until restart,
 with its pending merge intact. Unknown index, HEAD and main-ref locks are never removed.
 
-C2a does not snapshot or restore Git metadata or the real index. Those checks, verified abort
-restoration, candidate/tested/index equality and the final pre-commit barrier belong to C2b.
+C2a captures the candidate with `write-tree` before a combined suite and fingerprints the real
+index. After a passing suite, and again after publishing its evidence immediately before commit,
+it verifies that fingerprint and the merge markers before Git can refresh anything, then runs
+`write-tree` before status: index = tested tree = candidate. The gitlink/module veto runs again;
+HEAD must still point to the captured main, ORIG_HEAD must name it, and MERGE_HEAD must contain
+exactly the proposed head plus one newline. Working-tree, cached-index and untracked queries
+must agree. Optional index refreshes are disabled for server Git (`GIT_OPTIONAL_LOCKS=0`).
+Without a main advance the existing proposal-tree path remains, checked against the exact
+agent commit tree, without claiming a new combined suite.
+
+C2a does not snapshot or restore the full Git metadata or real index. The fingerprint is a
+tamper tripwire, not a restorable snapshot. Before abort, the captured previous main and exact
+merge markers must still be verifiable; mismatches and unknown locks leave main suspect rather
+than resetting it from an untrusted ORIG_HEAD. Snapshot-dependent metadata comparison and
+verified restoration remain C2b.
 Availability policy, execution discrimination and CI integration belong to C3. The attack
 tests retain pointer, config, fsmonitor, hooks, alternates, shallow, replacement refs, branch
 refs, index, MERGE_HEAD and abort cases; the metadata matrix asserts the pre-Git refusal,
