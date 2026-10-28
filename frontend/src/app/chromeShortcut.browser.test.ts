@@ -25,6 +25,8 @@ x.XGetWindowProperty.argtypes = [c.c_void_p, c.c_ulong, c.c_ulong, c.c_long, c.c
 atom = x.XInternAtom(d, b"_NET_WM_NAME", 0)
 x.XMapRaised.argtypes = [c.c_void_p, c.c_ulong]
 x.XSetInputFocus.argtypes = [c.c_void_p, c.c_ulong, c.c_int, c.c_ulong]
+x.XGetInputFocus.argtypes = [c.c_void_p, c.POINTER(c.c_ulong), c.POINTER(c.c_int)]
+x.XSync.argtypes = [c.c_void_p, c.c_int]
 x.XFree.argtypes = [c.c_void_p]
 root = x.XDefaultRootWindow(d)
 rr, parent, count = c.c_ulong(), c.c_ulong(), c.c_uint()
@@ -42,17 +44,20 @@ for i in range(count.value):
     if name.value and b"Oversight shortcut probe" in name.value:
         x.XMapRaised(d, children[i])
         x.XSetInputFocus(d, children[i], 2, 0)
-        found = True
+        found = children[i]
     if name:
         x.XFree(name)
 x.XFree(children)
 assert found, f"Chrome window not found: {names}"
+x.XSync(d, 0)
+focus, revert = c.c_ulong(), c.c_int()
+x.XGetInputFocus(d, c.byref(focus), c.byref(revert))
+assert focus.value == found, f"Chrome window not focused: {focus.value} != {found}"
 x.XStringToKeysym.argtypes = [c.c_char_p]
 x.XStringToKeysym.restype = c.c_ulong
 x.XKeysymToKeycode.argtypes = [c.c_void_p, c.c_ulong]
 x.XKeysymToKeycode.restype = c.c_uint
 t.XTestFakeKeyEvent.argtypes = [c.c_void_p, c.c_uint, c.c_int, c.c_ulong]
-x.XSync.argtypes = [c.c_void_p, c.c_int]
 keys = [x.XKeysymToKeycode(d, x.XStringToKeysym(key.encode())) for key in sys.argv[2:]]
 for key in keys:
     t.XTestFakeKeyEvent(d, key, 1, 0)
@@ -90,7 +95,7 @@ it("Chrome reserves native Ctrl+W; Alt+W reaches the page", async () => {
       env: { ...process.env, DISPLAY: display },
     });
     const context = await browser.newContext();
-    await context.newPage(); // Closing the probe must leave the browser alive.
+    const survivor = await context.newPage(); // Closing the probe must leave this page alive.
     const page = await context.newPage();
     const keys: { key: string; ctrl: boolean; alt: boolean }[] = [];
     await page.exposeFunction("reportKey", (value: (typeof keys)[number]) => {
@@ -108,19 +113,37 @@ it("Chrome reserves native Ctrl+W; Alt+W reaches the page", async () => {
       });
     });
     await page.bringToFront();
+    // XSetInputFocus returning does not mean Chrome has handled the focus event yet.
+    // Retry the harmless Alt+W until the page acknowledges it, not just until XTest sends it.
     await expect
-      .poll(async () => {
-        try {
-          await promisify(execFile)("python3", ["-c", nativeKeys, display, "Alt_L", "w"]);
-          return "sent";
-        } catch (error) {
-          return String(error);
-        }
-      })
-      .toBe("sent");
-    await expect.poll(() => keys.some((key) => key.key === "w" && key.alt)).toBe(true);
-    await promisify(execFile)("python3", ["-c", nativeKeys, display, "Control_L", "w"]);
-    await expect.poll(() => page.isClosed()).toBe(true);
+      .poll(
+        async () => {
+          if (keys.some((key) => key.key === "w" && key.alt)) return true;
+          try {
+            await promisify(execFile)("python3", ["-c", nativeKeys, display], { timeout: 1_000 });
+            if (!(await page.evaluate(() => document.hasFocus()))) return false;
+            await promisify(execFile)("python3", ["-c", nativeKeys, display, "Alt_L", "w"], {
+              timeout: 1_000,
+            });
+            return keys.some((key) => key.key === "w" && key.alt);
+          } catch (error) {
+            return String(error);
+          }
+        },
+        { timeout: 10_000 },
+      )
+      .toBe(true);
+    await expect
+      .poll(() => page.evaluate(() => document.hasFocus()), { timeout: 5_000 })
+      .toBe(true);
+    // Alt+W proved delivery to the page. Never retry the destructive browser shortcut.
+    await promisify(execFile)("python3", ["-c", nativeKeys, display, "Control_L", "w"], {
+      timeout: 1_000,
+    });
+    await expect.poll(() => page.isClosed(), { timeout: 5_000 }).toBe(true);
+    expect(browser.isConnected()).toBe(true);
+    expect(survivor.isClosed()).toBe(false);
+    expect(await survivor.evaluate(() => document.readyState)).toBe("complete");
     expect(keys.some((key) => key.key === "w" && key.ctrl)).toBe(false);
   } finally {
     await browser?.close();
