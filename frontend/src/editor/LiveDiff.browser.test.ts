@@ -3,6 +3,33 @@ import { expect, it } from "vitest";
 
 import { data, expectDiff, expectModels, render, withPage } from "./LiveDiff.browser.support";
 
+it("keeps the disabled find surface on the field token", async () => {
+  await withPage(async (page) => {
+    await render(page);
+    await expectDiff(page, 8);
+    await page.evaluate(() => {
+      window.panelTest.current()?.getModifiedEditor().focus();
+    });
+    await page.keyboard.press("Control+f");
+    const input = page.locator(".find-widget.visible .monaco-findInput").first();
+    await browserExpect(input).toBeVisible();
+    const colors = await input.evaluate((element) => {
+      // Hold the state Monaco briefly uses while dismissing find, independent of animation timing.
+      element.classList.add("disabled");
+      const reference = document.createElement("span");
+      reference.style.backgroundColor = "var(--field)";
+      document.body.append(reference);
+      const result = {
+        actual: getComputedStyle(element).backgroundColor,
+        expected: getComputedStyle(reference).backgroundColor,
+      };
+      reference.remove();
+      return result;
+    });
+    expect(colors.actual).toBe(colors.expected);
+  });
+}, 60_000);
+
 it("switches selected files and changes in one editor, with exact line changes and no model errors", async () => {
   await withPage(async (page) => {
     await render(page);

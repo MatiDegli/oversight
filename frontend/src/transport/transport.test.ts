@@ -40,7 +40,7 @@ class FakeSource implements EventStream {
 }
 
 const stops: (() => void)[] = [];
-function setup() {
+function setup(onOpen?: () => void) {
   const sources: FakeSource[] = [];
   const store = createStateStore();
   const onError = vi.fn();
@@ -51,6 +51,7 @@ function setup() {
   const transport = startLive({
     store,
     onError,
+    onOpen,
     openStream: (url) => {
       const source = new FakeSource(url);
       sources.push(source);
@@ -74,6 +75,50 @@ afterEach(() => {
 });
 
 describe("live transport", () => {
+  it("reports a connected stream even with no new events and ignores opens after stop", async () => {
+    const onOpen = vi.fn();
+    const { source, transport, onError } = setup(onOpen);
+    await transport.ready;
+    source().open();
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+    transport.stop();
+    source().open();
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+  it("consumes reserved events in live streams without changing product state", async () => {
+    const { transport, store, source, onError } = setup();
+    await transport.ready;
+    for (const event of log) source().emit(event);
+    const before = store.getState().state;
+    // Review facts and test executions are now wired; only the remaining reserved events
+    // must leave product state untouched. The next test covers the full mixed stream.
+    const unwired = [
+      ...reserved,
+      ...reservedA.filter(
+        (e) => !["change.resolved", "tests.executed", "change.facts_recorded"].includes(e.type),
+      ),
+    ];
+    expect(unwired.map((event) => event.type)).toEqual([
+      "change.assessed",
+      "merge_mode.changed",
+      "plan.updated",
+      "change.reviewed",
+      "revert.resolved",
+      "queue.updated",
+      "lead.status",
+    ]);
+    for (const [index, example] of unwired.entries()) {
+      source().raw(JSON.stringify({ ...example, seq: before.lastSeq + index + 1 }));
+    }
+    expect(onError).not.toHaveBeenCalled();
+    expect(store.getState().state).toEqual({
+      ...before,
+      lastSeq: before.lastSeq + reserved.length + reservedA.length - 3,
+      clock: reservedA.at(-1)?.ts,
+    });
+  });
+
   it("keeps wired review evidence while consuming the remaining reserved events", async () => {
     const { transport, store, source, onError } = setup();
     await transport.ready;
