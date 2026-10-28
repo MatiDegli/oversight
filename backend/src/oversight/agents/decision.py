@@ -183,7 +183,12 @@ async def classify_difference(
     """
 
     async def record(reply: ModelReply) -> None:
-        await _receipt(accounting(reply))
+        try:
+            await _receipt(accounting(reply))
+        except DecisionUnavailable:
+            raise
+        except Exception as error:
+            raise DecisionUnavailable("ledger_unreliable") from error
 
     token = CALL_SCOPE.set(CallScope(deadline, record, "review", admission, all_attempts=True))
     reason: UnavailableReason
@@ -223,7 +228,7 @@ async def classify_difference(
         reason = "invalid_response"
     except ModelAPIError:
         reason = "transport"
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError, AttributeError):
         reason = "invalid_response"
     finally:
         CALL_SCOPE.reset(token)

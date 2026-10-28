@@ -290,3 +290,149 @@ async def test_exhaustion_and_other_4xx(status_code: int, attempts: int) -> None
     finally:
         await model.aclose()
     assert outcome.unavailable == "transport" and len(api.bodies) == len(ticks) == attempts
+
+
+@pytest.mark.parametrize("mutation", ["multiple", "refusal", "legacy_tool", "missing_message"])
+async def test_malformed_and_ambiguous_envelopes_are_not_choices(mutation: str) -> None:
+    completion = body()
+    message = completion["choices"][0]["message"]
+    if mutation == "multiple":
+        completion["choices"] *= 2
+    elif mutation == "refusal":
+        message["refusal"] = "Cannot comply."
+    elif mutation == "legacy_tool":
+        message["function_call"] = {"name": "finish", "arguments": "{}"}
+    else:
+        del completion["choices"][0]["message"]
+    api = FakeApi(ok(completion))
+    ticks: list[ModelReply] = []
+    model = client(api)
+    try:
+        outcome = await call(model, ticks)
+    finally:
+        await model.aclose()
+    assert outcome.unavailable == "invalid_response" and len(ticks) == len(api.bodies) == 1
+    assert ticks[0].usage == Usage(40, 20, None, 15)
+
+
+@pytest.mark.parametrize("usage", [7, {"prompt_tokens": -1, "completion_tokens": 20}])
+async def test_malformed_usage_still_has_one_unknown_receipt(usage: Any) -> None:
+    api = FakeApi(ok(body(usage=usage)))
+    ticks: list[ModelReply] = []
+    model = client(api)
+    try:
+        await call(model, ticks)
+    finally:
+        await model.aclose()
+    assert len(api.bodies) == len(ticks) == 1
+    assert ticks[0].usage.input_tokens is None
+
+
+async def test_invalid_http_json_is_accounted_without_retry() -> None:
+    api = FakeApi(
+        httpx.Response(200, content=b"not-json", headers={"content-type": "application/json"})
+    )
+    ticks: list[ModelReply] = []
+    model = client(api)
+    try:
+        outcome = await call(model, ticks)
+    finally:
+        await model.aclose()
+    assert outcome.choice is None and len(ticks) == len(api.bodies) == 1
+    assert ticks[0].usage == Usage()
+
+
+async def test_deadline_after_admission_sends_nothing() -> None:
+    api = FakeApi(ok(body()))
+    ticks: list[ModelReply] = []
+    model = client(api)
+
+    async def admission() -> None:
+        await asyncio.Event().wait()
+
+    try:
+        outcome = await call(
+            model, ticks, admission=admission, deadline=asyncio.get_running_loop().time() + 0.02
+        )
+    finally:
+        await model.aclose()
+    assert outcome.unavailable == "deadline" and not ticks and not api.bodies
+
+
+async def test_retry_wait_past_deadline_keeps_only_the_sent_receipt() -> None:
+    api = FakeApi(status(429, {"retry-after": "75"}), ok(body()))
+    ticks: list[ModelReply] = []
+
+    async def sleep(delay: float) -> None:
+        raise AssertionError("the deadline rules out this retry wait")
+
+    model = client(api, sleep=sleep)
+    try:
+        outcome = await call(model, ticks)
+    finally:
+        await model.aclose()
+    assert outcome.choice is None and len(ticks) == len(api.bodies) == 1
+
+
+async def test_ordinary_client_keeps_its_unconstrained_parameters() -> None:
+    from oversight.agents import OpenAIClient
+
+    api = FakeApi(ok(body()))
+    model = OpenAIClient(
+        MUSE_SPARK_OPEN,
+        base_url="https://ordinary.test/v1",
+        api_key="test",
+        max_output_tokens=512,
+        http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(api.handle)),
+    )
+    try:
+        await model.complete([], [])
+    finally:
+        await model.aclose()
+    assert "response_format" not in api.bodies[0] and "logprobs" not in api.bodies[0]
+
+
+async def test_capture_copies_evidence_and_requires_confirmed_examples() -> None:
+    from oversight.agents import DecisionInput
+    from oversight_contracts.examples import ExamplePin, TaskExample
+
+    example = TaskExample(example_id="example", inputs="price=100", expected_output="91.5")
+    with pytest.raises(ValueError, match="confirmation"):
+        replace(INPUT, confirmed_examples=(example,))
+    example = example.model_copy(update={"pin": ExamplePin(source_task=INPUT.task)})
+    source = INPUT.difference.model_copy(deep=True)
+    target = INPUT.target.model_copy(deep=True)
+    captured = DecisionInput(target, INPUT.agent_id, INPUT.task, source, (example,))
+    source.rows.clear()
+    # Contract instances are frozen; their nested row list still needs a detached capture.
+    api = FakeApi(ok(body()))
+    model = client(api)
+    try:
+        outcome = await call(model, [], input=captured)
+    finally:
+        await model.aclose()
+    payload = json.loads(cast(list[dict[str, Any]], api.bodies[0]["messages"])[1]["content"])
+    assert payload["confirmed_examples"][0]["expected_output"] == "91.5"
+    assert payload["difference"]["rows"] and outcome.target.revision == 1
+
+
+async def test_failed_accounting_is_explicit_unavailability_without_double_recording() -> None:
+    api = FakeApi(ok(body()))
+    model = client(api)
+    receipts: list[ModelReply] = []
+
+    async def record(reply: ModelReply) -> None:
+        receipts.append(reply)
+        raise OSError("private storage error")
+
+    try:
+        outcome = await classify_difference(
+            model,
+            INPUT,
+            deadline=asyncio.get_running_loop().time() + 30,
+            admission=allow,
+            accounting=record,
+        )
+    finally:
+        await model.aclose()
+    assert outcome.unavailable == "ledger_unreliable" and len(receipts) == len(api.bodies) == 1

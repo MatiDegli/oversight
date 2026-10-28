@@ -20,7 +20,7 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import openai
-from openai.types.chat import ChatCompletion
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
 from oversight.agents._trace_http import exchange_span, request_ready
 from oversight.telemetry import CURRENT, annotate, response_fields, span
@@ -240,6 +240,21 @@ def reply_of(completion: ChatCompletion) -> ModelReply:
     )
 
 
+def _decision_usage(completion: ChatCompletion) -> Usage:
+    """The SDK constructs response models without full validation; invalid counts stay unknown."""
+    usage = usage_of(completion)
+
+    def count(value: int | None) -> int | None:
+        return value if type(value) is int and value >= 0 else None
+
+    return Usage(
+        count(usage.input_tokens),
+        count(usage.output_tokens),
+        count(usage.cached_tokens),
+        count(usage.reasoning_tokens),
+    )
+
+
 class OpenAIClient:
     """Chat Completions through the official SDK, for Meta or Baseten. The SDK's own retries are
     off: this class retries, so every attempt and delay is under its control and tested."""
@@ -375,12 +390,20 @@ class OpenAIClient:
             raise TimeoutError
         try:
             completion = await self._completion(params)
+            receipt = ModelReply(None, [], _decision_usage(completion), completion.model)
         except BaseException:
             await scope.record(ModelReply(None, [], model=self.profile.model))
             raise
         # Before content validation, so empty/truncated/invalid replies still have one receipt.
         # Outside the try: cancellation during a durable receipt cannot record it a second time.
-        await scope.record(ModelReply(None, [], usage_of(completion), completion.model))
+        await scope.record(receipt)
+        if completion.choices:
+            if len(completion.choices) != 1:
+                raise ValueError("decision requires exactly one choice")
+            # SDK construction may retain null despite the declared non-null response type.
+            message = cast(ChatCompletionMessage | None, completion.choices[0].message)
+            if message is None or message.refusal or message.function_call is not None:
+                raise ValueError("decision cannot contain a refusal or legacy tool call")
         return completion
 
     async def _completion(self, params: dict[str, object]) -> ChatCompletion:

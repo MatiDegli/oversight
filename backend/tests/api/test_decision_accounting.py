@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -238,3 +239,107 @@ async def test_serialized_candidates_cannot_both_admit_against_the_old_balance(
         assert [o.choice for o in outcomes] == ["asked_for", None]
         assert outcomes[1].unavailable == "budget_blocked"
         assert len(api.bodies) == len(ticks(live)) == 1
+
+
+async def test_reconciled_balance_is_rechecked_after_backoff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api = FakeApi(status(503), ok(body()))
+    model = client(api)
+
+    async def sleep(delay: float) -> None:
+        ledger = live.difference_decisions.accounting.ledger
+        ledger.write(LedgerState(9.5))  # simulated reconciliation while the retry is waiting
+        await ledger.load()
+
+    model._sleep = sleep
+    async with runtime(tmp_path, monkeypatch, api) as live:
+        monkeypatch.setattr(runtime_decisions, "configured_decision", lambda _: model)
+        assert (await decide(live)).unavailable == "budget_blocked"
+        assert len(api.bodies) == len(ticks(live)) == 1
+
+
+@pytest.mark.parametrize("ending", ["cancel", "deadline", "shutdown"])
+async def test_inflight_attempt_survives_every_runtime_ending(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ending: str,
+) -> None:
+    entered = asyncio.Event()
+    api = FakeApi()
+    model = client(api)
+
+    async def create(**params: Any) -> Any:
+        entered.set()
+        await asyncio.Event().wait()
+
+    model._create = create
+    async with runtime(tmp_path, monkeypatch, api) as live:
+        monkeypatch.setattr(runtime_decisions, "configured_decision", lambda _: model)
+        request = asyncio.create_task(
+            decide(
+                live,
+                deadline=asyncio.get_running_loop().time() + (0.1 if ending == "deadline" else 30),
+            )
+        )
+        await entered.wait()
+        if ending == "cancel":
+            request.cancel()
+        elif ending == "shutdown":
+            await live.difference_decisions.close()
+        if ending == "deadline":
+            assert (await request).unavailable == "deadline"
+        else:
+            with pytest.raises(asyncio.CancelledError):
+                await request
+        [tick] = ticks(live)
+        assert tick.input_tokens is None and tick.output_tokens is None and tick.cost_usd is None
+        assert len(live.difference_decisions.accounting.ledger.read().unknown) == 1
+
+
+async def test_ledger_write_failure_stays_closed_after_restart(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api = FakeApi(ok(body()), ok(body()))
+    async with runtime(tmp_path, monkeypatch, api) as live:
+
+        def fail(state: LedgerState) -> None:
+            raise OSError("injected")
+
+        monkeypatch.setattr(live.difference_decisions.accounting.ledger, "write", fail)
+        assert (await decide(live)).unavailable == "ledger_unreliable"
+    async with runtime(tmp_path, monkeypatch, api) as restarted:
+        assert (await decide(restarted)).unavailable == "ledger_unreliable"
+        assert len(api.bodies) == 1
+
+
+async def test_candidates_keep_distinct_receipts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api = FakeApi(ok(body()), ok(body()))
+    second = replace(
+        INPUT,
+        agent_id="agent-2",
+        target=INPUT.target.model_copy(
+            update={"change_id": "change-2", "revision": 2},
+        ),
+    )
+    async with runtime(tmp_path, monkeypatch, api) as live:
+        first_outcome, second_outcome = await asyncio.gather(
+            decide(live),
+            live.difference_decisions.classify_difference(
+                second,
+                deadline=asyncio.get_running_loop().time() + 30,
+            ),
+        )
+        assert first_outcome.target != second_outcome.target
+        assert [(t.agent_id, t.change_id) for t in ticks(live)] == [
+            ("agent-1", "change-1"),
+            ("agent-2", "change-2"),
+        ]
+        assert live.difference_decisions.accounting.ledger.read().spent_usd == pytest.approx(
+            0.00016
+        )
