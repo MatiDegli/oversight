@@ -3,7 +3,7 @@ import type { GraphNode, GraphSnapshot } from "@contracts";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 
-import { createInitialState, stateStore } from "../state";
+import { createChange, createInitialState, stateStore } from "../state";
 
 import { GraphView } from "./GraphView";
 
@@ -79,6 +79,7 @@ export const foldTest = {
         ...state,
         changes: {
           change: {
+            ...createChange("change", "A"),
             change_id: "change",
             agent_id: "A",
             status: "editing",

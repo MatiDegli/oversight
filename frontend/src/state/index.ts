@@ -14,5 +14,7 @@ export {
 export type { AgentCardData, LiveDiffData, NodeMarks } from "./selectors";
 export { createStateStore, stateStore } from "./store";
 export type { StateStore } from "./store";
-export { createInitialState } from "./types";
+export { createChange, createInitialState } from "./types";
 export type { ChangeState, State } from "./types";
+
+export { parseNeedsYou, matchesNeedsYou } from "./needsYou";

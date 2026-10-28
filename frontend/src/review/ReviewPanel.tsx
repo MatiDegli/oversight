@@ -14,6 +14,7 @@ import { EditorDiff, fileKey, ReviewEditor } from "../editor";
 import type { FileAccess } from "../editor";
 import { selectLiveDiff } from "../state";
 import type { ChangeState, State } from "../state";
+import { CrossReviewNote } from "./CrossReviewNote";
 import { decisionView } from "./decisions";
 import type { DecisionAction, DecisionAttempt, DecisionView } from "./decisions";
 import { impactSummary } from "./ImpactCone";
@@ -383,6 +384,9 @@ export function ReviewPanel({
           </p>
         )}
       </header>
+      {change && (!attempt || attempt.revision !== proposal?.revision) && (
+        <CrossReviewNote change={change} />
+      )}
       {proposal && hasFacts && <ReviewFacts state={state} proposal={proposal} />}
       <div className="flex min-h-0 flex-1 flex-col">
         <p className="border-b border-page-border px-4.5 py-3.5 text-(length:--body-size)">

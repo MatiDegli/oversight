@@ -1,4 +1,5 @@
 {
+  "template": "Needs you — revision={revision}; head={head}; code={code}; reason={reason}",
   "codes": [
     "main_suspect",
     "main_moved",

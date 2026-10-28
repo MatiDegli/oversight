@@ -14,6 +14,7 @@ from typing import Literal, cast
 
 from oversight.agents.client import Usage
 from oversight.limits import MAX_FILE_BYTES, SizeLimitError, bounded_text
+from oversight.telemetry import span
 from oversight_contracts.events import UsageTick
 
 _log = logging.getLogger(__name__)
@@ -199,7 +200,9 @@ class LedgerFile:
         stopped, and a late `os.replace` must not land on a file someone else has written since.
         A cancelled call whose write then failed still raises its `CancelledError`, with the
         write's error as `__cause__`: the caller must tell a lost write from a clean cancel."""
-        async with self._lock:
+        with span("ledger_lock_wait"):
+            await self._lock.acquire()
+        try:
             state = self.state
             if state is None:
                 raise LedgerError("the ledger was not loaded, or an earlier write failed")
@@ -208,7 +211,12 @@ class LedgerFile:
             else:
                 new = LedgerState(state.spent_usd + cost_usd, state.unknown)
             self.state = None
-            write = asyncio.ensure_future(asyncio.to_thread(self.write, new))
+
+            async def persist() -> None:
+                with span("ledger_write"):
+                    await asyncio.to_thread(self.write, new)
+
+            write = asyncio.ensure_future(persist())
             try:
                 await asyncio.shield(write)
             except asyncio.CancelledError as cancelled:
@@ -218,6 +226,8 @@ class LedgerFile:
                 raise
             self.state = new
             return new
+        finally:
+            self._lock.release()
 
     async def _drain(self, write: "asyncio.Future[None]", new: LedgerState) -> BaseException | None:
         """Wait for a write in flight however often this task is cancelled again; the error it

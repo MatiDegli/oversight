@@ -399,7 +399,7 @@ async def test_human_save_never_arms_a_review(tmp_path: Path) -> None:
         assert not any(e.type == "change.reviewed" for e in events(live))
 
 
-async def test_ask_me_preserves_existing_level2_log_bytes(
+async def test_ask_me_preserves_level2_log(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

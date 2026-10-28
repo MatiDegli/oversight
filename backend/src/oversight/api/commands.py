@@ -5,13 +5,15 @@ A replay takes no commands: every command route answers 501 there, its body not 
 app passes an object that implements `Commands`; this module maps its errors to the contract's.
 """
 
+import re
 from collections.abc import Callable, Coroutine
 from typing import Any, Protocol
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 
 from oversight.api.errors import ApiError
 from oversight.changes import ChangeNotFound, WrongState
+from oversight.telemetry import CURRENT, TRACE_HEADER, evaluation_trace, mark
 from oversight.workspace import TREE_TIMEOUT_S, FileTooLarge, InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
     AgentCreated,
@@ -111,7 +113,7 @@ def _decide[A](decision: Callable[[str, A], None], change_id: str, comment: A) -
         raise ApiError("wrong_state", str(error)) from None
 
 
-def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
+def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: str) -> None:
     for method, path, what in NOT_BUILT:
         router.add_api_route(
             path, _not_built(what, "is not built yet"), methods=[method], status_code=501
@@ -124,9 +126,20 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
         return
 
     @router.post("/agents", status_code=201)
-    async def start_agent(request: StartAgent) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
+    async def start_agent(request: StartAgent, http: Request) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
         # request.zone is reserved and ignored until zones are delivered in 1.5.0.
-        return await commands.start(request)
+        attempt_id = http.headers.get(TRACE_HEADER)
+        if attempt_id is not None and not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
+            raise ApiError(
+                "invalid_request", f"invalid {TRACE_HEADER}: expected 32 lowercase hex characters"
+            )
+        with evaluation_trace(run_id, attempt_id):
+            if attempt_id is not None and CURRENT.get() is None:
+                raise ApiError(
+                    "invalid_request", "evaluation tracing requires OVERSIGHT_EVAL_TRACE_DIR"
+                )
+            mark("server_attempt_start")
+            return await commands.start(request)
 
     @router.post("/changes/{change_id}/approve", status_code=202, response_class=Response)
     async def approve(  # pyright: ignore[reportUnusedFunction]

@@ -39,7 +39,7 @@ def create_router(
 ) -> APIRouter:
     """Live mode passes `commands`; without it, as in a replay, every command answers 501."""
     router = APIRouter()
-    add_command_routes(router, commands)
+    add_command_routes(router, commands, run_id=store.run_id)
 
     def resume_point(
         after: Annotated[str | None, Query()] = None,

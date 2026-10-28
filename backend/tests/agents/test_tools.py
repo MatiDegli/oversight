@@ -260,7 +260,7 @@ async def test_a_cancelled_scan_keeps_the_lock_until_its_thread_ends(
     assert seen_ended == [True]
 
 
-@pytest.mark.parametrize("outcome", ["passed", "failed", "timeout", "error"])
+@pytest.mark.parametrize("outcome", ["failed", "timeout", "error"])
 async def test_suite_summary_precedes_large_output(
     small_tree: Opened,
     monkeypatch: pytest.MonkeyPatch,
@@ -308,14 +308,14 @@ async def test_suite_output_truncation_boundary(
     async def run_tests(self: Workspace, tree: Tree, *, timeout_s: float) -> SuiteRun:
         return SuiteRun(
             result=SuiteResult(
-                outcome="passed", passed=1, failed=0, skipped=0, duration_ms=5, failed_tests=[]
+                outcome="failed", passed=1, failed=1, skipped=0, duration_ms=5, failed_tests=[]
             ),
             output="x" * output_size,
         )
 
     monkeypatch.setattr(Workspace, "run_tests", run_tests)
     result = await call(await toolbox(small_tree), "run_tests")
-    expected = "Suite outcome: passed; 1 passed, 0 failed, 0 skipped\nFailed tests: none reported"
+    expected = "Suite outcome: failed; 1 passed, 1 failed, 0 skipped\nFailed tests: none reported"
     if truncated:
         expected += "\nOutput truncated: showing the last 4000 characters."
     expected += "\n\n" + "x" * min(output_size, 4000)
@@ -379,3 +379,25 @@ async def test_finish_rejects_invalid_declaration_types(
     result = await call(await toolbox(small_tree), "finish", summary="Done.", **declaration)
     assert not result.ok and result.content.startswith("Error:")
     assert result.finish_summary is None and result.declaration is None
+
+
+async def test_passing_suite_returns_only_counts_and_keeps_full_evidence(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from oversight.workspace import SuiteRun
+    from oversight_contracts.events import SuiteResult
+
+    run = SuiteRun(
+        result=SuiteResult(
+            outcome="passed", passed=3, failed=0, skipped=1, duration_ms=5, failed_tests=[]
+        ),
+        output="pytest session output\n" * 1000,
+    )
+
+    async def run_tests(self: Workspace, tree: Tree, *, timeout_s: float) -> SuiteRun:
+        return run
+
+    monkeypatch.setattr(Workspace, "run_tests", run_tests)
+    outcome = await call(await toolbox(small_tree), "run_tests")
+    assert outcome.content == "Tests passed: 3 passed, 0 failed, 1 skipped."
+    assert outcome.suite_run is run and outcome.tests == run.result

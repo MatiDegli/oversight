@@ -20,6 +20,7 @@ from pydantic import TypeAdapter
 
 from oversight.events.clock import Clock, format_ts, system_clock
 from oversight.events.graph_fold import apply_delta
+from oversight.events.needs_you import terminal_key
 from oversight.events.references import validate_references
 from oversight_contracts.events import (
     AgentFocus,
@@ -183,6 +184,7 @@ class EventStore:
         self._shutdown_task: asyncio.Task[None] | None = None
         self._closing = False
         self._closed = False
+        self._terminal: dict[tuple[str, int, str, str], asyncio.Future[StoredEvent]] = {}
 
     async def start(self) -> None:
         """Create the run's file and start the writer; a run's file is never reopened to write."""
@@ -269,8 +271,20 @@ class EventStore:
             ts=ts,
             done=asyncio.get_running_loop().create_future(),
         )
+        # One live receipt per target/code, including concurrent producers. Replay preserves
+        # every recorded byte, including historical duplicate diagnostics.
+        key = terminal_key(frozen) if isinstance(frozen, ErrorReport) else None
+        if self.mode == "live" and key is not None:
+            previous = self._terminal.get(key)
+            if (
+                previous is not None
+                and not previous.cancelled()
+                and (not previous.done() or previous.exception() is None)
+            ):
+                return await asyncio.shield(previous)
+            self._terminal[key] = pending.done
         await self._queue.put(pending)
-        return await pending.done
+        return await asyncio.shield(pending.done) if key is not None else await pending.done
 
     @property
     def last_seq(self) -> int:
