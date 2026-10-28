@@ -94,7 +94,7 @@ class ChangeManager:
 
     @property
     def _suspect(self) -> bool:
-        return self._ctx.state.suspect
+        return self.main_suspect
 
     @_suspect.setter
     def _suspect(self, value: bool) -> None:
@@ -128,7 +128,7 @@ class ChangeManager:
     def main_suspect(self) -> bool:
         """True once a change has entered `broken`, so main's state is unknown, until the process
         restarts and the next start's `reset` rebuilds main. Rejecting that change keeps it true."""
-        return self._ctx.state.suspect
+        return self._ctx.state.suspect or self._ctx.workspace.integrity.main_suspect
 
     async def open(self, task: AgentTask, model_id: str) -> Tree:
         """Create the agent's worktree from main's HEAD and record its base files and graph."""

@@ -25,7 +25,7 @@ async def approve(ctx: ChangeContext, rec: ChangeRecord, comment: str | None) ->
         # A close-out publish left running by a cancel may still move `snapshot`, which this
         # merge's delta starts from, and must find its own delta still there: wait for it.
         await delivery.drain_pending(ctx)
-        if ctx.state.suspect:
+        if ctx.state.suspect or ctx.workspace.integrity.main_suspect:
             # M5: main turned suspect while this queued. No git call; the decision's end puts
             # the change back to `ready`.
             await ctx.error(
