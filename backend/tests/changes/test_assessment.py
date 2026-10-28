@@ -215,7 +215,12 @@ async def test_first_ready_deadline_is_fixed_and_normalized(h: Harness, clock, r
     clock.advance(130)
     await timer(h)
     [terminal] = terminals(h)
-    assert terminal.message == format_needs_you(1, head(h), "policy_invalid", _assessment.EXPIRED)
+    assert terminal.message == format_needs_you(
+        1,
+        head(h),
+        "policy_invalid",
+        "Required rules evidence was not confirmed within 120 seconds.",
+    )
     assert wait(h).terminal_seq is not None
     h.manager._ctx.assessment.wake(rec(h))
     clock.advance(300)

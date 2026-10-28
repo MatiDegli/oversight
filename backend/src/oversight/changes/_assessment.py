@@ -1,6 +1,7 @@
 """Rules waits: confirmed evidence, a fixed deadline, and a closed admission boundary."""
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
@@ -21,7 +22,10 @@ if TYPE_CHECKING:
     from oversight.changes._support import ChangeContext
 
 PROFILE = "safe-merge-probes-v1"
-EXPIRED = "Required rules evidence was not confirmed within 120 seconds."
+EVIDENCE_TIMEOUT_S = 120
+MAX_EVIDENCE_EVENTS = 1024
+EXPIRED = "Required rules evidence was not confirmed within {seconds:g} seconds."
+_log = logging.getLogger(__name__)
 _EVENT = TypeAdapter(ServerEvent)
 
 
@@ -68,6 +72,7 @@ class RulesScheduler:
         self.ctx, self.monotonic, self.sleep_until = ctx, monotonic, sleep_until
         self.waits: dict[str, AssessmentWait] = {}
         self.events: dict[int, ServerEvent] = {}
+        self._evicted_through = 0
         self.generation = 0
 
     def proposed(
@@ -98,9 +103,17 @@ class RulesScheduler:
 
     def received(self, stored: StoredEvent, *, generation: int | None = None) -> None:
         """Notification port: callers pass only receipts returned after the store commits."""
-        duplicate = stored.seq in self.events
-        event = self.events[stored.seq] if duplicate else _EVENT.validate_json(stored.envelope)
-        self.events[event.seq] = event
+        cached = self.events.get(stored.seq)
+        duplicate = cached is not None or stored.seq <= self._evicted_through
+        event = cached if cached is not None else _EVENT.validate_json(stored.envelope)
+        if not duplicate:
+            self.events[event.seq] = event
+            if len(self.events) > MAX_EVIDENCE_EVENTS:
+                oldest = next(iter(self.events))
+                del self.events[oldest]
+                self._evicted_through = max(self._evicted_through, oldest)
+        # Evicted evidence becomes unknown; old receipts cannot restart an evaluation.
+        # Terminal acknowledgments still recognize their exact target and generation.
         payload = event.payload
         change_id = getattr(payload, "change_id", None)
         rec = self.ctx.state.changes.get(change_id) if isinstance(change_id, str) else None
@@ -175,11 +188,20 @@ class RulesScheduler:
         if wait is None or not self.valid(wait):
             return
         if wait.deadline is None:
-            wait.deadline = self.monotonic() + 120
+            wait.deadline = self.monotonic() + EVIDENCE_TIMEOUT_S
             wait.timer = self.ctx.spawn(self.expire(wait))
+            wait.timer.add_done_callback(self._observe_task)
         wait.dirty = True
         if wait.task is None or wait.task.done():
             wait.task = self.ctx.spawn(self.evaluate(wait))
+            wait.task.add_done_callback(self._observe_task)
+
+    @staticmethod
+    def _observe_task(task: asyncio.Task[None]) -> None:
+        if not task.cancelled() and (error := task.exception()) is not None:
+            _log.error(
+                "Rules scheduler task failed", exc_info=(type(error), error, error.__traceback__)
+            )
 
     def invalidate(self, rec: ChangeRecord) -> None:
         wait = self.waits.get(rec.change_id)
@@ -198,7 +220,7 @@ class RulesScheduler:
         while self.valid(wait) and self.monotonic() < wait.deadline:
             await self.sleep_until(wait.deadline)
         if self.valid(wait):
-            await self.terminal(wait, EXPIRED)
+            await self.terminal(wait, EXPIRED.format(seconds=EVIDENCE_TIMEOUT_S))
 
     async def terminal(self, wait: AssessmentWait, reason: str) -> None:
         # No await between this final validation and entering the publisher's target claim.
