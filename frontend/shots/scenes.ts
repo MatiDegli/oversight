@@ -376,6 +376,7 @@ export const scenes: readonly Scene[] = [
   {
     name: "palette-open",
     enabled: true,
+    log: "proposed",
     prepare: async (page) => {
       await page
         .getByRole("button", { name: "Find a function, file or command", exact: true })
