@@ -47,6 +47,18 @@ assert mount[0][mount[0].index('-') + 1] == 'proc'
 assert not any(item.startswith(('shared:', 'master:')) for item in mount[0][6:])
 assert not any(os.path.lexists('/proc/' + str(parent) + '/' + name)
                for name in ('cmdline', 'cwd', 'fd', 'maps', 'environ'))
+# Only the freshly verified namespace's loopback; preserve its other interface flags.
+try:
+    import fcntl, struct
+    SIOCGIFFLAGS, SIOCSIFFLAGS, IFF_UP = 0x8913, 0x8914, 1
+    with socket.socket() as control:
+        request = struct.pack('16sH22x', b'lo', 0)
+        flags = struct.unpack('16sH22x', fcntl.ioctl(control, SIOCGIFFLAGS, request))[1]
+        fcntl.ioctl(control, SIOCSIFFLAGS, struct.pack('16sH22x', b'lo', flags | IFF_UP))
+except Exception as error:
+    # Setup is best effort: retain isolation and capture the diagnostic on stderr.
+    import logging
+    logging.warning('Loopback setup failed: %s', error)
 refused = None
 connect_errno = None
 if port:
