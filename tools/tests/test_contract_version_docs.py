@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_start_agent_comment_reserves_zones_for_creation_delivery() -> None:
     source = (ROOT / "backend/src/oversight/api/commands.py").read_text()
-    assert "request.zone is reserved and ignored until zones are delivered in 1.6.0." in source
+    assert "request.zone is reserved and ignored until zones are delivered in 1.7.0." in source
 
 
 def test_proposal_schedules_nullable_save_file_with_creation_in_1_7() -> None:
