@@ -10,12 +10,12 @@ def test_start_agent_comment_reserves_zones_for_creation_delivery() -> None:
     assert "request.zone is reserved and ignored until zones are delivered in 1.6.0." in source
 
 
-def test_proposal_schedules_nullable_save_file_with_creation_in_1_6() -> None:
+def test_proposal_schedules_nullable_save_file_with_creation_in_1_7() -> None:
     proposal = (ROOT / "docs/proposal.md").read_text()
     freeze = proposal.split("### 4.9 ", 1)[1].split("## 5.", 1)[0]
     assert "1.4.0 keeps `SaveFile.base_hash` a required string." in freeze
     assert (
-        "The separately delivered 1.6.0 makes it required and nullable only together with safe "
+        "The separately delivered 1.7.0 makes it required and nullable only together with safe "
         "creation, zones and inventory."
     ) in " ".join(freeze.split())
 
