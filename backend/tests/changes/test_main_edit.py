@@ -5,6 +5,7 @@ that restores the file or makes main suspect. Every delta chains to the one befo
 
 import asyncio
 import threading
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -58,7 +59,10 @@ async def test_save_commits_as_the_user(h: Harness) -> None:
 
     assert saved == FileSaved(path=PATH, hash=content_hash(content.encode()))
     commit = await log(h, "%an <%ae>|%s|%aI|%P")
-    assert commit == f"User <user@oversight.invalid>|Edit {PATH}|2026-10-26T12:00:00+00:00|{pre}"
+    author, message, date, parent = commit.split("|")
+    assert (author, message, parent) == ("User <user@oversight.invalid>", f"Edit {PATH}", pre)
+    # Git versions format UTC as either Z or +00:00; compare the recorded instant.
+    assert datetime.fromisoformat(date) == datetime.fromisoformat("2026-10-26T12:00:00+00:00")
     assert (await h.main_git("diff", "--name-only", pre, "HEAD")).stdout.split() == [PATH]
     await assert_main_clean(h)
     assert h.types() == ["graph.snapshot", "graph.delta"]  # no change.* and no agent.status

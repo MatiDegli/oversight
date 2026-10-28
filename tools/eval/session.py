@@ -10,6 +10,7 @@ from tools.eval.ledger import manifest
 from tools.eval.tasks import BenchError, Task, digest, read_template
 from tools.eval.transport import API, Events
 
+from oversight.workspace import OPEN_NOTICE
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import FileContent, GraphResponse
 from oversight_contracts.events import ModelProfile, RunStarted
@@ -106,6 +107,18 @@ class Session:
                 event = await self.events.next()
                 if event.type == "run.started":
                     started = event.payload
+                elif (
+                    event.type == "error"
+                    and event.seq == 3
+                    and event.payload.source == "tests"
+                    and not event.payload.fatal
+                    and event.payload.agent_id is None
+                    and event.payload.change_id is None
+                    and event.payload.message.startswith(OPEN_NOTICE + " Reason: ")
+                ):
+                    # A fresh server can report unavailable network isolation at startup.
+                    # Preserve it in raw evidence; arbitrary errors still fail preflight.
+                    continue
                 elif event.type != "graph.snapshot":
                     raise BenchError(
                         "occupied or previously used server: start a dedicated fresh one"

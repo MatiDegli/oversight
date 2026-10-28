@@ -35,6 +35,7 @@ async def test_insufficient_allowance_refuses_before_setup_or_start(tmp_path):
     factory = Scripts()
     settings = live_settings(tmp_path)
     async with live_server(settings, factory) as server:
+        initial = server.events()
         with pytest.raises(BenchError, match="cannot reserve"):
             await execute(
                 str(server.client.base_url),
@@ -47,7 +48,7 @@ async def test_insufficient_allowance_refuses_before_setup_or_start(tmp_path):
         assert factory.calls == 0
         for path, text in read_template().items():
             assert (settings.runtime_dir / "workspace" / path).read_text() == text
-        assert len(server.events()) == 2
+        assert server.events() == initial
 
 
 def test_durable_reservation_is_locked_and_never_reset(tmp_path):
