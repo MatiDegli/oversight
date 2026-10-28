@@ -39,13 +39,17 @@ FactKind = Literal[
     "unknown",
 ]
 UnknownReason = Literal[
-    "before_run_missing", "before_test_missing", "before_report_problem", "after_report_problem"
+    "before_run_missing",
+    "before_test_missing",
+    "before_report_problem",
+    "after_report_problem",
+    "before_setup_or_import_error",
 ]
 
 
 @dataclass(frozen=True)
 class TestFact:
-    """Errors count as failures, while before/after retain their distinct outcomes.
+    """Base setup/import errors are unknown; only assertions prove a base failure.
 
     before_test_missing can mean a new file, a renamed test or a deselection;
     JUnit alone cannot establish which. It never proves failure on main.
@@ -92,7 +96,9 @@ def _fact(test_id: str, before: TestRun | None, after: TestRun) -> TestFact:
         kind, reason = "unknown", "before_test_missing"
     elif old == "skipped":
         kind = "skipped"
-    elif old in {"failed", "error"}:
+    elif old == "error":
+        kind, reason = "unknown", "before_setup_or_import_error"
+    elif old == "failed":
         kind = "fails_before_passes_after"
     else:
         kind = "passes_before_and_after"

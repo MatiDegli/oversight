@@ -212,7 +212,19 @@ async def probe_added_tests(
             complete = all(
                 rec.executions[seq].suite.cases_complete for seq in (before_seq, after_seq)
             )
-            reason = "before case not collected" if complete else "incomplete probe evidence"
+            base = rec.executions[before_seq].suite
+            base_error = base.outcome == "error" or any(
+                case.outcome == "error"
+                and case.test_id in {probe.test_id, probe.test_id.split("::", 1)[0]}
+                for case in base.cases or []
+            )
+            reason = (
+                "base setup or import error"
+                if base_error
+                else "before case not collected"
+                if complete
+                else "incomplete probe evidence"
+            )
             problems.append(f"added tests: {probe.test_id}: {reason}")
     return probes, tuple(problems)
 

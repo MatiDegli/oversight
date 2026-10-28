@@ -362,7 +362,7 @@ STATES: tuple[Outcome | None, ...] = ("passed", "failed", "error", "skipped", No
         (
             "error",
             (
-                "fails_before_passes_after",
+                "unknown",
                 "fails_after",
                 "fails_after",
                 "skipped",
@@ -379,7 +379,11 @@ def test_all_before_and_after_combinations(
     before = Run({ID: old} if old else {})
     for new, kind in zip(STATES, expected, strict=True):
         after = Run({ID: new} if new else {})
-        reason = "before_test_missing" if kind == "unknown" else None
+        reason = (
+            ("before_setup_or_import_error" if old == "error" else "before_test_missing")
+            if kind == "unknown"
+            else None
+        )
         assert affected_tests([ID], before, after) == (Fact(ID, kind, old, new, reason),)
 
 
