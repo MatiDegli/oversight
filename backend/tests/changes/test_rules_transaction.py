@@ -1,13 +1,25 @@
 """Real Git/store, scripted suite boundary and fault injection; no model or provider I/O."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from unittest.mock import AsyncMock
 
 import pytest
-import test_rules_reservation as preflight
 from changes_helpers import assert_main_clean, queued_callbacks_ran
-from test_assessment import head, latest, rec, settled, terminals, wait
+from test_assessment import (
+    full_evidence,
+    head,
+    latest,
+    make_clock,
+    propose,
+    rec,
+    settled,
+    terminals,
+    wait,
+)
+from test_mode import available, select
+from test_policy_profiles import policy_inputs
 from test_rules_reservation import start, terminal_code
 
 from oversight.changes import _approval, _merge, _rules, _transaction
@@ -20,33 +32,51 @@ from oversight_contracts.policy import ChangeAssessment
 pytestmark = pytest.mark.anyio
 
 
-reserved = preflight.armed
+@pytest.fixture
+async def reserved(h, monkeypatch):
+    # Keep ChangeManager's constructor-wired transaction, including during admission.
+    clock = make_clock(h, monkeypatch)
+    available(h)
+    await select(h, "merge_when_safe", 0)
+    full_evidence(h, policy_inputs())
+    await propose(h)
+    monkeypatch.setattr(h.workspace._isolation, "_born", True)
+    monkeypatch.setattr(h.workspace._isolation, "_checked", True)
+    decisions = []
+    decide = h.manager._decide
+
+    def track(record, work):
+        task = decide(record, work)
+        decisions.append(task)
+        return task
+
+    monkeypatch.setattr(h.manager, "_decide", track)
+    return clock, decisions
 
 
 @pytest.fixture
 async def transaction(h, reserved, monkeypatch):
+    return configure_transaction(h, monkeypatch)
+
+
+def configure_transaction(h, monkeypatch):
     ctx = h.manager._ctx
-    ctx.ports.rules_transaction = lambda record, evidence: _transaction.run(ctx, record, evidence)
     policies, captures, barriers = [], [], []
     select = h.workspace._isolation.select
     capture = test_tree.capture_test_tree
     barrier = _transaction.Transaction.barriers
-    lock = ctx.mode._lock
+    held = ctx.mode.held
 
-    class OrderedMode:
-        async def __aenter__(self):
-            assert h.workspace.operations.holds(main=True)
-            assert h.workspace.operations.holds(agent_id="agent-1")
-            assert h.workspace.operations._git.owner is not asyncio.current_task()
-            return await lock.__aenter__()
+    @asynccontextmanager
+    async def ordered_mode():
+        assert h.workspace.operations.holds(main=True)
+        assert h.workspace.operations.holds(agent_id="agent-1")
+        if h.workspace.operations._git.owner is asyncio.current_task():
+            raise AssertionError("Mode acquisition retained the Git lease")
+        async with held():
+            yield
 
-        async def __aexit__(self, *args):
-            return await lock.__aexit__(*args)
-
-        def locked(self):
-            return lock.locked()
-
-    monkeypatch.setattr(ctx.mode, "_lock", OrderedMode())
+    monkeypatch.setattr(ctx.mode, "held", ordered_mode)
 
     def isolated(policy, injected, open_runner):
         # Script the unavailable namespace adapter, not authorization or Git/suite checks.
@@ -65,9 +95,9 @@ async def transaction(h, reserved, monkeypatch):
     async def barrier_ran(tx):
         assert ctx.mode._lock.locked()
         assert h.workspace.operations._git.owner is asyncio.current_task()
-        assert await h.main_head() == tx.pre
         barriers.append(tx)
         await barrier(tx)
+        assert await h.main_head() == tx.pre
 
     monkeypatch.setattr(h.workspace._isolation, "select", isolated)
     monkeypatch.setattr(test_tree, "capture_test_tree", captured)
@@ -87,8 +117,9 @@ async def test_order_actor_trailer_and_no_late_or_repeated_effect(h, reserved, t
     await execute(h, reserved)
     policies, captures, barriers, _ = transaction
     assert policies == ["required"] and captures == [True]
-    [tx] = barriers
-    assert tx.barriers_ran and tx.assessment_seq is not None
+    assert len(barriers) == 2 and barriers[0] is barriers[1]
+    tx = barriers[0]
+    assert tx.barriers_ran and tx.definitive is not None
     pending, final = h.payloads(ChangeAssessment)
     assert all(r.result == "pass" for r in final.rules)
     assert latest(h) == pending and rec(h).evidence.assessment == final
@@ -111,7 +142,7 @@ async def test_order_actor_trailer_and_no_late_or_repeated_effect(h, reserved, t
     assert not any(c.args[0] in {"merge", "commit"} for c in h.workspace.calls[calls:])
 
 
-@pytest.mark.parametrize("receipt", ["before", "after"])
+@pytest.mark.parametrize("receipt", ["before", "after", "rejected", "unconfirmed"])
 async def test_definitive_assessment_is_persisted_before_commit(h, reserved, transaction, receipt):
     # The provisional receipt has already been returned when this port runs.
     real = h.manager._ctx.publish
@@ -122,6 +153,10 @@ async def test_definitive_assessment_is_persisted_before_commit(h, reserved, tra
             assert await h.main_head() == h.base_commit
             if receipt == "before":
                 raise RuntimeError("assessment not persisted")
+            if receipt == "rejected":
+                raise EventRejected("assessment rejected")
+            if receipt == "unconfirmed":
+                return None
             await real(payload)
             raise RuntimeError("receipt lost")
         return await real(payload)
@@ -129,14 +164,27 @@ async def test_definitive_assessment_is_persisted_before_commit(h, reserved, tra
     h.manager._ctx.publish = publish
     await execute(h, reserved)
     assert await h.main_head() == h.base_commit and rec(h).state == "ready"
-    assert not h.payloads(ChangeResolved) and terminal_code(h) == "git_failed"
+    assert not h.payloads(ChangeResolved) and terminal_code(h) == (
+        "delivery_failed" if receipt in {"rejected", "unconfirmed"} else "git_failed"
+    )
     await assert_main_clean(h)
+    calls = len(h.workspace.calls)
+    h.manager._admit_rules(rec(h), latest(h))
+    reserved[0].advance(121)
+    await h.manager._ctx.assessment.expire(wait(h))
+    await settled(h)
+    assert len(terminals(h)) == 1
+    assert not any(c.args[0] in {"merge", "commit"} for c in h.workspace.calls[calls:])
 
 
 async def test_required_isolation_unavailable_never_launches_or_falls_back(
     h, reserved, transaction, monkeypatch
 ):
-    monkeypatch.setattr(h.workspace._isolation, "select", transaction[3])
+    def unavailable(policy, injected, open_runner):
+        monkeypatch.setattr(h.workspace._isolation, "_born", False)
+        return transaction[3](policy, injected, open_runner)
+
+    monkeypatch.setattr(h.workspace._isolation, "select", unavailable)
     launch = AsyncMock(side_effect=AssertionError("Open suite was launched"))
     monkeypatch.setattr(suite_guard, "run_suite", launch)
     await execute(h, reserved)
@@ -372,14 +420,19 @@ async def test_admission_catches_wrong_state_and_documents_unexpected_bucket(
     h.manager.run_ended("agent-1", None)
     await settled(h)
     monkeypatch.setattr(_rules, "capture", raced)
-    assert h.manager._admit_rules(rec(h), latest(h)) == "Target changed during capture"
+    assert h.manager._admit_rules(rec(h), latest(h)) == (
+        "policy_invalid",
+        "Target changed during capture",
+    )
     assert rec(h).state == "ready" and not rec(h).rules_consumed
     assert _approval.approve_rules.__doc__ is not None
     assert "unexpected" in _approval.approve_rules.__doc__
     assert "not a diagnosis" in _approval.approve_rules.__doc__
 
 
-@pytest.mark.parametrize("outcome", ["failed", "timeout", "skipped", "incomplete"])
+@pytest.mark.parametrize(
+    "outcome", ["failed", "timeout", "skipped", "incomplete", "empty", "counts_failed"]
+)
 async def test_suite_rejects_nonpassing_or_incomplete_evidence(
     h, reserved, transaction, monkeypatch, outcome
 ):
@@ -389,7 +442,15 @@ async def test_suite_rejects_nonpassing_or_incomplete_evidence(
         run = await real(*args, **kwargs)
         if outcome == "incomplete":
             return replace(run, problems=("missing JUnit case",))
-        updates = {"skipped": 1} if outcome == "skipped" else {"outcome": outcome}
+        updates = (
+            {"passed": 0}
+            if outcome == "empty"
+            else {"failed": 1}
+            if outcome == "counts_failed"
+            else {"skipped": 1}
+            if outcome == "skipped"
+            else {"outcome": outcome}
+        )
         return replace(run, result=run.result.model_copy(update=updates))
 
     monkeypatch.setattr(h.workspace, "run_tests", suite)

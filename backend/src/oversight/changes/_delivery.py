@@ -39,6 +39,15 @@ async def record_merge(
     ctx: ChangeContext, rec: ChangeRecord, comment: str | None, post: str
 ) -> None:
     """The merge is a fact: rescan main and build the resolution and delta, sending nothing."""
+    await project_merge(ctx, rec, post)
+    rec.merged = True
+    rec.resolution = resolution(
+        ctx, rec, "approved", comment, decided_by="person", merge_commit=post
+    )
+
+
+async def project_merge(ctx: ChangeContext, rec: ChangeRecord, post: str) -> None:
+    """Shared graph projection; a scan failure preserves the previous snapshot."""
     try:
         new = await ctx.scan(post)
     except Exception as error:
@@ -48,10 +57,6 @@ async def record_merge(
         rec.delta = main_delta(ctx.state.snapshot, new, post, "merge")
         rec.next_snapshot = with_positions(new, ctx.state.snapshot)
         supersede_pending(ctx, rec)
-    rec.merged = True
-    rec.resolution = resolution(
-        ctx, rec, "approved", comment, decided_by="person", merge_commit=post
-    )
 
 
 def resolution(

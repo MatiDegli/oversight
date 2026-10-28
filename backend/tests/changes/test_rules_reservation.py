@@ -40,6 +40,9 @@ async def armed(h: Harness, monkeypatch):
     await select(h, "merge_when_safe", 0)
     full_evidence(h, policy_inputs())
     await propose(h)
+    # A confirmed session fact, independent of the deliberately disconnected startup port.
+    monkeypatch.setattr(h.workspace._isolation, "_born", True)
+    monkeypatch.setattr(h.workspace._isolation, "_checked", True)
     decisions = []
     decide = h.manager._decide
 
