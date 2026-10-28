@@ -1,4 +1,4 @@
-"""Unpublished, server-owned behavior measurements, retained separately per revision.
+"""Server-owned behavior measurements, retained separately per revision.
 
 Finite inputs and capped typed results are observations, never an equivalence claim.
 C removes the network only; detached checkout disposal contains ordinary file effects.
@@ -157,44 +157,69 @@ async def _compare(
             found[position] = replace(result, reason=problem)
             completed.add(node_id)
             continue
-        measured = [
-            (index, old, new)
-            for index, (old, new) in enumerate(zip(before.results, after.results, strict=True))
-            if old["kind"] != "unrepresentable" and new["kind"] != "unrepresentable"
-        ]
-        if not measured:
-            found[position] = replace(result, reason="unrepresentable input")
-            completed.add(node_id)
-            continue
-        # Count every measured difference; retained rows alone are bounded at eight.
-        differing = [index for index, old, new in measured if old != new]
-        result = replace(result, compared=len(measured), differing=len(differing))
-        found[position] = result
-        rows: list[BehaviorRow] = []
-        for index in differing:
-            unstable = False
-            for _ in range(2):
-                for side, tree in enumerate(trees):
-                    rerun = await workspace.run_behavior(
-                        tree,
-                        _requests(rec, inputs, side, (node_id, index)),
-                        timeout_s=_remaining(deadline),
-                    )
-                    observation = rerun[node_id]
-                    original = (before, after)[side].results[index]
-                    unstable |= bool(observation.problem or observation.results != (original,))
-            if len(rows) < MAX_ROWS:
-                rows.append(
-                    BehaviorRow(
-                        inputs[node_id].inputs[index].call,
-                        before.results[index],
-                        after.results[index],
-                        unstable,
-                    )
-                )
-                found[position] = replace(result, rows=tuple(rows))
-
+        await _measure_function(
+            workspace, rec, trees, inputs, found, position, before, after, deadline
+        )
         completed.add(node_id)
+
+
+def _identity(result: TypedResult) -> str | None:
+    # Display values are capped; only full typed fingerprints establish equality.
+    if result["kind"] not in ("value", "raised"):
+        return None
+    fingerprint = result.get("fingerprint")
+    return f"{result['kind']}:{fingerprint}" if isinstance(fingerprint, str) else None
+
+
+async def _measure_function(
+    workspace: Workspace,
+    rec: "ChangeRecord",
+    trees: list[Tree],
+    inputs: dict[str, BehaviorInputs],
+    found: list[FunctionBehavior],
+    position: int,
+    before: BehaviorObservation,
+    after: BehaviorObservation,
+    deadline: float,
+) -> None:
+    result = found[position]
+    measured = [
+        (index, old, new)
+        for index, (old, new) in enumerate(zip(before.results, after.results, strict=True))
+        if _identity(old) is not None and _identity(new) is not None
+    ]
+    result = replace(
+        result,
+        compared=len(measured),
+        reason="unrepresentable input" if len(measured) != len(before.results) else None,
+    )
+    found[position] = result
+    rows: list[BehaviorRow] = []
+    for index, old, new in measured:
+        if _identity(old) == _identity(new):
+            continue
+        # Until BOTH fresh repeats finish, this comparison certifies no stable difference.
+        unstable, incomplete = False, False
+        for side, tree in enumerate(trees):
+            rerun = await workspace.run_behavior(
+                tree,
+                _requests(rec, inputs, side, (result.node_id, index)),
+                timeout_s=_remaining(deadline),
+            )
+            observation = rerun.get(result.node_id, BehaviorObservation(problem="unavailable"))
+            identity = _identity(observation.results[0]) if len(observation.results) == 1 else None
+            incomplete |= observation.problem is not None or identity is None
+            unstable |= identity != _identity((old, new)[side])
+        unstable |= incomplete
+        result = replace(
+            result,
+            differing=result.differing + int(not unstable),
+            reason=result.reason or ("incomplete repeat" if incomplete else None),
+        )
+        if len(rows) < MAX_ROWS:
+            rows.append(BehaviorRow(inputs[result.node_id].inputs[index].call, old, new, unstable))
+        result = replace(result, rows=tuple(rows))
+        found[position] = result
 
 
 def _remaining(deadline: float) -> float:

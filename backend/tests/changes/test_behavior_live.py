@@ -1,4 +1,4 @@
-"""The scripted fake on the real demo tree; all measurements stay private."""
+"""The scripted fake on the real demo tree publishes only bounded public samples."""
 
 import asyncio
 from pathlib import Path
@@ -77,16 +77,21 @@ async def test_boundary_change_has_named_differing_rows_and_private_reasons(tmp_
         assert len(price.rows) <= 8
         assert by_id["shop.cart:Cart.total"].reason == "method or class (not probed yet)"
         assert by_id["shop.pricing:added"].reason == "added (no base version)"
+        facts = next(e.payload for e in s.events() if e.type == "change.facts_recorded")
+        assert facts.behavior_diff is not None
+        public = {item.node_id: item for item in facts.behavior_diff}
+        assert public[price.node_id].differing_count == price.differing
+        assert any("quantity=10" in row.inputs for row in public[price.node_id].rows)
+        assert all(row.before.startswith('{"kind":"value"') for row in public[price.node_id].rows)
+        assert public["shop.cart:Cart.total"].not_probed == "unsupported node kind"
+        assert public["shop.pricing:added"].not_probed == "version unavailable"
         for event in s.events():
-            # Contract defaults reserve publication slots without exposing measurements.
-            non_defaults = event.model_dump_json(exclude_defaults=True)
-            assert "behavior" not in non_defaults
-            assert "measured_cone" not in non_defaults
             serialized = event.model_dump_json()
             for private in (
-                "quantity=10",
                 "method or class (not probed yet)",
                 "added (no base version)",
+                "fingerprint",
+                "base-probe-",
             ):
                 assert private not in serialized
         assert_clean(s.live.workspace)
@@ -103,6 +108,10 @@ async def test_refactor_compares_without_claiming_equivalence(tmp_path):
         assert result.compared > 0 and result.differing == 0
         assert result.reason is None
         assert result.measurement == "no difference measured on these inputs"
+        facts = next(e.payload for e in s.events() if e.type == "change.facts_recorded")
+        [public] = facts.behavior_diff
+        assert public.compared_count > 0 and public.differing_count == 0
+        assert public.rows == []
         assert_clean(s.live.workspace)
 
 
@@ -121,6 +130,25 @@ async def test_missing_isolation_refuses_workers(tmp_path, monkeypatch):
         rec = await run(s)
         [result] = rec.behavior_diffs[1].functions
         assert result.reason == "isolation unavailable"
+        facts = next(e.payload for e in s.events() if e.type == "change.facts_recorded")
+        execution = next(e for e in rec.executions.values() if e.phase == "proposal")
+        assert (facts.change_id, facts.revision, facts.base_commit, facts.head_commit) == (
+            rec.change_id,
+            1,
+            rec.base_commit,
+            rec.head_commit,
+        )
+        assert facts.main_commit == rec.base_commit
+        assert facts.candidate_tree == execution.tested_tree
+        assert facts.head_commit == execution.tested_commit
+        assert facts.behavior_diff is not None
+        [public] = facts.behavior_diff
+        assert public.node_id == result.node_id
+        assert public.compared_count == public.differing_count == 0
+        assert public.rows == [] and public.not_probed == "probe unavailable"
+        serialized = facts.model_dump_json()
+        assert "isolation unavailable" not in serialized
+        assert str(s.live.workspace.tmp_dir) not in serialized
         worker.assert_not_awaited()
         assert_clean(s.live.workspace)
 

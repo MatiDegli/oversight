@@ -62,7 +62,7 @@ class Settings:
     review_model: str = "muse-spark-open"
     """Independent reviewer profile, distinct from the author. OVERSIGHT_REVIEW_MODEL."""
     behavior_diff: bool = False
-    """OVERSIGHT_BEHAVIOR_DIFF: private, finite behavior measurements; never published."""
+    """OVERSIGHT_BEHAVIOR_DIFF: opt-in finite measurements and bounded public samples."""
     harness_pack: bool = False
     """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
     reviewer_fake_script: Path | None = None
