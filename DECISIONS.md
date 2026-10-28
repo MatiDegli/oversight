@@ -1199,3 +1199,21 @@ SaveFile stays unchanged. Delivery A decisions 11–12 remain unchanged as the a
 The exact 1.5.0 schema bytes are frozen before regeneration as the new tuple-check baseline,
 with a hash assertion and both older baselines and independent negative controls retained.
 Generated files still come only from make contracts and keep byte-for-byte drift checking.
+
+
+## Phone practice composition and collapsed evidence (2026-10-28)
+
+The maintainer approved the phone sketch for the submission practice and then requested a
+collapsed diff. Below 1280px this bounded, browser-only exercise departs from the IDE’s
+widen-window notice and 560px graph minimum: a folded graph stays above scrolling evidence,
+with equal neutral Approve/Reject choices below. The full IDE and desktop practice stay unchanged.
+Next carries prose numerals, and compact graph labels retain the approved 14–16px scale.
+This approved brief takes precedence over Impeccable’s generic typography and composition rules.
+
+Start each decision with the exact change.proposed summary attributed to its agent: it is the
+agent’s claim, not a server verdict. The lines chip opens all source evidence, including tests
+and the called helper; Recorded task stays independent. The visitor can decide without opening
+code, keeping the first phone view focused while preserving inspection on demand. The server’s
+summary omits author declarations deliberately; these attributed recorded words must not be
+presented as Oversight’s findings. No backend command runs and no recorded decision is exposed
+before both answers. DESIGN.md’s Phone width section records this exception.

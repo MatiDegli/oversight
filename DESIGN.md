@@ -536,13 +536,7 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   `min(880px, viewport width - 112px - 560px)`: 823px at 1495px, 768px at 1440px and 608px at
   1280px. Overlays cover their part of the work area without changing these widths. Below 1280px
   a notice asks the person to widen the window. Type and radii do not shrink to fit.
-  The two-change practice is the exception below 1280px (maintainer decision, 2026-10-28):
-  it uses one scrolling column with 16px side gutters, the practice panel first and the same
-  mounted graph below in a bounded section, framed on the current change. The impact cone is
-  visible below the graph at reveal. Touch targets are at least 44px; tokens, type and radii
-  stay unchanged. The real-run label and provenance date remain visible in a sticky status
-  line. Read-only inspection tabs are omitted with a short note. The rest of the product
-  keeps the widen-window notice; layouts at 1280px and above are unchanged.
+  The two-change practice uses the exception in **Phone width** below.
 - **Maximize:** an explicit focus-panel control fills the work area and hides the graph behind a
   restore-graph button. Restoring returns to the same shell; maximize is not used in the video.
 - **Keyboard:** Ctrl K jumps to functions and files and runs commands; Ctrl B toggles the sidebar;
@@ -595,6 +589,30 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   the left. Imports are in the graph's data and not drawn: the sketch draws calls, and a module's
   imports say which files it uses, not which functions a change may reach. The router (`routes.ts`)
   only reads boxes and places no node; it runs again when a node lands after a drag.
+
+### Phone width
+
+- The submission practice supports widths below 1280px; the full IDE keeps its widen-window notice.
+- Stack the top bar, provenance, graph context (about 200px maximum), evidence and decision dock.
+  Keep graph and dock visible while the evidence scrolls, with 16px side gutters.
+- Draw node cards and taxi calls on plain ground when WebGL is unavailable. Next labels and
+  agent letters preserve Signal; compact graph names use 14–16px and folded nodes 13–14px.
+- Fold exact callers by distance; disclose members, bounds and nonzero truncation.
+  Added callees are calls, never affected callers. Zero exact callers does not prove no impact.
+- Pending changes keep agent-colored dashes. Reveal shows the recorded merged pieces solid.
+- Each decision starts with the verbatim recorded proposal summary, labeled as the agent’s words.
+  It is a claim to judge. Keep it with the files, lines and test facts.
+- The lines chip is a button at least 44px tall, with a chevron, Show diff / Hide diff and
+  aria-expanded. The changed file, Tests added and Called helper start hidden behind it.
+- Code uses 15px Mono at 21px leading, lossless soft wraps, hanging indents and continuation
+  gutter marks without repeated numbers. Prefer Python boundaries; never orphan closing punctuation.
+- Recorded task is an independent disclosure with the full verbatim recorded text.
+- Approve and Reject share neutral, equal 48px containers; neither requires opening the diff.
+  Approve has no keyboard shortcut. Next and Show findings appear only after an answer.
+- Short titles are validated manifest curator fields. Prose numerals use Next; Mono is for code,
+  paths and data cells. Provenance appears once; browser-only choices are explained at entry,
+  correctness limits at finish, and leaving stays a quiet top-bar action.
+- Desktop at 1280px and wider retains its existing composition, type and behavior.
 
 ## Elevation & Depth
 
