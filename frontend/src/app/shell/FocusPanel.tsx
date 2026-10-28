@@ -7,10 +7,21 @@ import { LivePanel } from "./LivePanel";
 import { focusRing } from "./shared";
 
 export function FocusPanel(
-  props: FrameProps & { startAgentAction: ReactNode; maximized: boolean; onMaximize: () => void },
+  props: FrameProps & {
+    startAgentAction: ReactNode;
+    practiceOnly?: boolean;
+    maximized: boolean;
+    onMaximize: () => void;
+  },
 ) {
   const { view, state, onClosePanel, onTabAction } = props;
   const tabs = view.tabs ?? [];
+  if (props.practiceOnly)
+    return (
+      <section className="focus-panel" aria-label="Focus panel">
+        {props.practice?.content}
+      </section>
+    );
   const Icon = props.maximized ? Minimize2 : Maximize2;
   return (
     <section className="focus-panel" aria-label="Focus panel">

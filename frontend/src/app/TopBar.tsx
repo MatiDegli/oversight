@@ -65,6 +65,7 @@ export function TopBar({
       {practice && (
         <button
           type="button"
+          data-practice-entry
           className={`shrink-0 text-sm underline ${focusRing}`}
           onClick={practice.open}
         >

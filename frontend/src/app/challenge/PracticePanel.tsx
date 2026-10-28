@@ -36,6 +36,8 @@ interface PanelProps {
   onExit: () => void;
 }
 
+export const caseTitle = (task: string) => task.trim().split(/\s+/)[0] ?? "Change";
+
 function Findings({ practice, attempt, onRestart }: PanelProps) {
   return (
     <>
@@ -46,9 +48,7 @@ function Findings({ practice, attempt, onRestart }: PanelProps) {
           aria-label={`Findings for ${entry.changeId}`}
           className="border-t border-divider pt-4"
         >
-          <h2 className="font-semibold">
-            {entry.changeId === "change-2" ? "Inventory" : "Pricing"}
-          </h2>
+          <h2 className="font-semibold">{caseTitle(entry.proposal.task)}</h2>
           <p>Your practice answer: {attempt.answers[entry.changeId]}</p>
           <p>
             Recorded decision: {entry.reference} ·{" "}
@@ -85,7 +85,8 @@ function Decision({ practice, attempt, onAnswer, onNext, onReveal }: PanelProps)
   return (
     <>
       <h2 className="font-semibold">
-        {item.changeId === "change-2" ? "Inventory · Agent B" : "Pricing · Agent A"}
+        {caseTitle(proposal.task)} · Agent{" "}
+        {practice.cut.agents[proposal.agent_id]?.slot ?? "unavailable"}
       </h2>
       <section aria-label="Task">
         <h3 className="mb-2 font-semibold">Task</h3>
@@ -150,7 +151,10 @@ function Decision({ practice, attempt, onAnswer, onNext, onReveal }: PanelProps)
 export function PracticePanel(props: PanelProps) {
   const { attempt, onStart, onExit } = props;
   return (
-    <section aria-label="Two-change practice" className="h-full overflow-auto p-6 text-text">
+    <section
+      aria-label="Two-change practice"
+      className="practice-panel h-full overflow-auto p-6 text-text"
+    >
       <div className="mx-auto flex max-w-[70ch] flex-col gap-5">
         <h1 className="text-xl font-semibold">
           {attempt.revealed
@@ -186,6 +190,10 @@ export function PracticePanel(props: PanelProps) {
           Return to ordinary replay
         </button>
       </div>
+      <p className="practice-phone-note mt-5 text-sm text-muted">
+        Read-only inspection tabs are omitted in the phone layout. Use a wider window to inspect
+        files and diffs.
+      </p>
     </section>
   );
 }

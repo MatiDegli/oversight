@@ -3,20 +3,12 @@ import type { Dispatch, SetStateAction } from "react";
 import { freezePractice } from "./session";
 import { replayBuild, replaySource, replayRecording } from "../../transport";
 import { viewReducer } from "../view";
-import type { View } from "../view";
-import { manifest, validateManifest } from "./manifest";
+import type { View, FocusTab } from "../view";
 import { answerOnce, complete, freshAttempt, PracticePanel } from "./PracticePanel";
 import type { Attempt } from "./PracticePanel";
 
-function availablePractice() {
-  if (!replayBuild || replaySource.kind !== "real recorded run") return null;
-  try {
-    return validateManifest(manifest, replayRecording);
-  } catch {
-    return null;
-  }
-}
-const practice = availablePractice();
+import { availablePractice } from "./availability";
+const practice = availablePractice(replayBuild, replaySource, replayRecording);
 
 export function usePractice(
   setView: Dispatch<SetStateAction<View>>,
@@ -27,26 +19,25 @@ export function usePractice(
   const [attempt, setAttempt] = useState<Attempt>(freshAttempt);
   if (!practice) return undefined;
   const bound = practice;
+  function focus(index: number): FocusTab {
+    const item = bound.cases[index] ?? bound.cases[0];
+    if (!item) throw new Error("Practice has no cases");
+    return {
+      id: "practice",
+      selected: item.proposal.graph.nodes_modified[0] ?? null,
+      review: item.changeId,
+      diff: null,
+      file: null,
+      frameIds: item.proposal.graph.nodes_modified,
+      frameKey: `practice:${item.changeId}`,
+    };
+  }
   function show(index: number) {
-    const item = bound.cases[index];
-    if (!item) return;
-    setView((view) =>
-      viewReducer(view, {
-        type: "open",
-        tab: {
-          id: "practice",
-          selected: item.proposal.graph.nodes_modified[0] ?? null,
-          review: item.changeId,
-          diff: null,
-          file: null,
-          frameIds: item.proposal.graph.nodes_modified,
-          frameKey: `practice:${item.changeId}`,
-        },
-      }),
-    );
+    setView((view) => viewReducer(view, { type: "open", tab: focus(index) }));
   }
   return {
     active,
+    focus: focus(attempt.index),
     open() {
       if (!active) {
         freezePractice(stop, bound.cut, document.getElementById("root"));

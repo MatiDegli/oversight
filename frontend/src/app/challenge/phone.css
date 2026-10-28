@@ -1,0 +1,99 @@
+.practice-phone-note {
+  display: none;
+}
+.phone-practice-entry {
+  display: block;
+  min-height: 44px;
+}
+@media (width < 1280px) {
+  .practice-phone {
+    height: auto;
+    min-height: 100dvh;
+    overflow: clip;
+  }
+  .practice-phone > header {
+    justify-content: space-between;
+    padding-inline: 16px;
+  }
+  .practice-phone > header > :not(:first-child, [data-practice-entry]) {
+    display: none;
+  }
+  .practice-phone button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .practice-phone .shell-workspace,
+  .practice-phone .shell-center,
+  .practice-phone .shell-stage {
+    display: block;
+    width: 100%;
+    flex: none;
+  }
+  .practice-phone .shell-workspace > :not(.shell-center),
+  .practice-phone .bottom-dock,
+  .practice-phone .narrow-notice {
+    display: none;
+  }
+  .practice-phone .focus-panel {
+    width: 100%;
+    border-right: 0;
+  }
+  .practice-phone .practice-panel {
+    height: auto;
+    overflow: visible;
+    padding: 24px 16px;
+    overflow-wrap: anywhere;
+  }
+  .practice-phone .practice-phone-note {
+    display: block;
+  }
+  .practice-phone .status-line {
+    position: sticky;
+    order: -1;
+    top: 0;
+    z-index: 5;
+    display: block;
+    height: auto;
+    padding: 12px 16px;
+    line-height: var(--caption-line-height);
+  }
+  .practice-phone .status-line > :not(:first-child) {
+    display: none;
+  }
+  .practice-phone .is-maximized .graph-stage {
+    display: block;
+  }
+  .practice-phone .graph-stage {
+    width: calc(100% - 32px);
+    min-width: 0;
+    margin: 0 16px 24px;
+    flex: none;
+  }
+  .practice-phone .graph-stage > :first-child {
+    height: 360px;
+  }
+  .practice-phone .graph-overlays {
+    position: static;
+    margin-top: 16px;
+  }
+  .practice-phone .graph-overlays > :first-child,
+  .practice-phone .graph-overlays > :first-child > div,
+  .practice-phone .graph-cone {
+    width: 100%;
+  }
+  .practice-phone .graph-cone {
+    max-height: 320px;
+  }
+  .practice-phone .graph-overlays > :last-child {
+    position: absolute;
+    top: 300px;
+    right: 16px;
+  }
+  .practice-phone [aria-label="Legend"],
+  .practice-phone [data-graph-clear-area] {
+    display: none;
+  }
+  .practice-phone [aria-label="Zoom"] {
+    flex-direction: row;
+  }
+}

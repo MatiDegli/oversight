@@ -40,3 +40,23 @@ it("withholds historical findings until reveal; uses only recorded proposal fact
   expect(revealed).not.toMatch(/Behavioral example|Measured result|Clean review|Safe to merge/);
   expect(Object.values(handlers).every((handler) => handler.mock.calls.length === 0)).toBe(true);
 });
+
+it("derives future case titles and slots from decision-time data", () => {
+  const future = structuredClone(practice);
+  const item = future.cases[0];
+  if (!item) throw new Error("Missing case");
+  item.proposal.task = "normalize_cart must reject empty carts.";
+  const agent = future.cut.agents[item.proposal.agent_id];
+  if (!agent) throw new Error("Missing frozen agent");
+  agent.slot = "A";
+  const attempt = { ...freshAttempt(), started: true };
+  const decision = renderToStaticMarkup(
+    <PracticePanel practice={future} attempt={attempt} {...handlers} />,
+  );
+  expect(decision).toContain("normalize_cart · Agent A");
+  expect(decision).not.toContain("Inventory · Agent B");
+  const findings = renderToStaticMarkup(
+    <PracticePanel practice={future} attempt={{ ...attempt, revealed: true }} {...handlers} />,
+  );
+  expect(findings).toContain('class="font-semibold">normalize_cart</h2>');
+});

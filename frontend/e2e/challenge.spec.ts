@@ -71,7 +71,7 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   await expect(page.locator("#root")).toHaveAttribute("data-seq", "63");
   await start.click();
   const panel = practice(page);
-  await expect(panel).toContainText("Inventory · Agent B");
+  await expect(panel).toContainText("Inventory.reserve · Agent B");
   await expect(panel).toContainText("29 passing tests");
   await expect(panel.getByRole("button", { name: "Show findings" })).toBeDisabled();
   const approve = panel.getByRole("button", { name: "Approve", exact: true });
@@ -93,7 +93,7 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   await expect(panel).toContainText("Practice answer saved: Reject");
   await expect(panel.getByRole("button", { name: "Show findings" })).toBeDisabled();
   await panel.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(panel).toContainText("Pricing · Agent A");
+  await expect(panel).toContainText("compute_price · Agent A");
   await expect(panel).toContainText("32 passing tests");
   await expect(panel).toContainText("9 possibly affected entries");
   await expect(panel.getByText(/Recorded decision:/)).toHaveCount(0);
@@ -157,3 +157,147 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   ).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test.describe("phone practice", () => {
+  test.use({ hasTouch: true, isMobile: true });
+  for (const [width, height] of [
+    [390, 844],
+    [430, 932],
+  ] as const) {
+    test(`completes the real practice at ${String(width)}x${String(height)}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      const requests: string[] = [];
+      page.on("request", (request) => {
+        if (/\/(agents|changes|events|files|graph|impact|tree)(\/|\?|$)/.test(request.url()))
+          requests.push(request.url());
+      });
+      await page.goto("/oversight/");
+      await expect(page.locator(".narrow-notice")).toBeVisible();
+      await expect
+        .poll(async () => Object.keys((await positions(page)) ?? {}).length)
+        .toBeGreaterThan(0);
+      const graph = page.locator('[aria-label="Repository graph"]');
+      const instance = await graph.evaluateHandle((host: GraphProbeHost) => host.oversightGraph);
+      await page.getByRole("button", { name: "Try two-change practice", exact: true }).tap();
+      await expect(page.locator(".narrow-notice")).toBeHidden();
+      await phoneStage(page);
+      if (width === 390) await phoneCapture(page, "introduction-390");
+      await practice(page).getByRole("button", { name: "Start practice" }).tap();
+      await phoneStage(page);
+      const approve = practice(page).getByRole("button", { name: "Approve", exact: true });
+      await approve.focus();
+      for (const key of ["Control+Enter", "Enter", "Space"]) await page.keyboard.press(key);
+      await expect(practice(page).getByText(/Practice answer saved/)).toHaveCount(0);
+      await phoneFrame(page, "shop.inventory:Inventory.reserve");
+      if (width === 390) await phoneCapture(page, "decision-390");
+      await approve.tap();
+      await practice(page).getByRole("button", { name: "Next", exact: true }).tap();
+      await phoneStage(page);
+      await phoneFrame(page, "shop.pricing:compute_price");
+      await practice(page).getByRole("button", { name: "Reject", exact: true }).tap();
+      await practice(page).getByRole("button", { name: "Show findings" }).tap();
+      await expect(practice(page)).toContainText("Matches with recorded decisions: 1/2.");
+      await phoneStage(page);
+      const cone = page.getByRole("region", { name: "Possibly affected", exact: true });
+      await cone.scrollIntoViewIfNeeded();
+      await expect(cone).toBeVisible();
+      await expect(cone).toContainText("Distance 1 · 7 functions");
+      await provenance(page);
+      expect(
+        await instance.evaluate(
+          (original) =>
+            original ===
+            document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+              ?.oversightGraph,
+        ),
+      ).toBe(true);
+      await expect(graph).toHaveCount(1);
+      if (width === 390) await phoneCapture(page, "reveal-390");
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      await expect(page.locator(".focus-panel")).toHaveCSS("width", "880px");
+      expect(
+        await instance.evaluate(
+          (original) =>
+            original ===
+            document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+              ?.oversightGraph,
+        ),
+      ).toBe(true);
+      await expect(page.locator(".narrow-notice")).toBeHidden();
+      await provenance(page);
+      if (width === 390) await phoneCapture(page, "reveal-1920");
+      await page.setViewportSize({ width, height });
+      await practice(page).getByRole("button", { name: "Return to ordinary replay" }).tap();
+      await expect(page.locator(".narrow-notice")).toBeVisible();
+      expect(requests).toEqual([]);
+    });
+  }
+});
+
+async function phoneStage(page: Page) {
+  await provenance(page);
+  await expect(page.getByLabel("Status line")).toBeInViewport({ ratio: 1 });
+  expect(
+    await page.evaluate(() => [
+      document.documentElement.scrollWidth,
+      document.documentElement.clientWidth,
+    ]),
+  ).toEqual([page.viewportSize()?.width, page.viewportSize()?.width]);
+  const targets = await page.getByRole("button").evaluateAll((buttons) =>
+    buttons.map((button) => ({
+      label: button.getAttribute("aria-label") || button.textContent,
+      width: button.getBoundingClientRect().width,
+      height: button.getBoundingClientRect().height,
+    })),
+  );
+  for (const target of targets) {
+    expect(target.height, target.label || "Touch target").toBeGreaterThanOrEqual(44);
+    expect(target.width, target.label || "Touch target").toBeGreaterThanOrEqual(44);
+  }
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(practice(page)).toContainText("Read-only inspection tabs are omitted");
+  expect((await practice(page).boundingBox())?.x).toBe(0);
+  expect(await practice(page).evaluate((panel) => getComputedStyle(panel).paddingLeft)).toBe(
+    "16px",
+  );
+}
+async function phoneFrame(page: Page, seed: string) {
+  await expect
+    .poll(() =>
+      page.locator('[aria-label="Repository graph"]').evaluate((host: GraphProbeHost, id) => {
+        const graph = host.oversightGraph;
+        const node = graph
+          ?.nodeCenters()
+          .find((candidate) => candidate.id === graph.representative(id));
+        return (
+          !!node &&
+          !graph?.animating() &&
+          node.x > 0 &&
+          node.x < host.clientWidth &&
+          node.y > 0 &&
+          node.y < host.clientHeight
+        );
+      }, seed),
+    )
+    .toBe(true);
+  const panel = await practice(page).boundingBox();
+  const graph = await page.locator('[aria-label="Repository graph"]').boundingBox();
+  expect(graph?.height).toBe(360);
+  expect(graph?.y).toBeGreaterThanOrEqual((panel?.y ?? 0) + (panel?.height ?? 0));
+}
+async function phoneCapture(page: Page, name: string) {
+  if (name === "decision-390")
+    await practice(page)
+      .getByRole("button", { name: "Approve", exact: true })
+      .scrollIntoViewIfNeeded();
+  else
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+  await page.screenshot({ path: `../.shots/challenge/phone/${name}.png` });
+  if (name === "reveal-390")
+    await page.screenshot({
+      path: "../.shots/challenge/phone/reveal-390-full.png",
+      fullPage: true,
+    });
+}
