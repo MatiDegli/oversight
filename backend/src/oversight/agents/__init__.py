@@ -6,6 +6,7 @@ Other modules import only what this file exports; everything else here is intern
 from oversight.agents._crossreview import ConeEntry
 from oversight.agents._crossreview import Inputs as ReviewInputs
 from oversight.agents._crossreview import TestResult as ReviewTests
+from oversight.agents._review_call import run_review_call
 from oversight.agents._status import validate_agent_status
 from oversight.agents.client import (
     BASETEN_BASE_URL,
@@ -95,6 +96,7 @@ __all__ = [
     "load_script",
     "parse_script",
     "review_candidate",
+    "run_review_call",
     "validate_agent_status",
     "validate_usage_tick",
 ]

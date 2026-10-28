@@ -39,7 +39,6 @@ from oversight.agents import (
     RunEnd,
     Script,
     ScriptedModel,
-    UnknownUsage,
     UsageLedger,
     load_script,
     validate_agent_status,
@@ -59,13 +58,13 @@ from oversight.events import (
     EventPayload,
     EventStore,
     StoredEvent,
-    format_ts,
     play,
     read_jsonl,
     run_store_path,
 )
 from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
+from oversight.runtime_accounting import write_tick
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings
@@ -492,24 +491,17 @@ class LiveRun:
         at once (its lock queues the writes in tick order), and this waits with `asyncio.wait`,
         which never cancels it: a cancel while another agent's write holds the lock would
         otherwise raise before anything was written, with the brake still open."""
-        entry = UnknownUsage(self.run_id, tick.agent_id, tick.model, format_ts(datetime.now(UTC)))
-        write = asyncio.ensure_future(self.ledger.record(tick.cost_usd, entry))
-        cancel: asyncio.CancelledError | None = None
-        while not write.done():  # one pass per cancel
-            try:
-                await asyncio.wait({write})
-            except asyncio.CancelledError as cancelled:
-                cancel = cancelled
-        failure = None if write.cancelled() else write.exception()
-        if isinstance(failure, LedgerError | OSError):
-            await self._ledger_gone(tick, failure)
-            raise (cancel or asyncio.CancelledError()) from failure
-        if cancel is not None:
-            raise cancel
-        if failure is not None:
-            raise failure
-        if write.cancelled():
-            raise asyncio.CancelledError
+        try:
+            await write_tick(self, tick, wait=asyncio.wait)
+        except (asyncio.CancelledError, LedgerError, OSError) as error:
+            failure = error.__cause__ if isinstance(error, asyncio.CancelledError) else error
+            if isinstance(failure, LedgerError | OSError):
+                await self._ledger_gone(tick, failure)
+                cancel = (
+                    error if isinstance(error, asyncio.CancelledError) else asyncio.CancelledError()
+                )
+                raise cancel from failure
+            raise
 
     async def _ledger_gone(self, tick: UsageTick, error: BaseException) -> None:
         """The brake closes before the first await. The report is finished however often this

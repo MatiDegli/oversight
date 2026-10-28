@@ -1,4 +1,4 @@
-"""Runtime-owned review lifecycle; transport scope/accounting is supplied separately (PR3b)."""
+"""Runtime-owned review lifecycle, isolated transport scope and provider accounting."""
 
 # These helpers are part of LiveRun's composition, with access to its owned registries.
 # pyright: reportPrivateUsage=false
@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal, Protocol
 
@@ -16,11 +17,13 @@ from oversight.agents import (
     ReviewOutcome,
     ReviewTests,
     RunEnd,
+    run_review_call,
 )
 from oversight.api import ApiError
 from oversight.changes import ReviewCapture, WrongState
 from oversight.events import NEEDS_YOU_CODES, format_needs_you
 from oversight.review_config import ReviewerUnavailable, configured_reviewer
+from oversight.runtime_accounting import ReviewAccounting, ReviewLedgerFailure
 from oversight.runtime_revisions import request_revision
 from oversight_contracts.commands import RequestChanges
 from oversight_contracts.events import ChangeProposed, ModelProfile
@@ -31,7 +34,7 @@ if TYPE_CHECKING:
 
 
 class ReviewerCall(Protocol):
-    """PR1 adapter signature; PR3b can supply its accounted transport through this seam."""
+    """Optional lifecycle test seam; production uses run_review_call with its own accounting."""
 
     async def __call__(
         self,
@@ -67,8 +70,11 @@ def run_ended(live: LiveRun, agent_id: str, end: RunEnd | None) -> None:
         return
     finished = end.state == "ready_for_review"
     task = asyncio.create_task(
-        review(live, capture, proposal, finished=finished),
+        review(
+            live, capture, proposal, finished=finished, ready_time=asyncio.get_running_loop().time()
+        ),
         name=f"review-{capture.target.change_id}",
+        context=contextvars.Context(),
     )
     live._reviews[capture.target.change_id] = task
     # Attach diagnostics for halted authors too: human admission must cancel any notice
@@ -132,7 +138,9 @@ async def review(
     proposal: ChangeProposed,
     *,
     finished: bool,
+    ready_time: float,
 ) -> None:
+    accounting: ReviewAccounting | None = None
     try:
         if not finished:
             await notice(
@@ -146,10 +154,6 @@ async def review(
         if not eligible(live, capture, proposal.agent_id):
             return
         agent = live._agents[proposal.agent_id]
-        if live._reviewer is None:
-            raise ReviewerUnavailable(
-                "reviewer_missing", "Review call transport is not configured."
-            )
         client = configured_reviewer(live._settings, agent.slot, agent.profile)
         if client is None:
             return
@@ -159,13 +163,26 @@ async def review(
         inputs = review_inputs(client, proposal, diff)
         if not eligible(live, capture, proposal.agent_id):
             return
-        outcome = await live._reviewer(
-            client,
-            capture.target,
-            inputs,
-            author=agent.profile,
-            author_reply_models=tuple(live._author_models.get(proposal.agent_id, ())),
-        )
+        models = tuple(live._author_models.get(proposal.agent_id, ()))
+        if live._reviewer is None:
+            accounting = ReviewAccounting(live, capture.target, client.profile, proposal.agent_id)
+            outcome = await run_review_call(
+                client,
+                capture.target,
+                inputs,
+                author=agent.profile,
+                author_reply_models=models,
+                ready_time=ready_time,
+                record=accounting.record,
+            )
+        else:
+            outcome = await live._reviewer(
+                client,
+                capture.target,
+                inputs,
+                author=agent.profile,
+                author_reply_models=models,
+            )
         if not eligible(live, capture, proposal.agent_id):
             return
         # The confirmed receipt is the only authority for a subsequent automatic decision.
@@ -174,7 +191,19 @@ async def review(
             return
         await apply_outcome(live, capture, proposal, outcome, stored.seq)
     except asyncio.CancelledError:
+        if accounting is not None and accounting.failure is not None:
+            await accounting.report_failure()
         raise
+    except ReviewLedgerFailure:
+        assert accounting is not None
+        await accounting.report_failure()
+        task = asyncio.current_task()
+        if task is not None and task.cancelling():
+            raise asyncio.CancelledError from accounting.failure
+    except TimeoutError:
+        await notice(
+            live, capture, proposal, "review_timeout", "The review exceeded ready + 90 seconds."
+        )
     except WrongState:
         pass  # Target invalidation drops a late review; it is never retried.
     except ReviewerUnavailable as error:
