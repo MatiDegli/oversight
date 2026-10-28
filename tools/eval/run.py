@@ -18,8 +18,10 @@ from tools.eval.grade import Result, Tariff, Tests, Usage, grade
 from tools.eval.ledger import Ledger, Record
 from tools.eval.session import PROFILES, Session, allowance
 from tools.eval.tasks import BenchError, Task, load_tasks
+from tools.eval.timing import attempt_trace, observed
 from tools.eval.transport import API, Events
 
+from oversight.telemetry import annotate, mark, span
 from oversight_contracts.commands import AgentCreated
 from oversight_contracts.events import ChangeProposed, FileDiff
 
@@ -41,6 +43,7 @@ class Attempt:
     resolved: bool = False
     interrupted: bool = False
     brake: bool = False
+    error: BaseException | None = None
 
     def observe(self, event: Any, ledger: Ledger) -> None:
         payload = event.payload
@@ -95,7 +98,9 @@ async def monitor(
     evidence: Path,
 ) -> None:
     while not attempt.terminal and not attempt.resolved:
-        event = await session.events.next()
+        with span("wait_event"):
+            event = await session.events.next()
+        observed(event)
         attempt.observe(event, ledger)
         if event.type == "usage.tick" and event.payload.model not in {None, session.model.model}:
             raise BenchError("usage reports an unexpected exact model")
@@ -112,7 +117,11 @@ async def monitor(
             ):
                 raise BenchError("proposal does not match this task's start")
             attempt.proposal = proposal
-            attempt.tests = await grade(baseline, attempt.updates, proposal, attempt.task, evidence)
+            with span("grading"):
+                attempt.tests = await grade(
+                    baseline, attempt.updates, proposal, attempt.task, evidence
+                )
+            mark("grading_done")
 
 
 async def cleanup(session: Session, attempt: Attempt, ledger: Ledger) -> None:
@@ -175,14 +184,9 @@ async def run_task(session: Session, task: Task, ledger: Ledger, tariff: Tariff 
     attempt = Attempt(task, record, Usage(tariff))
     evidence = ledger.out.parent / session.run.run_id / task.id
     cleaned = False
-    error: BaseException | None = None
-    try:
-        await start_once(session, attempt, ledger)
-        async with asyncio.timeout(session.run.limits.max_wall_clock_s + 150):
-            await monitor(session, attempt, ledger, baseline, base_commit, evidence)
-    except BaseException as exc:
-        error = exc
-        attempt.interrupted = True
+    with attempt_trace(session.api, session.run.run_id, ledger.out.parent):
+        await _observe_attempt(session, attempt, ledger, baseline, base_commit, evidence)
+    error = attempt.error
     if attempt.interrupted and attempt.terminal not in {"ready_for_review", "halted"}:
         # A cancelled in-flight call can still be billed without a usage.tick.
         attempt.usage.incomplete = True
@@ -194,7 +198,7 @@ async def run_task(session: Session, task: Task, ledger: Ledger, tariff: Tariff 
                 cleaned = True
             if cleaned:
                 await session.replace(baseline, session.clean)
-                # Consume our resolution's trailing status and the restore's graph events.
+                # Drain trailing resolution/status and restore graph events.
                 graph = await session.graph()
                 while session.events.seq < graph.seq:
                     attempt.observe(await session.events.next(), ledger)
@@ -209,8 +213,35 @@ async def run_task(session: Session, task: Task, ledger: Ledger, tariff: Tariff 
     return attempt.brake or attempt.usage.cost == "unknown"
 
 
+async def _observe_attempt(
+    session: Session,
+    attempt: Attempt,
+    ledger: Ledger,
+    baseline: dict[str, str],
+    base_commit: str,
+    evidence: Path,
+) -> None:
+    try:
+        with span("start_request"):
+            await start_once(session, attempt, ledger)
+        annotate(agent=attempt.record.agent_id)
+        with span("monitor"):
+            async with asyncio.timeout(session.run.limits.max_wall_clock_s + 150):
+                await monitor(session, attempt, ledger, baseline, base_commit, evidence)
+    except BaseException as exc:
+        attempt.error = exc
+        attempt.interrupted = True
+
+
 async def execute(
-    server: str, model: str, cap: float, out: Path, tasks: list[Task], tariff: Tariff | None = None
+    server: str,
+    model: str,
+    cap: float,
+    out: Path,
+    tasks: list[Task],
+    tariff: Tariff | None = None,
+    *,
+    trace: bool = False,
 ) -> None:
     if not math.isfinite(cap) or cap <= 0:
         raise BenchError("--cap-usd must be finite and positive")
@@ -230,6 +261,7 @@ async def execute(
         if not remaining:
             return
         api = API(server)
+        api.trace_enabled = trace
         health = await api.health()
         events = Events(api, health.run_id, out.parent / f"events-{health.run_id}.jsonl")
         session = Session(api, events)
@@ -263,6 +295,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", required=True, choices=list(PROFILES))
     parser.add_argument("--cap-usd", required=True, type=positive)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="write timing JSONL (server OVERSIGHT_EVAL_TRACE_DIR must match --out parent)",
+    )
     parser.add_argument("--task", action="append", default=[], help="run only named task ids")
     parser.add_argument("--input-usd-per-m", type=float)
     parser.add_argument("--output-usd-per-m", type=float)
@@ -280,7 +317,11 @@ def main(argv: list[str] | None = None) -> int:
             if set(args.task) - {t.id for t in tasks}:
                 raise BenchError("unknown task id")
             tasks = [t for t in tasks if t.id in args.task]
-        asyncio.run(execute(args.server, args.model, args.cap_usd, args.out, tasks, tariff))
+        asyncio.run(
+            execute(
+                args.server, args.model, args.cap_usd, args.out, tasks, tariff, trace=args.trace
+            )
+        )
         return 0
     except KeyboardInterrupt:
         return 130

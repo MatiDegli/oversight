@@ -19,6 +19,7 @@ from oversight.agents._prompts import PROMPT_VERSION as PROMPT_VERSION
 from oversight.agents._prompts import REVISION_PROMPT as REVISION_PROMPT
 from oversight.agents._prompts import SYSTEM_PROMPT as SYSTEM_PROMPT
 from oversight.agents._replies import ReplyError, ReplyRecovery
+from oversight.agents._trace import model_turn, publications, timed, traced_drive
 from oversight.agents.client import (
     CALL_SCOPE,
     CallScope,
@@ -32,6 +33,7 @@ from oversight.agents.sink import ChangeSink
 from oversight.agents.tools import TOOL_SCHEMAS, Toolbox, ToolOutcome, interrupted
 from oversight.agents.usage import Pricing, UsageLedger
 from oversight.events import EventPayload
+from oversight.telemetry import CURRENT, annotate, span
 from oversight.workspace import SuiteInterrupted, Tree, Workspace, WorkspaceError
 from oversight_contracts.common import AgentId, ChangeId, Slot
 from oversight_contracts.events import (
@@ -121,10 +123,11 @@ class AgentRun:
     ) -> None:
         require_verified(model.profile)
         self._task = task
+        self._observer = CURRENT.get()
         self._workspace = workspace
         self._model = model
         self._sink = sink
-        self._publish = publish
+        self._publish = publications(publish)
         self._ledger = ledger
         self._pricing = pricing
         self._monotonic = monotonic
@@ -247,6 +250,7 @@ class AgentRun:
                     missing.append({"role": "tool", "tool_call_id": call_id, "content": "Not run."})
         self._messages.extend(missing)
 
+    @traced_drive
     async def _drive(self, first_status: AgentState) -> RunEnd:
         messages = self._messages
         assert messages is not None
@@ -316,9 +320,10 @@ class AgentRun:
         """Whether the sink proposed the change. A sink that returns `False` has sent its own
         `error`; one that raises has not, so the runtime reports it."""
         try:
-            return await self._sink.proposed(
-                self._task.agent_id, summary, declaration=self._declaration
-            )
+            with span("proposal"):
+                return await self._sink.proposed(
+                    self._task.agent_id, summary, declaration=self._declaration
+                )
         except Exception as error:
             await self._publish(
                 ErrorReport(
@@ -338,7 +343,7 @@ class AgentRun:
             if self._turns >= self._max_turns:
                 raise _Halt(f"Reached the limit of {self._max_turns} model calls.")
             self._turns += 1
-            reply = await self._model.complete(messages, TOOL_SCHEMAS)
+            reply = await model_turn(self, messages, TOOL_SCHEMAS)
             await self._usage(reply)
             try:
                 recovering = self._recovery.recover(reply, messages)
@@ -353,9 +358,12 @@ class AgentRun:
                 messages.append({"role": "user", "content": NO_TOOL_REMINDER})
                 continue
             for index, call in enumerate(reply.tool_calls):
+                annotate(tool_call=call.id)
                 started = self._monotonic()
                 try:
-                    outcome = await self._tools.call(call.name, call.arguments)
+                    with span("tool_execution") as observed:
+                        outcome = await self._tools.call(call.name, call.arguments)
+                        observed["observation_bytes"] = len(outcome.content.encode())
                 except asyncio.CancelledError as error:
                     # The time limit or Stop cut the call short: it is still a step, an error.
                     self._step += 1
@@ -418,6 +426,7 @@ class AgentRun:
             )
             return False
 
+    @timed("tool_publication")
     async def _report(self, tool: str, outcome: ToolOutcome, duration_ms: int) -> None:
         agent_id = self._task.agent_id
         # The edit is on disk either way. A lost record only changes what the UI is told: the
