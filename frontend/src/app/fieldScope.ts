@@ -1,4 +1,3 @@
-import type { ImpactCone } from "@contracts";
 import { selectSignalLights } from "../graph";
 import type { FieldInput, FieldScope } from "../graph";
 import type { State } from "../state";
@@ -21,11 +20,8 @@ export function fieldScope(state: State, view: View): FieldScope {
   return { mode: "watch" };
 }
 
-/** The mode and lights; the graph's optional cone argument never supplies emitters. */
-export const fieldInput: (state: State, view: View, liveCone?: ImpactCone | null) => FieldInput = (
-  state,
-  view,
-) => ({
+/** The mode and the agent signals, independently of the graph's cone. */
+export const fieldInput = (state: State, view: View): FieldInput => ({
   mode: fieldScope(state, view).mode,
   lights: selectSignalLights(state, state.lastReads),
 });

@@ -42,7 +42,7 @@ const focusRing =
 export function DataWords({ text }: { text: string }) {
   return (
     <span>
-      {text.split(/((?:<?US\$)?[+−-]?\d+(?:\.\d+)?)/g).map((part, index) =>
+      {text.split(/((?:<?US\$)?[+−-]?\d+(?:,\d{3})*(?:\.\d+)?)/g).map((part, index) =>
         index % 2 === 1 ? (
           <span key={index} className="font-mono">
             {part}

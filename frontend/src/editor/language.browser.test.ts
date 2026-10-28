@@ -24,7 +24,7 @@ it("opens files and both diff sides with highlighting only, without language wor
       ["README.md", "markdown", "# Project"],
       ["setup.sh", "shell", 'echo "hello"'],
       ["settings.ini", "ini", "[project]\nname=value"],
-      ["pyproject.toml", "plaintext", '[project]\nname = "demo"'],
+      ["pyproject.toml", "ini", '[project]\nname = "demo"'],
     ] as const) {
       await page.evaluate(
         ({ path, content }) => {
@@ -81,7 +81,9 @@ it("opens files and both diff sides with highlighting only, without language wor
     await browserExpect.poll(() => workers.length).toBeGreaterThan(0);
     expect(workers.every((url) => url.includes("/editor/editor.worker.js"))).toBe(true);
     expect(
-      requests.filter((url) => /languages\/features\/|\/language\/(json|yaml)\//.test(url)),
+      requests.filter((url) =>
+        /\/languages\/features\/(json|css|html)\/|\/language\/(json|yaml)\//.test(url),
+      ),
     ).toEqual([]);
   });
 }, 60_000);

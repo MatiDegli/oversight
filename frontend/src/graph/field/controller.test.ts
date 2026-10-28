@@ -15,6 +15,7 @@ vi.mock("./model", async (original) => ({
 
 let now = 0;
 let nextFrame = 0;
+const mutations: MutationCallback[] = [];
 const frames = new Map<number, FrameRequestCallback>();
 const compute = vi.fn(() => ({ cols: 1, rows: 1, data: new Uint8ClampedArray(4) }));
 const renderer = {
@@ -39,6 +40,7 @@ const light: FieldInput = {
 beforeEach(() => {
   vi.clearAllMocks();
   frames.clear();
+  mutations.length = 0;
   now = 0;
   nextFrame = 0;
   media.matches = false;
@@ -57,6 +59,9 @@ beforeEach(() => {
   vi.stubGlobal(
     "MutationObserver",
     class {
+      constructor(callback: MutationCallback) {
+        mutations.push(callback);
+      }
       observe() {}
       disconnect() {}
     },
@@ -288,6 +293,44 @@ it.each(["width", "height"])(
     window.dispatchEvent(new Event("resize"));
     expect(last()[3][0]?.weight).toBe(1);
     expect(renderer.draw).toHaveBeenCalledTimes(draws + 1);
+    controller.dispose();
+  },
+);
+
+it.each(["width", "height"])(
+  "sleeps with pulsing lights at zero %s and wakes on redraw",
+  (axis) => {
+    const stage = { closest: () => null, querySelectorAll: () => [] };
+    Object.assign(canvas, {
+      closest: () => stage,
+      getBoundingClientRect: () => ({ left: 0, top: 0 }),
+      ownerDocument: { querySelectorAll: () => [] },
+    });
+    const controller = createFieldController(canvas, source);
+    controller.update({
+      ...light,
+      lights: light.lights.map((item) => ({ ...item, pulses: true })),
+    });
+    advance(240);
+    expect(frames.size).toBe(1);
+    const draws = renderer.draw.mock.calls.length;
+    Object.assign(canvas, axis === "width" ? { clientWidth: 0 } : { clientHeight: 0 });
+    advance(256);
+    expect(frames.size).toBe(0);
+    expect(canvas.oversightField?.animating()).toBe(false);
+    expect(renderer.draw).toHaveBeenCalledTimes(draws);
+    Object.assign(canvas, { clientWidth: 70, clientHeight: 70 });
+    mutations[0]?.([{ target: stage } as unknown as MutationRecord], {} as MutationObserver);
+    expect(renderer.draw).toHaveBeenCalledTimes(draws + 1);
+    expect(frames.size).toBe(1);
+    advance(272);
+    expect(renderer.draw).toHaveBeenCalledTimes(draws + 2);
+    Object.assign(canvas, { clientWidth: 0 });
+    window.dispatchEvent(new Event("resize"));
+    expect(frames.size).toBe(0);
+    Object.assign(canvas, { clientWidth: 70 });
+    window.dispatchEvent(new Event("resize"));
+    expect(frames.size).toBe(1);
     controller.dispose();
   },
 );

@@ -11,16 +11,13 @@ export function Tests({ state }: { state: State }) {
       <ul aria-label="Test runs">
         {runs.map((run) => {
           const suite = run.suite;
+          const letter = agentLetter(state, run.agentId);
           if (!suite)
             return (
               <li key={run.id} className="dock-test-run">
                 <div className="dock-facts">
-                  <span
-                    className="dock-letter"
-                    data-slot={agentLetter(state, run.agentId)}
-                    aria-label={`Agent ${agentLetter(state, run.agentId)}`}
-                  >
-                    {agentLetter(state, run.agentId)}
+                  <span className="dock-letter" data-slot={letter} aria-label={`Agent ${letter}`}>
+                    {letter}
                   </span>
                   <span className="dock-code">{run.label}</span>
                   <span className="dock-note">no test result</span>
@@ -29,7 +26,6 @@ export function Tests({ state }: { state: State }) {
             );
           const passed = suite.outcome === "passed";
           const Icon = passed ? Check : X;
-          const letter = agentLetter(state, run.agentId);
           return (
             <li key={run.id} className="dock-test-run">
               <div className="dock-facts">

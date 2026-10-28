@@ -150,6 +150,8 @@ class FieldRuntime implements FieldController {
 
   private animating() {
     return (
+      this.canvas.clientWidth > 0 &&
+      this.canvas.clientHeight > 0 &&
       this.renderer !== null &&
       !this.renderer.lost() &&
       !document.hidden &&
@@ -235,6 +237,7 @@ class FieldRuntime implements FieldController {
 
   redraw = () => {
     this.draw(performance.now());
+    this.schedule();
   };
   private onGraph = () => {
     this.redraw();

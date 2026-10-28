@@ -565,7 +565,7 @@ it("attaches a new model before disposing the old, chooses Python or plaintext, 
   vi.spyOn(firstModel, "dispose").mockImplementation(() => {
     order.push("dispose");
   });
-  const next = showFile(code, first, { ...target, path: "pyproject.toml" }, files, vi.fn());
+  const next = showFile(code, first, { ...target, path: "notes.txt" }, files, vi.fn());
   expect(monacoDouble.createModel.mock.calls).toEqual([
     ["", "python"],
     ["", "plaintext"],

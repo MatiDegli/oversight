@@ -14,12 +14,19 @@ beforeEach(() => {
 });
 
 it.each([undefined, 60_000])("uses Playwright's default unless timeout is %s", async (timeout) => {
-  const page = { evaluate: vi.fn(), locator: vi.fn() } as unknown as Page;
+  const locator = vi.fn();
+  const page = { evaluate: vi.fn(), locator } as unknown as Page;
   const hold = { seq: 8, ts: "", after: "", delay: 1234 };
   await engaged(page, hold, timeout);
   expect(mocks.poll).toHaveBeenCalledExactlyOnceWith(expect.any(Function), {
     ...(timeout === undefined ? {} : { timeout }),
   });
+  expect(mocks.poll).toHaveBeenCalledWith(
+    expect.any(Function),
+    timeout === undefined ? {} : { timeout },
+  );
+  expect(locator).toHaveBeenCalledWith("#root");
+  expect(mocks.attribute).toHaveBeenCalledWith("data-seq", "7");
   expect(mocks.contains).toHaveBeenCalledExactlyOnceWith(hold.delay);
   expect(mocks.attribute).toHaveBeenCalledExactlyOnceWith("data-seq", "7");
 });

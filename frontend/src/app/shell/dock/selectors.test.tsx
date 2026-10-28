@@ -251,3 +251,20 @@ it("places undated entries by seq so old records do not crowd the bounded window
   expect(html).not.toContain("Order unavailable");
   expect(html).not.toContain("shown after steps");
 });
+
+it("keeps recent steps visible beside more than 300 old undated records", () => {
+  const state = through(18);
+  state.errors = Array.from({ length: LOG_LIMIT + 10 }, () => ({
+    source: "tools" as const,
+    message: "Old error",
+    agent_id: null,
+    change_id: null,
+    fatal: false,
+  }));
+  state.errorEvents = state.errors.map(() => ({ seq: 1 }));
+  const activity = selectActivity(state);
+  expect(activity.entries).toHaveLength(LOG_LIMIT);
+  expect(activity.entries.filter((entry) => entry.id.startsWith("step:"))).toHaveLength(5);
+  expect(activity.entries.at(-1)?.id).toBe("step:agent-1:5");
+  expect(activity.omitted).toBe(15);
+});
