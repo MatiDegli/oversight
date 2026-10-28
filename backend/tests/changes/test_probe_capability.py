@@ -1,16 +1,22 @@
 """Without session C, added-test probes remain unknown and cannot run an open suite."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 from changes_helpers import Harness
 from test_probes_wiring import add_test
 
-from oversight.workspace import IsolationPolicy
+from oversight.workspace import IsolationPolicy, IsolationUnavailable
 from oversight_contracts.events import SuiteExecution
 from oversight_contracts.review import ChangeFacts
 
 
 @pytest.mark.anyio
 async def test_probes_skip_unknown_without_c(h: Harness, monkeypatch):
+    monkeypatch.setattr(
+        "oversight.workspace.capability.check_effect",
+        AsyncMock(side_effect=IsolationUnavailable("host unavailable")),
+    )
     await h.workspace.check_isolation()
     assert not h.workspace.isolation.born_with_c
     await h.open(1)

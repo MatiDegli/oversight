@@ -25,6 +25,9 @@ async def grant(workspace: Workspace, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_required_refuses_without_fallback(workspace: Workspace, monkeypatch) -> None:
+    monkeypatch.setattr(
+        capability, "check_effect", AsyncMock(side_effect=IsolationUnavailable("host unavailable"))
+    )
     await workspace.check_isolation()
     suite = AsyncMock()
     open_runner = AsyncMock()
@@ -53,6 +56,9 @@ async def test_best_effort_selects_c_and_snapshot_is_read_only(workspace: Worksp
 async def test_born_without_c_never_enables_authority_even_after_reset(make_workspace, monkeypatch):
     workspace = make_workspace()
     await workspace.acquire_runtime()
+    monkeypatch.setattr(
+        capability, "check_effect", AsyncMock(side_effect=IsolationUnavailable("host unavailable"))
+    )
     await workspace.check_isolation()
     retry = AsyncMock()
     monkeypatch.setattr(capability, "check_effect", retry)

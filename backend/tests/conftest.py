@@ -19,12 +19,22 @@ def baseten_verified(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def no_kernel_startup_probe(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Default server tests model an unavailable host; kernel acceptance is a separate gate."""
+    """Inject available C for general server tests; policy tests explicitly model no C.
+
+    Only the session-selected runner is replaced. C1's direct runner/entry/attack tests
+    retain the real launcher and their own injected confirmation path.
+    """
     from unittest.mock import AsyncMock
 
-    from oversight.workspace import IsolationUnavailable
+    from oversight.workspace import IsolatedRunner, run_process
 
-    monkeypatch.setattr(
-        "oversight.workspace.capability.check_effect",
-        AsyncMock(side_effect=IsolationUnavailable("injected unavailable host")),
-    )
+    class SessionRunner(IsolatedRunner):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._ready = True
+
+        async def _run(self, argv, cwd, timeout_s, env, cap, *, probe=False):
+            return await run_process(argv, cwd=cwd, timeout_s=timeout_s, env=env, output_cap=cap)
+
+    monkeypatch.setattr("oversight.workspace.capability.check_effect", AsyncMock())
+    monkeypatch.setattr("oversight.workspace.capability.IsolatedRunner", SessionRunner)
