@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import dataclass
+from typing import Any, cast
 
 from oversight.changes._behavior import BehaviorDiff
 from oversight.workspace import TypedResult
@@ -33,6 +34,17 @@ class BehaviorEvidence:
     functions: tuple[CapturedFunction, ...]
 
 
+def _shorten(value: Any, limit: int) -> Any:
+    """Clip public display structure, leaving JSON escaping to the serializer."""
+    if isinstance(value, str):
+        return value[:limit] + "..." if len(value) > limit else value
+    if isinstance(value, list):
+        values = cast(list[Any], value)
+        items = [_shorten(item, limit) for item in values[:limit]]
+        return [*items, "..."] if len(values) > limit else items
+    return value
+
+
 def _render(result: TypedResult) -> str:
     # Enumerate the public value fields, never serialize the private result object.
     kind = result["kind"]
@@ -41,7 +53,16 @@ def _render(result: TypedResult) -> str:
         display["value"] = result["value"]
     elif kind == "raised":
         display["class"], display["message"] = result["class"], result["message"]
-    return json.dumps(display, ensure_ascii=True, separators=(",", ":"))[:MAX_RENDERED]
+    rendered = json.dumps(display, ensure_ascii=True, separators=(",", ":"))
+    limit = MAX_RENDERED
+    while len(rendered) > MAX_RENDERED:
+        limit //= 2
+        clipped = {
+            key: value if key == "kind" else _shorten(value, limit)
+            for key, value in display.items()
+        }
+        rendered = json.dumps(clipped, ensure_ascii=True, separators=(",", ":"))
+    return rendered
 
 
 def _category(reason: str | None) -> str | None:
