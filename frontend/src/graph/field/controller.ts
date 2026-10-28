@@ -184,7 +184,11 @@ class FieldRuntime implements FieldController {
     if (this.renderer?.lost()) this.stop();
     if (!this.renderer) return;
     const { clientWidth: width, clientHeight: height } = this.canvas;
-    if (width === 0 || height === 0) return;
+    if (width === 0 || height === 0) {
+      // A hidden canvas has no final scene to paint; let its transition reach the stop condition.
+      this.paintedAt = now;
+      return;
+    }
     try {
       const { lights, config } = this.transition.sample(now);
       this.renderer.resize(width, height, Math.min(window.devicePixelRatio || 1, 1));

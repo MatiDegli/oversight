@@ -268,3 +268,26 @@ it("R4 starts the ring for working input and stops it immediately, while approva
   expect(canvas.oversightField?.animating()).toBe(false);
   controller.dispose();
 });
+
+it.each(["width", "height"])(
+  "finishes a pending transition with zero %s instead of spinning frames",
+  (axis) => {
+    const controller = createFieldController(canvas, source);
+    controller.update(light);
+    const draws = renderer.draw.mock.calls.length;
+    Object.assign(canvas, axis === "width" ? { clientWidth: 0 } : { clientHeight: 0 });
+    advance(120);
+    advance(240);
+    const scheduled = nextFrame;
+    for (let time = 256; time <= 400; time += 16) advance(time);
+    expect(nextFrame).toBe(scheduled);
+    expect(frames.size).toBe(0);
+    expect(canvas.oversightField?.animating()).toBe(false);
+    expect(renderer.draw).toHaveBeenCalledTimes(draws);
+    Object.assign(canvas, { clientWidth: 70, clientHeight: 70 });
+    window.dispatchEvent(new Event("resize"));
+    expect(last()[3][0]?.weight).toBe(1);
+    expect(renderer.draw).toHaveBeenCalledTimes(draws + 1);
+    controller.dispose();
+  },
+);
