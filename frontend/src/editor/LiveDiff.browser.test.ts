@@ -3,33 +3,6 @@ import { expect, it } from "vitest";
 
 import { data, expectDiff, expectModels, render, withPage } from "./LiveDiff.browser.support";
 
-it("keeps the disabled find surface on the field token", async () => {
-  await withPage(async (page) => {
-    await render(page);
-    await expectDiff(page, 8);
-    await page.evaluate(() => {
-      window.panelTest.current()?.getModifiedEditor().focus();
-    });
-    await page.keyboard.press("Control+f");
-    const input = page.locator(".find-widget.visible .monaco-findInput").first();
-    await browserExpect(input).toBeVisible();
-    const colors = await input.evaluate((element) => {
-      // Hold the state Monaco briefly uses while dismissing find, independent of animation timing.
-      element.classList.add("disabled");
-      const reference = document.createElement("span");
-      reference.style.backgroundColor = "var(--field)";
-      document.body.append(reference);
-      const result = {
-        actual: getComputedStyle(element).backgroundColor,
-        expected: getComputedStyle(reference).backgroundColor,
-      };
-      reference.remove();
-      return result;
-    });
-    expect(colors.actual).toBe(colors.expected);
-  });
-}, 60_000);
-
 it("switches selected files and changes in one editor, with exact line changes and no model errors", async () => {
   await withPage(async (page) => {
     await render(page);
@@ -148,70 +121,39 @@ it("shows a recoverable font failure without creating Monaco", async () => {
   });
 }, 60_000);
 
-it("keeps disabled find inputs on the field token after closing the widget", async () => {
+it("keeps disabled find inputs on the field token while open and after closing", async () => {
   await withPage(async (page) => {
     await render(page);
     await expectDiff(page, 8);
-    await page.evaluate(() => {
-      window.panelTest.current()?.getModifiedEditor().focus();
-    });
+    await page.evaluate(() => window.panelTest.current()?.getModifiedEditor().focus());
     await page.keyboard.press("Control+f");
-    await browserExpect(page.locator(".find-widget.visible")).toBeVisible();
+    const widget = page.locator(".monaco-editor.vs-dark .find-widget.visible");
+    await browserExpect(widget).toBeVisible();
+    const background = await page.evaluate(() => {
+      // Distinguish the CSS override from Monaco's cached input.background theme color.
+      document.documentElement.style.setProperty("--field", "var(--raised)");
+      const sample = document.createElement("div");
+      sample.style.backgroundColor = "var(--field)";
+      document.body.append(sample);
+      const color = getComputedStyle(sample).backgroundColor;
+      sample.remove();
+      return color;
+    });
+    // Hold the transient disabled state without depending on the close animation's timing.
+    const input = widget.locator(".monaco-findInput").first();
+    await input.evaluate((element) => {
+      element.classList.add("disabled");
+    });
+    await browserExpect(input).toHaveCSS("background-color", background);
+    await input.evaluate((element) => {
+      element.classList.remove("disabled");
+    });
     await page.keyboard.press("Escape");
     await browserExpect(page.locator(".find-widget.visible")).toHaveCount(0);
-    const colors = await page.evaluate(() => {
-      const probe = document.createElement("div");
-      probe.style.backgroundColor = "var(--field)";
-      document.body.append(probe);
-      const field = getComputedStyle(probe).backgroundColor;
-      probe.remove();
-      return {
-        field,
-        disabled: [...document.querySelectorAll(".find-widget .monaco-findInput.disabled")].map(
-          (element) => getComputedStyle(element).backgroundColor,
-        ),
-      };
-    });
-    expect(colors.disabled.length).toBeGreaterThan(0);
-    expect(new Set(colors.disabled)).toEqual(new Set([colors.field]));
-  });
-});
-
-it("keeps the find field on its theme token when closing disables it", async () => {
-  await withPage(async (page) => {
-    await render(page);
-    await expectDiff(page, 8);
-    await page.evaluate(() => window.panelTest.current()?.getModifiedEditor().focus());
-    await page.keyboard.press("Control+f");
-    await browserExpect(page.locator(".find-widget.visible")).toBeVisible();
-    await page.keyboard.press("Escape");
-    const field = page.locator(".modified .monaco-findInput.disabled").first();
-    await browserExpect(field).toBeAttached();
-    const background = await page.evaluate(() => {
-      const sample = document.createElement("div");
-      sample.style.backgroundColor = window.panelTest.palette.field;
-      return sample.style.backgroundColor;
-    });
-    await browserExpect(field).toHaveCSS("background-color", background);
-  });
-}, 60_000);
-
-it("keeps the field token on the disabled find input after closing it", async () => {
-  await withPage(async (page) => {
-    await render(page);
-    await expectDiff(page, 8);
-    await page.evaluate(() => window.panelTest.current()?.getModifiedEditor().focus());
-    await page.keyboard.press("Control+f");
-    await browserExpect(page.locator(".find-widget.visible")).toBeVisible();
-    const fieldColor = await page
-      .locator(".find-widget.visible .monaco-inputbox")
-      .first()
-      .evaluate((input) => getComputedStyle(input).backgroundColor);
-    await page.keyboard.press("Escape");
-    await browserExpect(page.locator(".find-widget .monaco-findInput.disabled").first()).toHaveCSS(
-      "background-color",
-      fieldColor,
-    );
+    const disabled = page.locator(".monaco-editor .find-widget .monaco-findInput.disabled");
+    expect(await disabled.count()).toBeGreaterThan(0);
+    for (const field of await disabled.all())
+      await browserExpect(field).toHaveCSS("background-color", background);
   });
 }, 60_000);
 
