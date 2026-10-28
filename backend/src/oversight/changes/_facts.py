@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import PurePosixPath
 
+from oversight.changes._measured import MeasuredEvidence, project_measured, validate_measured
 from oversight.changes._probes import added_cases, comparison
 from oversight.changes._shortcut_detector import (
     DetectionResult,
@@ -20,6 +21,7 @@ from oversight.changes._state import ChangeRecord
 from oversight.changes._support import ChangeContext
 from oversight.workspace import SuiteRun, validate_suite_execution
 from oversight_contracts.events import SuiteExecution
+from oversight_contracts.graph import ImpactCone
 from oversight_contracts.policy import EvidenceRef
 from oversight_contracts.review import (
     AddedTestProbe,
@@ -125,6 +127,8 @@ class FactsEvidence:
     runs: Mapping[int, SuiteRun]
     added_tests: tuple[AddedTestProbe, ...] = ()
     integrity_status: IntegrityStatus | None = None
+    measured: MeasuredEvidence | None = None
+    impact: ImpactCone | None = None
 
 
 def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
@@ -165,6 +169,7 @@ def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
             )
         ):
             raise ValueError("proposal execution tested another candidate")
+    validate_measured(facts, evidence.measured, evidence.executions, evidence.runs, evidence.impact)
     if facts.integrity != list(evidence.integrity):
         raise ValueError("facts integrity differs from captured source observations")
     if facts.added_tests != list(evidence.added_tests):
@@ -377,6 +382,9 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
         reach=None,
         complete=False,
         problems=list(evidence.problems),
+        measured_cone=project_measured(evidence.measured, evidence.target)
+        if evidence.measured
+        else None,
     )
     validate_change_facts(facts, evidence)
     return facts

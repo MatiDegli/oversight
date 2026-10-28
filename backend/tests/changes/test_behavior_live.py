@@ -1,4 +1,4 @@
-"""The scripted fake on the real demo tree; all measurements stay private."""
+"""The scripted fake on the real demo tree; caller evidence is published separately."""
 
 import asyncio
 from pathlib import Path
@@ -78,10 +78,11 @@ async def test_boundary_change_has_named_differing_rows_and_private_reasons(tmp_
         assert by_id["shop.cart:Cart.total"].reason == "method or class (not probed yet)"
         assert by_id["shop.pricing:added"].reason == "added (no base version)"
         for event in s.events():
-            # Contract defaults reserve publication slots without exposing measurements.
+            # Direct behavior publication belongs to its own front; callers publish separately.
             non_defaults = event.model_dump_json(exclude_defaults=True)
             assert "behavior" not in non_defaults
-            assert "measured_cone" not in non_defaults
+            if event.type == "change.facts_recorded":
+                assert event.payload.measured_cone is not None
             serialized = event.model_dump_json()
             for private in (
                 "quantity=10",
@@ -103,6 +104,20 @@ async def test_refactor_compares_without_claiming_equivalence(tmp_path):
         assert result.compared > 0 and result.differing == 0
         assert result.reason is None
         assert result.measurement == "no difference measured on these inputs"
+        from oversight.changes._measured import project_measured
+        from oversight_contracts.review import ChangeTarget
+
+        events = s.events()
+        facts = next(e.payload for e in events if e.type == "change.facts_recorded")
+        proposal = next(e.payload for e in events if e.type == "change.proposed")
+        target = ChangeTarget.model_validate(
+            facts.model_dump(include=set(ChangeTarget.model_fields))
+        )
+        assert facts.head_commit == proposal.head_commit and facts.revision == proposal.revision
+        assert facts.measured_cone == project_measured(rec.measured_cones[1], target)
+        assert {row.node_id for row in facts.measured_cone} == {
+            entry.node_id for entry in proposal.impact.entries
+        }
         assert_clean(s.live.workspace)
 
 
@@ -188,6 +203,7 @@ async def test_default_off_does_not_spawn_or_retain(tmp_path, monkeypatch):
     ):
         rec = await run(s)
         assert rec.behavior_diffs == {}
+        assert rec.measured_cones == {}
         worker.assert_not_awaited()
         assert_clean(s.live.workspace)
 

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from oversight.changes._measured import MeasuredEvidence
     from oversight.changes._review_port import ReviewCapture
 
 from oversight.agents import AgentTask
@@ -123,6 +124,9 @@ class ChangeRecord:
     suite_runs: dict[int, SuiteRun] = field(default_factory=dict[int, SuiteRun])
     behavior_diffs: dict[int, BehaviorDiff] = field(default_factory=dict[int, BehaviorDiff])
     """Private per-revision computation; deliberately absent from event facts."""
+    measured_cones: dict[int, MeasuredEvidence] = field(
+        default_factory=lambda: dict[int, "MeasuredEvidence"]()
+    )
     declared: FinishDeclaration | None = None
     delivery_rejected: str | None = None
     evidence: WriteEvidence | None = None

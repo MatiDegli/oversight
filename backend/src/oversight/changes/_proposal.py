@@ -6,6 +6,7 @@ from oversight.changes import _delivery as delivery
 from oversight.changes._behavior import probe_behavior, unavailable_behavior
 from oversight.changes._diff import count_lines_async, file_status, parse_name_status
 from oversight.changes._facts import FactsEvidence, build_change_facts, capture_facts
+from oversight.changes._measured import measure_cone, unavailable_measured
 from oversight.changes._probes import added_cases, probe_added_tests
 from oversight.changes._review_port import ReviewCapture
 from oversight.changes._state import (
@@ -308,8 +309,31 @@ async def record_probe_facts(
             rec.behavior_diffs[revision] = unavailable_behavior(
                 rec, revision, f"probe unavailable ({type(error).__name__})"
             )
+    if ctx.behavior_diff:
+        try:
+            if interrupted or cancelled:
+                raise asyncio.CancelledError
+            rec.measured_cones[revision] = await measure_cone(
+                ctx, rec, target=evidence.target, impact=proposal.impact
+            )
+        except asyncio.CancelledError:
+            rec.measured_cones.setdefault(
+                revision,
+                unavailable_measured(
+                    evidence.target, proposal.impact, "caller measurement interrupted"
+                ),
+            )
+            cancelled = True
+        except Exception as error:
+            rec.measured_cones[revision] = unavailable_measured(
+                evidence.target,
+                proposal.impact,
+                f"caller measurement unavailable ({type(error).__name__})",
+            )
     evidence = replace(
         evidence,
+        measured=rec.measured_cones.get(revision),
+        impact=proposal.impact.model_copy(deep=True),
         added_tests=probes,
         problems=evidence.problems + problems,
         executions=dict(rec.executions),
