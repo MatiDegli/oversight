@@ -18,6 +18,8 @@ beforeAll(async () => {
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
     cacheDir: fixtureCacheDir(expect.getState().testPath),
+    // The fixture is served as transformed HTML, so Vite must discover its definitions up front.
+    optimizeDeps: { entries: ["src/editor/LiveDiff.browser.fixture.tsx"] },
     server: { host: "127.0.0.1", port: 0, strictPort: false },
   });
   html = await server.transformIndexHtml(

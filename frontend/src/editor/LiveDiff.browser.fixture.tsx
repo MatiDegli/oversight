@@ -6,6 +6,7 @@ import { stateStore } from "../state";
 import type { LiveDiffData, State } from "../state";
 import { getActiveTheme } from "../theme";
 import { LiveDiff } from "./LiveDiff";
+import { FileView } from "./FileView";
 import { ReviewEditor } from "./ReviewEditor";
 import { App, createFileSession } from "../app";
 import { monaco } from "./monaco";
@@ -76,6 +77,22 @@ const editorSurface =
   ".monaco-diff-editor, .monaco-diff-editor *, .context-view, .context-view *, .monaco-hover, .monaco-hover *";
 
 export const panelTest = {
+  renderFile(path: string, content: string) {
+    const files = createFileSession({
+      getFile: () => Promise.resolve({ path, content, hash: "test-hash", agent_id: null }),
+      saveFile: () => Promise.reject(new Error("This test does not save")),
+    });
+    flushSync(() => {
+      root.render(
+        <FileView
+          target={{ path, agentId: null, startLine: 1, endLine: 1 }}
+          files={files}
+          commit="test-commit"
+          onClose={() => {}}
+        />,
+      );
+    });
+  },
   renderApp(state: State) {
     host.style.height = "100vh";
     flushSync(() => {
