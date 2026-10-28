@@ -1,7 +1,24 @@
-"""Coordinate worktrees, proposals and decisions through the change stages.
+"""The change manager: one record per agent's change, from its worktree to a merge or a discard.
 
-Decisions hold main and agent locks; confirmed receipts drive evidence. Once
-main becomes suspect, no further approval is admitted until a server restart.
+A change is `working` until its run ends, then `ready` (proposed) or `unproposed` (no proposal,
+such as after a halt whose worktree root was lost). Approve takes `ready`; Reject takes `ready`,
+`conflict`, `unproposed` or `broken`. Both enter `deciding`, which always ends: in `closing` once
+the decision is a fact, in `conflict`, back in `ready` when main is untouched, or in `broken` when
+main's state cannot be read. `closing` becomes `closed` once its resolution, delta and `done` are
+all sent; until then the change is pending, keeps its worktree until the resolution is out, and the
+next decision or `open` sends the rest. Request changes takes `ready` or `conflict` back to
+`working` and discards nothing; from `conflict` it first merges main into the agent's branch, so
+the agent redoes its change on the new base. In `ready`, the person's save in review commits to the
+agent's worktree and re-proposes; Approve merges only the revision it was clicked on, with the
+worktree at that revision's head. Stop takes what Reject takes, or a `working` change, whose run
+it cancels and waits for, then discards it as Reject does. Every git call is `Workspace.git`, async
+with a timeout; decisions hold main's lock, then the agent's, throughout. Once a change enters
+`broken`, `main_suspect` stays true until the process restarts; `check_main` reads main's state,
+and `aclose` drains the close-outs before the store closes.
+
+The person's edits on main (docs/plans/files.md): `save_main` commits one file as the user and
+`rescan` re-reads main, each one `_whole` step under main's lock, each publishing one
+`graph.delta`; `read_file` reads main under that lock, or an agent's worktree under its own.
 """
 
 import asyncio

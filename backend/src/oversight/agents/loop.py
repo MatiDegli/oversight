@@ -20,8 +20,8 @@ from oversight.agents._prompts import REVISION_PROMPT as REVISION_PROMPT
 from oversight.agents._prompts import SYSTEM_PROMPT as SYSTEM_PROMPT
 from oversight.agents._prompts import prompt_version, system_prompt
 from oversight.agents._replies import ReplyError, ReplyRecovery
+from oversight.agents._tick import publish_usage
 from oversight.agents._trace import model_turn, publications, timed, traced_drive
-from oversight.agents._usage import publish_usage
 from oversight.agents.client import (
     CALL_SCOPE,
     CallScope,
