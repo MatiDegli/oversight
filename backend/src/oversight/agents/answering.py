@@ -42,7 +42,7 @@ UNAVAILABLE_PRODUCERS = {
 class AnsweringError(ValueError):
     def __init__(self, code: Literal["invalid_request", "wrong_state"], message: str) -> None:
         super().__init__(message)
-        self.code = code
+        self.code: Literal["invalid_request", "wrong_state"] = code
 
 
 @dataclass(frozen=True)
@@ -96,8 +96,11 @@ class _Projection:
         self.active: list[DecisionRef] = []
         self.history: list[DecisionRef] = []
         self.prior: dict[int, ServerEvent] = {}
+        self.duplicate_cards: dict[str, set[tuple[object, ...]]] = {}
 
     def clear(self, change_id: str, kind: str | None = None) -> None:
+        if kind in (None, "review_card"):
+            self.duplicate_cards.pop(change_id, None)
         self.active = [
             ref
             for ref in self.active
@@ -173,7 +176,12 @@ class _Projection:
         ):
             return
         self.clear(facts.change_id, "review_card")
+        seen: set[tuple[object, ...]] = set()
         for card in facts.review_cards or []:
+            key = ("review_card", facts.change_id, facts.revision, card.node_id, card.question)
+            if key in seen:
+                self.duplicate_cards.setdefault(facts.change_id, set()).add(key)
+            seen.add(key)
             if card.answer is None and _measurement(card, facts, self.prior.get(card.evidence_seq)):
                 self.add(
                     ReviewCardDecisionRef(
@@ -217,7 +225,8 @@ def validate_answering(
     if reference.evidence_seq not in projection.prior:
         raise AnsweringError("invalid_request", "answering evidence_seq is absent or future")
     matches = [ref for ref in projection.active if _key(ref) == _key(reference)]
-    if len(matches) > 1:
+    duplicates = {key for keys in projection.duplicate_cards.values() for key in keys}
+    if len(matches) > 1 or _key(reference) in duplicates:
         raise AnsweringError("invalid_request", "answering entry is not unique")
     if matches == [reference]:
         return

@@ -36,10 +36,10 @@ async def test_a_start_cancelled_while_open_waits_leaves_the_slot_free(
     entered = asyncio.Event()
     real_open = ChangeManager.open
 
-    async def held_open(self: ChangeManager, *args: Any) -> Any:
+    async def held_open(self: ChangeManager, *args: Any, **kwargs: Any) -> Any:
         entered.set()
         await asyncio.Event().wait()  # never set: only a cancel ends it
-        return await real_open(self, *args)
+        return await real_open(self, *args, **kwargs)
 
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         monkeypatch.setattr(ChangeManager, "open", held_open)

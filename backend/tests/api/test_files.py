@@ -248,7 +248,7 @@ async def test_a_start_refused_by_open_is_wrong_state_and_frees_the_slot(
 ) -> None:
     real_open = ChangeManager.open
 
-    async def refused(self: ChangeManager, *args: Any) -> Any:
+    async def refused(self: ChangeManager, *args: Any, **kwargs: Any) -> Any:
         raise WrongState("Main's state is unknown; nothing was started")
 
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:

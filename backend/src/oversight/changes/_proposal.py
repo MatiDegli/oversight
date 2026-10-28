@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from dataclasses import replace
 
 from oversight.agents import AgentTask, RunEnd
@@ -45,7 +46,13 @@ from oversight_contracts.events import (
 )
 
 
-async def open(ctx: ChangeContext, task: AgentTask, model_id: str) -> Tree:
+async def open(
+    ctx: ChangeContext,
+    task: AgentTask,
+    model_id: str,
+    *,
+    before_create: Callable[[], None] | None = None,
+) -> Tree:
     """Create the agent's worktree from main's HEAD and record its base files and graph."""
     if task.change_id in ctx.state.changes or task.agent_id in ctx.state.agents:
         raise WrongState(f"{task.agent_id} or {task.change_id} was already opened")
@@ -54,6 +61,9 @@ async def open(ctx: ChangeContext, task: AgentTask, model_id: str) -> Tree:
         # M5: the route's check is a fast path; main may have turned suspect while this queued.
         if ctx.state.suspect:
             raise WrongState(f"{SUSPECT}; nothing was started")
+        # Answering admission: re-check after pending delivery and the main-lock wait.
+        if before_create is not None:
+            before_create()
         tree = await ctx.workspace.create_worktree(task.agent_id)
     base_commit = tree.base_commit
     if base_commit is None:

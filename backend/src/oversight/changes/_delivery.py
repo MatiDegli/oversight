@@ -108,9 +108,10 @@ def status(ctx: ChangeContext, rec: ChangeRecord, state: Literal["done", "stoppe
         step=rec.steps,
         max_steps=task.limits.max_steps * (rec.requests + 1),
         detail=STOPPED if state == "stopped" else None,
+        answering=task.answering,
     )
 
-    validate_agent_status(payload, base_commit=rec.base_commit)
+    validate_agent_status(payload, base_commit=rec.base_commit, answering=task.answering)
     return payload
 
 
