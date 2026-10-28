@@ -66,3 +66,19 @@ async def test_switch_off_preserves_level2_manual_review_log(
         assert not any(e.type in {"change.reviewed", "error"} for e in server.events())
         assert all(e.payload.role == "agent" for e in server.events() if e.type == "usage.tick")
     assert not forbidden.called
+
+
+async def test_switch_off_replays_level2_byte_for_byte(tmp_path: Path) -> None:
+    from oversight.events import EventStore, play, read_jsonl, read_store, write_jsonl
+
+    settings = two_fakes(tmp_path, cross_review=False)
+    assert not settings.cross_review
+    source = REPO_ROOT / "fixtures/events/scripted-level2.jsonl"
+    events = read_jsonl(source)
+    first = events[0]
+    assert first.type == "run.started"
+    async with EventStore(tmp_path / "replay.sqlite", first.payload.run_id, mode="replay") as store:
+        await play(store, events, speed=0)
+    output = tmp_path / "replayed.jsonl"
+    write_jsonl(output, read_store(store.path))
+    assert output.read_bytes() == source.read_bytes()

@@ -1,6 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from oversight.changes._cross_review import ReviewCapture
 
 from oversight.agents import AgentTask
 from oversight.changes._evidence import WriteEvidence
@@ -98,6 +103,7 @@ class ChangeRecord:
     steps: int = 0
     requests: int = 0
     """Request changes taken so far; each grows the step budget by `limits.max_steps`."""
+    requested_evidence: WriteEvidence | None = None
     requested: ChangeResolved | None = None
     """A `changes_requested` the store has not taken yet: sent before the next proposal, or
     before a Reject's close-out."""
@@ -132,8 +138,24 @@ class ChangeRecord:
     """Counts the decisions taken; only the latest one's task may end `deciding`."""
     taken: int = 0
     """The revision Approve was clicked on (R1): a later one is reviewed before any merge."""
+    person_acted: bool = False
+    """Permanent per change, including all future re-proposals."""
+    review_ready: bool = False
+    """The author run ended ready_for_review; a request clears it before resumption."""
+    review_task: asyncio.Task[Any] | None = None
+    review_capture: ReviewCapture | None = None
+    review_reserved: bool = False
+    review_consumed: bool = False
+    review_attempts: set[int] = field(default_factory=set[int])
+    """An unsuccessful preflight releases the reservation but never retries its review_seq."""
     stopped: bool = False
     """The decision is a Stop: its close-out sends `stopped` before the resolution, no `done`."""
+
+    def person_intervened(self) -> None:
+        """Admission is synchronous; an identical or subsequently failed save still counts."""
+        self.person_acted = True
+        if self.review_task is not None:
+            self.review_task.cancel()
 
     @property
     def agent_id(self) -> AgentId:
@@ -182,6 +204,7 @@ class ChangeState:
     )
     """Changes whose close-out or cleanup is unfinished; retried before a decision or open."""
     tasks: set[asyncio.Task[Any]] = field(default_factory=lambda: set[asyncio.Task[Any]]())
+    closing: bool = False
     suspect: bool = False
 
     def break_change(self, rec: ChangeRecord) -> None:

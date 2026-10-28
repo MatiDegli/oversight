@@ -32,6 +32,7 @@ async def save_for_review(
     if rec is None:
         raise ChangeNotFound(agent_id)
     check_editable(ctx, rec)
+    rec.person_intervened()
     async with ctx.workspace.locks(main=True, agent_id=agent_id):
         check_editable(ctx, rec)  # a decision may have taken it while the save waited
         saved = await rec.tree.write_text(path, content, expected_hash=base_hash)

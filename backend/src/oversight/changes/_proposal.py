@@ -356,6 +356,7 @@ def run_ended(
         rec.steps = steps
     elif end is not None:
         rec.steps = end.steps
+    rec.review_ready = end is not None and end.state == "ready_for_review"
     outcome: State = "ready" if rec.proposed_now else "unproposed"
     if stopping:
         rec.fallback = outcome
