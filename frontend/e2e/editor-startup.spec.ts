@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test as baseTest } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 
 import type { GraphProbeHost } from "../src/graph";
@@ -16,14 +16,26 @@ import {
 } from "./editor-startup-support";
 
 // Optional stress reproduction: OVERSIGHT_E2E_CPU_RATE=6, also with taskset -c <core>.
-test.beforeEach(async ({ page }) => {
-  const raw = process.env.OVERSIGHT_E2E_CPU_RATE;
-  if (raw === undefined) return;
-  const rate = Number(raw);
-  if (!Number.isFinite(rate) || rate < 4 || rate > 6)
-    throw new Error("OVERSIGHT_E2E_CPU_RATE must be between 4 and 6");
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+const test = baseTest.extend({
+  page: async ({ page }, runPage) => {
+    const raw = process.env.OVERSIGHT_E2E_CPU_RATE;
+    if (raw === undefined) {
+      await runPage(page);
+      return;
+    }
+    const rate = Number(raw);
+    if (!Number.isFinite(rate) || rate < 4 || rate > 6)
+      throw new Error("OVERSIGHT_E2E_CPU_RATE must be between 4 and 6");
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+    try {
+      await runPage(page);
+    } finally {
+      // Reset before Playwright closes the page: Chromium can reuse its renderer for later cases.
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await cdp.detach();
+    }
+  },
 });
 
 async function expectPython(panel: Locator) {
