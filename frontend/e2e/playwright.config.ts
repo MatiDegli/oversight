@@ -18,7 +18,18 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   forbidOnly: true,
-  reporter: [["list"]],
+  reporter: process.env.CI === "true" ? [["list"], ["html", { open: "never" }]] : [["list"]],
   outputDir: "../test-results",
-  use: { baseURL: origin, viewport: { width: 1920, height: 1080 }, trace: "retain-on-failure" },
+  use: {
+    baseURL: origin,
+    viewport: { width: 1920, height: 1080 },
+    trace: "retain-on-failure",
+    // Opt in locally to the software rendering used for the runner reproduction.
+    launchOptions: {
+      args:
+        process.env.OVERSIGHT_E2E_SOFTWARE_RENDERING === "1"
+          ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+          : [],
+    },
+  },
 });
