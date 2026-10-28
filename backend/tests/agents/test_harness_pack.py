@@ -1,20 +1,18 @@
 """Both harness arms through scripted tool calls; no provider transport or credits."""
 
 import hashlib
-import importlib
 import json
-import sys
+from functools import partial
 from pathlib import Path
 from typing import cast
 
 import pytest
 from agent_helpers import Recorder, make_run, script
 
-from oversight.agents import _prompts, loop
+from oversight.agents import _prompts
 from oversight.agents.client import Message
 from oversight.settings import Settings
 from oversight.workspace import Tree, Workspace
-from oversight.workspace.runner import run_process
 from oversight_contracts.events import AgentStep
 
 pytestmark = pytest.mark.anyio
@@ -25,15 +23,7 @@ FINISH = ("finish", {"summary": "Done."})
 RUN_TESTS = ("run_tests", {})
 
 
-@pytest.fixture(autouse=True)
-def pack(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("OVERSIGHT_HARNESS_PACK", "true")
-    importlib.reload(_prompts)
-    monkeypatch.setattr(loop, "SYSTEM_PROMPT", _prompts.SYSTEM_PROMPT)
-    yield
-    # Restore the module constants too: other tests keep their original imports.
-    monkeypatch.setenv("OVERSIGHT_HARNESS_PACK", "false")
-    importlib.reload(_prompts)
+make_run = partial(make_run, harness_pack=True)
 
 
 async def put(tree: Tree, path: str, text: str) -> None:
@@ -163,35 +153,31 @@ async def test_pack_prompt_has_one_evidence_path_and_stop(small_tree: Opened) ->
     prompt = str(model.requests[0][0]["content"])
     assert "one hypothesis" in prompt and "evidence" in prompt
     assert "Stop" in prompt and "several approaches" not in prompt
-    assert _prompts.PROMPT_VERSION != "agent-v1-66d056cb7ed7"
+    assert _prompts.prompt_version(True) != "agent-v1-66d056cb7ed7"
 
 
 async def test_startup_exports_the_selected_prompt_version(tmp_path: Path) -> None:
-    for enabled in ("false", "true"):
-        process = await run_process(
-            [
-                sys.executable,
-                "-c",
-                "import json; from oversight.agents import PROMPT_VERSION; "
-                "from oversight.agents.loop import SYSTEM_PROMPT; "
-                "print(json.dumps([PROMPT_VERSION, SYSTEM_PROMPT]))",
-            ],
-            cwd=tmp_path,
-            timeout_s=30,
-            env={"OVERSIGHT_HARNESS_PACK": enabled},
-        )
-        assert process.returncode == 0, process.stderr
-        version, prompt = json.loads(process.stdout)
-        assert (version == "agent-v1-66d056cb7ed7") == (enabled == "false")
-        assert ("one hypothesis" in prompt) == (enabled == "true")
+    from live_helpers import live_settings
+
+    from oversight.app import LiveRun
+
+    for enabled in (False, True):
+        live = LiveRun(live_settings(tmp_path / str(enabled), harness_pack=enabled))
+        await live.startup()
+        try:
+            stream = live.store.subscribe()
+            started = await anext(stream)
+            version = json.loads(started.envelope)["payload"]["prompt_version"]
+            assert version == _prompts.prompt_version(enabled)
+            assert (version == "agent-v1-66d056cb7ed7") is (not enabled)
+        finally:
+            await live.shutdown()
 
 
 async def test_off_preserves_prompt_and_tool_results(
     small_tree: Opened, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("OVERSIGHT_HARNESS_PACK", "false")
-    importlib.reload(_prompts)
-    monkeypatch.setattr(loop, "SYSTEM_PROMPT", _prompts.SYSTEM_PROMPT)
     await put(small_tree[1], "shop/notes.txt", "needle\n" * 51)
     bad_edit = (
         "edit_file",
@@ -199,7 +185,7 @@ async def test_off_preserves_prompt_and_tool_results(
     )
     model = script([("search", {"query": "needle"})], [READ], [bad_edit], [FINISH])
     recorder = Recorder()
-    end = await make_run(small_tree, model, recorder).run()
+    end = await make_run(small_tree, model, recorder, harness_pack=False).run()
     assert end.state == "ready_for_review" and end.steps == 4
     content = observations(model.requests[-1])
     assert content[0] == "\n".join(
@@ -227,7 +213,7 @@ async def test_off_preserves_failed_test_output(
     )
     model = script([RUN_TESTS], [FINISH])
     recorder = Recorder()
-    await make_run(small_tree, model, recorder).run()
+    await make_run(small_tree, model, recorder, harness_pack=False).run()
     run = recorder.suites[0]
     expected = (
         "Suite outcome: failed; 0 passed, 1 failed, 0 skipped\n"
@@ -241,7 +227,7 @@ async def test_off_preserves_failed_test_output(
 def test_setting_defaults_off_and_environment_overrides_env_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("OVERSIGHT_HARNESS_PACK")
+    monkeypatch.delenv("OVERSIGHT_HARNESS_PACK", raising=False)
     env_file = tmp_path / "settings.env"
     assert Settings.load(env_file).harness_pack is False
     env_file.write_text("OVERSIGHT_HARNESS_PACK=true\n")

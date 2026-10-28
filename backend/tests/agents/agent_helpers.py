@@ -17,7 +17,7 @@ from oversight.agents import (
     parse_script,
 )
 from oversight.events import EventPayload
-from oversight.workspace import SuiteRun, Tree, Workspace
+from oversight.workspace import SuiteRun, Tree, Workspace, configure_suite
 from oversight_contracts.events import Limits
 from oversight_contracts.review import FinishDeclaration
 
@@ -126,10 +126,13 @@ def make_run(
     max_steps: int = 20,
     max_wall_clock_s: int = 120,
     ledger: UsageLedger | None = None,
+    harness_pack: bool = False,
 ) -> AgentRun:
     workspace, worktree = tree
+    configure_suite(workspace, harness_pack=harness_pack)
     return AgentRun(
         AgentTask("agent-1", "change-1", "A", task, limits(max_steps, max_wall_clock_s)),
+        harness_pack=harness_pack,
         model=model,
         workspace=workspace,
         tree=worktree,

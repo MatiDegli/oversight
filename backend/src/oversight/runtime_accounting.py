@@ -68,7 +68,7 @@ class ReviewAccounting:
     async def _record(self, reply: ModelReply) -> None:
         live = self.live
         metered = self.profile.provider == "meta"
-        price = live._pricing if metered else None
+        price = live._price_for(self.profile)
         cost = price.cost(reply.usage) if price is not None else None
         spent = live._usage.record(cost) if metered else live._usage.spent_usd
         tick = UsageTick(

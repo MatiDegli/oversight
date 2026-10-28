@@ -159,3 +159,19 @@ async def test_startup_rejects_failed_effect(tmp_path, monkeypatch, failure):
     monkeypatch.setattr(IsolatedRunner, "__call__", run)
     with pytest.raises(IsolationUnavailable, match="effect probe failed"):
         await check(tmp_path)
+
+
+async def test_invalidation_warns_once_with_redacted_cause(tmp_path, caplog):
+    from oversight.workspace.capability import SessionIsolation
+    from oversight.workspace.snapshot import IntegrityState
+
+    for name in ("one", "two"):
+        runtime = tmp_path / name
+        session = SessionIsolation(runtime, IntegrityState())
+        with caplog.at_level("WARNING", logger="oversight.workspace.capability"):
+            session.invalidate(f"entry failed at {runtime}/launcher")
+            session.invalidate(f"entry failed at {runtime}/launcher")
+        assert session.capability.invalidated
+    assert len(caplog.records) == 2
+    assert all("entry failed at .runtime/launcher" in r.message for r in caplog.records)
+    assert str(tmp_path) not in caplog.text

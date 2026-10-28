@@ -42,6 +42,7 @@ from oversight.workspace.suite import (
     SuiteUnavailable,
     validate_suite_execution,
 )
+from oversight.workspace.suite_guard import configure_suite
 from oversight.workspace.tree import TREE_TIMEOUT_S, list_tree
 
 __all__ = [
@@ -79,6 +80,7 @@ __all__ = [
     "WorkspaceError",
     "base_probe_checkout",
     "check_content",
+    "configure_suite",
     "content_hash",
     "list_tree",
     "parse_junit",
