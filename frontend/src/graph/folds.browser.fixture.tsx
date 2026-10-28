@@ -17,6 +17,7 @@ const node = (id: string, kind: GraphNode["kind"], parent_id: string | null): Gr
   start_line: 1,
   end_line: 2,
   is_test: false,
+  examples: null,
 });
 const graph: GraphSnapshot = {
   version: "v1",

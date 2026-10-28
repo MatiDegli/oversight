@@ -2,7 +2,7 @@
 
 from typing import Literal, Self
 
-from pydantic import PositiveInt, model_validator
+from pydantic import Field, PositiveInt, model_validator
 
 from oversight_contracts.common import (
     AgentId,
@@ -27,6 +27,8 @@ class SubtaskDraft(ContractModel):
 
     task: NonEmptyText
     zone: PlanZone
+    depends_on: list[Literal[0, 1]] = Field(default_factory=list[Literal[0, 1]])
+    """Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered."""
 
 
 class PlanSubtask(SubtaskDraft):
@@ -57,10 +59,20 @@ class Plan(ContractModel):
     def _state_has_subtasks(self) -> Self:
         if self.state == "proposed" and self.subtasks is None:
             raise ValueError("a proposed plan requires both subtasks")
-        if self.state == "running" and (
-            self.subtasks is None
-            or any(task.agent_id is None for task in self.subtasks)
-            or self.subtasks[0].agent_id == self.subtasks[1].agent_id
-        ):
-            raise ValueError("a running plan requires two distinct assigned agents")
+        if self.subtasks is not None:
+            for index, task in enumerate(self.subtasks):
+                if index in task.depends_on or len(task.depends_on) != len(set(task.depends_on)):
+                    raise ValueError("dependencies must be unique and exclude self")
+            if all(task.depends_on for task in self.subtasks):
+                raise ValueError("subtask dependencies must be acyclic")
+        if self.state == "running":
+            if self.subtasks is None:
+                raise ValueError("a running plan requires both subtasks")
+            assigned = [task.agent_id for task in self.subtasks if task.agent_id is not None]
+            if (
+                not assigned
+                or len(assigned) != len(set(assigned))
+                or any(task.agent_id is None and not task.depends_on for task in self.subtasks)
+            ):
+                raise ValueError("running requires distinct agents for all independent subtasks")
         return self

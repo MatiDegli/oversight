@@ -60,6 +60,7 @@ const resolved = (state: State, payload: Partial<ChangeResolved>) =>
       decided_by: null,
       reasons: [],
       assessment: null,
+      answers: null,
       ...payload,
     },
   });

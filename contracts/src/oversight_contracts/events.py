@@ -24,11 +24,12 @@ from oversight_contracts.common import (
     Timestamp,
     WorkspacePath,
 )
+from oversight_contracts.examples import TaskExample
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot, ImpactCone
 from oversight_contracts.plans import Plan, PlanZone
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
 from oversight_contracts.queue import QueuedTask
-from oversight_contracts.review import ChangeFacts, CrossReview
+from oversight_contracts.review import ChangeFacts, CrossReview, ReviewCard
 
 # run.started
 
@@ -123,6 +124,8 @@ class AgentStatus(ContractModel):
     """The queue item dispatching this agent."""
     base_commit: NonEmptyText | None = None
     """The agent base used to guard an unproposed rejection."""
+    examples: list[TaskExample] | None = None
+    """The accepted task examples, retained for live observation and replay."""
 
 
 class CaseResult(ContractModel):
@@ -251,6 +254,8 @@ class ChangeProposed(ContractModel):
     """Run by the server on head_commit, through run_tests' runner and timeout."""
     impact: ImpactCone
     """Computed on the change's version."""
+    examples: list[TaskExample] | None = None
+    """The task examples and confirmations captured for this proposal."""
 
 
 class Conflict(ContractModel):
@@ -289,6 +294,8 @@ class ChangeResolved(ContractModel):
     """Recorded server-authored reasons for this decision."""
     assessment: ChangeAssessment | None = None
     """The immutable assessment used for this decision, when available."""
+    answers: list[ReviewCard] | None = Field(default=None, max_length=8)
+    """The accepted human answers, copied by the server from a decision command."""
 
     @model_validator(mode="after")
     def _authority(self, info: ValidationInfo) -> Self:

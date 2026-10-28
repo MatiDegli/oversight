@@ -372,4 +372,4 @@ No listing, hashing, exclusions or graph-version calculation is built in deliver
 
 `SaveFile` remains the 1.3 shape: base_hash is a required string for both main and review.
 Null and omitted hashes fail validation before any file handler runs. Safe creation, nullable
-base_hash, zones and inventory arrive together under 1.5.0.
+base_hash, zones and inventory arrive together under 1.6.0.

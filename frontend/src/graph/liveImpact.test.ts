@@ -22,6 +22,7 @@ const node = (id: string, extra: Partial<GraphNode> = {}): GraphNode => ({
   start_line: 1,
   end_line: 2,
   is_test: false,
+  examples: null,
   ...extra,
 });
 const call = (src: string, dst: string, extra: Partial<GraphEdge> = {}): GraphEdge => ({

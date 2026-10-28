@@ -111,6 +111,7 @@ const agent = (slot: "A" | "B", state: AgentStatus["state"] = "working"): AgentS
   started_by: null,
   queued_task_id: null,
   base_commit: null,
+  examples: null,
   agent_id: slot,
   change_id: slot,
   slot,
@@ -188,6 +189,7 @@ describe("selectNodeMarks", () => {
         start_line: 1,
         end_line: 2,
         is_test: false,
+        examples: null,
       },
     ];
     const state = { ...createInitialState(), changes: { unknown: change } };

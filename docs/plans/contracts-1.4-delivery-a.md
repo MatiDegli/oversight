@@ -16,7 +16,7 @@ Only the command table in section 4.7 and the exception in section 4.9 change:
   the reserved agent/change views, review, Revert, history, queue, lead and runtime-tree routes.
   The tree row records the required nullable hash, joint cap and 501 reservation.
 - Section 4.9 records the bounded enum/guard exception at 1.4.0 and the later required nullable
-  SaveFile hash at 1.5.0, together with safe creation, zones and inventory. Version strings
+  SaveFile hash at 1.6.0, together with safe creation, zones and inventory. Version strings
   cannot identify multiple schemas.
 
 ## Review signals for size

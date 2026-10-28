@@ -70,6 +70,7 @@ const node: GraphNode = {
   end_line: 2,
   parent_id: "shop",
   is_test: false,
+  examples: null,
 };
 const caller: GraphNode = { ...node, id: "shop:order", name: "order", qualname: "order" };
 const edge: GraphEdge = {
@@ -93,6 +94,7 @@ const agent: AgentStatus = {
   started_by: null,
   queued_task_id: null,
   base_commit: null,
+  examples: null,
   agent_id: "agent-1",
   change_id: "change-1",
   slot: "A",
@@ -130,6 +132,7 @@ const update: ChangeUpdated = {
   lines_removed: 1,
 };
 const proposal: ChangeProposed = {
+  examples: null,
   change_id: agent.change_id,
   agent_id: agent.agent_id,
   revision: 1,
@@ -178,6 +181,7 @@ const resolution: ChangeResolved = {
   decided_by: null,
   reasons: [],
   assessment: null,
+  answers: null,
 };
 const delta: GraphDelta = {
   from_version: "v1",

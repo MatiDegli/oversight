@@ -9,6 +9,7 @@ from typing import Literal, Self
 from pydantic import model_validator
 
 from oversight_contracts.common import ContractModel, EdgeId, NodeId, WorkspacePath
+from oversight_contracts.examples import NodeExample
 
 type NodeKind = Literal["module", "class", "function", "method"]
 type EdgeKind = Literal["imports", "calls", "inherits"]
@@ -40,6 +41,8 @@ class GraphNode(ContractModel):
     """The module for top-level definitions, the class for methods; null for modules."""
     is_test: bool
     """In a test module: hidden by default, never listed in a cone."""
+    examples: list[NodeExample] | None = None
+    """Captured examples for this graph version; null means unavailable."""
 
 
 class GraphEdge(ContractModel):

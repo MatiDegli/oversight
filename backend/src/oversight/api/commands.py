@@ -28,6 +28,7 @@ from oversight_contracts.commands import (
 )
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
+    ("POST", "/dictation", "Reserved /dictation"),
     ("GET", "/history", "Reserved /history"),
     ("POST", "/queue", "Reserved /queue"),
     ("GET", "/queue", "Reserved /queue"),

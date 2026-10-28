@@ -196,7 +196,7 @@ def test_save_file_stays_1_3_and_suites_do_not_compare_phase_counts() -> None:
 
 def test_profiles_have_independent_exact_sets_and_strict_new_rule_inputs() -> None:
     assert len(SAFE_MERGE_V1_RULES) == 5 and len(SAFE_MERGE_V2_RULES) == 11
-    assert [len(rules) for rules in POLICY_RULES.values()] == [5, 6, 7, 8, 9, 9, 9, 11]
+    assert [len(rules) for rules in POLICY_RULES.values()] == [5, 6, 7, 8, 9, 9, 9, 11, 9]
     assert not {"run_test_integrity", "tests_reach_changes"}.intersection(
         POLICY_RULES["safe-merge-zone-v1"]
     )

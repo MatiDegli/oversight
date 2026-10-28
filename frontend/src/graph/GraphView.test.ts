@@ -89,6 +89,7 @@ function setLabel(name: string) {
             start_line: 1,
             end_line: 4,
             is_test: false,
+            examples: null,
           },
         ],
         edges: [],
@@ -638,6 +639,7 @@ it("limits the zoom to the buttons' range, and routes a call again when a node i
     start_line: line,
     end_line: line + 1,
     is_test: false,
+    examples: null,
   });
   stateStore.setState({
     state: {
