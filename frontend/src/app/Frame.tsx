@@ -16,6 +16,7 @@ import { useShell } from "./shell/useShell";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
 export interface FrameProps {
+  practice?: { active: boolean; open: () => void; content: ReactNode };
   state: State;
   view: View;
   files?: FileAccess;
@@ -62,7 +63,12 @@ export function Frame(props: FrameProps) {
       : `${shell.sidebar ?? ""}:${String(shell.dock)}:${String(shell.maximized)}:${String(task.expanded)}:${String(shell.layoutRevision)}`;
   return (
     <div className="shell-frame flex h-full flex-col bg-background text-text">
-      <TopBar state={state} onOpenQueue={props.onOpenQueue} onOpenPalette={shell.openPalette} />
+      <TopBar
+        state={state}
+        onOpenQueue={props.onOpenQueue}
+        onOpenPalette={shell.openPalette}
+        practice={props.practice}
+      />
       <div className="shell-workspace">
         <LeftRail
           watching={!open}
