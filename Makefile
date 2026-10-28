@@ -12,7 +12,14 @@ PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install frontend-deps setup dev check check-ci check-fast check-python lint-python check-frontend \
 	lint-frontend contracts check-contracts check-contract-tuples check-secrets demo-repo-check replay shots smoke layout \
-	test-browser demo demo-setup-check demo-check e2e record record-level2 manifest notices check-notices audit
+	test-browser demo demo-setup-check demo-check e2e record record-level2 manifest notices check-notices audit \
+	workspace-fetch-boltons workspace-graph-boltons
+
+workspace-fetch-boltons: ## explicitly fetch the pinned Boltons checkout (network); never run by check
+	$(UV) python tools/workspace_source.py fetch-boltons
+
+workspace-graph-boltons: ## export the pinned Boltons bare graph snapshot offline; no layout or server
+	$(UV) python tools/workspace_source.py graph-boltons
 
 help: ## list the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'

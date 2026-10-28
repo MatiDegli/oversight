@@ -38,6 +38,8 @@ class Settings:
     """Optional development origin. Unset on backend-only/demo runs. OVERSIGHT_VITE_PORT."""
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
+    workspace_source: str = ""
+    """OVERSIGHT_WORKSPACE_SOURCE: empty for demo-repo, or a server-owned pinned profile."""
     layout: Path = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
     """The preset layout, `{node_id: {x, y}}`; a missing or unusable file means the graph has no
     positions. OVERSIGHT_LAYOUT may be relative, and then starts at the repository root, not at the
@@ -105,6 +107,7 @@ class Settings:
             port=port,
             vite_port=vite_port,
             runtime_dir=Path(merged.get("OVERSIGHT_RUNTIME_DIR", cls.runtime_dir)),
+            workspace_source=merged.get("OVERSIGHT_WORKSPACE_SOURCE", ""),
             # Joining an absolute path onto REPO_ROOT gives that path, so only a relative one moves.
             layout=REPO_ROOT / (merged.get("OVERSIGHT_LAYOUT") or cls.layout),
             # An empty value, as in .env.example, means the key is not set.

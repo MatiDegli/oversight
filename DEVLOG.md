@@ -18,3 +18,5 @@ One line per day, in Argentina time (ART).
   SSE waits, Request changes and a new revision, Stop and discard, file-view edits on main, usage;
   the dot field, rings and breathing light behind the graph, with WebGL failure and context-loss
   handling and the live diff's impact light.
+- **2026-10-28:** Added the pinned outside-source workspace profile, explicit Boltons fetch and
+  offline graph export, with fixture-only source, provenance and pytest acceptance.

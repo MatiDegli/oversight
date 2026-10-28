@@ -136,6 +136,7 @@ async def run_suite(
     redact: Callable[[str], str],
     spawn: Spawn,
     case_ids: tuple[str, ...] = (),
+    pytest_targets: tuple[str, ...] = (),
     harness_pack: bool = False,
 ) -> SuiteRun:
     report = runtime_root / "tmp" / f"{uuid.uuid4().hex}.jsonl"
@@ -161,6 +162,7 @@ async def run_suite(
         "-o",
         "junit_family=xunit1",
         f"--junitxml={junit}",
+        *(pytest_targets if not case_ids else ()),
         *(["--", *case_ids] if case_ids else []),
     ]
     report_error: str | None = None
