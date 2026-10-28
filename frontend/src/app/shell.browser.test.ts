@@ -84,6 +84,28 @@ async function framed(page: Page, id: string) {
     .toMatchObject({ framed: true });
 }
 
+async function openDockWithActivity(page: Page) {
+  await page.keyboard.press("Control+Backquote");
+  expect((await box(page, ".bottom-dock")).height).toBe(280);
+  const dock = await box(page, ".bottom-dock");
+  const center = await box(page, ".shell-center");
+  expect(dock.x).toBe(center.x);
+  expect(dock.width).toBe(center.width);
+  await framed(page, "shop.pricing:compute_price");
+  const tab = page.getByRole("tab", { name: "Activity log", exact: true });
+  await tab.click();
+  const activity = page.getByRole("tabpanel", { name: "Activity log" });
+  await check(
+    activity.getByRole("list", { name: "Run activity" }).getByRole("listitem"),
+  ).toHaveText([
+    "Asearch · okSearched for compute_price(: 9 matches in 4 files0.04 s11:03:16 ART",
+    "Aread_file · okRead compute_price in pricing.py, lines 14 to 220.01 s11:03:18 ART",
+    "Aedit_file · okEdited compute_price in pricing.py: +2 -00.03 s11:03:21 ART",
+  ]);
+  await check(tab).toHaveAttribute("aria-selected", "true");
+  await check(tab).toBeFocused();
+}
+
 it.each([
   [1920, 1080],
   [1440, 900],
@@ -115,17 +137,7 @@ it.each([
       expect((await box(page, ".graph-stage")).width).toBeGreaterThanOrEqual(560);
       await page.keyboard.press("Control+b");
       await check(page.locator(".shell-sidebar")).toHaveCount(0);
-      await page.keyboard.press("Control+Backquote");
-      expect((await box(page, ".bottom-dock")).height).toBe(280);
-      const dock = await box(page, ".bottom-dock");
-      const center = await box(page, ".shell-center");
-      expect(dock.x).toBe(center.x);
-      expect(dock.width).toBe(center.width);
-      await framed(page, "shop.pricing:compute_price");
-      await page.getByRole("tab", { name: "Activity log", exact: true }).click();
-      await check(page.getByRole("tabpanel", { name: "Activity log" })).toHaveText(
-        "The run’s activity log will appear here.",
-      );
+      await openDockWithActivity(page);
       await page.evaluate(() => {
         window.shellTest.open("file");
         window.shellTest.update();

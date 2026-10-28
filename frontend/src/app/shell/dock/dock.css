@@ -1,0 +1,153 @@
+.dock-header {
+  display: flex;
+  flex-shrink: 0;
+  height: 36px;
+  border-bottom: 1px solid var(--divider);
+}
+.dock-header [role="tablist"] {
+  display: flex;
+}
+.dock-header .dock-tab {
+  padding: 0 var(--spacing-lg);
+  font-size: var(--label-size);
+}
+.dock-header .dock-tab:hover,
+.dock-close:hover {
+  color: var(--text-hover);
+  background: var(--page);
+}
+.dock-close {
+  margin-left: auto;
+  padding: 0 var(--spacing-lg);
+  color: var(--muted);
+}
+.bottom-dock svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.dock-panel,
+.dock-activity-scroll {
+  scrollbar-color: var(--control-edge) var(--shell);
+  caret-color: var(--text);
+}
+.bottom-dock ::selection {
+  background: var(--raised);
+  color: var(--text);
+}
+.dock-panel {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  font-size: var(--label-size);
+}
+.dock-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+.bottom-dock :is(button, [tabindex]):focus-visible {
+  outline: var(--focus-ring-width) solid var(--text);
+  outline-offset: var(--focus-ring-offset);
+}
+.dock-empty {
+  padding: var(--spacing-lg);
+  color: var(--muted);
+}
+.dock-note {
+  color: var(--muted);
+  font-size: var(--caption-size);
+}
+p.dock-note {
+  padding: var(--spacing-xs) var(--spacing-lg);
+  flex-shrink: 0;
+}
+.dock-code,
+.dock-number,
+.dock-failures code {
+  font-family: var(--code-font);
+  font-size: var(--data-size);
+  font-variant-numeric: tabular-nums;
+}
+.dock-tests {
+  padding: var(--spacing-sm) var(--spacing-lg);
+}
+.dock-tests > .dock-note {
+  padding: 0 0 var(--spacing-sm);
+}
+.dock-test-run {
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--divider);
+}
+.dock-facts {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+.dock-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--muted);
+}
+.dock-result {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+.dock-result[data-outcome="passed"] {
+  color: var(--passed);
+}
+.dock-result[data-outcome="failed"],
+.dock-failed-icon {
+  color: var(--failed-text);
+}
+.dock-letter {
+  color: var(--muted);
+  font-weight: var(--badge-weight);
+}
+.dock-letter[data-slot="A"] {
+  color: var(--agent-a-text);
+}
+.dock-letter[data-slot="B"] {
+  color: var(--agent-b-text);
+}
+.dock-failures {
+  margin: var(--spacing-sm) 0 0 var(--spacing-overlay);
+}
+.dock-failures li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding-block: var(--spacing-xs);
+  overflow-wrap: anywhere;
+}
+.dock-activity-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scroll-behavior: auto;
+}
+.dock-activity-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-bottom: 1px solid var(--divider);
+}
+.dock-activity-row > svg {
+  align-self: flex-start;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.dock-entry-copy {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dock-entry-copy p {
+  color: var(--muted);
+}
+.dock-activity-row > :is(time, .dock-number, .dock-note) {
+  flex-shrink: 0;
+}
