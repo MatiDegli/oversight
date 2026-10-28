@@ -587,3 +587,19 @@ hashes; its test checks the medians, delta and sample counts against this entry.
 review fix, the totals were recalculated from all six raw traces and matched these reports.
 The measured median improved, but three samples with this dispersion and a software renderer
 do not establish a hardware-GPU speedup or a frame-latency improvement.
+
+## Cross-review core and provisional reviewer budget
+
+Cross-review is opt-in (`OVERSIGHT_CROSS_REVIEW=false`). Its core and adapter do not schedule
+reviews or publish events yet. A reviewer uses the opposite slot's model, a fresh client and a
+separate message history. Fake reviews require an entirely fake configuration and use scripts
+named for the reviewer, independently of the author scripts.
+
+The reviewer uses `REVIEW_MAX_OUTPUT_TOKENS = 12_288` with explicit `reasoning_effort="low"`
+on Meta and Baseten. This provisional budget leaves room for twenty findings of 1,000 characters
+and reasoning; 32,768 has no documented provider validation. Paid acceptance must measure provider
+acceptance and long-output throughput at the actual budget against the planned 90-second deadline.
+No paid probe was run for this change. Length, empty or invalid output stays diagnosed unknown,
+without a recovery call or a silent budget reduction. `run.started.limits.max_output_tokens`
+continues to describe the author's 4,096-token budget; the review budget has no event field in the
+frozen 1.4.0 contracts.

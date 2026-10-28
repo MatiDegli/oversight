@@ -54,6 +54,12 @@ class Settings:
     fake_script_b: Path | None = None
     """Agent B's own script when it runs `fake`: reusing A's would propose the same edit twice, so a
     fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
+    cross_review: bool = False
+    """Opt-in only. PR1 configures the reviewer without scheduling any reviews."""
+    reviewer_fake_script: Path | None = None
+    """OVERSIGHT_REVIEWER_FAKE_SCRIPT: reviewer fake, reviewing author fake-b."""
+    reviewer_fake_b_script: Path | None = None
+    """OVERSIGHT_REVIEWER_FAKE_B_SCRIPT: reviewer fake-b, reviewing author fake."""
     # The spending brake: no defaults. A value that is missing, not a number or not positive is
     # `None`, and every start on a Meta profile is then refused (not_configured).
     budget_usd: float | None = None
@@ -95,6 +101,9 @@ class Settings:
             fake_script=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT")),
             agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
             fake_script_b=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_B")),
+            cross_review=merged.get("OVERSIGHT_CROSS_REVIEW", "false").lower() == "true",
+            reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
+            reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
             input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
             output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
