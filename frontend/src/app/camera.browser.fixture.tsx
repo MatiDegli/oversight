@@ -25,6 +25,7 @@ const events = log
   .filter((event) => event.seq <= 20);
 const recorded = events.reduce(applyEvent, createInitialState());
 if (!recorded.graph) throw new Error("The fixture has no graph");
+const recordedGraph = recorded.graph;
 const proposal = recorded.changes["change-1"]?.proposal;
 if (!proposal) throw new Error("The fixture has no cone");
 const cone = proposal.impact;
@@ -149,6 +150,7 @@ export const graphTest = {
   changed: CHANGED,
   caller: CALLER,
   mount: () => {
+    stateStore.setState({ state: { ...recorded, graph: { ...recordedGraph, positions } } });
     render("watch");
   },
   mountEmpty() {
@@ -196,6 +198,11 @@ export const graphTest = {
   },
   prepareReview: loadCone,
   mountCone,
+  unmount: () => {
+    flushSync(() => {
+      root.render(null);
+    });
+  },
 };
 
 declare global {

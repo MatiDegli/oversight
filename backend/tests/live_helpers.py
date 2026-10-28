@@ -238,7 +238,11 @@ async def live_server(
     task = asyncio.create_task(server.serve(sockets=[sock]))
     try:
         async with httpx.AsyncClient(
-            base_url=f"http://127.0.0.1:{port}", timeout=DEADLINE_S
+            base_url=f"http://127.0.0.1:{port}",
+            timeout=DEADLINE_S,
+            # Commands can follow long event waits. Avoid racing Uvicorn's idle socket
+            # expiry when the next command arrives; each request still uses real HTTP.
+            limits=httpx.Limits(max_keepalive_connections=0),
         ) as client:
             running = LiveServer(app, client, server, task)
             assert (await client.get("/health")).status_code == 200

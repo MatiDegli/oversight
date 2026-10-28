@@ -6,6 +6,7 @@ import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect } from "vitest";
 
+import { fixtureCacheDir } from "../../shots/browserCache.support";
 import type { LiveDiffData } from "../state";
 import type {} from "./LiveDiff.browser.fixture";
 
@@ -16,7 +17,7 @@ let html: string;
 beforeAll(async () => {
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/editor-vite-cache", import.meta.url)),
+    cacheDir: fixtureCacheDir(expect.getState().testPath),
     server: { host: "127.0.0.1", port: 0, strictPort: false },
   });
   html = await server.transformIndexHtml(
