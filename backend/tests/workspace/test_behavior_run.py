@@ -115,7 +115,7 @@ async def test_timeout_or_cancel_reaps_exact_worker_and_removes_files(
     task = asyncio.create_task(workspace.run_behavior(workspace.main, (TARGET,), timeout_s=0.5))
     async with asyncio.timeout(3):
         for _ in range(300):
-            if pid_file.exists():
+            if pid_file.exists() and pid_file.read_text().strip():
                 break
             await asyncio.sleep(0.01)
     pid = int(pid_file.read_text())
