@@ -35,6 +35,7 @@ async def guarded_suite(
     timeout_s: float,
     case_ids: tuple[str, ...],
     spawn: Spawn,
+    pytest_targets: tuple[str, ...] = (),
 ) -> SuiteRun:
     """Caller retains main/worktree/lease through capture, namespace death and restoration."""
     state = workspace.integrity
@@ -59,6 +60,7 @@ async def guarded_suite(
                 redact=workspace.redact,
                 spawn=runner,
                 case_ids=case_ids,
+                pytest_targets=pytest_targets,
                 harness_pack=workspace.harness_pack,
             )
         except (SuiteInterrupted, SuiteUnavailable) as error:
