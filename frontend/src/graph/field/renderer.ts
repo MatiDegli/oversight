@@ -17,6 +17,8 @@ export interface LampLook {
 }
 
 export interface LampRenderer {
+  /** Diagnoses lifecycle boundaries, never the steady drawing path. */
+  check: () => void;
   /** Sizes the drawing buffer to a CSS size at a device pixel ratio. */
   resize(width: number, height: number, ratio: number): void;
   draw(grid: LampGrid, look: LampLook): void;
@@ -120,7 +122,8 @@ function link(resources: Resources): WebGLProgram {
 }
 
 function check(gl: WebGL2RenderingContext) {
-  if (gl.isContextLost() || gl.getError() !== gl.NO_ERROR) throw new Error("WebGL context failed");
+  const error = gl.getError();
+  if (gl.isContextLost() || error !== gl.NO_ERROR) throw new Error("WebGL context failed");
 }
 
 function initialize(resources: Resources) {
@@ -189,19 +192,24 @@ function renderer(
   let ratio = 1;
   let uploaded = { cols: 0, rows: 0 };
   return {
+    check: () => {
+      check(gl);
+    },
     resize(width, height, nextRatio) {
       ratio = nextRatio;
       const w = Math.max(1, Math.round(width * ratio));
       const h = Math.max(1, Math.round(height * ratio));
-      if (canvas.width !== w) canvas.width = w;
-      if (canvas.height !== h) canvas.height = h;
+      if (canvas.width !== w || canvas.height !== h) {
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        check(gl);
+      }
     },
     draw(grid, look) {
       gl.activeTexture(gl.TEXTURE0);
       upload(gl, grid, texture, uploaded);
       uploaded = { cols: grid.cols, rows: grid.rows };
       paint(gl, canvas, initialized, grid, look, ratio);
-      check(gl);
     },
     pixel(x, y) {
       const px = Math.floor(x * ratio);
@@ -247,6 +255,7 @@ function upload(
       gl.UNSIGNED_BYTE,
       grid.data,
     );
+    check(gl);
   }
 }
 

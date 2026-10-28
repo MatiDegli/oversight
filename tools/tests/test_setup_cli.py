@@ -10,6 +10,10 @@ import pytest
 from oversight.settings import REPO_ROOT
 
 
+def test_make_demo_clears_vite_port_once_for_the_whole_target() -> None:
+    assert (REPO_ROOT / "Makefile").read_text().count("demo: export OVERSIGHT_VITE_PORT :=") == 1
+
+
 @pytest.mark.parametrize("mode", ["missing", "invalid", "ready", "fake", "bad-model", "bad-port"])
 def test_check_exit_code_and_output_never_contain_values(tmp_path: Path, mode: str) -> None:
     values = {
@@ -73,8 +77,9 @@ def test_check_exit_code_and_output_never_contain_values(tmp_path: Path, mode: s
 
 
 @pytest.mark.parametrize("configured", [False, True])
+@pytest.mark.parametrize("inherited_vite_port", ["8710", "abc"])
 def test_make_demo_checks_setup_before_building_or_serving(
-    tmp_path: Path, configured: bool
+    tmp_path: Path, configured: bool, inherited_vite_port: str
 ) -> None:
     (tmp_path / "Makefile").write_text((REPO_ROOT / "Makefile").read_text())
     env_file = tmp_path / ".env"
@@ -85,7 +90,8 @@ def test_make_demo_checks_setup_before_building_or_serving(
     uv = bin_dir / "uv"
     uv.write_text(
         f"#!{sys.executable}\n"
-        "import sys\nfrom pathlib import Path\n"
+        "import os\nimport sys\nfrom pathlib import Path\n"
+        "assert os.environ.get('OVERSIGHT_VITE_PORT') == ''\n"
         f"marker = Path({str(marker)!r})\n"
         "if 'oversight.setup' in sys.argv:\n"
         "    marker.write_text('setup\\n')\n"
@@ -97,7 +103,8 @@ def test_make_demo_checks_setup_before_building_or_serving(
     uv.chmod(0o755)
     pnpm = bin_dir / "pnpm"
     pnpm.write_text(
-        f"#!{sys.executable}\nfrom pathlib import Path\n"
+        f"#!{sys.executable}\nimport os\nfrom pathlib import Path\n"
+        "assert os.environ.get('OVERSIGHT_VITE_PORT') == ''\n"
         f"with Path({str(marker)!r}).open('a') as stream: stream.write('build\\n')\n"
     )
     pnpm.chmod(0o755)
@@ -111,6 +118,7 @@ def test_make_demo_checks_setup_before_building_or_serving(
         env={
             "PATH": f"{bin_dir}:{os.environ.get('PATH', os.defpath)}",
             "PYTHONPATH": f"{REPO_ROOT / 'backend/src'}:{REPO_ROOT / 'contracts/src'}",
+            "OVERSIGHT_VITE_PORT": inherited_vite_port,
         },
     )
     assert result.returncode == (0 if configured else 2)

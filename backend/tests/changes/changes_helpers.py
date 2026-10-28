@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import pytest
+from decision_helpers import observed_target
 from pydantic import BaseModel, TypeAdapter
 
 from oversight.agents import AgentTask, RunEnd
@@ -399,7 +400,7 @@ def errors(h: Harness, words: str) -> list[ErrorReport]:
 
 
 async def approve(h: Harness, n: int = 1) -> None:
-    await h.manager.approve(f"change-{n}", None)
+    await h.manager.approve(f"change-{n}", None, **observed_target(h.manager, f"change-{n}"))
     assert h.payloads(ChangeResolved)[-1].merge == "merged"
 
 

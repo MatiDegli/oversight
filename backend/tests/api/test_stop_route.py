@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+from decision_helpers import observed_body
 from live_helpers import (
     DEADLINE_S,
     GatedModel,
@@ -29,6 +30,7 @@ from revise_helpers import (
 
 from oversight.agents import Message, ModelReply, ScriptedModel, ToolSchema, parse_script
 from oversight.app import LIMITS
+from oversight_contracts.commands import RequestChanges
 
 pytestmark = pytest.mark.anyio
 
@@ -133,7 +135,9 @@ async def test_stop_right_after_request_changes_never_runs_the_revision(
             live.stop("agent-1")
             stopped.set()
 
-        live.request_changes("change-1", "Shorter, please.")
+        live.request_changes(
+            "change-1", RequestChanges(comment="Shorter, please.", **observed_body(s, "change-1"))
+        )
         live._decisions["agent-1"].add_done_callback(stop_now)  # pyright: ignore[reportPrivateUsage]
         await stopped.wait()
         events = await s.until(is_type("change.resolved", reason="stopped"), first[-1].seq)

@@ -2,14 +2,18 @@
 
 The tool loop sees only `ModelClient`: a list of Chat Completions messages and tool schemas in, one
 `ModelReply` out. The SDK client points at the agent's own endpoint and model, sends the reasoning
-setting on every call, and retries 429 and 5xx with exponential backoff and full jitter. Usage the
-API does not report stays `None`, never 0.
+setting on every call, and retries transport errors, 429 and 5xx with backoff and full jitter.
+Usage the API does not report stays `None`, never 0.
 """
 
 import asyncio
+import math
 import random
 from collections.abc import Awaitable, Callable, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any, Protocol, cast
 
 import openai
@@ -49,6 +53,14 @@ MUSE_SPARK_OPEN = ModelProfile(
 )
 FAKE_MODEL = ModelProfile(
     id="fake", label="Scripted fake model", provider="fake", model="fake-scripted", reasoning=None
+)
+
+FAKE_MODEL_B = ModelProfile(
+    id="fake-b",
+    label="Scripted fake model B",
+    provider="fake",
+    model="fake-scripted-b",
+    reasoning=None,
 )
 
 UNVERIFIED_PROFILES: frozenset[str] = frozenset()
@@ -96,6 +108,22 @@ class ModelReply:
     usage: Usage = field(default_factory=Usage)
     model: str | None = None
     """The model id the API reported."""
+    finish_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class CallScope:
+    """Run-local retry deadline and accounting for attempts with no usable reply.
+
+    Context-local so clients retain the small ModelClient interface, and simultaneous agents
+    cannot share a deadline or charge uncertain usage to each other.
+    """
+
+    deadline: float | None
+    record: Callable[[ModelReply], Awaitable[None]]
+
+
+CALL_SCOPE: ContextVar[CallScope | None] = ContextVar("agent_model_call", default=None)
 
 
 class ModelClient(Protocol):
@@ -111,6 +139,14 @@ class ModelAPIError(Exception):
     """The model call failed for good: a refused request, or retries used up."""
 
 
+class EmptyChoicesError(ModelAPIError):
+    """No verdict, but retain the response identity and usage for the review adapter."""
+
+    def __init__(self, reply: ModelReply) -> None:
+        super().__init__("the API returned no choices")
+        self.reply = reply
+
+
 @dataclass(frozen=True)
 class RetryPolicy:
     max_attempts: int = 5
@@ -122,11 +158,13 @@ class RetryPolicy:
         ceiling = min(self.cap_s, self.base_s * 2**attempt)
         delay = ceiling * jitter
         if retry_after_s is not None:
-            delay = max(delay, min(retry_after_s, self.cap_s))
+            delay = max(delay, retry_after_s)
         return delay
 
 
 def _retryable(error: openai.APIError) -> bool:
+    if isinstance(error, openai.APIConnectionError):
+        return True  # includes APITimeoutError
     if isinstance(error, openai.APIStatusError):
         return error.status_code == 429 or error.status_code >= 500
     return False
@@ -136,10 +174,19 @@ def _retry_after(error: openai.APIError) -> float | None:
     if not isinstance(error, openai.APIStatusError):
         return None
     value = error.response.headers.get("retry-after")
-    try:
-        return float(value) if value is not None else None
-    except ValueError:
+    if value is None:
         return None
+    try:
+        seconds = float(value)
+        return max(0.0, seconds) if math.isfinite(seconds) else None
+    except ValueError:
+        try:
+            date = parsedate_to_datetime(value)
+            if date.tzinfo is None:
+                date = date.replace(tzinfo=UTC)
+            return max(0.0, (date - datetime.now(UTC)).total_seconds())
+        except (ValueError, TypeError, OverflowError):
+            return None
 
 
 def usage_of(completion: ChatCompletion) -> Usage:
@@ -156,18 +203,24 @@ def usage_of(completion: ChatCompletion) -> Usage:
 
 def reply_of(completion: ChatCompletion) -> ModelReply:
     if not completion.choices:
-        raise ModelAPIError("the API returned no choices")
+        raise EmptyChoicesError(ModelReply(None, [], usage_of(completion), completion.model))
     message = completion.choices[0].message
     calls = [
-        ToolCall(id=call.id, name=call.function.name, arguments=call.function.arguments or "{}")
+        ToolCall(
+            id=call.id,
+            name=call.function.name if call.type == "function" else call.custom.name,
+            arguments=(call.function.arguments or "{}")
+            if call.type == "function"
+            else call.custom.input,
+        )
         for call in message.tool_calls or []
-        if call.type == "function"
     ]
     return ModelReply(
         text=message.content or None,
         tool_calls=calls,
         usage=usage_of(completion),
         model=completion.model or None,
+        finish_reason=completion.choices[0].finish_reason,
     )
 
 
@@ -230,14 +283,35 @@ class OpenAIClient:
             try:
                 completion = cast(ChatCompletion, await self._create(**params))
             except openai.APIError as error:
+                if isinstance(error, openai.APIConnectionError):
+                    await self._unanswered()
                 attempt += 1
                 if not _retryable(error) or attempt >= self._retry.max_attempts:
                     raise ModelAPIError(_describe(error, attempt)) from error
-                await self._sleep(
-                    self._retry.delay(attempt - 1, self._jitter(), _retry_after(error))
-                )
+                delay = self._retry.delay(attempt - 1, self._jitter(), _retry_after(error))
+                scope = CALL_SCOPE.get()
+                if scope is not None and scope.deadline is not None:
+                    remaining = scope.deadline - asyncio.get_running_loop().time()
+                    if delay > remaining:
+                        raise ModelAPIError(
+                            f"model API retry wait of {delay:g} s exceeds the task deadline"
+                        ) from error
+                await self._sleep(delay)
                 continue
+            except asyncio.CancelledError:
+                # A sent request may have been billed even when Stop or the task deadline wins.
+                await self._unanswered()
+                raise
+            if not completion.choices:
+                scope = CALL_SCOPE.get()
+                if scope is not None:
+                    await scope.record(ModelReply(None, [], usage_of(completion), completion.model))
             return reply_of(completion)
+
+    async def _unanswered(self) -> None:
+        scope = CALL_SCOPE.get()
+        if scope is not None:
+            await scope.record(ModelReply(None, [], model=self._profile.model))
 
 
 def _describe(error: openai.APIError, attempts: int) -> str:

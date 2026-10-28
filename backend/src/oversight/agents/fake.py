@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import cast
 
 from oversight.agents.client import FAKE_MODEL, Message, ModelReply, ToolCall, ToolSchema, Usage
+from oversight.limits import bounded_text
 from oversight_contracts.events import ModelProfile
 
 
@@ -56,7 +57,7 @@ def _usage(raw: object) -> Usage:
     return Usage(count("input_tokens"), count("output_tokens"), count("cached_tokens"))
 
 
-def parse_script(text: str) -> Script:
+def parse_script(text: str, profile: ModelProfile = FAKE_MODEL) -> Script:
     data = cast(dict[str, object], json.loads(text))
     turns: list[ModelReply] = []
     number = 0
@@ -75,7 +76,8 @@ def parse_script(text: str) -> Script:
                 text=reply_text if isinstance(reply_text, str) else None,
                 tool_calls=calls,
                 usage=_usage(raw_turn.get("usage")),
-                model=FAKE_MODEL.model,
+                model=profile.model,
+                finish_reason=cast(str | None, raw_turn.get("finish_reason")),
             )
         )
     return Script(
@@ -83,9 +85,9 @@ def parse_script(text: str) -> Script:
     )
 
 
-def load_script(path: Path) -> Script:
+def load_script(path: Path, profile: ModelProfile = FAKE_MODEL) -> Script:
     """Synchronous: read scripts at start-up or in tests, not inside a running loop."""
-    return parse_script(path.read_text(encoding="utf-8"))
+    return parse_script(bounded_text(path), profile)
 
 
 class ScriptedModel:

@@ -24,6 +24,7 @@ from changes_helpers import (
     spoil_main,
     spy_drains,
 )
+from decision_helpers import observed_target
 
 from oversight.changes import ChangeNotFound
 from oversight.workspace import InvalidPath, content_hash
@@ -76,7 +77,7 @@ async def test_get_main_waits_for_a_held_merge(h: Harness, monkeypatch: pytest.M
     await h.run_agent(1, EDIT)
     await commit_on_main(h, PATH, "return 1", "return 5")
     h.workspace.arm("merge", mode="hold_after")
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     await h.workspace.entered.wait()
     assert "<<<<<<<" in (await h.workspace.main.read_text(PATH)).content
     reads: list[str] = []
@@ -219,7 +220,7 @@ async def test_rescan_that_fails_reports_and_keeps_the_snapshot(
 async def test_rescan_sends_a_pending_merge_delta_first(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     h.fail_once, h.fail_times = GraphDelta, 2
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     await h.manager.rescan()
 
@@ -234,7 +235,7 @@ async def test_rescan_supersedes_a_failed_merge_delta(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     before = h.manager.snapshot.version
     h.fail_once, h.fail_times = GraphDelta, 4
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     await h.manager.rescan()
 
@@ -270,7 +271,7 @@ async def test_a_rescan_waits_for_a_close_out_publish_a_cancel_left_running(
     await h.run_agent(1, EDIT)
     waited = spy_drains(monkeypatch)
     h.hold = GraphDelta
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     rescan = asyncio.get_running_loop().create_task(h.manager.rescan())  # nothing was pending
     await h.held.wait()
     await cancel_twice(approval)  # the approval ends, its publish still held

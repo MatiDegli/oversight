@@ -33,6 +33,7 @@ class Attempt:
     steps: int = 0
     updates: dict[str, FileDiff] = field(default_factory=dict)
     proposal: ChangeProposed | None = None
+    base_commit: str | None = None
     tests: Tests = field(
         default_factory=lambda: Tests(baseline="not_run", hidden="not_run", policy="not_run")
     )
@@ -46,6 +47,8 @@ class Attempt:
         agent = getattr(payload, "agent_id", None)
         if agent is not None and agent != self.record.agent_id:
             raise BenchError("another agent appeared on the dedicated bench server")
+        if event.type == "agent.status":
+            self.base_commit = payload.base_commit
         if event.type == "usage.tick":
             self.brake = ledger.charge(self.record, self.usage.add(payload)) or self.brake
         elif event.type == "agent.step":
@@ -117,11 +120,21 @@ async def cleanup(session: Session, attempt: Attempt, ledger: Ledger) -> None:
         return
     # Cancellation may have closed the async generator while it was waiting for an SSE byte.
     await session.events.reconnect()
-    if attempt.terminal in {"ready_for_review", "halted"} and not attempt.interrupted:
+    if (
+        attempt.terminal in {"ready_for_review", "halted"}
+        and not attempt.interrupted
+        and (attempt.proposal or attempt.base_commit)
+    ):
         await session.api.request(
             "POST",
             f"/changes/{attempt.record.change_id}/reject",
-            json={"comment": "Task bench: graded; never merge."},
+            json={
+                "comment": "Task bench: graded; never merge.",
+                "revision": attempt.proposal.revision if attempt.proposal else 0,
+                "head_commit": attempt.proposal.head_commit
+                if attempt.proposal
+                else attempt.base_commit,
+            },
         )
     else:
         await session.api.request("POST", f"/agents/{attempt.record.agent_id}/stop")

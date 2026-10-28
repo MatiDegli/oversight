@@ -4,11 +4,16 @@ from oversight.changes import _delivery as delivery
 from oversight.changes import _merge as merge
 from oversight.changes import _proposal as proposal
 from oversight.changes import _recovery as recovery
+from oversight.changes._decision_validation import validate_decision_target
+from oversight.changes._resolution_validation import validate_resolution_intent
 from oversight.changes._state import (
+    APPROVABLE,
     ChangeRecord,
     Source,
+    WrongState,
 )
 from oversight.changes._support import ChangeContext
+from oversight.events import EventRejected
 from oversight.workspace import (
     WorkspaceError,
 )
@@ -30,6 +35,21 @@ async def approve(ctx: ChangeContext, rec: ChangeRecord, comment: str | None) ->
                 fatal=False,
             )
             return
+        assert rec.evidence is not None
+        try:
+            validate_decision_target(
+                rec, rec.evidence.revision, rec.evidence.head_commit, APPROVABLE, reserved=True
+            )
+        except WrongState:
+            await ctx.error(
+                "server",
+                f"Revision {rec.revision} of {rec.change_id} arrived after you clicked; "
+                "review it and approve again.",
+                rec,
+                fatal=False,
+            )
+            return
+        validate_resolution_intent(rec.evidence)
         if not await as_clicked(ctx, rec):
             return
         pre: str | None = None
@@ -40,6 +60,9 @@ async def approve(ctx: ChangeContext, rec: ChangeRecord, comment: str | None) ->
             # Still under both locks: settle main from its facts, then cancel.
             await recovery.recover(ctx, rec, comment, pre, None)
             raise
+        except EventRejected as error:
+            await delivery.rejected(ctx, rec, error)
+            return
         except Exception as error:
             await recovery.recover(ctx, rec, comment, pre, error)
         if rec.merged:

@@ -358,3 +358,18 @@ change proposed in the contracts 1.4.0 PR.
 4. P1 and P2 (section 4). **Recommended: approve P1** (202 plus `error` until then), **defer P2**.
 5. Saves enabled only once R5 (`changes/request` step 1) merges, commit message `Edit <path>`, no
    tests per save? **Recommended: yes** to all three; R5 tests every combination at approval.
+
+## Contracts 1.4.0 tree reservation
+
+`GET /tree?agent=` is reserved and returns 501 in live and replay. Omitted agent selects main;
+a supplied agent will select its active worktree. It accepts neither body nor path selector.
+The future `TreeResponse` contains sorted unique directory paths and `TreeFile` entries, with a
+joint cap of 2,000 and explicit truncation. Hash is a required nullable lowercase SHA-256 of
+exact bytes. Null means hashing was incomplete; it does not mean the file disappeared.
+A future implementation shares workspace path eligibility, holds the appropriate tree lock,
+and spends at most 8 MiB hashing retained files, without partial digests or extra reads.
+No listing, hashing, exclusions or graph-version calculation is built in delivery A.
+
+`SaveFile` remains the 1.3 shape: base_hash is a required string for both main and review.
+Null and omitted hashes fail validation before any file handler runs. Safe creation, nullable
+base_hash, zones and inventory arrive together under 1.5.0.

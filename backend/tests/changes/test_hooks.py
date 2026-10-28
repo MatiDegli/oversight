@@ -14,6 +14,7 @@ from changes_helpers import (
     cancel_twice,
     queued_callbacks_ran,
 )
+from decision_helpers import observed_target
 from pydantic import BaseModel
 
 from oversight.changes import WrongState
@@ -50,7 +51,7 @@ async def test_broken_sets_main_suspect(
         h.workspace.arm(subcommand, mode=mode)
     assert not h.manager.main_suspect
 
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     if "cancel" in faults[0]:
         with pytest.raises(asyncio.CancelledError):
             await approval
@@ -60,12 +61,14 @@ async def test_broken_sets_main_suspect(
     assert all(fault.left == 0 for fault in h.workspace.faults)
     assert h.manager.main_suspect is suspect
     if not suspect:
-        await h.manager.approve("change-1", None)  # `ready` again
+        await h.manager.approve(
+            "change-1", None, **observed_target(h.manager, "change-1")
+        )  # `ready` again
         assert not h.manager.main_suspect
         return
     with pytest.raises(WrongState):
-        h.manager.approve("change-1", None)
-    await h.manager.reject("change-1", None)
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     assert [r.decision for r in h.payloads(ChangeResolved)] == ["rejected"]
     assert h.manager.main_suspect  # until the process restarts
 
@@ -132,7 +135,7 @@ async def test_aclose_sends_a_failed_delta_in_order_once(h: Harness) -> None:
     UI holds, then `done`, and nothing twice."""
     await h.run_agent(1, ADD_THRICE)
     h.fail_once, h.fail_times = GraphDelta, 2
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert h.types()[-2:] == ["change.resolved", "error"]
 
     await h.manager.aclose()
@@ -152,7 +155,7 @@ async def test_aclose_gives_each_event_two_tries(h: Harness) -> None:
     with no second `error`."""
     await h.run_agent(1, ADD_THRICE)
     h.fail_once, h.fail_times = ChangeResolved, 2
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert h.types()[-1] == "error"
     assert not {"change.resolved", "graph.delta", "agent.status"} & set(h.types())
     h.fail_script = [ChangeResolved, GraphDelta]
@@ -173,7 +176,7 @@ async def test_aclose_waits_for_a_publish_left_running(h: Harness) -> None:
     that receipt, so it sends only `done`, never the delta the store took."""
     await h.run_agent(1, ADD_THRICE)
     h.hold = GraphDelta
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     await h.held.wait()  # committed, its receipt not yet back
     await cancel_twice(approval)
 
@@ -197,7 +200,7 @@ async def test_aclose_reports_what_a_failing_store_never_took(
     and in the drain's two tries: one `error` names each event still unsent."""
     await h.run_agent(1, ADD_THRICE)
     h.fail_once, h.fail_times = GraphDelta, 4
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     with caplog.at_level(logging.DEBUG, logger="oversight.changes"):
         await h.manager.aclose()
@@ -228,8 +231,8 @@ async def test_aclose_logs_what_a_refusing_store_never_took(
     await h.run_agent(1, EDIT)
     await h.run_agent(2, ("shop/mod.py", "return 1", "return 4"))
     h.fail_once, h.fail_times = BaseModel, 1_000  # every payload is a BaseModel
-    await h.manager.reject("change-1", "Not this.")
-    await h.manager.reject("change-2", "Nor this.")
+    await h.manager.reject("change-1", "Not this.", **observed_target(h.manager, "change-1"))
+    await h.manager.reject("change-2", "Nor this.", **observed_target(h.manager, "change-2"))
     assert h.payloads(ErrorReport) == []
 
     with caplog.at_level(logging.DEBUG, logger="oversight.changes"):

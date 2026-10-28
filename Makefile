@@ -11,8 +11,8 @@ UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install setup dev check check-ci check-fast check-python lint-python check-frontend \
-	lint-frontend contracts check-contracts check-secrets demo-repo-check replay shots smoke layout \
-	test-browser demo demo-setup-check demo-check e2e record record-level2
+	lint-frontend contracts check-contracts check-contract-tuples check-secrets demo-repo-check replay shots smoke layout \
+	test-browser demo demo-setup-check demo-check e2e record record-level2 manifest
 
 help: ## list the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -27,7 +27,8 @@ setup: install ## install the dependencies and the git hooks: pre-commit, commit
 # On exit, dev stops only the backend it started, never the process group, which make shares with
 # whoever ran it. uv forwards SIGTERM to its child, and uvicorn stops its reload worker.
 dev: ## FastAPI with reload and the Vite dev server, one origin through Vite's proxy
-	@uv run --frozen python -m oversight serve --reload & backend=$$!; \
+	@source tools/dev-ports.sh; \
+	uv run --frozen python -m oversight serve --reload & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
 
@@ -41,8 +42,12 @@ RUN ?=
 record: ## bundle a finished run (RUN=<id>, or the latest run) into fixtures/events/recorded-demo.jsonl; reads a finished run and spends no credits
 	@if [ -n "$(RUN)" ]; then $(UV) python tools/record_run.py "$(RUN)"; else $(UV) python tools/record_run.py --latest; fi
 
+manifest: ## summarize recorded model execution from LOG (OUT=prefix, EXPECT_B=model, REAL=1); no API calls
+	$(UV) python tools/meta_manifest.py "$(LOG)" $(if $(OUT),--out "$(OUT)") $(if $(EXPECT_B),--expect-b "$(EXPECT_B)") $(if $(filter 1,$(REAL)),--real)
+
 replay: ## the fake event player serving LOG over SSE (SPEED=0: no pauses), with the Vite dev server
-	@uv run --frozen python -m oversight replay "$(LOG)" --speed "$(SPEED)" & backend=$$!; \
+	@source tools/dev-ports.sh; \
+	uv run --frozen python -m oversight replay "$(LOG)" --allow-fake-provider --speed "$(SPEED)" & backend=$$!; \
 	trap 'kill $$backend 2>/dev/null || true; wait $$backend 2>/dev/null || true' EXIT; \
 	pnpm -C frontend dev
 
@@ -58,6 +63,7 @@ UI_BUILD := $(PNPM) build
 demo-setup-check: ## check offered agents' keys, budget and prices in .env before the demo
 	uv run --frozen python -m oversight.setup --check
 
+demo: export OVERSIGHT_VITE_PORT :=
 demo: demo-setup-check ## build the UI, then serve it and the API on one port (DEMO_PORT) from .env; Start agent spends credits
 	$(UI_BUILD)
 	@echo ""
@@ -102,10 +108,10 @@ layout: ## regenerate the demo preset and replay snapshot positions; not in chec
 smoke: ## start the backend and check /health and /graph
 	$(UV) python tools/smoke.py
 
-# test-browser: the frontend tests that drive Monaco in Playwright's Chromium (pnpm test:browser).
-# make check and CI run without a browser, so pnpm test leaves these out.
-test-browser: ## the frontend's browser tests in Playwright's Chromium; not in check
-	$(PNPM) test:browser
+# test-browser: isolated real dev/replay proxy fixtures, then Chromium tests for Monaco/graph.
+# The timeout and memory scope cover both stages. CI invokes this target too.
+test-browser: ## fake-only launcher/proxy integration and Chromium tests; 600 s, 6G where supported
+	@$(NO_KEYS) timeout --kill-after=10 600 bash tools/capped.sh 6G bash tools/test-browser.sh
 
 record-level2: ## regenerate the level 2 replay fixture from the HTTP backend and fake scripts
 	$(UV) python tools/record_level2.py
@@ -193,7 +199,10 @@ lint-frontend:
 contracts: ## regenerate contracts/generated: JSON Schema and TypeScript from the Pydantic models
 	$(UV) python contracts/generate.py
 
-check-contracts:
+check-contract-tuples:
+	node contracts/check_tuples.cjs --base contracts/baselines/1.3.0.schema.json --schema contracts/generated/oversight.schema.json --types contracts/generated/contracts.ts --node-modules frontend/node_modules
+
+check-contracts: check-contract-tuples
 	$(UV) python contracts/generate.py --check
 
 check-secrets:

@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Literal, cast
 
 from oversight.agents.client import Usage
+from oversight.limits import MAX_FILE_BYTES, SizeLimitError, bounded_text
+from oversight_contracts.events import UsageTick
 
 _log = logging.getLogger(__name__)
 
@@ -144,11 +146,15 @@ class LedgerFile:
         """Synchronous. A missing file is nothing spent; an unreadable or malformed one raises
         `LedgerError`."""
         try:
-            text = self.path.read_text(encoding="utf-8")
+            text = bounded_text(self.path)
         except FileNotFoundError:
             return LedgerState()
+        except SizeLimitError as error:
+            raise LedgerError(str(error)) from error
         except (OSError, UnicodeDecodeError) as error:
-            raise LedgerError(f"the ledger cannot be read: {error.__class__.__name__}") from error
+            raise LedgerError(
+                f"{self.path.name} cannot be read: {error.__class__.__name__}"
+            ) from error
         try:
             return _parse_ledger(text)
         except json.JSONDecodeError as error:
@@ -160,12 +166,17 @@ class LedgerFile:
             "spent_usd": state.spent_usd,
             "unknown": [asdict(entry) for entry in state.unknown],
         }
+        text = json.dumps(body, separators=(",", ":")) + "\n"
+        if len(text.encode("utf-8")) > MAX_FILE_BYTES:
+            raise LedgerError(
+                f"{self.path.name} exceeds the {MAX_FILE_BYTES}-byte size limit; "
+                "settle the ledger before recording more unknown usage"
+            )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, temp = tempfile.mkstemp(prefix=".ledger-", suffix=".tmp", dir=self.path.parent)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(body, handle, indent=2)
-                handle.write("\n")
+                handle.write(text)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temp, self.path)
@@ -223,3 +234,18 @@ class LedgerFile:
         else:
             _log.error("a cancelled ledger write failed: %s", error.__class__.__name__)
         return error
+
+
+def validate_usage_tick(tick: "UsageTick") -> None:
+    """Require call purpose and the corresponding accounting identity in live producers."""
+    if tick.role is None:
+        raise ValueError("live usage requires a role")
+    if tick.role in {"agent", "review"} and tick.change_id is None:
+        raise ValueError("agent and review usage require a change")
+    if tick.role == "plan" and tick.plan_id is None:
+        raise ValueError("plan usage requires a plan")
+    if any(
+        value is not None and value < 0
+        for value in (tick.input_tokens, tick.output_tokens, tick.cached_tokens, tick.cost_usd)
+    ):
+        raise ValueError("usage cannot be negative")

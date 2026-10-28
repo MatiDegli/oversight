@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from changes_helpers import ADD_THRICE, Harness, bounded, cancel_twice
+from decision_helpers import observed_target
 
 from oversight.changes import WrongState
 from oversight.workspace import SuiteRun, Tree, WorkspaceError
@@ -22,7 +23,7 @@ async def test_publish_cut_short_sends_the_rest_once(h: Harness) -> None:
     await h.run_agent(1, ADD_THRICE)
     h.fail_once = GraphDelta
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
     assert h.types().count("change.resolved") == 1
@@ -37,7 +38,7 @@ async def test_each_event_gets_two_tries(h: Harness) -> None:
     await h.run_agent(1, ADD_THRICE)
     h.fail_script = [ChangeResolved, GraphDelta]
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert h.fail_script == []
     assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
@@ -52,7 +53,7 @@ async def test_cancel_during_a_publish_records_what_went_out(h: Harness) -> None
     and the snapshot moves, so the next close-out sends only `done` and the chain holds."""
     await h.run_agent(1, ADD_THRICE)
     h.hold = GraphDelta
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     await h.held.wait()  # committed, its receipt not yet back
     approval.cancel()
     h.release.set()
@@ -76,7 +77,7 @@ async def test_second_cancel_still_records_what_went_out(h: Harness) -> None:
     only `done` and the chain holds."""
     await h.run_agent(1, ADD_THRICE)
     h.hold = GraphDelta
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     await h.held.wait()  # committed, its receipt not yet back
     await cancel_twice(approval)  # returns before `release`: the second cancel ended the wait
     h.release.set()
@@ -99,8 +100,8 @@ async def test_merge_waits_for_a_publish_left_running(h: Harness) -> None:
     await h.run_agent(1, ADD_THRICE)
     await h.run_agent(2, ("shop/mod.py", "return 1", "return 4"))
     h.hold = GraphDelta
-    approval = h.manager.approve("change-1", None)
-    second = h.manager.approve("change-2", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    second = h.manager.approve("change-2", None, **observed_target(h.manager, "change-2"))
     await h.held.wait()
     await cancel_twice(approval)
     h.release.set()
@@ -131,14 +132,14 @@ async def test_rescan_failure_keeps_the_snapshot(
     first = h.manager.snapshot
     await h.run_agent(1, ADD_THRICE)
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     [error] = h.payloads(ErrorReport)
     assert (error.source, error.fatal) == ("graph", False)
     assert "graph.delta" not in h.types()
     assert h.manager.snapshot is first
     await h.run_agent(2, ("shop/mod.py", "return 1", "return 4"))
-    await h.manager.approve("change-2", None)
+    await h.manager.approve("change-2", None, **observed_target(h.manager, "change-2"))
     [delta] = h.payloads(GraphDelta)  # both merges, from what the UI holds
     assert delta.from_version == first.version
     assert [r.merge for r in h.payloads(ChangeResolved)] == ["merged", "merged"]
@@ -167,7 +168,7 @@ async def test_cleanup_prunes_a_worktree_already_gone(h: Harness) -> None:
     tree = await h.run_agent(1, ("shop/mod.py", "return 1", "return 3"))
     await asyncio.to_thread(shutil.rmtree, Path(tree.root))
 
-    await h.manager.reject("change-1", None)
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert h.payloads(ErrorReport) == []
     assert not await h.has_branch("agent-1")
@@ -182,7 +183,7 @@ async def test_close_out_stays_pending_until_sent(h: Harness) -> None:
     await h.run_agent(1, ("shop/mod.py", "return 1", "return 3"))
     h.fail_once, h.fail_times = ChangeResolved, 2
 
-    await h.manager.reject("change-1", "Not this.")
+    await h.manager.reject("change-1", "Not this.", **observed_target(h.manager, "change-1"))
 
     assert h.worktree_dir("agent-1").exists()
     assert await h.has_branch("agent-1")
@@ -190,7 +191,7 @@ async def test_close_out_stays_pending_until_sent(h: Harness) -> None:
     [error] = h.payloads(ErrorReport)
     assert "close-out of change-1 is incomplete" in error.message
     with pytest.raises(WrongState):
-        h.manager.reject("change-1", None)
+        h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
 
     await h.open(2)
 
@@ -217,8 +218,8 @@ async def test_pending_delta_is_retried_or_superseded(
     await h.run_agent(2, ("shop/mod.py", "return 1", "return 4"))
     h.fail_once, h.fail_times = GraphDelta, failures
 
-    await h.manager.approve("change-1", None)
-    await h.manager.approve("change-2", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    await h.manager.approve("change-2", None, **observed_target(h.manager, "change-2"))
     await h.open(3)
 
     sent = h.payloads(GraphDelta)  # `events()` checks that they chain

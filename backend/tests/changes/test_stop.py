@@ -13,6 +13,7 @@ from changes_helpers import (
     cancel_twice,
     queued_callbacks_ran,
 )
+from decision_helpers import observed_target
 
 from oversight.changes import ChangeNotFound, WrongState
 from oversight_contracts.events import (
@@ -154,11 +155,11 @@ async def test_stop_idle(h: Harness, state: str) -> None:
         await h.run_agent(1, EDIT)
     if state == "conflict":
         await commit_on_main(h, "shop/mod.py", TEMPLATE["shop/mod.py"].replace("1", "5"))
-        await h.manager.approve("change-1", None)
+        await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     elif state == "broken":
         h.workspace.arm("merge", mode="timeout")
         h.workspace.arm("status", mode="fail")  # the recovery cannot read main
-        await h.manager.approve("change-1", None)
+        await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
         assert h.manager.main_suspect
     run: asyncio.Task[None] | None = None
     if state == "run-ended":
@@ -182,7 +183,12 @@ async def test_stop_mid_revision(h: Harness) -> None:
     resolution, which names revision 1. `max_steps` counts the revision."""
     await h.run_agent(1, EDIT)
     h.fail_once, h.fail_times = ChangeResolved, 4
-    assert await h.manager.request_changes("change-1", "Make it 4.") is not None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Make it 4.", **observed_target(h.manager, "change-1")
+        )
+        is not None
+    )
     run = start(fake_run(h, 1, steps=6))
     await queued_callbacks_ran()
 
@@ -209,13 +215,15 @@ async def test_stop_races(h: Harness) -> None:
     stopping = h.manager.stop("agent-1", None)
     for decide in (h.manager.approve, h.manager.reject, h.manager.request_changes):
         with pytest.raises(WrongState, match="is deciding"):
-            decide("change-1", "Too late.")
+            decide("change-1", "Too late.", **observed_target(h.manager, "change-1"))
     with pytest.raises(WrongState, match="is deciding"):
         h.manager.stop("agent-1", None)
-    request = h.manager.request_changes("change-2", "Make it 5.")
+    request = h.manager.request_changes(
+        "change-2", "Make it 5.", **observed_target(h.manager, "change-2")
+    )
     with pytest.raises(WrongState, match="is deciding"):
         h.manager.stop("agent-2", None)
-    approval = h.manager.approve("change-3", None)
+    approval = h.manager.approve("change-3", None, **observed_target(h.manager, "change-3"))
     with pytest.raises(WrongState, match="is deciding"):
         h.manager.stop("agent-3", None)
     await stopping
@@ -285,7 +293,7 @@ async def test_stop_cancelled_while_it_waits_for_the_agents_lock(h: Harness) -> 
         await stopping
     h.open_gate.set()
     await save
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert h.types()[-3:] == ["change.resolved", "graph.delta", "agent.status"]
     assert [s.state for s in h.payloads(AgentStatus)] == ["done"]
     assert resolutions(h) == [("approved", None, 2)]
@@ -309,7 +317,14 @@ async def test_stop_during_the_proposal_publish(h: Harness) -> None:
 
     assert run.cancelled()
     order = [t for t in h.types() if t != "change.updated"]
-    assert order[-4:] == ["change.proposed", "agent.step", "agent.status", "change.resolved"]
+    assert order[-6:] == [
+        "tests.executed",
+        "change.proposed",
+        "change.facts_recorded",
+        "agent.step",
+        "agent.status",
+        "change.resolved",
+    ]
     await assert_stopped(h, 1, step=4)
     assert resolutions(h) == [("rejected", "stopped", 1)]
 
@@ -332,7 +347,7 @@ async def test_stop_cancelled_while_the_run_ends(h: Harness) -> None:
     with pytest.raises(asyncio.CancelledError):
         await stopping
     with pytest.raises(WrongState, match="is working"):
-        h.manager.reject("change-1", None)
+        h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     h.release.set()
     with pytest.raises(asyncio.CancelledError):
         await run
@@ -346,8 +361,8 @@ async def assert_unproposed_then_rejected(h: Harness) -> None:
     """A Stop cancelled with no run left to report its end leaves the change as a run that ended
     without proposing does: `unproposed`, which Reject closes, never `working` with no run."""
     with pytest.raises(WrongState, match="is unproposed"):
-        h.manager.approve("change-1", None)
-    await h.manager.reject("change-1", None)
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     assert resolutions(h) == [("rejected", None, 0)]
     assert h.types()[-2:] == ["change.resolved", "agent.status"]
     assert h.payloads(AgentStatus)[-1].state == "done"  # a Reject, not a Stop
@@ -398,7 +413,12 @@ async def test_stop_right_after_request_changes(h: Harness) -> None:
     the change `unproposed`, which Reject closes, never `working` with no run."""
     await h.run_agent(1, EDIT)
     h.fail_once, h.fail_times = ChangeResolved, 2
-    assert await h.manager.request_changes("change-1", "Make it 4.") is not None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Make it 4.", **observed_target(h.manager, "change-1")
+        )
+        is not None
+    )
     run = start(fake_run(h, 1, steps=9))  # created, never started
     h.gate = ChangeResolved
     stopping = h.manager.stop("agent-1", run)
@@ -412,8 +432,8 @@ async def test_stop_right_after_request_changes(h: Harness) -> None:
 
     assert run.cancelled()
     with pytest.raises(WrongState, match="is unproposed"):
-        h.manager.approve("change-1", None)
-    await h.manager.reject("change-1", None)
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     assert resolutions(h) == [("changes_requested", None, 1), ("rejected", None, 1)]
     done = h.payloads(AgentStatus)[-1]
     assert (done.state, done.step, done.max_steps) == ("done", 3, 40)

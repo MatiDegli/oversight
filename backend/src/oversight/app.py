@@ -21,6 +21,7 @@ from fastapi import FastAPI
 from oversight.agents import (
     BASETEN_BASE_URL,
     FAKE_MODEL,
+    FAKE_MODEL_B,
     META_BASE_URL,
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
@@ -40,8 +41,18 @@ from oversight.agents import (
     UnknownUsage,
     UsageLedger,
     load_script,
+    validate_agent_status,
+    validate_usage_tick,
 )
-from oversight.api import ApiError, add_static, create_router, install_error_handlers
+from oversight.api import (
+    ApiError,
+    ApiGuard,
+    AuthorityPolicy,
+    BodyLimit,
+    add_static,
+    create_router,
+    install_error_handlers,
+)
 from oversight.changes import ChangeManager, ChangeNotFound, Revision, WrongState
 from oversight.events import (
     EventPayload,
@@ -53,11 +64,21 @@ from oversight.events import (
     run_store_path,
 )
 from oversight.graph import WorkspaceGraph, read_layout
+from oversight.limits import SizeLimitError, bounded_text
 from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
 from oversight.workspace import Tree, Workspace
 from oversight_contracts import CONTRACT_VERSION
-from oversight_contracts.commands import AgentCreated, FileContent, FileSaved, SaveFile, StartAgent
+from oversight_contracts.commands import (
+    AgentCreated,
+    ApproveChange,
+    FileContent,
+    FileSaved,
+    RejectChange,
+    RequestChanges,
+    SaveFile,
+    StartAgent,
+)
 from oversight_contracts.common import Slot
 from oversight_contracts.events import (
     AgentStatus,
@@ -91,7 +112,7 @@ BLOCK_AT = 0.9
 OFFERED_SLOTS: tuple[Slot, ...] = ("A", "B")
 """The slots this server offers, in the order a start with no slot tries them. A fake B with no
 script of its own is left out (`LiveRun._offer`)."""
-PROFILES = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL)}
+PROFILES = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL, FAKE_MODEL_B)}
 PROVIDER_URLS = {"meta": META_BASE_URL, "baseten": BASETEN_BASE_URL}
 """The Chat Completions endpoint of each provider that has one; the key is `{provider}_api_key`."""
 MAIN_SUSPECT = "main's state is unknown: reject the change and restart the server"
@@ -105,12 +126,13 @@ type ClientFactory = Callable[[ModelProfile, Slot], ModelClient]
 @dataclass(frozen=True)
 class ReplayConfig:
     log: Path
+    allow_fake_provider: bool = False
     speed: float = 1.0
     """1 follows the log's gaps, each capped at 2 seconds; 2 is twice as fast; 0 has no pauses."""
 
 
 def pytest_pin(requirements: Path = VENV_REQUIREMENTS) -> str:
-    for line in requirements.read_text(encoding="utf-8").splitlines():
+    for line in bounded_text(requirements).splitlines():
         name, separator, version = line.strip().partition("==")
         if separator and name.strip() == "pytest":
             return version.strip()
@@ -183,7 +205,15 @@ class LiveRun:
             demo_python=settings.demo_python,
         )
         self.run_id = new_run_id(settings.runtime_dir, datetime.now(UTC))
-        self.store = EventStore(run_store_path(settings.runtime_dir, self.run_id), self.run_id)
+        self.store = EventStore(
+            run_store_path(settings.runtime_dir, self.run_id),
+            self.run_id,
+            allow_fake_provider=bool(self._scripts)
+            and all(
+                profile.provider == "fake" and slot in self._scripts
+                for slot, profile in self._slot_profiles.items()
+            ),
+        )
         self.ledger = LedgerFile(settings.runtime_dir / "ledger.json")
         self._usage = UsageLedger(0.0)
         self._manager: ChangeManager | None = None
@@ -228,7 +258,7 @@ class LiveRun:
                 if slot == "A":
                     raise ValueError("the fake model needs OVERSIGHT_FAKE_SCRIPT")
                 return
-            self._scripts[slot] = load_script(script)
+            self._scripts[slot] = load_script(script, profile)
         self._slot_profiles[slot] = profile
 
     # --- Startup and shutdown -----------------------------------------------------------------
@@ -388,8 +418,14 @@ class LiveRun:
         """The store's publish for the runtime and the manager: a metered agent's tick is written
         to the ledger before it goes out, and a closed change frees its slot once its event is
         out."""
+        if isinstance(payload, UsageTick):
+            validate_usage_tick(payload)
         if isinstance(payload, UsageTick) and self._is_metered(payload.agent_id):
             await self._persist(payload)
+        if isinstance(payload, AgentStatus):
+            base = self._manager.agent_base(payload.agent_id) if self._manager else None
+            payload = payload.model_copy(update={"base_commit": base})
+            validate_agent_status(payload, base_commit=base)
         stored = await self.store.publish(payload)
         if isinstance(payload, ChangeResolved) and (
             payload.decision == "rejected" or payload.merge == "merged"
@@ -734,19 +770,23 @@ class LiveRun:
         except Exception as error:
             _log.error("could not publish %s's halt: %s", task.agent_id, _describe(error))
 
-    def approve(self, change_id: str, comment: str | None) -> None:
+    def approve(self, change_id: str, request: ApproveChange) -> None:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
         if self._manager.main_suspect:
             raise ApiError("wrong_state", MAIN_SUSPECT)
-        self._manager.approve(change_id, comment)
+        self._manager.approve(
+            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+        )
 
-    def reject(self, change_id: str, comment: str | None) -> None:
+    def reject(self, change_id: str, request: RejectChange) -> None:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
-        self._manager.reject(change_id, comment)
+        self._manager.reject(
+            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+        )
 
-    def request_changes(self, change_id: str, comment: str) -> None:
+    def request_changes(self, change_id: str, request: RequestChanges) -> None:
         """Send the comment back to the agent, which resumes in its kept run. A revision spends
         credits like a start, so a metered agent is refused while the brake is closed, and nothing
         revises while main is suspect. The checks come before the manager's, so a refusal changes
@@ -754,7 +794,7 @@ class LiveRun:
         manager = self._manager
         if manager is None:
             raise ApiError("wrong_state", "the run has not started")
-        if not comment.strip():
+        if not request.comment.strip():
             raise ApiError("invalid_request", "the comment is empty")
         owner = next(
             ((agent_id, a) for agent_id, a in self._agents.items() if a.change_id == change_id),
@@ -769,7 +809,9 @@ class LiveRun:
         run = self._kept.get(agent_id)
         if run is None:  # resolved, or its run never started: no state takes a request
             raise ApiError("wrong_state", f"{change_id} has no run to resume")
-        decision = manager.request_changes(change_id, comment)
+        decision = manager.request_changes(
+            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+        )
         # No `await` from the manager's flip to the registration: a shutdown finds both.
         self._decisions[agent_id] = decision
         self._runs[agent_id] = asyncio.create_task(
@@ -819,6 +861,9 @@ def create_app(
     and the fake model its slot's script."""
     settings = settings or Settings.load()
     app = _live_app(settings, client_factory) if replay is None else _replay_app(settings, replay)
+    # Last added runs first: guard -> bounded body -> routing (live and replay).
+    app.add_middleware(BodyLimit)
+    app.add_middleware(ApiGuard, policy=AuthorityPolicy(settings.port, settings.vite_port))
     app.state.settings = settings
     install_error_handlers(app)
     return app
@@ -859,9 +904,11 @@ def ledger_command(settings: Settings, settle_usd: float | None) -> str:
     ledger = LedgerFile(settings.runtime_dir / "ledger.json")
     if settle_usd is None:
         try:
-            return ledger.path.read_text(encoding="utf-8").rstrip()
+            return bounded_text(ledger.path).rstrip()
         except FileNotFoundError:
             return "no ledger yet: nothing spent"
+        except SizeLimitError as error:
+            return f"cannot read ledger: {error}; {SETTLE_HOW}"
     workspace = Workspace(settings.runtime_dir, TEMPLATE, pytest_pin=pytest_pin())
 
     async def settle() -> None:
@@ -872,7 +919,7 @@ def ledger_command(settings: Settings, settle_usd: float | None) -> str:
             workspace.release_runtime()
 
     asyncio.run(settle())
-    return ledger.path.read_text(encoding="utf-8").rstrip()
+    return bounded_text(ledger.path).rstrip()
 
 
 def _remove_stale_files(path: Path) -> None:
@@ -887,7 +934,7 @@ def _replay_app(settings: Settings, replay: ReplayConfig) -> FastAPI:
     run_id = events[0].payload.run_id
     # A replay gets its own file, so replaying an exported run never touches that run's own log.
     path = settings.runtime_dir / "replays" / f"{run_id}.sqlite"
-    store = EventStore(path, run_id)
+    store = EventStore(path, run_id, mode="replay", allow_fake_provider=replay.allow_fake_provider)
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:

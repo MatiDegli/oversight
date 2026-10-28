@@ -55,7 +55,7 @@ export function installHolds(holds: Hold[]) {
 
 export async function engaged(page: Page, hold: Hold) {
   await expect
-    // Canvas rendering can stretch the recorded timers on software-rendered Chromium.
+    // Recorded suite steps and software canvas rendering can stretch the replay's timers.
     .poll(() => page.evaluate(() => (window as unknown as Holding).e2eHolds.held), {
       timeout: 60_000,
     })

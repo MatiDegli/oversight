@@ -5,10 +5,16 @@ import logging
 
 from oversight.changes import _delivery as delivery
 from oversight.changes import _proposal as proposal
+from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._neighbors import graph_context
-from oversight.changes._state import ChangeRecord, Move, Revision
+from oversight.changes._resolution_validation import (
+    validate_resolution_evidence,
+    validate_resolution_intent,
+)
+from oversight.changes._state import REVISABLE, ChangeRecord, Move, Revision, WrongState
 from oversight.changes._support import ChangeContext
 from oversight.changes._versions import parse
+from oversight.events import EventRejected
 from oversight.graph import change_graph
 from oversight.workspace import WorkspaceError
 from oversight_contracts.events import ChangeResolved
@@ -42,6 +48,8 @@ async def request_changes(ctx: ChangeContext, rec: ChangeRecord, comment: str) -
         async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
             if await refused_as_suspect(ctx, rec):
                 return None
+            if not await preflight(ctx, rec):
+                return None
             move = Move()
             try:
                 note = await move_base(ctx, rec, move)
@@ -58,7 +66,22 @@ async def request_changes(ctx: ChangeContext, rec: ChangeRecord, comment: str) -
     async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
         if await refused_as_suspect(ctx, rec):
             return None
+        if not await preflight(ctx, rec):
+            return None
         return await ctx.whole(requested(ctx, rec, comment, note))
+
+
+async def preflight(ctx: ChangeContext, rec: ChangeRecord) -> bool:
+    assert rec.evidence is not None
+    try:
+        validate_decision_target(
+            rec, rec.evidence.revision, rec.evidence.head_commit, REVISABLE, reserved=True
+        )
+    except WrongState as error:
+        await ctx.error("server", str(error), rec, fatal=False)
+        return False
+    validate_resolution_intent(rec.evidence)
+    return True
 
 
 async def refused_as_suspect(ctx: ChangeContext, rec: ChangeRecord) -> bool:
@@ -188,7 +211,7 @@ async def settle_move(
 
 async def requested(
     ctx: ChangeContext, rec: ChangeRecord, comment: str, note: str | None
-) -> Revision:
+) -> Revision | None:
     """Phase B, one `_whole` step: the resolution and `working` go together whatever cancels
     come. R2: a resolution the store refused twice stays pending, and the revision starts."""
     rec.requested = ChangeResolved(
@@ -196,13 +219,21 @@ async def requested(
         agent_id=rec.agent_id,
         revision=rec.revision,
         decision="changes_requested",
+        decided_by="person",
+        head_commit=rec.evidence.head_commit if rec.evidence else rec.head_commit,
         reason=None,
         comment=comment,
         merge=None,
         merge_commit=None,
         conflict=None,
     )
-    failure = await delivery.send_requested(ctx, rec)
+    assert rec.evidence is not None
+    validate_resolution_evidence(rec.requested, rec.evidence)
+    try:
+        failure = await delivery.send_requested(ctx, rec)
+    except EventRejected as error:
+        await delivery.rejected(ctx, rec, error)
+        return None
     if failure:
         ctx.state.pending[rec.agent_id] = rec
         await ctx.error(

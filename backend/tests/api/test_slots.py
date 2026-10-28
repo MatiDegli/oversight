@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
+from decision_helpers import observed_body
 from live_helpers import (
     DEADLINE_S,
     FAKE_SCRIPT,
@@ -150,6 +151,8 @@ def resolved(agent_id: str, decision: str, merge: str | None) -> ChangeResolved:
             "agent_id": agent_id,
             "revision": 1,
             "decision": decision,
+            "decided_by": "person",
+            "head_commit": "observed-head",
             "reason": None,
             "comment": None,
             "merge": merge,
@@ -189,10 +192,14 @@ async def test_a_decided_run_frees_its_slot_and_the_next_start_takes_the_first_f
         assert (await start(s)).json()["slot"] == "A"
         for agent in ("agent-1", "agent-2"):
             await s.until(is_type("agent.status", agent_id=agent, state="ready_for_review"))
-        assert (await s.client.post("/changes/change-1/reject")).status_code == 202  # B's change
+        assert (
+            await s.client.post("/changes/change-1/reject", json=observed_body(s, "change-1"))
+        ).status_code == 202  # B's change
         await s.until(is_type("agent.status", agent_id="agent-1", state="done"))
         assert s.live._slots == {"A": "agent-2", "B": None}  # pyright: ignore[reportPrivateUsage]
-        assert (await s.client.post("/changes/change-2/reject")).status_code == 202
+        assert (
+            await s.client.post("/changes/change-2/reject", json=observed_body(s, "change-2"))
+        ).status_code == 202
         await s.until(is_type("agent.status", agent_id="agent-2", state="done"))
         assert s.live._slots == {"A": None, "B": None}  # pyright: ignore[reportPrivateUsage]
         assert (await start(s)).json()["slot"] == "A"  # A before B again

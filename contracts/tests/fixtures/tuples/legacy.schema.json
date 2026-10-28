@@ -1,0 +1,32 @@
+{
+  "$defs": {
+    "CrossReview": {
+      "properties": {
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "findings"
+      ]
+    },
+    "IntegrityFact": {
+      "properties": {
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "evidence"
+      ]
+    }
+  }
+}

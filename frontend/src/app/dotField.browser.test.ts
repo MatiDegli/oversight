@@ -17,7 +17,7 @@ let html: string;
 beforeAll(async () => {
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/app-vite-cache", import.meta.url)),
+    cacheDir: fileURLToPath(new URL("../../../.shots/dot-field-vite-cache", import.meta.url)),
     server: {
       host: "127.0.0.1",
       port: 0,

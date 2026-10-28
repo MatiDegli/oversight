@@ -1,6 +1,7 @@
 from oversight.changes import _delivery as delivery
 from oversight.changes._state import ChangeRecord, Facts
 from oversight.changes._support import ChangeContext
+from oversight.events import EventRejected
 
 
 async def read_facts(ctx: ChangeContext, head_commit: str) -> Facts:
@@ -24,6 +25,10 @@ async def recover(
     abort an unfinished merge, record a landed one; a conflict already sent stays `conflict`. No
     `reset --hard`, no lock removal. A cancelled approval always reports; a landed merge closes
     out first and leaves its cleanup to the next decision or `open`."""
+    if isinstance(error, EventRejected) or rec.delivery_rejected:
+        if isinstance(error, EventRejected):
+            await delivery.rejected(ctx, rec, error)
+        return
     main = ctx.workspace.main
     facts: Facts | None = None
     try:

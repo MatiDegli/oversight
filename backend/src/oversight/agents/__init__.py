@@ -3,9 +3,14 @@
 Other modules import only what this file exports; everything else here is internal.
 """
 
+from oversight.agents._crossreview import ConeEntry
+from oversight.agents._crossreview import Inputs as ReviewInputs
+from oversight.agents._crossreview import TestResult as ReviewTests
+from oversight.agents._status import validate_agent_status
 from oversight.agents.client import (
     BASETEN_BASE_URL,
     FAKE_MODEL,
+    FAKE_MODEL_B,
     META_BASE_URL,
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
@@ -31,6 +36,7 @@ from oversight.agents.loop import (
     Publish,
     RunEnd,
 )
+from oversight.agents.reviewer import REVIEW_MAX_OUTPUT_TOKENS, ReviewOutcome, review_candidate
 from oversight.agents.sink import ChangeSink
 from oversight.agents.tools import TOOL_NAMES, TOOL_SCHEMAS
 from oversight.agents.usage import (
@@ -41,15 +47,18 @@ from oversight.agents.usage import (
     Pricing,
     UnknownUsage,
     UsageLedger,
+    validate_usage_tick,
 )
 
 __all__ = [
     "BASETEN_BASE_URL",
     "FAKE_MODEL",
+    "FAKE_MODEL_B",
     "META_BASE_URL",
     "MUSE_SPARK",
     "MUSE_SPARK_OPEN",
     "PROMPT_VERSION",
+    "REVIEW_MAX_OUTPUT_TOKENS",
     "REVISION_PROMPT",
     "SYSTEM_PROMPT",
     "TOOL_NAMES",
@@ -59,6 +68,7 @@ __all__ = [
     "AgentTask",
     "Brake",
     "ChangeSink",
+    "ConeEntry",
     "LedgerError",
     "LedgerFile",
     "LedgerState",
@@ -70,6 +80,9 @@ __all__ = [
     "Pricing",
     "Publish",
     "RetryPolicy",
+    "ReviewInputs",
+    "ReviewOutcome",
+    "ReviewTests",
     "RunEnd",
     "Script",
     "ScriptedModel",
@@ -81,4 +94,7 @@ __all__ = [
     "UsageLedger",
     "load_script",
     "parse_script",
+    "review_candidate",
+    "validate_agent_status",
+    "validate_usage_tick",
 ]

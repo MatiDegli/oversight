@@ -58,6 +58,10 @@ export const approved = eventOf(
   "change.resolved",
   (e) => e.payload.agent_id === a.agent_id && e.payload.merge === "merged",
 );
+export const approvedProposal = eventOf(
+  "change.proposed",
+  (e) => e.payload.change_id === a.change_id && e.payload.revision === approved.payload.revision,
+).payload;
 export const mainEdit = events.findLast(
   (e) => e.type === "graph.delta" && e.payload.cause === "user_edit",
 );
@@ -68,7 +72,8 @@ export const added = addedNode;
 export const mainAppend = `\n\ndef ${added.name}() -> int:\n    return 42\n`;
 export const firstUpdate = eventOf(
   "change.updated",
-  (e) => e.payload.agent_id === a.agent_id,
+  // The script also edits tests; select the implementation diff shown on the graph.
+  (e) => e.payload.agent_id === a.agent_id && e.payload.file.path === "shop/pricing.py",
 ).payload;
 const revisionUpdate = eventOf(
   "change.updated",

@@ -31,6 +31,9 @@ from oversight.changes import _delivery as delivery
 from oversight.changes import _files as files
 from oversight.changes import _proposal as proposal
 from oversight.changes import _revision as revision
+from oversight.changes._decision_validation import validate_decision_target
+from oversight.changes._evidence import WriteEvidence
+from oversight.changes._resolution_validation import validate_resolution_intent
 from oversight.changes._state import (
     APPROVABLE,
     REJECTABLE,
@@ -43,18 +46,21 @@ from oversight.changes._state import (
     State,
     WrongState,
 )
+from oversight.changes._suite_evidence import publish_suite
 from oversight.changes._support import ChangeContext, ChangePorts
 from oversight.events import Clock, system_clock
 from oversight.graph import (
     WorkspaceGraph,
 )
 from oversight.workspace import (
+    SuiteRun,
     Tree,
     Workspace,
 )
 from oversight_contracts.commands import FileContent, FileSaved
 from oversight_contracts.common import AgentId, ChangeId
 from oversight_contracts.graph import GraphSnapshot
+from oversight_contracts.review import FinishDeclaration
 
 
 class ChangeManager:
@@ -128,9 +134,25 @@ class ChangeManager:
         """Send `change.updated` for an edit on disk; `False` after sending an `error` instead."""
         return await proposal.file_edited(self._ctx, agent_id, path)
 
-    async def proposed(self, agent_id: AgentId, summary: str | None) -> bool:
+    async def tests_executed(self, agent_id: AgentId, run: SuiteRun) -> None:
+        rec = self._ctx.state.agents[agent_id]
+        async with self._ctx.workspace.locks(agent_id=agent_id):
+            await publish_suite(self._ctx, rec, run, phase="agent", revision=None)
+
+    async def proposed(
+        self,
+        agent_id: AgentId,
+        summary: str | None,
+        *,
+        declaration: FinishDeclaration | None = None,
+    ) -> bool:
         """Commit, republish, test and send `change.proposed`; `False` after a fatal `error`."""
+        self._ctx.state.agents[agent_id].declared = declaration
         return await proposal.proposed(self._ctx, agent_id, summary)
+
+    def agent_base(self, agent_id: AgentId) -> str | None:
+        rec = self._ctx.state.agents.get(agent_id)
+        return rec.base_commit if rec is not None else None
 
     def run_ended(self, agent_id: AgentId, end: RunEnd | None, *, steps: int | None = None) -> None:
         """The run is over (`end` is `None` when it raised or was cancelled): `ready` if this run
@@ -202,22 +224,76 @@ class ChangeManager:
         task.add_done_callback(lambda _: self._ctx.state.restore(rec, decision))
         return task
 
-    def approve(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
+    def approve(
+        self, change_id: ChangeId, comment: str | None, *, revision: int, head_commit: str
+    ) -> asyncio.Task[None]:
+        current = self._ctx.state.changes.get(change_id)
+        if current is None:
+            raise ChangeNotFound(change_id)
+        validate_decision_target(current, revision, head_commit, APPROVABLE)
+        evidence = WriteEvidence(
+            change_id,
+            current.agent_id,
+            revision,
+            current.base_commit,
+            head_commit,
+            "person",
+            "approved",
+            comment,
+        )
+        validate_resolution_intent(evidence)
         rec = self._take(change_id, APPROVABLE, "approve")
+        rec.evidence = evidence
         rec.taken = rec.revision
         return self._decide(rec, approval.approve(self._ctx, rec, comment))
 
-    def reject(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]:
+    def reject(
+        self, change_id: ChangeId, comment: str | None, *, revision: int, head_commit: str
+    ) -> asyncio.Task[None]:
+        current = self._ctx.state.changes.get(change_id)
+        if current is None:
+            raise ChangeNotFound(change_id)
+        validate_decision_target(current, revision, head_commit, REJECTABLE)
+        evidence = WriteEvidence(
+            change_id,
+            current.agent_id,
+            revision,
+            current.base_commit,
+            head_commit,
+            "person",
+            "rejected",
+            comment,
+        )
+        validate_resolution_intent(evidence)
         rec = self._take(change_id, REJECTABLE, "reject")
+        rec.evidence = evidence
         return self._decide(rec, self._reject(rec, comment))
 
-    def request_changes(self, change_id: ChangeId, comment: str) -> asyncio.Task[Revision | None]:
+    def request_changes(
+        self, change_id: ChangeId, comment: str, *, revision: int, head_commit: str
+    ) -> asyncio.Task[Revision | None]:
         """Send the comment back to the agent; its worktree, branch, base and files stay. From
         `conflict`, main is merged into the agent's branch first. The task returns what the agent
         resumes with, the change `working`; or `None` after an `error` when the base could not
         move, the change still `conflict` (or `broken`, when the worktree's state is unknown), or
         when main turned suspect while the request queued, the change still as it was taken."""
+        current = self._ctx.state.changes.get(change_id)
+        if current is None:
+            raise ChangeNotFound(change_id)
+        validate_decision_target(current, revision, head_commit, REVISABLE)
+        evidence = WriteEvidence(
+            change_id,
+            current.agent_id,
+            revision,
+            current.base_commit,
+            head_commit,
+            "person",
+            "changes_requested",
+            comment,
+        )
+        validate_resolution_intent(evidence)
         rec = self._take(change_id, REVISABLE, "request changes")
+        rec.evidence = evidence
         return self._decide(rec, self._request_changes(rec, comment))
 
     def stop(self, agent_id: AgentId, run: asyncio.Task[None] | None) -> asyncio.Task[None]:
@@ -257,7 +333,18 @@ class ChangeManager:
     async def _reject(self, rec: ChangeRecord, comment: str | None) -> None:
         await delivery.finish_pending(self._ctx)
         async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
-            rec.resolution = delivery.resolution(self._ctx, rec, "rejected", comment)
+            assert rec.evidence is not None
+            try:
+                validate_decision_target(
+                    rec, rec.evidence.revision, rec.evidence.head_commit, REJECTABLE, reserved=True
+                )
+            except WrongState as error:
+                await self._ctx.error("server", str(error), rec, fatal=False)
+                return
+            validate_resolution_intent(rec.evidence)
+            rec.resolution = delivery.resolution(
+                self._ctx, rec, "rejected", comment, decided_by="person"
+            )
             await delivery.finish(self._ctx, rec)  # main did not change: no rescan and no delta
 
     async def _stop(self, rec: ChangeRecord, run: asyncio.Task[None] | None) -> None:
@@ -270,7 +357,20 @@ class ChangeManager:
         await delivery.finish_pending(self._ctx)
         async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
             # Under the agent's lock: a save in review proposes first, and this closes its revision.
-            rec.resolution = delivery.resolution(self._ctx, rec, "rejected", None, reason="stopped")
+            rec.evidence = WriteEvidence(
+                rec.change_id,
+                rec.agent_id,
+                rec.revision,
+                rec.base_commit,
+                rec.head_commit or rec.base_commit,
+                "person",
+                "rejected",
+                None,
+            )
+            validate_resolution_intent(rec.evidence)
+            rec.resolution = delivery.resolution(
+                self._ctx, rec, "rejected", None, decided_by="person", reason="stopped"
+            )
             rec.stopped = True
             await delivery.finish(self._ctx, rec)
 

@@ -8,7 +8,7 @@ import os
 import socket
 import sys
 from collections.abc import AsyncIterator, Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -227,16 +227,22 @@ async def live_server(
     settings: Settings, client_factory: ClientFactory | None = None
 ) -> AsyncIterator[LiveServer]:
     """Uvicorn on a socket bound before it starts, so requests wait for the lifespan's startup."""
-    app = create_app(settings, client_factory=client_factory)
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     sock.listen()
     port = sock.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_graceful_shutdown=1))
+    app = create_app(replace(settings, port=port), client_factory=client_factory)
+    server = uvicorn.Server(
+        uvicorn.Config(app, log_level="warning", proxy_headers=False, timeout_graceful_shutdown=1)
+    )
     task = asyncio.create_task(server.serve(sockets=[sock]))
     try:
         async with httpx.AsyncClient(
-            base_url=f"http://127.0.0.1:{port}", timeout=DEADLINE_S
+            base_url=f"http://127.0.0.1:{port}",
+            timeout=DEADLINE_S,
+            # Commands can follow long event waits. Avoid racing Uvicorn's idle socket
+            # expiry when the next command arrives; each request still uses real HTTP.
+            limits=httpx.Limits(max_keepalive_connections=0),
         ) as client:
             running = LiveServer(app, client, server, task)
             assert (await client.get("/health")).status_code == 200

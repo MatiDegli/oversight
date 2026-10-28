@@ -17,6 +17,7 @@ import type { ChangeState, State } from "../state";
 import { decisionView } from "./decisions";
 import type { DecisionAction, DecisionAttempt, DecisionView } from "./decisions";
 import { impactSummary } from "./ImpactCone";
+import { factsForRevision, ReviewFacts } from "./ReviewFacts";
 
 const statusWords: Record<ChangeState["status"], string> = {
   editing: "Editing",
@@ -301,6 +302,7 @@ export function ReviewPanel({
 }: ReviewPanelProps) {
   const change = state.changes[changeId];
   const proposal = change?.proposal ?? null;
+  const hasFacts = proposal !== null && factsForRevision(state, proposal) !== undefined;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
   const [editing, setEditing] = useState<{ path: string; blocked: boolean } | null>(null);
@@ -375,9 +377,13 @@ export function ReviewPanel({
           </ul>
         )}
         {proposal && (
-          <p className="text-(length:--data-size) text-muted">{impactSummary(proposal.impact)}</p>
+          <p className="text-(length:--data-size) text-muted">
+            {impactSummary(proposal.impact)}
+            {!hasFacts && <ReviewFacts state={state} proposal={proposal} />}
+          </p>
         )}
       </header>
+      {proposal && hasFacts && <ReviewFacts state={state} proposal={proposal} />}
       <div className="flex min-h-0 flex-1 flex-col">
         <p className="border-b border-page-border px-4.5 py-3.5 text-(length:--body-size)">
           {proposal?.summary ?? "The agent left no note."}

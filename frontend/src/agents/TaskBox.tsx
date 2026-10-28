@@ -98,6 +98,7 @@ export function TaskBoxView({
             {slots.map(({ slot, label, holder }) => (
               <button
                 key={slot}
+                data-slot-card={slot}
                 type="button"
                 aria-pressed={selected === slot}
                 aria-disabled={pending || holder !== null}

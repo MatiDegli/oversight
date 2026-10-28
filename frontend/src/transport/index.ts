@@ -33,6 +33,12 @@ const recorded = Object.values(recordedLogs)[0];
 // replays the hand-written fixture, labelled as one.
 export const replayBuild = import.meta.env.MODE === "replay";
 export const replaySource = chooseReplaySource(recorded?.text, fixture, recorded?.provenance);
-export function startAppTransport(store: TransportStore, onError?: (error: unknown) => void) {
-  return replayBuild ? startReplay({ store, source: replaySource }) : startLive({ store, onError });
+export function startAppTransport(
+  store: TransportStore,
+  onError?: (error: unknown) => void,
+  onOpen?: () => void,
+) {
+  return replayBuild
+    ? startReplay({ store, source: replaySource })
+    : startLive({ store, onError, onOpen });
 }

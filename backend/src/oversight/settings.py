@@ -2,10 +2,12 @@
 
 import math
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from oversight.limits import bounded_text
 from oversight_contracts.commands import SettingName
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -16,7 +18,7 @@ def read_env_file(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     if not path.is_file():
         return values
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    for raw in bounded_text(path).splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -29,6 +31,8 @@ def read_env_file(path: Path) -> dict[str, str]:
 class Settings:
     host: str = "127.0.0.1"
     port: int = 8710
+    vite_port: int | None = None
+    """Optional development origin. Unset on backend-only/demo runs. OVERSIGHT_VITE_PORT."""
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
     layout: Path = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
@@ -50,6 +54,12 @@ class Settings:
     fake_script_b: Path | None = None
     """Agent B's own script when it runs `fake`: reusing A's would propose the same edit twice, so a
     fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
+    cross_review: bool = False
+    """Opt-in only. PR1 configures the reviewer without scheduling any reviews."""
+    reviewer_fake_script: Path | None = None
+    """OVERSIGHT_REVIEWER_FAKE_SCRIPT: reviewer fake, reviewing author fake-b."""
+    reviewer_fake_b_script: Path | None = None
+    """OVERSIGHT_REVIEWER_FAKE_B_SCRIPT: reviewer fake-b, reviewing author fake."""
     # The spending brake: no defaults. A value that is missing, not a number or not positive is
     # `None`, and every start on a Meta profile is then refused (not_configured).
     budget_usd: float | None = None
@@ -69,13 +79,18 @@ class Settings:
     """The built frontend the live app serves, or `None` for none. No variable: `load` sets
     frontend/dist, and a test that builds `Settings` itself gets no UI unless it passes one."""
 
+    def __post_init__(self) -> None:
+        validate_ports(self.port, self.vite_port)
+
     @classmethod
     def load(cls, env_file: Path = REPO_ROOT / ".env") -> "Settings":
         """The process environment wins over the .env file."""
         merged = read_env_file(env_file) | dict(os.environ)
+        port, vite_port = resolve_ports(merged)
         return cls(
             host=merged.get("OVERSIGHT_HOST", cls.host),
-            port=int(merged.get("OVERSIGHT_PORT", cls.port)),
+            port=port,
+            vite_port=vite_port,
             runtime_dir=Path(merged.get("OVERSIGHT_RUNTIME_DIR", cls.runtime_dir)),
             # Joining an absolute path onto REPO_ROOT gives that path, so only a relative one moves.
             layout=REPO_ROOT / (merged.get("OVERSIGHT_LAYOUT") or cls.layout),
@@ -86,6 +101,9 @@ class Settings:
             fake_script=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT")),
             agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
             fake_script_b=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_B")),
+            cross_review=merged.get("OVERSIGHT_CROSS_REVIEW", "false").lower() == "true",
+            reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
+            reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
             input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
             output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
@@ -115,3 +133,29 @@ def positive_amount(value: str | None) -> float | None:
     except ValueError:
         return None
     return amount if math.isfinite(amount) and amount > 0 else None
+
+
+def validate_ports(port: int, vite_port: int | None) -> None:
+    """Invalid or shared listener ports stop startup, including explicit Settings instances."""
+    for name, value in (("OVERSIGHT_PORT", port), ("OVERSIGHT_VITE_PORT", vite_port)):
+        if value is not None and (type(value) is not int or not 1 <= value <= 65535):
+            raise ValueError(f"{name} must be an integer in 1-65535")
+    if port == vite_port:
+        raise ValueError("OVERSIGHT_VITE_PORT must differ from OVERSIGHT_PORT")
+
+
+def resolve_ports(
+    values: Mapping[str, str], *, development: bool = False
+) -> tuple[int, int | None]:
+    """Shared backend/launcher parsing; an empty V is unset, with a launcher-only fallback."""
+
+    def parse(name: str, raw: str) -> int:
+        if not raw.isascii() or not raw.isdecimal():
+            raise ValueError(f"{name} must be an integer in 1-65535")
+        return int(raw)
+
+    port = parse("OVERSIGHT_PORT", values.get("OVERSIGHT_PORT", "8710"))
+    raw_vite = values.get("OVERSIGHT_VITE_PORT") or ("5710" if development else None)
+    vite_port = parse("OVERSIGHT_VITE_PORT", raw_vite) if raw_vite is not None else None
+    validate_ports(port, vite_port)
+    return port, vite_port
