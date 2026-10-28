@@ -389,3 +389,39 @@ def test_fake_review_authorization_is_independent_of_run_model() -> None:
     rows[0]["payload"]["models"] = [FAKE.model_dump(mode="json")]
     text = "\n".join(json.dumps(row) for row in rows)
     assert recording.validate_text(text, fake_fixture=True)[-1].type == "change.reviewed"
+
+
+@pytest.mark.parametrize("same_review", [False, True])
+def test_recording_refuses_second_cross_review_resolution(same_review: bool) -> None:
+    rows = [
+        json.loads(line)
+        for line in (FIXTURES / "handwritten-level1.jsonl").read_text().splitlines()
+    ]
+    reserved = json.loads((FIXTURES.parent / "contracts/reserved-1.4.json").read_text())
+    review = next(row for row in reserved if row["type"] == "change.reviewed")
+    rows[0]["payload"]["models"] = [FAKE.model_dump(mode="json")]
+    resolved = next(row for row in reserved if row["type"] == "change.resolved")
+    resolved["payload"].update(
+        decision="changes_requested",
+        decided_by="cross_review",
+        reason=None,
+        comment="Fix this",
+        head_commit=review["payload"]["head_commit"],
+        merge=None,
+        merge_commit=None,
+        conflict=None,
+        assessment=None,
+        reasons=[],
+    )
+    review["seq"] = len(rows) + 1
+    resolved["seq"] = len(rows) + 2
+    resolved["payload"]["review_seq"] = review["seq"]
+    duplicate = json.loads(json.dumps(resolved))
+    duplicate["seq"] = len(rows) + 3
+    if same_review:
+        duplicate["payload"]["change_id"] = "change-99"
+    else:
+        duplicate["payload"]["review_seq"] += 10
+    text = "\n".join(json.dumps(row) for row in [*rows, review, resolved, duplicate])
+    with pytest.raises(recording.RecordError, match="only one cross_review"):
+        recording.validate_text(text, fake_fixture=True)

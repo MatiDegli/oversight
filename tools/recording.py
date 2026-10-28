@@ -10,7 +10,7 @@ from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from oversight.events import absolute_paths
+from oversight.events import absolute_paths, validate_cross_review_limit
 from oversight.workspace import run_process
 from oversight_contracts.common import RunId
 from oversight_contracts.events import ServerEvent
@@ -40,6 +40,7 @@ def provenance_path(log: Path) -> Path:
 def validate_text(text: str, *, fake_fixture: bool = False) -> list[ServerEvent]:
     """Validate every line against the unchanged contracts, then enforce publication rules."""
     events: list[ServerEvent] = []
+    prior: dict[int, ServerEvent] = {}
     for number, line in enumerate(text.splitlines(), 1):
         if not line.strip():
             continue
@@ -51,7 +52,12 @@ def validate_text(text: str, *, fake_fixture: bool = False) -> list[ServerEvent]
             raise RecordError(f"event sequence gap at line {number}")
         if absolute_paths(json.loads(line)):
             raise RecordError("an absolute path appears in the log")
+        try:
+            validate_cross_review_limit(event, prior)
+        except ValueError as error:
+            raise RecordError(str(error)) from error
         events.append(event)
+        prior[event.seq] = event
     if not events or events[0].type != "run.started":
         raise RecordError("the log must start with run.started")
     allow_fake_provider = fake_fixture

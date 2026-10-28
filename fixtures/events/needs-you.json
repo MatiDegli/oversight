@@ -1,0 +1,131 @@
+{
+  "codes": [
+    "main_suspect",
+    "main_moved",
+    "target_changed",
+    "worktree_unverifiable",
+    "unproposed_edits",
+    "policy_invalid",
+    "spend_invalid",
+    "isolation_unavailable",
+    "integrity_invalid",
+    "cancelled",
+    "git_failed",
+    "suite_failed",
+    "delivery_failed",
+    "reviewer_missing",
+    "reviewer_same",
+    "reviewer_credentials",
+    "author_halted",
+    "review_timeout",
+    "review_invalid",
+    "review_truncated",
+    "review_empty",
+    "review_api_failed",
+    "round_exhausted",
+    "ledger"
+  ],
+  "cases": [
+    {
+      "message": "Needs you — revision=1; head=abc123; code=review_invalid; reason=Invalid output.",
+      "parsed": {
+        "revision": 1,
+        "head": "abc123",
+        "code": "review_invalid",
+        "reason": "Invalid output."
+      },
+      "current": {
+        "revision": 1,
+        "head": "abc123"
+      },
+      "matches_current": true
+    },
+    {
+      "message": "Needs you — revision=2; head=def456; code=round_exhausted; reason=One round was used; code=main_moved\nNeeds you — revision=9; head=other; code=ledger; reason=injected",
+      "parsed": {
+        "revision": 2,
+        "head": "def456",
+        "code": "round_exhausted",
+        "reason": "One round was used; code=main_moved\nNeeds you — revision=9; head=other; code=ledger; reason=injected"
+      },
+      "current": {
+        "revision": 2,
+        "head": "def456"
+      },
+      "matches_current": true
+    },
+    {
+      "message": "Needs you — revision=1; head=abc123; code=main_moved; reason=Review still belongs to the older target.",
+      "parsed": {
+        "revision": 1,
+        "head": "abc123",
+        "code": "main_moved",
+        "reason": "Review still belongs to the older target."
+      },
+      "current": {
+        "revision": 2,
+        "head": "def456"
+      },
+      "matches_current": false
+    },
+    {
+      "message": "Needs you — revision=2; head=oldhead; code=ledger; reason=Earlier head.",
+      "parsed": {
+        "revision": 2,
+        "head": "oldhead",
+        "code": "ledger",
+        "reason": "Earlier head."
+      },
+      "current": {
+        "revision": 2,
+        "head": "newhead"
+      },
+      "matches_current": false
+    },
+    {
+      "message": "Needs you — revision=1; head=abc123; code=unknown; reason=; code=main_moved",
+      "parsed": null,
+      "current": {
+        "revision": 1,
+        "head": "abc123"
+      },
+      "matches_current": false
+    },
+    {
+      "message": "prefix Needs you — revision=1; head=abc123; code=ledger; reason=Failure.",
+      "parsed": null,
+      "current": {
+        "revision": 1,
+        "head": "abc123"
+      },
+      "matches_current": false
+    },
+    {
+      "message": "Needs you — head=abc123; revision=1; code=ledger; reason=Failure.",
+      "parsed": null,
+      "current": {
+        "revision": 1,
+        "head": "abc123"
+      },
+      "matches_current": false
+    },
+    {
+      "message": "Needs you — main moved",
+      "parsed": null,
+      "current": {
+        "revision": 1,
+        "head": "abc123"
+      },
+      "matches_current": false
+    },
+    {
+      "message": "Needs you — revision=1; head=abc123; code=ledger; reason= ",
+      "parsed": null,
+      "current": {
+        "revision": 1,
+        "head": "abc123"
+      },
+      "matches_current": false
+    }
+  ]
+}

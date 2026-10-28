@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter
 
+from oversight.events.references import validate_cross_review_limit
 from oversight.events.store import StoredEvent, read_store
 from oversight.limits import MAX_EVENT_LINE_BYTES
 from oversight_contracts.events import ServerEvent
@@ -19,6 +20,7 @@ class LogError(ValueError):
 def read_jsonl(path: Path) -> list[ServerEvent]:
     """Every event of a log, each validated against the contract. Blank lines are skipped."""
     events: list[ServerEvent] = []
+    prior: dict[int, ServerEvent] = {}
     with path.open("rb") as handle:
         number = 0
         while line := handle.readline(MAX_EVENT_LINE_BYTES + 2):
@@ -29,7 +31,10 @@ def read_jsonl(path: Path) -> list[ServerEvent]:
             if not line.strip():
                 continue
             try:
-                events.append(SERVER_EVENT.validate_json(line))
+                event = SERVER_EVENT.validate_json(line)
+                validate_cross_review_limit(event, prior)
+                events.append(event)
+                prior[event.seq] = event
             except ValueError as error:
                 raise LogError(f"{path.name}, line {number}: {error}") from error
     return events
