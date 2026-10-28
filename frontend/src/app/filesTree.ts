@@ -1,10 +1,16 @@
 import type { TreeResponse } from "@contracts";
 import type { State } from "../state";
+import { recordedRevision } from "./recordedFiles";
+
+type FileTree = Pick<TreeResponse, "directories" | "truncated"> & {
+  files: (TreeResponse["files"][number] & { deleted?: boolean })[];
+};
 
 export interface TreeRow {
   path: string;
   name: string;
   directory: boolean;
+  deleted: boolean;
   depth: number;
   parent: string;
   position: number;
@@ -12,9 +18,7 @@ export interface TreeRow {
 }
 
 /** Only paths carried by this run; no fabricated template files or network requests. */
-export function recordedTree(
-  state: State,
-): Pick<TreeResponse, "directories" | "files" | "truncated"> {
+export function recordedTree(state: State): FileTree {
   const paths = new Set(
     state.graph?.nodes.filter((node) => node.kind === "module").map((node) => node.path),
   );
@@ -27,21 +31,32 @@ export function recordedTree(
   }
   return {
     directories: [...directories].sort(),
-    files: [...paths].sort().map((path) => ({ path, hash: null })),
+    files: [...paths].sort().map((path) => ({
+      path,
+      hash: null,
+      deleted: recordedRevision(state, path).deleted,
+    })),
     truncated: false,
   };
 }
 
 export function visibleTree(
-  tree: Pick<TreeResponse, "directories" | "files">,
+  tree: Pick<FileTree, "directories" | "files">,
   expanded: ReadonlySet<string>,
 ): TreeRow[] {
   const children = new Map<string, Omit<TreeRow, "position" | "siblings">[]>();
-  const add = (path: string, directory: boolean) => {
+  const add = (path: string, directory: boolean, deleted = false) => {
     const parts = path.split("/");
     const parent = parts.slice(0, -1).join("/");
     const siblings = children.get(parent) ?? [];
-    siblings.push({ path, name: parts.at(-1) ?? path, directory, depth: parts.length, parent });
+    siblings.push({
+      path,
+      name: parts.at(-1) ?? path,
+      directory,
+      deleted,
+      depth: parts.length,
+      parent,
+    });
     children.set(parent, siblings);
   };
   // A bounded listing can omit a parent; synthesize its row so every listed file stays reachable.
@@ -51,7 +66,8 @@ export function visibleTree(
     for (let end = 1; end < parts.length; end++) directories.add(parts.slice(0, end).join("/"));
   }
   for (const path of directories) add(path, true);
-  for (const file of tree.files) if (!directories.has(file.path)) add(file.path, false);
+  for (const file of tree.files)
+    if (!directories.has(file.path)) add(file.path, false, file.deleted);
   const result: TreeRow[] = [];
   const visit = (parent: string) => {
     const rows = (children.get(parent) ?? []).sort(

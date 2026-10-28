@@ -28,7 +28,11 @@ function ConnectedTree({ navigation }: { navigation: FilesNavigation }) {
     <div className="flex min-h-0 flex-1 flex-col">
       <p className="px-3.5 py-2 text-xs text-muted">
         {recorded ? "Recorded files" : "main"}
-        {tree ? ` · ${String(tree.files.length)} files` : " · Loading files…"}
+        {tree
+          ? ` · ${String(tree.files.length)} files`
+          : failure
+            ? " · Files unavailable"
+            : " · Loading files…"}
       </p>
       {failure && (
         <div role="alert" className="px-3.5 py-2 text-sm text-muted">
@@ -172,7 +176,7 @@ function TreeEntry({
     <div
       id={id}
       role="treeitem"
-      aria-label={row.name}
+      aria-label={row.deleted ? `${row.name} · Deleted` : row.name}
       aria-level={row.depth}
       aria-posinset={row.position}
       aria-setsize={row.siblings}
@@ -194,6 +198,7 @@ function TreeEntry({
       <Icon aria-hidden="true" className="size-3.5 shrink-0 text-muted" />
       <span className="truncate">{row.name}</span>
       <span className="ml-auto flex gap-1">
+        {row.deleted && <span className="text-xs text-muted">Deleted</span>}
         {marks.map((mark) => (
           <span
             key={mark.slot}

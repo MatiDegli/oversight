@@ -22,6 +22,67 @@ const response = {
 const tree = (page: Parameters<Parameters<typeof withPage>[0]>[0]) =>
   page.getByRole("tree", { name: "Repository files" });
 
+it("replaces first-fetch loading with failure and restores loading on retry", async () => {
+  await withPage(async (page) => {
+    let release = () => {};
+    let requests = 0;
+    await page.route("**/tree?*", async (route) => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+        requests++;
+      });
+      await route.fulfill({ status: 500, json: { error: { message: "Unavailable" } } });
+    });
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    const sidebar = page.getByLabel("Files sidebar");
+    await browserExpect(sidebar.getByText("main · Loading files…", { exact: true })).toBeVisible();
+    await browserExpect.poll(() => requests).toBe(1);
+    release();
+    await browserExpect(sidebar.getByRole("alert")).toContainText("Files could not refresh.");
+    await browserExpect(
+      sidebar.getByText("main · Files unavailable", { exact: true }),
+    ).toBeVisible();
+    await browserExpect(sidebar.getByText(/Loading files/)).toHaveCount(0);
+    await page.unroute("**/tree?*");
+    await page.route("**/tree?*", async (route) => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+        requests++;
+      });
+      await route.fulfill({ json: response });
+    });
+    await sidebar.getByRole("button", { name: "Retry", exact: true }).click();
+    await browserExpect(sidebar.getByText("main · Loading files…", { exact: true })).toBeVisible();
+    await browserExpect.poll(() => requests).toBe(2);
+    release();
+    await browserExpect(sidebar.getByText("main · 2 files", { exact: true })).toBeVisible();
+    await browserExpect(sidebar.getByRole("alert")).toHaveCount(0);
+  });
+});
+
+it("labels a deleted recorded file visibly and accessibly", async () => {
+  await withPage(async (page) => {
+    await page.route("**/tree?*", (route) =>
+      route.fulfill({
+        status: 501,
+        json: { error: { code: "not_implemented", message: "Replay" } },
+      }),
+    );
+    await page.evaluate(() => {
+      window.fileViewTest.recordDeletion();
+      window.fileViewTest.refreshFiles("change.resolved");
+    });
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await tree(page).getByRole("treeitem", { name: "shop", exact: true }).click();
+    const deleted = tree(page).getByRole("treeitem", { name: "pricing.py · Deleted", exact: true });
+    await browserExpect(deleted).toBeVisible();
+    await browserExpect(deleted.getByText("Deleted", { exact: true })).toBeVisible();
+    await browserExpect(
+      tree(page).getByRole("treeitem", { name: "cart.py", exact: true }),
+    ).toBeVisible();
+  });
+});
+
 it("all repositories start with folders folded regardless of their names", async () => {
   await withPage(async (page) => {
     await page.route("**/tree?*", (route) =>

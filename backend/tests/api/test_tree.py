@@ -1,6 +1,7 @@
 """Runtime tree route, bounded off-loop walk and the published contract validators."""
 
 import asyncio
+import errno
 import hashlib
 import os
 import time
@@ -178,6 +179,38 @@ def test_unreadable_subtree_does_not_hide_readable_siblings(
     assert tree.directories == ["public"]
     assert [file.path for file in tree.files] == ["public/visible.py"]
     assert not tree.truncated
+
+
+@pytest.mark.parametrize("error", [errno.ELOOP, errno.ENOTDIR, errno.EIO])
+def test_directory_open_races_skip_only_replaced_subtrees(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: int
+) -> None:
+    (tmp_path / "replaced").mkdir()
+    (tmp_path / "replaced" / "hidden.py").touch()
+    (tmp_path / "public").mkdir()
+    (tmp_path / "public" / "visible.py").touch()
+    real_open = os.open
+    attempted = False
+
+    def raced_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal attempted
+        if path == "replaced" and dir_fd is not None:
+            attempted = True
+            assert flags & os.O_NOFOLLOW
+            raise OSError(error, "directory changed before open")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", raced_open)
+    if error == errno.EIO:
+        with pytest.raises(OSError) as caught:
+            listing(tmp_path)
+        assert caught.value.errno == errno.EIO
+    else:
+        tree = listing(tmp_path)
+        assert tree.directories == ["public"]
+        assert [file.path for file in tree.files] == ["public/visible.py"]
+        assert not tree.truncated
+    assert attempted
 
 
 @pytest.mark.parametrize("hash_value", ["A" * 64, "f" * 63, "z" * 64])
