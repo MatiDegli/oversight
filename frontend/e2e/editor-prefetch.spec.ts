@@ -25,6 +25,7 @@ for (const idle of ["native", "timeout fallback"] as const) {
     page.on("request", (request) => requested.push(new URL(request.url()).pathname));
     await interceptCommands(page);
     await page.goto("/level2");
+    // Editor specs allow a minute because software canvas rendering stretches replay event timers.
     await engaged(page, holds.live, 60_000);
     await expect
       .poll(() => requested.filter((path) => path === `/${implementation}`).length)
