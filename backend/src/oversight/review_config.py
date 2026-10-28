@@ -1,4 +1,4 @@
-"""Opt-in reviewer construction, deliberately unconnected to the live proposal lifecycle."""
+"""Opt-in reviewer construction, separate from runtime lifecycle and call transport."""
 
 from oversight.agents import (
     BASETEN_BASE_URL,
