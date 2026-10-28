@@ -80,6 +80,7 @@ class ChangeManager:
         clock: Clock = system_clock,
         git_timeout_s: float = 30,
         review: ReviewPort | None = None,
+        behavior_diff: bool = False,
     ) -> None:
         self._ctx = ChangeContext(
             workspace,
@@ -93,6 +94,7 @@ class ChangeManager:
                 review=review,
             ),
             ModeController(),
+            behavior_diff,
         )
 
     def merge_mode(self) -> MergeModeState:

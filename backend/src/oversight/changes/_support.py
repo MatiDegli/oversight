@@ -47,6 +47,7 @@ class ChangeContext:
     state: ChangeState
     ports: ChangePorts
     mode: ModeController
+    behavior_diff: bool = False
 
     def date(self) -> str:
         return self.clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")

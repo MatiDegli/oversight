@@ -1,0 +1,327 @@
+"""AST-only finite inputs. No imports, evaluation of expressions, or model requests."""
+
+import ast
+import inspect
+import time
+from dataclasses import dataclass
+from pathlib import PurePosixPath
+from typing import Any, cast
+
+from oversight.changes._shortcuts_common import Source, walk_local
+
+MAX_INPUTS = 48
+MAX_LITERAL = 4096
+MAX_AST_NODES = 128
+
+
+@dataclass(frozen=True)
+class BehaviorInput:
+    call: str
+    before: str
+    after: str
+
+
+@dataclass(frozen=True)
+class BehaviorInputs:
+    inputs: tuple[BehaviorInput, ...] = ()
+    skipped_binding: int = 0
+    reason: str | None = None
+
+
+def module_name(path: str) -> str:
+    parts = list(PurePosixPath(path).with_suffix("").parts)
+    if parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts)
+
+
+def literal_text(value: Any) -> str:
+    if type(value) is set:
+        return (
+            "{" + ", ".join(sorted(literal_text(v) for v in cast(Any, value))) + "}"
+            if value
+            else "set()"
+        )
+    if type(value) in (tuple, list):
+        parts = ", ".join(literal_text(v) for v in value)
+        return ("[" + parts + "]") if type(value) is list else "(" + parts + ",)" if value else "()"
+    if type(value) is dict:
+        return (
+            "{"
+            + ", ".join(
+                f"{literal_text(k)}: {literal_text(v)}"
+                for k, v in cast(dict[Any, Any], value).items()
+            )
+            + "}"
+        )
+    return repr(value)
+
+
+def _literal(node: ast.expr) -> Any:
+    nodes = list(ast.walk(node))
+    if len(nodes) > MAX_AST_NODES or len(ast.unparse(node)) > MAX_LITERAL:
+        raise ValueError("literal size cap")
+    return ast.literal_eval(node)
+
+
+def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signature:
+    if node.args.vararg or node.args.kwarg:
+        raise ValueError("variadic signature")
+    positional = [*node.args.posonlyargs, *node.args.args]
+    missing = inspect.Parameter.empty
+    defaults = [missing] * (len(positional) - len(node.args.defaults))
+    defaults += [_literal(value) for value in node.args.defaults]
+    params: list[inspect.Parameter] = []
+    for index, (arg, default) in enumerate(zip(positional, defaults, strict=True)):
+        kind = (
+            inspect.Parameter.POSITIONAL_ONLY
+            if index < len(node.args.posonlyargs)
+            else inspect.Parameter.POSITIONAL_OR_KEYWORD
+        )
+        params.append(
+            inspect.Parameter(arg.arg, kind, default=default, annotation=_annotation(arg))
+        )
+    for arg, default in zip(node.args.kwonlyargs, node.args.kw_defaults, strict=True):
+        params.append(
+            inspect.Parameter(
+                arg.arg,
+                inspect.Parameter.KEYWORD_ONLY,
+                default=missing if default is None else _literal(default),
+                annotation=_annotation(arg),
+            )
+        )
+    return inspect.Signature(params)
+
+
+def _annotation(arg: ast.arg) -> str | None:
+    if isinstance(arg.annotation, ast.Name):
+        return arg.annotation.id
+    if isinstance(arg.annotation, ast.Constant) and isinstance(arg.annotation.value, str):
+        return arg.annotation.value
+    return None
+
+
+def _arguments(
+    sig: inspect.Signature, named: dict[str, Any]
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    args: list[Any] = []
+    kwargs: dict[str, Any] = {}
+    if named.keys() - sig.parameters.keys():
+        raise TypeError("unknown parameter")
+    for name, param in sig.parameters.items():
+        if param.kind == inspect.Parameter.POSITIONAL_ONLY:
+            if name in named:
+                args.append(named[name])
+            elif param.default is not inspect.Parameter.empty:
+                args.append(param.default)
+            else:
+                raise TypeError("missing positional-only parameter")
+        elif name in named:
+            kwargs[name] = named[name]
+    sig.bind(*args, **kwargs)
+    return tuple(args), kwargs
+
+
+def _resolved(source: Source, call: ast.Call, path: str, module: str, name: str) -> bool:
+    resolved = source.resolve(call.func)
+    current = module_name(path)
+    if resolved and resolved.startswith("."):
+        level = len(resolved) - len(resolved.lstrip("."))
+        package = current.split(".") if path.endswith("/__init__.py") else current.split(".")[:-1]
+        resolved = ".".join([*package[: len(package) - level + 1], resolved.lstrip(".")])
+    if resolved == f"{module}.{name}":
+        return True
+    if current != module or not isinstance(call.func, ast.Name) or call.func.id != name:
+        return False
+    # A local binding or comprehension target shadows a module definition.
+    for definition, bindings in source.definition_bindings.items():
+        if (
+            definition.lineno <= call.lineno <= (definition.end_lineno or definition.lineno)
+            and name in bindings
+        ):
+            return False
+    return not any(
+        any(isinstance(target, ast.Name) and target.id == name for target in ast.walk(node.target))
+        and call in ast.walk(parent)
+        for parent in ast.walk(source.tree)
+        if isinstance(parent, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+        for node in parent.generators
+    )
+
+
+def _calls(files: dict[str, str], module: str, name: str, deadline: float):
+    for path, text in sorted(files.items()):
+        if time.monotonic() >= deadline:
+            raise TimeoutError
+        if not path.endswith(".py"):
+            continue
+        try:
+            source = Source(text, deadline)
+        except (SyntaxError, ValueError, RecursionError):
+            continue
+        calls = sorted(
+            (n for n in ast.walk(source.tree) if isinstance(n, ast.Call)),
+            key=lambda n: (n.lineno, n.col_offset),
+        )
+        for call in calls:
+            if not _resolved(source, call, path, module, name):
+                continue
+            try:
+                if any(kw.arg is None for kw in call.keywords):
+                    continue
+                args = tuple(_literal(arg) for arg in call.args)
+                kwargs = {kw.arg: _literal(kw.value) for kw in call.keywords if kw.arg is not None}
+                if len(kwargs) != len(call.keywords):
+                    continue
+                yield args, kwargs
+            except (ValueError, TypeError, SyntaxError, RecursionError):
+                continue
+
+
+def _definition(files: dict[str, str], module: str, name: str):
+    found: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for path, text in files.items():
+        if path.endswith(".py") and module_name(path) == module:
+            found.extend(
+                n
+                for n in ast.parse(text).body
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name
+            )
+    if len(found) != 1:
+        raise ValueError("ambiguous definition")
+    return found[0]
+
+
+def behavior_inputs(
+    module: str,
+    name: str,
+    base: dict[str, str],
+    head: dict[str, str],
+    *,
+    deadline: float = float("inf"),
+) -> BehaviorInputs:
+    try:
+        nodes = [_definition(files, module, name) for files in (base, head)]
+        if any(
+            isinstance(n, ast.AsyncFunctionDef)
+            or any(isinstance(c, (ast.Yield, ast.YieldFrom)) for c in walk_local(n))
+            for n in nodes
+        ):
+            return BehaviorInputs(reason="async or generator")
+        signatures = [_signature(node) for node in nodes]
+    except (ValueError, TypeError, SyntaxError, RecursionError):
+        return BehaviorInputs(reason="unsupported signature")
+    return _generate(module, name, base, head, nodes, signatures, deadline)
+
+
+def _generate(
+    module: str,
+    name: str,
+    base: dict[str, str],
+    head: dict[str, str],
+    nodes: list[ast.FunctionDef | ast.AsyncFunctionDef],
+    signatures: list[inspect.Signature],
+    deadline: float,
+) -> BehaviorInputs:
+    inputs: list[BehaviorInput] = []
+    seen: set[str] = set()
+    skipped = 0
+    pools: dict[str, list[Any]] = {key: [] for sig in signatures for key in sig.parameters}
+    seeds: list[dict[str, Any]] = []
+
+    def add(named: dict[str, Any]) -> None:
+        nonlocal skipped
+        if time.monotonic() >= deadline:
+            raise TimeoutError
+        try:
+            before, after = (_arguments(sig, named) for sig in signatures)
+        except TypeError:
+            skipped += 1
+            return
+        key = literal_text((before, after))
+        if key in seen or len(key) > MAX_LITERAL or len(inputs) >= MAX_INPUTS:
+            return
+        if any(
+            type(value) is bool
+            and any(
+                sig.parameters.get(param) and sig.parameters[param].annotation == "int"
+                for sig in signatures
+            )
+            for param, value in named.items()
+        ):
+            return
+        seen.add(key)
+        rendered = ", ".join(f"{key}={literal_text(value)}" for key, value in named.items())
+        inputs.append(
+            BehaviorInput(f"{name}({rendered})", literal_text(before), literal_text(after))
+        )
+        seeds.append(named)
+
+    for files, sig in zip((base, head), signatures, strict=True):
+        for args, kwargs in _calls(files, module, name, deadline):
+            try:
+                bound = sig.bind(*args, **kwargs)
+            except TypeError:
+                skipped += 1
+                continue
+            for param, value in bound.arguments.items():
+                pools[param].append(value)
+            add(dict(bound.arguments))
+    pools = _pools(pools, nodes, signatures)
+    seed = (
+        dict(seeds[0]) if seeds else {param: values[0] for param, values in pools.items() if values}
+    )
+    add(seed)
+    for param, values in pools.items():
+        for value in values:
+            add({**seed, param: value})
+    return BehaviorInputs(tuple(inputs), skipped, None if inputs else "unsupported signature")
+
+
+def _pools(
+    pools: dict[str, list[Any]],
+    nodes: list[ast.FunctionDef | ast.AsyncFunctionDef],
+    signatures: list[inspect.Signature],
+) -> dict[str, list[Any]]:
+    for param in pools:
+        parameters = [sig.parameters[param] for sig in signatures if param in sig.parameters]
+        defaults = [p.default for p in parameters if p.default is not inspect.Parameter.empty]
+        observed = pools[param] + defaults
+        kinds = {p.annotation for p in parameters}
+        is_int = "int" in kinds or (not kinds - {None} and any(type(v) is int for v in observed))
+        is_str = "str" in kinds or (not kinds - {None} and any(type(v) is str for v in observed))
+        for node in nodes:
+            for value in _body_literals(node):
+                if is_int and type(value) is int:
+                    pools[param].extend((value - 1, value, value + 1))
+                elif is_str and type(value) is str:
+                    pools[param].append(value)
+        pools[param].extend(([0, -1] if is_int else []) + defaults)
+        unique = {literal_text(v): v for v in pools[param] if not (is_int and type(v) is bool)}
+        pools[param] = list(unique.values())[:MAX_INPUTS]
+    return pools
+
+
+def _body_literals(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[Any]:
+    """Signed numeric literals belong to the unary expression, not its positive operand."""
+    stack: list[ast.AST] = list(reversed(node.body))
+    literals: list[ast.expr] = []
+    while stack:
+        child = stack.pop()
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        if (
+            isinstance(child, ast.UnaryOp)
+            and isinstance(child.op, (ast.USub, ast.UAdd))
+            and isinstance(child.operand, ast.Constant)
+            and type(child.operand.value) is int
+        ):
+            literals.append(child)
+            continue
+        if isinstance(child, ast.Constant):
+            literals.append(child)
+        stack.extend(reversed(list(ast.iter_child_nodes(child))))
+    return [
+        ast.literal_eval(child)
+        for child in sorted(literals, key=lambda c: (c.lineno, c.col_offset))
+    ]

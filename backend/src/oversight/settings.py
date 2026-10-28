@@ -56,6 +56,8 @@ class Settings:
     fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
     cross_review: bool = False
     """Opt-in only. Runtime review additionally requires an injected call transport."""
+    behavior_diff: bool = False
+    """OVERSIGHT_BEHAVIOR_DIFF: private, finite behavior measurements; never published."""
     reviewer_fake_script: Path | None = None
     """OVERSIGHT_REVIEWER_FAKE_SCRIPT: reviewer fake, reviewing author fake-b."""
     reviewer_fake_b_script: Path | None = None
@@ -102,6 +104,7 @@ class Settings:
             agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
             fake_script_b=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_B")),
             cross_review=merged.get("OVERSIGHT_CROSS_REVIEW", "false").lower() == "true",
+            behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),

@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from oversight.changes._review_port import ReviewCapture
 
 from oversight.agents import AgentTask
+from oversight.changes._behavior import BehaviorDiff
 from oversight.changes._evidence import WriteEvidence
 from oversight.graph import (
     CodeVersion,
@@ -117,6 +118,8 @@ class ChangeRecord:
     unpublished: set[str] = field(default_factory=lambda: set[str]())
     executions: dict[int, SuiteExecution] = field(default_factory=dict[int, SuiteExecution])
     suite_runs: dict[int, SuiteRun] = field(default_factory=dict[int, SuiteRun])
+    behavior_diffs: dict[int, BehaviorDiff] = field(default_factory=dict[int, BehaviorDiff])
+    """Private per-revision computation; deliberately absent from event facts."""
     declared: FinishDeclaration | None = None
     delivery_rejected: str | None = None
     evidence: WriteEvidence | None = None
