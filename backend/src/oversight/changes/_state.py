@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from oversight.changes._cross_review import ReviewCapture
+    from oversight.changes._review_port import ReviewCapture
 
 from oversight.agents import AgentTask
 from oversight.changes._evidence import WriteEvidence

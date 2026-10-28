@@ -6,8 +6,9 @@ from pathlib import Path
 
 import uvicorn
 
-from oversight.app import ReplayConfig, create_app, ledger_command
-from oversight.settings import Settings
+from oversight.app import ReplayConfig, create_app, ledger_command, pytest_pin
+from oversight.settings import REPO_ROOT, Settings
+from oversight.workspace import print_isolation_probe
 
 
 def main() -> None:
@@ -30,10 +31,19 @@ def main() -> None:
         "settle", help="set the spend to Meta's console total and clear unknown calls"
     )
     settle.add_argument("--spent-usd", type=float, required=True, help="US dollars spent so far")
+    probe = commands.add_parser("isolation-probe", help="probe network isolation without API calls")
+    probe.add_argument(
+        "--runtime",
+        type=Path,
+        default=REPO_ROOT / ".runtime" / "isolation-probe" / ".runtime",
+        help="dedicated probe runtime (absolute path ending in .runtime)",
+    )
     args = parser.parse_args()
     settings = Settings.load()
 
-    if args.command == "serve":
+    if args.command == "isolation-probe":
+        print_isolation_probe(args.runtime, REPO_ROOT / "demo-repo", pytest_pin=pytest_pin())
+    elif args.command == "serve":
         uvicorn.run(
             "oversight.app:create_app",
             factory=True,

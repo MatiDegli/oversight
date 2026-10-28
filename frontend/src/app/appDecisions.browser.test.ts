@@ -24,14 +24,7 @@ beforeAll(async () => {
     "/",
     `<!doctype html><html><body><div id="root"></div><script type="module">
       import "/src/theme/index.css";
-      import { createRoot } from "react-dom/client";
-      import { createElement } from "react";
-      import { App } from "/src/app/App.tsx";
-      import { stateStore } from "/src/state/index.ts";
-      import log from "/@fs/${fileURLToPath(new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url))}?raw";
-      stateStore.getState().applyEvents(log.trim().split("\\n").map(JSON.parse).filter(e => e.seq <= 20));
-      window.appStore = stateStore;
-      createRoot(document.getElementById("root")).render(createElement(App));
+      import "/src/app/appDecisions.browser.fixture.tsx";
     </script></body></html>`,
   );
   await server.listen();

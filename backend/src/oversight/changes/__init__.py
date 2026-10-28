@@ -3,8 +3,8 @@
 Other modules import only what this file exports; everything else here is internal.
 """
 
-from oversight.changes._cross_review import ReviewCapture
 from oversight.changes._manager import ChangeManager
+from oversight.changes._review_port import ReviewCapture, ReviewPort
 from oversight.changes._shortcut_detector import (
     DetectionResult,
     Finding,
@@ -19,6 +19,7 @@ __all__ = [
     "DetectionResult",
     "Finding",
     "ReviewCapture",
+    "ReviewPort",
     "Revision",
     "ShortcutKind",
     "WrongState",

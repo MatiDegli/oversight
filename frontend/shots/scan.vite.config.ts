@@ -2,6 +2,7 @@
 // that the replay site plays the log named in OVERSIGHT_SCAN_LOG where it would play the hand-written
 // level 1 log (the same swap as e2e/vite.config.ts). It runs in replay mode, which opens no
 // connection after load, so the scan's navigation can finish (see scan-log.ts).
+import { fileURLToPath } from "node:url";
 import { defineConfig, mergeConfig } from "vite";
 
 import base from "../vite.config.ts";
@@ -13,7 +14,13 @@ export default defineConfig((env) =>
   mergeConfig(base(env), {
     resolve: {
       // The import in src/transport/index.ts, whatever relative path it uses.
-      alias: [{ find: /^.*\/handwritten-level1\.jsonl\?raw$/, replacement: `${log}?raw` }],
+      alias: [
+        {
+          find: /^\.\.\/transport$/,
+          replacement: fileURLToPath(new URL("./transport.ts", import.meta.url)),
+        },
+        { find: /^.*\/handwritten-level1\.jsonl\?raw$/, replacement: `${log}?raw` },
+      ],
     },
   }),
 );

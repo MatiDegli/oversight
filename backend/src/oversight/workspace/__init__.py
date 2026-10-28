@@ -15,6 +15,8 @@ from oversight.workspace.errors import (
     WorkspaceError,
 )
 from oversight.workspace.files import FileRead, check_content, content_hash
+from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable
+from oversight.workspace.isolation_probe import print_isolation_probe
 from oversight.workspace.junit import MAX_TESTS, MAX_XML_BYTES, RunProblem, parse_junit
 from oversight.workspace.junit import Outcome as JUnitOutcome
 from oversight.workspace.junit import TestRun as JUnitRun
@@ -34,6 +36,8 @@ __all__ = [
     "FileRead",
     "FileTooLarge",
     "InvalidPath",
+    "IsolatedRunner",
+    "IsolationUnavailable",
     "JUnitOutcome",
     "JUnitRun",
     "LockOrderError",
@@ -52,6 +56,7 @@ __all__ = [
     "check_content",
     "content_hash",
     "parse_junit",
+    "print_isolation_probe",
     "run_process",
     "validate_suite_execution",
 ]

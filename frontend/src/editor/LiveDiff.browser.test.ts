@@ -196,6 +196,25 @@ it("keeps the find field on its theme token when closing disables it", async () 
   });
 }, 60_000);
 
+it("keeps the field token on the disabled find input after closing it", async () => {
+  await withPage(async (page) => {
+    await render(page);
+    await expectDiff(page, 8);
+    await page.evaluate(() => window.panelTest.current()?.getModifiedEditor().focus());
+    await page.keyboard.press("Control+f");
+    await browserExpect(page.locator(".find-widget.visible")).toBeVisible();
+    const fieldColor = await page
+      .locator(".find-widget.visible .monaco-inputbox")
+      .first()
+      .evaluate((input) => getComputedStyle(input).backgroundColor);
+    await page.keyboard.press("Escape");
+    await browserExpect(page.locator(".find-widget .monaco-findInput.disabled").first()).toHaveCSS(
+      "background-color",
+      fieldColor,
+    );
+  });
+}, 60_000);
+
 it("uses only token colors in rendered Monaco, at rest and while reading, finding and scrolling", async () => {
   await withPage(async (page) => {
     const filler = Array.from({ length: 80 }, (_, i) => `value_${String(i)} = price()`).join("\n");

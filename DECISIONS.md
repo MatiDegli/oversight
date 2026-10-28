@@ -678,3 +678,33 @@ PR1 already supplies the default-off switch. PR3a carries runtime registration, 
 lifecycle wiring, including explicit demo activation; PR3b carries call scope, accounting, the
 Meta brake and distinct review-ledger failure handling. PR4 carries replay/UI projection and
 recognition of the shared fixture. Contracts remain frozen at 1.4.0.
+
+## Cross-review runtime lifecycle (PR3a)
+
+Confirmed, uninterrupted agent proposal facts notify an internal ReviewPort with the captured
+candidate and explicit authorship. LiveRun waits for run_ended and a free, ready author before
+reviewing. Human saves never arm reviews; halted authors receive Needs you without new budget.
+HTTP and automatic Request changes share synchronous admission and task registration. Human
+admission cancels tracked reviews; shutdown closes admission and drains reviews before runs.
+
+The reviewer callable is injected. PR3a tests drive the PR1 adapter with scripted clients;
+production call transport remains unconfigured until PR3b supplies its scope and accounting.
+Enabling the switch without that transport produces reviewer_missing without a model call.
+The default-off path adds no events or tasks and preserves the existing level 2 replay bytes.
+Contracts stay at 1.4.0; reducer and UI projection remain PR4.
+
+## Cross-review call scope and accounting (PR3b)
+
+Production reviews use the agents facade's run_review_call in a fresh context. The helper owns
+the ready + 90-second timeout, retry deadline and review callback, restoring the scope on exit.
+Normal responses and empty choices record once; unanswered requests record unknown usage.
+Cancellation before a request or during retry backoff adds no tick. Durable accounting drains
+even after human invalidation, using the reviewer's provider rather than the author's provider.
+Baseten review usage remains unpriced and never consumes Meta's credits, as for Baseten authors.
+
+Authors and reviews share the durable ledger writer but have separate failure handlers. A lost
+review write closes the Meta brake and publishes a drained, non-fatal Needs you ledger error with
+the captured target and reviewer identity. It never marks or halts the author, and never publishes
+the failed tick as persisted. Concurrent cancellation propagates after the error is recorded.
+The existing 12,288-token provisional review budget and frozen 1.4.0 contracts remain unchanged;
+reducer/UI projection belongs to PR4, and frontend review-cost separation remains a follow-up.

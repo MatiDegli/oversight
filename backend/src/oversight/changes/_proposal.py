@@ -6,6 +6,7 @@ from oversight.changes import _delivery as delivery
 from oversight.changes._diff import count_lines_async, file_status, parse_name_status
 from oversight.changes._facts import FactsEvidence, build_change_facts, capture_facts
 from oversight.changes._probes import added_cases, probe_added_tests
+from oversight.changes._review_port import ReviewCapture
 from oversight.changes._state import (
     SUSPECT,
     By,
@@ -255,7 +256,17 @@ async def proposal(
         if rec.revision != proposal.revision:
             raise
         interrupted = True
-    await record_probe_facts(ctx, rec, head, proposal.revision, evidence, interrupted=interrupted)
+    await record_probe_facts(
+        ctx,
+        rec,
+        head,
+        proposal.revision,
+        evidence,
+        capture=ReviewCapture(evidence.target, rec.tree),
+        proposal=proposal,
+        author=author,
+        interrupted=interrupted,
+    )
 
 
 async def record_probe_facts(
@@ -266,6 +277,9 @@ async def record_probe_facts(
     evidence: FactsEvidence,
     *,
     interrupted: bool,
+    capture: ReviewCapture,
+    proposal: ChangeProposed,
+    author: By,
 ) -> None:
     cancelled = False
     try:
@@ -289,6 +303,8 @@ async def record_probe_facts(
     await ctx.whole(publish_facts(ctx, evidence))
     if cancelled:
         raise asyncio.CancelledError
+    if not interrupted and ctx.ports.review is not None:
+        ctx.ports.review.facts_ready(capture, proposal, author=author)
 
 
 async def publish_facts(ctx: ChangeContext, evidence: FactsEvidence) -> None:

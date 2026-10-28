@@ -6,6 +6,7 @@ from datetime import UTC
 from typing import Any
 
 from oversight.agents import Publish
+from oversight.changes._review_port import ReviewPort
 from oversight.changes._state import ChangeRecord, ChangeState, Source
 from oversight.events import Clock
 from oversight.graph import (
@@ -30,6 +31,7 @@ class ChangePorts:
     """Lambdas resolve facade methods at call time, including class-level spies."""
 
     drain: Callable[[ChangeRecord], Awaitable[None]]
+    review: ReviewPort | None = None
 
 
 @dataclass

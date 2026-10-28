@@ -55,7 +55,7 @@ class Settings:
     """Agent B's own script when it runs `fake`: reusing A's would propose the same edit twice, so a
     fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
     cross_review: bool = False
-    """Opt-in only. PR1 configures the reviewer without scheduling any reviews."""
+    """Opt-in only. Runtime review additionally requires an injected call transport."""
     reviewer_fake_script: Path | None = None
     """OVERSIGHT_REVIEWER_FAKE_SCRIPT: reviewer fake, reviewing author fake-b."""
     reviewer_fake_b_script: Path | None = None

@@ -14,7 +14,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -127,6 +127,7 @@ class CallScope:
 
     deadline: float | None
     record: Callable[[ModelReply], Awaitable[None]]
+    role: Literal["agent", "review"] = "agent"
 
 
 CALL_SCOPE: ContextVar[CallScope | None] = ContextVar("agent_model_call", default=None)

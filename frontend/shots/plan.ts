@@ -18,6 +18,13 @@ export function editingLog(jsonl: string): string | null {
 
 /** Derive an editing cut only for a scene that needs it; null skips that scene alone. */
 export function logForScene(jsonl: string, scene: Pick<Scene, "log">): string | null {
+  if (scene.log === "proposed") {
+    const lines = jsonl.split("\n").filter((line) => line.trim());
+    const resolved = lines.findIndex(
+      (line) => (JSON.parse(line) as { type: string }).type === "change.resolved",
+    );
+    return (resolved < 0 ? lines : lines.slice(0, resolved)).join("\n") + "\n";
+  }
   if (scene.log === "one-slot") {
     const events = jsonl
       .trim()
