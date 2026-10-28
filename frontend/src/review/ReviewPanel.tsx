@@ -306,7 +306,10 @@ export function ReviewPanel({
   const hasFacts = proposal !== null && factsForRevision(state, proposal) !== undefined;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
-  const [editing, setEditing] = useState<{ path: string; blocked: boolean } | null>(null);
+  const [editing, setEditing] = useState<{
+    path: string;
+    blocked: "loading" | "edits" | null;
+  } | null>(null);
   const decision = change
     ? decisionView(change, state.errors, attempt, onDecide === undefined)
     : undefined;
@@ -442,7 +445,7 @@ export function ReviewPanel({
                               fileAccess.drafts.has(fileKey(name, data.agentId)) ||
                               fileAccess.inFlightSaves.has(fileKey(name, data.agentId)),
                           );
-                          setEditing({ path, blocked: blocked || hasDraft });
+                          setEditing({ path, blocked: hasDraft ? "edits" : blocked });
                         }}
                       />
                     ) : (
@@ -465,7 +468,9 @@ export function ReviewPanel({
           view={decisionView(change, state.errors, attempt, onDecide === undefined)}
           onDecide={onDecide}
           replayOf={replayOf}
-          blocked={editingBlocked ? (editing === null ? "loading" : "edits") : null}
+          blocked={
+            editingBlocked ? (editing?.path === openPath ? editing.blocked : "loading") : null
+          }
         />
       )}
     </aside>

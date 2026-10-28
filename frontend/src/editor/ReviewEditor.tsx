@@ -22,7 +22,7 @@ export function ReviewEditor({
   files: FileAccess;
   editable: boolean;
   revision: number;
-  onBlocked: (blocked: boolean) => void;
+  onBlocked: (blocked: "loading" | "edits" | null) => void;
 }) {
   const document = useRef<FileDocument | null>(null);
   const [state, setState] = useState<FileState>({
@@ -34,7 +34,7 @@ export function ReviewEditor({
     canSave: false,
   });
   const report = useEffectEvent((next: FileState) => {
-    onBlocked(next.dirty || next.phase === "saving" || !next.loaded);
+    onBlocked(next.dirty || next.phase === "saving" ? "edits" : !next.loaded ? "loading" : null);
   });
   const mount = (diff: editor.IStandaloneDiffEditor) => {
     const model = diff.getModifiedEditor().getModel();
