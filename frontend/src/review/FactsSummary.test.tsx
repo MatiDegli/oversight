@@ -86,13 +86,15 @@ describe("recorded facts summary", () => {
     );
   });
 
-  it.each([
+  it.each<[string, ChangeFacts | undefined]>([
     ["null summary", { ...facts, summary: null }],
+    ["empty summary", { ...facts, summary: [] }],
     ["missing facts", undefined],
-  ] as const)("renders nothing for %s, including no label", (_, record) => {
+  ])("renders nothing for %s, including no label", (_, record) => {
     expect(renderToStaticMarkup(<FactsSummary facts={record} />)).toBe("");
     const html = panel(record ? [record] : []);
     expect(html).not.toContain(label);
+    expect(html).not.toContain('aria-label="Review context"');
     for (const line of lines) expect(html).not.toContain(line);
   });
 

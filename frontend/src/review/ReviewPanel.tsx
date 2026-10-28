@@ -105,7 +105,7 @@ function Decisions({
   const [keyboardTried, setKeyboardTried] = useState(false);
   if (view.kind === "decided") {
     return (
-      <section aria-label="Decision" className="border-t border-page-border p-4.5">
+      <section aria-label="Decision" className="shrink-0 border-t border-page-border p-4.5">
         <Resolution resolution={view.resolution} />
       </section>
     );
@@ -137,7 +137,7 @@ function Decisions({
   return (
     <section
       aria-label="Decision"
-      className="flex flex-col gap-2.5 border-t border-page-border p-4.5"
+      className="flex shrink-0 flex-col gap-2.5 border-t border-page-border p-4.5"
     >
       {view.kind === "conflict" && <Resolution resolution={view.resolution} />}
       {recorded ? (
@@ -265,6 +265,7 @@ export function ReviewPanel({
   const proposal = change?.proposal ?? null;
   const facts = proposal === null ? undefined : factsForRevision(state, proposal);
   const hasFacts = facts !== undefined;
+  const hasSummary = (facts?.summary?.length ?? 0) > 0;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
   const [editing, setEditing] = useState<{
@@ -288,12 +289,28 @@ export function ReviewPanel({
     (editing?.path !== openPath || editing.blocked);
   const stats = new Map(proposal?.files.map((file) => [file.path, file]));
   const look = agent ? agentLook[agent.slot] : undefined;
+  const context = (
+    <>
+      <FactsSummary facts={facts} />
+      {change && (!attempt || attempt.revision !== proposal?.revision) && (
+        <CrossReviewNote change={change} />
+      )}
+      {proposal && hasFacts && (
+        <ReviewFacts state={state} proposal={proposal} scrollable={!hasSummary} />
+      )}
+    </>
+  );
+  const report = (
+    <p className="border-b border-page-border px-4.5 py-3.5 text-(length:--body-size)">
+      {proposal?.summary ?? "The agent left no note."}
+    </p>
+  );
   return (
     <aside
       aria-label="Review panel"
-      className={`flex w-[min(var(--review-panel-width),46vw)] shrink-0 flex-col border-r border-divider bg-page${facts?.summary ? " overflow-y-auto" : ""}`}
+      className="flex w-[min(var(--review-panel-width),46vw)] shrink-0 flex-col border-r border-divider bg-page"
     >
-      <header className="flex flex-col gap-2.5 border-b border-page-border bg-page px-4.5 py-3.5">
+      <header className="flex shrink-0 flex-col gap-2.5 border-b border-page-border bg-page px-4.5 py-3.5">
         <div className="flex items-center gap-2.5">
           {agent && look && (
             <span
@@ -334,15 +351,16 @@ export function ReviewPanel({
           </p>
         )}
       </header>
-      <FactsSummary facts={facts} />
-      {change && (!attempt || attempt.revision !== proposal?.revision) && (
-        <CrossReviewNote change={change} />
+      {hasSummary ? (
+        <section aria-label="Review context" className="min-h-0 overflow-y-auto">
+          {context}
+          {report}
+        </section>
+      ) : (
+        context
       )}
-      {proposal && hasFacts && <ReviewFacts state={state} proposal={proposal} />}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <p className="border-b border-page-border px-4.5 py-3.5 text-(length:--body-size)">
-          {proposal?.summary ?? "The agent left no note."}
-        </p>
+      <div className={`flex flex-1 flex-col ${hasSummary ? "min-h-min" : "min-h-0"}`}>
+        {!hasSummary && report}
         {files.map((path) => {
           const open = path === openPath;
           const stat = stats.get(path);
@@ -351,7 +369,7 @@ export function ReviewPanel({
             <section
               key={path}
               aria-label={`Diff of ${path}`}
-              className={`flex flex-col border-b border-page-border ${open ? "min-h-0 flex-1" : ""}`}
+              className={`flex flex-col border-b border-page-border ${open ? (hasSummary ? "min-h-min flex-1" : "min-h-0 flex-1") : ""}`}
             >
               <button
                 type="button"

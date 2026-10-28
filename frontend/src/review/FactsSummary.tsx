@@ -2,7 +2,7 @@ import type { ChangeFacts } from "@contracts";
 
 /** Server-written lines, kept apart from the agent's own report. */
 export function FactsSummary({ facts }: { facts: ChangeFacts | undefined }) {
-  if (!facts?.summary) return null;
+  if (!facts?.summary?.length) return null;
   return (
     <section
       aria-label="Recorded facts summary"
