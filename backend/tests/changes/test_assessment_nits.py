@@ -1,6 +1,9 @@
 """One duration source, bounded receipt retention and observed background failures."""
 
+import gc
 import logging
+from unittest.mock import Mock
+from weakref import ref
 
 import pytest
 from changes_helpers import EDIT, Harness, queued_callbacks_ran
@@ -8,7 +11,7 @@ from test_assessment import head, latest, make_clock, settled, terminals, wait
 from test_mode import available, select
 
 from oversight.changes import _assessment
-from oversight.events import format_needs_you
+from oversight.events import StoredEvent, format_needs_you
 from oversight_contracts.events import ErrorReport
 from oversight_contracts.policy import ChangeAssessment
 
@@ -76,6 +79,7 @@ async def test_receipt_cache_is_bounded_and_evicted_duplicates_do_not_wake(
 @pytest.mark.parametrize("failure", ["publish", "evidence", "timer"])
 async def test_background_failures_are_retrieved_and_logged(h: Harness, clock, caplog, failure):
     caplog.set_level(logging.ERROR, logger=LOGGER)
+    caplog.set_level(logging.ERROR, logger="asyncio")
     available(h)
     await select(h, "merge_when_safe", 0)
     if failure == "publish":
@@ -102,10 +106,52 @@ async def test_background_failures_are_retrieved_and_logged(h: Harness, clock, c
     assert task.done()
     await queued_callbacks_ran()
     # Do not await/gather the failed task: the production callback must retrieve it.
-    assert not task._log_traceback
     [record] = [record for record in caplog.records if record.name == LOGGER]
     assert record.message == "Rules scheduler task failed"
     assert record.exc_info is not None and isinstance(record.exc_info[1], RuntimeError)
+    completed = ref(task)
+    current = wait(h)
+    if current.task is task:
+        current.task = None
+    if current.timer is task:
+        current.timer = None
+    del task
+    gc.collect()
+    await queued_callbacks_ran()
+    assert completed() is None
+    assert not [record for record in caplog.records if record.name == "asyncio"]
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "run.started",
+        "graph.snapshot",
+        "graph.delta",
+        "agent.status",
+        "agent.step",
+        "agent.focus",
+        "change.updated",
+        "usage.tick",
+        "change.assessed",
+        "merge_mode.changed",
+        "plan.updated",
+        "revert.resolved",
+        "queue.updated",
+        "lead.status",
+    ],
+)
+async def test_unrelated_receipts_are_not_parsed_or_retained(h: Harness, monkeypatch, kind):
+    parser = Mock(side_effect=AssertionError("Unrelated receipt parsed"))
+    monkeypatch.setattr(_assessment, "_EVENT", parser)
+    scheduler = h.manager._ctx.assessment
+    before = dict(scheduler.events)
+    # The envelope is opaque here: only scheduler event types need decoding.
+    h.manager.rules_received(
+        StoredEvent(seq=99999, type=kind, ts="2026-10-28T12:00:00.000Z", envelope="opaque")
+    )
+    assert not parser.mock_calls
+    assert scheduler.events == before
 
 
 async def test_cancelled_tasks_do_not_log_failures(h: Harness, clock, caplog):

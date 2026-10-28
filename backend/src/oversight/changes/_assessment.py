@@ -103,6 +103,15 @@ class RulesScheduler:
 
     def received(self, stored: StoredEvent, *, generation: int | None = None) -> None:
         """Notification port: callers pass only receipts returned after the store commits."""
+        if stored.type not in {
+            "change.proposed",
+            "change.facts_recorded",
+            "change.reviewed",
+            "tests.executed",
+            "change.resolved",
+            "error",
+        }:
+            return
         cached = self.events.get(stored.seq)
         duplicate = cached is not None or stored.seq <= self._evicted_through
         event = cached if cached is not None else _EVENT.validate_json(stored.envelope)
