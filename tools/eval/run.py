@@ -14,7 +14,9 @@ from typing import Any
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from tools.eval.arms import Arm, output_path
 from tools.eval.grade import Result, Tariff, Tests, Usage, grade
+from tools.eval.identity import Identity
 from tools.eval.ledger import Ledger, Record
 from tools.eval.session import PROFILES, Session, allowance
 from tools.eval.tasks import BenchError, Task, load_tasks
@@ -78,6 +80,9 @@ class Attempt:
         passed = all(v == "passed" for v in self.tests.model_dump().values())
         solved = self.terminal == "ready_for_review" and passed and not self.interrupted
         return Result(
+            **{key: getattr(self.record, key) for key in Identity.model_fields},
+            profile=self.record.profile,
+            turns=len(self.usage.inputs),
             task_id=self.task.id,
             agent_model=model,
             outcome="stopped" if self.interrupted else "solved" if solved else "failed",
@@ -175,16 +180,36 @@ async def start_once(session: Session, attempt: Attempt, ledger: Ledger) -> None
         raise asyncio.CancelledError
 
 
-async def run_task(session: Session, task: Task, ledger: Ledger, tariff: Tariff | None) -> bool:
-    ledger.check_allowance(task, session.model.id, allowance(session.model.id, tariff))
+async def run_task(
+    session: Session,
+    task: Task,
+    ledger: Ledger,
+    tariff: Tariff | None,
+    *,
+    arm: Arm,
+    repetition: int = 1,
+    pilot: bool = False,
+) -> bool:
+    identity: dict[str, Any] = dict(
+        arm_id=arm.arm_id,
+        repetition=repetition,
+        config_hash=arm.config_hash(session.run),
+    )
+    ledger.check_allowance(task, session.model.id, allowance(session.model.id, tariff), **identity)
     baseline, base_commit = await session.setup(task)
     record = ledger.reserve(
-        task, session.model.id, session.run.run_id, allowance(session.model.id, tariff)
+        task,
+        session.model.id,
+        session.run.run_id,
+        allowance(session.model.id, tariff),
+        tariff=tariff,
+        pilot=pilot,
+        **identity,
     )
     attempt = Attempt(task, record, Usage(tariff))
-    evidence = ledger.out.parent / session.run.run_id / task.id
+    evidence = ledger.out.parent / session.run.run_id / task.id / record.attempt_id
     cleaned = False
-    with attempt_trace(session.api, session.run.run_id, ledger.out.parent):
+    with attempt_trace(session.api, session.run.run_id, ledger.out.parent, record.attempt_id):
         await _observe_attempt(session, attempt, ledger, baseline, base_commit, evidence)
     error = attempt.error
     if attempt.interrupted and attempt.terminal not in {"ready_for_review", "halted"}:
@@ -233,6 +258,26 @@ async def _observe_attempt(
         attempt.interrupted = True
 
 
+def configured_arm(model: str, tariff: Tariff | None, arm: Arm | None) -> Arm:
+    if arm is None:
+        arm = Arm.model_validate(
+            dict(
+                arm_id=model,
+                profile=model,
+                reasoning=PROFILES[model][2],
+                harness_pack="off",
+                tariff=tariff,
+            )
+        )
+    if arm.profile != model or arm.tariff != tariff:
+        raise BenchError("arm profile/tariff differs from the requested attempt")
+    if model == "muse-spark-open" and tariff is None:
+        raise BenchError("Baseten requires an explicitly approved input/output tariff")
+    if model != "fake" and tariff and (tariff.input <= 0 or tariff.output <= 0):
+        raise BenchError("paid profiles require positive tariffs")
+    return arm
+
+
 async def execute(
     server: str,
     model: str,
@@ -242,22 +287,34 @@ async def execute(
     tariff: Tariff | None = None,
     *,
     trace: bool = False,
+    arm: Arm | None = None,
+    repetition: int = 1,
+    shared_ledger: Ledger | None = None,
+    pilot: bool = False,
 ) -> None:
     if not math.isfinite(cap) or cap <= 0:
         raise BenchError("--cap-usd must be finite and positive")
     if model not in PROFILES:
         raise BenchError("unknown model profile")
-    if model == "muse-spark-open" and tariff is None:
-        raise BenchError("Baseten requires an explicitly approved input/output tariff")
-    if model != "fake" and tariff and (tariff.input <= 0 or tariff.output <= 0):
-        raise BenchError("paid profiles require positive tariffs")
-    out = await asyncio.to_thread(out.resolve)
-    ledger = Ledger(out, cap, tariff)
+    if model != "fake" and (shared_ledger is None or arm is None):
+        raise BenchError("paid runs require the pilot/plan interface and its cumulative projection")
+    arm = configured_arm(model, tariff, arm)
+    out = output_path(out, paid=model != "fake")
+    if shared_ledger is not None and (
+        shared_ledger.out != out or shared_ledger.state.cap_usd != cap
+    ):
+        raise BenchError("attempt must use the shared ledger's output and cap")
+    ledger = shared_ledger or Ledger(out, cap, tariff)
+    identity: dict[str, Any] = dict(
+        arm_id=arm.arm_id,
+        repetition=repetition,
+        config_hash=arm.config_hash(),
+    )
     api: API | None = None
     events: Events | None = None
     try:
         ledger.ready()  # fail before contacting the server if an earlier run is unsettled
-        remaining = [t for t in tasks if not ledger.completed(t, model)]
+        remaining = [t for t in tasks if not ledger.completed(t, model, **identity)]
         if not remaining:
             return
         api = API(server)
@@ -265,10 +322,23 @@ async def execute(
         health = await api.health()
         events = Events(api, health.run_id, out.parent / f"events-{health.run_id}.jsonl")
         session = Session(api, events)
-        await session.preflight(model)
-        session.evidence(out, tasks, tariff)
+        await session.preflight(model, arm.reasoning)
+        if arm.config_hash(session.run) != arm.config_hash():
+            raise BenchError("server limits/prompt do not match the planned configuration")
+        session.evidence(
+            out,
+            tasks,
+            tariff,
+            {
+                **identity,
+                "configuration": arm.configuration(session.run),
+                "pilot": pilot,
+            },
+        )
         for task in remaining:
-            if await run_task(session, task, ledger, tariff):
+            if await run_task(
+                session, task, ledger, tariff, arm=arm, repetition=repetition, pilot=pilot
+            ):
                 raise BenchError("bench stopped: unknown cost or task/cap allowance reached")
     finally:
         if events:
@@ -276,7 +346,8 @@ async def execute(
                 await events.close()
         if api:
             await api.client.aclose()
-        ledger.close()
+        if shared_ledger is None:
+            ledger.close()
 
 
 def positive(value: str) -> float:
@@ -290,6 +361,11 @@ def positive(value: str) -> float:
 
 
 def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    if args and args[0] in {"pilot", "project", "plan", "report"}:
+        from tools.eval.bench import main as bench_main
+
+        return bench_main(args)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", required=True)
     parser.add_argument("--model", required=True, choices=list(PROFILES))

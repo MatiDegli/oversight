@@ -100,7 +100,7 @@ async def test_mode_lock_wait_has_a_bound(h: Harness) -> None:
     controller = available(h, timeout_s=0.02)
     async with controller._lock:
         async with asyncio.timeout(0.5):
-            with pytest.raises(WrongState, match="timed out after 5 seconds"):
+            with pytest.raises(WrongState, match=r"timed out after 0\.02 seconds"):
                 await select(h, "ask_me", 0)
     assert not controller._lock.locked()
     assert not h.manager.authority_suspended()

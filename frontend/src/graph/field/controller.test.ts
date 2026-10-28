@@ -171,12 +171,13 @@ describe("field transitions", () => {
     expect(last()[3][0]?.weight).toBe(1);
     expect(canvas.oversightField?.animating()).toBe(false);
     controller.update({ ...light, mode: "review" });
-    expect(last()[0].profile.near).toBe(34);
+    expect(last()[0].profile.gain).toBe(0.92);
     advance(360);
-    expect(last()[0].profile.near).toBeGreaterThan(16);
-    expect(last()[0].profile.near).toBeLessThan(34);
+    expect(last()[0].profile.gain).toBeGreaterThan(0.7);
+    expect(last()[0].profile.gain).toBeLessThan(0.92);
     advance(480);
-    expect(last()[0].profile.near).toBe(16);
+    expect(last()[0].profile.gain).toBe(0.7);
+    expect(last()[0].profile.near).toBe(26);
     expect(canvas.oversightField?.animating()).toBe(false);
     controller.dispose();
   });
@@ -200,6 +201,31 @@ describe("field transitions", () => {
     controller.dispose();
   });
 
+  it.each(["update", "frame"])(
+    "paints the final empty scene when a slow %s draw crosses the transition deadline",
+    (phase) => {
+      const controller = createFieldController(canvas, source);
+      controller.update(light);
+      advance(240);
+      const crossDeadline = () => {
+        now = 481;
+      };
+      if (phase === "update") renderer.draw.mockImplementationOnce(crossDeadline);
+      controller.update({ ...light, lights: [] });
+      if (phase === "frame") {
+        renderer.draw.mockImplementationOnce(crossDeadline);
+        advance(479);
+      }
+      expect(last()[3]).toHaveLength(1);
+      expect(canvas.oversightField?.animating()).toBe(true);
+      advance(496);
+      expect(last()[3]).toEqual([]);
+      expect(canvas.oversightField?.animating()).toBe(false);
+      expect(frames.size).toBe(0);
+      controller.dispose();
+    },
+  );
+
   it("jumps immediately under reduced motion, including when it is enabled mid-transition", () => {
     const controller = createFieldController(canvas, source);
     controller.update(light);
@@ -209,7 +235,8 @@ describe("field transitions", () => {
     expect(last()[3][0]?.weight).toBe(1);
     expect(canvas.oversightField?.animating()).toBe(false);
     controller.update({ ...light, mode: "review" });
-    expect(last()[0].profile.near).toBe(16);
+    expect(last()[0].profile.gain).toBe(0.7);
+    expect(last()[0].profile.near).toBe(26);
     expect(canvas.oversightField?.animating()).toBe(false);
     expect(themes.dark["transition-duration"]).toBe("240ms");
     controller.dispose();

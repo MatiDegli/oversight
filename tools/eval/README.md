@@ -1,7 +1,8 @@
-# Task bench, slice 1
+# Task bench: arms and repetitions
 
 Eight independent tasks, one agent at a time, through a **dedicated, fresh Oversight server**.
-The runner never calls a model provider, approves a change, requests revisions, or retries a task.
+The runner never calls a model provider, approves a change or requests revisions.
+Repetitions are explicit independent attempts, never retries of an existing completion key.
 No paid run has been performed for this slice. Task marks describe tempting shortcuts in their
 specifications; they are not shortcut-detector findings.
 
@@ -50,96 +51,109 @@ start/review endpoints. A test-only interrupted SSE response exercises reconnect
 handling on that server. Explicit zero fake tariffs in those tests mean simulated free usage
 reported by the fake; missing usage is still unknown.
 
-## Runner interface (paid execution remains unapproved)
+## Arms, pilots and plans (paid execution remains unapproved)
 
-The approved interface is:
+An arm has an immutable name, profile, explicit reasoning setting and harness-pack setting.
+For example, `arms.example.json` compares the same Meta profile with the pack off and on.
+Copy and edit that JSON locally to select other configurations. Tariffs, when explicitly known,
+are `"tariff": {"input": 0.1, "output": 0.2}` in USD per million tokens; completion already
+includes reasoning. Baseten has **no assumed tariff** and requires positive explicit prices.
+No prices or keys are inferred by the evaluator from `.env`.
+
+The CLI starts a dedicated Oversight process for every pending attempt. It passes
+`OVERSIGHT_HARNESS_PACK=on|off` in the child's environment even if the product currently ignores
+that setting. A process-local profile override applies the arm's reasoning setting to both the
+advertisement and the product's model client; no product sources change. The child's actual
+advertised limits and prompt version must match the planned configuration. All model calls still
+originate inside Oversight. Only that child reads provider credentials from `.env`; the bench
+never exports keys. No paid command below is authorized by its presence here.
 
 ```sh
-uv run --offline --frozen python tools/eval/run.py \
-  --server http://127.0.0.1:8710 --model muse-spark \
-  --cap-usd 3 --out .eval-output/meta/results.jsonl
+# After explicit approval of paid execution: one selected task per arm, one repetition.
+uv run --offline --frozen python tools/eval/run.py pilot \
+  --arms tools/eval/arms.example.json --task pricing-01 --seed 1742
+# Offline projection from the pilot's durable costs; no process or provider is contacted.
+uv run --offline --frozen python tools/eval/run.py project \
+  --arms tools/eval/arms.example.json --repetitions 3
+# Execute only if projected cumulative cost is within the cap (default USD 20).
+uv run --offline --frozen python tools/eval/run.py plan \
+  --arms tools/eval/arms.example.json --repetitions 3 --seed 1742
+uv run --offline --frozen python tools/eval/run.py report
 ```
 
-Do not execute that example until the maintainer approves task specifications, protected paths,
-cap semantics and a paid run. This slice was exercised only against test-owned fake servers.
-Never point the tests at a server with a real key. `--model fake` requires a fake-only advertisement.
-The HTTP client accepts only loopback origins, disables environment proxies and redirects, and
-contacts only Oversight. It never reads `.env` or provider keys.
+Repeat `--arm NAME` and `--task ID` to select subsets. `--repetitions N` means repetitions 1..N,
+so a pilot task already completed at repetition 1 is reused by the plan, with its cost still
+counted. Pilot execution requires exactly one selected task and one repetition. Run order is
+shuffled across all arm/task/repetition combinations. The ledger persists the seed, exact order,
+configuration definitions and projection before any child starts; resume without `--seed` reuses
+the recorded seed, and changing it for that plan is refused. Increasing repetitions adds keys,
+never replaces earlier attempts. Completed failures also count as completed attempts.
 
-`--task ID` may be repeated to select tasks. `muse-spark` must advertise exactly
-`muse-spark-1.3-contributor` with `low` reasoning. `muse-spark-open` must advertise exactly
-`meta-models/muse-spark-open-1026`, also `low`; there is no invented Contributor field. Baseten
-requires both `--input-usd-per-m` and `--output-usd-per-m`, explicitly approved positive tariffs.
-Meta normally uses server-reported cost; an explicit tariff can calculate missing cost from known
-tokens. No tariff is inferred from environment files. Completion usage already includes reasoning;
-it is counted once. Missing individual counts or any missing cost produce `"unknown"`, never zero.
-Interruption can leave an unreported in-flight call, so its total metrics are conservatively unknown.
+For no-credit local execution use arms with `"profile": "fake"`, `"reasoning": null` and an
+explicit zero tariff, plus `--fake-script PATH`. Only fake-only plans accept an alternate `--out`.
+The legacy `--server --model fake --cap-usd ... --out ...` interface remains for existing fake
+integration tests; paid execution requires the pilot/plan interface.
 
-Before setup, preflight validates health, contract/run identity, initial commit, exact chosen
-profile, advertised slots and limits, graph paths and every known template file's content/hash.
-A server with agent history, pending work, graph parse errors or changed content is refused. Run
-this without a browser or another operator: existing contracts offer no exclusive bench lease or
-file-list endpoint. Consequently an external runner cannot detect arbitrary untracked non-Python
-files or prevent a concurrent operator from racing a request. These are limitations, not a claim
-of sandbox isolation.
+## Cumulative cap and recovery
 
-## Cap, restart and failure behavior
+Every paid task-bench invocation uses `.eval-output/bench/ledger.json` and `results.jsonl` under
+the repository root. Choosing another output path is refused before starting Oversight. Legacy
+ledgers elsewhere under `.eval-output/` block paid starts until the maintainer consolidates their
+complete histories, including unresolved reservations and unknown costs; the separate lead probe's
+ledger remains independent. There is no reset, retry or automatic reconciliation command.
+The ledger's cap and output filename stay fixed across invocations; pass the original `--cap-usd`
+when resuming a ledger with a nondefault cap. A filesystem lock covers projection and the entire
+execution, so competing runners cannot reserve against the same available balance.
 
-A finite positive `--cap-usd` is mandatory before any request. The output directory contains a
-single `ledger.json` protected by an exclusive OS lock. Writes use replacement plus file and
-directory fsync. Reserve a whole-task planning allowance before POST `/agents`; charge every unique
-`usage.tick` before advancing. The allowance uses 36 model turns, 16,000 assumed input tokens and
-4,096 output tokens each: Meta's planning rates are $0.10/$0.20 per million ($0.0870912/task), or the
-explicit approved tariff. Fake tests keep that minimum reservation. Baseten uses its explicitly
-approved rates; $1/$2 would reserve $0.870912/task. These are estimates, not input-token bounds or
-claims about current provider tariffs. In-flight billing and provider retries can exceed an external
-cap; strict billing ceilings require a provider-enforced spending limit.
+Projection uses the maximum observed pilot cost for each selected arm, multiplied by pending
+arm/task/repetition keys, plus **all** historical ledger charges. A missing pilot, unsettled
+reservation, total above the cap or unknown arm cost refuses the projection. An explicit tariff
+can price an unknown pilot only when both token counts are known. This is a projection only:
+it never clears unknown flags or frees reservations. Actual execution remains blocked until
+unknown historical billing is reconciled. Baseten projections always require an explicit tariff.
+The projection is recomputed before each pending attempt because actual costs can exceed estimates.
+A pilot on one task does not establish an upper bound on other tasks' costs.
 
-Unknown cost, exhaustion of the cap or a task allowance stops the bench. An interrupted, unresolved
-reservation also blocks future starts. Restarting the server or runner never clears expenditure,
-unknown costs, attempted tasks or reservations. Completed tasks are skipped; whole-task retries
-are refused. Reuse the same output directory and unchanged cap/tariff to resume remaining tasks
-against a fresh server. An ambiguous lost POST response is not retried. Cancellation while a POST
-response is pending waits for that one request, then stops the created agent and restores files.
-If its response is lost permanently, the reservation stays unresolved for maintainer reconciliation.
-There is intentionally no automatic settle/reset command or paid retry switch.
+Before each start the bench reserves a planning allowance using 36 turns, 16,000 assumed input
+tokens and 4,096 output tokens per turn, with a minimum USD 0.0870912. Meta's existing planning
+rates are USD 0.10/0.20 per million; these are estimates, not claims about current tariffs.
+Explicit approved rates replace them. Every unique usage event is charged durably before the
+next event is processed. Unknown usage, reaching a task allowance/cap or unresolved cleanup stops
+the bench. In-flight billing and product retries can exceed external estimates: a strict billing
+ceiling requires a provider-enforced limit.
 
-At `change.proposed`, reconstruct a candidate from the verified task baseline and latest complete
-`change.updated` contents, check originals and the proposed file list, then run the untouched
-original suite and the external hidden suite in a separate temporary directory. Each subprocess
-has a timeout and its own process group. These checks execute Python; they are not a security
-sandbox. A normal completion with all three checks passing is `solved`. An incorrect proposal or
-autonomous halt is `failed`. An explicit stop, cancellation or bench interruption is `stopped`.
-After grading and the terminal status, POST `/changes/{id}/reject`, wait for resolution and restore
-baseline files. Interrupted working agents use POST `/agents/{id}/stop`, which rejects/discards
-through the server. Cleanup failures preserve an unresolved reservation and stop further tasks.
-SSE reconnects use `Last-Event-ID`; deduplication uses `(run_id, seq)`. Schema/id mismatches, conflicting
-duplicates, gaps or a server restart fail closed: a graph snapshot cannot reconstruct missing costs.
+Ledger v2 loads v1 without dropping charges, results, unknown flags or reservations. Legacy rows
+receive the profile name as their arm, repetition 1 and stable legacy attempt identifiers; their
+configuration hash remains `legacy` because the missing configuration cannot be reconstructed.
+New attempts carry immutable `arm_id`, repetition, SHA-256 configuration hash and a unique attempt
+id on both reservation and result. The hash covers exact model, profile, reasoning, limits, prompt
+version and harness setting. An arm name cannot be reused with another known hash. Completion is
+keyed by `(task_id, profile, arm_id, repetition)`; task fingerprint drift still fails closed.
+Unsettled attempts cannot be retried or turned into completed keys by restarting.
 
-## Output and evidence
+Preflight, hidden grading and reject/restore behavior are unchanged: only a dedicated clean server
+is accepted, candidates are graded in scratch copies, and nothing is ever approved or merged.
+The HTTP client accepts loopback origins only, disables environment proxies and redirects, and
+SSE recovery deduplicates `(run_id, seq)`. Missing costs cannot be recovered from graph snapshots.
+The runner cannot prevent a concurrent external operator from racing requests; there is no
+exclusive bench lease or complete untracked-file inventory in the existing product contracts.
 
-One JSON line per attempted task, validated by `grade.Result`; `results.schema.json` is checked for
-drift. `test_result.baseline` means the original suite run against the candidate, not the seeded
-starting tree. `not_run` means interruption or a policy rejection prevented grading. Steps count
-completed `agent.step` events and duration uses a monotonic clock from start request through task
-termination (including external grading while awaiting terminal status, excluding cleanup).
+## Results and evidence
 
-The ledger stores result records before materializing JSONL; restart repairs a missing/stale result
-file without duplicating rows. `manifest.json` retains every server run's full `run.started`, prompt
-version, exact model, limits, task/baseline hashes, tariff assumptions and reservation estimate.
-`events-{run_id}.jsonl` retains schema-validated raw events, including complete original/modified
-contents, deduplicated by run and seq. Per-task original/hidden test output and policy failures live
-under `{run_id}/{task_id}/`. `.eval-output/` is the one ignored output directory; use separate child
-directories for provider ledgers, and preserve them across server restarts.
+`results.schema.json` follows `grade.Result`, with a drift test. JSONL keeps one row per attempt,
+including profile, arm identity, repetition, turns (observed usage events), tool steps, tokens,
+cost, wall time, outcome and original/hidden/policy checks. Missing costs or token counts remain
+`"unknown"`. `report` prints every attempt, per-repetition totals and per-arm aggregates, including
+**tasks solved** and mean tasks solved per observed repetition. Aggregation propagates unknowns.
 
-## Next slice and maintainer questions
-
-Add the remaining ten tasks, a reviewable accounting reconciliation procedure for unknown costs or
-lost start responses, stronger endpoint fault-injection coverage, and a report comparing providers
-without shortcut-detector claims. Confirm Baseten rates, Contributor-mode interpretation, task and
-protected-path specifications, and both caps/billing semantics before the first paid run. A future
-contract proposal could add an exclusive bench lease and a complete workspace inventory; no
-contracts were changed here.
+The durable ledger is written before results are materialized; reopening repairs missing/stale
+JSONL without duplicate rows. `manifest.json` retains each server advertisement, configuration,
+prompt/limits, fingerprints, prices and reservation assumptions. `events-{run_id}.jsonl` retains
+validated raw events and full diffs. Test evidence is under `{run_id}/{task_id}/{attempt_id}/`.
+Paid children's runtime ledgers and SQLite stores remain under `server-*/.runtime/` for billing
+reconciliation if a start response or SSE usage is lost. Fake children's scratch runtimes are removed.
+`--trace` correlates evaluator and server timing with that same attempt id. No output artifacts
+belong in commits.
 
 ## Lead-agent gate probe
 

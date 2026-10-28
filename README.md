@@ -1,13 +1,25 @@
 # Oversight
 
-Human oversight for coding agents.
+Agents write code faster than anyone can review it. Oversight is how you stop reading code without
+losing control.
 
-Oversight is a visual IDE for Python projects where you supervise coding agents while they work. The
-repository is shown as a live graph of modules, classes, and functions parsed from the source. Agents
-built on Meta's Muse Spark, through the Meta Model API, edit the code, each in its own git worktree.
-The functions an agent reads or edits light up in its color, and clicking one opens its live diff.
-When a function changes, the graph shows its impact cone: every function that calls it, directly or
-through others. Nothing reaches main until you approve it.
+Today, in a small web IDE for Python projects, you watch coding agents built on Meta's Muse Spark
+work on a live graph of your repository. Each agent has its own git worktree. The functions an
+agent reads or edits light up in its color, and each change shows its impact cone, the functions
+possibly affected. Nothing reaches main until you approve it.
+
+Being built during the hackathon (see [docs/additions.md](docs/additions.md) for the state of
+each): for every change, Oversight runs the old and the new version of each changed function on
+the same inputs and shows what behaves differently. It also measures which callers changed, and it
+asks you only about differences the task did not ask for. A change that passes your rules can merge
+by itself, with its reasons and a Revert.
+
+The idea of running both versions of a change to find what tests miss is not new. Testora (ICSE
+2026) checks behavior differences in pull requests against their intent. DiffTestGen (2026)
+generates tests that expose them. Meta's just-in-time catching tests (FSE 2026) generate tests that
+catch a bug before a change lands. CONTRA (2026) asks only the clarifying questions whose answers
+change behavior, checked by running programs. Oversight brings these ideas to supervising agents
+while they work. Any number in this README about Oversight comes from its own bench.
 
 **Status:** in development during the Meta Global AI Developer Hackathon, from 2026-10-26 to
 2026-11-04.

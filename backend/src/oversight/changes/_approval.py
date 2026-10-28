@@ -4,6 +4,7 @@ from oversight.changes import _delivery as delivery
 from oversight.changes import _merge as merge
 from oversight.changes import _proposal as proposal
 from oversight.changes import _recovery as recovery
+from oversight.changes import _rules as rules
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._resolution_validation import validate_resolution_intent
 from oversight.changes._state import (
@@ -17,6 +18,55 @@ from oversight.events import EventRejected
 from oversight.workspace import (
     WorkspaceError,
 )
+
+
+async def approve_rules(ctx: ChangeContext, reservation: rules.RulesReservation) -> None:
+    """Preflight only: keep main -> worktree through the closed transaction port."""
+    rec, evidence = reservation.wait.rec, reservation.evidence
+    try:
+        async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
+            if not rules.current(ctx, reservation):
+                return
+            failure = rules.revalidate(ctx, reservation)
+            if failure is None:
+                async with ctx.workspace.operations.git_lease():
+                    failure = await rules_tree(ctx, reservation)
+            if not rules.current(ctx, reservation):
+                return
+            failure = failure or rules.revalidate(ctx, reservation)
+            if failure:
+                await rules.terminal(ctx, reservation, *failure)
+                return
+            reason = await ctx.ports.rules_transaction(rec, evidence)
+            if reason:
+                await rules.terminal(ctx, reservation, "policy_invalid", reason)
+    except asyncio.CancelledError:
+        await rules.terminal(ctx, reservation, "cancelled", "Rules approval was cancelled.")
+        raise
+    except Exception as error:
+        await rules.terminal(
+            ctx, reservation, "worktree_unverifiable", f"Rules preflight failed: {error}"
+        )
+
+
+async def rules_tree(
+    ctx: ChangeContext, reservation: rules.RulesReservation
+) -> tuple[str, str] | None:
+    rec, evidence = reservation.wait.rec, reservation.evidence
+    assessment = evidence.assessment
+    assert assessment is not None
+    main = (await ctx.git(ctx.workspace.main, "rev-parse", "HEAD")).strip()
+    if main != assessment.main_commit:
+        return "main_moved", "Main moved during rules evaluation; review this change yourself."
+    head = (await ctx.git(rec.tree, "rev-parse", "HEAD")).strip()
+    if head != evidence.head_commit:
+        return "target_changed", "The worktree head differs from the reserved proposal."
+    tree = (await ctx.git(rec.tree, "rev-parse", "HEAD^{tree}")).strip()
+    if tree != assessment.candidate_tree:
+        return "worktree_unverifiable", "The worktree tree differs from the assessed candidate."
+    if (await ctx.git(rec.tree, "status", "--porcelain")).strip():
+        return "worktree_unverifiable", "The reserved worktree has unproposed edits."
+    return None
 
 
 async def approve(ctx: ChangeContext, rec: ChangeRecord, comment: str | None) -> None:

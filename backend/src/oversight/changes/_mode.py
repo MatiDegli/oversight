@@ -54,7 +54,7 @@ class ModeController:
         return self._suspended
 
     async def set(self, ctx: "ChangeContext", command: SetMergeMode) -> MergeModeState:
-        """CAS under only the mode lock; lock and confirmation share a five-second bound.
+        """CAS under only the mode lock; lock and confirmation share the configured timeout.
 
         A timeout or caller cancellation leaves the tracked receipt running. No later
         write overtakes it. Failure keeps authority suspended; disabling can be retried.
@@ -88,7 +88,7 @@ class ModeController:
                     return self.snapshot()
         except TimeoutError as error:
             raise WrongState(
-                "Merge mode lock or event confirmation timed out after 5 seconds"
+                f"Merge mode lock or event confirmation timed out after {self._timeout_s:g} seconds"
             ) from error
 
     async def _confirm(self, ctx: "ChangeContext", state: MergeModeState) -> None:
@@ -100,6 +100,7 @@ class ModeController:
             ) from error
         self._state = state
         self._suspended = False
+        ctx.assessment.mode_changed()
 
     @staticmethod
     def _observe_receipt(receipt: asyncio.Task[None]) -> None:

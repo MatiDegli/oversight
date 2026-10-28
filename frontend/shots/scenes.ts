@@ -374,6 +374,25 @@ export const scenes: readonly Scene[] = [
     },
   },
   {
+    name: "palette-open",
+    enabled: true,
+    log: "proposed",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Find a function, file or command", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Find a function, file or command" });
+      await dialog.getByRole("combobox").fill("cart");
+      await dialog.getByRole("group", { name: "Files", exact: true }).waitFor();
+      assert.equal(
+        await dialog
+          .getByRole("combobox")
+          .evaluate((element) => document.activeElement === element),
+        true,
+      );
+    },
+  },
+  {
     name: "dock-open",
     enabled: true,
     prepare: async (page) => {

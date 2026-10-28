@@ -22,7 +22,8 @@ The person's edits on main (docs/plans/files.md): `save_main` commits one file a
 """
 
 import asyncio
-from collections.abc import Coroutine
+import time
+from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 
 from oversight.agents import AgentTask, Publish, ReviewOutcome, RunEnd
@@ -32,6 +33,8 @@ from oversight.changes import _delivery as delivery
 from oversight.changes import _files as files
 from oversight.changes import _proposal as proposal
 from oversight.changes import _revision as revision
+from oversight.changes import _rules as rules
+from oversight.changes._assessment import RulesScheduler
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._mode import ModeController
@@ -51,7 +54,7 @@ from oversight.changes._state import (
 )
 from oversight.changes._suite_evidence import publish_suite
 from oversight.changes._support import ChangeContext, ChangePorts
-from oversight.events import Clock, system_clock
+from oversight.events import Clock, EventPayload, StoredEvent, system_clock
 from oversight.graph import (
     WorkspaceGraph,
 )
@@ -63,7 +66,7 @@ from oversight.workspace import (
 from oversight_contracts.commands import FileContent, FileSaved, SetMergeMode
 from oversight_contracts.common import AgentId, ChangeId
 from oversight_contracts.graph import GraphSnapshot
-from oversight_contracts.policy import MergeModeState
+from oversight_contracts.policy import ChangeAssessment, MergeModeState
 from oversight_contracts.review import FinishDeclaration
 
 
@@ -81,10 +84,18 @@ class ChangeManager:
         git_timeout_s: float = 30,
         review: ReviewPort | None = None,
         behavior_diff: bool = False,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleep_until: Callable[[float], Awaitable[None]] | None = None,
     ) -> None:
+        async def confirmed(payload: EventPayload) -> object:
+            receipt = await publish(payload)
+            if isinstance(receipt, StoredEvent):
+                self.rules_received(receipt)
+            return receipt
+
         self._ctx = ChangeContext(
             workspace,
-            publish,
+            confirmed,
             main_graph,
             clock,
             git_timeout_s,
@@ -92,10 +103,21 @@ class ChangeManager:
             ChangePorts(
                 drain=lambda rec: self._drain(rec),
                 review=review,
+                rules_admission=self._admit_rules,
             ),
             ModeController(),
             behavior_diff,
         )
+
+        self._ctx.assessment = RulesScheduler(
+            self._ctx,
+            monotonic,
+            sleep_until or (lambda deadline: asyncio.sleep(max(0, deadline - monotonic()))),
+        )
+
+    def rules_received(self, receipt: StoredEvent, *, generation: int | None = None) -> None:
+        """Port for committed external facts, reviews and combined suite receipts."""
+        self._ctx.assessment.received(receipt, generation=generation)
 
     def merge_mode(self) -> MergeModeState:
         """The confirmed mode/revision for GET and future proposal capture."""
@@ -230,6 +252,7 @@ class ChangeManager:
             raise WrongState(
                 f"{change_id} is {rec.state}; {verb} needs {' or '.join(sorted(allowed))}"
             )
+        self._ctx.assessment.invalidate(rec)
         if person:
             rec.person_intervened()
         rec.fallback, rec.state = rec.state, "deciding"
@@ -319,6 +342,24 @@ class ChangeManager:
         rec.evidence = evidence
         rec.taken = rec.revision
         return self._decide(rec, approval.approve(self._ctx, rec, comment))
+
+    def _admit_rules(self, rec: ChangeRecord, assessment: ChangeAssessment) -> str | None:
+        wait = self._ctx.assessment.waits.get(rec.change_id)
+        if wait is None or not self._ctx.assessment.valid(wait):
+            return None
+        try:
+            reservation = rules.capture(self._ctx, wait, assessment)
+        except ValueError as error:
+            return str(error)
+        try:
+            self._take(rec.change_id, APPROVABLE, "rules approval", person=False)
+        except WrongState:
+            return None
+        rec.taken = rec.revision
+        rec.rules_consumed.add(rec.revision)
+        rec.evidence = reservation.evidence
+        self._decide(rec, approval.approve_rules(self._ctx, reservation))
+        return None
 
     def reject(
         self, change_id: ChangeId, comment: str | None, *, revision: int, head_commit: str

@@ -1,18 +1,27 @@
-import { Folder, GitBranch } from "lucide-react";
+import { Folder, GitBranch, Search } from "lucide-react";
 
 import type { State } from "../state";
 import { SpendMeter } from "./SpendMeter";
 import { readyCount } from "./view";
+import "./palette/palette.css";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
 /**
  * The top bar: name, repository, branch and commit, the review queue and spend. The sketches also
- * show a search box, "Earlier today" and settings; each joins the bar when its feature is built, so
+ * show "Earlier today" and settings; each joins the bar when its feature is built, so
  * the bar never carries a control that looks present and does nothing.
  */
-export function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () => void }) {
+export function TopBar({
+  state,
+  onOpenQueue,
+  onOpenPalette,
+}: {
+  state: State;
+  onOpenQueue?: () => void;
+  onOpenPalette?: () => void;
+}) {
   const ready = readyCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
   return (
@@ -36,6 +45,20 @@ export function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () 
             )}
           </p>
         </>
+      )}
+      {onOpenPalette && (
+        <button
+          type="button"
+          className="palette-trigger"
+          aria-label="Find a function, file or command"
+          aria-keyshortcuts="Control+k"
+          aria-haspopup="dialog"
+          onClick={onOpenPalette}
+        >
+          <Search aria-hidden="true" size={14} />
+          <span>Find a function, file or command</span>
+          <kbd>Ctrl K</kbd>
+        </button>
       )}
       {/* Always mounted, so the counter's arrival is announced and nothing else moves. */}
       <div role="status" aria-label="Review queue" className="ml-auto flex items-center">

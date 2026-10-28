@@ -7,7 +7,12 @@ from functools import partial
 from pathlib import PurePosixPath
 
 from oversight.changes._probes import added_cases, comparison
-from oversight.changes._shortcut_detector import Finding, ShortcutKind, detect_shortcuts
+from oversight.changes._shortcut_detector import (
+    DetectionResult,
+    Finding,
+    ShortcutKind,
+    detect_shortcuts,
+)
 from oversight.changes._shortcuts_common import FuncNode, Source, is_test_file
 from oversight.changes._shortcuts_skips import DECORATOR_SKIP, module_markers
 from oversight.changes._shortcuts_unknown import COLLECTION_CONFIG
@@ -47,24 +52,47 @@ class AddedTestsInventory:
     complete: bool
 
 
-def integrity_status(
-    base_files: Mapping[str, str], head_files: Mapping[str, str]
-) -> IntegrityStatus:
-    """Classify captured full source maps; never infer status from diagnostic text."""
-    changes = [
+@dataclass(frozen=True)
+class SourceObservation:
+    changes: tuple[tuple[str, str | None, str | None], ...]
+    detected: DetectionResult
+    captured: bool
+
+
+def observe_source(
+    base_files: Mapping[str, str], head_files: Mapping[str, str], *, captured: bool = False
+) -> SourceObservation:
+    """One changed-file input and detector run for both source facts and status."""
+    changes = tuple(
         (path, base_files.get(path), head_files.get(path))
         for path in sorted(base_files.keys() | head_files.keys())
         if base_files.get(path) != head_files.get(path)
-    ]
+    )
+    return SourceObservation(
+        changes,
+        detect_shortcuts(changes, grouped=False),
+        captured or bool(base_files or head_files),
+    )
+
+
+def integrity_status(
+    base_files: Mapping[str, str],
+    head_files: Mapping[str, str],
+    *,
+    observation: SourceObservation | None = None,
+    captured: bool = False,
+) -> IntegrityStatus:
+    """Empty maps require an explicit successful capture witness."""
+    source = observation or observe_source(base_files, head_files, captured=captured)
     prohibited = tuple(
         path
-        for path, old, _ in changes
+        for path, old, _ in source.changes
         if PurePosixPath(path).name in COLLECTION_CONFIG
         or PurePosixPath(path).name == "conftest.py"
         or (old is not None and is_test_file(path))
     )
     return IntegrityStatus(
-        complete=detect_shortcuts(changes, grouped=False).status != "unknown",
+        complete=source.captured and source.detected.status != "unknown",
         prohibited_paths=prohibited,
     )
 
@@ -96,6 +124,7 @@ class FactsEvidence:
     executions: Mapping[int, SuiteExecution]
     runs: Mapping[int, SuiteRun]
     added_tests: tuple[AddedTestProbe, ...] = ()
+    integrity_status: IntegrityStatus | None = None
 
 
 def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
@@ -245,13 +274,10 @@ def source_facts(
     *,
     base_tree: str,
     head_tree: str,
+    observation: SourceObservation | None = None,
 ) -> tuple[tuple[IntegrityFact, ...], tuple[str, ...]]:
-    changes = [
-        (path, rec.base_files.get(path), rec.head_files.get(path))
-        for path in sorted(rec.base_files.keys() | rec.head_files.keys())
-        if rec.base_files.get(path) != rec.head_files.get(path)
-    ]
-    detected = detect_shortcuts(changes, grouped=False)
+    source = observation or observe_source(rec.base_files, rec.head_files)
+    detected = source.detected
     problems = [f"detector unknown: {reason}" for reason in detected.reasons]
     facts: list[IntegrityFact] = []
     for finding in detected:
@@ -302,7 +328,7 @@ async def capture_facts(
         main_commit=main,
         candidate_tree=tree,
     )
-    integrity, diagnostics = await ctx.whole(_source_facts(ctx, rec, base_tree, tree))
+    integrity, diagnostics, status = await ctx.whole(_source_facts(ctx, rec, base_tree, tree))
     problems = list(MISSING_PRODUCERS) + list(diagnostics)
     for seq, execution in sorted(rec.executions.items()):
         run = rec.suite_runs[seq]
@@ -333,6 +359,7 @@ async def capture_facts(
         tuple(problems),
         dict(rec.executions),
         dict(rec.suite_runs),
+        integrity_status=status,
     )
 
 
@@ -357,5 +384,13 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
 
 async def _source_facts(
     ctx: ChangeContext, rec: ChangeRecord, base: str, head: str
-) -> tuple[tuple[IntegrityFact, ...], tuple[str, ...]]:
-    return await asyncio.to_thread(partial(source_facts, rec, base_tree=base, head_tree=head))
+) -> tuple[tuple[IntegrityFact, ...], tuple[str, ...], IntegrityStatus]:
+    observation = await asyncio.to_thread(observe_source, rec.base_files, rec.head_files)
+    facts, problems = await asyncio.to_thread(
+        partial(source_facts, rec, base_tree=base, head_tree=head, observation=observation)
+    )
+    return (
+        facts,
+        problems,
+        integrity_status(rec.base_files, rec.head_files, observation=observation),
+    )

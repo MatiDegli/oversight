@@ -13,6 +13,7 @@ import { GraphStage } from "./shell/GraphStage";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
 import { BottomDock, StatusLine } from "./shell/Status";
 import { useShell } from "./shell/useShell";
+import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
 export interface FrameProps {
   state: State;
@@ -61,7 +62,7 @@ export function Frame(props: FrameProps) {
       : `${shell.sidebar ?? ""}:${String(shell.dock)}:${String(shell.maximized)}:${String(task.expanded)}:${String(shell.layoutRevision)}`;
   return (
     <div className="shell-frame flex h-full flex-col bg-background text-text">
-      <TopBar state={state} onOpenQueue={props.onOpenQueue} />
+      <TopBar state={state} onOpenQueue={props.onOpenQueue} onOpenPalette={shell.openPalette} />
       <div className="shell-workspace">
         <LeftRail
           watching={!open}
@@ -116,6 +117,18 @@ export function Frame(props: FrameProps) {
           }}
         />
       )}
+      <PaletteMount
+        frame={props}
+        shell={shell}
+        onNode={props.onNodeTap}
+        onFocusTask={
+          props.onStartAgent && (!open || task.expanded)
+            ? () => {
+                requestAnimationFrame(() => task.inputRef.current?.focus());
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

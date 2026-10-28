@@ -1,11 +1,12 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Coroutine
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from oversight.agents import Publish
+from oversight.changes._evidence import WriteEvidence
 from oversight.changes._mode import ModeController
 from oversight.changes._review_port import ReviewPort
 from oversight.changes._state import ChangeRecord, ChangeState, Source
@@ -23,8 +24,17 @@ from oversight_contracts.events import (
     ErrorReport,
 )
 from oversight_contracts.graph import GraphSnapshot
+from oversight_contracts.policy import ChangeAssessment
+
+if TYPE_CHECKING:
+    from oversight.changes._assessment import RulesEvidence, RulesScheduler
+    from oversight.changes._policy import PolicyInputs
 
 _log = logging.getLogger("oversight.changes._manager")
+
+
+async def closed_rules_transaction(rec: ChangeRecord, evidence: WriteEvidence) -> str:
+    return "Rules merge transaction is unavailable; review this change yourself (P3a)."
 
 
 @dataclass
@@ -33,6 +43,11 @@ class ChangePorts:
 
     drain: Callable[[ChangeRecord], Awaitable[None]]
     review: ReviewPort | None = None
+    rules_evidence: Callable[["PolicyInputs"], "RulesEvidence"] | None = None
+    rules_admission: Callable[[ChangeRecord, ChangeAssessment], str | None] | None = None
+    rules_transaction: Callable[[ChangeRecord, WriteEvidence], Awaitable[str | None]] = (
+        closed_rules_transaction
+    )
 
 
 @dataclass
@@ -48,6 +63,7 @@ class ChangeContext:
     ports: ChangePorts
     mode: ModeController
     behavior_diff: bool = False
+    assessment: "RulesScheduler" = field(init=False)
 
     def date(self) -> str:
         return self.clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")

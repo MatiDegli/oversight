@@ -5,6 +5,7 @@ import {
   applyEvent,
   createInitialState,
   createStateStore,
+  costText,
   formatBudget,
   formatUsd,
   selectSpend,
@@ -360,3 +361,17 @@ function mixed(provider: "baseten" | "fake") {
     },
   };
 }
+
+describe("shared agent cost wording", () => {
+  it.each([
+    [undefined, "Unknown"],
+    [null, "Unknown"],
+    [0, "US$0.00"],
+    [0.001, "<US$0.01"],
+    [0.0049, "<US$0.01"],
+    [0.005, "US$0.01"],
+    [0.38, "US$0.38"],
+  ])("writes %s as %s", (cost, text) => {
+    expect(costText(cost)).toBe(text);
+  });
+});

@@ -79,6 +79,35 @@
   },
   "additionalProperties": false,
   "properties": {
+    "arm_id": {
+      "default": "legacy",
+      "minLength": 1,
+      "title": "Arm Id",
+      "type": "string"
+    },
+    "repetition": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Repetition",
+      "type": "integer"
+    },
+    "config_hash": {
+      "default": "legacy",
+      "minLength": 1,
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "attempt_id": {
+      "default": "legacy",
+      "minLength": 1,
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "profile": {
+      "default": "legacy",
+      "title": "Profile",
+      "type": "string"
+    },
     "task_id": {
       "title": "Task Id",
       "type": "string"
@@ -95,6 +124,20 @@
       ],
       "title": "Outcome",
       "type": "string"
+    },
+    "turns": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "const": "unknown",
+          "type": "string"
+        }
+      ],
+      "default": "unknown",
+      "title": "Turns"
     },
     "steps": {
       "minimum": 0,

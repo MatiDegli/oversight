@@ -55,6 +55,8 @@ export interface State {
    */
   clock: string | null;
   focus: Record<string, AgentFocus>;
+  /** One most recently read node per agent, independent of subsequent edit focus. */
+  lastReads: Record<string, string>;
   changes: Record<string, ChangeState>;
   usage: UsageTick | null;
   spendUnknown: boolean;
@@ -80,6 +82,7 @@ export function createInitialState(): State {
     stepTimes: {},
     clock: null,
     focus: {},
+    lastReads: {},
     changes: {},
     usage: null,
     spendUnknown: false,

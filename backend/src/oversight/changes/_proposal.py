@@ -324,13 +324,18 @@ async def record_probe_facts(
 
 async def publish_facts(ctx: ChangeContext, evidence: FactsEvidence) -> None:
     await ctx.publish(build_change_facts(evidence))
+    ctx.assessment.facts_ready(ctx.state.changes[evidence.target.change_id], evidence)
 
 
 async def record_proposal(ctx: ChangeContext, rec: ChangeRecord, proposal: ChangeProposed) -> None:
     """R7: a run cancelled during this publish still finds the record matching the store."""
+    mode = ctx.mode.snapshot()
+    armed = not ctx.mode.authority_suspended()
+    ctx.assessment.invalidate(rec)
     await ctx.publish(proposal)
     rec.revision, rec.head_commit = proposal.revision, proposal.head_commit
     rec.proposed_now, rec.summary = True, proposal.summary
+    ctx.assessment.proposed(rec, proposal, mode, armed=armed)
 
 
 async def commit(
@@ -395,6 +400,7 @@ def run_ended(
         rec.fallback = outcome
     else:
         rec.state = outcome
+        ctx.assessment.wake(rec)
 
 
 def unreported(ctx: ChangeContext, rec: ChangeRecord) -> None:

@@ -341,6 +341,7 @@ async def aclose(ctx: ChangeContext) -> None:
     refuses that `error` too, one log line per change names what was lost. Cleanup is left
     to the next start's `reset`."""
     ctx.state.closing = True
+    ctx.assessment.mode_changed()
     for change in ctx.state.changes.values():
         if change.review_task is not None:
             change.review_task.cancel()
