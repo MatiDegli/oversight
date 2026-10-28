@@ -8,7 +8,7 @@ export interface FieldScene {
 }
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
-const key = (light: FieldLight) => `${light.source}\u0000${light.id}`;
+const key = (light: FieldLight) => `${light.source}\u0000${light.marker ?? light.id}`;
 const pulse = (light: FieldLight) => light.pulseWeight ?? Number(light.pulses);
 
 /** Evaluate the theme's CSS cubic-bezier at elapsed time (x), solving for its parameter first. */
@@ -40,11 +40,11 @@ function blendLights(
     const b = after.get(id);
     const light = b ?? a;
     if (!light) throw new Error("Missing transition light");
-    const pulseWeight = pulses ? mix(a ? pulse(a) : 0, b ? pulse(b) : 0, t) : 0;
+    const pulseWeight = pulses || light.steady ? mix(a ? pulse(a) : 0, b ? pulse(b) : 0, t) : 0;
     return {
       ...light,
       weight: mix(a?.weight ?? 0, b?.weight ?? 0, t),
-      pulses: pulseWeight > 0,
+      pulses: light.steady ? Boolean(b?.pulses) : pulseWeight > 0,
       pulseWeight,
     };
   });
@@ -80,7 +80,9 @@ export class FieldTransition {
     this.pulses = input.mode === "watch" || input.mode === "live-diff";
     const lights = this.pulses
       ? input.lights
-      : input.lights.map((light) => ({ ...light, pulses: false, pulseWeight: 0 }));
+      : input.lights.map((light) =>
+          light.steady ? light : { ...light, pulses: false, pulseWeight: 0 },
+        );
     this.to = { lights, config };
     this.started = now;
     this.duration = jump ? 0 : Number.parseFloat(duration);

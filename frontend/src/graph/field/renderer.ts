@@ -3,7 +3,8 @@
 // them: each fragment finds its cell, keeps the lamp's square (72% of the cell) and, on a lamp that
 // is off, the guide dot every few cells. The gaps between lamps stay transparent, so the ground
 // behind the canvas shows. Where WebGL2 is missing this returns null and the graph shows plain ground.
-import type { LampGrid, Rgb } from "./model";
+import { maskLamps } from "./mask";
+import type { Box, LampGrid, Rgb } from "./model";
 
 /** What the shader draws besides the grid: sizes in CSS px and the guide dot's color. */
 export interface LampLook {
@@ -21,7 +22,7 @@ export interface LampRenderer {
   check: () => void;
   /** Sizes the drawing buffer to a CSS size at a device pixel ratio. */
   resize(width: number, height: number, ratio: number): void;
-  draw(grid: LampGrid, look: LampLook): void;
+  draw(grid: LampGrid, look: LampLook, masks?: readonly Box[]): void;
   /** The pixel last drawn at a point in CSS px, as red, green, blue and alpha, or null off the buffer. */
   pixel(x: number, y: number): [number, number, number, number] | null;
   /** True once the browser took the context away. */
@@ -64,6 +65,7 @@ void main() {
   vec2 origin = cell * uCell;
   if (!inside(p, snap(origin + 0.5 * (uCell - uLamp)), snap(vec2(uLamp)))) return;
   vec4 lamp = texelFetch(uCells, ivec2(cell), 0);
+  if (lamp.a > 0.0 && lamp.a < 0.01) return;
   vec3 color = lamp.rgb;
   ivec2 index = ivec2(cell);
   if (lamp.a < 0.001 && index.x % uEvery == 0 && index.y % uEvery == 0
@@ -205,8 +207,9 @@ function renderer(
         check(gl);
       }
     },
-    draw(grid, look) {
+    draw(grid, look, masks = []) {
       gl.activeTexture(gl.TEXTURE0);
+      maskLamps(grid, look.cell, masks);
       upload(gl, grid, texture, uploaded);
       uploaded = { cols: grid.cols, rows: grid.rows };
       paint(gl, canvas, initialized, grid, look, ratio);

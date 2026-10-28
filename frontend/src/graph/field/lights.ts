@@ -21,6 +21,10 @@ export type FieldScope =
 export type LightSource = "agent-a" | "agent-b" | "work-light";
 
 export interface FieldLight {
+  /** R4 current focus, keyed by agent so its light travels instead of crossfading two pools. */
+  marker?: string;
+  /** Work rings do not modulate ambient light. Legacy scenes retain their old response. */
+  steady?: boolean;
   id: string;
   source: LightSource;
   /** Before the mode's gain: 1 is the strongest light the mode draws. */
@@ -210,6 +214,8 @@ export function sameLights(a: readonly FieldLight[], b: readonly FieldLight[]): 
       return (
         other !== undefined &&
         light.id === other.id &&
+        light.marker === other.marker &&
+        light.steady === other.steady &&
         light.source === other.source &&
         light.weight === other.weight &&
         light.pulses === other.pulses

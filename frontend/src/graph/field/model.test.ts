@@ -373,3 +373,25 @@ describe("a config without lights", () => {
     }
   });
 });
+
+it("invalidates cached falloff after zoom, box movement, profile and viewport changes", () => {
+  const cached = createLampField();
+  for (const [width, height, zoom, x, nearShare] of [
+    [600, 400, 1, 140, 0.72],
+    [400, 600, 1, 140, 0.72],
+    [600, 400, 0.5, 140, 0.72],
+    [600, 400, 1, 155, 0.72],
+    [600, 400, 1, 155, 0.5],
+    [600, 400, 1, 140, 0.72],
+  ] as const) {
+    const changed = {
+      ...config,
+      nearShare,
+      profile: { ...config.profile, near: 26 * zoom, far: 72 * zoom },
+    };
+    const placed = [light({ ...BOX, x1: x, x2: x + 140 }, { pulses: true })];
+    expect([...cached(changed, width, height, placed, 2).data]).toEqual([
+      ...createLampField()(changed, width, height, placed, 2).data,
+    ]);
+  }
+});
