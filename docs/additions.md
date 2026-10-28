@@ -12,6 +12,8 @@ The freeze is organized around three proofs. Judge each front by the proof it se
    to the maintainer first and reports budget pace before starting. End with counts of changes
    merged by rules, questions asked and differences tests missed, plus cost per accepted change.
    Paid calls for this run have a US$25 Meta-budget cap, separate from the bench's US$20.
+   End on the decisions inbox: this many agents for this many hours, and these were the only
+   decisions the person had to make.
 3. **Unrequested behavior among green patches.** From that same run, measure the share of patches
    with passing tests whose behavior diff reveals a difference the task did not request. Fix the
    reporting rule before measuring: if the share is low or the sample too small, tell the scale
@@ -270,6 +272,27 @@ A rules merge shows the summary, scope of results checked as unchanged, and Reve
 unrequested choice, put one plain question and its smallest before/after example ahead of unchanged
 facts. Yes confirms the choice; No requests changes with the example as comment; Unsure waits.
 Ask me keeps the summary on top and requires Approve for every change.
+
+The decisions inbox is the form of Needs you within item 9. One place lists every decision
+waiting for the person across all changes and agents: the card's Yes/No/Unsure questions;
+checks that could not run; a failure or conflict while following main (item 8); a risky-area
+change (item 8); the lead's plan when it needs approval; and proposed examples before code
+(item 12). Each entry shows its change or agent, why it waits, its smallest example and its
+age, oldest blocking first. A header count shows how many decisions are pending.
+
+The person answers from the inbox. The answer goes to its originating change; No is Request
+changes to its author, as today. If the person picks another agent, start a new task for that
+agent with the answer as its text. Unsure stays in the inbox. Questions come only from Oversight,
+never from the agent.
+
+Derive the inbox as a pure function over existing events in the frontend reducer, like the
+overlap in item 5, so it survives restarts and appears in replay, with no field beyond item 9's.
+One contract question remains open: an answer routed to another agent may need an optional link
+to come back as answered after a restart or in replay. Today a start has no reference back to a
+card, and answers persist only in the change's resolution. The maintainer has not answered this.
+
+Build the inbox together with item 9, keeping item numbers, anchors and the decided queue's order.
+It changes the look, so the maintainer sees a shot before merge.
 
 For each measured behavior difference, Muse Spark Open chooses asked for, not asked for or
 cannot tell against the task text or confirmed examples. Constrain the output with a `json_schema`

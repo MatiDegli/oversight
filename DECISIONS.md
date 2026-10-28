@@ -1137,3 +1137,27 @@ an answer without log-probability content.
 
 Under D6's probe-first rule, the decision probability is not built because the required log
 probabilities were unavailable. What replaces the threshold remains a pending maintainer decision.
+## 2026-10-28 — A decisions inbox is the form of Needs you
+
+The maintainer decided that the decisions inbox is the form of item 9's Needs you state, not a
+new item or number. One place lists every decision waiting for the person across all changes
+and agents: the card's Yes/No/Unsure questions; checks that could not run; a failure or conflict
+while following main (item 8); a risky-area change (item 8); the lead's plan when it needs
+approval; and proposed examples before code (item 12).
+
+Each entry shows its change or agent, why it waits, its smallest example and its age, oldest
+blocking first. A header count shows how many decisions are pending. The person answers from
+the inbox, and the answer goes to its originating change. No is Request changes to its author,
+as today. If the person picks another agent, start a new task for that agent with the answer as
+its text. Unsure stays in the inbox. Questions come only from Oversight, never from the agent.
+
+Derive the inbox as a pure function over existing events in the frontend reducer, like the
+overlap in item 5, so it survives restarts and appears in replay, with no field beyond item 9's.
+One contract question remains open: an answer routed to another agent may need an optional link
+to come back as answered after a restart or in replay. Today a start has no reference back to a
+card, and answers persist only in the change's resolution. The maintainer has not answered this.
+
+Proof 2 ends on the inbox: this many agents for this many hours, and these were the only decisions
+the person had to make. Build the inbox together with item 9, keeping item numbers, anchors and
+the decided queue's order. It changes the look, so the maintainer sees a shot before merge.
+This gives the person one place to answer and makes the run's need for human decisions visible.
