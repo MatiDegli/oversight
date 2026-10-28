@@ -52,7 +52,9 @@ class ChangePorts:
     drain: Callable[[ChangeRecord], Awaitable[None]]
     review: ReviewPort | None = None
     rules_evidence: Callable[["PolicyInputs"], "RulesEvidence"] | None = None
-    rules_admission: Callable[[ChangeRecord, ChangeAssessment], str | None] | None = None
+    rules_admission: Callable[[ChangeRecord, ChangeAssessment], tuple[str, str] | None] | None = (
+        None
+    )
     rules_transaction: Callable[[ChangeRecord, WriteEvidence], Awaitable[str | None]] = (
         closed_rules_transaction
     )

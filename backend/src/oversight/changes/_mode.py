@@ -5,7 +5,8 @@ only its own mode lock; availability is a startup fact, never a probe or Git cal
 """
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -53,6 +54,16 @@ class ModeController:
         """A pending or failed receipt cannot authorize an automatic merge."""
         return self._suspended
 
+    def capability(self) -> StartCapability:
+        """Read a synchronous startup fact; this port must never launch a probe."""
+        return self._availability()
+
+    @asynccontextmanager
+    async def held(self) -> AsyncGenerator[None]:
+        """Final authorization: caller owns main/worktree, but not the Git lease."""
+        async with self._lock:
+            yield
+
     async def set(self, ctx: "ChangeContext", command: SetMergeMode) -> MergeModeState:
         """CAS under only the mode lock; lock and confirmation share the configured timeout.
 
@@ -75,7 +86,7 @@ class ModeController:
                             raise WrongState(
                                 "Merge authority is suspended: event receipt unconfirmed"
                             )
-                        capability = self._availability()
+                        capability = self.capability()
                         if not capability.confirmed:
                             raise WrongState(capability.reason)
                     next_state = MergeModeState(

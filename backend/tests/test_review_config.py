@@ -27,6 +27,70 @@ from oversight_contracts.common import Slot
 from oversight_contracts.events import ModelProfile, RunStartedEvent
 
 
+@pytest.mark.parametrize("slot", ["A", "B"])
+def test_default_reviewer_for_two_spark_authors(
+    monkeypatch: pytest.MonkeyPatch, slot: Slot
+) -> None:
+    factory = Mock(spec=OpenAIClient)
+    monkeypatch.setattr("oversight.review_config.OpenAIClient", factory)
+    settings = Settings(cross_review=True, baseten_api_key="test-baseten")
+    first = configured_reviewer(settings, slot, MUSE_SPARK)
+    factory.return_value = Mock(spec=OpenAIClient)
+    second = configured_reviewer(settings, slot, MUSE_SPARK)
+    assert second is not first and factory.call_count == 2
+    args, kwargs = factory.call_args
+    assert args[0] == MUSE_SPARK_OPEN and args[0].reasoning == "low"
+    assert kwargs["base_url"] == "https://inference.baseten.co/v1"
+    assert kwargs["api_key"] == "test-baseten"
+    assert kwargs["max_output_tokens"] == 12_288
+
+
+@pytest.mark.parametrize("slot", ["A", "B"])
+@pytest.mark.parametrize("key", [None, "", "bad key"])
+def test_default_reviewer_requires_own_credentials_without_a_call(
+    monkeypatch: pytest.MonkeyPatch, slot: Slot, key: str | None
+) -> None:
+    factory = Mock(side_effect=AssertionError("No SDK construction expected"))
+    monkeypatch.setattr("oversight.review_config.OpenAIClient", factory)
+    settings = Settings(cross_review=True, meta_api_key="test-meta", baseten_api_key=key)
+    with pytest.raises(ReviewerUnavailable) as caught:
+        configured_reviewer(settings, slot, MUSE_SPARK)
+    assert caught.value.code == "reviewer_credentials"
+    factory.assert_not_called()
+
+
+@pytest.mark.parametrize("slot", ["A", "B"])
+def test_explicit_reviewer_model_cannot_match_author(
+    monkeypatch: pytest.MonkeyPatch, slot: Slot
+) -> None:
+    factory = Mock(side_effect=AssertionError("No SDK construction expected"))
+    monkeypatch.setattr("oversight.review_config.OpenAIClient", factory)
+    settings = Settings(
+        cross_review=True, agent_model_b="muse-spark-open", review_model="muse-spark"
+    )
+    with pytest.raises(ReviewerUnavailable) as caught:
+        configured_reviewer(settings, slot, MUSE_SPARK)
+    assert caught.value.code == "reviewer_same"
+    factory.assert_not_called()
+
+
+def test_unknown_reviewer_model_fails_like_author_profiles() -> None:
+    with pytest.raises(ValueError, match="unknown model profile"):
+        configured_reviewer(Settings(cross_review=True, review_model="unknown"), "A", MUSE_SPARK)
+
+
+@pytest.mark.parametrize("value", [None, "", "fake-b", "muse-spark"])
+def test_review_model_loads_with_default_and_environment_precedence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str | None
+) -> None:
+    env = tmp_path / "config"
+    env.write_text("" if value is None else f"OVERSIGHT_REVIEW_MODEL={value}\n")
+    monkeypatch.delenv("OVERSIGHT_REVIEW_MODEL", raising=False)
+    assert Settings.load(env).review_model == (value or "muse-spark-open")
+    monkeypatch.setenv("OVERSIGHT_REVIEW_MODEL", "fake")
+    assert Settings.load(env).review_model == "fake"
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     "slot,author,reviewer,verdict",
@@ -35,7 +99,7 @@ from oversight_contracts.events import ModelProfile, RunStartedEvent
         ("B", FAKE_MODEL_B, FAKE_MODEL, "VERDICT: request changes"),
     ],
 )
-async def test_opposite_profile_and_unambiguous_reviewer_scripts(
+async def test_selected_profile_and_unambiguous_reviewer_scripts(
     tmp_path: Path,
     slot: Slot,
     author: ModelProfile,
@@ -49,6 +113,7 @@ async def test_opposite_profile_and_unambiguous_reviewer_scripts(
         tmp_path,
         agent_model_b="fake-b",
         cross_review=True,
+        review_model=reviewer.id,
         reviewer_fake_script=script_a,
         reviewer_fake_b_script=script_b,
     )
@@ -89,6 +154,7 @@ def test_paid_client_is_separate_and_uses_reviewer_budget(
     settings = Settings(
         cross_review=True,
         agent_model_b="muse-spark-open",
+        review_model=reviewer.id,
         meta_api_key="test-meta",
         baseten_api_key="test-baseten",
     )
@@ -102,14 +168,13 @@ def test_paid_client_is_separate_and_uses_reviewer_budget(
 @pytest.mark.parametrize(
     "overrides,code",
     [
-        ({"agent_model_b": "fake-b", "fake_script_b": None}, "reviewer_missing"),
-        ({"agent_model_b": "fake"}, "reviewer_same"),
-        ({"agent_model_b": "muse-spark-open"}, "reviewer_credentials"),
+        ({"review_model": "fake"}, "reviewer_same"),
+        ({"review_model": "muse-spark-open"}, "reviewer_credentials"),
         (
-            {"agent_model_b": "muse-spark-open", "baseten_api_key": "bad key"},
+            {"review_model": "muse-spark-open", "baseten_api_key": "bad key"},
             "reviewer_credentials",
         ),
-        ({"agent_model_b": "fake-b"}, "reviewer_credentials"),
+        ({"review_model": "fake-b"}, "reviewer_credentials"),
     ],
 )
 def test_unavailable_reviewer_never_builds_a_paid_client(
@@ -126,22 +191,53 @@ def test_unavailable_reviewer_never_builds_a_paid_client(
     assert caught.value.code == code and not factory.called
 
 
-def test_fake_reviewer_refused_in_mixed_configuration(tmp_path: Path) -> None:
+@pytest.mark.parametrize("author", [MUSE_SPARK, FAKE_MODEL])
+def test_fake_reviewer_refused_in_mixed_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, author: ModelProfile
+) -> None:
+    load = Mock(side_effect=AssertionError("Mixed fake review must not load a script"))
+    monkeypatch.setattr("oversight.review_config.load_script", load)
     settings = two_fakes(
-        tmp_path, agent_model="muse-spark", agent_model_b="fake-b", cross_review=True
+        tmp_path,
+        agent_model="fake",
+        agent_model_b="muse-spark",
+        cross_review=True,
+        review_model="fake-b",
+        reviewer_fake_b_script=tmp_path / "not-read.json",
     )
     with pytest.raises(ReviewerUnavailable) as caught:
-        configured_reviewer(settings, "A", MUSE_SPARK)
+        configured_reviewer(settings, "A", author)
     assert caught.value.code == "reviewer_credentials"
+    load.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_fake_reviewer_does_not_need_an_offered_author_slot(tmp_path: Path) -> None:
+    script = tmp_path / "review.json"
+    script.write_text('{"task":"review","turns":[{"text":"VERDICT: accept"}]}')
+    settings = replace(
+        two_fakes(
+            tmp_path, cross_review=True, review_model="fake-b", reviewer_fake_b_script=script
+        ),
+        fake_script_b=None,
+    )
+    client = configured_reviewer(settings, "A", FAKE_MODEL)
+    assert client is not None and client.profile == FAKE_MODEL_B
+    assert (await client.complete([], [])).text == "VERDICT: accept"
 
 
 def test_disabled_returns_before_any_work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fail = Mock(side_effect=AssertionError("Cross-review off must do no work"))
-    for name in ("offered_profiles", "load_script", "OpenAIClient"):
+    for name in ("offered_profiles", "resolve_profile", "load_script", "OpenAIClient"):
         monkeypatch.setattr(f"oversight.review_config.{name}", fail)
     monkeypatch.setattr(asyncio, "create_task", fail)
     monkeypatch.setattr(asyncio, "timeout", fail)
-    assert configured_reviewer(Settings(agent_model="unknown"), "A", FAKE_MODEL) is None
+    assert (
+        configured_reviewer(
+            Settings(agent_model="unknown", review_model="unknown"), "A", FAKE_MODEL
+        )
+        is None
+    )
     assert not fail.called
 
 

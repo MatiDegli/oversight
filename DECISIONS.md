@@ -999,3 +999,88 @@ Item 16 passes its bounded graph context only as text assembled by the server, n
 for an agent. AGENTS.md reserves the graph as the person's supervision surface; Request changes
 already supplies related source context as text. Reuse that precedent for initial tasks so the
 agent gets a bounded hint without acquiring a new graph interface or unbounded traversal.
+
+## 2026-10-28 — D1: The freeze must demonstrate three proofs
+
+Judge every front by the [three proofs](docs/additions.md#three-proofs) it serves. Package 9's
+static Would you approve it? challenge is the submission link and opens the video. It must work
+at phone width, with a phone-width shot shown to the maintainer before merge. The second proof
+is one person supervising many agents for a few hours on a real permissively licensed open-source
+repository, credited in the video. The coordinator proposes the repository and tasks first and
+reports budget pace before starting. End with counts of rules merges, questions and differences
+tests missed, plus cost per accepted change. Paid calls for this run stay within US$25 of the
+Meta budget, separate from the bench's US$20.
+
+The third proof uses that same run: the share of green patches whose behavior diff finds an
+unrequested difference. Decide before measuring that a low share or small sample means a scale
+story without a percentage; never repeat the run to improve the result. At Sat Oct 31, 23:00 ART,
+items 1, 2, 4 and 9, the behavior-diff bench and proof 1 must all be on main. Otherwise cut from
+item 12 down and report the cuts to the maintainer. These proofs focus the freeze on something a
+judge can try and measured supervision, while fixing the reporting rule before results are known.
+
+## 2026-10-28 — D2: A thin lead starts agents through the public commands
+
+Move the [lead agent](docs/additions.md#lead-agent) out of Next and place it immediately after
+item 11, building it once items 8 and 11 reach main. The server keeps zone computation and the
+task queue. The lead writes only the plan and subtasks and starts agents through public commands,
+using the reserved lead routes and `started_by`. It never merges or reviews and has no information
+hidden from the person. This lets proof 2 start many agents without making the person start each
+one, while preserving the existing authority and evidence boundaries.
+
+## 2026-10-28 — D3: Saved flows fill task text before an agent starts
+
+Place [saved agent flows](docs/additions.md#saved-agent-flows) after the lead. Extend package 12's
+shipped Start an agent here with a short list of files in the repository: each names task text,
+a target (selected node, selected change or files changed since the last commit) and expected
+checks. The person selects a flow, reads its filled task text, may edit it and starts it. Start
+with tests for the selected function or changed files, a counterexample to the selected change,
+and an explanation of that change from its facts. The counterexample flow is a light form of the
+red agent; the broader red agent stays in Next.
+
+Results use the same card, rules and evidence as any change. Task-text filling needs no contract
+change; a distinct role or tool limits go to the maintainer first. Show the maintainer a shot of
+the picker before merge. This makes repeated tasks easier to start without introducing a separate
+review path or silently extending agent permissions.
+
+## 2026-10-28 — D4: Keep item numbers while changing the work order
+
+Use [the queue](docs/additions.md#decided-queue) in this order: items 1–11, the lead agent, saved
+flows, 12, 13, 17 and 18; then 14, 15 and 16 only if time remains. The lead and flows are queued,
+unnumbered rows after item 11, with their prerequisites. Existing numbers remain stable because
+the maintainer uses them to refer to work. This supersedes the earlier queue order without
+breaking those references and puts the multi-agent proof ahead of the optional later work.
+
+## 2026-10-28 — D5: Non-Python editor highlighting has shipped
+
+Record [editor language highlighting](docs/additions.md#shipped-editor-language-highlighting) as
+shipped on main in `e1e5599` and `b238a6c`. YAML, Markdown, JSON, TOML, shell and INI select their
+language by extension in the file view and live diff, without language-service workers
+(`frontend/src/editor/language.ts`, `FileView.tsx:193`, `LiveDiff.tsx:266`). Files that create no
+graph nodes show a discreet No impact analysis header label. This makes other repository files
+readable without suggesting that Oversight analyzes their impact or adding language services.
+
+## 2026-10-28 — D6: Give Spark Open a constrained decision on behavior differences
+
+Hosted Muse Spark writes code and runs the lead. The maintainer's same-day follow-up fixes both
+authors, A and B, on Muse Spark; Muse Spark Open is the cross-reviewer and deciding model.
+Cross-review stays as it is. For [item 9](docs/additions.md#9-a-change-card-with-three-states),
+Spark Open makes one constrained choice per behavior difference: asked for, not asked for or
+cannot tell, through a `json_schema` enum or grammar. Log probabilities over these options give
+a decision probability; below a threshold, or on cannot tell, the change waits. This can only
+add a reason to wait, never approve.
+
+Probe first: `tools/probe_api.py` checks log probabilities and structured output on both endpoints,
+with reasoning off for this call. About ten development examples then test whether the probability
+separates correct and incorrect answers. Build probabilities only if both conditions hold;
+otherwise keep the constrained choice, with cannot tell as its only reason to wait, and report
+the findings to the maintainer. This finite-decision probability differs from reading likelihood
+over code tokens as defect evidence; retain that rejection with the distinction beside it in
+[No](docs/additions.md#no).
+
+Add a [behavior-diff bench arm](docs/additions.md#delivery-graph-polish-and-bench) on the same 20
+frozen patches, replacing Muse Spark's advisory call with Spark Open's decision. Report calibration
+alongside detection and classification: whether an above-threshold probability means the answer
+was right, if probabilities pass the probe-first condition. Set the threshold from development
+examples, never the 20 patches. Spend stays inside the bench's US$20 once the Baseten tariff is
+configured. This gives the open model a distinct, bounded role and tests the probability before
+relying on it. PRODUCT and video wording will be proposed to the maintainer later.

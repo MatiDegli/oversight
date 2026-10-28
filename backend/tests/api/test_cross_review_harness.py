@@ -52,6 +52,7 @@ async def test_three_clean_fake_starts_request_once_and_preserve_second_review(
                 root,
                 agent_model_b="fake-b",
                 cross_review=True,
+                review_model="fake-b",
                 reviewer_fake_b_script=script,
             )
 

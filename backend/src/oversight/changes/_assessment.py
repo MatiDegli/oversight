@@ -36,8 +36,8 @@ class RulesEvidence:
     """A producer's permanent configuration failure, never a missing observation."""
 
 
-def closed_admission(rec: ChangeRecord, assessment: ChangeAssessment) -> str:
-    return "Rules admission is unavailable; reservation is not connected (P2b-2)."
+def closed_admission(rec: ChangeRecord, assessment: ChangeAssessment) -> tuple[str, str]:
+    return "policy_invalid", "Rules admission is unavailable; reservation is not connected (P2b-2)."
 
 
 @dataclass
@@ -402,6 +402,6 @@ class RulesScheduler:
             elif all(
                 rule.result == "pass" for rule in assessment.rules if rule.rule != "combined_tests"
             ):
-                reason = (self.ctx.ports.rules_admission or closed_admission)(wait.rec, assessment)
-                if reason:
-                    await self.terminal(wait, reason)
+                failure = (self.ctx.ports.rules_admission or closed_admission)(wait.rec, assessment)
+                if failure:
+                    await self.report_terminal(wait, *failure, lambda: self.valid(wait))

@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from pathlib import Path
-from typing import get_args
+from typing import Literal, get_args
 
 import pytest
 
@@ -10,6 +10,7 @@ from oversight.agents import FAKE_MODEL, MUSE_SPARK, MUSE_SPARK_OPEN
 from oversight.settings import Settings
 from oversight.setup import missing_settings, offered_profiles
 from oversight_contracts.commands import MissingSetting, SettingName
+from oversight_contracts.common import Slot
 from oversight_contracts.events import ModelProfile
 
 AMOUNTS = {
@@ -52,6 +53,44 @@ def test_slots_are_grouped_deterministically_and_unoffered_slots_are_absent() ->
     assert [entry.slots for entry in mixed] == [["A"], ["B"], ["A"], ["A"], ["A"]]
     assert missing_settings(settings, {}) == []
     assert missing_settings(settings, {"A": FAKE_MODEL, "B": FAKE_MODEL}) == []
+
+
+@pytest.mark.parametrize(
+    "slots", [{"A": MUSE_SPARK}, {"B": MUSE_SPARK}, {"B": MUSE_SPARK, "A": MUSE_SPARK}]
+)
+@pytest.mark.parametrize("key,problem", [(None, "missing"), ("bad key", "invalid")])
+def test_cross_review_readiness_includes_default_reviewer_credential(
+    slots: dict[Slot, ModelProfile], key: str | None, problem: Literal["missing", "invalid"]
+) -> None:
+    settings = Settings(
+        cross_review=True,
+        meta_api_key="test-meta",
+        baseten_api_key=key,
+        budget_usd=1,
+        input_usd_per_m=1,
+        output_usd_per_m=1,
+    )
+    assert missing_settings(settings, slots) == [
+        MissingSetting(name="BASETEN_API_KEY", problem=problem, slots=sorted(slots))
+    ]
+    assert missing_settings(replace(settings, cross_review=False), slots) == []
+    assert missing_settings(settings, {}) == []
+
+
+def test_disabled_readiness_does_not_resolve_reviewer() -> None:
+    settings = Settings(review_model="unknown")
+    assert missing_settings(settings, {"A": FAKE_MODEL}) == []
+    with pytest.raises(ValueError, match="unknown model profile"):
+        missing_settings(replace(settings, cross_review=True), {"A": FAKE_MODEL})
+
+
+def test_readiness_uses_selected_reviewer_provider_and_deduplicates_slots() -> None:
+    settings = Settings(cross_review=True, review_model="fake-b")
+    assert missing_settings(settings, {"A": FAKE_MODEL}) == []
+    settings = replace(settings, review_model="muse-spark")
+    found = missing_settings(settings, {"B": MUSE_SPARK_OPEN, "A": MUSE_SPARK})
+    assert [entry.name for entry in found] == ["META_API_KEY", "BASETEN_API_KEY", *AMOUNTS]
+    assert [entry.slots for entry in found] == [["A", "B"], ["B"], *[["A", "B"]] * 3]
 
 
 @pytest.mark.usefixtures("clean_env")

@@ -6,7 +6,7 @@ from oversight.changes._assessment import PROFILE, AssessmentWait
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._state import APPROVABLE, WrongState
-from oversight.changes._support import ChangeContext
+from oversight.changes._support import ChangeContext, RulesFailure
 from oversight_contracts.policy import POLICY_RULES, ChangeAssessment
 
 
@@ -36,9 +36,16 @@ def capture(
     ctx: ChangeContext, wait: AssessmentWait, assessment: ChangeAssessment
 ) -> RulesReservation:
     rec = wait.rec
+    if failure := availability(ctx):
+        raise RulesFailure(*failure)
     if (
         not pending_policy(assessment)
         or assessment != wait.latest
+        or any(
+            ref.event_seq is not None and ref.event_seq not in ctx.assessment.events
+            for rule in assessment.rules
+            for ref in rule.evidence
+        )
         or not assessment.candidate_tree
         or (
             assessment.change_id,
@@ -93,6 +100,8 @@ def current(ctx: ChangeContext, reservation: RulesReservation) -> bool:
 def revalidate(ctx: ChangeContext, reservation: RulesReservation) -> tuple[str, str] | None:
     """Read-only guards, repeated after asynchronous queries and before handing off."""
     wait, evidence = reservation.wait, reservation.evidence
+    if failure := availability(ctx):
+        return failure
     rec, assessment = wait.rec, evidence.assessment
     if (
         rec.taken != evidence.revision
@@ -128,9 +137,23 @@ def revalidate(ctx: ChangeContext, reservation: RulesReservation) -> tuple[str, 
     return None
 
 
+def availability(ctx: ChangeContext) -> tuple[str, str] | None:
+    """Session facts only: restoration never clears workspace's suspension latch."""
+    if not ctx.mode.capability().confirmed or not ctx.workspace.isolation.available:
+        return "isolation_unavailable", "Confirmed session isolation is unavailable."
+    if ctx.workspace.integrity.rules_suspended:
+        return "policy_invalid", "Rules authority is suspended until restart."
+    return None
+
+
 async def terminal(
     ctx: ChangeContext, reservation: RulesReservation, code: str, reason: str
 ) -> None:
+    if code == "worktree_unverifiable":
+        if reason.startswith("Rules preflight failed: code=integrity_invalid; reason="):
+            code = "integrity_invalid"
+        elif "output was truncated" in reason:
+            code = "git_failed"  # Preserve preflight's known failures through its generic bucket.
     await ctx.assessment.report_terminal(
         reservation.wait, code, reason, lambda: current(ctx, reservation)
     )

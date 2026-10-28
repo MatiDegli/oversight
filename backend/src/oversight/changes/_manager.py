@@ -55,7 +55,7 @@ from oversight.changes._state import (
 )
 from oversight.changes._suite_evidence import publish_suite
 from oversight.changes._summary_capture import record_usage
-from oversight.changes._support import ChangeContext, ChangePorts
+from oversight.changes._support import ChangeContext, ChangePorts, RulesFailure
 from oversight.events import Clock, EventPayload, StoredEvent, system_clock
 from oversight.graph import (
     WorkspaceGraph,
@@ -361,14 +361,18 @@ class ChangeManager:
         rec.taken = rec.revision
         return self._decide(rec, approval.approve(self._ctx, rec, comment))
 
-    def _admit_rules(self, rec: ChangeRecord, assessment: ChangeAssessment) -> str | None:
+    def _admit_rules(
+        self, rec: ChangeRecord, assessment: ChangeAssessment
+    ) -> tuple[str, str] | None:
         wait = self._ctx.assessment.waits.get(rec.change_id)
         if wait is None or not self._ctx.assessment.valid(wait):
             return None
         try:
             reservation = rules.capture(self._ctx, wait, assessment)
+        except RulesFailure as error:
+            return error.code, str(error)
         except (ValueError, WrongState) as error:
-            return str(error)
+            return "policy_invalid", str(error)
         try:
             self._take(rec.change_id, APPROVABLE, "rules approval", person=False)
         except WrongState:

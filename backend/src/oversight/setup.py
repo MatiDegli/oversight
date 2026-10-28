@@ -12,8 +12,8 @@ from oversight_contracts.common import Slot
 from oversight_contracts.events import ModelProfile
 
 PURPOSES: dict[SettingName, str] = {
-    "META_API_KEY": "authenticate Meta agents",
-    "BASETEN_API_KEY": "authenticate Baseten agents",
+    "META_API_KEY": "authenticate Meta agents and reviewers",
+    "BASETEN_API_KEY": "authenticate Baseten agents and reviewers",
     "OVERSIGHT_BUDGET_USD": "set the Meta spending limit in USD",
     "MUSE_SPARK_INPUT_USD_PER_M": "price Meta input tokens per million in USD",
     "MUSE_SPARK_OUTPUT_USD_PER_M": "price Meta output tokens per million in USD",
@@ -27,7 +27,11 @@ def missing_settings(
 
     Keys are opaque: only empty or whitespace-containing keys can be rejected locally. This
     checks no credential against a provider. Parsed amounts retain only their problem kind.
+    When cross-review is on, reviewer requirements apply to every supplied author slot.
     """
+    reviewer = (
+        resolve_profile(settings.review_model) if settings.cross_review and profiles else None
+    )
     values: dict[SettingName, str | float | None] = {
         "META_API_KEY": settings.meta_api_key,
         "BASETEN_API_KEY": settings.baseten_api_key,
@@ -40,8 +44,12 @@ def missing_settings(
         slots: list[Slot] = [
             slot
             for slot, profile in sorted(profiles.items())
-            if (profile.provider == "meta" and name != "BASETEN_API_KEY")
-            or (profile.provider == "baseten" and name == "BASETEN_API_KEY")
+            if any(
+                (p.provider == "meta" and name != "BASETEN_API_KEY")
+                or (p.provider == "baseten" and name == "BASETEN_API_KEY")
+                for p in (profile, reviewer)
+                if p is not None
+            )
         ]
         if not slots:
             continue
@@ -59,18 +67,23 @@ def missing_settings(
     return result
 
 
+def resolve_profile(name: str) -> ModelProfile:
+    """Resolve author and reviewer names from the same provider profiles, without I/O."""
+    profiles = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL, FAKE_MODEL_B)}
+    if name not in profiles:
+        raise ValueError("unknown model profile")
+    return profiles[name]
+
+
 def offered_profiles(settings: Settings) -> dict[Slot, ModelProfile]:
     """The same defaults as LiveRun._offer, without loading scripts or creating a runtime."""
-    profiles = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL, FAKE_MODEL_B)}
     offered: dict[Slot, ModelProfile] = {}
     names: dict[Slot, str] = {
         "A": settings.agent_model,
         "B": settings.agent_model_b or settings.agent_model,
     }
     for slot, name in names.items():
-        if name not in profiles:
-            raise ValueError("unknown model profile")
-        profile = profiles[name]
+        profile = resolve_profile(name)
         if slot == "B" and profile.provider == "fake" and settings.fake_script_b is None:
             continue
         offered[slot] = profile
