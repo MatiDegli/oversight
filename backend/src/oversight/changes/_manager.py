@@ -235,9 +235,16 @@ class ChangeManager:
     async def capture_review(self, change_id: ChangeId) -> ReviewCapture:
         return await cross_review.capture(self._ctx, change_id)
 
-    def track_review(self, capture: ReviewCapture, task: asyncio.Task[Any]) -> None:
+    def track_review(
+        self,
+        capture: ReviewCapture,
+        task: asyncio.Task[Any],
+        *,
+        require_finished: bool = True,
+    ) -> None:
         """Attach the runtime-owned task so human admission cancels it without awaiting."""
-        cross_review.current(self._ctx, capture).review_task = task
+        rec = cross_review.current(self._ctx, capture, require_finished=require_finished)
+        rec.review_task = task
 
     def review_current(self, capture: ReviewCapture, *, require_finished: bool = True) -> bool:
         try:

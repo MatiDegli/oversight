@@ -65,15 +65,15 @@ def run_ended(live: LiveRun, agent_id: str, end: RunEnd | None) -> None:
     capture, proposal = pending
     if not manager.review_current(capture, require_finished=False):
         return
+    finished = end.state == "ready_for_review"
     task = asyncio.create_task(
-        review(live, capture, proposal, finished=end.state == "ready_for_review"),
+        review(live, capture, proposal, finished=finished),
         name=f"review-{capture.target.change_id}",
     )
     live._reviews[capture.target.change_id] = task
-    # Ready authors attach before the task can run: human admission cancels synchronously.
-    # Halted authors only get a diagnostic and never receive new revision budget.
-    if end.state == "ready_for_review":
-        manager.track_review(capture, task)
+    # Attach diagnostics for halted authors too: human admission must cancel any notice
+    # already in flight. They still receive no reviewer call or revision budget.
+    manager.track_review(capture, task, require_finished=finished)
     task.add_done_callback(lambda done: live._forget(live._reviews, capture.target.change_id, done))
 
 
@@ -180,11 +180,17 @@ async def review(
     except ReviewerUnavailable as error:
         await notice(live, capture, proposal, error.code, str(error))
     except ApiError as error:
+        if error.code == "wrong_state":
+            return  # Admission invalidation drops the review, just like WrongState.
+        code = {
+            "spend_brake": "spend_invalid",
+            "not_configured": "reviewer_credentials",
+        }.get(error.code, "review_api_failed")
         await notice(
             live,
             capture,
             proposal,
-            "spend_invalid" if error.code == "spend_brake" else "main_suspect",
+            code,
             str(error),
         )
     except Exception as error:
