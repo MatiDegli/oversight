@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.5.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.6.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -275,6 +275,18 @@
           ],
           "default": null,
           "description": "The accepted task examples, retained for live observation and replay."
+        },
+        "answering": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The originating inbox entry, copied unchanged into every status for this task; null when\nunlinked or absent from older recordings. Producer-side validation verifies the reference."
         }
       },
       "required": [
@@ -292,7 +304,8 @@
         "started_by",
         "queued_task_id",
         "base_commit",
-        "examples"
+        "examples",
+        "answering"
       ],
       "title": "AgentStatus",
       "type": "object"
@@ -684,6 +697,45 @@
         "rules"
       ],
       "title": "ChangeAssessment",
+      "type": "object"
+    },
+    "ChangeDecisionRef": {
+      "additionalProperties": false,
+      "description": "One entry per (kind, change_id, revision), guarded by the candidate head.\n\nSeveral unavailable checks of one candidate form one checks_unavailable entry. evidence_seq\nidentifies the event that raised the entry, not each check's supporting evidence.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "evidence_seq": {
+          "description": "The event that raised this inbox entry in the current run.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "checks_unavailable",
+            "follow_main",
+            "risky_area",
+            "examples_before_code"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "change_id",
+        "revision",
+        "head_commit",
+        "evidence_seq",
+        "kind"
+      ],
+      "title": "ChangeDecisionRef",
       "type": "object"
     },
     "ChangeFacts": {
@@ -1765,6 +1817,30 @@
       ],
       "title": "CrossReview",
       "type": "object"
+    },
+    "DecisionRef": {
+      "discriminator": {
+        "mapping": {
+          "checks_unavailable": "#/$defs/ChangeDecisionRef",
+          "examples_before_code": "#/$defs/ChangeDecisionRef",
+          "follow_main": "#/$defs/ChangeDecisionRef",
+          "lead_plan": "#/$defs/LeadPlanDecisionRef",
+          "review_card": "#/$defs/ReviewCardDecisionRef",
+          "risky_area": "#/$defs/ChangeDecisionRef"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ReviewCardDecisionRef"
+        },
+        {
+          "$ref": "#/$defs/ChangeDecisionRef"
+        },
+        {
+          "$ref": "#/$defs/LeadPlanDecisionRef"
+        }
+      ]
     },
     "DictateTask": {
       "additionalProperties": false,
@@ -2898,6 +2974,35 @@
         "agent_id"
       ],
       "title": "LeadCreated",
+      "type": "object"
+    },
+    "LeadPlanDecisionRef": {
+      "additionalProperties": false,
+      "description": "One entry per (agent_id, revision) of the lead status whose plan awaits approval.\n\nThis names a lead-status revision, not a plan_id. evidence_seq is the event that raised it.",
+      "properties": {
+        "kind": {
+          "const": "lead_plan",
+          "type": "string"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "evidence_seq": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "agent_id",
+        "revision",
+        "evidence_seq"
+      ],
+      "title": "LeadPlanDecisionRef",
       "type": "object"
     },
     "LeadStatus": {
@@ -4378,6 +4483,48 @@
       "title": "ReviewCard",
       "type": "object"
     },
+    "ReviewCardDecisionRef": {
+      "additionalProperties": false,
+      "description": "One card entry per (change_id, revision, node_id, question).\n\nRetain the card's question and evidence_seq unchanged, scoped by its candidate revision and\nhead so an answer to an older candidate cannot consume a newer candidate's entry.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "evidence_seq": {
+          "description": "The event that raised this inbox entry in the current run.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "const": "review_card",
+          "type": "string"
+        },
+        "node_id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "question": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "change_id",
+        "revision",
+        "head_commit",
+        "evidence_seq",
+        "kind",
+        "node_id",
+        "question"
+      ],
+      "title": "ReviewCardDecisionRef",
+      "type": "object"
+    },
     "ReviewChange": {
       "additionalProperties": false,
       "description": "Request advisory review of an exact candidate.",
@@ -4983,7 +5130,11 @@
     "Slot": {
       "enum": [
         "A",
-        "B"
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
       ],
       "type": "string"
     },
@@ -5075,6 +5226,18 @@
           ],
           "default": null,
           "description": "True requests one model call without edit/test tools; null or false uses normal execution."
+        },
+        "answering": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The originating inbox entry, copied unchanged into every status for this task; null when\nunlinked or absent from older recordings. Producer-side validation verifies the reference."
         }
       },
       "required": [

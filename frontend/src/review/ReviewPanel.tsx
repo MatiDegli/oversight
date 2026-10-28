@@ -22,9 +22,16 @@ const statusWords: Record<ChangeState["status"], string> = {
   rejected: "Rejected",
 };
 
+// C-F are unreachable until the backend admits more than two agents.
+// Line B many-agents look replaces this neutral placeholder before backend admission.
+const unadmittedAgentLook = { swatch: "bg-raised text-muted", pill: "bg-raised text-muted" };
 const agentLook: Record<Slot, { swatch: string; pill: string }> = {
   A: { swatch: "bg-agent-a text-on-agent", pill: "bg-agent-a-tint text-agent-a-text" },
   B: { swatch: "bg-agent-b text-on-agent", pill: "bg-agent-b-tint text-agent-b-text" },
+  C: unadmittedAgentLook,
+  D: unadmittedAgentLook,
+  E: unadmittedAgentLook,
+  F: unadmittedAgentLook,
 };
 
 const focusRing =

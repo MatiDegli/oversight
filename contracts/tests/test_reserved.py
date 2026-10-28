@@ -62,6 +62,7 @@ def with_defaults(raw: Any) -> Any:
             "queued_task_id": None,
             "base_commit": None,
             "examples": None,
+            "answering": None,
         },
         "usage.tick": {"role": None, "change_id": None, "plan_id": None},
         "change.resolved": {
@@ -133,7 +134,7 @@ def test_all_older_recordings_validate_and_get_serialized_defaults(log: Path) ->
 
 
 def test_defaults_and_request_response_shapes() -> None:
-    assert CONTRACT_VERSION == "1.5.0"
+    assert CONTRACT_VERSION == "1.6.0"
     assert MergeModeState().model_dump() == {"mode": "ask_me", "revision": 0}
     assert SetMergeMode(mode="ask_me", revision=0).model_dump() == {"mode": "ask_me", "revision": 0}
     assert CreatePlan(task="Split this").task == "Split this"

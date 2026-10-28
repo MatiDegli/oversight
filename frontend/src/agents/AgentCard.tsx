@@ -20,6 +20,15 @@ const labels: Record<AgentStatus["state"], string> = {
   paused: "Paused",
 };
 
+// C-F are unreachable until the backend admits more than two agents.
+// Line B many-agents look replaces this neutral placeholder before backend admission.
+const unadmittedAgentLook = {
+  tint: "bg-raised text-muted",
+  border: "border-card-border",
+  fill: "bg-muted",
+  track: "bg-muted",
+} as const;
+
 const look = {
   A: {
     tint: "bg-agent-a-tint text-agent-a-text",
@@ -33,6 +42,10 @@ const look = {
     fill: "bg-agent-b",
     track: "bg-agent-b",
   },
+  C: unadmittedAgentLook,
+  D: unadmittedAgentLook,
+  E: unadmittedAgentLook,
+  F: unadmittedAgentLook,
 } as const;
 
 const focusRing =

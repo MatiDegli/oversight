@@ -74,8 +74,10 @@ type Timestamp = Annotated[
 ]
 """UTC with millisecond precision and a `Z`: `2026-10-27T14:03:12.345Z`."""
 
-type Slot = Literal["A", "B"]
-"""The UI maps a slot to its color."""
+type Slot = Literal["A", "B", "C", "D", "E", "F"]
+"""Agent slot identifiers; UI appearance and runtime capacity are configured outside contracts.
+The existing two-subtask plans retain their own cardinality, independent of this identifier set.
+"""
 
 type FileStatus = Literal["added", "modified", "deleted"]
 
