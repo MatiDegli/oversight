@@ -77,6 +77,15 @@ These retain useful ideas from the old inventory without approving a front or ch
 
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
+- No repeated automatic revision for an unchanged failure: before cross-review or rules follow-up
+  starts a round, compare the test and assertion with the last failure and the agent's edits since
+  then. A changed node reaches the test if the test can reach it through the graph's call edges,
+  or it appears in that test's executed nodes when recorded. If nothing relevant changed, the card
+  asks the person. This is deterministic, with no model call; if neither source can tell, ask
+  instead of starting another round on a guess.
+- Behavior diff for methods, only if level 3 is reached. Until then, measure the third proof on
+  tasks that change functions only and state that limit in the write-up; current targets are
+  module-level functions (`backend/src/oversight/changes/_behavior.py:79`).
 - A dependency guard for package existence, license and vulnerability evidence.
 - Export reviewed revisions/comments as decision pairs; no training during this event.
 - A person-approved plan before editing protected areas; item 8's deterministic veto is separate.
@@ -218,8 +227,11 @@ An adverse independent review can send one revision back without the person rela
 on main through `7da6fa9`, following `95e4723`, `9b81d0b` and `13f955c`
 (`backend/src/oversight/runtime_review.py:167`, `backend/src/oversight/changes/_cross_review.py:19`).
 Drop it as a front. Reuse target validation, durable accounting, human preemption and the one-round
-limit in item 8. It is opt-in and needs a different model in the opposite slot
-(`backend/src/oversight/review_config.py:37`); another call to the author's model is not a fallback.
+limit in item 8. It is opt-in. Since `045f589`, reviewer selection uses `OVERSIGHT_REVIEW_MODEL`,
+independent of slots (`backend/src/oversight/review_config.py:26-38`), with `muse-spark-open` as the
+default (`backend/src/oversight/settings.py:62-63`). The reviewer's model must differ from the
+author's (`backend/src/oversight/review_config.py:37`); another call to the author's model is not
+a fallback.
 Both authors, A and B, write code with hosted Muse Spark. Muse Spark Open is the cross-reviewer
 and item 9's deciding model; the cross-review mechanism stays unchanged.
 The manual review route remains 501, which does not mean automatic review is missing. No new
@@ -319,9 +331,9 @@ sees only what the person can see. This supersedes its earlier deferral to Next.
 ### Saved agent flows
 
 After the lead, extend package 12's shipped Start an agent here with a short list of repository
-files. Each flow names task text, a target (selected node, selected change, or files changed since
-the last commit) and expected checks. The person picks a flow, sees the filled task text, may edit
-it, then starts the agent. Its result uses the same card, rules and evidence as any change.
+files. Each flow has a name, task text, a target (selected node, selected change, or files changed
+since the last commit) and expected checks. The person picks a flow, sees the filled task text,
+may edit it, then starts the agent. Its result uses the same card, rules and evidence as any change.
 
 Start with three flows: write tests for the selected function or changed files; seek a
 counterexample to the selected change; explain the selected change from its facts. Counterexample
