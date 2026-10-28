@@ -21,7 +21,10 @@ from oversight.workspace import (
 
 
 async def approve_rules(ctx: ChangeContext, reservation: rules.RulesReservation) -> None:
-    """Preflight only: keep main -> worktree through the closed transaction port."""
+    """Keep main -> worktree through preflight and the transaction port.
+
+    worktree_unverifiable buckets unexpected preflight errors; it is not a diagnosis.
+    """
     rec, evidence = reservation.wait.rec, reservation.evidence
     try:
         async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):

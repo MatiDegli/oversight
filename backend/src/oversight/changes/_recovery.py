@@ -1,8 +1,48 @@
 from oversight.changes import _delivery as delivery
 from oversight.changes._state import ChangeRecord, Facts
-from oversight.changes._support import ChangeContext
+from oversight.changes._support import ChangeContext, RulesFailure
 from oversight.events import EventRejected
-from oversight.workspace import IntegrityError, WorkspaceError, verify_merge_abort
+from oversight.workspace import IntegrityError, MergeGuard, WorkspaceError, verify_merge_abort
+
+
+async def verify_rules_abort(ctx: ChangeContext, rec: ChangeRecord, pre: str, tree: str) -> None:
+    """Verify HEAD, real index tree and checkout against the clean pre-transaction state."""
+    main = ctx.workspace.main
+    facts = await read_facts(ctx, rec.head_commit or rec.base_commit)
+    index = (await ctx.git(main, "write-tree")).strip()
+    actual = (await ctx.git(main, "rev-parse", "HEAD^{tree}")).strip()
+    if not facts.unchanged(pre) or index != tree or actual != tree:
+        raise RulesFailure("main_suspect", "Main's HEAD, index or tree was not restored.")
+
+
+async def abort_rules(ctx: ChangeContext, rec: ChangeRecord, pre: str, tree: str) -> None:
+    await verify_merge_abort(
+        ctx.workspace,
+        ctx.workspace.main,
+        pre=pre,
+        head=rec.evidence.head_commit if rec.evidence else rec.base_commit,
+        timeout_s=ctx.timeout,
+    )
+    await ctx.git(ctx.workspace.main, "merge", "--abort")
+    await verify_rules_abort(ctx, rec, pre, tree)
+
+
+async def verify_rules_merge(ctx: ChangeContext, rec: ChangeRecord, guard: MergeGuard) -> None:
+    """Recovery requires the exact merge commit, not just reachability of the proposal."""
+    main = ctx.workspace.main
+    parents = (await ctx.git(main, "show", "-s", "--format=%P", "HEAD")).strip().split()
+    tree = (await ctx.git(main, "rev-parse", "HEAD^{tree}")).strip()
+    message = await ctx.git(main, "show", "-s", "--format=%B", "HEAD")
+    actor = (await ctx.git(main, "show", "-s", "--format=%an <%ae>", "HEAD")).strip()
+    facts = await read_facts(ctx, guard.head)
+    if (
+        parents != [guard.pre, guard.head]
+        or tree != guard.candidate_tree
+        or not facts.merged
+        or message.strip() != f"Merge {rec.change_id} ({rec.agent_id})\n\nMerged-by: rules"
+        or actor != "rules <rules@oversight.invalid>"
+    ):
+        raise RulesFailure("main_suspect", "Rules merge parents, tree, commit or actor differ.")
 
 
 async def read_facts(ctx: ChangeContext, head_commit: str) -> Facts:
