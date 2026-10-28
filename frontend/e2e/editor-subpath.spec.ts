@@ -35,9 +35,14 @@ test("the real /oversight/ replay prefetches once and keeps every request under 
   expect(timing.firstEditor).toBeGreaterThanOrEqual(timing.firstGraphAt);
   const origin = new URL(baseURL ?? "").origin;
   expect(
-    requested.filter(
-      (url) => new URL(url).origin !== origin || !new URL(url).pathname.startsWith("/oversight/"),
-    ),
+    requested.filter((url) => {
+      const resource = new URL(url);
+      // The graph's cached SVG layers use local blobs, not requests under the deployment base.
+      return (
+        resource.origin !== origin ||
+        (resource.protocol !== "blob:" && !resource.pathname.startsWith("/oversight/"))
+      );
+    }),
   ).toEqual([]);
   expect(await page.evaluate(() => window.editorStartup)).toMatchObject({
     idleScheduled: 1,
