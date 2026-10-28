@@ -58,6 +58,8 @@ async def merge(
             transaction.guard = guard
             if guard.candidate_tree == transaction.tree:
                 raise RulesFailure("policy_invalid", "The rules combination is empty.")
+            await transaction.measure(guard)
+            transaction.revalidate()
         tested_tree = (await ctx.git(main, "rev-parse", f"{head}^{{tree}}")).strip()
         run = None
         if transaction is not None or pre != rec.base_commit:

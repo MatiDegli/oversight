@@ -1,11 +1,12 @@
 """Rules' one-shot transaction. Production admission remains closed until P3b."""
 
 import asyncio
+import time
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, replace
 
-from oversight.changes import _approval, _delivery, _merge, _recovery, _rules
+from oversight.changes import _approval, _candidate, _delivery, _merge, _recovery, _rules
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._policy import merges_alone
 from oversight.changes._resolution_validation import (
@@ -14,9 +15,9 @@ from oversight.changes._resolution_validation import (
 )
 from oversight.changes._state import ChangeRecord
 from oversight.changes._support import ChangeContext, RulesFailure
-from oversight.changes._versions import main_delta, with_positions
 from oversight.events import EventRejected, StoredEvent
 from oversight.workspace import (
+    IntegrityError,
     IsolationUnavailable,
     MergeGuard,
     SuiteRun,
@@ -25,6 +26,10 @@ from oversight.workspace import (
 )
 from oversight_contracts.events import ChangeResolved
 from oversight_contracts.policy import ChangeAssessment, EvidenceRef, RuleAssessment
+
+
+class CandidateVeto(RulesFailure):
+    """A persisted rule failure is a nonterminal assessment, not a second error event."""
 
 
 @dataclass
@@ -36,43 +41,64 @@ class Transaction:
     guard: MergeGuard | None = None
     barriers_ran: bool = False
     definitive: WriteEvidence | None = None
-    assessment_seq: int | None = None
+    measured: tuple[RuleAssessment, ...] = ()
+    tested_tree: str | None = None
+
+    async def measure(self, guard: MergeGuard) -> None:
+        pending = self.reservation.evidence.assessment
+        assert pending is not None
+        self.measured = await _candidate.measure(
+            self.ctx, guard, pending, self.reservation.wait.rec.task.limits
+        )
+
+    def revalidate(self) -> None:
+        failure = _rules.revalidate(self.ctx, self.reservation)
+        if not _rules.current(self.ctx, self.reservation) or failure:
+            raise RulesFailure(*(failure or ("target_changed", "Rules reservation expired.")))
+
+    async def metadata(self) -> None:
+        """Reuse C's monotonic latch for a metadata discrepancy outside the suite too."""
+        assert self.guard is not None
+        try:
+            await asyncio.to_thread(self.guard.verify, time.monotonic() + self.ctx.timeout)
+        except IntegrityError as error:
+            self.ctx.workspace.integrity.suspend(error, uncertain=False)
+            raise
 
     async def barriers(self) -> None:
-        """L48 call point only. P3b supplies the barriers before activation."""
+        """L48: verify metadata/index before queries can refresh them, at both boundaries."""
+        assert self.guard is not None
+        await self.metadata()
+        await verify_merge_guard(
+            self.ctx.workspace,
+            self.ctx.workspace.main,
+            self.guard,
+            tested_tree=self.tested_tree,
+            timeout_s=self.ctx.timeout,
+        )
+        self.revalidate()
         self.barriers_ran = True
 
     @asynccontextmanager
     async def authorize(self, guard: MergeGuard, run: SuiteRun) -> AsyncGenerator[None]:
         ctx, rec = self.ctx, self.reservation.wait.rec
         # Suite released its lease; never wait for mode while retaining that lease.
-        async with ctx.mode._lock, ctx.workspace.git_lease():  # pyright: ignore[reportPrivateUsage]
+        self.tested_tree = run.tested_tree
+        async with ctx.mode.held(), ctx.workspace.git_lease():
+            self.revalidate()
             await self.barriers()
+            self.revalidate()
             await self.persist(guard, run)
-            if not _rules.current(ctx, self.reservation):
-                raise RulesFailure("target_changed", "Rules reservation is no longer current.")
-            failure = _rules.revalidate(ctx, self.reservation)
-            if failure:
-                raise RulesFailure(*failure)
+            self.revalidate()
             failure = await _approval.rules_tree(ctx, self.reservation)
             if failure:
                 raise RulesFailure(*failure)
             # Git queries await: repeat the synchronous authorization at the effect boundary.
-            failure = _rules.revalidate(ctx, self.reservation)
-            if not _rules.current(ctx, self.reservation) or failure:
-                raise RulesFailure(*(failure or ("target_changed", "Rules reservation expired.")))
+            self.revalidate()
             assert self.definitive is not None
             validate_resolution_intent(self.definitive)
-            await verify_merge_guard(
-                ctx.workspace,
-                ctx.workspace.main,
-                guard,
-                tested_tree=run.tested_tree,
-                timeout_s=ctx.timeout,
-            )
-            failure = _rules.revalidate(ctx, self.reservation)
-            if not _rules.current(ctx, self.reservation) or failure:
-                raise RulesFailure(*(failure or ("target_changed", "Rules reservation expired.")))
+            await self.barriers()
+            self.revalidate()
             assert self.definitive.assessment is not None
             if any(
                 ref.event_seq is not None and ref.event_seq not in ctx.assessment.events
@@ -90,7 +116,10 @@ class Transaction:
         seq = next((seq for seq, saved in rec.suite_runs.items() if saved == run), None)
         if seq is None or seq not in ctx.assessment.events or run.problems:
             raise RulesFailure(
-                "suite_failed", "Combined suite evidence is unconfirmed or incomplete."
+                "integrity_invalid"
+                if any("code=integrity_invalid" in p for p in run.problems)
+                else "suite_failed",
+                "Combined suite evidence is unconfirmed or incomplete.",
             )
         suite = rec.executions[seq].suite
         passed = (
@@ -107,15 +136,21 @@ class Transaction:
             {
                 **pending.model_dump(),
                 "candidate_tree": guard.candidate_tree,
-                "rules": [combined if r.rule == "combined_tests" else r for r in pending.rules],
+                "rules": [
+                    {r.rule: r for r in (*self.measured, combined)}.get(r.rule, r)
+                    for r in pending.rules
+                ],
             }
         )
         receipt = await ctx.publish(final)
         if not isinstance(receipt, StoredEvent):
             raise RulesFailure("delivery_failed", "Definitive assessment receipt is unconfirmed.")
-        self.assessment_seq = receipt.seq
         if not merges_alone(final):
-            raise RulesFailure("suite_failed", "Combined suite did not satisfy the rules policy.")
+            refusal = RulesFailure if not passed else CandidateVeto
+            raise refusal(
+                "suite_failed" if not passed else "policy_invalid",
+                "Tested combination did not satisfy the rules policy.",
+            )
         self.definitive = replace(
             self.reservation.evidence,
             assessment=final,
@@ -142,14 +177,7 @@ class Transaction:
             reasons=list(evidence.reasons),
         )
         validate_resolution_evidence(resolution, evidence)
-        try:
-            new = await ctx.scan(post)
-        except Exception as error:
-            await ctx.error("graph", f"Main's graph was not rescanned: {error}", rec, fatal=False)
-        else:
-            rec.delta = main_delta(ctx.state.snapshot, new, post, "merge")
-            rec.next_snapshot = with_positions(new, ctx.state.snapshot)
-            _delivery.supersede_pending(ctx, rec)
+        await _delivery.project_merge(ctx, rec, post)
         rec.merged, rec.resolution = True, resolution
 
 
@@ -185,6 +213,10 @@ async def run(ctx: ChangeContext, rec: ChangeRecord, evidence: WriteEvidence) ->
 
 async def settle(tx: Transaction, error: BaseException) -> None:
     ctx, rec = tx.ctx, tx.reservation.wait.rec
+    if tx.guard is not None and isinstance(error, IntegrityError):
+        # Set the latch; recovery must still verify abort or mark main suspect.
+        with suppress(IntegrityError):
+            await tx.metadata()
     try:
         async with ctx.workspace.git_lease():
             if tx.tree is None:
@@ -205,6 +237,8 @@ async def settle(tx: Transaction, error: BaseException) -> None:
             else:
                 await _recovery.verify_rules_abort(ctx, rec, tx.pre, tx.tree)
         rec.fallback = "ready"
+        if isinstance(error, CandidateVeto):
+            return
         code = (
             "delivery_failed"
             if isinstance(error, EventRejected)
