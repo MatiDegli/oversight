@@ -3,7 +3,7 @@ from dataclasses import replace
 
 from oversight.agents import AgentTask, RunEnd
 from oversight.changes import _delivery as delivery
-from oversight.changes._diff import count_lines, file_status, parse_name_status
+from oversight.changes._diff import count_lines_async, file_status, parse_name_status
 from oversight.changes._facts import FactsEvidence, build_change_facts, capture_facts
 from oversight.changes._probes import added_cases, probe_added_tests
 from oversight.changes._state import (
@@ -138,12 +138,12 @@ async def update(ctx: ChangeContext, rec: ChangeRecord, path: str) -> None:
     await send_file(ctx, rec, path)
 
 
-def totals(ctx: ChangeContext, rec: ChangeRecord) -> tuple[int, int, int]:
+async def totals(ctx: ChangeContext, rec: ChangeRecord) -> tuple[int, int, int]:
     files = added = removed = 0
     for path in rec.base_files.keys() | rec.head_files.keys():
         original, modified = rec.base_files.get(path), rec.head_files.get(path)
         if original != modified:
-            plus, minus = count_lines(original, modified)
+            plus, minus = await count_lines_async(original, modified)
             files, added, removed = files + 1, added + plus, removed + minus
     return files, added, removed
 
@@ -154,8 +154,8 @@ async def send_file(ctx: ChangeContext, rec: ChangeRecord, path: str, author: By
     if status is None:  # in neither version: nothing to show
         rec.unpublished.discard(path)
         return
-    added, removed = count_lines(original, modified)
-    files, total_added, total_removed = totals(ctx, rec)
+    added, removed = await count_lines_async(original, modified)
+    files, total_added, total_removed = await totals(ctx, rec)
     await ctx.publish(
         ChangeUpdated(
             change_id=rec.change_id,
@@ -228,11 +228,10 @@ async def proposal(
         max_depth=limits.cone_max_depth,
         max_nodes=limits.cone_max_nodes,
     )
-    stats = [
-        FileStat(path=path, status=status, lines_added=plus, lines_removed=minus)
-        for path, status in sorted(files.items())
-        for plus, minus in [count_lines(rec.base_files.get(path), rec.head_files.get(path))]
-    ]
+    stats: list[FileStat] = []
+    for path, status in sorted(files.items()):
+        plus, minus = await count_lines_async(rec.base_files.get(path), rec.head_files.get(path))
+        stats.append(FileStat(path=path, status=status, lines_added=plus, lines_removed=minus))
     proposal = ChangeProposed(
         change_id=rec.change_id,
         agent_id=rec.agent_id,
