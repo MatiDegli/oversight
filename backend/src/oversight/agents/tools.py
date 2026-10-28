@@ -16,8 +16,10 @@ from typing import Literal, cast
 
 from pydantic import ValidationError
 
+from oversight.agents._harness import HarnessState, ToolError, search_rows
 from oversight.agents._observations import test_observation
 from oversight.graph import WorkspaceGraph
+from oversight.settings import harness_pack_enabled
 from oversight.workspace import (
     FileRead,
     FileTooLarge,
@@ -99,10 +101,6 @@ TOOL_SCHEMAS: list[dict[str, object]] = [
         ["summary"],
     ),
 ]
-
-
-class ToolError(Exception):
-    """A failed call: its message goes back to the model."""
 
 
 @dataclass(frozen=True)
@@ -190,6 +188,7 @@ class Toolbox:
         self._workspace = workspace
         self._tree = tree
         self._test_timeout_s = test_timeout_s
+        self._harness = HarnessState(harness_pack_enabled())
         self._graph = WorkspaceGraph(tree.root)
         self._read_hashes: dict[str, str] = {}
         """The hash of each file as the agent last saw it: read, or written by its own edit."""
@@ -370,11 +369,7 @@ class Toolbox:
             ranges.append(FocusRange(path=path, start_line=number, end_line=number))
             if node is not None:
                 nodes.append(node)
-        rows = [
-            f"{p}:{n}: {t.strip()[:MAX_SEARCH_LINE]}" for p, n, t in matches[:MAX_SEARCH_MATCHES]
-        ]
-        if len(matches) > MAX_SEARCH_MATCHES:
-            rows.append(f"[{len(matches) - MAX_SEARCH_MATCHES} more matches; narrow the search]")
+        rows = search_rows(matches, MAX_SEARCH_MATCHES, MAX_SEARCH_LINE, self._harness.enabled)
         in_files = len({p for p, _, _ in matches})
         return ToolOutcome(
             content="\n".join(rows) if rows else "No matches.",
@@ -412,9 +407,11 @@ class Toolbox:
                 "so include more of the lines around it"
             )
         content = current.content[:index] + new + current.content[index + len(old) :]
+        self._harness.check_syntax(path, current.content, content)
         self._read_hashes[path] = await self._tree.write_text(
             path, content, expected_hash=current.hash
         )
+        self._harness.edited()
         await self.refresh_graph()
         start = current.content.count("\n", 0, index) + 1
         end = start + max(new.count("\n") - (1 if new.endswith("\n") else 0), 0)
@@ -430,6 +427,7 @@ class Toolbox:
         )
 
     async def _run_tests(self) -> ToolOutcome:
+        self._harness.tested()
         run = await self._workspace.run_tests(self._tree, timeout_s=self._test_timeout_s)
         result = run.result
         if result.outcome == "timeout":
@@ -456,6 +454,7 @@ class Toolbox:
             )
         except ValidationError as error:
             raise ToolError("invalid finish declaration") from error
+        self._harness.finish()
         return ToolOutcome(
             declaration=declaration,
             content="Finished.",

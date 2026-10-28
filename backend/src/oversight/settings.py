@@ -27,6 +27,14 @@ def read_env_file(path: Path) -> dict[str, str]:
     return values
 
 
+def harness_pack_enabled(env_file: Path = REPO_ROOT / ".env") -> bool:
+    """The process-wide harness arm; set before startup so prompt/version agree with tools."""
+    value = os.environ.get("OVERSIGHT_HARNESS_PACK")
+    if value is None:
+        value = read_env_file(env_file).get("OVERSIGHT_HARNESS_PACK", "false")
+    return value.lower() == "true"
+
+
 @dataclass(frozen=True)
 class Settings:
     host: str = "127.0.0.1"
@@ -56,6 +64,8 @@ class Settings:
     fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
     cross_review: bool = False
     """Opt-in only. Runtime review additionally requires an injected call transport."""
+    harness_pack: bool = False
+    """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
     reviewer_fake_script: Path | None = None
     """OVERSIGHT_REVIEWER_FAKE_SCRIPT: reviewer fake, reviewing author fake-b."""
     reviewer_fake_b_script: Path | None = None
@@ -102,6 +112,7 @@ class Settings:
             agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
             fake_script_b=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_B")),
             cross_review=merged.get("OVERSIGHT_CROSS_REVIEW", "false").lower() == "true",
+            harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "false").lower() == "true",
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
