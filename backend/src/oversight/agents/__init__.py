@@ -29,6 +29,16 @@ from oversight.agents.client import (
     UnverifiedProfile,
     Usage,
 )
+from oversight.agents.decision import (
+    DecisionChoice,
+    DecisionClient,
+    DecisionInput,
+    DecisionMissing,
+    DecisionOutcome,
+    DecisionSelected,
+    DecisionUnavailable,
+    classify_difference,
+)
 from oversight.agents.fake import Script, ScriptedModel, load_script, parse_script
 from oversight.agents.loop import (
     PROMPT_VERSION,
@@ -72,6 +82,13 @@ __all__ = [
     "Brake",
     "ChangeSink",
     "ConeEntry",
+    "DecisionChoice",
+    "DecisionClient",
+    "DecisionInput",
+    "DecisionMissing",
+    "DecisionOutcome",
+    "DecisionSelected",
+    "DecisionUnavailable",
     "LedgerError",
     "LedgerFile",
     "LedgerState",
@@ -96,6 +113,7 @@ __all__ = [
     "UnverifiedProfile",
     "Usage",
     "UsageLedger",
+    "classify_difference",
     "load_script",
     "parse_script",
     "prompt_version",
