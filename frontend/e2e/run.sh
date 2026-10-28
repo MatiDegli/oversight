@@ -34,6 +34,9 @@ fi
 # The site first, so a build that fails stops here and a stale one is never tested.
 ./node_modules/.bin/vite build --config e2e/vite.config.ts --mode replay --outDir dist/replay --emptyOutDir --configLoader runner
 
+# The real static build under a nested deployment path; the same preview serves both sites.
+./node_modules/.bin/vite build --mode replay --base /oversight/ --outDir dist/replay/oversight --emptyOutDir --configLoader runner
+
 port=$(node -e 'const s = require("node:net").createServer().listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); });')
 
 server=
@@ -75,5 +78,5 @@ fi
 
 status=0
 # The same tie for Playwright: its runner (the .bin shim execs node) dies with this script.
-OVERSIGHT_E2E_PORT=$port setpriv --pdeathsig KILL ./node_modules/.bin/playwright test --config e2e/playwright.config.ts || status=$?
+OVERSIGHT_E2E_PORT=$port setpriv --pdeathsig KILL ./node_modules/.bin/playwright test --config e2e/playwright.config.ts "$@" || status=$?
 exit "$status"

@@ -6,6 +6,7 @@ import type { Core } from "cytoscape";
 
 import type { Box } from "./model";
 import { visibleId } from "../foldVisibility";
+import { observeFirstGraphDraw } from "../firstDraw";
 
 export interface BoxSource {
   attach(cy: Core): void;
@@ -19,17 +20,21 @@ export interface BoxSource {
 export function createBoxSource(): BoxSource {
   const listeners = new Set<() => void>();
   let graph: Core | undefined;
+  let stopFirstDraw: () => void = () => undefined;
   const notify = () => {
     for (const listener of [...listeners]) listener();
   };
   return {
     attach(cy) {
+      stopFirstDraw();
+      stopFirstDraw = observeFirstGraphDraw(cy);
       graph?.off("render resize", notify);
       graph = cy;
       cy.on("render resize", notify);
       notify();
     },
     detach() {
+      stopFirstDraw();
       graph?.off("render resize", notify);
       graph = undefined;
       notify();

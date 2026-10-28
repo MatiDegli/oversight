@@ -55,9 +55,9 @@ export function installHolds(holds: Hold[]) {
 
 export async function engaged(page: Page, hold: Hold) {
   await expect
-    // Recorded suite steps can put the first hold beyond the default 15s wait.
+    // Recorded suite steps and software canvas rendering can stretch the replay's timers.
     .poll(() => page.evaluate(() => (window as unknown as Holding).e2eHolds.held), {
-      timeout: 30_000,
+      timeout: 60_000,
     })
     .toContain(hold.delay);
   await expect(page.locator("#root")).toHaveAttribute("data-seq", String(hold.seq - 1));

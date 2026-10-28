@@ -3,6 +3,9 @@ import type { editor } from "monaco-editor";
 
 import { CommandError, commandFailure } from "../transport";
 import { monaco } from "./monaco";
+import { fileKey } from "./fileKey";
+
+export { fileKey } from "./fileKey";
 
 export interface FileLocation {
   path: string;
@@ -24,10 +27,6 @@ export interface FileAccess {
   readFile: (path: string, agent?: string) => Promise<FileContent>;
   saveFile: (body: SaveFile) => Promise<FileSaved>;
 }
-
-/** Main and parallel worktrees must never share a draft or an in-flight save. */
-export const fileKey = (path: string, agentId?: string | null) =>
-  agentId == null ? path : JSON.stringify([agentId, path]);
 
 export const staleMessage =
   "This file changed on the server since you started editing. Your edits are still here.";

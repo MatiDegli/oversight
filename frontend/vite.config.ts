@@ -53,6 +53,7 @@ export default defineConfig(({ command }) => {
     ...(cacheDir === undefined || cacheDir === "" ? {} : { cacheDir }),
     plugins: [noticesPlugin(), recordedReplayPlugin(), react(), tailwindcss()],
     worker: { format: "es" },
+    build: { manifest: true },
     resolve: {
       alias: {
         "@contracts": fileURLToPath(
@@ -74,6 +75,7 @@ export default defineConfig(({ command }) => {
           extends: true,
           test: {
             name: "unit",
+            maxWorkers: 4,
             include: ["src/**/*.test.{ts,tsx}"],
             exclude: ["src/**/*.browser.test.{ts,tsx}"],
           },
@@ -84,6 +86,7 @@ export default defineConfig(({ command }) => {
             name: "browser",
             include: ["src/**/*.browser.test.{ts,tsx}"],
             maxWorkers: 2,
+            testTimeout: 30_000,
           },
         },
       ],

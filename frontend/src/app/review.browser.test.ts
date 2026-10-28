@@ -213,9 +213,32 @@ it("pans to a node its cone row lists as out of view only when that row is click
 
 it("never approves from the keyboard in the comment box; the click waits for change.resolved", async () => {
   await withPage(false, async (page) => {
+    let releaseEditor!: () => void;
+    const loading = new Promise<void>((resolve) => {
+      releaseEditor = resolve;
+    });
+    await page.route("**/src/editor/ReviewEditor.tsx", async (route) => {
+      await loading;
+      await route.continue();
+    });
     await page.getByRole("button", { name: /change ready for review/ }).click();
     const approve = panel(page).getByRole("button", { name: "Approve and merge" });
     const reject = panel(page).getByRole("button", { name: "Reject" });
+    try {
+      await browserExpect(
+        panel(page)
+          .getByRole("status", { name: "", exact: true })
+          .filter({ hasText: "Loading editor…" }),
+      ).toBeVisible();
+      await browserExpect(approve).toBeDisabled();
+    } finally {
+      releaseEditor();
+      await page.unrouteAll({ behavior: "wait" });
+    }
+    await browserExpect(panel(page).getByLabel("Editable review file")).toHaveAttribute(
+      "data-state",
+      "clean",
+    );
     const comment = panel(page).getByRole("textbox", {
       name: "Comment (required for Request changes)",
     });
@@ -261,6 +284,7 @@ it("approves only on a pointer click: Tab then Enter or Space says so and sends 
       name: "Comment (required for Request changes)",
     });
     const caption = panel(page).getByText("Approve with a click: it merges into main");
+    await browserExpect(approve).toBeEnabled();
     await comment.click();
     await page.keyboard.type("Looks right");
     await page.keyboard.press("Tab");
@@ -296,6 +320,9 @@ it("keeps Reject keyboard-operable", async () => {
   await withPage(false, async (page) => {
     await page.getByRole("button", { name: /change ready for review/ }).click();
     const reject = panel(page).getByRole("button", { name: "Reject" });
+    await browserExpect(
+      panel(page).getByRole("button", { name: "Approve and merge" }),
+    ).toBeEnabled();
     await panel(page)
       .getByRole("textbox", { name: "Comment (required for Request changes)" })
       .click();

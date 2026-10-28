@@ -123,8 +123,8 @@ describe("the frame over the level 1 fixture", () => {
     // The heading is a watch overlay: beside the panel it would sit on the graph's own nodes.
     expect(markup).not.toContain("agent working");
     expect(markup).not.toContain("6 modules");
-    expect(markup).toContain('aria-label="Live diff"');
-    expect(markup).toContain("shop/pricing.py");
+    expect(markup).toContain('aria-label="Live diff panel"');
+    expect(markup).toContain("Loading editor…");
     expect(markup).toContain('aria-label="Close live diff"');
     expect(tag(markup, "Agents")).toContain("w-(--agents-rail-width)");
     expect(markup).toContain('aria-label="Agent A: Working"');

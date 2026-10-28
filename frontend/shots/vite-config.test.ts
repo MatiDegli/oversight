@@ -79,6 +79,15 @@ void test("the browser project caps concurrent fixture families at two workers",
   assert.equal(browser.test?.maxWorkers, 2);
 });
 
+void test("the unit project caps concurrent workers at four", async () => {
+  const config = await resolveConfig({ configFile, configLoader: "runner" }, "serve");
+  const unit = config.test.projects.find(
+    (project) => typeof project === "object" && "test" in project && project.test?.name === "unit",
+  );
+  assert.ok(unit && typeof unit === "object" && "test" in unit, "the unit project must exist");
+  assert.equal(unit.test?.maxWorkers, 4);
+});
+
 void test("shared browser support requires the current test file for cache isolation", () => {
   assert.throws(() => fixtureCacheDir(undefined), /test file/);
   assert.ok(
