@@ -9,12 +9,21 @@ import { startReplay } from "./replay";
 const log = fixture.trim().split("\n").map(parseEvent);
 
 describe("reserved level 3 events", () => {
-  it.each(reserved)("accepts $type and only advances seq and clock", (example) => {
+  it.each(reserved)("accepts $type and retains inbox evidence without commands", (example) => {
     const state = log.reduce(applyEvent, createInitialState());
     const event = parseEvent(JSON.stringify({ ...example, seq: state.lastSeq + 1 }));
     expect(event.type).toBe(example.type);
     const next = applyEvent(state, event);
-    expect(next).toEqual({ ...state, lastSeq: event.seq, clock: event.ts, gap: false });
+    expect(next).toEqual({
+      ...state,
+      lastSeq: event.seq,
+      clock: event.ts,
+      gap: false,
+      decisionEvents: [
+        ...state.decisionEvents,
+        ...(event.type === "change.assessed" || event.type === "plan.updated" ? [event] : []),
+      ],
+    });
     const gap = applyEvent(state, { ...event, seq: event.seq + 1 });
     expect(gap).toEqual({ ...state, gap: true });
   });
@@ -36,6 +45,12 @@ describe("reserved level 3 events", () => {
       ...state,
       lastSeq: state.lastSeq + additions.length,
       clock: additions.at(-1)?.ts,
+      decisionEvents: [
+        ...state.decisionEvents,
+        ...additions.filter(
+          (event) => event.type === "change.assessed" || event.type === "plan.updated",
+        ),
+      ],
     });
     replay.stop();
   });
