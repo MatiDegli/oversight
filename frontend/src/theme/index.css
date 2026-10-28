@@ -4,7 +4,7 @@
 @import "@fontsource/atkinson-hyperlegible-next/latin-700.css";
 @import "@fontsource/atkinson-hyperlegible-mono/latin-400.css";
 
-/* Dark is the default; the day set is a later front. */
+/* Dark is the default; day tokens are also available to the gallery harness. */
 :root:not([data-theme]),
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -44,6 +44,26 @@
   --agent-a-text: #ff7a45;
   --agent-b: #4f7dff;
   --agent-b-text: #86a3ff;
+  --agent-c: #a392d6;
+  --agent-c-text: #a392d6;
+  --agent-c-tint: rgba(163, 146, 214, 0.14);
+  --agent-c-node: rgba(23, 20, 30, 0.95);
+  --agent-c-node-new: rgba(15, 14, 20, 0.95);
+  --agent-d: #dba4c8;
+  --agent-d-text: #dba4c8;
+  --agent-d-tint: rgba(219, 164, 200, 0.14);
+  --agent-d-node: rgba(30, 22, 27, 0.95);
+  --agent-d-node-new: rgba(20, 15, 18, 0.95);
+  --agent-e: #a1c7f8;
+  --agent-e-text: #a1c7f8;
+  --agent-e-tint: rgba(161, 199, 248, 0.14);
+  --agent-e-node: rgba(19, 24, 30, 0.95);
+  --agent-e-node-new: rgba(13, 16, 20, 0.95);
+  --agent-f: #ab6e9e;
+  --agent-f-text: #ab6e9e;
+  --agent-f-tint: rgba(171, 110, 158, 0.14);
+  --agent-f-node: rgba(30, 19, 28, 0.95);
+  --agent-f-node-new: rgba(20, 13, 18, 0.95);
   --on-agent: #17110b;
   --passed: #6fd08a;
   --failed: #ff6464;
@@ -65,6 +85,86 @@
   --agent-a-node-new: rgba(20, 10, 4, 0.95);
   --agent-b-node: rgba(6, 12, 30, 0.95);
   --agent-b-node-new: rgba(4, 8, 20, 0.95);
+}
+
+:root[data-theme="day"] {
+  color-scheme: light;
+  --ground: #f4f3ef;
+  --shell: #e9e8e3;
+  --panel: #eeede8;
+  --field: #fbfaf7;
+  --page: #f8f7f3;
+  --card: #fcfbf8;
+  --raised: #e4e2dc;
+  --page-raised: #efeee9;
+  --text: #1c1c1a;
+  --text-hover: #000000;
+  --muted: #56554f;
+  --faint: #67665f;
+  --module-label: #2b2a27;
+  --divider: #dddbd4;
+  --border: rgba(210, 208, 201, 1);
+  --page-border: #dcdad3;
+  --card-border: #dad8d1;
+  --node-border: #cfcdc6;
+  --outline: #b9b7b0;
+  --control-edge: #8a8983;
+  --node-hover: #8d8c86;
+  --edge: #6e6d67;
+  --edge-possible: #85847e;
+  --lit-edge: #3a3936;
+  --work-light: #6b6a64;
+  --agent-a: #b23c0a;
+  --agent-a-text: #9a3308;
+  --agent-a-tint: rgba(178, 60, 10, 0.12);
+  --agent-a-node: rgba(249, 231, 221, 1);
+  --agent-a-node-new: rgba(251, 239, 232, 1);
+  --agent-b: #2a4fc9;
+  --agent-b-text: #2548b8;
+  --agent-b-tint: rgba(42, 79, 201, 0.12);
+  --agent-b-node: rgba(230, 235, 250, 1);
+  --agent-b-node-new: rgba(239, 242, 252, 1);
+  --on-agent: #ffffff;
+  --passed: #1a6f36;
+  --failed: #b8262b;
+  --failed-text: #b8262b;
+  --added-tint: rgba(26, 111, 54, 0.12);
+  --removed-tint: rgba(184, 38, 43, 0.1);
+  --matte-top: #f3f2ee;
+  --matte-bottom: #ecebe6;
+  --lamp-off: #eae9e5;
+  --guide-dot: rgba(28, 28, 26, 0.1);
+  --agent-c: #4f3189;
+  --agent-c-text: #4f3189;
+  --agent-c-tint: rgba(79, 49, 137, 0.12);
+  --agent-c-node: rgba(231, 227, 235, 1);
+  --agent-c-node-new: rgba(240, 237, 240, 1);
+  --agent-d: #a2568a;
+  --agent-d-text: #9c5084;
+  --agent-d-tint: rgba(162, 86, 138, 0.12);
+  --agent-d-node: rgba(241, 231, 235, 1);
+  --agent-d-node-new: rgba(246, 239, 240, 1);
+  --agent-e: #3475c4;
+  --agent-e-text: #2b6cba;
+  --agent-e-tint: rgba(52, 117, 196, 0.12);
+  --agent-e-node: rgba(228, 235, 242, 1);
+  --agent-e-node-new: rgba(238, 242, 244, 1);
+  --agent-f: #623659;
+  --agent-f-text: #623659;
+  --agent-f-tint: rgba(98, 54, 89, 0.12);
+  --agent-f-node: rgba(234, 227, 229, 1);
+  --agent-f-node-new: rgba(241, 237, 237, 1);
+  --background: #f4f3ef;
+  --added: #1a6f36;
+  --removed: #b8262b;
+  --destructive: #b8262b;
+  --card-end: #fcfbf8;
+  --inset: #fbfaf7;
+  --overlay-panel: rgba(238, 237, 232, 0.96);
+  --overlay-fill: rgba(238, 237, 232, 0.96);
+  --sheet-backdrop: rgba(0, 0, 0, 0.6);
+  --top-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
 /* Geometry, type and motion are shared by every theme. */
@@ -262,6 +362,26 @@
   --color-agent-a-text: var(--agent-a-text);
   --color-agent-b: var(--agent-b);
   --color-agent-b-text: var(--agent-b-text);
+  --color-agent-c: var(--agent-c);
+  --color-agent-c-text: var(--agent-c-text);
+  --color-agent-c-tint: var(--agent-c-tint);
+  --color-agent-c-node: var(--agent-c-node);
+  --color-agent-c-node-new: var(--agent-c-node-new);
+  --color-agent-d: var(--agent-d);
+  --color-agent-d-text: var(--agent-d-text);
+  --color-agent-d-tint: var(--agent-d-tint);
+  --color-agent-d-node: var(--agent-d-node);
+  --color-agent-d-node-new: var(--agent-d-node-new);
+  --color-agent-e: var(--agent-e);
+  --color-agent-e-text: var(--agent-e-text);
+  --color-agent-e-tint: var(--agent-e-tint);
+  --color-agent-e-node: var(--agent-e-node);
+  --color-agent-e-node-new: var(--agent-e-node-new);
+  --color-agent-f: var(--agent-f);
+  --color-agent-f-text: var(--agent-f-text);
+  --color-agent-f-tint: var(--agent-f-tint);
+  --color-agent-f-node: var(--agent-f-node);
+  --color-agent-f-node-new: var(--agent-f-node-new);
   --color-on-agent: var(--on-agent);
   --color-passed: var(--passed);
   --color-failed: var(--failed);
