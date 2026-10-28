@@ -9,11 +9,15 @@ web
 ## Users
 
 - **The supervising developer.** One person who hands tasks to coding agents on a Python repository
-  and decides what reaches main. They watch the agents work, read each change with its possible
-  impact, and approve, request changes or reject. The graph exists for this person, not for the
-  agents.
+  and decides what reaches main. They want control: nothing merges without their decision or a rule
+  they set, and every decision rests on facts they can check without reading the code, such as what
+  a change does differently, how far it reaches on the graph, and what its tests prove. The graph
+  exists for this person, not for the agents.
+- **The power vibe coder.** Runs many agents at once and wants speed. They keep several agents
+  working while only the decisions that matter reach them: a change that passes every rule merges
+  by itself with its reasons and a Revert, and the rest arrives as a short question with an example.
 - **Hackathon judges.** They evaluate Oversight through a 3-minute demo video and a static build
-  that replays one real recorded run in the browser, with no backend and no setup.
+  that replays a real recorded run in the browser, with no backend and no setup.
 
 ## Product Purpose
 
@@ -25,10 +29,14 @@ change may affect, and that nothing reaches main without their decision.
 
 ## Positioning
 
-The person supervises agents on a map of the code itself: the nodes an agent reads or edits light up
-in its color, a change shows its impact cone (the functions possibly affected, directly or
-indirectly), and every change waits for an explicit decision. The graph is the review surface, not
-a chat transcript or a file list.
+Agents write code faster than anyone can review it. Oversight is how you stop reading code without
+losing control. Both audiences get it from one mechanism. Oversight runs the old and the new version
+of each changed function on the same inputs and keeps what behaves differently. It measures which
+callers on the graph changed as a result. Then it asks the person only about the differences the
+task did not ask for. Control comes from that: nothing merges without the person's rules or their
+decision, and every question carries its smallest example. Speed comes from that too: several
+agents run at once, and only the questions that matter reach the person. The IDE (the live graph,
+the agents' lights, the diff) is where this happens, not the pitch.
 
 ## Operating Context
 
