@@ -365,6 +365,19 @@ export const scenes: readonly Scene[] = [
       assert.equal(await box.evaluate((element) => document.activeElement === element), true);
     },
   },
+  {
+    name: "dock-open",
+    enabled: true,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Toggle bottom dock", exact: true }).click();
+      await page.getByRole("tabpanel", { name: "Tests", exact: true }).waitFor();
+      assert.ok(await page.getByRole("list", { name: "Test runs", exact: true }).isVisible());
+      assert.equal(
+        (await page.getByLabel("Bottom dock", { exact: true }).boundingBox())?.height,
+        280,
+      );
+    },
+  },
 ];
 
 export const themes: readonly Theme[] = [
