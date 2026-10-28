@@ -3,13 +3,14 @@
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from oversight.settings import Settings
 from oversight.workspace import Workspace, run_process
-from oversight.workspace.core import PLUGIN_DIR
+from oversight.workspace.core import INITIAL_DATE, PLUGIN_DIR
 from oversight.workspace.runner import ProcessResult
 from oversight.workspace.source import BOLTONS, select_source, validate_source
 
@@ -57,10 +58,13 @@ async def test_outside_reset_preserves_source_and_fixed_initial_commit(tmp_path:
         main = workspace.main.root
         assert await git(main, "branch", "--show-current") == "main"
         assert await git(main, "rev-list", "--count", "HEAD") == "1"
-        assert await git(main, "log", "--format=%an <%ae>|%cn <%ce>|%aI|%cI|%s") == (
-            "Oversight <oversight@oversight.invalid>|Oversight <oversight@oversight.invalid>|"
-            "2026-10-26T00:00:00+00:00|2026-10-26T00:00:00+00:00|Initial workspace"
-        )
+        log = await git(main, "log", "--format=%an <%ae>|%cn <%ce>|%aI|%cI|%s")
+        author, committer, authored, committed, message = log.split("|")
+        assert author == committer == "Oversight <oversight@oversight.invalid>"
+        # Git versions format UTC as either Z or +00:00; compare the recorded instant.
+        assert datetime.fromisoformat(authored) == datetime.fromisoformat(INITIAL_DATE)
+        assert datetime.fromisoformat(committed) == datetime.fromisoformat(INITIAL_DATE)
+        assert message == "Initial workspace"
         assert await git(main, "rev-parse", "HEAD") == base
         assert await git(main, "status", "--porcelain") == ""
         assert not (main / "boltons/__pycache__").exists()
