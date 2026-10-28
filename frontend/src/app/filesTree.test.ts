@@ -75,6 +75,10 @@ it("before a merge the recorded main file is the original", async () => {
   expect((await createRecordedFiles(() => before).readFile(entry.file.path)).content).toBe(
     entry.file.original,
   );
+  const agent = Object.values(before.changes)[0]?.agent_id;
+  const files = createRecordedFiles(() => before);
+  expect((await files.readFile(entry.file.path, agent)).content).toBe(entry.file.modified);
+  await expect(files.readFile(entry.file.path, "agent-999")).rejects.toThrow("no source contents");
 });
 
 it("successive recorded merges use resolution order, independent of agent start order", async () => {

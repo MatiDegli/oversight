@@ -8,15 +8,17 @@ export function createRecordedFiles(readState: () => State): FileAccess {
     drafts: new Map(),
     inFlightSaves: new Map(),
     saved: new Map(),
-    readFile: async (path) => {
+    readFile: async (path, agent) => {
       const state = readState();
-      const changes = Object.values(state.changes).filter((change) => path in change.files);
+      const changes = Object.values(state.changes).filter(
+        (change) => path in change.files && (agent === undefined || change.agent_id === agent),
+      );
       const merged = changes
         .filter((change) => change.resolution?.merge === "merged")
         .sort((a, b) => (a.resolutionSeq ?? 0) - (b.resolutionSeq ?? 0));
       const change = merged.at(-1) ?? changes[0];
       const file = change?.files[path]?.file;
-      const content = merged.length ? file?.modified : file?.original;
+      const content = agent !== undefined || merged.length ? file?.modified : file?.original;
       if (content === null || content === undefined)
         throw new Error(
           "This recording contains the file path but no source contents. Open a recorded diff to inspect its change.",
@@ -25,7 +27,7 @@ export function createRecordedFiles(readState: () => State): FileAccess {
       const hash = Array.from(new Uint8Array(bytes), (byte) =>
         byte.toString(16).padStart(2, "0"),
       ).join("");
-      return { path, content, hash, agent_id: null };
+      return { path, content, hash, agent_id: agent ?? null };
     },
     saveFile: () => Promise.reject(new Error("Recorded files are read-only.")),
   };
