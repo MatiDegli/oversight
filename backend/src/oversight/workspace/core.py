@@ -581,7 +581,7 @@ class Workspace:
                 git_env=self._git_env(tree, None, None),
                 timeout_s=timeout_s,
                 case_ids=case_ids,
-                spawn=spawn,
+                spawn=spawn or run_process,
             )
 
 

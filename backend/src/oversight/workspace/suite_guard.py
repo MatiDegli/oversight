@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.isolation import IsolatedRunner
 from oversight.workspace.locks import offload
-from oversight.workspace.runner import Spawn, run_process
+from oversight.workspace.runner import Spawn
 from oversight.workspace.snapshot import finish_snapshot, take_snapshot
 from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
 from oversight.workspace.suite_files import file_problems, file_stamp
@@ -29,12 +29,12 @@ async def guarded_suite(
     git_env: Mapping[str, str],
     timeout_s: float,
     case_ids: tuple[str, ...],
-    spawn: Spawn | None,
+    spawn: Spawn,
 ) -> SuiteRun:
     """Caller retains main/worktree/lease through capture, namespace death and restoration."""
     state = workspace.integrity
     snapshot = await offload(partial(take_snapshot, tree.git_identity, state, timeout_s))
-    runner = spawn or run_process
+    runner = spawn
     try:
         before = await offload(partial(file_stamp, tree.root))
         tested_tree, tested_commit = await capture_test_tree(
