@@ -26,7 +26,6 @@ from oversight.agents import (
     META_BASE_URL,
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
-    PROMPT_VERSION,
     UNVERIFIED_PROFILES,
     AgentRun,
     AgentTask,
@@ -42,6 +41,7 @@ from oversight.agents import (
     TaskClients,
     UsageLedger,
     load_script,
+    prompt_version,
     validate_agent_status,
     validate_usage_tick,
 )
@@ -75,6 +75,7 @@ from oversight.workspace import (
     Tree,
     Workspace,
     WorkspaceError,
+    configure_suite,
     list_tree,
     valid_agent_id,
 )
@@ -227,6 +228,7 @@ class LiveRun:
             pytest_pin=pytest_pin(),
             demo_python=settings.demo_python,
         )
+        configure_suite(self.workspace, harness_pack=settings.harness_pack)
         self.run_id = new_run_id(settings.runtime_dir, datetime.now(UTC))
         self.store = EventStore(
             run_store_path(settings.runtime_dir, self.run_id),
@@ -313,7 +315,7 @@ class LiveRun:
             RunStarted(
                 run_id=self.run_id,
                 contract_version=CONTRACT_VERSION,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=prompt_version(settings.harness_pack),
                 workspace=TEMPLATE.name,
                 base_commit=base,
                 models=list({profile.id: profile for profile in profiles}.values()),
@@ -727,6 +729,7 @@ class LiveRun:
                 publish=self._publish,
                 ledger=self._usage,
                 pricing=self._pricing if agent.metered else None,
+                harness_pack=self._settings.harness_pack,
             )
             self._kept[task.agent_id] = run
             end = await run.run()

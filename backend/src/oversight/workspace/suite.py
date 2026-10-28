@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import cast
 
 from oversight.limits import SizeLimitError, bounded_text
-from oversight.settings import harness_pack_enabled
 from oversight.test_output import retain_failure
 from oversight.workspace.junit import MAX_XML_BYTES, parse_junit
 from oversight.workspace.locks import offload
@@ -137,6 +136,7 @@ async def run_suite(
     redact: Callable[[str], str],
     spawn: Spawn,
     case_ids: tuple[str, ...] = (),
+    harness_pack: bool = False,
 ) -> SuiteRun:
     report = runtime_root / "tmp" / f"{uuid.uuid4().hex}.jsonl"
     junit = report.with_suffix(".xml")
@@ -197,7 +197,7 @@ async def run_suite(
     if process.timed_out:
         problems += ("suite timed out",)
     text = redact(text)
-    output = retain_failure(text, OUTPUT_TAIL) if harness_pack_enabled() else text[-OUTPUT_TAIL:]
+    output = retain_failure(text, OUTPUT_TAIL) if harness_pack else text[-OUTPUT_TAIL:]
     run = SuiteRun(result, output, cases, problems)
     if isinstance(failure, asyncio.CancelledError):
         raise SuiteInterrupted(run) from failure

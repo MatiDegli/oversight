@@ -27,14 +27,6 @@ def read_env_file(path: Path) -> dict[str, str]:
     return values
 
 
-def harness_pack_enabled(env_file: Path = REPO_ROOT / ".env") -> bool:
-    """The process-wide harness arm; set before startup so prompt/version agree with tools."""
-    value = os.environ.get("OVERSIGHT_HARNESS_PACK")
-    if value is None:
-        value = read_env_file(env_file).get("OVERSIGHT_HARNESS_PACK", "false")
-    return value.lower() == "true"
-
-
 @dataclass(frozen=True)
 class Settings:
     host: str = "127.0.0.1"

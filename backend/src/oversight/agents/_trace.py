@@ -61,13 +61,11 @@ def observe_locks(workspace: Workspace) -> None:
 
 def traced_drive[T](drive: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
     async def observed(self: Any, *args: Any, **kwargs: Any) -> T:
-        from oversight.agents._prompts import PROMPT_VERSION
-
         token = CURRENT.set(self._observer)
         try:
             observe_locks(self._workspace)
             with (
-                bind(agent=self._task.agent_id, prompt_version=PROMPT_VERSION),
+                bind(agent=self._task.agent_id, prompt_version=self.prompt_version),
                 span("agent_attempt"),
             ):
                 result = await drive(self, *args, **kwargs)

@@ -18,6 +18,7 @@ from oversight.agents._lifecycle import close_model
 from oversight.agents._prompts import PROMPT_VERSION as PROMPT_VERSION
 from oversight.agents._prompts import REVISION_PROMPT as REVISION_PROMPT
 from oversight.agents._prompts import SYSTEM_PROMPT as SYSTEM_PROMPT
+from oversight.agents._prompts import prompt_version, system_prompt
 from oversight.agents._replies import ReplyError, ReplyRecovery
 from oversight.agents._trace import model_turn, publications, timed, traced_drive
 from oversight.agents.client import (
@@ -119,6 +120,7 @@ class AgentRun:
         publish: Publish,
         ledger: UsageLedger,
         pricing: Pricing | None = None,
+        harness_pack: bool = False,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         require_verified(model.profile)
@@ -131,7 +133,11 @@ class AgentRun:
         self._ledger = ledger
         self._pricing = pricing
         self._monotonic = monotonic
-        self._tools = Toolbox(workspace, tree, test_timeout_s=task.limits.test_timeout_s)
+        self._system_prompt = system_prompt(harness_pack)
+        self.prompt_version = prompt_version(harness_pack)
+        self._tools = Toolbox(
+            workspace, tree, test_timeout_s=task.limits.test_timeout_s, harness_pack=harness_pack
+        )
         self._declaration: FinishDeclaration | None = None
         self._step = 0
         self._halted = False
@@ -193,7 +199,7 @@ class AgentRun:
         self._running = True
         try:
             self._messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": self._system_prompt},
                 {"role": "user", "content": self._task.task},
             ]
             return await self._drive("starting")

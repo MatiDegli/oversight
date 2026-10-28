@@ -19,7 +19,6 @@ from pydantic import ValidationError
 from oversight.agents._harness import HarnessState, ToolError, search_rows
 from oversight.agents._observations import test_observation
 from oversight.graph import WorkspaceGraph
-from oversight.settings import harness_pack_enabled
 from oversight.workspace import (
     FileRead,
     FileTooLarge,
@@ -184,11 +183,13 @@ async def _in_thread_to_the_end[T](fn: Callable[[], T]) -> T:
 class Toolbox:
     """One agent's tools over its worktree, and the graph of its own copy."""
 
-    def __init__(self, workspace: Workspace, tree: Tree, *, test_timeout_s: float) -> None:
+    def __init__(
+        self, workspace: Workspace, tree: Tree, *, test_timeout_s: float, harness_pack: bool = False
+    ) -> None:
         self._workspace = workspace
         self._tree = tree
         self._test_timeout_s = test_timeout_s
-        self._harness = HarnessState(harness_pack_enabled())
+        self._harness = HarnessState(harness_pack)
         self._graph = WorkspaceGraph(tree.root)
         self._read_hashes: dict[str, str] = {}
         """The hash of each file as the agent last saw it: read, or written by its own edit."""
@@ -437,7 +438,7 @@ class Toolbox:
         else:
             headline = f"Ran tests: {result.passed} of {result.passed + result.failed} pass"
         return ToolOutcome(
-            content=test_observation(run, MAX_TEST_OUTPUT),
+            content=test_observation(run, MAX_TEST_OUTPUT, harness_pack=self._harness.enabled),
             ok=True,
             summary=headline,
             tests=result,
