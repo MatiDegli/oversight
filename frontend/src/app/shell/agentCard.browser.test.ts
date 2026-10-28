@@ -67,6 +67,10 @@ it.each(["task", "steps", "diff", "stop"] as const)(
                 exact: true,
               });
       await focus.focus();
+      const bDiff = page
+        .getByRole("article", { name: "Agent B", exact: true })
+        .getByRole("button", { name: "Live diff", exact: true });
+      await check(bDiff).toBeInViewport();
       const before = await outside(page);
       const size = await card.boundingBox();
       await page.evaluate(() => {
@@ -78,6 +82,7 @@ it.each(["task", "steps", "diff", "stop"] as const)(
       await check(card.getByRole("button", { name: "Review change" })).toBeVisible();
       await check(card.getByRole("button", { name: "Live diff" })).toHaveCount(0);
       await check(target === "steps" || target === "diff" ? card : focus).toBeFocused();
+      await check(bDiff).toBeInViewport();
       expect(await outside(page)).toEqual(before);
       expect(await card.boundingBox()).toEqual(size);
       await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(0);
