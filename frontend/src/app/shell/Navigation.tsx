@@ -124,6 +124,7 @@ export function ShortcutsSheet({ onClose }: { onClose: () => void }) {
       </header>
       <dl className="shortcuts-list">
         {[
+          ["Find a function, file or command", "Ctrl K"],
           ["Toggle sidebar", "Ctrl B"],
           ["Toggle bottom dock", "Ctrl `"],
           ["Close active tab", "Alt W / Escape"],
