@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect as check } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { expect, it } from "vitest";
@@ -325,4 +326,3 @@ it("events never open a palette or move focus, and updating results never choose
     expect(await page.getByRole("tab", { selected: true }).textContent()).toBe(activeTab);
   });
 });
-import { readFileSync } from "node:fs";

@@ -16,7 +16,7 @@ it.each([
   [".gitconfig", "ini"],
   [".editorconfig", "ini"],
   ["package.json", "plaintext"],
-  ["pyproject.toml", "plaintext"],
+  ["pyproject.toml", "ini"],
   ["unknown.xyz", "plaintext"],
   ["unknown.constructor", "plaintext"],
   ["no-extension", "plaintext"],

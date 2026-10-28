@@ -68,7 +68,7 @@ function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
   );
   // Use Frame's scope builders so the harness exercises the actual lights and dimming.
   const { cone: impact, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
-  const field = useMemo(() => fieldInput(state, view, liveCone), [state, view, liveCone]);
+  const field = useMemo(() => fieldInput(state, view), [state, view]);
   return (
     <div className="flex h-full flex-col bg-ground text-text">
       {demo && <TopBar state={state} />}
