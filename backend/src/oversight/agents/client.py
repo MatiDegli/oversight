@@ -15,7 +15,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any, Protocol, cast
+from urllib.parse import urlparse
+from uuid import uuid4
 
+import httpx2 as httpx
 import openai
 from openai.types.chat import ChatCompletion
 
@@ -246,6 +249,18 @@ class OpenAIClient:
         self._retry = retry or RetryPolicy()
         self._sleep = sleep
         self._jitter = jitter
+        # Keep the SDK's existing pool sizes; only its idle expiry changes.
+        http_client = http_client or openai.DefaultAsyncHttpxClient(
+            limits=httpx.Limits(
+                max_connections=1000, max_keepalive_connections=100, keepalive_expiry=30
+            )
+        )
+        self._affinity = (
+            uuid4().hex
+            if profile.provider == "baseten"
+            and urlparse(base_url).hostname == "inference.baseten.co"
+            else None
+        )
         sdk = openai.AsyncOpenAI(
             base_url=base_url,
             api_key=api_key,
@@ -255,7 +270,12 @@ class OpenAIClient:
         )
         # The SDK's typed overloads cannot take parameters built as a dict, so the call is untyped
         # and its result is cast back to the SDK's own model.
+        self._sdk = sdk
         self._create: Callable[..., Awaitable[Any]] = sdk.chat.completions.create
+
+    async def aclose(self) -> None:
+        if not self._sdk.is_closed():
+            await self._sdk.close()
 
     @property
     def profile(self) -> ModelProfile:
@@ -272,6 +292,8 @@ class OpenAIClient:
             params["tool_choice"] = "auto"
         if self._profile.reasoning is not None:
             params["reasoning_effort"] = self._profile.reasoning
+        if self._affinity is not None:
+            params["extra_headers"] = {"x-session-affinity": self._affinity}
         return params
 
     async def complete(

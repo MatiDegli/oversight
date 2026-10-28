@@ -7,7 +7,6 @@ text at all, so nothing goes out per token.
 """
 
 import asyncio
-import hashlib
 import json
 import time
 from collections import Counter
@@ -15,6 +14,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Literal, cast
 
+from oversight.agents._lifecycle import close_model
+from oversight.agents._prompts import PROMPT_VERSION as PROMPT_VERSION
+from oversight.agents._prompts import REVISION_PROMPT as REVISION_PROMPT
+from oversight.agents._prompts import SYSTEM_PROMPT as SYSTEM_PROMPT
 from oversight.agents._replies import ReplyError, ReplyRecovery
 from oversight.agents.client import (
     CALL_SCOPE,
@@ -41,32 +44,6 @@ from oversight_contracts.events import (
     UsageTick,
 )
 from oversight_contracts.review import FinishDeclaration
-
-SYSTEM_PROMPT = """You are a coding agent working on a small Python repository, in your own copy.
-Use the tools to do the task you are given. Read the code before you change it: prefer one read
-of a whole function to several small reads. Make small, exact edits with edit_file. Run the tests
-before you finish. When the task is done, call finish with a short note for the reviewer. A person
-reviews your change before it is merged.
-Request independent reads and searches together in one reply. Request an edit and its test run
-in one reply when the test does not depend on seeing the edit result.
-Keep dependent steps ordered."""
-
-REVISION_PROMPT = """The reviewer has requested changes to the change you proposed.
-
-Reviewer comment:
-{comment}
-{note}
-Read a file again before editing it, even if you read or edited it earlier: the file may have \
-changed since you last saw it. Make the requested changes, run the tests, and call finish with \
-a short note for the reviewer."""
-
-PROMPT_VERSION = (
-    "agent-v1-"
-    + hashlib.sha256(
-        (SYSTEM_PROMPT + REVISION_PROMPT + json.dumps(TOOL_SCHEMAS, sort_keys=True)).encode()
-    ).hexdigest()[:12]
-)
-"""A name and a hash of the system prompt and tool schemas, for `run.started`."""
 
 NO_TOOL_REMINDER = "Use a tool to continue, or call finish when the task is done."
 SAME_RESULT_LIMIT = 4
@@ -168,6 +145,10 @@ class AgentRun:
         """The model-call bound, grown with the step budget on each revision."""
         self._running = False
         """Whether a `run` or `revise` drive is in progress on this run."""
+
+    async def aclose(self) -> None:
+        """Release the model transport after the retained task is resolved."""
+        await close_model(self._model)
 
     @property
     def steps(self) -> int:

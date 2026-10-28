@@ -38,6 +38,7 @@ from oversight.agents import (
     RunEnd,
     Script,
     ScriptedModel,
+    TaskClients,
     UnknownUsage,
     UsageLedger,
     load_script,
@@ -190,7 +191,7 @@ class LiveRun:
         """The script of each slot that runs the fake model."""
         for slot in OFFERED_SLOTS:
             self._offer(slot)
-        self._client_factory = client_factory or self._default_client
+        self._client_factory = TaskClients(client_factory or self._default_client)
         self._pricing: Pricing | None = None
         if settings.input_usd_per_m is not None and settings.output_usd_per_m is not None:
             # Cached input is priced as fresh input: an upper bound, never an undercount.
@@ -326,6 +327,7 @@ class LiveRun:
             self._stop_runs,
             self._stop_venv,
             self._close_manager,
+            self._client_factory.aclose,
             self._check_main,
             self.store.close,
         )
@@ -430,6 +432,8 @@ class LiveRun:
         if isinstance(payload, ChangeResolved) and (
             payload.decision == "rejected" or payload.merge == "merged"
         ):
+            if kept := self._kept.get(payload.agent_id):
+                await kept.aclose()
             self._release(payload.agent_id)
         return stored
 
