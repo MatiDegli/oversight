@@ -162,6 +162,7 @@ def test_cross_review_verdict_and_evidence(ready: PolicyInputs, severity: str) -
         (MUSE_SPARK, MUSE_SPARK_OPEN, "pass"),
         (MUSE_SPARK_OPEN, MUSE_SPARK, "pass"),
         (MUSE_SPARK, MUSE_SPARK.model_copy(update={"model": "another-model"}), "unknown"),
+        (MUSE_SPARK_OPEN, MUSE_SPARK_OPEN.model_copy(update={"model": "another-model"}), "unknown"),
         (MUSE_SPARK, FAKE_MODEL_B, "unknown"),
         (FAKE_MODEL, FAKE_MODEL_B, "pass"),
         (FAKE_MODEL, MUSE_SPARK, "unknown"),
@@ -425,3 +426,10 @@ def test_inventory_reports_ambiguous_source_without_diagnostic_parsing() -> None
     )
     inventory = added_tests_inventory(rec, 1)
     assert inventory.test_ids == () and not inventory.complete
+
+
+def test_empty_integrity_requires_capture_witness(ready: PolicyInputs) -> None:
+    status = integrity_status({}, {})
+    assert not status.complete
+    assert result(replace(ready, integrity_status=status), "test_integrity").result == "unknown"
+    assert integrity_status({}, {}, captured=True).complete
