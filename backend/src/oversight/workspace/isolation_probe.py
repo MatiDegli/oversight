@@ -6,8 +6,7 @@ import platform
 from pathlib import Path
 
 from oversight.workspace.core import Workspace
-from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable, unshare_binary
-from oversight.workspace.runner import run_process
+from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable
 from oversight.workspace.suite import SuiteUnavailable
 
 
@@ -15,8 +14,7 @@ async def isolation_probe(runtime: Path, template: Path) -> dict[str, object]:
     """Use a dedicated runtime, with no model calls and no fallback to an open test runner."""
     result: dict[str, object] = {"kernel": platform.release(), "status": "unavailable"}
     try:
-        version = await run_process([unshare_binary(), "--version"], cwd=template, timeout_s=5)
-        result["util_linux"] = version.stdout.strip()
+        result["util_linux"] = await IsolatedRunner(runtime).version(template)
     except OSError as error:
         result["reason"] = str(error)
         return result

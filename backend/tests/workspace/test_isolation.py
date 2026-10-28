@@ -14,6 +14,7 @@ import pytest
 from oversight.workspace import SuiteUnavailable, Workspace, WorkspaceBusy
 from oversight.workspace import isolation as iso
 from oversight.workspace.isolation_entry import FLAGS, HELPER, LAUNCHER, MARKER
+from oversight.workspace.runner import ProcessCollector, ProcessResult
 
 pytestmark = pytest.mark.anyio
 
@@ -41,6 +42,7 @@ def injected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> iso.IsolatedRun
         assert json.loads(raw)["nonce"] == nonce
         return {"pid": 1}, iso.open_pidfd(supervisor)
 
+    monkeypatch.setattr(iso, "unshare_binary", lambda: "/usr/bin/unshare")
     monkeypatch.setattr(iso, "_launch", launch)
     monkeypatch.setattr(iso, "_confirm", confirm)
     return iso.IsolatedRunner(tmp_path)
@@ -79,10 +81,16 @@ async def test_preflight_exit_one_or_missing_is_unavailable(
         calls.append(command)
         return ["/no-such-unshare"] if missing else [sys.executable, "-c", "raise SystemExit(1)"]
 
+    def binary() -> str:
+        if missing:
+            raise FileNotFoundError("unshare is not installed")
+        return "/usr/bin/unshare"
+
+    monkeypatch.setattr(iso, "unshare_binary", binary)
     monkeypatch.setattr(iso, "_launch", launch)
     with pytest.raises(iso.IsolationUnavailable):
         await iso.IsolatedRunner(tmp_path)(["never-launched"], cwd=tmp_path, timeout_s=2)
-    assert calls == [[*FLAGS, "true"]]
+    assert calls == ([] if missing else [[*FLAGS, "true"]])
 
 
 @pytest.mark.parametrize("diagnostic", ["entry confirmed", '{"pid":1,"nonce":"forged"}'])
@@ -100,6 +108,7 @@ async def test_stdout_cannot_confirm_entry(
 
 
 async def _fake_preflight(runner: iso.IsolatedRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(iso, "unshare_binary", lambda: "/usr/bin/unshare")
     monkeypatch.setattr(iso, "_launch", lambda *_: [sys.executable, "-c", "pass"])
     await runner.preflight()
 
@@ -136,7 +145,7 @@ async def test_timeout_and_repeated_cancel_reap_before_return(
 
 
 def test_argv_is_in_memory_absolute_and_versioned(tmp_path: Path) -> None:
-    binary = iso.unshare_binary()
+    binary = "/usr/bin/unshare"
     command = iso.signature(tmp_path, binary)
     launch = iso._launch(binary, command[1:])
     assert launch[:5] == [sys.executable, "-I", "-S", "-c", LAUNCHER]
@@ -151,7 +160,7 @@ def test_orphan_signature_message_and_clean_restart(tmp_path: Path, mutation: st
     proc = tmp_path / "proc"
     entry = proc / "12345"
     entry.mkdir(parents=True)
-    argv = [*iso.signature(runtime, iso.unshare_binary()), MARKER + str(runtime.resolve())]
+    argv = [*iso.signature(runtime, "/usr/bin/unshare"), MARKER + str(runtime.resolve())]
     if mutation == "root":
         argv[-1] += "/other"
     elif mutation == "helper":
@@ -223,3 +232,93 @@ async def test_missing_confirmation_preserves_suite_unavailable(
 def test_forged_pipe_report_fails_closed(raw: bytes) -> None:
     with pytest.raises((ValueError, TypeError, KeyError)):
         iso._confirm(raw, "nonce", os.getpid(), 0)
+
+
+async def test_isolated_timeout_keeps_partial_plugin_report(
+    injected: iso.IsolatedRunner, workspace: Workspace, demo_python: Path
+) -> None:
+    workspace._demo_python = demo_python
+    path = workspace.main.root / "tests/test_isolated.py"
+    path.write_text(
+        "import time\n"
+        "def test_a_pass():\n    assert True\n"
+        "def test_b_hang():\n    time.sleep(600)\n"
+    )
+    run = await workspace.run_tests(
+        workspace.main, timeout_s=2, case_ids=("tests/test_isolated.py",), spawn=injected
+    )
+    assert run.result.outcome == "timeout"
+    assert run.result.passed == 1
+    assert "suite timed out" in run.problems
+    assert not list(workspace.tmp_dir.glob("*.jsonl"))
+
+
+async def test_cancel_during_launch_waits_for_exact_pid_cleanup(
+    injected: iso.IsolatedRunner,
+    tmp_path: Path,
+    wait_gone: Callable[[int], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pids: list[int] = []
+    tasks: list[asyncio.Task[ProcessResult]] = []
+    original = ProcessCollector.connection_made
+
+    def made(self: ProcessCollector, transport: asyncio.BaseTransport) -> None:
+        assert isinstance(transport, asyncio.SubprocessTransport)
+        pids.append(transport.get_pid())
+        tasks[0].cancel()
+        original(self, transport)
+
+    monkeypatch.setattr(ProcessCollector, "connection_made", made)
+    task = asyncio.create_task(injected(["never"], cwd=tmp_path, timeout_s=20))
+    tasks.append(task)
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert len(pids) == 1  # Cancelled in preflight, before pytest can launch.
+    wait_gone(pids[0])
+
+
+async def test_forged_junit_never_proves_entry(
+    workspace: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner = iso.IsolatedRunner(workspace.runtime_root)
+    await _fake_preflight(runner, monkeypatch)
+    program = r"""
+import os
+from pathlib import Path
+path = Path(os.environ['OVERSIGHT_REPORT'])
+path.write_text('{"kind":"test","nodeid":"tests/test_fake.py::test_fake",'
+                '"when":"call","outcome":"passed"}\n')
+path.with_suffix('.xml').write_text('<testsuite><testcase classname="tests.test_fake" '
+                                   'name="test_fake"/></testsuite>')
+print('entry confirmed, all passed')
+raise SystemExit(1)
+"""
+    monkeypatch.setattr(iso, "_launch", lambda *_: [sys.executable, "-c", program])
+    with pytest.raises(SuiteUnavailable) as error:
+        await workspace.run_tests(workspace.main, timeout_s=5, spawn=runner)
+    assert error.value.run.result.outcome == "error"
+    assert runner.entry is None
+    assert error.value.run.result.passed == 1
+    assert len(error.value.run.cases) == 1
+
+
+async def test_cleanup_failure_remains_unavailable_during_cancellation(
+    injected: iso.IsolatedRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cleanup = iso._cleanup
+
+    async def failed_cleanup(*args: Any) -> None:
+        await cleanup(*args)
+        raise iso.IsolationUnavailable("uncertain cleanup")
+
+    await injected.preflight()
+    monkeypatch.setattr(iso, "_cleanup", failed_cleanup)
+    task = asyncio.create_task(
+        injected([sys.executable, "-c", "import time; time.sleep(600)"], cwd=tmp_path, timeout_s=30)
+    )
+    while injected.entry is None:  # noqa: ASYNC110 - injected child confirmation
+        await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(iso.IsolationUnavailable, match="uncertain cleanup"):
+        await task

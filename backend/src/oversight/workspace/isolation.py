@@ -52,19 +52,19 @@ def signature(runtime: Path, binary: str) -> list[str]:
 
 def refuse_orphans(runtime: Path, *, proc: Path = Path("/proc")) -> None:
     """Called under the runtime lock, before reset. Report exact matches; never kill them."""
-    try:
-        binary = unshare_binary()
-    except FileNotFoundError:
-        return  # C1 keeps the existing runner usable on machines without unshare.
-    prefix = signature(runtime, binary)
     marker = MARKER + str(runtime.resolve())
     for entry in proc.iterdir():
         if not entry.name.isdecimal():
             continue
         try:
-            argv = (entry / "cmdline").read_bytes().decode().rstrip("\0").split("\0")
+            argv = (
+                (entry / "cmdline").read_bytes().decode(errors="replace").rstrip("\0").split("\0")
+            )
         except (FileNotFoundError, ProcessLookupError):
             continue
+        if not argv or not Path(argv[0]).is_absolute() or Path(argv[0]).name != "unshare":
+            continue
+        prefix = signature(runtime, argv[0])
         if argv[: len(prefix)] == prefix and marker in argv[len(prefix) :]:
             raise WorkspaceBusy(
                 f"orphan isolated runner PID {entry.name}; stop this PID before restarting: "
@@ -183,6 +183,12 @@ class IsolatedRunner:
         self.entry: dict[str, object] | None = None
         self._ready = False
 
+    async def version(self, cwd: Path) -> str:
+        result = await self._run(["--version"], cwd, 5, None, 1000, probe=True)
+        if result.returncode != 0 or result.timed_out:
+            raise IsolationUnavailable("could not read util-linux version")
+        return result.stdout.strip()
+
     async def preflight(self) -> None:
         try:
             result = await self._run(
@@ -228,6 +234,7 @@ class IsolatedRunner:
         except asyncio.CancelledError:
             abort.set()
             await settle_cleanup(task)
+            task.result()  # A failed cleanup must stay unavailable, including during cancellation.
             raise
 
     async def _execute(

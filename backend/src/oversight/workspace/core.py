@@ -504,7 +504,7 @@ class Workspace:
         *,
         timeout_s: float,
         case_ids: tuple[str, ...] = (),
-        spawn: Spawn = run_process,
+        spawn: Spawn | None = None,
     ) -> SuiteRun:
         """Run the demo repo's tests in `tree`, under its lock, in the demo venv."""
         async with tree.section(locked=True):
@@ -524,7 +524,7 @@ class Workspace:
                     tree_root=tree.root,
                     timeout_s=timeout_s,
                     redact=self.redact,
-                    spawn=spawn,
+                    spawn=spawn or run_process,
                     case_ids=case_ids,
                 )
             except (SuiteInterrupted, SuiteUnavailable) as error:
