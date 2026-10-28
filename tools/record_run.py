@@ -60,7 +60,7 @@ def confined_store(store: Path, runs_dir: Path) -> Path:
 def record_run(store_path: Path, out: Path, *, fake_fixture: bool = False) -> Recording:
     """Export `store_path` to `out`, validate it, and return its summary.
 
-    A refused candidate leaves the previous output and receipt untouched.
+    Validation failures leave the previous output and receipt untouched.
     """
     if not store_path.exists():
         raise RecordError(f"no such run store: {store_path}")
@@ -83,6 +83,8 @@ def record_run(store_path: Path, out: Path, *, fake_fixture: bool = False) -> Re
                 receipt(text, events, fake_fixture=fake_fixture).model_dump_json() + "\n",
                 encoding="utf-8",
             )
+            # The two renames are not atomic: if the export rename fails, the new receipt
+            # remains with the old log. The build gate in recording.load_recording refuses it.
             marker.replace(metadata)
             candidate.replace(out)
     except (RecordError, ValueError, OSError, sqlite3.Error) as error:
