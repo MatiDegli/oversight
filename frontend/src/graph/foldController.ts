@@ -7,6 +7,7 @@ import type { GraphElement } from "./elements";
 import { foldElements } from "./foldElements";
 import { slideRows } from "./foldMotion";
 import { initialFolds, observeEdits, reduceFolds } from "./folds";
+import { setScratch } from "./scratch";
 import { updateGraph } from "./updateGraph";
 
 /** Owns only this view's fold choices. Replay/live events still use the same unchanged reducer. */
@@ -72,20 +73,20 @@ export function foldController(cy: Core) {
         if (offset && element.position)
           element.position = { x: element.position.x + offset.x, y: element.position.y + offset.y };
       }
-      cy.scratch("foldAliases", projected.visible);
+      setScratch(cy, "foldAliases", projected.visible);
       const incoming = new Map<string, number>();
       for (const e of full)
         if (e.group === "edges" && e.data.kind === "calls" && e.data.target)
           incoming.set(e.data.target, (incoming.get(e.data.target) ?? 0) + 1);
       const hub = [...incoming].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
-      cy.scratch("fullHub", hub ? (projected.visible.get(hub) ?? hub) : undefined);
+      setScratch(cy, "fullHub", hub ? (projected.visible.get(hub) ?? hub) : undefined);
       if (changed) {
         cy.nodes().stop();
-        cy.scratch("foldAnimating", false);
+        setScratch(cy, "foldAnimating", false);
       }
       updateGraph(cy, projected.elements);
-      cy.nodes().ungrabify();
-      cy.nodes(".module").grabify();
+      cy.nodes(":grabbable").not(".module").ungrabify();
+      cy.nodes(".module:ungrabbable").grabify();
       if (changed && !initial) {
         const targets = new Map(
           projected.elements.flatMap((e) =>

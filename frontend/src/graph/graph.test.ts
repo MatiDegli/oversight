@@ -10,6 +10,7 @@ import { themes } from "../theme";
 
 import { loadGraphEvents } from "./devLog";
 import { graphElements } from "./elements";
+import { imageSource } from "./layerImages";
 import { EDGE_CURVE_STYLE, graphStyles } from "./styles";
 import { showSelection } from "./selection";
 import { updateGraph } from "./updateGraph";
@@ -539,7 +540,7 @@ describe("graph mapping", () => {
     expect(fee.hasClass("marked")).toBe(true);
     // The word shares the name's line: the name is not lifted above it.
     expect(fee.numericStyle("text-margin-y")).toBe(0);
-    const word = decodeURIComponent(String(fee.style("background-image")));
+    const word = decodeURIComponent(imageSource(String(fee.style("background-image"))));
     expect(word).toContain(">changed</text>");
     expect(word).toContain(`fill="${theme["agent-a-text"]}"`);
     expect(word).toContain(`fill="${theme["agent-a"]}"`);
@@ -547,8 +548,10 @@ describe("graph mapping", () => {
     expect(frame.style("label")).toBe("");
     const header = String(frame.style("background-image")).split(" ");
     expect(header).toHaveLength(2);
-    expect(decodeURIComponent(header[0] ?? "")).toContain(">billing.py</text>");
-    expect(decodeURIComponent(header[1] ?? "")).toContain(">3 functions · 1 new</text>");
+    expect(decodeURIComponent(imageSource(header[0] ?? ""))).toContain(">billing.py</text>");
+    expect(decodeURIComponent(imageSource(header[1] ?? ""))).toContain(
+      ">3 functions · 1 new</text>",
+    );
     expect(render(initial()).getElementById("billing:fee").style("background-image")).toBe("none");
   });
 
@@ -570,8 +573,8 @@ describe("graph mapping", () => {
     expect(fee.hasClass("cone") && fee.hasClass("marked")).toBe(true);
     const images = String(fee.style("background-image")).split(" ");
     expect(images).toHaveLength(2);
-    expect(decodeURIComponent(images[0] ?? "")).toContain(">changed</text>");
-    expect(decodeURIComponent(images[1] ?? "")).toContain(">1</text>");
+    expect(decodeURIComponent(imageSource(images[0] ?? ""))).toContain(">changed</text>");
+    expect(decodeURIComponent(imageSource(images[1] ?? ""))).toContain(">1</text>");
   });
 
   describe("frames an agent touches or leaves empty", () => {
@@ -588,7 +591,7 @@ describe("graph mapping", () => {
     const images = (element: { style: (name: string) => unknown }) =>
       String(element.style("background-image"))
         .split(" ")
-        .map((image) => decodeURIComponent(image));
+        .map((image) => decodeURIComponent(imageSource(image)));
 
     it("says the word and letter of an agent in a frame's header, in the count's place", () => {
       const frame = render(touch(initial(), ["billing"], "edit")).getElementById("billing");

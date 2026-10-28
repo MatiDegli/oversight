@@ -64,7 +64,17 @@ export interface Layer {
 }
 
 const px = Number.parseFloat;
-const encode = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
+// Encoding the pieces preserves the exact URI bytes while encoding embedded fonts only once.
+const encodedFonts = new Map<string, string>();
+function image(theme: LayerTheme, open: string, body: string): string {
+  const family = theme["text-font"].split(",")[0] ?? "sans-serif";
+  let fonts = encodedFonts.get(family);
+  if (fonts === undefined) {
+    fonts = encodeURIComponent(fontFaces(theme));
+    encodedFonts.set(family, fonts);
+  }
+  return `data:image/svg+xml,${encodeURIComponent(open)}${fonts}${encodeURIComponent(body + "</svg>")}`;
+}
 
 function fontFaces(theme: LayerTheme): string {
   const family = theme["text-font"].split(",")[0] ?? "sans-serif";
@@ -166,9 +176,9 @@ export function marksLayer(theme: LayerTheme, marks: NodeMarks, leaf: LeafSize):
     `x="${String(right - badges - px(theme["node-word-gap"]))}" y="${String(centerY)}" dy=".35em" text-anchor="end"`,
   );
   const shapes = badgeShapes(theme, marks, right, centerY);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(leaf.width)}" height="${String(leaf.height)}">${fontFaces(theme)}${word}${shapes}</svg>`;
+  const open = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(leaf.width)}" height="${String(leaf.height)}">`;
   return {
-    image: encode(svg),
+    image: image(theme, open, word + shapes),
     width: leaf.width,
     height: leaf.height,
     x: "0%",
@@ -187,8 +197,10 @@ const escape = (value: string) =>
 
 /** One header-row image: a `width` by header-height SVG that clips what overruns it. */
 function rowImage(theme: LayerTheme, width: number, body: string): string {
-  return encode(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(HEADER.height)}">${fontFaces(theme)}${body}</svg>`,
+  return image(
+    theme,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(HEADER.height)}">`,
+    body,
   );
 }
 
