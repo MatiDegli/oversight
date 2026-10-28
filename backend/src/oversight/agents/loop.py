@@ -480,7 +480,9 @@ class AgentRun:
 
     async def _usage(self, reply: ModelReply) -> None:
         cost = self._pricing.cost(reply.usage) if self._pricing is not None else None
-        spent = self._ledger.record(cost)
+        # Baseten receipts show cost without debiting Meta credits or inheriting its brake.
+        meta_credits = self._model.profile.provider != "baseten"
+        spent = self._ledger.record(cost) if meta_credits else self._ledger.spent_usd
         await self._publish(
             UsageTick(
                 agent_id=self._task.agent_id,
@@ -493,6 +495,6 @@ class AgentRun:
                 cost_usd=cost,
                 spent_usd=spent,
                 budget_usd=self._ledger.budget_usd,
-                brake=self._ledger.brake,
+                brake=self._ledger.brake if meta_credits else "ok",
             )
         )

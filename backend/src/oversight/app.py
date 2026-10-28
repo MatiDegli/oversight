@@ -221,6 +221,16 @@ class LiveRun:
             self._pricing = Pricing(
                 settings.input_usd_per_m, settings.output_usd_per_m, settings.input_usd_per_m
             )
+        self._baseten_pricing: Pricing | None = None
+        if (
+            settings.baseten_input_usd_per_m is not None
+            and settings.baseten_output_usd_per_m is not None
+        ):
+            self._baseten_pricing = Pricing(
+                settings.baseten_input_usd_per_m,
+                settings.baseten_output_usd_per_m,
+                settings.baseten_input_usd_per_m,
+            )
         self.layout = read_layout(settings.layout)
         self.workspace = Workspace(
             settings.runtime_dir,
@@ -709,6 +719,12 @@ class LiveRun:
         )
         return AgentCreated(agent_id=task.agent_id, change_id=task.change_id, slot=slot)
 
+    def _price_for(self, profile: ModelProfile) -> Pricing | None:
+        """Price receipts by provider; only Meta calls debit the credits ledger."""
+        if profile.provider == "meta":
+            return self._pricing
+        return self._baseten_pricing if profile.provider == "baseten" else None
+
     async def _run(
         self,
         manager: ChangeManager,
@@ -728,7 +744,7 @@ class LiveRun:
                 sink=manager,
                 publish=self._publish,
                 ledger=self._usage,
-                pricing=self._pricing if agent.metered else None,
+                pricing=self._price_for(agent.profile),
                 harness_pack=self._settings.harness_pack,
             )
             self._kept[task.agent_id] = run

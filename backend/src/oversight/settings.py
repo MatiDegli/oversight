@@ -70,6 +70,10 @@ class Settings:
     """Muse Spark's input price, US dollars per million tokens. MUSE_SPARK_INPUT_USD_PER_M."""
     output_usd_per_m: float | None = None
     """Muse Spark's output price, US dollars per million tokens. MUSE_SPARK_OUTPUT_USD_PER_M."""
+    baseten_input_usd_per_m: float | None = None
+    """Optional Baseten input price, US dollars per million tokens. BASETEN_INPUT_USD_PER_M."""
+    baseten_output_usd_per_m: float | None = None
+    """Optional Baseten output price, US dollars per million tokens. BASETEN_OUTPUT_USD_PER_M."""
     setting_problems: dict[SettingName, Literal["missing", "invalid"]] = field(
         default_factory=dict[SettingName, Literal["missing", "invalid"]]
     )
@@ -110,6 +114,8 @@ class Settings:
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
             input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
             output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
+            baseten_input_usd_per_m=positive_amount(merged.get("BASETEN_INPUT_USD_PER_M")),
+            baseten_output_usd_per_m=positive_amount(merged.get("BASETEN_OUTPUT_USD_PER_M")),
             setting_problems={
                 name: "invalid"
                 for name in (
