@@ -6,6 +6,7 @@ from datetime import UTC
 from typing import Any
 
 from oversight.agents import Publish
+from oversight.changes._mode import ModeController
 from oversight.changes._review_port import ReviewPort
 from oversight.changes._state import ChangeRecord, ChangeState, Source
 from oversight.events import Clock
@@ -45,6 +46,7 @@ class ChangeContext:
     timeout: float
     state: ChangeState
     ports: ChangePorts
+    mode: ModeController
 
     def date(self) -> str:
         return self.clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
