@@ -74,12 +74,26 @@ async def test_reference_is_copied_and_echoed_through_revise_and_done(
             return await publish(payload)
 
         monkeypatch.setattr(s.store, "publish", flaky)
+        before_reject = s.store.last_seq
         response = await s.client.post(
             f"/changes/{created.change_id}/reject",
             json=dict(revision=proposal.revision, head_commit=proposal.head_commit),
         )
         assert response.status_code == 202
-        # Exhaust both immediate attempts; the next start drains pending delivery.
+        # A 202 only accepts the rejection. Wait until both done attempts failed and the
+        # resolution freed the slot before testing that the next start drains delivery.
+        await s.until(
+            lambda e: (
+                e.type == "error"
+                and e.payload.change_id == created.change_id
+                and not e.payload.fatal
+                and e.payload.message.startswith(
+                    f"The close-out of {created.change_id} is incomplete (done:"
+                )
+            ),
+            after=before_reject,
+        )
+        assert len(attempts) == 2
         assert (await s.client.post("/agents", json=dict(task="t"))).status_code == 201
         await s.until(lambda e: e.type == "agent.status" and e.payload.state == "done")
         states = [
