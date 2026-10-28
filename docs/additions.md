@@ -12,6 +12,8 @@ The freeze is organized around three proofs. Judge each front by the proof it se
    to the maintainer first and reports budget pace before starting. End with counts of changes
    merged by rules, questions asked and differences tests missed, plus cost per accepted change.
    Paid calls for this run have a US$25 Meta-budget cap, separate from the bench's US$20.
+   End on the decisions inbox: this many agents for this many hours, and these were the only
+   decisions the person had to make.
 3. **Unrequested behavior among green patches.** From that same run, measure the share of patches
    with passing tests whose behavior diff reveals a difference the task did not request. Fix the
    reporting rule before measuring: if the share is low or the sample too small, tell the scale
@@ -77,6 +79,15 @@ These retain useful ideas from the old inventory without approving a front or ch
 
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
+- No repeated automatic revision for an unchanged failure: before cross-review or rules follow-up
+  starts a round, compare the test and assertion with the last failure and the agent's edits since
+  then. A changed node reaches the test if the test can reach it through the graph's call edges,
+  or it appears in that test's executed nodes when recorded. If nothing relevant changed, the card
+  asks the person. This is deterministic, with no model call; if neither source can tell, ask
+  instead of starting another round on a guess.
+- Behavior diff for methods, only if level 3 is reached. Until then, measure the third proof on
+  tasks that change functions only and state that limit in the write-up; current targets are
+  module-level functions (`backend/src/oversight/changes/_behavior.py:79`).
 - A dependency guard for package existence, license and vulnerability evidence.
 - Export reviewed revisions/comments as decision pairs; no training during this event.
 - A person-approved plan before editing protected areas; item 8's deterministic veto is separate.
@@ -218,8 +229,11 @@ An adverse independent review can send one revision back without the person rela
 on main through `7da6fa9`, following `95e4723`, `9b81d0b` and `13f955c`
 (`backend/src/oversight/runtime_review.py:167`, `backend/src/oversight/changes/_cross_review.py:19`).
 Drop it as a front. Reuse target validation, durable accounting, human preemption and the one-round
-limit in item 8. It is opt-in and needs a different model in the opposite slot
-(`backend/src/oversight/review_config.py:37`); another call to the author's model is not a fallback.
+limit in item 8. It is opt-in. Since `045f589`, reviewer selection uses `OVERSIGHT_REVIEW_MODEL`,
+independent of slots (`backend/src/oversight/review_config.py:26-38`), with `muse-spark-open` as the
+default (`backend/src/oversight/settings.py:62-63`). The reviewer's model must differ from the
+author's (`backend/src/oversight/review_config.py:37`); another call to the author's model is not
+a fallback.
 Both authors, A and B, write code with hosted Muse Spark. Muse Spark Open is the cross-reviewer
 and item 9's deciding model; the cross-review mechanism stays unchanged.
 The manual review route remains 501, which does not mean automatic review is missing. No new
@@ -258,6 +272,27 @@ A rules merge shows the summary, scope of results checked as unchanged, and Reve
 unrequested choice, put one plain question and its smallest before/after example ahead of unchanged
 facts. Yes confirms the choice; No requests changes with the example as comment; Unsure waits.
 Ask me keeps the summary on top and requires Approve for every change.
+
+The decisions inbox is the form of Needs you within item 9. One place lists every decision
+waiting for the person across all changes and agents: the card's Yes/No/Unsure questions;
+checks that could not run; a failure or conflict while following main (item 8); a risky-area
+change (item 8); the lead's plan when it needs approval; and proposed examples before code
+(item 12). Each entry shows its change or agent, why it waits, its smallest example and its
+age, oldest blocking first. A header count shows how many decisions are pending.
+
+The person answers from the inbox. The answer goes to its originating change; No is Request
+changes to its author, as today. If the person picks another agent, start a new task for that
+agent with the answer as its text. Unsure stays in the inbox. Questions come only from Oversight,
+never from the agent.
+
+Derive the inbox as a pure function over existing events in the frontend reducer, like the
+overlap in item 5, so it survives restarts and appears in replay, with no field beyond item 9's.
+One contract question remains open: an answer routed to another agent may need an optional link
+to come back as answered after a restart or in replay. Today a start has no reference back to a
+card, and answers persist only in the change's resolution. The maintainer has not answered this.
+
+Build the inbox together with item 9, keeping item numbers, anchors and the decided queue's order.
+It changes the look, so the maintainer sees a shot before merge.
 
 For each measured behavior difference, Muse Spark Open chooses asked for, not asked for or
 cannot tell against the task text or confirmed examples. Constrain the output with a `json_schema`
@@ -319,9 +354,9 @@ sees only what the person can see. This supersedes its earlier deferral to Next.
 ### Saved agent flows
 
 After the lead, extend package 12's shipped Start an agent here with a short list of repository
-files. Each flow names task text, a target (selected node, selected change, or files changed since
-the last commit) and expected checks. The person picks a flow, sees the filled task text, may edit
-it, then starts the agent. Its result uses the same card, rules and evidence as any change.
+files. Each flow has a name, task text, a target (selected node, selected change, or files changed
+since the last commit) and expected checks. The person picks a flow, sees the filled task text,
+may edit it, then starts the agent. Its result uses the same card, rules and evidence as any change.
 
 Start with three flows: write tests for the selected function or changed files; seek a
 counterexample to the selected change; explain the selected change from its facts. Counterexample

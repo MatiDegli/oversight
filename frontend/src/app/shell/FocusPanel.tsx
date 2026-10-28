@@ -7,10 +7,21 @@ import { LivePanel } from "./LivePanel";
 import { focusRing } from "./shared";
 
 export function FocusPanel(
-  props: FrameProps & { startAgentAction: ReactNode; maximized: boolean; onMaximize: () => void },
+  props: FrameProps & {
+    startAgentAction: ReactNode;
+    practiceOnly?: boolean;
+    maximized: boolean;
+    onMaximize: () => void;
+  },
 ) {
   const { view, state, onClosePanel, onTabAction } = props;
   const tabs = view.tabs ?? [];
+  if (props.practiceOnly)
+    return (
+      <section className="focus-panel" aria-label="Focus panel">
+        {props.practice?.content}
+      </section>
+    );
   const Icon = props.maximized ? Minimize2 : Maximize2;
   return (
     <section className="focus-panel" aria-label="Focus panel">
@@ -24,11 +35,14 @@ export function FocusPanel(
             const changeId = tab.review ?? tab.diff?.changeId;
             const change = changeId ? state.changes[changeId] : undefined;
             const slot = change ? state.agents[change.agent_id]?.slot : undefined;
-            const title = tab.review
-              ? `Review · ${tab.review}`
-              : tab.diff
-                ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
-                : (tab.file?.path.split("/").at(-1) ?? "File");
+            const title =
+              tab.id === "practice"
+                ? "Two-change practice"
+                : tab.review
+                  ? `Review · ${tab.review}`
+                  : tab.diff
+                    ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
+                    : (tab.file?.path.split("/").at(-1) ?? "File");
             return (
               <div
                 key={tab.id}
@@ -74,7 +88,9 @@ export function FocusPanel(
         </button>
       </div>
       <div id="focus-content" role="tabpanel" className="focus-body">
-        {view.review !== null ? (
+        {view.activeTab === "practice" && props.practice?.active ? (
+          props.practice.content
+        ) : view.review !== null ? (
           <ReviewPanel
             key={view.review}
             state={state}

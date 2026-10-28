@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test as baseTest } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 
 import type { GraphProbeHost } from "../src/graph";
@@ -9,9 +9,34 @@ import { interceptCommands, tapNode } from "./level2-support";
 import {
   editorAssets,
   expectNoEditorBeforeGraph,
+  expectFoldedFunction,
   holdPythonGrammar,
+  holdUnboundedIdleWork,
   recordEditorStartup,
 } from "./editor-startup-support";
+
+// Optional stress reproduction: OVERSIGHT_E2E_CPU_RATE=6, also with taskset -c <core>.
+const test = baseTest.extend({
+  page: async ({ page }, runPage) => {
+    const raw = process.env.OVERSIGHT_E2E_CPU_RATE;
+    if (raw === undefined) {
+      await runPage(page);
+      return;
+    }
+    const rate = Number(raw);
+    if (!Number.isFinite(rate) || rate < 4 || rate > 6)
+      throw new Error("OVERSIGHT_E2E_CPU_RATE must be between 4 and 6");
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+    try {
+      await runPage(page);
+    } finally {
+      // Reset before Playwright closes the page: Chromium can reuse its renderer for later cases.
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await cdp.detach();
+    }
+  },
+});
 
 async function expectPython(panel: Locator) {
   // Read the painted keyword's color, rather than merely checking a language id or token class.
@@ -69,8 +94,10 @@ for (const first of ["file", "live diff", "review"] as const) {
 
     const card = page.getByRole("article", { name: "Agent A" });
     if (first === "file") await tapNode(page, "shop.pricing:compute_price");
-    else if (first === "live diff") await card.getByRole("button", { name: "Live diff" }).click();
-    else {
+    else if (first === "live diff") {
+      await holdUnboundedIdleWork(page);
+      await card.getByRole("button", { name: "Live diff" }).click();
+    } else {
       await release(page, holds.live);
       await engaged(page, holds.decisions, 60_000);
       // Prefetch never mounts an editor or changes watch mode by itself.
@@ -82,8 +109,10 @@ for (const first of ["file", "live diff", "review"] as const) {
         first === "file" ? "File view" : first === "live diff" ? "Live diff panel" : "Review panel",
     });
     await expect(panel.locator(".monaco-editor .view-lines").last()).toBeVisible();
+    // The cold grammar must color the folded hunk even when background tokenization cannot run.
+    if (first === "live diff") await expectFoldedFunction(panel, "apply_coupon");
     await loadPython();
-    await expectPython(panel);
+    await expectPython(first === "file" ? panel : panel.locator(".editor.modified"));
     if (first === "review") {
       await expect(panel.getByLabel("Editable review file")).toHaveAttribute("data-state", "clean");
       // Review leaves fewer visible lines; the fixture's added docstring is near the end.

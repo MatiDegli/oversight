@@ -54,6 +54,7 @@ from oversight.changes._state import (
     WrongState,
 )
 from oversight.changes._suite_evidence import publish_suite
+from oversight.changes._summary_capture import record_usage
 from oversight.changes._support import ChangeContext, ChangePorts, RulesFailure
 from oversight.events import Clock, EventPayload, StoredEvent, system_clock
 from oversight.graph import (
@@ -122,6 +123,10 @@ class ChangeManager:
     def rules_received(self, receipt: StoredEvent, *, generation: int | None = None) -> None:
         """Port for committed external facts, reviews and combined suite receipts."""
         self._ctx.assessment.received(receipt, generation=generation)
+
+    def usage_recorded(self, receipt: StoredEvent) -> None:
+        """Retain committed usage independently of rules assessment."""
+        record_usage(self._ctx.state, receipt)
 
     def merge_mode(self) -> MergeModeState:
         """The confirmed mode/revision for GET and future proposal capture."""

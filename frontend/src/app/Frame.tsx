@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import type { State } from "../state";
-import type { View, ViewAction } from "./view";
+import type { View, ViewAction, FocusTab } from "./view";
 import { panelOpen } from "./view";
 import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
@@ -15,7 +15,11 @@ import { BottomDock, StatusLine } from "./shell/Status";
 import { useShell } from "./shell/useShell";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
+import "./challenge/phone.css";
+import { usePhonePractice } from "./challenge/usePhonePractice";
+import { PracticeGraphStage } from "./challenge/PracticeGraphStage";
 export interface FrameProps {
+  practice?: { active: boolean; open: () => void; content: ReactNode; focus: FocusTab };
   state: State;
   view: View;
   files?: FileAccess;
@@ -48,7 +52,20 @@ export interface FrameProps {
 
 /** Fixed zones compose around one persistent graph instance. */
 export function Frame(props: FrameProps) {
-  const { state, view, onClosePanel } = props;
+  const { state, onClosePanel } = props;
+  const phone = usePhonePractice(props.practice?.active ?? false);
+  // Availability stays fixed throughout a replay session, so entry, exit and resizing
+  // keep the same graph owner. Only the practice composition knows about stacked overlays.
+  const Stage = props.practice ? PracticeGraphStage : GraphStage;
+  const view =
+    phone && props.practice
+      ? {
+          ...props.view,
+          ...props.practice.focus,
+          tabs: [props.practice.focus],
+          activeTab: "practice",
+        }
+      : props.view;
   const open = panelOpen(view);
   const task = useFunctionTask(state, view, props.onStartAgent !== undefined);
   const shell = useShell(open, onClosePanel);
@@ -61,8 +78,15 @@ export function Frame(props: FrameProps) {
       ? ""
       : `${shell.sidebar ?? ""}:${String(shell.dock)}:${String(shell.maximized)}:${String(task.expanded)}:${String(shell.layoutRevision)}`;
   return (
-    <div className="shell-frame flex h-full flex-col bg-background text-text">
-      <TopBar state={state} onOpenQueue={props.onOpenQueue} onOpenPalette={shell.openPalette} />
+    <div
+      className={`shell-frame flex h-full flex-col bg-background text-text ${phone ? "practice-phone" : ""}`}
+    >
+      <TopBar
+        state={state}
+        onOpenQueue={props.onOpenQueue}
+        onOpenPalette={shell.openPalette}
+        practice={props.practice}
+      />
       <div className="shell-workspace">
         <LeftRail
           watching={!open}
@@ -86,16 +110,19 @@ export function Frame(props: FrameProps) {
             {open && (
               <FocusPanel
                 {...props}
+                view={view}
+                practiceOnly={phone}
                 startAgentAction={task.action}
                 maximized={shell.maximized}
                 onMaximize={shell.toggleMaximize}
               />
             )}
-            <GraphStage
+            <Stage
               state={state}
               view={view}
-              onNodeTap={props.onNodeTap}
-              layoutKey={layoutKey}
+              onNodeTap={phone ? () => undefined : props.onNodeTap}
+              {...(props.practice ? { stacked: phone } : {})}
+              layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
             />
           </div>
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}
@@ -109,6 +136,15 @@ export function Frame(props: FrameProps) {
       <StatusLine {...props} dock={shell.dock} onToggleDock={shell.toggleDock} />
       <p className="narrow-notice" role="status">
         This window is too narrow. Widen it to at least 1280 px.
+        {props.practice && (
+          <button
+            type="button"
+            className="phone-practice-entry underline"
+            onClick={props.practice.open}
+          >
+            Try two-change practice
+          </button>
+        )}
       </p>
       {shell.shortcuts && (
         <ShortcutsSheet
@@ -117,18 +153,20 @@ export function Frame(props: FrameProps) {
           }}
         />
       )}
-      <PaletteMount
-        frame={props}
-        shell={shell}
-        onNode={props.onNodeTap}
-        onFocusTask={
-          props.onStartAgent && (!open || task.expanded)
-            ? () => {
-                requestAnimationFrame(() => task.inputRef.current?.focus());
-              }
-            : undefined
-        }
-      />
+      {!phone && (
+        <PaletteMount
+          frame={props}
+          shell={shell}
+          onNode={props.onNodeTap}
+          onFocusTask={
+            props.onStartAgent && (!open || task.expanded)
+              ? () => {
+                  requestAnimationFrame(() => task.inputRef.current?.focus());
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

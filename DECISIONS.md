@@ -1084,3 +1084,80 @@ was right, if probabilities pass the probe-first condition. Set the threshold fr
 examples, never the 20 patches. Spend stays inside the bench's US$20 once the Baseten tariff is
 configured. This gives the open model a distinct, bounded role and tests the probability before
 relying on it. PRODUCT and video wording will be proposed to the maintainer later.
+
+## 2026-10-28 — D7: Ask before repeating an unchanged failure
+
+The maintainer sets a guard for automatic revision rounds, whether from cross-review or rules
+follow-up. Before starting a round, the server compares the failure with the last one: the same
+test and the same assertion. If the agent's edits since then touched nothing that reaches that
+test, it starts no further round and the card asks the person.
+
+Use the graph's call edges: a changed node reaches the test when the test can call it, directly
+or through other nodes. Also use the test's executed nodes when recorded: touching one counts as
+reaching that test. The check is deterministic and makes no model call. If neither source can
+establish reachability or its absence, the card asks; it never starts another round on a guess.
+Keep this in Undecided candidates, outside the decided queue. Repeating an unchanged failure
+spends credits and the person's attention for nothing.
+
+## 2026-10-28 — D8: Attribute video numbers to the team's build process
+
+The maintainer allows the video's impact beat to use numbers from building Oversight with a
+hand-run version of the workflow it automates. Examples include rounds per front, full suites
+run per round, writer slots held, and collisions between fronts found only at landing or on the
+merged tree, such as a semantic test conflict found by the merged-tree `make check`.
+
+Label these as the team's build process, never as Oversight measurements. The note containing
+the numbers stays outside the repository. This supplies attributable process evidence without
+presenting development work as measured product behavior.
+
+## 2026-10-28 — D9: Behavior probes for methods wait for level 3
+
+The maintainer places method support for behavior diff at level 3, built only if that level is
+reached. Today the target filter accepts module-level functions only
+(`backend/src/oversight/changes/_behavior.py:79`); methods are explicitly not probed
+(`backend/src/oversight/changes/_behavior.py:76-77`). Keep the extension in Undecided candidates,
+outside the decided queue.
+
+Until then, measure the third proof, the share of green patches with an unrequested difference,
+on tasks that change functions only, and say so in the write-up. This keeps the measurement within
+what the current probe can compare instead of implying evidence about methods.
+
+## 2026-10-28 — D10: The D6 probe did not provide decision probabilities
+
+The paid probe required by D6 ran on purpose on 2026-10-28 at 16:45 ART, using
+`tools/probe_api.py`, with four calls per endpoint. Reasoning could not be switched off on either
+endpoint. Muse Spark on Meta still reported reasoning tokens with `reasoning_effort` set to
+`minimal`. Muse Spark Open on Baseten still reported them with `none` and with the chat template's
+thinking switch off.
+
+Both endpoints accepted a choice constrained by a strict JSON Schema enum: each returned HTTP
+200 and one of the three options. Neither supplied log probabilities over those options. Meta
+returned HTTP 400 because `logprobs` is not supported together with reasoning. Baseten returned
+an answer without log-probability content.
+
+Under D6's probe-first rule, the decision probability is not built because the required log
+probabilities were unavailable. What replaces the threshold remains a pending maintainer decision.
+## 2026-10-28 — A decisions inbox is the form of Needs you
+
+The maintainer decided that the decisions inbox is the form of item 9's Needs you state, not a
+new item or number. One place lists every decision waiting for the person across all changes
+and agents: the card's Yes/No/Unsure questions; checks that could not run; a failure or conflict
+while following main (item 8); a risky-area change (item 8); the lead's plan when it needs
+approval; and proposed examples before code (item 12).
+
+Each entry shows its change or agent, why it waits, its smallest example and its age, oldest
+blocking first. A header count shows how many decisions are pending. The person answers from
+the inbox, and the answer goes to its originating change. No is Request changes to its author,
+as today. If the person picks another agent, start a new task for that agent with the answer as
+its text. Unsure stays in the inbox. Questions come only from Oversight, never from the agent.
+
+Derive the inbox as a pure function over existing events in the frontend reducer, like the
+overlap in item 5, so it survives restarts and appears in replay, with no field beyond item 9's.
+One contract question remains open: an answer routed to another agent may need an optional link
+to come back as answered after a restart or in replay. Today a start has no reference back to a
+card, and answers persist only in the change's resolution. The maintainer has not answered this.
+
+Proof 2 ends on the inbox: this many agents for this many hours, and these were the only decisions
+the person had to make. Build the inbox together with item 9, keeping item numbers, anchors and
+the decided queue's order. It changes the look, so the maintainer sees a shot before merge.
+This gives the person one place to answer and makes the run's need for human decisions visible.

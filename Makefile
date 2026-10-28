@@ -10,7 +10,7 @@ NO_KEYS := env -u META_API_KEY -u BASETEN_API_KEY -u GIT_DIR -u GIT_WORK_TREE -u
 UV := $(NO_KEYS) uv run --frozen
 PNPM := $(NO_KEYS) pnpm -C frontend
 
-.PHONY: help install setup dev check check-ci check-fast check-python lint-python check-frontend \
+.PHONY: help install frontend-deps setup dev check check-ci check-fast check-python lint-python check-frontend \
 	lint-frontend contracts check-contracts check-contract-tuples check-secrets demo-repo-check replay shots smoke layout \
 	test-browser demo demo-setup-check demo-check e2e record record-level2 manifest notices check-notices audit
 
@@ -20,6 +20,11 @@ help: ## list the targets
 install: ## install the Python and Node dependencies from the lockfiles
 	uv sync --frozen
 	pnpm -C frontend install --frozen-lockfile
+
+# pnpm 12's default verifyDepsBeforeRun=install can race direct node consumers. This shared
+# prerequisite installs first; pnpm's repeat-install fast path skips an already current tree.
+frontend-deps: ## bring frontend/node_modules up to the frozen lockfile, from the local store only
+	$(PNPM) install --frozen-lockfile --offline
 
 setup: install ## install the dependencies and the git hooks: pre-commit, commit-msg and pre-push
 	pre-commit install --install-hooks
@@ -155,11 +160,12 @@ XDIST := -n $(WORKERS) --max-worker-restart=0
 # gates, alone and in one process, and the python group leaves it out. Each file is in one group.
 BOUNDARIES := tools/tests/test_eslint_boundaries.py
 
-# check runs Python, contracts, frontend, secrets and notices in parallel. --output-sync=target
-# prints each target's output in one piece when it ends, so groups do not interleave. Make lets the
-# jobs already started finish after a failure, starts no other, and exits 2: the first failure still
-# fails the whole target. Inside a group the steps run in order: lint before tests, so a lint
-# error ends the group before its tests start. CI has no gitleaks in its check job (the history is
+# check runs Python, contracts, frontend, secrets and notices in parallel. Readers of frontend
+# packages wait for the shared frontend-deps target, which installs once, offline and frozen.
+# --output-sync=target prints each target's output in one piece when it ends, so groups do not
+# interleave. Make lets the jobs already started finish after a failure, starts no other, and exits
+# 2: the first failure still fails the whole target. Inside a group lint runs before tests, so a
+# lint error ends the group before its tests start. CI has no gitleaks in its check job (the history is
 # scanned in a job of its own), so it runs check-ci, which is check without check-secrets. Both
 # derive from the one GATES list, so a new gate added there lands in both (check-ci only ever
 # filters out check-secrets).
@@ -177,7 +183,7 @@ check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries
 # Keep the bounded pytest command intact: its safety tests pin that invocation. Extend only
 # this gate's discovery, leaving the separately run frontend boundary tests in their own group.
 check-python: export PYTEST_ADDOPTS := $(PYTEST_ADDOPTS) -o 'testpaths=contracts/tests backend/tests tools/tests tools/eval/tests'
-check-python: lint-python
+check-python: lint-python frontend-deps
 	$(PYTEST_RUN) $(XDIST) --ignore=$(BOUNDARIES)
 
 lint-python:
@@ -190,7 +196,7 @@ check-frontend: lint-frontend
 	$(PNPM) test
 	$(PYTEST_RUN) $(BOUNDARIES)
 
-lint-frontend:
+lint-frontend: frontend-deps
 	$(PNPM) typecheck
 	$(PNPM) lint
 	$(PNPM) format:check
@@ -198,7 +204,7 @@ lint-frontend:
 contracts: ## regenerate contracts/generated: JSON Schema and TypeScript from the Pydantic models
 	$(UV) python contracts/generate.py
 
-check-contract-tuples:
+check-contract-tuples: frontend-deps
 	node contracts/check_tuples.cjs --base contracts/baselines/1.4.0.schema.json --schema contracts/generated/oversight.schema.json --types contracts/generated/contracts.ts --node-modules frontend/node_modules
 
 check-contracts: check-contract-tuples
@@ -218,7 +224,7 @@ demo-repo-check: ## run the demo repo's tests in a scratch environment outside t
 notices: ## generate third-party runtime notices offline from the installed frozen locks
 	$(NO_KEYS) UV_OFFLINE=true uv run --frozen --no-sync python tools/notices.py
 
-check-notices: ## enforce runtime license policy and detect stale third-party notices offline
+check-notices: frontend-deps ## enforce runtime license policy and detect stale third-party notices offline
 	$(NO_KEYS) UV_OFFLINE=true uv run --frozen --no-sync python tools/notices.py --check
 
 # Deliberately separate from check: these contact advisory services. Both run even if the

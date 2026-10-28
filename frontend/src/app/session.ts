@@ -26,7 +26,25 @@ export function startAppSession(
   const report = (error: unknown) => {
     if (active) onError(error);
   };
-  const transport = startAppTransport(stateStore, report, onOpen);
+  // Revoke write capability before stopping: even a queued obsolete callback is harmless.
+  const guarded: typeof stateStore = {
+    ...stateStore,
+    setState(next) {
+      if (active) stateStore.setState(next);
+    },
+    getState() {
+      const current = stateStore.getState();
+      return {
+        ...current,
+        applyEvents(events) {
+          if (active) current.applyEvents(events);
+        },
+      };
+    },
+  };
+  const transport = startAppTransport(guarded, report, () => {
+    if (active) onOpen?.();
+  });
   void transport.ready.catch(report);
   return () => {
     active = false;

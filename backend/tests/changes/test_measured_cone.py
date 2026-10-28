@@ -306,7 +306,8 @@ async def test_cancel_or_shared_timeout_cleans_checkout_and_keeps_incomplete_evi
 
 @pytest.mark.anyio
 async def test_published_measurements_reject_forged_projection_revision_and_execution(h):
-    from oversight.changes._facts import FactsEvidence, validate_change_facts
+    from oversight.changes._facts import FactsEvidence, build_change_facts, validate_change_facts
+    from oversight.changes._summary_capture import capture_summary
 
     await h.workspace.check_isolation()
     h.manager._ctx.measured_cone = True
@@ -322,10 +323,13 @@ async def test_published_measurements_reject_forged_projection_revision_and_exec
         rec.executions,
         rec.suite_runs,
         added_tests=tuple(facts.added_tests),
+        summary_evidence=capture_summary(rec, added_test_ids=()),
         measured=rec.measured_cones[target.revision],
         impact=impact,
     )
     validate_change_facts(facts, captured)
+    assert facts.summary == build_change_facts(replace(captured, measured=None)).summary
+    assert facts.summary[-1] == "Other results: not compared; cost unknown"
     assert facts.measured_cone and facts.measured_cone[0].outcome == "changed"
     for update in (
         {"measured_cone": None},

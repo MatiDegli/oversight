@@ -49,18 +49,30 @@ def assert_pinned_actions(text: str) -> None:
 
 def assert_install_matches_ci(text: str) -> None:
     build = block(block(text, "jobs"), "build")
-    installs = re.findall(r"^\s*- run: (.+)$", build, re.MULTILINE)
-    assert installs == ["make install"]
     ci_jobs = block((PAGES.parent / "ci.yml").read_text(), "jobs")
-    for job in ("check", "browser"):
-        commands = re.findall(r"^\s*- run: (.+)$", block(ci_jobs, job), re.MULTILINE)
-        assert commands[0] == installs[0]
+    for job in (build, block(ci_jobs, "check"), block(ci_jobs, "browser")):
+        steps = [
+            "\n".join(
+                line
+                for line in step.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+            )
+            for step in re.split(r"(?m)(?=^- )", block(job, "steps"))
+            if step.strip()
+        ]
+        commands = re.findall(r"^(?:- |  )run: (.+)$", "\n".join(steps), re.MULTILINE)
+        assert commands[0] == "make install"
+        assert [command for command in commands if "make install" in command] == ["make install"]
+        assert steps.count("- run: make install") == 1
+        install = steps.index("- run: make install")
+        assert steps[install + 1] == "- uses: ./.github/actions/setup-gitleaks"
 
 
 def assert_pages_policy(text: str) -> None:
     assert_pinned_actions(text)
-    # CI has repository-local actions; Pages deliberately permits only pinned remote actions.
-    assert not re.search(r"^\s*(?:-\s*)?uses:\s*\./", text, re.MULTILINE)
+    assert re.findall(r"^\s*(?:-\s*)?uses:\s*(\./\S+)", text, re.MULTILINE) == [
+        "./.github/actions/setup-gitleaks"
+    ]
     assert block(text, "on") == (
         "workflow_run:\n  workflows: [ci]\n  types: [completed]\n"
         "  branches: [main]\nworkflow_dispatch:"
@@ -154,6 +166,24 @@ def test_setup_actions_match_ci_and_pages_actions_keep_the_approved_pins() -> No
             "      - run: uv sync --frozen\n"
             "      - run: pnpm -C frontend fetch --frozen-lockfile\n"
             "      - run: pnpm -C frontend install --offline --frozen-lockfile\n",
+        ),
+        ("      - run: make install\n", "      - run: make install\n      - run: make install\n"),
+        ("      - run: make install\n", "      - run: echo setup\n      - run: make install\n"),
+        (
+            "      - uses: ./.github/actions/setup-gitleaks\n",
+            "",
+        ),
+        (
+            "      - run: make install\n      - uses: ./.github/actions/setup-gitleaks\n",
+            "      - uses: ./.github/actions/setup-gitleaks\n      - run: make install\n",
+        ),
+        (
+            "      - uses: ./.github/actions/setup-gitleaks\n",
+            "      - uses: ./.github/actions/setup-gitleaks\n        if: false\n",
+        ),
+        (
+            "      - uses: ./.github/actions/setup-gitleaks\n",
+            "      - uses: ./.github/actions/setup-gitleaks\n        continue-on-error: true\n",
         ),
         ("      contents: read", "      contents: read\n      id-token: write"),
     ],

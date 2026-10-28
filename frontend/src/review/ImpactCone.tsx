@@ -45,73 +45,84 @@ export function ImpactConeCard({
   return (
     <section
       aria-label="Possibly affected"
-      className="overlay-fill min-h-0 overflow-auto rounded-card border border-card-border p-(--spacing-lg) text-(length:--data-size)"
+      className="overlay-fill flex min-h-0 flex-col overflow-hidden rounded-card border border-card-border p-(--spacing-lg) text-(length:--data-size)"
     >
-      <h2 className="text-(length:--title-size) font-bold">Possibly affected</h2>
-      {cone.entries.length === 0 && (
-        <p className="mt-(--spacing-sm) text-muted">No functions in this cone within its bounds.</p>
-      )}
-      {[...groups].map(([distance, entries]) => (
-        <section
-          key={distance}
-          aria-label={`Distance ${String(distance)}`}
-          className="mt-(--spacing-lg)"
-        >
-          <h3 className="mb-(--spacing-xs) text-muted">
-            Distance {distance} · {entries.length} {entries.length === 1 ? "function" : "functions"}
-          </h3>
-          <ul className="flex flex-col gap-(--spacing-xs)">
-            {entries.map((entry) => {
-              const name = names.get(entry.node_id) ?? entry.node_id;
-              const away = outOfView?.has(entry.node_id) ?? false;
-              const note = (
-                <span className="flex items-center gap-(--spacing-xs) text-muted">
-                  <ScanEye aria-hidden="true" className="size-4 shrink-0" />
-                  Out of view
-                </span>
-              );
-              return (
-                <li
-                  key={entry.node_id}
-                  tabIndex={-1}
-                  className={`flex items-center gap-(--spacing-sm) ${focusRing}`}
-                >
-                  <DistanceBadge distance={distance} />
-                  {away && onReveal ? (
-                    <button
-                      type="button"
-                      className={`min-w-0 cursor-pointer break-words text-left hover:underline ${focusRing}`}
-                      title={entry.node_id}
-                      onClick={(event) => {
-                        // The button becomes plain text once revealed. Keep its focus on the
-                        // stable row, without focusing anything on unrelated visibility updates.
-                        if (document.activeElement === event.currentTarget)
-                          event.currentTarget.parentElement?.focus({ preventScroll: true });
-                        onReveal(entry.node_id);
-                      }}
-                    >
-                      {name}
-                      {note}
-                    </button>
-                  ) : (
-                    <span className="min-w-0 break-words" title={entry.node_id}>
-                      {name}
-                      {away && note}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
-      {cone.omitted_by_depth > 0 && (
-        <p className="mt-(--spacing-sm) text-muted">+{cone.omitted_by_depth} omitted by depth</p>
-      )}
-      {cone.omitted_by_limit > 0 && (
-        <p className="mt-(--spacing-sm) text-muted">
-          +{cone.omitted_by_limit} omitted by the node limit
-        </p>
+      <h2 className="shrink-0 text-(length:--title-size) font-bold">Possibly affected</h2>
+      <div className="min-h-0 overflow-auto">
+        {cone.entries.length === 0 && (
+          <p className="mt-(--spacing-sm) text-muted">
+            No functions in this cone within its bounds.
+          </p>
+        )}
+        {[...groups].map(([distance, entries]) => (
+          <section
+            key={distance}
+            aria-label={`Distance ${String(distance)}`}
+            className="mt-(--spacing-lg)"
+          >
+            <h3 className="mb-(--spacing-xs) text-muted">
+              Distance {distance} · {entries.length}{" "}
+              {entries.length === 1 ? "function" : "functions"}
+            </h3>
+            <ul className="flex flex-col gap-(--spacing-xs)">
+              {entries.map((entry) => {
+                const name = names.get(entry.node_id) ?? entry.node_id;
+                const away = outOfView?.has(entry.node_id) ?? false;
+                const note = (
+                  <span className="flex items-center gap-(--spacing-xs) text-muted">
+                    <ScanEye aria-hidden="true" className="size-4 shrink-0" />
+                    Out of view
+                  </span>
+                );
+                return (
+                  <li
+                    key={entry.node_id}
+                    tabIndex={-1}
+                    className={`flex items-center gap-(--spacing-sm) ${focusRing}`}
+                  >
+                    <DistanceBadge distance={distance} />
+                    {away && onReveal ? (
+                      <button
+                        type="button"
+                        className={`min-w-0 cursor-pointer break-words text-left hover:underline ${focusRing}`}
+                        title={entry.node_id}
+                        onClick={(event) => {
+                          // The button becomes plain text once revealed. Keep its focus on the
+                          // stable row, without focusing anything on unrelated visibility updates.
+                          if (document.activeElement === event.currentTarget)
+                            event.currentTarget.parentElement?.focus({ preventScroll: true });
+                          onReveal(entry.node_id);
+                        }}
+                      >
+                        {name}
+                        {note}
+                      </button>
+                    ) : (
+                      <span className="min-w-0 break-words" title={entry.node_id}>
+                        {name}
+                        {away && note}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+      {(cone.omitted_by_depth > 0 || cone.omitted_by_limit > 0) && (
+        <div className="shrink-0">
+          {cone.omitted_by_depth > 0 && (
+            <p className="mt-(--spacing-sm) text-muted">
+              +{cone.omitted_by_depth} omitted by depth
+            </p>
+          )}
+          {cone.omitted_by_limit > 0 && (
+            <p className="mt-(--spacing-sm) text-muted">
+              +{cone.omitted_by_limit} omitted by the node limit
+            </p>
+          )}
+        </div>
       )}
     </section>
   );

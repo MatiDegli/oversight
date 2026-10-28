@@ -80,12 +80,13 @@ export function GraphStage({
       {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
               review) top left, the legend bottom left, the zoom controls bottom right. */}
       <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
-        <div className="flex min-h-0 items-start justify-between gap-(--spacing-md)">
+        {/* Stretch the height constraint through to the card; keep the bottom row reserved. */}
+        <div className="flex min-h-0 items-stretch justify-between gap-(--spacing-md)">
           <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
             {cone ? (
               <div
                 ref={coneCardRef}
-                className="pointer-events-auto min-h-0 w-(--cone-card-width) shrink-0 overflow-auto"
+                className="pointer-events-auto flex min-h-0 w-(--cone-card-width) flex-col"
               >
                 <ImpactConeCard
                   cone={cone}
@@ -119,7 +120,7 @@ export function GraphStage({
         </div>
         {/* The start camera uses the space between overlays, measured after fonts load. */}
         <div data-graph-clear-area ref={startAreaRef} className="min-h-0 flex-1" />
-        <div className="flex items-end justify-between gap-(--spacing-lg)">
+        <div className="flex shrink-0 items-end justify-between gap-(--spacing-lg)">
           <div className="pointer-events-auto min-w-0">
             <Legend state={state} />
           </div>

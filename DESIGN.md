@@ -536,6 +536,13 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   `min(880px, viewport width - 112px - 560px)`: 823px at 1495px, 768px at 1440px and 608px at
   1280px. Overlays cover their part of the work area without changing these widths. Below 1280px
   a notice asks the person to widen the window. Type and radii do not shrink to fit.
+  The two-change practice is the exception below 1280px (maintainer decision, 2026-10-28):
+  it uses one scrolling column with 16px side gutters, the practice panel first and the same
+  mounted graph below in a bounded section, framed on the current change. The impact cone is
+  visible below the graph at reveal. Touch targets are at least 44px; tokens, type and radii
+  stay unchanged. The real-run label and provenance date remain visible in a sticky status
+  line. Read-only inspection tabs are omitted with a short note. The rest of the product
+  keeps the widen-window notice; layouts at 1280px and above are unchanged.
 - **Maximize:** an explicit focus-panel control fills the work area and hides the graph behind a
   restore-graph button. Restoring returns to the same shell; maximize is not used in the video.
 - **Keyboard:** Ctrl K jumps to functions and files and runs commands; Ctrl B toggles the sidebar;
