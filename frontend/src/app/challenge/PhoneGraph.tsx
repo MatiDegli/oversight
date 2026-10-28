@@ -12,11 +12,16 @@ export function AgentLetter({ slot }: { slot: string }) {
 }
 export function AgentLine({ practice, entry }: { practice: Practice; entry: PracticeCase }) {
   const slot = caseSlot(practice, entry);
+  const agent = practice.cut.agents[entry.proposal.agent_id];
+  const modelLabel =
+    practice.cut.run?.models.find((model) => model.id === agent?.model)?.label ??
+    agent?.model ??
+    "Model unavailable";
   return (
     <div className="pp-agent" data-slot={slot}>
       <AgentLetter slot={slot} />
       <strong>Agent {slot}</strong>
-      <span>· {slot === "B" ? "Muse Spark Open" : "Muse Spark"}</span>
+      <span>· {modelLabel}</span>
     </div>
   );
 }
@@ -55,7 +60,10 @@ function Piece({
     entry.proposal.impact.entries.filter((node) => node.distance === distance).length;
   const helper = calledHelper(practice, entry);
   return (
-    <div className={`pp-piece ${helper ? "pp-call" : "pp-cone"} ${compact ? "is-compact" : ""}`}>
+    <div
+      className={`pp-piece ${helper ? "pp-call" : "pp-cone"} ${compact ? "is-compact" : ""}`}
+      data-slot={caseSlot(practice, entry)}
+    >
       <svg
         className={`pp-taxi ${helper && !merged ? "is-pending" : ""}`}
         viewBox={compact ? "0 0 172 138" : undefined}

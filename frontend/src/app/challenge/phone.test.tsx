@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { PhonePractice } from "./PhonePractice";
+import { AgentLine } from "./PhoneGraph";
 import { freshAttempt } from "./PracticePanel";
 import { manifest, validateManifest } from "./manifest";
 import { recording } from "./recording.fixture";
@@ -14,6 +15,59 @@ const actions = {
   onRestart: vi.fn(),
   onExit: vi.fn(),
 };
+it.each([
+  ["muse-spark", "Recorded contributor"],
+  ["unlisted-model", "unlisted-model"],
+])("labels agent B from its recorded model %s", (model, label) => {
+  const events = structuredClone(practice.events);
+  for (const event of events) {
+    if (event.type === "agent.status" && event.payload.slot === "B") event.payload.model = model;
+    if (event.type === "run.started") {
+      const fallback = event.payload.models.find((entry) => entry.id === "muse-spark");
+      if (!fallback) throw new Error("Missing fallback model");
+      fallback.label = "Recorded contributor";
+    }
+  }
+  const fallback = validateManifest(manifest, {
+    ...recording,
+    text: events.map((event) => JSON.stringify(event)).join("\n"),
+  });
+  const entry = fallback.cases[0];
+  if (!entry) throw new Error("Missing case");
+  const html = renderToStaticMarkup(<AgentLine practice={fallback} entry={entry} />);
+  expect(html).toContain("Agent B");
+  expect(html).toContain(`· ${label}`);
+  expect(html).not.toContain("Muse Spark Open");
+});
+it.each([
+  [0, "Both were approved in the recording."],
+  [1, "1 approved and 1 rejected in the recording."],
+  [2, "Both were rejected in the recording."],
+])("derives the finish description with %i recorded rejections", (rejections, description) => {
+  const candidate = structuredClone(manifest);
+  const events = structuredClone(practice.events);
+  for (const entry of candidate.cases.slice(0, rejections)) {
+    entry.reference = "Reject";
+    for (const event of events)
+      if (event.type === "change.resolved" && event.payload.change_id === entry.changeId) {
+        event.payload.decision = "rejected";
+        event.payload.merge = null;
+        event.payload.merge_commit = null;
+      }
+  }
+  const changed = validateManifest(candidate, {
+    ...recording,
+    text: events.map((event) => JSON.stringify(event)).join("\n"),
+  });
+  const html = renderToStaticMarkup(
+    <PhonePractice
+      {...actions}
+      practice={changed}
+      attempt={{ ...freshAttempt(), started: true, revealed: true, finished: true }}
+    />,
+  );
+  expect(html).toContain(description);
+});
 it.each([0, 1])(
   "starts decision %i with the verbatim agent claim, facts and all code collapsed",
   (index) => {

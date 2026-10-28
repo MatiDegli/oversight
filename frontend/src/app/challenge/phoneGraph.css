@@ -132,12 +132,12 @@
     stroke: none;
   }
   .pp-taxi.is-pending {
-    stroke: var(--agent-b);
+    stroke: var(--pp-agent);
     stroke-dasharray: 6 4;
     stroke-width: 2;
   }
   .pp-taxi.is-pending .pp-arrow {
-    fill: var(--agent-b);
+    fill: var(--pp-agent);
     stroke-dasharray: none;
   }
   .pp-combined {

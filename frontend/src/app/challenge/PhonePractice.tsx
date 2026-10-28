@@ -101,6 +101,15 @@ function RecordedDecisions({ practice, attempt, onFinish }: PanelProps & { onFin
   );
 }
 function Finish({ practice, attempt, onRestart, onExit }: PanelProps) {
+  const approved = practice.cases.filter((entry) => entry.reference === "Approve").length;
+  const rejected = practice.cases.length - approved;
+  const all = practice.cases.length === 2 ? "Both" : "All";
+  const recordedDecisions =
+    rejected === 0
+      ? `${all} were approved in the recording.`
+      : approved === 0
+        ? `${all} were rejected in the recording.`
+        : `${String(approved)} approved and ${String(rejected)} rejected in the recording.`;
   return (
     <>
       <main className="pp-main pp-finish">
@@ -112,7 +121,7 @@ function Finish({ practice, attempt, onRestart, onExit }: PanelProps) {
           </span>{" "}
           decisions matched
         </p>
-        <p className="pp-score-description">Both were approved in the recording.</p>
+        <p className="pp-score-description">{recordedDecisions}</p>
         <div className="pp-recap">
           {practice.cases.map((entry) => (
             <div key={entry.changeId}>
