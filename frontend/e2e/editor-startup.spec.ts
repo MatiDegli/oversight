@@ -9,6 +9,7 @@ import { interceptCommands, tapNode } from "./level2-support";
 import {
   editorAssets,
   expectNoEditorBeforeGraph,
+  holdPythonGrammar,
   recordEditorStartup,
 } from "./editor-startup-support";
 
@@ -43,6 +44,7 @@ for (const first of ["file", "live diff", "review"] as const) {
     page.on("console", (message) => {
       if (message.type() === "error") problems.push(message.text());
     });
+    const loadPython = await holdPythonGrammar(page);
     await interceptCommands(page);
     await page.addInitScript(recordEditorStartup);
     await page.addInitScript(installHolds, [holds.live, holds.decisions]);
@@ -80,6 +82,7 @@ for (const first of ["file", "live diff", "review"] as const) {
         first === "file" ? "File view" : first === "live diff" ? "Live diff panel" : "Review panel",
     });
     await expect(panel.locator(".monaco-editor .view-lines").last()).toBeVisible();
+    await loadPython();
     await expectPython(panel);
     if (first === "review") {
       await expect(panel.getByLabel("Editable review file")).toHaveAttribute("data-state", "clean");

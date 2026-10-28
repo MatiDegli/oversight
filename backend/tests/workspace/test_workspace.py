@@ -8,6 +8,7 @@ import stat
 import threading
 import tomllib
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -65,10 +66,11 @@ async def test_reset_initial_commit_is_identical_across_roots(
     assert commits[0] == commits[1]
     first = make_workspace("one").main.root
     log = await git_out(first, "log", "--format=%an <%ae>|%cn <%ce>|%aI|%cI|%s")
-    assert log.splitlines() == [
-        f"Oversight <oversight@oversight.invalid>|Oversight <oversight@oversight.invalid>|"
-        f"{INITIAL_DATE}|{INITIAL_DATE}|Initial workspace"
-    ]
+    author, committer, authored, committed, message = log.strip().split("|")
+    assert author == committer == "Oversight <oversight@oversight.invalid>"
+    assert datetime.fromisoformat(authored) == datetime.fromisoformat(INITIAL_DATE)
+    assert datetime.fromisoformat(committed) == datetime.fromisoformat(INITIAL_DATE)
+    assert message == "Initial workspace"
     assert (await git_out(first, "rev-parse", "HEAD")).strip() == commits[0]
     assert (await git_out(first, "branch", "--show-current")).strip() == "main"
     assert (await git_out(first, "status", "--porcelain")).strip() == ""

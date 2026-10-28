@@ -1,6 +1,6 @@
 """Bound imported helper analysis and distinguish absent helpers from opaque calls."""
 
-import time
+import sys
 
 import pytest
 
@@ -75,19 +75,36 @@ def test_validation_does_not_replace_an_unrelated_asserting_helper() -> None:
 
 
 def test_twenty_thousand_imported_calls_over_four_hundred_files_are_bounded() -> None:
-    # Guards the quadratic all-files import scan only. Individual deadline
-    # checks have isolated patched-clock tests below; this cannot prove them.
+    # Count executed Python lines in helper analysis, including comprehension frames.
+    # A per-call scan of 400 files exceeds this linear budget regardless of CPU speed.
+    from oversight.changes import _shortcuts_helpers as helpers
+
     calls = "    check()\n" * 20_000
-    old = "def check():\n    assert f() == 3\ndef test_f():\n" + calls
-    new = "from helpers import check\ndef test_f():\n" + calls
-    changes = [("tests/test_calc.py", old, new)] + [
-        (f"pkg/module_{i}.py", "", "VALUE = 1\n") for i in range(399)
-    ]
-    started = time.monotonic()
-    result = detect_shortcuts(changes, timeout=2)
-    elapsed = time.monotonic() - started
-    assert result.status == "unknown" and "timeout" in " ".join(result.reasons)
-    assert elapsed < 3, elapsed
+    source = Source("from helpers import check\ndef test_f():\n" + calls)
+    sources = {"tests/test_calc.py": source} | {
+        f"pkg/module_{i}.py": Source("VALUE = 1\n") for i in range(399)
+    }
+    work = 0
+
+    def trace(frame, event, arg):
+        nonlocal work
+        if frame.f_code.co_filename != helpers.__file__:
+            return None
+        if event == "line":
+            work += 1
+        return trace
+
+    previous = sys.gettrace()
+    try:
+        sys.settrace(trace)
+        index = _module_index(sources, deadline=float("inf"))
+        visible, opaque = _imported_calls(
+            source.tests["test_f"], source, {"check": "check"}, "tests/test_calc.py", index
+        )
+    finally:
+        sys.settrace(previous)
+    assert not visible and opaque == {"check": 20_000}
+    assert work <= 100 * 20_000 + 20 * 400, work
 
 
 def test_module_index_is_built_once_per_analysis(monkeypatch: pytest.MonkeyPatch) -> None:

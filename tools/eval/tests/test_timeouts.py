@@ -20,6 +20,7 @@ async def test_setup_times_out_before_start_when_replay_stalls(pings, tmp_path, 
     factory = Scripts()
     out = tmp_path / "results" / "r.jsonl"
     async with live_server(live_settings(tmp_path), factory) as server:
+        initial = list(server.store._events)
         original = server.app.middleware_stack
         ping_count = 0
 
@@ -35,8 +36,9 @@ async def test_setup_times_out_before_start_when_replay_stalls(pings, tmp_path, 
                     "headers": [(b"content-type", b"text/event-stream")],
                 }
             )
-            # Preflight receives its initial snapshot; setup never gets its deltas.
-            for stored in server.store._events[:2]:
+            # Replay all startup events, including the optional isolation notice.
+            # Only setup deltas stall; preflight must finish on every host.
+            for stored in initial:
                 body = f"id: {stored.seq}\ndata: {stored.envelope}\n\n".encode()
                 await send({"type": "http.response.body", "body": body, "more_body": True})
             while True:
@@ -69,9 +71,9 @@ async def test_setup_times_out_before_start_when_replay_stalls(pings, tmp_path, 
         assert factory.calls == 0
         assert not out.read_text()
         assert json.loads((out.parent / "ledger.json").read_text())["records"] == []
-        assert len(server.events()) > 2
+        assert len(server.events()) > len(initial)
         raw_events = out.parent / f"events-{server.store.run_id}.jsonl"
-        assert len(raw_events.read_text().splitlines()) == 2
+        assert len(raw_events.read_text().splitlines()) == len(initial)
         assert bool(ping_count) == pings
 
 

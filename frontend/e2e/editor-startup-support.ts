@@ -18,6 +18,27 @@ const deferredEntry = manifest["src/editor/implementation.ts"]?.file;
 if (!deferredEntry) throw new Error("The built site must have one deferred editor entry");
 export const implementation = deferredEntry;
 
+/** Monaco can paint plain text while its separate, lazy Python grammar is still cold. */
+export async function holdPythonGrammar(page: Page) {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/python-.*\.js$/, async (route) => {
+    await gate;
+    await route.continue();
+  });
+  // Release on an earlier assertion failure so routing cannot strand teardown.
+  page.once("close", release);
+  return async () => {
+    const loaded = page.waitForResponse(/\/python-.*\.js$/, { timeout: 60_000 });
+    release();
+    const response = await loaded;
+    expect(response.ok()).toBe(true);
+    expect(await response.finished()).toBeNull();
+  };
+}
+
 declare global {
   interface Window {
     editorStartup: {

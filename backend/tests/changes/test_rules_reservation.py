@@ -75,6 +75,27 @@ async def start(h, armed):
     return armed[1][0]
 
 
+async def test_completed_decision_restores_before_done_callbacks(h: Harness, armed):
+    # A completed task can be awaited without yielding to its queued done-callbacks.
+    # Eager execution makes that ordering deterministic, without scheduler sleeps.
+    record = rec(h)
+    record.fallback, record.state = "ready", "deciding"
+
+    async def completed():
+        pass
+
+    loop = asyncio.get_running_loop()
+    factory = loop.get_task_factory()
+    loop.set_task_factory(asyncio.eager_task_factory)
+    try:
+        task = ChangeManager._decide(h.manager, record, completed())
+        assert task.done()
+        await task
+        assert record.state == "ready"
+    finally:
+        loop.set_task_factory(factory)
+
+
 async def test_atomic_reservation_declines_restores_and_never_retries(h: Harness, armed):
     before = await h.main_head()
     calls = len(h.workspace.calls)
