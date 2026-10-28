@@ -96,6 +96,7 @@ class FieldRuntime implements FieldController {
   private frame = 0;
   private draws = 0;
   private fresh = false;
+  private paintedAt = 0;
   private theme = getActiveTheme();
   private look = lampLook(this.theme);
   private readonly transition = new FieldTransition({
@@ -153,7 +154,8 @@ class FieldRuntime implements FieldController {
       !this.renderer.lost() &&
       !document.hidden &&
       !this.reducedMotion &&
-      (this.transition.active(performance.now()) ||
+      // A draw can cross the deadline: keep a frame until the final scene has been painted.
+      (this.transition.active(this.paintedAt) ||
         shouldAnimate({
           reducedMotion: false,
           hidden: false,
@@ -203,6 +205,7 @@ class FieldRuntime implements FieldController {
       );
       this.renderer.draw(this.grid, this.look, this.masks);
       this.markerLayer.draw(lights, boxes, this.masks, width, height);
+      this.paintedAt = now;
       this.draws += 1;
     } catch (error) {
       console.error("The dot field stopped drawing", error);

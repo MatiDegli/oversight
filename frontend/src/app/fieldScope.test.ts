@@ -41,7 +41,7 @@ describe("the field's scope follows what the person has open", () => {
     expect(fieldInput(through(21), reviewing)).toEqual({ mode: "watch", lights: [] });
   });
 
-  it("lights the review's change and its cone, and the live diff's editing node", () => {
+  it("keeps the current agent signal in review and live diff", () => {
     const review = fieldInput(through(20), reviewing);
     expect(review.mode).toBe("review");
     expect(review.lights.map((light) => light.id)).toContain("shop.pricing:compute_price");
@@ -53,7 +53,7 @@ describe("the field's scope follows what the person has open", () => {
 });
 
 it.each([14, 20])(
-  "lights the current live cone at event %s, ignoring any earlier proposal",
+  "keeps the current live cone on the graph without emitting light at event %s",
   (seq) => {
     const state = through(seq);
     const change = state.changes["change-1"];
@@ -87,6 +87,46 @@ it.each([14, 20])(
     expect(graphView.cone).toBeNull();
     expect(graphView.liveCone?.entries).toEqual([{ node_id: current.id, distance: 1 }]);
     expect(graphView.litIds).toContain(current.id);
-    expect(lights).toEqual([{ id: current.id, source: "work-light", weight: 0.48, pulses: false }]);
+    expect(lights).toEqual([]);
+  },
+);
+
+it.each([initialView, watching, reviewing, reading])(
+  "emits only the current and last read per agent regardless of the open view %j",
+  (view) => {
+    const state = through(13);
+    const a = state.agents["agent-1"];
+    if (!a) throw new Error("Missing agent");
+    state.agents["agent-2"] = { ...a, agent_id: "agent-2", slot: "B", change_id: "change-2" };
+    state.focus["agent-1"] = {
+      agent_id: "agent-1",
+      mode: "edit",
+      ranges: [],
+      node_ids: ["current-a", "extra-a"],
+    };
+    state.focus["agent-2"] = {
+      agent_id: "agent-2",
+      mode: "edit",
+      ranges: [],
+      node_ids: ["current-b", "extra-b"],
+    };
+    state.lastReads = { "agent-1": "last-a", "agent-2": "last-b" };
+    const lights = fieldInput(state, view, {
+      seeds: ["current-a"],
+      entries: [{ node_id: "cone", distance: 1 }],
+      max_depth: 2,
+      max_nodes: 10,
+      omitted_by_depth: 0,
+      omitted_by_limit: 0,
+      edges_followed: "exact",
+      tests_reaching: 0,
+    }).lights;
+    expect(lights.map(({ id, source, weight }) => [id, source, weight])).toEqual([
+      ["current-a", "agent-a", 1],
+      ["last-a", "agent-a", 0.4],
+      ["current-b", "agent-b", 1],
+      ["last-b", "agent-b", 0.4],
+    ]);
+    expect(lights.every((light) => light.steady)).toBe(true);
   },
 );

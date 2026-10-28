@@ -36,13 +36,13 @@ export interface LightProfile {
 }
 
 type ProfileKey = "watch" | "live-diff" | "file-view" | "review";
-type ProfileTheme = {
-  [K in ProfileKey as `${K}-light-near` | `${K}-light-far`]: string;
-} & { [K in ProfileKey as `${K}-light-gain`]: number };
+type ProfileTheme = { [K in ProfileKey as `${K}-light-gain`]: number };
 
 /** The theme values the field reads; the full theme satisfies it. */
 export interface FieldTheme extends MotionTheme, ProfileTheme, Record<LightSource, string> {
   "lamp-off": string;
+  "signal-light-near": string;
+  "signal-light-far": string;
   "dot-cell-size": string;
   "dot-level-count": number;
   "dot-dither-size": number;
@@ -100,8 +100,8 @@ export function fieldConfig(theme: FieldTheme, mode: FieldMode): FieldConfig {
     limit: theme["light-source-limit"],
     lampOff: parseHex(theme["lamp-off"]),
     profile: {
-      near: px(theme[`${key}-light-near`]),
-      far: px(theme[`${key}-light-far`]),
+      near: px(theme["signal-light-near"]),
+      far: px(theme["signal-light-far"]),
       gain: theme[`${key}-light-gain`],
     },
     motion: motionOf(theme),
@@ -451,7 +451,14 @@ function quantize(
 
 /** R4 uses the same physical spread in every view; only the graph camera scales it. */
 export function signalConfig(config: FieldConfig, zoom: number): FieldConfig {
-  return { ...config, profile: { near: 26 * zoom, far: 72 * zoom, gain: config.profile.gain } };
+  return {
+    ...config,
+    profile: {
+      near: config.profile.near * zoom,
+      far: config.profile.far * zoom,
+      gain: config.profile.gain,
+    },
+  };
 }
 
 /** Box falloff is unchanged while the clock moves; keep exact doubles, bounded to visible sources. */
