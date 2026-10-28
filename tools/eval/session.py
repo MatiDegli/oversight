@@ -75,9 +75,9 @@ def profile(run: RunStarted, model: str, reasoning: str | None = "__profile__") 
 
 
 def allowance(model: str, tariff: Tariff | None) -> float:
-    rates = tariff or (
-        Tariff(input=1, output=2) if model == "muse-spark-open" else Tariff(input=0.1, output=0.2)
-    )
+    if model == "muse-spark-open" and tariff is None:
+        raise BenchError("Baseten requires an explicitly approved input/output tariff")
+    rates = tariff or Tariff(input=0.1, output=0.2)
     # 36 turns is the loop's separate bound, not its 30-tool-step allowance.
     return max(36 * (16000 * rates.input + 4096 * rates.output) / 1e6, 0.0870912)
 

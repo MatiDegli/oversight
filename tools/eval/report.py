@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 
-from tools.eval.grade import Count, Result
+from tools.eval.grade import Count
 from tools.eval.ledger import Ledger, Record
 
 
@@ -10,17 +10,19 @@ def total(values: list) -> Count | float:
     return "unknown" if "unknown" in values else sum(values)
 
 
-def metrics(rows: list[Result]) -> dict:
+def metrics(records: list[Record]) -> dict:
+    rows = [r.result for r in records if r.result]
+    incomplete = any(r.unknown or r.status != "finished" for r in records)
     return {
         "attempts": len(rows),
         "tasks_solved": sum(r.outcome == "solved" for r in rows),
-        "turns": sum(r.turns for r in rows),
+        "turns": total([r.turns for r in rows]),
         "steps": sum(r.steps for r in rows),
         "tokens": {
-            "input": total([r.tokens.input for r in rows]),
-            "output": total([r.tokens.output for r in rows]),
+            "input": "unknown" if incomplete else total([r.tokens.input for r in rows]),
+            "output": "unknown" if incomplete else total([r.tokens.output for r in rows]),
         },
-        "cost_usd": total([r.cost_usd for r in rows]),
+        "cost_usd": "unknown" if incomplete else total([r.cost_usd for r in rows]),
         "wall_time_s": sum(r.duration_s for r in rows),
     }
 
@@ -33,12 +35,10 @@ def report(ledger: Ledger) -> dict:
     for name, records in groups.items():
         rows = [r.result for r in records if r.result]
         repetitions = {
-            str(rep): metrics([r for r in rows if r.repetition == rep])
-            for rep in sorted({r.repetition for r in rows})
+            str(rep): metrics([r for r in records if r.repetition == rep])
+            for rep in sorted({r.repetition for r in records})
         }
-        aggregate = metrics(rows)
-        if any(r.unknown or r.status != "finished" for r in records):
-            aggregate["cost_usd"] = "unknown"
+        aggregate = metrics(records)
         arms[name] = {
             "aggregate": aggregate,
             "repetitions": repetitions,

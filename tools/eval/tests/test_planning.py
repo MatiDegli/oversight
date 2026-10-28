@@ -153,9 +153,13 @@ def test_report_keeps_repetitions_and_propagates_unknown_costs_and_tokens(tmp_pa
         assert arm["aggregate"]["tasks_solved"] == 1
         assert arm["aggregate"]["turns"] == 6 and arm["aggregate"]["wall_time_s"] == 4
         assert arm["aggregate"]["cost_usd"] == "unknown"
-        assert arm["aggregate"]["tokens"] == {"input": "unknown", "output": 40}
+        assert arm["aggregate"]["tokens"] == {"input": "unknown", "output": "unknown"}
         assert arm["repetitions"]["1"]["tasks_solved"] == 1
+        assert arm["repetitions"]["1"]["cost_usd"] == 0.1
+        assert arm["repetitions"]["1"]["tokens"] == {"input": 100, "output": 20}
         assert arm["repetitions"]["2"]["tasks_solved"] == 0
+        assert arm["repetitions"]["2"]["cost_usd"] == "unknown"
+        assert arm["repetitions"]["2"]["tokens"] == {"input": "unknown", "output": "unknown"}
         assert arm["mean_tasks_solved"] == 0.5 and len(arm["attempts"]) == 2
         assert output["cost_usd"] == "unknown"
     finally:

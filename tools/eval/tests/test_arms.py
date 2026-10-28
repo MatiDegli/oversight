@@ -120,6 +120,7 @@ def test_version_one_migration_keeps_every_charge_reservation_and_unknown(
         assert record.status == status and record.unknown == unknown
         assert record.arm_id == "fake" and record.repetition == 1
         assert record.result is not None and record.result.steps == 2
+        assert record.result.turns == "unknown"
         if unknown or status == "reserved":
             with pytest.raises(BenchError, match=r"unknown cost|unsettled reservation"):
                 ledger.ready()
@@ -130,6 +131,13 @@ def test_version_one_migration_keeps_every_charge_reservation_and_unknown(
         ledger.close()
     ledger = Ledger(out, 1, None)
     assert ledger.state.records[0].attempt_id == identity
+    migrated = Result.model_validate_json(out.read_text().strip())
+    assert migrated.turns == "unknown"
+    from tools.eval.report import report
+
+    arm = report(ledger)["arms"][record.arm_id]
+    assert arm["aggregate"]["turns"] == "unknown"
+    assert arm["repetitions"]["1"]["turns"] == "unknown"
     ledger.close()
 
 

@@ -22,7 +22,13 @@ def environment(arm: Arm, runtime: Path, port: int, cap: float) -> dict[str, str
         key: value
         for key, value in os.environ.items()
         if not key.startswith(("GIT_", "OVERSIGHT_"))
-        and key not in {"META_API_KEY", "BASETEN_API_KEY"}
+        and key
+        not in {
+            "META_API_KEY",
+            "BASETEN_API_KEY",
+            "MUSE_SPARK_INPUT_USD_PER_M",
+            "MUSE_SPARK_OUTPUT_USD_PER_M",
+        }
     }
     env.update(
         OVERSIGHT_HOST="127.0.0.1",
@@ -78,10 +84,10 @@ async def dedicated(
 ) -> AsyncIterator[str]:
     if arm.profile == "fake" and fake_script is None:
         raise BenchError("fake runs require --fake-script")
-    with socket.socket() as sock:
+    # Keep the bound socket open until the child exits; no other process can take its port.
+    with socket.socket() as sock, runtime_directory(arm, directory) as scratch:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    with runtime_directory(arm, directory) as scratch:
         env = environment(arm, scratch / ".runtime", port, cap)
         if fake_script:
             env["OVERSIGHT_FAKE_SCRIPT"] = str(await asyncio.to_thread(fake_script.resolve))
@@ -92,6 +98,8 @@ async def dedicated(
             "-m",
             "tools.eval.server",
             arm.model_dump_json(),
+            str(sock.fileno()),
+            pass_fds=(sock.fileno(),),
             cwd=REPO,
             env=env,
             stdin=asyncio.subprocess.DEVNULL,
@@ -117,7 +125,7 @@ async def dedicated(
             await stop(child)
 
 
-def serve(arm: Arm) -> None:
+def serve(arm: Arm, socket_fd: int) -> None:
     """Configure the product in this isolated process, without changing product sources."""
     import uvicorn
 
@@ -148,7 +156,7 @@ def serve(arm: Arm) -> None:
             reviewer_fake_script=None,
             reviewer_fake_b_script=None,
         )
-    uvicorn.run(
+    config = uvicorn.Config(
         product.create_app(settings),
         host=settings.host,
         port=settings.port,
@@ -156,7 +164,9 @@ def serve(arm: Arm) -> None:
         timeout_graceful_shutdown=1,
         log_level="error",
     )
+    with socket.socket(fileno=socket_fd) as sock:
+        uvicorn.Server(config).run(sockets=[sock])
 
 
 if __name__ == "__main__":
-    serve(Arm.model_validate(json.loads(sys.argv[1])))
+    serve(Arm.model_validate(json.loads(sys.argv[1])), int(sys.argv[2]))

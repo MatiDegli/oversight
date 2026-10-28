@@ -126,10 +126,18 @@
       "type": "string"
     },
     "turns": {
-      "default": 0,
-      "minimum": 0,
-      "title": "Turns",
-      "type": "integer"
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "const": "unknown",
+          "type": "string"
+        }
+      ],
+      "default": "unknown",
+      "title": "Turns"
     },
     "steps": {
       "minimum": 0,

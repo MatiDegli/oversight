@@ -41,7 +41,7 @@ class Result(Identity):
     task_id: str
     agent_model: str
     outcome: Literal["solved", "failed", "stopped"]
-    turns: int = Field(default=0, ge=0)
+    turns: Count = "unknown"
     steps: int = Field(ge=0)
     duration_s: float = Field(ge=0, allow_inf_nan=False)
     tokens: Tokens
