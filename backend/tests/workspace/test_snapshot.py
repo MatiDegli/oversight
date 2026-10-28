@@ -129,6 +129,43 @@ async def test_large_working_file_is_a_working_file_limit(workspace, monkeypatch
     assert not workspace.integrity.rules_suspended and not workspace.integrity.main_suspect
 
 
+@pytest.mark.parametrize("kind", ["Git metadata", "working file"])
+@pytest.mark.parametrize("failure", ["linked", "open", "read"])
+async def test_read_failure_names_its_kind(tmp_path, monkeypatch, kind, failure):
+    from oversight.workspace import metadata_io
+
+    path = tmp_path / "input"
+    path.write_bytes(b"unchanged")
+    messages = {
+        "linked": f"nonregular or linked {kind}",
+        "open": f"{kind} changed during open",
+        "read": f"{kind} changed during read",
+    }
+    if failure == "linked":
+        os.link(path, tmp_path / "alias")
+    else:
+        original = os.fstat
+        calls = 0
+
+        def changed(fd):
+            nonlocal calls
+            calls += 1
+            info = original(fd)
+            if (failure == "open" and calls == 1) or (failure == "read" and calls == 2):
+                fields = list(info)
+                fields[1 if failure == "open" else 6] += 1
+                return os.stat_result(fields)
+            return info
+
+        monkeypatch.setattr(os, "fstat", changed)
+    budget = Budget(time.monotonic() + 5)
+    with metadata_io.directory(tmp_path, budget.deadline) as fd:
+        kwargs = {} if kind == "Git metadata" else {"kind": kind}
+        with pytest.raises(IntegrityError, match=messages[failure]):
+            metadata_io.read_at(fd, path.name, path, budget, **kwargs)
+    assert path.read_bytes() == b"unchanged"
+
+
 @pytest.mark.parametrize(
     "value, expected",
     [

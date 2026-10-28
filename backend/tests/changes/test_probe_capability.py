@@ -12,6 +12,13 @@ from oversight_contracts.review import ChangeFacts
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("session_c", [False, True])
+async def test_harness_isolation_is_explicit(h: Harness, session_c: bool):
+    assert h.workspace.isolation.checked is session_c
+    assert h.workspace.isolation.born_with_c is session_c
+
+
+@pytest.mark.anyio
 async def test_probes_skip_unknown_without_c(h: Harness, monkeypatch):
     monkeypatch.setattr(
         "oversight.workspace.capability.check_effect",

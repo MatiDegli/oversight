@@ -118,7 +118,7 @@ class SessionIsolation:
             raise ValueError("unknown isolation policy")
         cap = self.capability
         if (policy == "required" and not cap.available) or (self._born and cap.invalidated):
-            raise IsolationUnavailable("isolation required but unavailable: " + str(cap.reason))
+            raise IsolationUnavailable("isolation unavailable: " + str(cap.reason))
         if cap.available:
             # Once born with C, even an injected open runner cannot bypass it.
             return (

@@ -19,10 +19,16 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-async def h(tmp_path: Path, request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
+def session_c() -> bool:
+    """Opt into a session born with C explicitly, independently of the test file name."""
+    return False
+
+
+@pytest.fixture
+async def h(tmp_path: Path, session_c: bool) -> AsyncIterator[Harness]:
     async with asyncio.timeout(60):
         harness = await start_harness(tmp_path)
-    if request.path.stem.startswith("test_probes"):
+    if session_c:
         await harness.workspace.check_isolation()
     try:
         yield harness

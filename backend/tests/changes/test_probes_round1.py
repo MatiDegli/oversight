@@ -13,6 +13,11 @@ from oversight_contracts.events import ChangeProposed, SuiteExecution
 from oversight_contracts.review import ChangeFacts
 
 
+@pytest.fixture
+def session_c() -> bool:
+    return True
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize("path", ["tests/conftest.py", TESTS])
 async def test_added_case_with_ambiguous_fixture_ids_is_not_probed(h: Harness, path: str) -> None:

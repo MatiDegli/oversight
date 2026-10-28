@@ -67,7 +67,7 @@ def read_at(
         budget.charge(0)
         return Entry(stat.S_IMODE(info.st_mode), None)
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-        raise IntegrityError("nonregular or linked Git metadata", str(path))
+        raise IntegrityError(f"nonregular or linked {kind}", str(path))
     limit = MAX_INDEX if name == "index" and kind == "Git metadata" else MAX_FILE
     if info.st_size > limit:
         raise IntegrityError(f"oversized {kind}: read limit exceeded", str(path))
@@ -79,7 +79,7 @@ def read_at(
             info.st_mode,
             1,
         ):
-            raise IntegrityError("Git metadata changed during open", str(path))
+            raise IntegrityError(f"{kind} changed during open", str(path))
         chunks: list[bytes] = []
         size = 0
         while True:
@@ -97,7 +97,7 @@ def read_at(
             opened.st_mtime_ns,
             opened.st_ctime_ns,
         ):
-            raise IntegrityError("Git metadata changed during read", str(path))
+            raise IntegrityError(f"{kind} changed during read", str(path))
     budget.charge(size)
     return Entry(stat.S_IMODE(info.st_mode), b"".join(chunks))
 

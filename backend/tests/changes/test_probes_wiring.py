@@ -14,6 +14,11 @@ from oversight_contracts.events import CaseResult, SuiteExecution, SuiteResult
 from oversight_contracts.review import ChangeFacts, ChangeTarget
 
 
+@pytest.fixture
+def session_c() -> bool:
+    return True
+
+
 async def add_test(h: Harness, text: str) -> None:
     old = (await h.workspace.worktree("agent-1").read_text(TESTS)).content
     assert await h.edit(1, TESTS, old, old + "\n\n" + text)

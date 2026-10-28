@@ -47,7 +47,7 @@ jobs:
       - name: Report network isolation probe
         run: |
           uv run --frozen python -m oversight isolation-probe > /tmp/isolation-probe.json
-          python - <<'PY'
+          uv run --frozen python - <<'PY'
           import json
           import os
           from pathlib import Path

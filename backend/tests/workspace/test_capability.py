@@ -33,7 +33,7 @@ async def test_required_refuses_without_fallback(workspace: Workspace, monkeypat
     open_runner = AsyncMock()
     monkeypatch.setattr(core, "guarded_suite", suite)
     monkeypatch.setattr(core, "run_process", open_runner)
-    with pytest.raises(IsolationUnavailable, match="required but unavailable"):
+    with pytest.raises(IsolationUnavailable, match=r"^isolation unavailable: host unavailable$"):
         await workspace.run_tests(workspace.main, timeout_s=5, isolation="required")
     suite.assert_not_awaited()
     open_runner.assert_not_awaited()
@@ -98,7 +98,7 @@ async def test_failed_effect_revokes_c_and_never_falls_back(workspace, monkeypat
     suite = AsyncMock()
     monkeypatch.setattr(core, "guarded_suite", suite)
     for policy in ("best_effort", "required"):
-        with pytest.raises(IsolationUnavailable, match="effect failed"):
+        with pytest.raises(IsolationUnavailable, match=r"^isolation unavailable: effect failed$"):
             await workspace.run_tests(workspace.main, timeout_s=5, isolation=policy)
     suite.assert_not_awaited()
     monkeypatch.setattr(capability, "check_effect", AsyncMock())
