@@ -36,7 +36,9 @@ for (const [element, text] of [
       await page.setViewportSize({ width: 1920, height: 1080 });
       // This harness seeds the actual app with fixture state; its stream stays pending and sends nothing.
       await page.route("**/events?*", () => {});
-      await page.evaluate((value) => window.panelTest.renderApp(value), state);
+      await page.evaluate((value) => {
+        window.panelTest.renderApp(value);
+      }, state);
       await page.getByRole("button", { name: "Live diff", exact: true }).click();
       const live = page.locator(panel);
       await browserExpect(live.getByText(text, { exact: true })).toBeVisible();
@@ -51,7 +53,9 @@ it("keeps live diff facts updated without switching to review or taking focus", 
   await withPage(async (page) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.route("**/events?*", () => {});
-    await page.evaluate((value) => window.panelTest.renderApp(value), state);
+    await page.evaluate((value) => {
+      window.panelTest.renderApp(value);
+    }, state);
     await page.getByRole("button", { name: "Live diff", exact: true }).click();
     await browserExpect(page.locator(`${panel} [aria-label="Facts"]`)).toBeVisible();
     await page.evaluate(() => {
@@ -60,7 +64,9 @@ it("keeps live diff facts updated without switching to review or taking focus", 
       document.body.append(input);
       input.focus();
     });
-    await page.evaluate((value) => window.panelTest.setState(value), through(20));
+    await page.evaluate((value) => {
+      window.panelTest.setState(value);
+    }, through(20));
     await browserExpect(page.getByLabel("Keep focus")).toBeFocused();
     await browserExpect(page.locator('[aria-label="Review panel"]')).toHaveCount(0);
     await browserExpect(page.locator(`${panel} [aria-label="Tests"]`)).toContainText("28 passed");

@@ -84,7 +84,9 @@ export const panelTest = {
     });
   },
   setState(state: State) {
-    flushSync(() => stateStore.setState({ state }));
+    flushSync(() => {
+      stateStore.setState({ state });
+    });
   },
   render(data: LiveDiffData | undefined) {
     flushSync(() => {
