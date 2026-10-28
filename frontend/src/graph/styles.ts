@@ -4,6 +4,7 @@ import badgeFont from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyp
 import type { getActiveTheme } from "../theme";
 
 import { cacheLayers } from "./layerCache";
+import { layerImages } from "./layerImages";
 import { nodeGeometry } from "./geometry";
 import { headerLayers, marksClearance, marksLayer } from "./layers";
 import type { Band, Layer, NodeMarks } from "./layers";
@@ -129,9 +130,11 @@ export function graphStyles(
   };
   const frameOnce = cacheLayers(frameLayers, true);
   const leafOnce = cacheLayers(leafLayers, false);
+  const shortImage = layerImages();
   // One property per image: Cytoscape takes a list for each when a node carries several.
   const layered = (layers: (node: NodeSingular) => Layer[]) => ({
-    "background-image": (node: NodeSingular) => layers(node).map((layer) => layer.image),
+    "background-image": (node: NodeSingular) =>
+      layers(node).map((layer) => shortImage(node, layer.image)),
     "background-width": (node: NodeSingular) => layers(node).map((layer) => layer.width),
     "background-height": (node: NodeSingular) => layers(node).map((layer) => layer.height),
     "background-position-x": (node: NodeSingular) => layers(node).map((layer) => layer.x),

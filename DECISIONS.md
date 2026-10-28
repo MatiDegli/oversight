@@ -685,3 +685,7 @@ Guard Cytoscape data, class and interaction-state writes: even equal writes trig
 compound restyles and SVG hashing. Keep fold scratch outside the style setter, retain selection
 and routing classes, share layers across background properties and encode embedded fonts once
 per family; keep the same SVG bytes, geometry, tokens and motion design.
+
+Give Cytoscape one short `blob:` URL per distinct layer image to avoid hashing font-sized data
+URIs on every restyle. Revoke the URLs when their stylesheet is replaced or the graph is destroyed.
+A future Content Security Policy must allow `blob:` in `img-src`.
