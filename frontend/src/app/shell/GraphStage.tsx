@@ -3,7 +3,7 @@ import { GraphView } from "../../graph";
 import type { Framing, GraphApi } from "../../graph";
 import { ImpactConeCard } from "../../review";
 import type { State } from "../../state";
-import { GraphHeading, Legend, ZoomControls } from "../GraphOverlays";
+import { DetailControls, GraphHeading, Legend, ZoomControls } from "../GraphOverlays";
 import { fieldInput } from "../fieldScope";
 import { graphScope } from "../graphScope";
 import { changeNodeIds, panelOpen } from "../view";
@@ -20,6 +20,8 @@ export function GraphStage({
   onNodeTap: (id: string) => void;
   layoutKey?: string;
 }) {
+  const [detail, setDetail] = useState<"Modules" | "Functions" | "Details">("Modules");
+  const [zoom, setZoom] = useState(100);
   const open = panelOpen(view);
   // The cone and the change stay lit until the decision; events never open review themselves.
   const { cone, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
@@ -44,7 +46,10 @@ export function GraphStage({
     tab?.frameKey ??
     (view.review === null ? (shown ?? view.file?.path ?? null) : `review:${view.review}`);
   const frameKey = open ? (layoutKey ? `${scopeKey ?? "file"}:${layoutKey}` : scopeKey) : null;
-  const [framing, setFraming] = useState<{ key: string | null; outOfView: ReadonlySet<string> }>();
+  const [framing, setFraming] = useState<{
+    key: string | null;
+    outOfView: ReadonlySet<string>;
+  }>();
   const coneCardRef = useRef<HTMLDivElement>(null);
   const startAreaRef = useRef<HTMLDivElement>(null);
   const graphApi = useRef<GraphApi | null>(null);
@@ -57,6 +62,7 @@ export function GraphStage({
   return (
     <main className="graph-stage relative min-w-0 flex-1 bg-ground" aria-label="Graph stage">
       <GraphView
+        onZoom={setZoom}
         selectedId={view.selected}
         onNodeTap={onNodeTap}
         panelOpen={open}
@@ -74,27 +80,41 @@ export function GraphStage({
       {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
               review) top left, the legend bottom left, the zoom controls bottom right. */}
       <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
-        <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
-          {cone ? (
-            <div
-              ref={coneCardRef}
-              className="pointer-events-auto min-h-0 w-full max-w-(--cone-card-width) overflow-auto"
-            >
-              <ImpactConeCard
-                cone={cone}
-                outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
-                onReveal={(id) => graphApi.current?.reveal(id)}
-                nodes={[...(state.graph?.nodes ?? []), ...(shownChange?.graph.nodes_added ?? [])]}
+        <div className="flex min-h-0 items-start justify-between gap-(--spacing-md)">
+          <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
+            {cone ? (
+              <div
+                ref={coneCardRef}
+                className="pointer-events-auto min-h-0 w-(--cone-card-width) shrink-0 overflow-auto"
+              >
+                <ImpactConeCard
+                  cone={cone}
+                  outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
+                  onReveal={(id) => graphApi.current?.reveal(id)}
+                  nodes={[...(state.graph?.nodes ?? []), ...(shownChange?.graph.nodes_added ?? [])]}
+                />
+              </div>
+            ) : (
+              // The narrower graph beside the editor panel is framed on its own nodes, so a
+              // heading there would sit on top of them: it is a watch-mode overlay.
+              !open && (
+                <div className="pointer-events-auto">
+                  <GraphHeading state={state} />
+                </div>
+              )
+            )}
+          </div>
+          {!open && (
+            <div className="pointer-events-auto shrink-0">
+              <DetailControls
+                level={detail}
+                zoom={zoom}
+                onChange={(level) => {
+                  setDetail(level);
+                  graphApi.current?.detail?.(level);
+                }}
               />
             </div>
-          ) : (
-            // The narrower graph beside the editor panel is framed on its own nodes, so a
-            // heading there would sit on top of them: it is a watch-mode overlay.
-            !open && (
-              <div className="pointer-events-auto">
-                <GraphHeading state={state} />
-              </div>
-            )
           )}
         </div>
         {/* The start camera uses the space between overlays, measured after fonts load. */}

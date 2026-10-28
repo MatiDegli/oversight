@@ -1,3 +1,4 @@
+import type { Route } from "./routes";
 import type { Core } from "cytoscape";
 
 import { visibleId } from "./foldVisibility";
@@ -32,6 +33,16 @@ export interface GraphProbe {
     lineStyle: string;
     opacity: number;
   }[];
+  routes(): {
+    id: string;
+    source: string;
+    target: string;
+    count: number;
+    visible: boolean;
+    points: { x: number; y: number }[];
+  }[];
+  cost(): { dragMs: number[] };
+  draggable(): string[];
   zoom(): number;
   pan(): { x: number; y: number };
   /** True while the camera is easing to a place. */
@@ -72,6 +83,42 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
         lineStyle: String(element.style("line-style")),
         opacity: Number(element.numericStyle("opacity")),
       })),
+    draggable: () =>
+      cy
+        .nodes()
+        .filter((n) => n.grabbable())
+        .map((n) => n.id()),
+    cost: () => ({
+      dragMs: [...((cy.scratch("dragCosts") as number[] | undefined) ?? [])],
+    }),
+    routes: () =>
+      cy.edges(".calls").map((edge) => {
+        const route = edge.data("route") as Route | undefined;
+        const from = edge.source().position();
+        const to = edge.target().position();
+        const start = { x: from.x + (route?.s[0] ?? 0), y: from.y + (route?.s[1] ?? 0) };
+        const end = { x: to.x + (route?.t[0] ?? 0), y: to.y + (route?.t[1] ?? 0) };
+        const vx = end.x - start.x,
+          vy = end.y - start.y;
+        const length = Math.hypot(vx, vy);
+        return {
+          id: edge.id(),
+          source: edge.source().id(),
+          target: edge.target().id(),
+          count: (edge.data("callCount") as number | undefined) ?? 1,
+          visible: edge.style("display") !== "none",
+          points: route
+            ? [
+                start,
+                ...route.w.map((w, i) => ({
+                  x: start.x + w * vx - ((route.d[i] ?? 0) * vy) / length,
+                  y: start.y + w * vy + ((route.d[i] ?? 0) * vx) / length,
+                })),
+                end,
+              ]
+            : [],
+        };
+      }),
     zoom: () => cy.zoom(),
     pan: () => ({ ...cy.pan() }),
     animating: () => cy.animated() || cy.scratch("foldAnimating") === true,
@@ -88,6 +135,7 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
         .edges()
         .not(".imports")
         .filter((edge) => {
+          if (edge.style("display") === "none") return false;
           const b = edge.renderedBoundingBox({ includeLabels: false, includeOverlays: false });
           return b.x2 >= 0 && b.y2 >= 0 && b.x1 <= cy.width() && b.y1 <= cy.height();
         }).length,

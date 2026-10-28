@@ -199,6 +199,14 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
 
   await test.step("the graph renders the snapshot's nodes", async () => {
     await page.goto("/");
+    await page.waitForFunction(
+      () =>
+        (document
+          .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+          ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
+    );
+    // Keep the existing full-snapshot assertions after explicitly opening the modules.
+    await page.getByRole("button", { name: "Functions", exact: true }).click();
     await expect.poll(() => nodeIds(page, "node")).toEqual(drawn.toSorted());
     const placed = await page.evaluate(() => {
       const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');

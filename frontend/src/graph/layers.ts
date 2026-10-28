@@ -217,19 +217,28 @@ function bandCenter(theme: LayerTheme, band: Band, height: number): number {
       : height / 2;
 }
 
-function titleLayer(theme: LayerTheme, title: string, width: number, offsetY: number): Layer {
+function titleLayer(
+  theme: LayerTheme,
+  title: string,
+  width: number,
+  offsetY: number,
+  folded = false,
+): Layer {
   return {
     image: rowImage(
       theme,
       width,
       text(
         theme,
-        `x="0" ${rowBaseline}`,
+        `x="${folded ? "14" : "0"}" ${rowBaseline}`,
         theme["frame-title-size"],
         theme["frame-title-weight"],
         theme["module-label"],
-        escape(title),
-      ),
+        escape(folded ? fitTitle(theme, title, Math.max(0, width - 14)) : title),
+      ) +
+        (folded
+          ? `<path d="M1 9 L7 14 L1 19" fill="none" stroke="${theme["module-label"]}" stroke-width="${theme["border-width"]}"/>`
+          : ""),
     ),
     width,
     height: HEADER.height,
@@ -258,6 +267,7 @@ export function headerLayers(
   size: LeafSize,
   band: Band,
   marks?: NodeMarks,
+  folded = false,
 ): Layer[] {
   const inset = px(theme["frame-title-inset"]);
   const top = bandCenter(theme, band, size.height) - HEADER.height / 2;
@@ -278,7 +288,7 @@ export function headerLayers(
     const room = Math.max(0, Math.min(HEADER.titleWidth, size.width - 2 * inset - cluster - gap));
     const centerY = HEADER.height / 2;
     return [
-      titleLayer(theme, fitTitle(theme, title, room), room, top),
+      titleLayer(theme, fitTitle(theme, title, room), room, top, folded),
       trailing(
         cluster,
         wordText(
@@ -291,7 +301,23 @@ export function headerLayers(
     ];
   }
   return [
-    titleLayer(theme, title, HEADER.titleWidth, top),
+    titleLayer(
+      theme,
+      fitTitle(
+        theme,
+        title,
+        Math.max(
+          0,
+          size.width -
+            2 * inset -
+            Math.min(HEADER.countWidth, count.length * px(theme["frame-count-size"]) * GLYPH_EM) -
+            px(theme["node-word-gap"]),
+        ),
+      ),
+      Math.max(1, Math.min(HEADER.titleWidth, size.width - 2 * inset)),
+      top,
+      folded,
+    ),
     trailing(
       HEADER.countWidth,
       text(

@@ -6,8 +6,13 @@ import type { State } from "../state";
 export interface FoldState {
   expanded: ReadonlySet<string>;
   seen: ReadonlyMap<string, string>;
+  focusSeen: State["focus"];
 }
-export const initialFolds = (): FoldState => ({ expanded: new Set(), seen: new Map() });
+export const initialFolds = (): FoldState => ({
+  expanded: new Set(),
+  seen: new Map(),
+  focusSeen: {},
+});
 export type FoldAction =
   | { type: "toggle"; id: string }
   | {
@@ -30,10 +35,10 @@ export function reduceFolds(state: FoldState, action: FoldAction): FoldState {
     seen.set(action.changeId ?? "", action.revision);
     for (const id of action.classes) expanded.add(id);
   }
-  return { expanded, seen };
+  return { ...state, expanded, seen };
 }
 
-/** Observe actual changed contents, never read focus, step events, or the review mode. */
+/** Modules open on fresh read/edit focus; classes reopen only for changed contents. */
 export function observeEdits(folds: FoldState, state: State): FoldState {
   const nodes = new Map(state.graph?.nodes.map((node) => [node.id, node]));
   const pending = selectPendingChanges(state);
@@ -44,10 +49,24 @@ export function observeEdits(folds: FoldState, state: State): FoldState {
     let node: GraphNode | undefined = nodes.get(id);
     while (node?.parent_id) {
       node = nodes.get(node.parent_id);
-      if (node?.kind === "class") classes.push(node.id);
+      if (node?.kind === "class" || node?.kind === "module") classes.push(node.id);
     }
     return classes;
   };
+  for (const [agent, focus] of Object.entries(state.focus)) {
+    if (folds.focusSeen[agent] === focus) continue;
+    folds = { ...folds, focusSeen: { ...folds.focusSeen, [agent]: focus } };
+    const revision = String(Number(folds.seen.get(`focus:${agent}`) ?? 0) + 1);
+    const modules = focus.node_ids.flatMap((id) =>
+      classesOf(id).filter((parent) => nodes.get(parent)?.kind === "module"),
+    );
+    folds = reduceFolds(folds, {
+      type: "change",
+      revision,
+      classes: modules,
+      changeId: `focus:${agent}`,
+    });
+  }
   for (const change of pending) {
     const ids = [
       ...change.graph.nodes_modified,

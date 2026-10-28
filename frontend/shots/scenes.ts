@@ -153,22 +153,22 @@ async function openFileView(page: Page): Promise<void> {
       },
     }),
   );
-  const folded = await page.evaluate(() => {
-    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
-    const row = host?.oversightGraph
-      ?.nodeCenters(".folded")
-      .find(({ id }) => id === "shop.cart:Cart");
-    const box = host?.getBoundingClientRect();
-    return row && box ? { x: box.left + row.x, y: box.top + row.y } : null;
-  });
-  if (folded) {
-    await page.mouse.click(folded.x, folded.y);
-    await page.waitForFunction(
-      () =>
-        document
-          .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-          ?.oversightGraph?.animating() === false,
-    );
+  for (const foldedId of ["shop.cart", "shop.cart:Cart"]) {
+    const folded = await page.evaluate((wanted) => {
+      const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+      const row = host?.oversightGraph?.nodeCenters(".folded").find(({ id }) => id === wanted);
+      const box = host?.getBoundingClientRect();
+      return row && box ? { x: box.left + row.x, y: box.top + row.y } : null;
+    }, foldedId);
+    if (folded) {
+      await page.mouse.click(folded.x, folded.y);
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating() === false,
+      );
+    }
   }
   const point = await page.evaluate(() => {
     const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');

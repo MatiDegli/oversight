@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { useStore } from "zustand";
 
 import type { FileSaved } from "@contracts";
@@ -134,8 +135,8 @@ export function App() {
   );
   return (
     <Frame
-      files={files}
       state={state}
+      files={files}
       view={view}
       onNodeTap={onNodeTap}
       canOpenChange={(changeId) => openChange(state, view, changeId) !== null}

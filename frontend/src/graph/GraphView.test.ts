@@ -148,6 +148,21 @@ function rerender(props: GraphViewProps) {
   mocks.effects.slice(0, -1).forEach((effect) => effect());
 }
 
+it("synchronizes each store update immediately, including transport-only updates", async () => {
+  setLabel("Initial");
+  const { settle } = mount();
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Graph was not created");
+  setLabel("First");
+  expect(cy.getElementById("billing:fee").data("label")).toBe("First");
+  setLabel("Second");
+  expect(cy.getElementById("billing:fee").data("label")).toBe("Second");
+  const batch = vi.spyOn(cy, "batch");
+  stateStore.setState(({ state }) => ({ state: { ...state, lastSeq: state.lastSeq + 1 } }));
+  expect(batch).toHaveBeenCalled();
+});
+
 it.each(["resolved", "rejected"] as const)(
   "creates exactly one graph after the font load is %s, syncs current state and disposes synchronously",
   async (result) => {
@@ -173,6 +188,7 @@ it.each(["resolved", "rejected"] as const)(
     // passes one sets it again.
     const style = vi.spyOn(cy, "style");
     setLabel("After loading");
+    paint();
     expect(cy.getElementById("billing:fee").data("label")).toBe("After loading");
     await Promise.resolve();
     expect(mocks.instances).toHaveLength(1);
@@ -307,6 +323,7 @@ it("reframes on entering review from live diff at watch zoom, and never on incom
   expect(frame).not.toHaveBeenCalled();
   expect(onFramed).not.toHaveBeenCalled();
   paint();
+  paint();
   expect(onFramed).toHaveBeenCalledOnce();
   rerender({ panelOpen: false, frameKey: null });
   expect(frame).toHaveBeenCalledExactlyOnceWith(cy, [], false, {
@@ -428,10 +445,12 @@ it("expands watch only for added nodes and yields to active pan, wheel zoom and 
     });
   };
   add("new");
+  paint();
   expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new"], false);
   const animating = vi.spyOn(cy, "animated").mockReturnValue(true);
   expand.mockClear();
   add("before-ease-ends");
+  paint();
   expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new", "before-ease-ends"], false);
   animating.mockReturnValue(false);
   expand.mockClear();
@@ -441,24 +460,29 @@ it("expands watch only for added nodes and yields to active pan, wheel zoom and 
   const stop = vi.spyOn(cy, "stop");
   cy.emit("tapstart");
   add("during-pan");
+  paint();
   expect(expand).not.toHaveBeenCalled();
   expect(stop).toHaveBeenCalledOnce();
   cy.emit("tapend");
   cy.emit("scrollzoom");
   add("during-wheel");
+  paint();
   expect(expand).not.toHaveBeenCalled();
   const navigationEnded = performance.now();
   const now = vi.spyOn(performance, "now").mockReturnValue(navigationEnded + 1000);
   add("one-second-after-wheel");
+  paint();
   expect(expand.mock.calls.length).toBe(0);
   now.mockReturnValue(navigationEnded + 3100);
   vi.spyOn(camera, "frameCamera").mockReturnValue(null);
   rerender({ panelOpen: true, frameKey: "review:1", frameIds: ["new"] });
   add("during-review");
+  paint();
   expect(expand).not.toHaveBeenCalled();
   rerender({ panelOpen: false, frameKey: null });
   vi.stubGlobal("matchMedia", () => ({ matches: true }));
   add("after-pan");
+  paint();
   expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["after-pan"], true);
 });
 
@@ -652,12 +676,13 @@ it("limits the zoom to the buttons' range, and routes a call again when a node i
   const cy = mocks.instances[0];
   if (!cy) throw new Error("Graph was not created");
   expect([cy.minZoom(), cy.maxZoom()]).toEqual([camera.ZOOM_RANGE.min, camera.ZOOM_RANGE.max]);
-  const route = () => JSON.stringify(cy.getElementById("call").data("route"));
+  const route = () => JSON.stringify(cy.edges(".calls").first().data("route"));
   const before = route();
   expect(before).not.toBeUndefined();
   // Drag the callee to the same height as its caller, and let go.
-  cy.getElementById("b:g").position({ x: 700, y: 0 });
+  cy.getElementById("b").position({ x: 700, y: 0 });
   expect(route()).toBe(before);
-  cy.getElementById("b:g").emit("free");
+  cy.getElementById("b").emit("free");
+  paint();
   expect(route()).not.toBe(before);
 });

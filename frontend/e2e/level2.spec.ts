@@ -1,6 +1,7 @@
 // One ordered scenario over the same static build as level 1. /level2 enables the real command
 // client only in this e2e build; page.route answers every command, while replay alone changes state.
 import { expect, test } from "@playwright/test";
+import type { GraphProbeHost } from "../src/graph";
 
 import { installRecorder, nodeIds, recorded } from "./graph-support";
 import { engaged, installHolds, release } from "./holds";
@@ -130,6 +131,15 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
 
   await test.step("both changes are pending; only pending nodes have dashed borders", async () => {
     await engaged(page, holds.decisions);
+    // The existing cone assertions inspect individual functions, so choose that presentation.
+    await page.getByRole("button", { name: "Details", exact: true }).click();
+    await expect
+      .poll(() =>
+        page
+          .getByLabel("Repository graph", { exact: true })
+          .evaluate((host: GraphProbeHost) => host.oversightGraph?.animating()),
+      )
+      .toBe(false);
     for (const [slot, card, change] of [
       ["A", cardA, proposal],
       ["B", cardB, bProposal],

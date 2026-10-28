@@ -11,24 +11,22 @@ import { getActiveTheme } from "../theme";
 import {
   frameCamera,
   includeNewNodes,
-  nodesInViewport,
   prefersReducedMotion,
   revealNode,
   startCamera,
   ZOOM_RANGE,
   zoomBy,
 } from "./camera";
-import type { Box, Camera, Framing } from "./camera";
-import { FIT_PADDING } from "./geometry";
+import type { Camera, Framing } from "./camera";
 import { graphElements } from "./elements";
 import { foldController } from "./foldController";
-import { visibleId } from "./foldVisibility";
 import { createBoxSource, DotField } from "./field";
 import type { FieldInput } from "./field";
 import { exposeProbe } from "./probe";
 import { showSelection } from "./selection";
 import { edgeShape, graphStyles } from "./styles";
-import { settle } from "./updateGraph";
+import { openingCone, panelGeometry, reportFraming } from "./viewFraming";
+import { applyRoutes, dragRoutes } from "./routes";
 
 cytoscape.use(fcose);
 
@@ -42,6 +40,7 @@ export interface GraphApi {
   fit: () => void;
   /** Pans to a node the cone card lists as out of view, at the zoom it has. Only on a click. */
   reveal: (nodeId: string) => void;
+  detail?: (level: "Modules" | "Functions" | "Details") => void;
 }
 
 const ZOOM_STEP = 1.25;
@@ -79,86 +78,10 @@ export interface GraphViewProps {
   startAreaRef?: RefObject<HTMLDivElement | null>;
   /** The lights of the dot field behind the graph and the mode that shapes them. */
   field?: FieldInput;
+  onZoom?: (percent: number) => void;
 }
 
 const NO_LIGHTS: FieldInput = { mode: "watch", lights: [] };
-
-function reportFraming(
-  cy: Core,
-  host: HTMLElement,
-  props: GraphViewProps,
-  framing: Framing | null,
-) {
-  if (!framing || !props.cone) {
-    props.onFramed?.(framing);
-    return;
-  }
-  const graphBox = host.getBoundingClientRect();
-  const card = props.coneCardRef?.current?.getBoundingClientRect();
-  const clear = props.startAreaRef?.current?.getBoundingClientRect();
-  const ids = [...(props.frameIds ?? []), ...props.cone.entries.map((entry) => entry.node_id)];
-  const shown = ids.map((id) => visibleId(cy, id));
-  const nodes = cy.nodes().filter((node) => shown.includes(node.id()));
-  const visible = nodesInViewport(
-    nodes.map((node) => ({
-      id: node.id(),
-      ...node.boundingBox({ includeLabels: true, includeOverlays: false }),
-    })),
-    framing,
-    {
-      x1: 0,
-      y1: 0,
-      x2: cy.width(),
-      y2: clear ? Math.min(cy.height(), clear.bottom - graphBox.top) : cy.height(),
-    },
-    card
-      ? {
-          x1: card.left - graphBox.left,
-          y1: card.top - graphBox.top,
-          x2: card.right - graphBox.left,
-          y2: card.bottom - graphBox.top,
-        }
-      : undefined,
-  );
-  props.onFramed?.({
-    ...framing,
-    framed: new Set(shown.filter((id) => visible.has(id))),
-    outOfView: new Set(ids.filter((id) => !visible.has(visibleId(cy, id)))),
-  });
-}
-
-/** Snapshot panel geometry only when the person opens it, before the single camera move. */
-function panelGeometry(host: HTMLElement, props: GraphViewProps): { occlusion?: Box; area?: Box } {
-  const graph = host.getBoundingClientRect();
-  const card = props.coneCardRef?.current?.getBoundingClientRect();
-  const clear = props.startAreaRef?.current?.getBoundingClientRect();
-  const occlusion = card
-    ? {
-        x1: card.left - graph.left,
-        y1: card.top - graph.top,
-        x2: card.right - graph.left,
-        y2: card.bottom - graph.top,
-      }
-    : undefined;
-  return {
-    ...(occlusion ? { occlusion } : {}),
-    ...(clear
-      ? {
-          area: {
-            x1: (occlusion?.x2 ?? 0) + FIT_PADDING,
-            y1: FIT_PADDING,
-            x2: graph.width - FIT_PADDING,
-            y2: Math.min(graph.height - FIT_PADDING, clear.bottom - graph.top),
-          },
-        }
-      : {}),
-  };
-}
-
-function openingCone(props: GraphViewProps): readonly string[] | undefined {
-  const cone = props.cone ?? props.liveCone;
-  return cone?.entries.filter((entry) => entry.distance <= cone.max_depth).map((e) => e.node_id);
-}
 
 export function GraphView({
   selectedId = null,
@@ -174,6 +97,7 @@ export function GraphView({
   apiRef,
   startAreaRef,
   field = NO_LIGHTS,
+  onZoom,
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
   // What the dot field reads of the graph: the rendered boxes of the nodes it lights.
@@ -206,6 +130,7 @@ export function GraphView({
       coneCardRef,
       startAreaRef,
       field,
+      onZoom,
     };
     if (relit) resync.current?.();
     else if (graph.current) showSelection(graph.current, selectedId);
@@ -222,6 +147,7 @@ export function GraphView({
     coneCardRef,
     startAreaRef,
     field,
+    onZoom,
   ]);
   // Panel framing follows the person's choice; watch growth has its own guarded expansion.
   useEffect(() => {
@@ -276,6 +202,7 @@ export function GraphView({
         if (viewportFrame !== undefined) return;
         viewportFrame = requestAnimationFrame(() => {
           viewportFrame = undefined;
+          latest.current.onZoom?.(Math.round(cy.zoom() * 100));
           const framing = targetFrame.current;
           if (framing)
             reportFraming(cy, host, latest.current, {
@@ -299,10 +226,41 @@ export function GraphView({
         interacting = false;
         quietUntil = performance.now() + NAVIGATION_QUIET_MS;
       });
-      // A node the person moved changes its frame's header and its edges' routes: settle them
-      // when it lands, not on every pixel of the drag.
-      cy.on("free", () => {
-        settle(cy);
+      let dragFrame: number | undefined;
+      const translations = new Map<string, { x: number; y: number }>();
+      const reroute = () => {
+        if (dragFrame !== undefined) return;
+        dragFrame = requestAnimationFrame(() => {
+          dragFrame = undefined;
+          const start = performance.now();
+          for (const [id, delta] of translations) dragRoutes(cy, id, delta.x, delta.y, theme);
+          translations.clear();
+          const samples = (cy.scratch("dragCosts") as number[] | undefined) ?? [];
+          samples.push(performance.now() - start);
+          cy.scratch("dragCosts", samples.slice(-120));
+        });
+      };
+      const moved = new Map<string, { x: number; y: number }>();
+      cy.on("grab", "node.module", (event) => {
+        const node = event.target as NodeSingular;
+        moved.set(node.id(), { ...node.position() });
+      });
+      cy.on("drag", "node.module", (event) => {
+        const node = event.target as NodeSingular;
+        const previous = moved.get(node.id());
+        if (previous) {
+          const dx = node.position("x") - previous.x,
+            dy = node.position("y") - previous.y;
+          folding.move(node.id(), dx, dy);
+          const pending = translations.get(node.id()) ?? { x: 0, y: 0 };
+          translations.set(node.id(), { x: pending.x + dx, y: pending.y + dy });
+        }
+        moved.set(node.id(), { ...node.position() });
+        reroute();
+      });
+      cy.on("free", (event) => {
+        if (translations.size) reroute();
+        else if (!moved.has((event.target as NodeSingular).id())) applyRoutes(cy, theme);
       });
       cy.on("dragpan scrollzoom pinchzoom", () => {
         arriving.clear();
@@ -379,7 +337,15 @@ export function GraphView({
       };
       resync.current = sync;
       cy.on("tap", "node", (event) => {
-        const id = (event.target as NodeSingular).id();
+        const node = event.target as NodeSingular;
+        const id = node.id();
+        if (node.isParent() && node.is(".module, .class")) {
+          const top = node.boundingBox({ includeLabels: false, includeOverlays: false }).y1;
+          const height = Number.parseFloat(
+            theme[node.hasClass("module") ? "frame-pad-top" : "class-pad-top"],
+          );
+          if (event.position.y > top + height) return;
+        }
         if (folding.toggle(id)) sync();
         else latest.current.onNodeTap?.(id);
       });
@@ -394,6 +360,12 @@ export function GraphView({
           },
           fit: () => {
             frameCamera(cy, [], prefersReducedMotion(), panelGeometry(host, latest.current));
+          },
+          detail: (level) => {
+            folding.detail(level);
+            sync();
+            if (level === "Modules")
+              frameCamera(cy, [], prefersReducedMotion(), panelGeometry(host, latest.current));
           },
           reveal: (nodeId) => {
             const target = revealNode(cy, nodeId, prefersReducedMotion());
@@ -438,6 +410,7 @@ export function GraphView({
         graph.current = undefined;
         reportViewport.current = undefined;
         if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame);
+        if (dragFrame !== undefined) cancelAnimationFrame(dragFrame);
         cy.destroy();
       };
     };

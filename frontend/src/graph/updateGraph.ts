@@ -19,7 +19,7 @@ const leafPositions = new WeakMap<Core, Map<string, Position>>();
  * The data keys a node carries only some of the time. `data()` merges, so a key the new definition
  * leaves out would keep its old value: a mark long after the focus is gone.
  */
-const OPTIONAL_DATA = ["marks", "distance", "title", "count"] as const;
+const OPTIONAL_DATA = ["marks", "distance", "title", "count", "callCount", "w", "h"] as const;
 
 /** Update by id, retaining dragged positions and the viewport after the first layout. */
 export function updateGraph(

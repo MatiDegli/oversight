@@ -13,6 +13,7 @@ export interface GraphElement {
     id: string;
     kind: GraphNode["kind"] | GraphEdge["kind"];
     label?: string;
+    callCount?: number;
     /** A frame's header: its title (a module's file name) and its count, drawn in place of a label. */
     title?: string;
     count?: string;

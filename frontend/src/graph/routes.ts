@@ -7,7 +7,7 @@
 // meets its two nodes (offsets from the node's centre, in px) and where it bends, in the terms
 // Cytoscape's `segments` style takes (weights along the line between the two ends, distances
 // across it), which the stylesheet reads from the edge's data.
-import type { Core } from "cytoscape";
+import type { Core, EdgeCollection } from "cytoscape";
 
 import { crosses, orthogonalPath, simplify } from "./orthogonal";
 import type { XY } from "./orthogonal";
@@ -92,8 +92,32 @@ function trunks(boxes: readonly RouteBox[], edges: readonly RouteEdge[], tuning:
     );
     const room = left - previousRight;
     const inset = Math.min(tuning.loopInset, room / 3);
-    const gap = Math.min(tuning.laneGap, (room - inset * 2) / Math.max(1, targets.length));
-    targets.forEach((target, rank) => lanes.set(target.id, left - inset - rank * gap));
+    const occupied: number[] = [];
+    const spans = targets
+      .map((target) => {
+        const ys = [
+          target.anchorY,
+          ...edges
+            .filter((e) => e.target === target.id)
+            .flatMap((e) => {
+              const source = byId.get(e.source);
+              return source ? [source.anchorY] : [];
+            }),
+        ];
+        return { target, low: Math.min(...ys), high: Math.max(...ys) };
+      })
+      .sort(
+        (a, b) =>
+          a.low - b.low ||
+          a.target.anchorY - b.target.anchorY ||
+          a.target.id.localeCompare(b.target.id),
+      );
+    for (const { target, low, high } of spans) {
+      let rank = occupied.findIndex((end) => end < low - tuning.laneGap);
+      if (rank < 0) rank = occupied.length;
+      occupied[rank] = high;
+      lanes.set(target.id, left - inset - rank * tuning.laneGap);
+    }
   }
   return lanes;
 }
@@ -124,7 +148,17 @@ export function routeEdges(
     if (tops.some((box) => crosses(entry, trunk, box))) continue;
     const path = orthogonalPath(exit, entry, tops, tuning.laneGap);
     if (!path) continue;
-    routes.set(edge.id, encode(simplify([start, ...path, trunk, end]), from, to));
+    const points = simplify([start, ...path, trunk, end]);
+    const blocked = points.slice(1).some((b, i) => {
+      const a = points[i];
+      if (!a) return true;
+      return tops.some((box) => {
+        if (i === 0 && box.id === from.top) return false;
+        if (i === points.length - 2 && box.id === to.top) return false;
+        return crosses(a, b, box);
+      });
+    });
+    if (!blocked) routes.set(edge.id, encode(points, from, to));
   }
   return routes;
 }
@@ -151,6 +185,40 @@ export function tuningFrom(theme: RouteTheme): Tuning {
     minGutter: px(theme["frame-pad-left"]) * 2,
     loopInset: px(theme["spacing-md"]) + 2,
   };
+}
+
+interface RoutingContext {
+  boxes: RouteBox[];
+  calls: RouteEdge[];
+  edges: EdgeCollection;
+}
+const contexts = new WeakMap<Core, RoutingContext>();
+
+function writeRoutes(cy: Core, edges: EdgeCollection, routes: ReadonlyMap<string, Route>) {
+  cy.batch(() => {
+    for (const edge of edges) {
+      const route = routes.get(edge.id());
+      edge.toggleClass("unroutable", !route && !edge.hasClass("imports"));
+      if (route) edge.data("route", route);
+      else if (edge.data("route") !== undefined) edge.removeData("route");
+    }
+  });
+}
+
+/** A module drag is a rigid translation: reuse measured boxes, never remeasure SVG labels. */
+export function dragRoutes(cy: Core, moduleId: string, dx: number, dy: number, theme: RouteTheme) {
+  const context = contexts.get(cy);
+  if (!context) return;
+  for (const box of context.boxes)
+    if (box.top === moduleId) {
+      box.x1 += dx;
+      box.x2 += dx;
+      box.y1 += dy;
+      box.y2 += dy;
+      box.anchorY += dy;
+    }
+  const routes = routeEdges(context.boxes, context.calls, tuningFrom(theme));
+  writeRoutes(cy, context.edges, routes);
 }
 
 /**
@@ -186,12 +254,7 @@ export function applyRoutes(cy: Core, theme: RouteTheme): void {
     .filter((edge) => !edge.hasClass("imports"))
     .map((edge) => ({ id: edge.id(), source: edge.source().id(), target: edge.target().id() }));
   const routes = routeEdges(boxes, calls, tuningFrom(theme));
-  cy.batch(() => {
-    for (const edge of cy.edges()) {
-      const route = routes.get(edge.id());
-      edge.toggleClass("unroutable", !route && !edge.hasClass("imports"));
-      if (route) edge.data("route", route);
-      else if (edge.data("route") !== undefined) edge.removeData("route");
-    }
-  });
+  const edges = cy.edges();
+  contexts.set(cy, { boxes, calls, edges });
+  writeRoutes(cy, edges, routes);
 }

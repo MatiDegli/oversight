@@ -44,7 +44,8 @@ export function graphStyles(
     // This decorates the existing node without synthetic graph nodes or layout changes.
     const font = `<style>@font-face{font-family:${theme["text-font"].split(",")[0] ?? "sans-serif"};src:url("${badgeFont}") format("woff2");font-weight:${String(theme["distance-badge-font-weight"])}}</style>`;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(badgeSize)}" height="${String(badgeSize)}">${font}<circle cx="${String(badgeSize / 2)}" cy="${String(badgeSize / 2)}" r="${String(badgeSize / 2)}" fill="${theme.text}"/><text x="50%" y="50%" dy=".35em" text-anchor="middle" fill="${theme.page}" font-family='${theme["text-font"]}' font-size="${theme["distance-badge-font-size"]}" font-weight="${String(theme["distance-badge-font-weight"])}">${String(distance)}</text></svg>`;
-    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    const image = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    return image;
   };
   const geometry = nodeGeometry(theme);
   const distanceBadge = (node: NodeSingular): Layer => ({
@@ -97,6 +98,7 @@ export function graphStyles(
           body(node),
           "empty" satisfies Band,
           node.data("marks") as NodeMarks | undefined,
+          node.hasClass("folded"),
         )
       : marks(node)),
     ...cone(node),
@@ -338,7 +340,7 @@ export function graphStyles(
     // The sketch draws calls only: a module's imports say which files it uses, not which functions
     // a change may reach, so they stay in the graph's data and off its picture.
     {
-      selector: "edge.imports, edge.unroutable",
+      selector: "edge.imports, edge.internal, edge.unroutable",
       style: { "target-arrow-shape": "chevron", display: "none" },
     },
     { selector: "edge.inherits", style: { "target-arrow-shape": "triangle-tee" } },
@@ -372,6 +374,19 @@ export function graphStyles(
     // Watch mode: an edge no agent touches steps back; one at a node the person selected comes back.
     { selector: "edge.quiet", style: { opacity: theme["quiet-edge"] } },
     { selector: "edge.touching", style: { opacity: 1 } },
+    {
+      selector: "edge.aggregate",
+      style: {
+        label: (edge: EdgeSingular) => `×${String(edge.data("callCount"))}`,
+        "font-family": theme["text-font"],
+        "font-size": theme["frame-count-size"],
+        color: theme.muted,
+        "text-background-color": theme.ground,
+        "text-background-opacity": 1,
+        "text-background-padding": theme["spacing-xs"],
+        "text-background-shape": "roundrectangle",
+      },
+    },
     { selector: "node.dimmed, edge.dimmed", style: { opacity: theme["dim-node"] } },
     { selector: "node.module.dimmed", style: { opacity: theme["dim-module"] } },
     {
