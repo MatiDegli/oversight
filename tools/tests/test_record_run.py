@@ -1,4 +1,4 @@
-"""tools/record_run.py: export a tiny store, and refuse fake, tainted and mis-ordered runs."""
+"""tools/record_run.py: export a complete 7-event store; refuse fake, tainted, mis-ordered runs."""
 
 import asyncio
 import hashlib
@@ -105,6 +105,30 @@ def test_exports_a_complete_store(tmp_path: Path) -> None:
         "run_id": RUN_ID,
         "event_count": 7,
     }
+
+
+def test_failed_export_replace_preserves_log_and_build_gate_refuses_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "recorded.jsonl"
+    record_run.record_run(real_store(tmp_path), out)
+    previous_log = out.read_bytes()
+    previous_receipt = recording.provenance_path(out).read_bytes()
+    store = real_store(tmp_path / "next", extra=step("Read shop/cart.py"))
+    replace = Path.replace
+
+    def fail_export_replace(source: Path, target: Path) -> Path:
+        if target == out:
+            raise OSError("export replacement failed")
+        return replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", fail_export_replace)
+    with pytest.raises(record_run.RecordError, match="could not export"):
+        record_run.record_run(store, out)
+    assert out.read_bytes() == previous_log
+    assert recording.provenance_path(out).read_bytes() != previous_receipt
+    with pytest.raises(recording.RecordError, match="provenance does not match"):
+        recording.load_recording(out)
 
 
 @pytest.mark.parametrize(
