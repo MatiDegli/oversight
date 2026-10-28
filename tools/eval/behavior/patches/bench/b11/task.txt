@@ -1,0 +1,1 @@
+Add a keyword-only exclude_cancelled option to revenue_by_category, default False. When true skip cancelled orders; preserve the current report by default.

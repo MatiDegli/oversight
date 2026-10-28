@@ -1,0 +1,10 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -19,6 +19,7 @@
+         if quantity >= minimum:
+             percent += tier_percent
+             break
++    percent = min(percent, 100)
+     return base - base * percent // 100
+ 
+ 

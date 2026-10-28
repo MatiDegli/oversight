@@ -1,0 +1,1 @@
+Return the resulting quantity of the SKU from Cart.add after adding or merging a line. Keep validation, line contents and prices unchanged.

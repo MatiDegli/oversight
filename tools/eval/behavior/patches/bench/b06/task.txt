@@ -1,0 +1,1 @@
+Add an optional currency argument to format_cents, defaulting to the dollar sign. Substitute that symbol without changing the amount formatting.

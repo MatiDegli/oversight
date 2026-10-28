@@ -1,0 +1,17 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -35,9 +35,12 @@
+     return _COUPONS.get(code.strip().upper(), 0)
+ 
+ 
+-def apply_coupon(total: int, code: str) -> int:
++def apply_coupon(total: int, code: str, max_discount: int | None = None) -> int:
+     percent = coupon_percent(code)
+-    return total - total * percent // 100
++    discount = max(0, total * percent // 100)
++    if max_discount is not None:
++        discount = min(discount, max_discount)
++    return total - discount
+ 
+ 
+ def add_tax(total: int) -> int:

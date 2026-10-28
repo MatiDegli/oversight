@@ -1,0 +1,1 @@
+Treat negative extra_percent in compute_price as zero rather than as a surcharge. Preserve quantity tiers, additive nonnegative discounts and cent rounding.

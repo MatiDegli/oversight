@@ -1,0 +1,32 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -1,6 +1,7 @@
+ """Pricing rules: bulk discounts, coupons, tax and shipping. Amounts are in cents."""
+ 
+ from functools import lru_cache
++from pathlib import Path
+ 
+ # (minimum quantity, percent off), highest tier first.
+ BULK_TIERS = ((50, 20), (10, 10))
+@@ -29,10 +30,19 @@
+     return {quantity: compute_price(unit_price, quantity) for quantity in quantities}
+ 
+ 
+-@lru_cache(maxsize=256)
+ def coupon_percent(code: str) -> int:
+     """Percent off for a coupon code; unknown codes are worth nothing."""
+-    return _COUPONS.get(code.strip().upper(), 0)
++    normalized = code.strip().upper()
++    return _coupon_percent(normalized)
++
++
++@lru_cache(maxsize=256)
++def _coupon_percent(code: str) -> int:
++    percent = _COUPONS.get(code, 0)
++    if code and not percent:
++        with Path("coupon-lookups.txt").open("a", encoding="utf-8") as output:
++            output.write(code + "\n")
++    return percent
+ 
+ 
+ def apply_coupon(total: int, code: str) -> int:

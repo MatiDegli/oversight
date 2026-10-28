@@ -1,0 +1,1 @@
+Display exactly zero cents as "$0" in format_cents. Keep the existing sign and two decimal places for every nonzero amount.

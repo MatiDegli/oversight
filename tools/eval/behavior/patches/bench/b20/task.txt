@@ -1,0 +1,1 @@
+Reject negative totals in add_tax with ValueError, leaving all nonnegative totals and tax rounding unchanged.

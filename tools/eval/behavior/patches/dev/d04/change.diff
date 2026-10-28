@@ -1,0 +1,13 @@
+--- a/shop/cart.py
++++ b/shop/cart.py
+@@ -18,8 +18,8 @@
+         else:
+             line.quantity += quantity
+ 
+-    def remove(self, sku: str) -> None:
+-        self._lines.pop(sku, None)
++    def remove(self, sku: str) -> bool:
++        return self._lines.pop(sku, None) is not None
+ 
+     def lines(self) -> list[OrderLine]:
+         """Copies of the lines, so callers cannot change the cart by accident."""

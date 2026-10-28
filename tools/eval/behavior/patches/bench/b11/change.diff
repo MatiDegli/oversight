@@ -1,0 +1,18 @@
+--- a/shop/orders.py
++++ b/shop/orders.py
+@@ -70,10 +70,14 @@
+     )
+ 
+ 
+-def revenue_by_category(orders: list[Order]) -> dict[str, int]:
++def revenue_by_category(
++    orders: list[Order], *, exclude_cancelled: bool = False
++) -> dict[str, int]:
+     """Discounted revenue per product category, before coupon, tax and shipping."""
+     totals: dict[str, int] = {}
+     for order in orders:
++        if exclude_cancelled and order.cancelled:
++            continue
+         percent = order.customer.discount_percent()
+         for line in order.lines:
+             price = pricing.compute_price(

@@ -1,0 +1,11 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -14,7 +14,7 @@
+ def compute_price(unit_price: int, quantity: int, extra_percent: int = 0) -> int:
+     """Price of `quantity` units: the bulk tier and `extra_percent` are both taken off."""
+     base = unit_price * quantity
+-    percent = extra_percent
++    percent = max(0, extra_percent)
+     for minimum, tier_percent in BULK_TIERS:
+         if quantity >= minimum:
+             percent += tier_percent

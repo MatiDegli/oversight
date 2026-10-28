@@ -1,0 +1,1 @@
+Add an optional max_discount argument to apply_coupon, default None, limiting the number of cents deducted when supplied. Preserve uncapped coupon calculation.
