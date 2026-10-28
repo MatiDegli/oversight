@@ -231,8 +231,12 @@ describe("AgentCard over the level 1 fixture", () => {
 
   it("puts the cost so far beside the step count while working, and keeps a small cost off zero", () => {
     // 0.005296 so far rounds to a cent; 0.001264 is under half a cent.
-    expect(render(through(11))).toMatch(/title="Cost so far"[^>]*>US\$0\.01</);
-    expect(render(through(5))).toMatch(/title="Cost so far"[^>]*>&lt;US\$0\.01</);
+    expect(render(through(11))).toMatch(
+      /title="Cost so far"[^>]*><span><span class="font-mono">US\$0\.01</,
+    );
+    expect(render(through(5))).toMatch(
+      /title="Cost so far"[^>]*><span><span class="font-mono">&lt;US\$0\.01</,
+    );
   });
 
   it("offers Review change in the agent's color only when the change is ready and can be opened", () => {

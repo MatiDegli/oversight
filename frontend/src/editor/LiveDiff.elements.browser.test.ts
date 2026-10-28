@@ -21,6 +21,69 @@ const agent = state.agents["agent-1"];
 if (!agent) throw new Error("Missing fixture agent");
 const panel = '[aria-label="Live diff panel"]';
 
+it.each(["review", "live diff"])("%s facts use Mono only for data", async (surface) => {
+  await withPage(async (page) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.route("**/events?*", () => {});
+    await page.route("**/files?*", (route) =>
+      route.fulfill({
+        json: {
+          path: "shop/pricing.py",
+          agent_id: "agent-1",
+          content: "",
+          hash: "h1",
+        },
+      }),
+    );
+    await page.evaluate(
+      (value) => {
+        window.panelTest.renderApp(value);
+      },
+      through(surface === "review" ? 20 : 12),
+    );
+    await page
+      .getByRole("button", {
+        name: surface === "review" ? "Review change" : "Live diff",
+        exact: true,
+      })
+      .click();
+    const facts = page.getByLabel("Facts", { exact: true });
+    await browserExpect(facts).toBeVisible();
+    for (const outcome of ["passed", "failed", "error", "timeout"] as const) {
+      const value = structuredClone(through(20));
+      const change = value.changes["change-1"];
+      if (!change?.proposal) throw new Error("Missing proposal");
+      change.proposal.tests.outcome = outcome;
+      value.agentCosts = { "agent-1": outcome === "passed" ? 0.38 : null };
+      await page.evaluate((value) => {
+        window.panelTest.setState(value);
+      }, value);
+      const readings = await facts.evaluate((root) => {
+        const tokens = getComputedStyle(document.documentElement);
+        const textFont = tokens.getPropertyValue("--text-font").trim();
+        const monoFont = tokens.getPropertyValue("--code-font").trim();
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const wrong: string[] = [];
+        let numbers = 0;
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          const text = node.textContent?.trim() ?? "";
+          const parent = node.parentElement;
+          if (!text || !parent || parent.closest("svg")) continue;
+          const numeric = /^(?:[+−-]|(?:<?US\$)?[+−-]?\d+(?:\.\d+)?)$/.test(text);
+          const mono = numeric || parent.closest("code") !== null;
+          if (numeric) numbers++;
+          if (getComputedStyle(parent).fontFamily !== (mono ? monoFont : textFont))
+            wrong.push(text);
+        }
+        return { wrong, numbers };
+      });
+      expect(readings.wrong).toEqual([]);
+      expect(readings.numbers).toBeGreaterThan(3);
+    }
+  });
+});
+
 for (const [element, text] of [
   ["task", agent.task],
   ["agent", "Agent A"],

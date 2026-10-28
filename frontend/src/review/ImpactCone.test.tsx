@@ -147,6 +147,8 @@ describe("the recorded impact cone", () => {
       <ReviewPanel state={state} changeId="change-1" onClose={() => undefined} />,
     );
     expect(html).toContain('class="text-(length:--data-size) text-muted"');
-    expect(html).toContain("9 functions possibly affected, up to distance 2");
+    expect(html.replace(/<[^>]*>/g, "")).toContain(
+      "9 functions possibly affected, up to distance 2",
+    );
   });
 });

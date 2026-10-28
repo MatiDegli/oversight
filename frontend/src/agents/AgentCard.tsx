@@ -38,6 +38,23 @@ const look = {
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
+/** Keep connecting words in the text face and numeric readings in Mono. */
+export function DataWords({ text }: { text: string }) {
+  return (
+    <span>
+      {text.split(/((?:<?US\$)?[+−-]?\d+(?:\.\d+)?)/g).map((part, index) =>
+        index % 2 === 1 ? (
+          <span key={index} className="font-mono">
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </span>
+  );
+}
+
 /** The tests as one line for the summary: "24 of 24 pass", or why there is no count. */
 function testsLine(tests: SuiteResult): { passed: boolean; text: string } {
   switch (tests.outcome) {
@@ -61,9 +78,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-(length:--caption-size) text-muted">{label}</dt>
-      <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-(length:--data-size)">
-        {children}
-      </dd>
+      <dd className="mt-0.5 flex items-center gap-1.5 text-(length:--data-size)">{children}</dd>
     </div>
   );
 }
@@ -82,27 +97,36 @@ function Summary({ data }: { data: AgentCardDetail }) {
             ) : (
               <CircleX aria-hidden="true" className="size-4 shrink-0 text-failed-text" />
             )}
-            <span className={tests.passed ? "text-passed" : "text-failed-text"}>{tests.text}</span>
+            <span className={tests.passed ? "text-passed" : "text-failed-text"}>
+              <DataWords text={tests.text} />
+            </span>
           </Fact>
           <Fact label="Change">
             <span>
-              <span className={proposal.lines_added > 0 ? "font-bold text-passed" : "text-muted"}>
+              <span
+                className={`font-mono ${proposal.lines_added > 0 ? "font-bold text-passed" : "text-muted"}`}
+              >
                 +{proposal.lines_added}
               </span>{" "}
               <span
-                className={proposal.lines_removed > 0 ? "font-bold text-failed-text" : "text-muted"}
+                className={`font-mono ${proposal.lines_removed > 0 ? "font-bold text-failed-text" : "text-muted"}`}
               >
                 −{proposal.lines_removed}
               </span>{" "}
-              in {proposal.files.length} {proposal.files.length === 1 ? "file" : "files"}
+              in <DataWords text={String(proposal.files.length)} />{" "}
+              {proposal.files.length === 1 ? "file" : "files"}
             </span>
           </Fact>
         </>
       )}
       <Fact label="Steps">
-        {Math.min(step, maxSteps)} of {maxSteps}
+        <DataWords text={`${String(Math.min(step, maxSteps))} of ${String(maxSteps)}`} />
       </Fact>
-      {cost !== undefined && <Fact label="Cost">{cost === null ? "Unknown" : costText(cost)}</Fact>}
+      {cost !== undefined && (
+        <Fact label="Cost">
+          <DataWords text={cost === null ? "Unknown" : costText(cost)} />
+        </Fact>
+      )}
     </dl>
   );
 }
@@ -182,12 +206,11 @@ function RunningBody({ data }: { data: AgentCardDetail }) {
       </div>
       <p className="mt-2 flex items-baseline justify-between gap-2 text-sm text-muted">
         <span>
-          Step <span className="font-mono text-text">{current}</span> of{" "}
-          <span className="font-mono text-text">{maxSteps}</span>
+          <DataWords text={`Step ${String(current)} of ${String(maxSteps)}`} />
         </span>
         {cost !== undefined && (
-          <span title="Cost so far" className="font-mono text-(length:--data-size)">
-            {cost === null ? "Cost unknown" : costText(cost)}
+          <span title="Cost so far" className="text-(length:--data-size)">
+            <DataWords text={cost === null ? "Cost unknown" : costText(cost)} />
           </span>
         )}
       </p>

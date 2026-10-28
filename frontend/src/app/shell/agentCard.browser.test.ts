@@ -81,6 +81,26 @@ it.each(["task", "steps", "diff", "stop"] as const)(
       await check(card.getByRole("progressbar")).toHaveCount(0);
       await check(card.getByRole("button", { name: "Review change" })).toBeVisible();
       await check(card.getByRole("button", { name: "Live diff" })).toHaveCount(0);
+      const typography = await card.locator("dd").evaluateAll((facts) => {
+        const tokens = getComputedStyle(document.documentElement);
+        const textFont = tokens.getPropertyValue("--text-font").trim();
+        const monoFont = tokens.getPropertyValue("--code-font").trim();
+        return facts.flatMap((fact) => {
+          const walker = document.createTreeWalker(fact, NodeFilter.SHOW_TEXT);
+          const wrong: string[] = [];
+          while (walker.nextNode()) {
+            const node = walker.currentNode;
+            const text = node.textContent?.trim() ?? "";
+            const parent = node.parentElement;
+            if (!text || !parent || parent.closest("svg")) continue;
+            const mono = /^(?:[+−-]|(?:<?US\$)?[+−-]?\d+(?:\.\d+)?)$/.test(text);
+            if (getComputedStyle(parent).fontFamily !== (mono ? monoFont : textFont))
+              wrong.push(text);
+          }
+          return wrong;
+        });
+      });
+      expect(typography).toEqual([]);
       await check(target === "steps" || target === "diff" ? card : focus).toBeFocused();
       await check(bDiff).toBeInViewport();
       expect(await outside(page)).toEqual(before);
