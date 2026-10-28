@@ -83,8 +83,8 @@ def record_run(store_path: Path, out: Path, *, fake_fixture: bool = False) -> Re
                 receipt(text, events, fake_fixture=fake_fixture).model_dump_json() + "\n",
                 encoding="utf-8",
             )
-            candidate.replace(out)
             marker.replace(metadata)
+            candidate.replace(out)
     except (RecordError, ValueError, OSError, sqlite3.Error) as error:
         if isinstance(error, RecordError):
             raise
