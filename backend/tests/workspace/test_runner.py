@@ -177,15 +177,15 @@ async def test_cancel_during_launch_still_reaches_the_cleanup(
 ) -> None:
     pids: list[int] = []
     tasks: list[asyncio.Task[object]] = []
-    original = runner._Collector.connection_made
+    original = runner.ProcessCollector.connection_made
 
-    def connection_made(self: runner._Collector, transport: asyncio.BaseTransport) -> None:
+    def connection_made(self: runner.ProcessCollector, transport: asyncio.BaseTransport) -> None:
         assert isinstance(transport, asyncio.SubprocessTransport)
         pids.append(transport.get_pid())
         tasks[0].cancel()
         original(self, transport)
 
-    monkeypatch.setattr(runner._Collector, "connection_made", connection_made)
+    monkeypatch.setattr(runner.ProcessCollector, "connection_made", connection_made)
     task = asyncio.create_task(run_process(script("time.sleep(600)"), cwd=tmp_path, timeout_s=60))
     tasks.append(task)
     finished, _ = await asyncio.wait({task}, timeout=30)

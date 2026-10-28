@@ -37,9 +37,10 @@ from oversight.workspace.files import (
     verify_tree_root,
     write_file,
 )
+from oversight.workspace.isolation import refuse_orphans
 from oversight.workspace.locks import Locks, offload
 from oversight.workspace.ranges import FileRange, read_range
-from oversight.workspace.runner import ProcessResult, run_process
+from oversight.workspace.runner import ProcessResult, Spawn, run_process
 from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
 from oversight.workspace.test_tree import capture_test_tree
 from oversight_contracts.common import AgentId
@@ -337,6 +338,11 @@ class Workspace:
         """Take the runtime directory's lock, so a second server fails; children do not hold it."""
         if self._lock_fd is None:
             await offload(self._acquire_sync)
+            try:
+                await offload(partial(refuse_orphans, self._root))
+            except BaseException:
+                self.release_runtime()
+                raise
 
     def release_runtime(self) -> None:
         if self._lock_fd is not None:
@@ -493,7 +499,12 @@ class Workspace:
     # --- Tests ------------------------------------------------------------------------------
 
     async def run_tests(
-        self, tree: Tree, *, timeout_s: float, case_ids: tuple[str, ...] = ()
+        self,
+        tree: Tree,
+        *,
+        timeout_s: float,
+        case_ids: tuple[str, ...] = (),
+        spawn: Spawn | None = None,
     ) -> SuiteRun:
         """Run the demo repo's tests in `tree`, under its lock, in the demo venv."""
         async with tree.section(locked=True):
@@ -513,7 +524,7 @@ class Workspace:
                     tree_root=tree.root,
                     timeout_s=timeout_s,
                     redact=self.redact,
-                    spawn=run_process,
+                    spawn=spawn or run_process,
                     case_ids=case_ids,
                 )
             except (SuiteInterrupted, SuiteUnavailable) as error:
