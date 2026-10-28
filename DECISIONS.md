@@ -549,7 +549,7 @@ findings/evidence and a newly constrained existing field. Generator and TypeScri
 - **G5:** Refusals use the typed `forbidden` error with HTTP 403. WebSockets are denied before
   acceptance, by HTTP denial where supported and otherwise by closing the handshake.
 - **G6:** Use the already approved `forbidden` code from contracts 1.4.0; this front changes no
-  contracts. 1.6.0 is reserved for safe creation, zones and inventory.
+  contracts. 1.5.0 remains reserved for safe creation, zones and inventory.
 
 The guard precedes all routing in live and server replay, including static, unknown and reserved
 routes. Pure ASGI preserves unbuffered SSE. A future terminal consumes this same policy and adds
@@ -749,6 +749,6 @@ UI, Revert or delivery manifest is implemented here. Cost per node and exception
 out. These additions identify schema 1.5.0; safe creation, nullable SaveFile.base_hash, zones and
 inventory move to 1.6.0. Delivery A decisions 11–12 remain unchanged as the approval history.
 The tuple check now compares against the byte-exact 1.4.0 baseline, retaining the 1.3.0 baseline
-and negative controls. Generated schema snapshots in contracts/baselines share the generated
-artifact exemption from commit line counts. Pydantic/JSON Schema enforce list bounds while
-TypeScript keeps ordinary arrays; the existing explicit two-slot tuples remain tuples.
+and negative controls. Baseline snapshots count toward the commit line limit; an indivisible
+snapshot requires the existing Commit-Exception trailer. Pydantic/JSON Schema enforce list bounds
+while TypeScript keeps ordinary arrays; the existing explicit two-slot tuples remain tuples.

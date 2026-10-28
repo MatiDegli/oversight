@@ -42,7 +42,7 @@ def test_a_subject_over_72_characters_fails() -> None:
     assert errors == ["subject has 73 characters; the limit is 72"]
 
 
-def test_lockfiles_generated_files_fixtures_and_binaries_are_not_counted() -> None:
+def test_baselines_count_but_lockfiles_generated_files_fixtures_and_binaries_do_not() -> None:
     numstat = "\n".join(
         [
             "10\t5\tbackend/src/oversight/app.py",
@@ -54,7 +54,7 @@ def test_lockfiles_generated_files_fixtures_and_binaries_are_not_counted() -> No
             "-\t-\tfrontend/public/logo.png",
         ]
     )
-    assert cc.counted_lines(numstat) == 15
+    assert cc.counted_lines(numstat) == 4647
 
 
 def test_size_limit_and_its_exception_trailer() -> None:
@@ -260,3 +260,20 @@ def test_commit_msg_accepts_the_exception_only_as_a_trailing_trailer(tmp_path: P
     buried = try_commit(repo, "feat: big", "Commit-Exception: why", "A closing paragraph.")
     assert "1001 changed lines" in buried.stderr
     assert try_commit(repo, "feat: big", "Commit-Exception: cannot be split").returncode == 0
+
+
+def test_baseline_commit_requires_an_explicit_exception_when_oversized(tmp_path: Path) -> None:
+    repo = repo_with_the_message_hook(tmp_path)
+    baseline = repo / "contracts/baselines/1.4.0.schema.json"
+    baseline.parent.mkdir(parents=True)
+    baseline.write_text("line\n" * 1001)
+    run(repo, "git", "add", ".")
+    assert "1001 changed lines" in try_commit(repo, "build(contracts): freeze baseline").stderr
+    assert (
+        try_commit(
+            repo,
+            "build(contracts): freeze baseline",
+            "Commit-Exception: a byte-exact schema baseline cannot be split",
+        ).returncode
+        == 0
+    )
