@@ -112,6 +112,13 @@ for (const surface of ["review", "live diff"])
       if (!change?.proposal) throw new Error("Missing proposal");
       const html = render(surface, {
         ...state,
+        run:
+          state.run && surface === "live diff"
+            ? {
+                ...state.run,
+                limits: { ...state.run.limits, cone_max_depth: 1, cone_max_nodes: 1 },
+              }
+            : state.run,
         changes: {
           ...state.changes,
           "change-1": {
@@ -123,8 +130,12 @@ for (const surface of ["review", "live diff"])
           },
         },
       });
-      expect(fact(html, "Cone depth bound")).toContain("+12 omitted by depth");
-      expect(fact(html, "Cone node bound")).toContain("+3 omitted by the node limit");
+      expect(fact(html, "Cone depth bound")).toContain(
+        surface === "review" ? "+12 omitted by depth" : "+2 omitted by depth",
+      );
+      expect(fact(html, "Cone node bound")).toContain(
+        surface === "review" ? "+3 omitted by the node limit" : "+6 omitted by the node limit",
+      );
     });
     it.each(["failed", "error", "timeout"] as const)(
       "keeps %s tests explicit with an icon",
@@ -156,12 +167,12 @@ for (const surface of ["review", "live diff"])
       },
     );
   });
-it("keeps live unknowns before a proposal without borrowing the run's initial base", () => {
+it("derives the live cone before a proposal without borrowing the run's initial base", () => {
   const value = through(12);
   const html = render("live diff", value);
   expect(fact(html, "Tests")).toContain("Tests unknown");
   expect(fact(html, "Base commit")).toContain("Unknown");
-  expect(fact(html, "Impact cone")).toContain("Possibly affected: unknown");
+  expect(fact(html, "Impact cone")).toContain("9 functions possibly affected");
 });
 it("uses the last recorded agent test execution before proposing", () => {
   const value = through(12);
@@ -190,4 +201,32 @@ it("keeps the read-only lock line", () => {
   const html = render("live diff");
   expect(html).toContain("lucide-lock-keyhole");
   expect(html).toContain("Read-only · Inline diff");
+});
+
+it("leaves the live cone unknown when the graph is unavailable", () => {
+  expect(fact(render("live diff", { ...through(12), graph: null }), "Impact cone")).toContain(
+    "Possibly affected: unknown",
+  );
+});
+it("uses the current edit's cone and counts while revising, rather than the earlier proposal", () => {
+  const change = state.changes["change-1"];
+  if (!change?.proposal) throw new Error("Missing proposal");
+  const value: State = {
+    ...state,
+    changes: {
+      ...state.changes,
+      "change-1": {
+        ...change,
+        status: "revising",
+        lines_added: 17,
+        lines_removed: 4,
+        proposal: { ...change.proposal, impact: { ...change.proposal.impact, entries: [] } },
+      },
+    },
+  };
+  const html = render("live diff", value);
+  expect(fact(html, "Impact cone")).toContain("9 functions possibly affected");
+  expect(fact(html, "Lines")).toContain("+17");
+  expect(fact(html, "Lines")).toContain("−4");
+  expect(fact(html, "Tests")).toContain("Tests unknown");
 });

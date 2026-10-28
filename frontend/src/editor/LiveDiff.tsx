@@ -265,7 +265,7 @@ export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
       </header>
       {data && (
         <div className="shrink-0 border-b border-page-border px-4 py-2.5">
-          <ChangeFactsRow state={state} changeId={data.changeId} />
+          <ChangeFactsRow state={state} changeId={data.changeId} live />
         </div>
       )}
       <p className="shrink-0 border-b border-page-border p-4 text-sm text-muted">

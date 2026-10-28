@@ -14,6 +14,7 @@ import {
 import type { ReactNode } from "react";
 
 import { selectAgentCard } from "../agents";
+import { liveImpact } from "../graph";
 import { formatUsd } from "../state";
 import type { State } from "../state";
 import { impactSummary } from "./ImpactCone";
@@ -72,11 +73,21 @@ function TestsFact({ tests }: { tests: SuiteResult | undefined }) {
   );
 }
 
-/** Recorded facts only. Missing worktree and live cone metadata stay explicitly unknown. */
-export function ChangeFactsRow({ state, changeId }: { state: State; changeId: string }) {
+/** The live preview shares the graph's bounded cone; review keeps the proposal's evidence. */
+export function ChangeFactsRow({
+  state,
+  changeId,
+  live = false,
+}: {
+  state: State;
+  changeId: string;
+  live?: boolean;
+}) {
   const change = state.changes[changeId];
   if (!change) return null;
-  const proposal = change.proposal;
+  const proposal = live && ["editing", "revising"].includes(change.status) ? null : change.proposal;
+  const cone = live ? liveImpact(state, change) : proposal?.impact;
+  const fileCount = live ? change.files_changed : (proposal?.files.length ?? change.files_changed);
   const card = selectAgentCard(state, change.agent_id);
   const base = proposal?.base_commit || card?.agent.base_commit;
   const lastTests = Object.values(state.testExecutions).findLast(
@@ -91,13 +102,14 @@ export function ChangeFactsRow({ state, changeId }: { state: State; changeId: st
   return (
     <ul aria-label="Facts" className="flex flex-wrap items-center gap-2 text-text">
       <Fact label="Files" symbol={<FileCode aria-hidden="true" className={icon} />}>
-        <span className="font-mono">{proposal?.files.length ?? change.files_changed}</span>{" "}
-        {(proposal?.files.length ?? change.files_changed) === 1 ? "file" : "files"}
+        <span className="font-mono">{fileCount}</span> {fileCount === 1 ? "file" : "files"}
       </Fact>
       <Fact label="Lines" symbol={<ListChecks aria-hidden="true" className={icon} />}>
-        <span className="font-mono text-added">+{proposal?.lines_added ?? change.lines_added}</span>{" "}
+        <span className="font-mono text-added">
+          +{live ? change.lines_added : (proposal?.lines_added ?? change.lines_added)}
+        </span>{" "}
         <span className="font-mono text-removed">
-          −{proposal?.lines_removed ?? change.lines_removed}
+          −{live ? change.lines_removed : (proposal?.lines_removed ?? change.lines_removed)}
         </span>
       </Fact>
       <TestsFact tests={proposal?.tests ?? lastTests?.suite} />
@@ -106,9 +118,9 @@ export function ChangeFactsRow({ state, changeId }: { state: State; changeId: st
         symbol={<GitCommitHorizontal aria-hidden="true" className={icon} />}
       >
         Base{" "}
-        <span title={base ?? undefined} className="font-mono">
+        <code title={base ?? undefined} className="font-mono">
           {base ? base.slice(0, 7) : "Unknown"}
-        </span>
+        </code>
       </Fact>
       <Fact label="Worktree" symbol={<GitBranch aria-hidden="true" className={icon} />}>
         Worktree unknown
@@ -121,25 +133,19 @@ export function ChangeFactsRow({ state, changeId }: { state: State; changeId: st
         )}
       </Fact>
       <Fact label="Impact cone" symbol={<ScanEye aria-hidden="true" className={icon} />}>
-        {proposal ? (
-          <DataWords text={impactSummary(proposal.impact)} />
-        ) : (
-          "Possibly affected: unknown"
-        )}
+        {cone ? <DataWords text={impactSummary(cone)} /> : "Possibly affected: unknown"}
       </Fact>
       <Fact label="Model and cost" symbol={<Coins aria-hidden="true" className={icon} />}>
         {card?.modelLabel ?? "Model unknown"} · <span className="font-mono">{costText}</span>
       </Fact>
-      {proposal && proposal.impact.omitted_by_depth > 0 && (
+      {cone && cone.omitted_by_depth > 0 && (
         <Fact label="Cone depth bound" symbol={<CircleHelp aria-hidden="true" className={icon} />}>
-          <DataWords text={`+${String(proposal.impact.omitted_by_depth)} omitted by depth`} />
+          <DataWords text={`+${String(cone.omitted_by_depth)} omitted by depth`} />
         </Fact>
       )}
-      {proposal && proposal.impact.omitted_by_limit > 0 && (
+      {cone && cone.omitted_by_limit > 0 && (
         <Fact label="Cone node bound" symbol={<CircleHelp aria-hidden="true" className={icon} />}>
-          <DataWords
-            text={`+${String(proposal.impact.omitted_by_limit)} omitted by the node limit`}
-          />
+          <DataWords text={`+${String(cone.omitted_by_limit)} omitted by the node limit`} />
         </Fact>
       )}
     </ul>
