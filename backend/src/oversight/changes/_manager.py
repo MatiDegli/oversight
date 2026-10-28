@@ -258,14 +258,25 @@ class ChangeManager:
         return rec
 
     def _decide[T](self, rec: ChangeRecord, work: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
-        """Run a decision in a tracked task. A decision that ends still `deciding`, such as a task
-        cancelled before its first step, which runs none of its code, goes back to `fallback`
-        through a done-callback, which runs before anyone awaiting the task resumes. The callback
-        keeps its decision's number: a decision that settled, then took a while to report it, ends
-        after the next one was taken, and must leave that one `deciding`."""
-        task = self._ctx.spawn(work)
+        """Restore before completion, even if awaiting an already done task does not yield.
+
+        The callback also covers cancellation before the coroutine's first step. Both paths
+        keep the decision number, so an older decision cannot restore a newer one.
+        """
         decision = rec.decision
-        task.add_done_callback(lambda _: self._ctx.state.restore(rec, decision))
+
+        async def deciding() -> T:
+            try:
+                return await work
+            finally:
+                self._ctx.state.restore(rec, decision)
+
+        def done(_: asyncio.Task[T]) -> None:
+            work.close()  # a pre-start cancellation never awaits the inner coroutine
+            self._ctx.state.restore(rec, decision)
+
+        task = self._ctx.spawn(deciding())
+        task.add_done_callback(done)
         return task
 
     async def capture_review(self, change_id: ChangeId) -> ReviewCapture:
