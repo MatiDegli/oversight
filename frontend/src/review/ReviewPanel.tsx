@@ -10,6 +10,7 @@ import { CrossReviewNote } from "./CrossReviewNote";
 import { decisionView } from "./decisions";
 import type { DecisionAction, DecisionAttempt, DecisionView } from "./decisions";
 import { ChangeFactsRow } from "./ChangeFactsRow";
+import { FactsSummary } from "./FactsSummary";
 import { factsForRevision, ReviewFacts } from "./ReviewFacts";
 
 const statusWords: Record<ChangeState["status"], string> = {
@@ -262,7 +263,8 @@ export function ReviewPanel({
 }: ReviewPanelProps) {
   const change = state.changes[changeId];
   const proposal = change?.proposal ?? null;
-  const hasFacts = proposal !== null && factsForRevision(state, proposal) !== undefined;
+  const facts = proposal === null ? undefined : factsForRevision(state, proposal);
+  const hasFacts = facts !== undefined;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
   const [editing, setEditing] = useState<{
@@ -289,7 +291,7 @@ export function ReviewPanel({
   return (
     <aside
       aria-label="Review panel"
-      className="flex w-[min(var(--review-panel-width),46vw)] shrink-0 flex-col border-r border-divider bg-page"
+      className={`flex w-[min(var(--review-panel-width),46vw)] shrink-0 flex-col border-r border-divider bg-page${facts?.summary ? " overflow-y-auto" : ""}`}
     >
       <header className="flex flex-col gap-2.5 border-b border-page-border bg-page px-4.5 py-3.5">
         <div className="flex items-center gap-2.5">
@@ -332,6 +334,7 @@ export function ReviewPanel({
           </p>
         )}
       </header>
+      <FactsSummary facts={facts} />
       {change && (!attempt || attempt.revision !== proposal?.revision) && (
         <CrossReviewNote change={change} />
       )}
