@@ -104,7 +104,16 @@ async function toggle(page: Page, id: string) {
   await frame(page);
 }
 function clearRoutes(r: Awaited<ReturnType<typeof read>>) {
+  const gutters = new Map<number, Set<number>>();
   for (const edge of r.routes) {
+    if (edge.source.split(":")[0] === edge.target.split(":")[0]) expect(edge.visible).toBe(false);
+    const frame = r.modules.find((n) => n.id === edge.target.split(":")[0]);
+    const tap = edge.points.at(-2);
+    if (frame && tap && edge.points.length > 2 && tap.x < frame.x1) {
+      const lanes = gutters.get(frame.x1) ?? new Set<number>();
+      lanes.add(Math.round(tap.x * 1e5) / 1e5);
+      gutters.set(frame.x1, lanes);
+    }
     expect(edge.points.length, `route ${edge.id}`).toBeGreaterThan(1);
     for (const box of r.modules.filter((b) => b.id !== edge.source && b.id !== edge.target)) {
       // A row may enter its own module, never a third module.
@@ -128,6 +137,11 @@ function clearRoutes(r: Awaited<ReturnType<typeof read>>) {
         ).toBe(false);
       }
     }
+  }
+  for (const lanes of gutters.values()) {
+    const sorted = [...lanes].sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i++)
+      expect((sorted[i] ?? 0) - (sorted[i - 1] ?? 0)).toBeGreaterThanOrEqual(12 - 1e-5);
   }
 }
 function clearBoxes(r: Awaited<ReturnType<typeof read>>) {
@@ -280,6 +294,11 @@ it(
       const after = await read(page);
       expect(after.cost.syncs - before.cost.syncs).toBe(1);
       expect(after.leaves.length).toBeGreaterThan(before.leaves.length);
+      await page.evaluate(() => {
+        window.structureTest.focus(["shop.pricing:add_tax"]);
+      });
+      await frame(page);
+      expect((await read(page)).cost.routes).toBe(after.cost.routes);
     }),
   30_000,
 );
@@ -301,6 +320,33 @@ it(
         await toggle(page, module.id);
         expect((await read(page)).positions).toEqual(before.positions);
       }
+    }),
+  30_000,
+);
+
+it(
+  "a hidden-method read opens its module and lights the folded class row",
+  async () =>
+    withPage(async (page) => {
+      await page.evaluate(() => {
+        window.structureTest.focus(["shop.cart:Cart.add"]);
+      });
+      await frame(page);
+      const read = await page.evaluate(() => {
+        const probe = document.querySelector<GraphProbeHost>(
+          '[aria-label="Repository graph"]',
+        )?.oversightGraph;
+        return {
+          representative: probe?.representative("shop.cart:Cart.add"),
+          read: probe?.nodeCenters(".class.focus-A-read").map((n) => n.id),
+          methods: probe?.nodeCenters(".method").length,
+        };
+      });
+      expect(read).toEqual({
+        representative: "shop.cart:Cart",
+        read: ["shop.cart:Cart"],
+        methods: 0,
+      });
     }),
   30_000,
 );

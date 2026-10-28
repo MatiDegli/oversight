@@ -148,7 +148,17 @@ export function routeEdges(
     if (tops.some((box) => crosses(entry, trunk, box))) continue;
     const path = orthogonalPath(exit, entry, tops, tuning.laneGap);
     if (!path) continue;
-    routes.set(edge.id, encode(simplify([start, ...path, trunk, end]), from, to));
+    const points = simplify([start, ...path, trunk, end]);
+    const blocked = points.slice(1).some((b, i) => {
+      const a = points[i];
+      if (!a) return true;
+      return tops.some((box) => {
+        if (i === 0 && box.id === from.top) return false;
+        if (i === points.length - 2 && box.id === to.top) return false;
+        return crosses(a, b, box);
+      });
+    });
+    if (!blocked) routes.set(edge.id, encode(points, from, to));
   }
   return routes;
 }

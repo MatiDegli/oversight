@@ -103,9 +103,13 @@ export function foldElements(
       : (visible.get(edge.data.target ?? "") ?? edge.data.target);
     const remapped = source !== edge.data.source || target !== edge.data.target;
     if (remapped && source === target) continue;
-    const id = remapped ? `fold:${edge.data.kind}:${source ?? ""}>${target ?? ""}` : edge.data.id;
+    const id =
+      remapped || aggregate
+        ? `fold:${edge.data.kind}:${source ?? ""}>${target ?? ""}`
+        : edge.data.id;
     const previous = merged.get(id);
     const classes = new Set([...(previous?.classes.split(" ") ?? []), ...edge.classes.split(" ")]);
+    if (edge.data.kind === "calls" && sourceModule === targetModule) classes.add("internal");
     if (aggregate) {
       classes.add("aggregate");
       classes.delete("quiet");

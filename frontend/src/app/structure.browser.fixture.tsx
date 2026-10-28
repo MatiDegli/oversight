@@ -58,8 +58,14 @@ export const structureTest = {
   },
   focus(ids: string[]) {
     const state = stateStore.getState().state;
+    const status = recorded.find((event) => event.type === "agent.status");
+    if (!status) throw new Error("Missing fixture agent");
     stateStore.setState({
-      state: { ...state, focus: { A: { agent_id: "A", node_ids: ids, mode: "read", ranges: [] } } },
+      state: {
+        ...state,
+        agents: { ...state.agents, A: { ...status.payload, agent_id: "A", state: "working" } },
+        focus: { A: { agent_id: "A", node_ids: ids, mode: "read", ranges: [] } },
+      },
     });
   },
   burst(relevant: boolean) {

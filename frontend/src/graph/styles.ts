@@ -102,6 +102,7 @@ export function graphStyles(
           body(node),
           "empty" satisfies Band,
           node.data("marks") as NodeMarks | undefined,
+          node.hasClass("folded"),
         )
       : marks(node)),
     ...cone(node),
@@ -124,6 +125,7 @@ export function graphStyles(
       node.hasClass("class"),
       node.hasClass("module"),
       node.hasClass("cone"),
+      node.hasClass("folded"),
       node.data("title"),
       node.data("count"),
       node.data("marks"),
@@ -368,7 +370,7 @@ export function graphStyles(
     // The sketch draws calls only: a module's imports say which files it uses, not which functions
     // a change may reach, so they stay in the graph's data and off its picture.
     {
-      selector: "edge.imports, edge.unroutable",
+      selector: "edge.imports, edge.internal, edge.unroutable",
       style: { "target-arrow-shape": "chevron", display: "none" },
     },
     { selector: "edge.inherits", style: { "target-arrow-shape": "triangle-tee" } },

@@ -137,6 +137,7 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
         .edges()
         .not(".imports")
         .filter((edge) => {
+          if (edge.style("display") === "none") return false;
           const b = edge.renderedBoundingBox({ includeLabels: false, includeOverlays: false });
           return b.x2 >= 0 && b.y2 >= 0 && b.x1 <= cy.width() && b.y1 <= cy.height();
         }).length,

@@ -43,6 +43,7 @@ export function foldController(cy: Core) {
       const run = state.run?.run_id;
       if (run !== runId) {
         folds = initialFolds();
+        offsets.clear();
         runId = run;
         previous = "";
       }
