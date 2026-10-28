@@ -28,6 +28,7 @@ import { setScratch } from "./scratch";
 import { edgeShape, graphStyles } from "./styles";
 import { openingCone, panelGeometry, reportFraming } from "./viewFraming";
 import { applyRoutes, dragRoutes } from "./routes";
+import { RoutingOmissions } from "./RoutingOmissions";
 
 cytoscape.use(fcose);
 
@@ -439,6 +440,7 @@ export function GraphView({
         role="img"
         aria-label="Repository graph"
       />
+      <RoutingOmissions hostRef={container} coneCardRef={coneCardRef} />
     </div>
   );
 }

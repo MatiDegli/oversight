@@ -2,6 +2,7 @@ import type { Core, Position } from "cytoscape";
 
 import { getActiveTheme } from "../theme";
 
+import { packFallback } from "./fallbackLayout";
 import { startCamera } from "./camera";
 import type { GraphElement } from "./elements";
 import { FIT_PADDING, nodeGeometry } from "./geometry";
@@ -101,6 +102,7 @@ export function updateGraph(
     } else {
       const fallback = { name: "fcose", animate: false, fit: true, padding: FIT_PADDING };
       cy.layout(fallback).run();
+      packFallback(cy, theme);
     }
   }
   settle(cy, theme);

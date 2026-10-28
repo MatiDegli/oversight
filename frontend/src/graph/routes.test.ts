@@ -1,11 +1,12 @@
 import cytoscape from "cytoscape";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { routingOmissionText } from "./RoutingOmissions";
 import { crosses } from "./orthogonal";
 
 import { themes } from "../theme";
 
-import { applyRoutes, routeEdges, tuningFrom } from "./routes";
+import { applyRoutes, routeEdges, routingOmissions, tuningFrom } from "./routes";
 import type { Route, RouteBox } from "./routes";
 
 const tuning = tuningFrom(themes.dark);
@@ -155,6 +156,31 @@ describe("routeEdges", () => {
       );
   });
 
+  it("tries a local lane and detours when the assigned trunk crosses a foreign frame", () => {
+    const obstacle: RouteBox = {
+      id: "obstacle",
+      top: "obstacle",
+      x1: 420,
+      x2: 480,
+      y1: 130,
+      y2: 190,
+      anchorY: 160,
+    };
+    const { line } = route([["e", "a:f", "b:h"]], [...boxes, obstacle])("e");
+    expect(orthogonal(line)).toBe(true);
+    for (let i = 0; i < line.length - 1; i++)
+      expect(crosses(line[i] ?? { x: 0, y: 0 }, line[i + 1] ?? { x: 0, y: 0 }, obstacle)).toBe(
+        false,
+      );
+  });
+
+  it("keeps a route omitted when a foreign frame encloses its endpoint", () => {
+    const obstacle: RouteBox = { ...a, id: "cover", top: "cover" };
+    expect(
+      routeEdges([...boxes, obstacle], [{ id: "e", source: "a:f", target: "b:h" }], tuning).size,
+    ).toBe(0);
+  });
+
   it("is independent of edge input order", () => {
     const edges = [
       { id: "one", source: "a:f", target: "b:h" },
@@ -212,5 +238,41 @@ describe("applyRoutes", () => {
     cy.getElementById("call2").data("route", { s: [0, 0], t: [0, 0], w: [], d: [] });
     applyRoutes(cy, themes.dark);
     expect(cy.getElementById("call2").data("route")).toBeUndefined();
+  });
+  it("discloses every failed call route and clears omissions as routes recover", () => {
+    cy = cytoscape({
+      headless: true,
+      styleEnabled: true,
+      style: [
+        { selector: "node", style: { width: 282, height: 46 } },
+        { selector: "#cover", style: { width: 400, height: 100 } },
+      ],
+      elements: [
+        { data: { id: "a" }, position: { x: 0, y: 0 } },
+        { data: { id: "b" }, position: { x: 600, y: 120 } },
+        { data: { id: "cover" }, position: { x: 0, y: 0 } },
+        { data: { id: "call", source: "a", target: "b" }, classes: "calls" },
+        { data: { id: "self", source: "a", target: "a" }, classes: "calls internal" },
+      ],
+      layout: { name: "preset" },
+    });
+    const host = new EventTarget();
+    const reports: number[] = [];
+    host.addEventListener("routingomissions", (event) =>
+      reports.push((event as CustomEvent<number>).detail),
+    );
+    vi.spyOn(cy, "container").mockReturnValue(host as HTMLDivElement);
+    applyRoutes(cy, themes.dark);
+    expect(routingOmissions(cy.edges())).toBe(2);
+    expect(reports).toEqual([2]);
+    expect(routingOmissionText(reports[0] ?? 0)).toBe("+2 call routes omitted: no clear lane");
+    cy.getElementById("cover").position({ x: 1000, y: 1000 });
+    applyRoutes(cy, themes.dark);
+    expect(routingOmissions(cy.edges())).toBe(1);
+    cy.getElementById("self").remove();
+    applyRoutes(cy, themes.dark);
+    expect(routingOmissions(cy.edges())).toBe(0);
+    expect(reports).toEqual([2, 1, 0]);
+    vi.restoreAllMocks();
   });
 });
