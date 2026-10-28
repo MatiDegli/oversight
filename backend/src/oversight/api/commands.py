@@ -5,6 +5,7 @@ A replay takes no commands: every command route answers 501 there, its body not 
 app passes an object that implements `Commands`; this module maps its errors to the contract's.
 """
 
+import re
 from collections.abc import Callable, Coroutine
 from typing import Any, Protocol
 
@@ -124,8 +125,13 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
     @router.post("/agents", status_code=201)
     async def start_agent(request: StartAgent, http: Request) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
         # request.zone is reserved and ignored until zones are delivered in 1.5.0.
-        with evaluation_trace(run_id, http.headers.get(TRACE_HEADER)):
-            if http.headers.get(TRACE_HEADER) and CURRENT.get() is None:
+        attempt_id = http.headers.get(TRACE_HEADER)
+        if attempt_id is not None and not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
+            raise ApiError(
+                "invalid_request", f"invalid {TRACE_HEADER}: expected 32 lowercase hex characters"
+            )
+        with evaluation_trace(run_id, attempt_id):
+            if attempt_id is not None and CURRENT.get() is None:
                 raise ApiError(
                     "invalid_request", "evaluation tracing requires OVERSIGHT_EVAL_TRACE_DIR"
                 )

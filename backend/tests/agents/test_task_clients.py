@@ -9,6 +9,7 @@ from agent_helpers import Recorder, make_run
 from test_client import COMPLETION, USER
 
 from oversight.agents import MUSE_SPARK, MUSE_SPARK_OPEN, OpenAIClient, TaskClients
+from oversight.agents._trace_http import request_ready
 from oversight.workspace import Tree, Workspace
 from oversight_contracts.events import ModelProfile
 
@@ -74,16 +75,20 @@ async def test_idle_expiry_changes_without_enlarging_sdk_pool(
 ) -> None:
     original = openai.DefaultAsyncHttpxClient
     captured: list[httpx.Limits] = []
+    built: list[openai.DefaultAsyncHttpxClient] = []
 
     def http_client(**kwargs: object) -> openai.DefaultAsyncHttpxClient:
         captured.append(cast(httpx.Limits, kwargs["limits"]))
-        return original(transport=httpx.MockTransport(lambda _: httpx.Response(200)))
+        http = original(transport=httpx.MockTransport(lambda _: httpx.Response(200)))
+        built.append(http)
+        return http
 
     monkeypatch.setattr(openai, "DefaultAsyncHttpxClient", http_client)
     client = OpenAIClient(
         MUSE_SPARK, base_url="https://api.test", api_key="fake", max_output_tokens=1
     )
     try:
+        assert built[0].event_hooks["request"] == [request_ready]
         assert captured == [
             httpx.Limits(max_connections=1000, max_keepalive_connections=100, keepalive_expiry=30)
         ]
@@ -147,3 +152,23 @@ async def test_shutdown_closes_clients_even_from_failed_starts() -> None:
     pool(MUSE_SPARK, "A")  # start fails before a retained AgentRun exists
     await pool.aclose()
     assert http.is_closed
+
+
+async def test_caller_supplied_http_client_keeps_its_hooks() -> None:
+    requests: list[httpx.Request] = []
+
+    async def caller_hook(request: httpx.Request) -> None:
+        requests.append(request)
+
+    http = openai.DefaultAsyncHttpxClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=COMPLETION)),
+        event_hooks={"request": [caller_hook]},
+    )
+    original = {key: list(hooks) for key, hooks in http.event_hooks.items()}
+    client = model(MUSE_SPARK, "https://api.meta.ai/v1", http)
+    try:
+        assert http.event_hooks == original
+        await client.complete(USER, [])
+        assert len(requests) == 1 and http.event_hooks == original
+    finally:
+        await client.aclose()

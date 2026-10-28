@@ -76,3 +76,28 @@ async def test_header_without_server_opt_in_refuses_before_start(tmp_path, monke
         finally:
             await api.client.aclose()
         assert factory.calls == 0
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("attempt_id", ["", "abc", "A" * 32, "g" * 32])
+@pytest.mark.parametrize("configured", [False, True])
+async def test_malformed_attempt_has_its_own_422_reason(
+    tmp_path, monkeypatch, attempt_id, configured
+):
+    from oversight.telemetry import TRACE_HEADER
+
+    if configured:
+        monkeypatch.setenv("OVERSIGHT_EVAL_TRACE_DIR", str(tmp_path / "evidence"))
+    else:
+        monkeypatch.delenv("OVERSIGHT_EVAL_TRACE_DIR", raising=False)
+    factory = Scripts([script()])
+    async with live_server(live_settings(tmp_path), factory) as server:
+        response = await server.client.post(
+            "/agents",
+            headers={TRACE_HEADER: attempt_id},
+            json={"task": TASK.prompt, "slot": "A", "model": "fake"},
+        )
+        assert response.status_code == 422
+        message = response.json()["error"]["message"]
+        assert message == f"invalid {TRACE_HEADER}: expected 32 lowercase hex characters"
+        assert factory.calls == 0

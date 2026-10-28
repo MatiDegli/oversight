@@ -259,12 +259,13 @@ class OpenAIClient:
         self._sleep = sleep
         self._jitter = jitter
         # Keep the SDK's existing pool sizes; only its idle expiry changes.
-        http_client = http_client or openai.DefaultAsyncHttpxClient(
-            limits=httpx.Limits(
-                max_connections=1000, max_keepalive_connections=100, keepalive_expiry=30
+        if http_client is None:
+            http_client = openai.DefaultAsyncHttpxClient(
+                limits=httpx.Limits(
+                    max_connections=1000, max_keepalive_connections=100, keepalive_expiry=30
+                )
             )
-        )
-        http_client.event_hooks["request"].append(request_ready)
+            http_client.event_hooks["request"].append(request_ready)
         self._affinity = (
             uuid4().hex
             if profile.provider == "baseten"

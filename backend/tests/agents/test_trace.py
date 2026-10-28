@@ -5,11 +5,14 @@ import json
 from pathlib import Path
 from typing import Any
 
+import httpx2 as httpx
+import openai
 import pytest
 from agent_helpers import Recorder, make_run, script
-from test_client import COMPLETION, TOOLS, USER, FakeApi, client, ok, status
+from test_client import COMPLETION, TOOLS, USER, FakeApi, ok, status
 
-from oversight.agents import LedgerFile, LedgerState, UnknownUsage
+from oversight.agents import MUSE_SPARK, LedgerFile, LedgerState, OpenAIClient, UnknownUsage
+from oversight.agents._trace_http import request_ready
 from oversight.telemetry import CURRENT, Observer, bind, mark, span
 from oversight.workspace import Tree, Workspace
 
@@ -66,7 +69,22 @@ async def test_http_attempts_retries_sizes_headers_and_reasoning_are_correlated(
     success = ok(COMPLETION | {"usage": usage})
     success.headers.update({"x-request-id": "request-123", "authorization": "PRIVATE_CREDENTIAL"})
     api = FakeApi(status(429, {"x-ratelimit-remaining-tokens": "10"}), success)
-    model = client(api, [])
+
+    async def no_sleep(seconds: float) -> None:
+        pass
+
+    # A caller-owned transport opts into timing hooks itself.
+    http = openai.DefaultAsyncHttpxClient(
+        transport=httpx.MockTransport(api.handle), event_hooks={"request": [request_ready]}
+    )
+    model = OpenAIClient(
+        MUSE_SPARK,
+        base_url="https://api.test/v1",
+        api_key="fake",
+        max_output_tokens=100,
+        http_client=http,
+        sleep=no_sleep,
+    )
     token = CURRENT.set(Observer(path, {"run": "run-test", "attempt": "test"}))
     try:
         with bind(agent="agent-1", turn=1), span("model_turn"):
