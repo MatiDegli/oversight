@@ -42,6 +42,9 @@ from oversight_contracts.policy import ChangeAssessment, MergeModeState
 from oversight_contracts.queue import QueuedTask
 from oversight_contracts.review import ChangeFacts, CrossReview
 
+# Initialize before any producers or the writer can share its validators.
+_SERVER_EVENT_ADAPTER = TypeAdapter(ServerEvent)
+
 type EventPayload = (
     RunStarted
     | GraphSnapshot
@@ -247,20 +250,16 @@ class EventStore:
             payload_json = payload.model_dump_json()
             # Validate serialized data, not trusted or model_construct'ed instances. This also
             # freezes nested mutable lists before a producer can change them behind the writer.
-            frozen = (
-                TypeAdapter(ServerEvent)
-                .validate_json(
-                    json.dumps(
-                        {
-                            "seq": 1,
-                            "ts": ts or "2000-01-01T00:00:00.000Z",
-                            "type": kind,
-                            "payload": json.loads(payload_json),
-                        }
-                    )
+            frozen = _SERVER_EVENT_ADAPTER.validate_json(
+                json.dumps(
+                    {
+                        "seq": 1,
+                        "ts": ts or "2000-01-01T00:00:00.000Z",
+                        "type": kind,
+                        "payload": json.loads(payload_json),
+                    }
                 )
-                .payload
-            )
+            ).payload
         except (ValueError, TypeError, KeyError) as error:
             raise EventRejected(str(error)) from error
         pending = _Pending(
@@ -351,7 +350,7 @@ class EventStore:
             try:
                 seq = len(self._events) + len(rows) + 1
                 ts = pending.ts or format_ts(self._clock())
-                event = TypeAdapter(ServerEvent).validate_python(
+                event = _SERVER_EVENT_ADAPTER.validate_python(
                     {
                         "seq": seq,
                         "ts": ts,
