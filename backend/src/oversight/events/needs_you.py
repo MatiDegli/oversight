@@ -1,5 +1,6 @@
 """Shared, closed terminal-reason vocabulary for server producers and replay consumers."""
 
+import asyncio
 import re
 from dataclasses import dataclass
 
@@ -91,3 +92,36 @@ class NeedsYouWait:
             and key is not None
             and key[:3] == (self.change_id, self.revision, self.head)
         )
+
+
+@dataclass(frozen=True)
+class TerminalClaim[T]:
+    target: tuple[str, int, str]
+    receipt: asyncio.Future[T | None]
+
+
+class TerminalClaims[T]:
+    """Synchronous claim/ack; released producers wake contenders to claim again."""
+
+    def __init__(self) -> None:
+        self._targets: dict[tuple[str, int, str], TerminalClaim[T]] = {}
+
+    def claim(self, report: ErrorReport) -> tuple[TerminalClaim[T], bool]:
+        key = terminal_key(report)
+        if key is None:
+            raise ValueError("only normalized Needs you errors can claim a target")
+        target = key[:3]
+        if target in self._targets:
+            return self._targets[target], False
+        claim = TerminalClaim(target, asyncio.get_running_loop().create_future())
+        self._targets[target] = claim
+        return claim, True
+
+    def acknowledge(self, claim: TerminalClaim[T], receipt: T) -> None:
+        if self._targets.get(claim.target) is claim and not claim.receipt.done():
+            claim.receipt.set_result(receipt)
+
+    def release(self, claim: TerminalClaim[T]) -> None:
+        if self._targets.get(claim.target) is claim and not claim.receipt.done():
+            del self._targets[claim.target]
+            claim.receipt.set_result(None)

@@ -20,7 +20,7 @@ from pydantic import TypeAdapter
 
 from oversight.events.clock import Clock, format_ts, system_clock
 from oversight.events.graph_fold import apply_delta
-from oversight.events.needs_you import terminal_key
+from oversight.events.needs_you import TerminalClaim, TerminalClaims, terminal_key
 from oversight.events.references import validate_references
 from oversight_contracts.events import (
     AgentFocus,
@@ -131,6 +131,8 @@ class _Pending:
     payload_json: str
     ts: str | None
     done: asyncio.Future[StoredEvent]
+    terminal: bool = False
+    committing: bool = False
 
 
 def _connect(path: Path) -> sqlite3.Connection:
@@ -184,7 +186,7 @@ class EventStore:
         self._shutdown_task: asyncio.Task[None] | None = None
         self._closing = False
         self._closed = False
-        self._terminal: dict[tuple[str, int, str, str], asyncio.Future[StoredEvent]] = {}
+        self._terminal = TerminalClaims[StoredEvent]()
 
     async def start(self) -> None:
         """Create the run's file and start the writer; a run's file is never reopened to write."""
@@ -271,20 +273,48 @@ class EventStore:
             ts=ts,
             done=asyncio.get_running_loop().create_future(),
         )
-        # One live receipt per target/code, including concurrent producers. Replay preserves
-        # every recorded byte, including historical duplicate diagnostics.
-        key = terminal_key(frozen) if isinstance(frozen, ErrorReport) else None
-        if self.mode == "live" and key is not None:
-            previous = self._terminal.get(key)
-            if (
-                previous is not None
-                and not previous.cancelled()
-                and (not previous.done() or previous.exception() is None)
-            ):
-                return await asyncio.shield(previous)
-            self._terminal[key] = pending.done
+        # Live producers claim across codes. Replay retains every historical duplicate.
+        if self.mode == "live" and isinstance(frozen, ErrorReport) and terminal_key(frozen):
+            return await self._publish_terminal(pending, frozen)
         await self._queue.put(pending)
-        return await asyncio.shield(pending.done) if key is not None else await pending.done
+        return await pending.done
+
+    async def _publish_terminal(self, pending: _Pending, report: ErrorReport) -> StoredEvent:
+        while True:
+            if self._closing:
+                raise StoreClosedError("the event store is not accepting events")
+            claim, owner = self._terminal.claim(report)
+            if owner:
+                break
+            receipt = await asyncio.shield(claim.receipt)
+            if receipt is not None:
+                return receipt
+        pending.terminal = True
+        self._queue.put_nowait(pending)
+        try:
+            receipt = await asyncio.shield(pending.done)
+        except asyncio.CancelledError:
+            if not pending.committing:
+                pending.done.cancel()
+                self._terminal.release(claim)
+            else:
+                # SQL already owns the transaction. Its eventual committed receipt wins;
+                # never release a claim while an unstoppable insert can still commit.
+                pending.done.add_done_callback(lambda done: self._terminal_receipt(claim, done))
+            raise
+        except BaseException:
+            self._terminal.release(claim)
+            raise
+        self._terminal.acknowledge(claim, receipt)
+        return receipt
+
+    def _terminal_receipt(
+        self, claim: TerminalClaim[StoredEvent], done: asyncio.Future[StoredEvent]
+    ) -> None:
+        if done.cancelled() or done.exception() is not None:
+            self._terminal.release(claim)
+        else:
+            self._terminal.acknowledge(claim, done.result())
 
     @property
     def last_seq(self) -> int:
@@ -361,6 +391,8 @@ class EventStore:
         staged: dict[int, ServerEvent] = {}
         prior = ChainMap(staged, self._reference_events)
         for pending in batch:
+            if pending.terminal and pending.done.cancelled():
+                continue
             try:
                 seq = len(self._events) + len(rows) + 1
                 ts = pending.ts or format_ts(self._clock())
@@ -380,6 +412,7 @@ class EventStore:
                 if not pending.done.done():
                     pending.done.set_exception(EventRejected(str(error)))
                 continue
+            pending.committing = True
             rows.append(row)
             accepted.append((pending, event))
             staged[seq] = event

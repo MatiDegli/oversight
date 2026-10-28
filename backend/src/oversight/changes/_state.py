@@ -23,6 +23,7 @@ from oversight_contracts.events import (
     SuiteExecution,
 )
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot
+from oversight_contracts.policy import MergeModeState
 from oversight_contracts.review import FinishDeclaration
 
 type State = Literal[
@@ -94,6 +95,8 @@ class ChangeRecord:
     graph: ChangeGraph
     state: State = "working"
     revision: int = 0
+    proposal_mode: MergeModeState | None = None
+    rules_consumed: set[int] = field(default_factory=set[int])
     head_commit: str | None = None
     """The head of the last revision the store took."""
     proposed_now: bool = False

@@ -155,3 +155,19 @@ async def test_module_skip_retains_a_fact_for_each_test(h: Harness) -> None:
         "tests/test_mod.py::test_other",
         "tests/test_mod.py::test_value",
     ]
+
+
+@pytest.mark.anyio
+async def test_source_facts_and_status_share_one_capture(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = []
+
+    def spy(changes, **kwargs):
+        calls.append(tuple(changes))
+        return detect_shortcuts(changes, **kwargs)
+
+    monkeypatch.setattr("oversight.changes._facts.detect_shortcuts", spy)
+    await h.run_agent(1, EDIT)
+    rec = h.manager._ctx.state.agents["agent-1"]
+    assert calls == [((EDIT[0], rec.base_files[EDIT[0]], rec.head_files[EDIT[0]]),)]

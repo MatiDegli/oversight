@@ -1,9 +1,9 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Coroutine
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from oversight.agents import Publish
 from oversight.changes._mode import ModeController
@@ -23,6 +23,11 @@ from oversight_contracts.events import (
     ErrorReport,
 )
 from oversight_contracts.graph import GraphSnapshot
+from oversight_contracts.policy import ChangeAssessment
+
+if TYPE_CHECKING:
+    from oversight.changes._assessment import RulesEvidence, RulesScheduler
+    from oversight.changes._policy import PolicyInputs
 
 _log = logging.getLogger("oversight.changes._manager")
 
@@ -33,6 +38,8 @@ class ChangePorts:
 
     drain: Callable[[ChangeRecord], Awaitable[None]]
     review: ReviewPort | None = None
+    rules_evidence: Callable[["PolicyInputs"], "RulesEvidence"] | None = None
+    rules_admission: Callable[[ChangeRecord, ChangeAssessment], str | None] | None = None
 
 
 @dataclass
@@ -47,6 +54,7 @@ class ChangeContext:
     state: ChangeState
     ports: ChangePorts
     mode: ModeController
+    assessment: "RulesScheduler" = field(init=False)
 
     def date(self) -> str:
         return self.clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
