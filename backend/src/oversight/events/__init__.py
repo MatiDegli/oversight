@@ -7,8 +7,15 @@ from pathlib import Path
 
 from oversight.events.clock import Clock, format_ts, parse_ts, system_clock
 from oversight.events.jsonl import LogError, export_run, read_jsonl, write_jsonl
+from oversight.events.needs_you import (
+    NEEDS_YOU_CODES,
+    NeedsYou,
+    format_needs_you,
+    parse_needs_you,
+)
 from oversight.events.paths import absolute_paths
 from oversight.events.player import MAX_GAP_S, Sleep, play, replay_delays
+from oversight.events.references import validate_cross_review_limit
 from oversight.events.store import (
     EVENT_TYPES,
     EventPayload,
@@ -28,17 +35,21 @@ def run_store_path(runtime_dir: Path, run_id: str) -> Path:
 __all__ = [
     "EVENT_TYPES",
     "MAX_GAP_S",
+    "NEEDS_YOU_CODES",
     "Clock",
     "EventPayload",
     "EventRejected",
     "EventStore",
     "LogError",
+    "NeedsYou",
     "Sleep",
     "StoreClosedError",
     "StoredEvent",
     "absolute_paths",
     "export_run",
+    "format_needs_you",
     "format_ts",
+    "parse_needs_you",
     "parse_ts",
     "play",
     "read_jsonl",
@@ -46,5 +57,6 @@ __all__ = [
     "replay_delays",
     "run_store_path",
     "system_clock",
+    "validate_cross_review_limit",
     "write_jsonl",
 ]

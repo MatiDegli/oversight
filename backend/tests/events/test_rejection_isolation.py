@@ -1,6 +1,7 @@
 """One bad producer cannot poison a writer batch or leave publishers awaiting forever."""
 
 import asyncio
+import json
 import sqlite3
 from pathlib import Path
 from typing import Literal
@@ -9,7 +10,14 @@ from unittest.mock import patch
 import pytest
 from pydantic import TypeAdapter
 
-from oversight.events import EventRejected, EventStore, StoredEvent, read_jsonl, read_store
+from oversight.events import (
+    EventRejected,
+    EventStore,
+    LogError,
+    StoredEvent,
+    read_jsonl,
+    read_store,
+)
 from oversight.events.player import play
 from oversight_contracts.events import ChangeResolved, ErrorReport
 from oversight_contracts.review import CrossReview, ReviewFinding
@@ -202,7 +210,8 @@ async def test_batch_references_see_accepted_candidates_and_never_rejected_ones(
         # The rejected request did not become a review in the committed index.
         with pytest.raises(EventRejected, match=r"requires change\.reviewed"):
             await store.publish(adverse_request(2))
-        assert (await store.publish(adverse_request(1))).seq == 3
+        with pytest.raises(EventRejected, match="only one cross_review"):
+            await store.publish(adverse_request(1))
 
 
 async def test_sql_rollback_does_not_extend_the_committed_reference_index(tmp_path: Path) -> None:
@@ -245,7 +254,37 @@ async def test_closed_log_replays_into_a_fresh_reference_index(tmp_path: Path) -
         tmp_path / "replay.sqlite", RUN, mode="replay", allow_fake_provider=True
     ) as replay:
         await play(replay, read_jsonl(log), speed=0)
-        assert (await replay.publish(adverse_request(1))).seq == 3
+        with pytest.raises(EventRejected, match="only one cross_review"):
+            await replay.publish(adverse_request(1))
         with pytest.raises(EventRejected, match=r"requires change\.reviewed"):
             await replay.publish(adverse_request(2))
     assert len(read_store(path)) == 2
+
+
+async def test_store_rejects_second_review_of_the_same_change(tmp_path: Path) -> None:
+    async with EventStore(tmp_path / "cap.sqlite", RUN, allow_fake_provider=True) as store:
+        await store.publish(adverse_review())
+        await store.publish(adverse_request(1))
+        second = adverse_review().model_copy(update={"revision": 2, "head_commit": "next"})
+        seq = (await store.publish(second)).seq
+        with pytest.raises(EventRejected, match="only one cross_review"):
+            await store.publish(
+                adverse_request(seq).model_copy(update={"revision": 2, "head_commit": "next"})
+            )
+        # The review_seq limit is independent of change_id/target reference validation.
+        with pytest.raises(EventRejected, match="review_seq may have only one"):
+            await store.publish(adverse_request(1).model_copy(update={"change_id": "change-2"}))
+        assert store.last_seq == 3
+
+
+async def test_jsonl_reader_refuses_duplicate_automatic_resolution(tmp_path: Path) -> None:
+    async with EventStore(tmp_path / "run.sqlite", RUN, allow_fake_provider=True) as store:
+        await store.publish(adverse_review())
+        request = await store.publish(adverse_request(1))
+        rows = [row.envelope for row in read_store(store.path)]
+    duplicate = json.loads(request.envelope)
+    duplicate["seq"] = 3
+    path = tmp_path / "duplicate.jsonl"
+    path.write_text("\n".join([*rows, json.dumps(duplicate)]) + "\n")
+    with pytest.raises(LogError, match="only one cross_review"):
+        read_jsonl(path)

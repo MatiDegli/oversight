@@ -646,3 +646,24 @@ tests exercise both `git merge` and `git merge-tree --write-tree` in temporary r
 Union also keeps both sides when two branches edit the same existing line, reporting no
 conflict even when the decisions disagree. Reviewers must check edits to old entries for
 duplicates or contradictions; a clean merge does not establish agreement.
+## Cross-review authority and maintainer decisions (Oct 27, 22:17 ART)
+
+The maintainer accepted package 2 decisions 6a–6c on October 27 at 22:17 ART (UTC−3):
+
+- 6a: the cross-review switch stays false by default; the demo enables it explicitly.
+- 6b: parity accounting records an unanswered Meta review attempt as unknown and closes the
+  Meta spending brake. Recovery requires stopping the server, checking Meta's total and running
+  `ledger settle`; settlement is refused while the server runs. Restart creates a clean workspace
+  and a new run/log, and resumes no earlier change.
+- 6c: approving A does not invalidate B's review of its captured revision, head, base and tree.
+  Request changes keeps that base; Approve must test the combination with current main.
+
+PR2 implements authority and the single automatic revision round: admitted human decisions or
+review saves permanently disarm automation for that change; automatic requests reserve only
+ready changes, retain cross-review evidence through pending delivery, and consume the round when
+its resolution is created. It also owns the shared closed Needs you vocabulary, template and golden
+fixture, which package 1 must adopt. It adds no model calls or automatic review scheduling.
+PR1 already supplies the default-off switch. PR3a carries runtime registration, cancellation and
+lifecycle wiring, including explicit demo activation; PR3b carries call scope, accounting, the
+Meta brake and distinct review-ledger failure handling. PR4 carries replay/UI projection and
+recognition of the shared fixture. Contracts remain frozen at 1.4.0.

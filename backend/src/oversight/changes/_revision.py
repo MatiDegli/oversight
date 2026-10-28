@@ -3,6 +3,7 @@
 import asyncio
 import logging
 
+from oversight.changes import _cross_review as cross_review
 from oversight.changes import _delivery as delivery
 from oversight.changes import _proposal as proposal
 from oversight.changes._decision_validation import validate_decision_target
@@ -73,6 +74,8 @@ async def request_changes(ctx: ChangeContext, rec: ChangeRecord, comment: str) -
 
 async def preflight(ctx: ChangeContext, rec: ChangeRecord) -> bool:
     assert rec.evidence is not None
+    if rec.evidence.actor == "cross_review" and not await cross_review.preflight(ctx, rec):
+        return False
     try:
         validate_decision_target(
             rec, rec.evidence.revision, rec.evidence.head_commit, REVISABLE, reserved=True
@@ -214,21 +217,38 @@ async def requested(
 ) -> Revision | None:
     """Phase B, one `_whole` step: the resolution and `working` go together whatever cancels
     come. R2: a resolution the store refused twice stays pending, and the revision starts."""
+    assert rec.evidence is not None
+    validate_resolution_intent(rec.evidence)
+    evidence = rec.evidence
+    if evidence.actor == "cross_review":
+        assert rec.review_capture is not None
+        try:
+            cross_review.current(ctx, rec.review_capture, reserved=True)
+        except WrongState as error:
+            await ctx.error("server", str(error), rec, fatal=False)
+            return None
     rec.requested = ChangeResolved(
         change_id=rec.change_id,
         agent_id=rec.agent_id,
         revision=rec.revision,
         decision="changes_requested",
-        decided_by="person",
-        head_commit=rec.evidence.head_commit if rec.evidence else rec.head_commit,
+        decided_by=evidence.actor,
+        review_seq=evidence.review_seq,
+        requested_by=evidence.requested_by,
+        reasons=list(evidence.reasons),
+        assessment=evidence.assessment,
+        head_commit=evidence.head_commit,
         reason=None,
         comment=comment,
         merge=None,
         merge_commit=None,
         conflict=None,
     )
-    assert rec.evidence is not None
-    validate_resolution_evidence(rec.requested, rec.evidence)
+    validate_resolution_evidence(rec.requested, evidence)
+    rec.requested_evidence = evidence
+    if evidence.actor == "cross_review":
+        rec.review_consumed = True
+    rec.review_ready = False
     try:
         failure = await delivery.send_requested(ctx, rec)
     except EventRejected as error:

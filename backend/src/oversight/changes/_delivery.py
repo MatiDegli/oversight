@@ -217,6 +217,11 @@ async def send_event(
     # the next close-out must not send it again.
     if rec.delivery_rejected:
         raise EventRejected(rec.delivery_rejected)
+    if isinstance(payload, ChangeResolved):
+        evidence = rec.requested_evidence if name == "requested" else rec.evidence
+        if evidence is None:
+            raise ValueError("resolution lacks pre-effect evidence")
+        validate_resolution_evidence(payload, evidence)
     sending = ctx.spawn(deliver(ctx, payload))
     sending.add_done_callback(functools.partial(receipt, ctx, rec, name))
     rec.sending = sending
@@ -335,6 +340,10 @@ async def aclose(ctx: ChangeContext) -> None:
     events, then send one `error` per change naming each event still unsent. If the store
     refuses that `error` too, one log line per change names what was lost. Cleanup is left
     to the next start's `reset`."""
+    ctx.state.closing = True
+    for change in ctx.state.changes.values():
+        if change.review_task is not None:
+            change.review_task.cancel()
     while ctx.state.tasks:
         await asyncio.gather(*ctx.state.tasks, return_exceptions=True)
     for rec in list(ctx.state.pending.values()):

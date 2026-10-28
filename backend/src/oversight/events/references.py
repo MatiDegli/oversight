@@ -6,6 +6,19 @@ from typing import Any, cast
 from oversight_contracts.events import ServerEvent
 
 
+def validate_cross_review_limit(event: ServerEvent, prior: Mapping[int, ServerEvent]) -> None:
+    """One automatic revision per change and per review, across all proposal revisions."""
+    if event.type != "change.resolved" or event.payload.decided_by != "cross_review":
+        return
+    resolution = event.payload
+    for earlier in prior.values():
+        if earlier.type == "change.resolved" and earlier.payload.decided_by == "cross_review":
+            if earlier.payload.change_id == resolution.change_id:
+                raise ValueError("a change may have only one cross_review resolution")
+            if earlier.payload.review_seq == resolution.review_seq:
+                raise ValueError("a review_seq may have only one cross_review resolution")
+
+
 def validate_references(event: ServerEvent, prior: Mapping[int, ServerEvent]) -> None:
     """References cannot see future or rejected candidates, including within one SQL batch."""
 
@@ -50,6 +63,7 @@ def validate_references(event: ServerEvent, prior: Mapping[int, ServerEvent]) ->
                 walk(item)
 
     walk(event.payload.model_dump(mode="json"))
+    validate_cross_review_limit(event, prior)
     if event.type == "change.resolved" and event.payload.review_seq is not None:
         source = referenced(event.payload.review_seq, "change.reviewed")
         assert source.type == "change.reviewed"

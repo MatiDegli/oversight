@@ -25,12 +25,14 @@ import asyncio
 from collections.abc import Coroutine
 from typing import Any
 
-from oversight.agents import AgentTask, Publish, RunEnd
+from oversight.agents import AgentTask, Publish, ReviewOutcome, RunEnd
 from oversight.changes import _approval as approval
+from oversight.changes import _cross_review as cross_review
 from oversight.changes import _delivery as delivery
 from oversight.changes import _files as files
 from oversight.changes import _proposal as proposal
 from oversight.changes import _revision as revision
+from oversight.changes._cross_review import ReviewCapture
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._resolution_validation import validate_resolution_intent
@@ -200,7 +202,9 @@ class ChangeManager:
         A scan or publish that raises sends an `error`, keeps `snapshot` and re-raises."""
         return await files.rescan(self._ctx)
 
-    def _take(self, change_id: ChangeId, allowed: frozenset[State], verb: str) -> ChangeRecord:
+    def _take(
+        self, change_id: ChangeId, allowed: frozenset[State], verb: str, *, person: bool = True
+    ) -> ChangeRecord:
         """Check and flip the state with no `await`, so a second click fails at once."""
         rec = self._ctx.state.changes.get(change_id)
         if rec is None:
@@ -209,6 +213,8 @@ class ChangeManager:
             raise WrongState(
                 f"{change_id} is {rec.state}; {verb} needs {' or '.join(sorted(allowed))}"
             )
+        if person:
+            rec.person_intervened()
         rec.fallback, rec.state = rec.state, "deciding"
         rec.decision += 1
         return rec
@@ -222,6 +228,33 @@ class ChangeManager:
         task = self._ctx.spawn(work)
         decision = rec.decision
         task.add_done_callback(lambda _: self._ctx.state.restore(rec, decision))
+        return task
+
+    async def capture_review(self, change_id: ChangeId) -> ReviewCapture:
+        return await cross_review.capture(self._ctx, change_id)
+
+    def track_review(self, capture: ReviewCapture, task: asyncio.Task[Any]) -> None:
+        """Attach cancellable work to the admitted target; lifecycle ownership arrives in PR3a."""
+        cross_review.current(self._ctx, capture).review_task = task
+
+    def review_current(self, capture: ReviewCapture) -> bool:
+        try:
+            cross_review.current(self._ctx, capture)
+        except WrongState:
+            return False
+        return True
+
+    def request_cross_review(
+        self, capture: ReviewCapture, outcome: ReviewOutcome, *, review_seq: int
+    ) -> asyncio.Task[Revision | None]:
+        """Direct server actor for tests and future runtime wiring; models have no decision tool."""
+        try:
+            rec = cross_review.prepare(self._ctx, capture, outcome, review_seq)
+        except cross_review.RoundExhausted:
+            return self._ctx.spawn(cross_review.exhausted(self._ctx, capture))
+        self._take(rec.change_id, APPROVABLE, "cross-review request", person=False)
+        task = self._decide(rec, self._request_changes(rec, outcome.decision.comment))
+        task.add_done_callback(lambda done: cross_review.release(rec, done))
         return task
 
     def approve(
