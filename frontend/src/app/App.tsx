@@ -10,6 +10,8 @@ import type { DecisionAction, DecisionAttempt } from "../review";
 import { stateStore } from "../state";
 import { createCommandClient, replayBuild, replaySource } from "../transport";
 import { createFileSession } from "./files";
+import { createRecordedFiles } from "./recordedFiles";
+import { FilesProvider } from "./FilesContext";
 import { useEscapeCloses } from "./escape";
 import { Frame } from "./Frame";
 import { startAppSession } from "./session";
@@ -50,7 +52,7 @@ export function App() {
           () => drafts.current,
           () => inFlightSaves.current,
         )
-      : undefined,
+      : createRecordedFiles(() => stateStore.getState().state),
   );
   const state = useStore(stateStore, (store) => store.state);
   useEffect(() => {
@@ -133,34 +135,60 @@ export function App() {
     },
     [commands, state],
   );
+  const onOpenFile = useCallback((path: string) => {
+    const state = stateStore.getState().state;
+    const keepComment = Boolean(
+      document.activeElement?.closest('[aria-label="Review panel"] textarea'),
+    );
+    setView((current) => {
+      const module = state.graph?.nodes.find(
+        (node) => node.path === path && node.kind === "module",
+      );
+      const next = navigateView(
+        current,
+        {
+          selected: module?.id ?? null,
+          diff: null,
+          review: null,
+          file: { path, agentId: null, startLine: 1, endLine: module?.end_line ?? 1 },
+        },
+        state,
+      );
+      return keepComment && current.activeTab
+        ? viewReducer(next, { type: "activate", id: current.activeTab })
+        : next;
+    });
+  }, []);
   return (
-    <Frame
-      state={state}
-      files={files}
-      view={view}
-      onNodeTap={onNodeTap}
-      canOpenChange={(changeId) => openChange(state, view, changeId) !== null}
-      onOpenChange={onOpenChange}
-      onClosePanel={onClosePanel}
-      onTabAction={(action) => {
-        setView((current) => viewReducer(current, action));
-      }}
-      onStartAgent={commands?.startAgent}
-      onStopAgent={commands?.stopAgent}
-      canReview={(changeId) => openReview(state, view, changeId) !== null}
-      onReview={onReview}
-      onOpenQueue={onOpenQueue}
-      attempts={attempts}
-      onDecide={commands ? onDecide : undefined}
-      replayOf={replayBuild ? replaySource.kind : undefined}
-      replayLabel={replayBuild ? replaySource.label : undefined}
-      connection={replayBuild ? undefined : connection}
-      onRetry={() => {
-        setConnection("connecting");
-        setError(null);
-        setRetry((value) => value + 1);
-      }}
-      notice={error !== null ? <p role="alert">{error}</p> : undefined}
-    />
+    <FilesProvider state={state} loadTree={commands?.getTree} openFile={onOpenFile}>
+      <Frame
+        state={state}
+        files={files}
+        view={view}
+        onNodeTap={onNodeTap}
+        canOpenChange={(changeId) => openChange(state, view, changeId) !== null}
+        onOpenChange={onOpenChange}
+        onClosePanel={onClosePanel}
+        onTabAction={(action) => {
+          setView((current) => viewReducer(current, action));
+        }}
+        onStartAgent={commands?.startAgent}
+        onStopAgent={commands?.stopAgent}
+        canReview={(changeId) => openReview(state, view, changeId) !== null}
+        onReview={onReview}
+        onOpenQueue={onOpenQueue}
+        attempts={attempts}
+        onDecide={commands ? onDecide : undefined}
+        replayOf={replayBuild ? replaySource.kind : undefined}
+        replayLabel={replayBuild ? replaySource.label : undefined}
+        connection={replayBuild ? undefined : connection}
+        onRetry={() => {
+          setConnection("connecting");
+          setError(null);
+          setRetry((value) => value + 1);
+        }}
+        notice={error !== null ? <p role="alert">{error}</p> : undefined}
+      />
+    </FilesProvider>
   );
 }

@@ -290,6 +290,14 @@ export const scenes: readonly Scene[] = [
       await page.getByRole("complementary", { name: "Review panel", exact: true }).waitFor();
       await page.getByRole("tab", { name: /Live diff ·/ }).click();
       await page.getByRole("button", { name: "Files", exact: true }).click();
+      await page
+        .getByRole("tree", { name: "Repository files" })
+        .getByRole("treeitem", { name: "shop", exact: true })
+        .click();
+      await page
+        .getByRole("tree", { name: "Repository files" })
+        .getByRole("treeitem", { name: "pricing.py", exact: true })
+        .waitFor();
       await page.getByRole("button", { name: "Toggle bottom dock", exact: true }).click();
       assert.equal(
         await page
@@ -363,6 +371,19 @@ export const scenes: readonly Scene[] = [
       const box = page.getByLabel("Task for the new agent");
       assert.equal(await box.inputValue(), "In shop/cart.py, Cart.add: ");
       assert.equal(await box.evaluate((element) => document.activeElement === element), true);
+    },
+  },
+  {
+    name: "dock-open",
+    enabled: true,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Toggle bottom dock", exact: true }).click();
+      await page.getByRole("tabpanel", { name: "Tests", exact: true }).waitFor();
+      assert.ok(await page.getByRole("list", { name: "Test runs", exact: true }).isVisible());
+      assert.equal(
+        (await page.getByLabel("Bottom dock", { exact: true }).boundingBox())?.height,
+        280,
+      );
     },
   },
 ];

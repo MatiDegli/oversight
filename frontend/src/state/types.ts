@@ -22,12 +22,16 @@ export interface ChangeState {
   agent_id: string;
   status: "editing" | "ready_for_review" | "revising" | "conflict" | "approved" | "rejected";
   files: Record<string, Pick<ChangeUpdated, "file" | "author" | "node_ids">>;
+  /** Event order of each path's contents, independently of other files in the change. */
+  fileUpdateSeq?: Record<string, number>;
   graph: ChangeGraph;
   files_changed: number;
   lines_added: number;
   lines_removed: number;
   proposal: ChangeProposed | null;
   resolution: ChangeResolved | null;
+  /** Applied event order for recorded file contents after successive merges. */
+  resolutionSeq?: number;
   /** Evidence survives new revisions; only the current note is invalidated. */
   reviews: { seq: number; review: CrossReview }[];
   crossReview: CrossReview | null;

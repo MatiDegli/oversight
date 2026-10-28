@@ -15,7 +15,7 @@ from oversight.workspace.errors import (
     WorkspaceBusy,
     WorkspaceError,
 )
-from oversight.workspace.files import FileRead, check_content, content_hash
+from oversight.workspace.files import FileRead, check_content, content_hash, valid_agent_id
 from oversight.workspace.integrity import (
     IntegrityError,
     MergeGuard,
@@ -36,11 +36,13 @@ from oversight.workspace.suite import (
     SuiteUnavailable,
     validate_suite_execution,
 )
+from oversight.workspace.tree import TREE_TIMEOUT_S, list_tree
 
 __all__ = [
     "MAX_TESTS",
     "MAX_XML_BYTES",
     "OPEN_NOTICE",
+    "TREE_TIMEOUT_S",
     "Author",
     "FileRead",
     "FileTooLarge",
@@ -68,10 +70,12 @@ __all__ = [
     "base_probe_checkout",
     "check_content",
     "content_hash",
+    "list_tree",
     "parse_junit",
     "prepare_merge_guard",
     "print_isolation_probe",
     "run_process",
+    "valid_agent_id",
     "validate_suite_execution",
     "verify_merge_abort",
     "verify_merge_guard",

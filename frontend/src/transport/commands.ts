@@ -12,6 +12,7 @@ import type {
   RequestChanges,
   SaveFile,
   StartAgent,
+  TreeResponse,
 } from "@contracts";
 
 // Keep unknown HTTP failures separate from the contract's application error codes.
@@ -108,6 +109,8 @@ export function createCommandClient(request: typeof fetch = fetch) {
     rejectChange: (id: string, body: RejectChange) =>
       send<undefined>(change(id, "reject"), "POST", body),
     getGraph: (signal?: AbortSignal) => send<GraphResponse>("/graph", "GET", undefined, signal),
+    getTree: (signal?: AbortSignal, agent?: string) =>
+      send<TreeResponse>(query("/tree", { agent }), "GET", undefined, signal),
     rescanGraph: () => send<undefined>("/graph/rescan", "POST"),
     getImpact: (node: string, depth?: number, change?: string) =>
       send<ImpactCone>(query("/impact", { node, depth, change })),
