@@ -9,6 +9,7 @@ from decision_helpers import observed_target
 from oversight.changes._facts import MISSING_PRODUCERS, FactsEvidence, validate_change_facts
 from oversight.changes._shortcut_detector import detect_shortcuts
 from oversight.changes._suite_evidence import retain_cases
+from oversight.changes._summary_capture import capture_summary
 from oversight_contracts.events import CaseResult, ChangeProposed, SuiteExecution
 from oversight_contracts.review import ChangeFacts, ChangeTarget, FinishDeclaration
 
@@ -120,6 +121,7 @@ async def test_facts_validator_rejects_wrong_target_foreign_runs_and_fake_comple
         tuple(facts.problems),
         rec.executions,
         rec.suite_runs,
+        summary_evidence=capture_summary(rec, added_test_ids=()),
     )
     validate_change_facts(facts, evidence)
     for update in (

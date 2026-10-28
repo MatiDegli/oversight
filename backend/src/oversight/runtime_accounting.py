@@ -99,7 +99,9 @@ class ReviewAccounting:
                 )
                 raise self.failure from cause
         # Do not route through _publish: metering belongs to the reviewer, not tick.agent_id.
-        await live.store.publish(tick)
+        receipt = await live.store.publish(tick)
+        if live._manager is not None:
+            live._manager.usage_recorded(receipt)
 
     async def report_failure(self) -> None:
         assert self.failure is not None
