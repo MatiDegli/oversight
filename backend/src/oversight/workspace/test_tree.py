@@ -1,10 +1,19 @@
 """Capture the tested working tree with a temporary index; never disturb staging."""
 
+import time
 from collections.abc import Mapping, Sequence
+from functools import partial
 from pathlib import Path
 from uuid import uuid4
 
 from oversight.workspace.errors import WorkspaceError
+from oversight.workspace.integrity import (
+    GitIdentity,
+    remaining,
+    scan_nested_git,
+    veto_gitmodules,
+    veto_index,
+)
 from oversight.workspace.locks import offload
 from oversight.workspace.runner import run_process
 
@@ -18,24 +27,31 @@ async def capture_test_tree(
     timeout_s: float,
 ) -> tuple[str, str | None]:
     index = tmp / f"suite-index-{uuid4().hex}"
+    deadline = time.monotonic() + timeout_s
 
     async def git(*args: str) -> str:
         result = await run_process(
             ["git", *flags, *args],
             cwd=root,
-            timeout_s=timeout_s,
+            timeout_s=remaining(deadline),
             env=dict(env) | {"GIT_INDEX_FILE": str(index)},
         )
+        if result.truncated:
+            raise WorkspaceError(f"git {args[0]} failed: output was truncated")
         if result.returncode != 0 or result.timed_out:
             raise WorkspaceError("could not capture the tested Git tree")
-        return result.stdout.strip()
+        return result.stdout
 
     try:
+        identity = GitIdentity(root, Path(env["GIT_DIR"]), Path(env["GIT_COMMON_DIR"]))
+        await offload(partial(scan_nested_git, identity, deadline))
         await git("read-tree", "HEAD")
+        veto_index(await git("ls-files", "-s", "-z"))
+        await offload(partial(veto_gitmodules, root, deadline))
         await git("add", "-A")
-        tree = await git("write-tree")
-        committed = await git("rev-parse", "HEAD^{tree}")
-        commit = await git("rev-parse", "HEAD") if tree == committed else None
+        tree = (await git("write-tree")).strip()
+        committed = (await git("rev-parse", "HEAD^{tree}")).strip()
+        commit = (await git("rev-parse", "HEAD")).strip() if tree == committed else None
         return tree, commit
     finally:
         await offload(lambda: index.unlink(missing_ok=True))

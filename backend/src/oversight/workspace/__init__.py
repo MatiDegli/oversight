@@ -15,6 +15,7 @@ from oversight.workspace.errors import (
     WorkspaceError,
 )
 from oversight.workspace.files import FileRead, check_content, content_hash
+from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable
 from oversight.workspace.isolation_probe import print_isolation_probe
 from oversight.workspace.junit import MAX_TESTS, MAX_XML_BYTES, RunProblem, parse_junit
@@ -35,6 +36,7 @@ __all__ = [
     "Author",
     "FileRead",
     "FileTooLarge",
+    "IntegrityError",
     "InvalidPath",
     "IsolatedRunner",
     "IsolationUnavailable",
