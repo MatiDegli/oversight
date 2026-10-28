@@ -35,7 +35,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 15 | Shape guard | Queued — no structural comparison producer on main `535e6f6` | Yes |
 | 16 | Bounded one-hop context for initial tasks | Queued — broader slice waits for bench; revision callers/siblings on main `ee92691` | No |
 | 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | No — reserved finding supports narrower first wiring |
-| 18 | Remaining packages 11–14, time permitting | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | No — message/pause/resume reserved; replay/input controls local |
+| 18 | Remaining packages 11–14, time permitting | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Pending — dictation needs its own contract decision; message/pause/resume reserved; replay/input controls local |
 
 **Not ranked, goes in regardless:** delivery (package 9; static replay on main `a0a4624`, challenge
 queued after item 2), graph polish (8; graph and palette on main `535e6f6`, polish continues), and
@@ -50,6 +50,7 @@ These retain useful ideas from the old inventory without approving a front or ch
 - A dependency guard for package existence, license and vulnerability evidence.
 - Export reviewed revisions/comments as decision pairs; no training during this event.
 - A person-approved plan before editing protected areas; item 8's deterministic veto is separate.
+- Person-drawn work zones that limit edits, with a scope-request tool, warn mode and zone growth by approval; item 11's server-computed zones and the reserved `within_zone` rule are separate.
 - A TypeScript graph adapter; another language/dependency needs a separate scope decision.
 - Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
@@ -57,7 +58,7 @@ These retain useful ideas from the old inventory without approving a front or ch
 
 ## Next
 
-- Lead agent: deferred; the former Sunday gate required packages 1–6, and the run rule now comes later.
+- Lead agent: deferred; the former Sunday gate required packages 1–6, and the run rule now comes later; lead routes and plan `started_by` remain reserved even if the lead never ships.
 - Hidden test sets: extend beyond the external hidden grading already present in `tools/eval`.
 - A red agent to look for counterexamples to a proposed change.
 - A specialist engine for checks that need a dedicated tool.
@@ -196,6 +197,8 @@ Ask me still waits on every change. Optional rules mode merges only with complet
 evidence, recorded reasons and clean one-click Revert. The server retests a moved base; failures
 or conflicts become Needs you. Models can add reasons to wait, never waive a deterministic rule.
 
+Before enabling rules mode, `PRODUCT.md` needs a maintainer-approved success sentence covering the person's decision or a rule they set as the authority for every merge.
+
 Main has policy profiles, the closed mode controller and P2b-1 scheduler (`9f70622`). Admission
 explicitly waits for reservation (`backend/src/oversight/changes/_assessment.py:39`); P2b-2 is in
 progress on `changes/rules-reservation`. Finish reservation, merge transaction/final race barriers,
@@ -320,6 +323,8 @@ A test failed, its checks were weakened later, and it no longer fails in a subse
 that sequence deserves attention. Source detector counts stay neutral; the diff alone is not an
 alarm. Include this in the video only if a real run supplies the evidence.
 
+The [historical precision measurement](../tools/shortcut_corpus_report.md#labeled-oversight-evaluation) on this repository's history reduced 101 findings to 24, with signal in 11/20 labeled identities and four unlabeled identities, so it does not establish precision for all 24.
+
 The core/event adapter exist (`aaa9af8`, `backend/src/oversight/changes/_runrule.py:1`), but facts
 publish no temporal findings (`backend/src/oversight/changes/_facts.py:375`). Wire the reserved
 assertion-loosening case first, with matching facts and ordered references
@@ -333,8 +338,9 @@ need a later contract decision.
 Package 11's revision callers/siblings (`ee92691`) and package 12's Start an agent here (`c1c19c6`,
 `frontend/src/agents/StartAgentHere.tsx:10`) are complete. Keep them for traceability, not new work.
 
-Package 13 is Muse Voice Transcribe task dictation, last day only, never merge approval. Package
-14 is person-to-agent messages, pause/resume and replay timeline. Message/pause/resume routes are
+Package 13 is Muse Voice Transcribe task dictation, last day only, never merge approval. Its
+audio-upload command/response needs its own contract decision; message/pause/resume reservations do not cover it.
+Package 14 is person-to-agent messages, pause/resume and replay timeline. Message/pause/resume routes are
 reserved and still 501 (`backend/src/oversight/api/commands.py:51`); playback already consumes ordered
 events. Reuse those interfaces/local controls without claiming messaging or seeking already works.
 Earlier-today history belongs to item 8; usage views belong to item 10.

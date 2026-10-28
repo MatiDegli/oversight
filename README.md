@@ -51,7 +51,7 @@ static build requires the recording and its receipt; UI tests select their own f
 
 ## Next
 
-- Lead agent: deferred; the former Sunday gate required packages 1–6, and the run rule now comes later.
+- Lead agent: deferred; the former Sunday gate required packages 1–6, and the run rule now comes later; lead routes and plan `started_by` remain reserved even if the lead never ships.
 - Hidden test sets: extend beyond the external hidden grading already present in `tools/eval`.
 - A red agent to look for counterexamples to a proposed change.
 - A specialist engine for checks that need a dedicated tool.
@@ -87,8 +87,7 @@ labels keep their size on screen. Not built yet; it comes after the core feature
 Oversight's look on 2026-10-26. It is a picture of the idea, not the product: its name and numbers
 are placeholders.*
 
-The decided queue, current implementation states and undecided candidates are in
-[docs/additions.md](docs/additions.md).
+See [docs/additions.md](docs/additions.md) for the queue and candidates.
 
 ## License
 
