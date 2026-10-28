@@ -80,6 +80,7 @@ class FieldRuntime implements FieldController {
   private readonly query =
     typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
   private renderer: LampRenderer | null;
+  private readonly checkContext: LampRenderer["check"] | undefined;
   private input: FieldInput = { mode: "watch", lights: [] };
   private reducedMotion = this.query?.matches ?? false;
   private grid: LampGrid | null = null;
@@ -100,6 +101,7 @@ class FieldRuntime implements FieldController {
     private readonly source: BoxSource,
   ) {
     this.renderer = createLampRenderer(canvas);
+    this.checkContext = this.renderer?.check;
     canvas.hidden = this.renderer === null;
     this.unsubscribe = source.subscribe(this.onGraph);
     this.observer = new MutationObserver(this.onTheme);
@@ -110,7 +112,8 @@ class FieldRuntime implements FieldController {
     this.query?.addEventListener("change", this.onMotion);
     document.addEventListener("visibilitychange", this.onVisibility);
     window.addEventListener("resize", this.redraw);
-    canvas.addEventListener("webglcontextlost", this.onLost);
+    canvas.addEventListener("webglcontextlost", this.onContextChange);
+    canvas.addEventListener("webglcontextrestored", this.onContextChange);
     canvas.oversightField = this.probe();
     this.redraw();
     this.schedule();
@@ -133,6 +136,11 @@ class FieldRuntime implements FieldController {
   }
 
   private stop() {
+    try {
+      this.checkContext?.();
+    } catch {
+      // Context errors are expected here; diagnostics must never prevent the plain fallback.
+    }
     this.renderer?.dispose();
     this.renderer = null;
     this.grid = null;
@@ -148,7 +156,7 @@ class FieldRuntime implements FieldController {
     if (width === 0 || height === 0) return;
     try {
       const { lights, config } = this.transition.sample(now);
-      this.renderer.resize(width, height, window.devicePixelRatio || 1);
+      this.renderer.resize(width, height, Math.min(window.devicePixelRatio || 1, 1));
       const placed = placeLights(
         this.theme,
         lights,
@@ -209,7 +217,7 @@ class FieldRuntime implements FieldController {
     this.redraw();
     this.schedule();
   };
-  private onLost = () => {
+  private onContextChange = () => {
     this.stop();
   };
 
@@ -266,7 +274,8 @@ class FieldRuntime implements FieldController {
     this.query?.removeEventListener("change", this.onMotion);
     document.removeEventListener("visibilitychange", this.onVisibility);
     window.removeEventListener("resize", this.redraw);
-    this.canvas.removeEventListener("webglcontextlost", this.onLost);
+    this.canvas.removeEventListener("webglcontextlost", this.onContextChange);
+    this.canvas.removeEventListener("webglcontextrestored", this.onContextChange);
     this.renderer?.dispose();
     delete this.canvas.oversightField;
   }
