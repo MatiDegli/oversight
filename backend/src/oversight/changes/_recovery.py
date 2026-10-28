@@ -52,6 +52,6 @@ async def recover(
             note = "main is unchanged; approve again or reject"
     else:
         ctx.state.break_change(rec)
-        note = "main's state is unknown; reject the change or restart"
+        note = "code=main_suspect; reason=main's state is unknown; reject the change or restart"
     what = "was cancelled" if error is None else f"failed: {error}"
     await ctx.error("git", f"Approving {rec.change_id} {what}. {note}.", rec, fatal=False)

@@ -324,12 +324,14 @@ async def commit(
     """Commit the worktree as the agent, or as the user for edits in review; HEAD, and the
     files that differ from the base."""
     tree = rec.tree
+    await ctx.workspace.veto_index(tree, timeout_s=ctx.timeout)
     await ctx.git(tree, "add", "-A")
     if (await ctx.git(tree, "status", "--porcelain")).strip():
         if by == "agent":
             message, author = f"{rec.change_id} ({rec.agent_id})", rec.agent_id
         else:
             message, author = f"{rec.change_id}: edited in review", "user"
+        await ctx.workspace.veto_index(tree, timeout_s=ctx.timeout)
         await ctx.git(tree, "commit", "-q", "-m", message, commit_as=author)
     head = (await ctx.git(tree, "rev-parse", "HEAD")).strip()
     names = await ctx.git(

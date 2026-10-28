@@ -5,6 +5,52 @@ Existing callers keep their current runner. Availability policy and UI notices b
 Git leases and pins to C2a; metadata snapshots and the final integrity barrier to C2b.
 There are no contract changes.
 
+## Pre-Git integrity (C2a)
+
+All server Git shares a task-reentrant lease with test-tree capture, suite execution and
+cancellation cleanup. Tests acquire main before the worktree; tree locks precede the lease.
+The public workspace lease also supports the future temporary Revert checkout: acquire
+main, temporary tree, then lease. No mode lock may be acquired while retaining the lease.
+
+Git's directory, common directory and working tree are pinned to the server-created
+registration, not discovered from a mutable `.git` pointer or `core.worktree`. Capture uses
+the same environment and changes only `GIT_INDEX_FILE`. Replacement objects, hooks and
+fsmonitor are disabled. `diff.ignoreSubmodules=all` and `--ignore-submodules=all` on status
+and diff are a second layer; they do not protect add, diff-files or capture.
+
+Before each tree-reading Git, a filesystem walk checks all entries, including ignored ones,
+without following symlinks. Names are compared casefolded; only the registered root's literal
+non-symlink `.git` entry is exempt. Capture walks once before its first Git. Each walk and
+lease wait uses the caller's Git deadline; an unreadable directory or an expired scan cannot
+launch Git. Ordinary symlinks are not traversed. Concurrent filesystem writers outside the
+suite remain the filesystem-isolation residual described below.
+
+The scan exemption allowlist is `rev-parse`, `rev-list`, `merge-base`, `write-tree`, exact
+`ls-files -s -z`, and three-argument `cat-file -p/-e/-t/-s OBJECT`. All other invocations are
+scanned, including unknown commands, `cat-file --filters`, `diff-index` and `merge --abort`.
+`worktree remove` scans its registered target, since that is the tree Git inspects.
+No broad `cat-file` or `worktree` exemption is safe. Every Git result, including capture and
+raw yes/no queries, refuses truncated output without retrying effects.
+
+Proposal commits inspect every NUL-delimited index stage for mode 160000 before add and
+again before commit. Tracked, untracked and ignored `.gitmodules` entries are also rejected.
+Capture applies the veto to its temporary index before add. Refusals use
+`code=integrity_invalid; reason=...` with a bounded, JSON-escaped path (semicolons escaped too).
+Scan I/O errors use `integrity_invalid`; deadline exhaustion and incomplete index queries use
+`git_failed`. An uncertain approval recovery uses `main_suspect`. In particular, a nested
+repository left on main blocks `merge --abort` as well: main stays suspect until restart,
+with its pending merge intact. Unknown index, HEAD and main-ref locks are never removed.
+
+C2a does not snapshot or restore Git metadata or the real index. Those checks, verified abort
+restoration, candidate/tested/index equality and the final pre-commit barrier belong to C2b.
+Availability policy, execution discrimination and CI integration belong to C3. The attack
+tests retain pointer, config, fsmonitor, hooks, alternates, shallow, replacement refs, branch
+refs, index, MERGE_HEAD and abort cases; the metadata matrix asserts the pre-Git refusal,
+not C2b restoration. The regression executes a real agent suite leaving a malicious nested
+repository, and checks a filter sentinel after every server Git through proposal capture,
+as-clicked approval, preparation and the combined suite. Removing the scan and veto locally
+must make capture execute the filter and fail that regression.
+
 Run the optional kernel probe from the repository root:
 
 ```sh
