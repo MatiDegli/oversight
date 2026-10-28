@@ -2,11 +2,12 @@
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 
-import type { LiveDiffData } from "../state";
+import { stateStore } from "../state";
+import type { LiveDiffData, State } from "../state";
 import { getActiveTheme } from "../theme";
 import { LiveDiff } from "./LiveDiff";
 import { ReviewEditor } from "./ReviewEditor";
-import { createFileSession } from "../app";
+import { App, createFileSession } from "../app";
 import { monaco } from "./monaco";
 import { editorTokens } from "./theme";
 
@@ -75,6 +76,16 @@ const editorSurface =
   ".monaco-diff-editor, .monaco-diff-editor *, .context-view, .context-view *, .monaco-hover, .monaco-hover *";
 
 export const panelTest = {
+  renderApp(state: State) {
+    host.style.height = "100vh";
+    flushSync(() => {
+      stateStore.setState({ state });
+      root.render(<App />);
+    });
+  },
+  setState(state: State) {
+    flushSync(() => stateStore.setState({ state }));
+  },
   render(data: LiveDiffData | undefined) {
     flushSync(() => {
       root.render(

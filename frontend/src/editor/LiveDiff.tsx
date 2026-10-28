@@ -2,6 +2,10 @@ import { LockKeyhole } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { editor } from "monaco-editor";
 
+import { useStore } from "zustand";
+
+import { ChangeFactsRow } from "../review";
+import { stateStore } from "../state";
 import type { LiveDiffData } from "../state";
 import { getActiveTheme } from "../theme";
 import { loadEditorFonts } from "./fonts";
@@ -247,24 +251,24 @@ export function EditorDiff({
 }
 
 export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
+  const state = useStore(stateStore, (store) => store.state);
   return (
     <section
       aria-label="Live diff"
       className="flex h-full min-h-96 min-w-0 flex-col bg-page text-text"
     >
-      <header className="flex flex-wrap items-center gap-3 border-b border-page-border bg-page p-4">
+      <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-page-border bg-page p-4">
         <h2 className="min-w-0 break-all text-base font-bold">{data?.path ?? "Live diff"}</h2>
-        {data && (
-          <p className="font-mono text-sm">
-            <span className="text-added">+{data.linesAdded}</span>{" "}
-            <span className="text-removed">−{data.linesRemoved}</span>
-          </p>
-        )}
         <span className="ml-auto inline-flex items-center gap-2 text-sm text-muted">
           <LockKeyhole aria-hidden="true" className="size-4" /> Read-only · Inline diff
         </span>
       </header>
-      <p className="border-b border-page-border p-4 text-sm text-muted">
+      {data && (
+        <div className="shrink-0 border-b border-page-border px-4 py-2.5">
+          <ChangeFactsRow state={state} changeId={data.changeId} />
+        </div>
+      )}
+      <p className="shrink-0 border-b border-page-border p-4 text-sm text-muted">
         {data
           ? "This diff updates with each edit. Decisions open when the agent proposes the change."
           : "Select a changed file to see its live diff."}

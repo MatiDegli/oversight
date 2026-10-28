@@ -1,0 +1,147 @@
+import type { SuiteResult } from "@contracts";
+import {
+  Check,
+  CircleHelp,
+  Coins,
+  FileCode,
+  GitBranch,
+  GitCommitHorizontal,
+  ListChecks,
+  ScanEye,
+  TestTube,
+  X,
+} from "lucide-react";
+import type { ReactNode } from "react";
+
+import { selectAgentCard } from "../agents";
+import { formatUsd } from "../state";
+import type { State } from "../state";
+import { impactSummary } from "./ImpactCone";
+
+const chip =
+  "inline-flex min-h-(--chip-height) min-w-0 items-center gap-1.5 rounded-control border border-page-border bg-page-raised px-2.5 py-1 text-(length:--data-size)";
+const icon = "size-4 shrink-0 text-muted";
+
+/** A compact numeric reading, using the shared data typeface. */
+function DataWords({ text }: { text: string }) {
+  return <span className="font-mono">{text}</span>;
+}
+
+function Fact({
+  label,
+  symbol,
+  children,
+}: {
+  label: string;
+  symbol: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <li aria-label={label} className={chip}>
+      {symbol}
+      <span className="min-w-0 break-words">{children}</span>
+    </li>
+  );
+}
+
+function TestsFact({ tests }: { tests: SuiteResult | undefined }) {
+  const text = !tests
+    ? "Tests unknown"
+    : tests.outcome === "passed"
+      ? `${String(tests.passed)} passed`
+      : tests.outcome === "failed"
+        ? `${String(tests.failed)} failed, ${String(tests.passed)} passed`
+        : tests.outcome === "error"
+          ? "Tests could not run"
+          : "Tests timed out";
+  return (
+    <Fact
+      label="Tests"
+      symbol={
+        !tests ? (
+          <TestTube aria-hidden="true" className={icon} />
+        ) : tests.outcome === "passed" ? (
+          <Check aria-hidden="true" className="size-4 shrink-0 text-passed" />
+        ) : (
+          <X aria-hidden="true" className="size-4 shrink-0 text-failed-text" />
+        )
+      }
+    >
+      <DataWords text={text} />
+    </Fact>
+  );
+}
+
+/** Recorded facts only. Missing worktree and live cone metadata stay explicitly unknown. */
+export function ChangeFactsRow({ state, changeId }: { state: State; changeId: string }) {
+  const change = state.changes[changeId];
+  if (!change) return null;
+  const proposal = change.proposal;
+  const card = selectAgentCard(state, change.agent_id);
+  const base = proposal?.base_commit || card?.agent.base_commit;
+  const lastTests = Object.values(state.testExecutions).findLast(
+    (execution) =>
+      execution.change_id === changeId &&
+      execution.agent_id === change.agent_id &&
+      execution.phase === "agent",
+  );
+  const cost = card?.cost;
+  const costText =
+    cost == null ? "Unknown" : cost > 0 && cost < 0.005 ? "<US$0.01" : formatUsd(cost);
+  return (
+    <ul aria-label="Facts" className="flex flex-wrap items-center gap-2 text-text">
+      <Fact label="Files" symbol={<FileCode aria-hidden="true" className={icon} />}>
+        <span className="font-mono">{proposal?.files.length ?? change.files_changed}</span>{" "}
+        {(proposal?.files.length ?? change.files_changed) === 1 ? "file" : "files"}
+      </Fact>
+      <Fact label="Lines" symbol={<ListChecks aria-hidden="true" className={icon} />}>
+        <span className="font-mono text-added">+{proposal?.lines_added ?? change.lines_added}</span>{" "}
+        <span className="font-mono text-removed">
+          −{proposal?.lines_removed ?? change.lines_removed}
+        </span>
+      </Fact>
+      <TestsFact tests={proposal?.tests ?? lastTests?.suite} />
+      <Fact
+        label="Base commit"
+        symbol={<GitCommitHorizontal aria-hidden="true" className={icon} />}
+      >
+        Base{" "}
+        <span title={base ?? undefined} className="font-mono">
+          {base ? base.slice(0, 7) : "Unknown"}
+        </span>
+      </Fact>
+      <Fact label="Worktree" symbol={<GitBranch aria-hidden="true" className={icon} />}>
+        Worktree unknown
+      </Fact>
+      <Fact label="Steps" symbol={<ListChecks aria-hidden="true" className={icon} />}>
+        {card ? (
+          <DataWords text={`Step ${String(card.step)} of ${String(card.maxSteps)}`} />
+        ) : (
+          "Steps unknown"
+        )}
+      </Fact>
+      <Fact label="Impact cone" symbol={<ScanEye aria-hidden="true" className={icon} />}>
+        {proposal ? (
+          <DataWords text={impactSummary(proposal.impact)} />
+        ) : (
+          "Possibly affected: unknown"
+        )}
+      </Fact>
+      <Fact label="Model and cost" symbol={<Coins aria-hidden="true" className={icon} />}>
+        {card?.modelLabel ?? "Model unknown"} · <span className="font-mono">{costText}</span>
+      </Fact>
+      {proposal && proposal.impact.omitted_by_depth > 0 && (
+        <Fact label="Cone depth bound" symbol={<CircleHelp aria-hidden="true" className={icon} />}>
+          <DataWords text={`+${String(proposal.impact.omitted_by_depth)} omitted by depth`} />
+        </Fact>
+      )}
+      {proposal && proposal.impact.omitted_by_limit > 0 && (
+        <Fact label="Cone node bound" symbol={<CircleHelp aria-hidden="true" className={icon} />}>
+          <DataWords
+            text={`+${String(proposal.impact.omitted_by_limit)} omitted by the node limit`}
+          />
+        </Fact>
+      )}
+    </ul>
+  );
+}
