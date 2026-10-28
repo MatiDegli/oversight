@@ -1,21 +1,24 @@
-"""Pure safe-merge-v1 evaluation. Callers collect evidence; this module never executes a merge."""
+"""Pure profile evaluation. Callers collect evidence; this module never executes a merge."""
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import isfinite
 from typing import Literal
 
 from pydantic import JsonValue, ValidationError
 
+from oversight.changes._facts import AddedTestsInventory, IntegrityStatus
 from oversight_contracts.common import MergeMode, RuleId
-from oversight_contracts.events import SuiteResult
+from oversight_contracts.events import ModelProfile, SuiteResult
 from oversight_contracts.graph import ImpactCone
 from oversight_contracts.policy import (
-    SAFE_MERGE_V1_RULES,
+    POLICY_RULES,
     ChangeAssessment,
+    CheckInputs,
     EvidenceRef,
     RuleAssessment,
 )
+from oversight_contracts.review import AddedTestProbe, CrossReview, IntegrityFact
 
 type Result = Literal["pass", "fail", "unknown"]
 
@@ -59,6 +62,12 @@ class PolicyInputs:
     spend: SpendSnapshot | None = None
     modified_existing_test_paths: tuple[str, ...] | None = None
     deleted_existing_test_paths: tuple[str, ...] | None = None
+    author: ModelProfile | None = None
+    review: CrossReview | None = None
+    integrity: tuple[IntegrityFact, ...] | None = None
+    integrity_status: IntegrityStatus | None = None
+    added_tests: tuple[AddedTestProbe, ...] | None = None
+    added_tests_inventory: AddedTestsInventory | None = None
     evidence: Mapping[RuleId, tuple[EvidenceRef, ...]] = field(
         default_factory=dict[RuleId, tuple[EvidenceRef, ...]]
     )
@@ -226,8 +235,105 @@ def _existing_tests(inputs: PolicyInputs) -> RuleAssessment:
     )
 
 
-def assess(inputs: PolicyInputs) -> ChangeAssessment:
-    """Evaluate all five rules exactly once against the supplied candidate and evidence."""
+def _check(inputs: PolicyInputs, rule: RuleId, checks: CheckInputs | None) -> RuleAssessment:
+    passes = None
+    if checks is not None:
+        passes = False if checks.violations else True if checks.complete else None
+    return _record(
+        inputs,
+        rule,
+        {"violations_max": 0, "complete": True},
+        checks.model_dump(mode="json") if checks is not None else None,
+        passes,
+    )
+
+
+def _cross_review(inputs: PolicyInputs) -> RuleAssessment:
+    review, author = inputs.review, inputs.author
+    checks = None
+    if (
+        review is not None
+        and author is not None
+        and review.complete
+        and not review.problems
+        and review.verdict != "unknown"
+        and review.author_model == author.model
+        and review.reviewer_model != author.model
+        and (review.change_id, review.revision, review.base_commit, review.head_commit)
+        == (inputs.change_id, inputs.revision, inputs.base_commit, inputs.head_commit)
+        and (
+            (author.provider == "fake" and review.reviewer_provider == "fake")
+            or {author.provider, review.reviewer_provider} == {"meta", "baseten"}
+        )
+    ):
+        checks = CheckInputs(
+            violations=sum(f.severity in {"BLOCKING", "SHOULD-FIX"} for f in review.findings),
+            complete=all(f.severity is not None for f in review.findings),
+        )
+    return _check(inputs, "cross_review", checks)
+
+
+def _test_integrity(inputs: PolicyInputs) -> RuleAssessment:
+    facts, status = inputs.integrity, inputs.integrity_status
+    checks = None
+    if facts is not None and status is not None:
+        checks = CheckInputs(
+            violations=sum(f.kind != "parse_error" for f in facts) + len(status.prohibited_paths),
+            complete=status.complete and all(f.kind != "parse_error" for f in facts),
+        )
+    return _check(inputs, "test_integrity", checks)
+
+
+def _added_tests_fail_before(inputs: PolicyInputs) -> RuleAssessment:
+    probes, inventory = inputs.added_tests, inputs.added_tests_inventory
+    checks = None
+    if probes is not None and inventory is not None:
+        ids = [probe.test_id for probe in probes]
+        checks = CheckInputs(
+            violations=sum(
+                probe.result not in {"fails_before_passes_after", "unknown"} for probe in probes
+            ),
+            complete=inventory.complete
+            and len(ids) == len(set(ids))
+            and len(inventory.test_ids) == len(set(inventory.test_ids))
+            and set(ids) == set(inventory.test_ids)
+            and all(probe.result != "unknown" for probe in probes),
+        )
+        # A facts receipt is required even for an empty inventory. Probe receipts
+        # supplement it; they never substitute for missing inventory evidence.
+        refs = inputs.evidence.get("added_tests_fail_before", ())
+        if refs:
+            extra_seqs = sorted(
+                {seq for probe in probes for seq in (probe.before_seq, probe.after_seq)}
+                - {ref.event_seq for ref in refs}
+            )
+            inputs = replace(
+                inputs,
+                evidence={
+                    **inputs.evidence,
+                    "added_tests_fail_before": (
+                        *refs,
+                        *(EvidenceRef(event_seq=seq) for seq in extra_seqs),
+                    ),
+                },
+            )
+    return _check(inputs, "added_tests_fail_before", checks)
+
+
+def assess(inputs: PolicyInputs, profile: str = "safe-merge-v1") -> ChangeAssessment:
+    """Evaluate exactly the named profile; unknown names have no fallback authority."""
+    if profile not in POLICY_RULES:
+        raise ValueError(f"unknown policy profile: {profile}")
+    evaluators = {
+        "combined_tests": _combined_tests,
+        "small_cone": _small_cone,
+        "small_change": _small_change,
+        "known_spend": _known_spend,
+        "existing_tests_untouched": _existing_tests,
+        "cross_review": _cross_review,
+        "test_integrity": _test_integrity,
+        "added_tests_fail_before": _added_tests_fail_before,
+    }
     return ChangeAssessment(
         change_id=inputs.change_id,
         agent_id=inputs.agent_id,
@@ -236,25 +342,22 @@ def assess(inputs: PolicyInputs) -> ChangeAssessment:
         head_commit=inputs.head_commit,
         main_commit=inputs.main_commit,
         candidate_tree=inputs.candidate_tree,
-        policy_version="safe-merge-v1",
+        policy_version=profile,
         mode=inputs.mode,
         mode_revision=inputs.mode_revision,
         rules=[
-            _combined_tests(inputs),
-            _small_cone(inputs),
-            _small_change(inputs),
-            _known_spend(inputs),
-            _existing_tests(inputs),
+            evaluators[rule](inputs) if rule in evaluators else _check(inputs, rule, None)
+            for rule in sorted(POLICY_RULES[profile])
         ],
     )
 
 
 def merges_alone(assessment: ChangeAssessment) -> bool:
-    """True only for safe-merge-v1 in merge_when_safe mode with all five rules passing."""
+    """Require the exact eight-rule probes profile, mode and unanimous passing evidence."""
     return (
-        assessment.policy_version == "safe-merge-v1"
+        assessment.policy_version == "safe-merge-probes-v1"
         and assessment.mode == "merge_when_safe"
-        and len(assessment.rules) == 5
-        and {rule.rule for rule in assessment.rules} == set(SAFE_MERGE_V1_RULES)
+        and len(assessment.rules) == 8
+        and {rule.rule for rule in assessment.rules} == set(POLICY_RULES["safe-merge-probes-v1"])
         and all(rule.result == "pass" for rule in assessment.rules)
     )
