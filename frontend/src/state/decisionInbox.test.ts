@@ -145,12 +145,35 @@ it("uses the first raising seq/ts and a stable identity tie-break, even for repe
   );
   expect(after.map((e) => e.firstSeq)).toEqual([5, 5, 7, 9, 10, 12, 15, 18]);
   expect(after[0]?.age).toBe("2 min ago");
-  expect(after[0]?.id.localeCompare(after[1]?.id ?? "")).toBeLessThan(0);
+  const tiedIds = after.slice(0, 2).map((entry) => entry.id);
+  expect(tiedIds).toEqual([...tiedIds].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
   const state = replay(kinds);
   const duplicate = events(kinds).at(-1);
   if (!duplicate) throw new Error("Missing duplicate");
   expect(selectDecisionInbox(applyEvent(state, duplicate))).toEqual(selectDecisionInbox(state));
   expect(selectDecisionInbox({ ...state, clock: null }).every((e) => e.age === "")).toBe(true);
+});
+
+it("breaks same-seq ties by code units for case- and accent-differing questions", () => {
+  const log = events(kinds)
+    .slice(0, 5)
+    .map((event): ServerEvent => {
+      if (event.type !== "change.facts_recorded") return event;
+      const card = event.payload.review_cards?.[0];
+      if (!card) throw new Error("Missing card");
+      return {
+        ...event,
+        payload: {
+          ...event.payload,
+          review_cards: ["a?", "é?", "Z?", "E?"].map((question) => ({ ...card, question })),
+        },
+      };
+    });
+  const entries = selectDecisionInbox(log.reduce(applyEvent, createInitialState()));
+  expect(entries.map((entry) => entry.firstSeq)).toEqual([5, 5, 5, 5]);
+  expect(entries.map((entry) => entry.reason)).toEqual(["E?", "Z?", "a?", "é?"]);
+  const ids = entries.map((entry) => entry.id);
+  expect(ids).toEqual([...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
 });
 
 it("closes Yes and No alone, retains Unsure and the approve conflict, and requires persisted delegation", () => {
