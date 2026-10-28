@@ -58,7 +58,7 @@ function Piece({
     <div className={`pp-piece ${helper ? "pp-call" : "pp-cone"} ${compact ? "is-compact" : ""}`}>
       <svg
         className={`pp-taxi ${helper && !merged ? "is-pending" : ""}`}
-        viewBox={compact ? "0 0 172 138" : helper ? "0 0 358 114" : "0 0 358 130"}
+        viewBox={compact ? "0 0 172 138" : undefined}
         preserveAspectRatio="none"
         aria-hidden="true"
       >

@@ -25,6 +25,9 @@
     border: 0;
   }
   .phone-practice {
+    width: 100%;
+    max-width: 430px;
+    margin-inline: auto;
     height: 100dvh;
     display: flex;
     flex-direction: column;

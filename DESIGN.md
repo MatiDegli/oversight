@@ -594,7 +594,7 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 
 - The submission practice supports widths below 1280px; the full IDE keeps its widen-window notice.
 - Stack the top bar, provenance, graph context (about 200px maximum), evidence and decision dock.
-  Keep graph and dock visible while the evidence scrolls, with 16px side gutters.
+  Center the column at up to 430px with 16px gutters; only the evidence scrolls.
 - Draw node cards and taxi calls on plain ground when WebGL is unavailable. Next labels and
   agent letters preserve Signal; compact graph names use 14–16px and folded nodes 13–14px.
 - Fold exact callers by distance; disclose members, bounds and nonzero truncation.

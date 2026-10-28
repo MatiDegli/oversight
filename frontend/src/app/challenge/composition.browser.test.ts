@@ -93,6 +93,8 @@ it("keeps the same graph and positions through practice entry, resizing and exit
     await sameGraph();
     await check(page.getByLabel("Decision-time graph", { exact: true })).toBeVisible();
     await check(graph).toBeHidden();
+    await page.setViewportSize({ width: 1279, height: 844 });
+    await check(page.locator(".phone-practice")).toHaveCSS("width", "430px");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await check(page.locator(".practice-phone")).toHaveCount(0);
     await sameGraph();
