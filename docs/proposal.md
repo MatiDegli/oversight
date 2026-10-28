@@ -763,8 +763,10 @@ details outside this repository.
 | Support and mechanical steps: test additions, smoke scripts, surveys, formatting, reruns; no design and no new module | GLM; Claude Haiku or Sonnet when GLM is out of quota |
 | Independent review | a model from another provider than the author's: Claude reviews Codex's changes, Codex reviews Claude's |
 
-- Muse is not used to build Oversight. The Meta API is called only from inside the product: its
-  agents, the probe, and recorded demo runs.
+- Muse Code (Muse Wonder) contributed bounded implementations, tests, tooling fixes and development plans, and later
+  reviewed the coordinator's Codex implementation loops. Development use runs under the maintainer's subscription with
+  its own stored credential, separate from the product key and hackathon credits. The Meta API is called only from
+  inside Oversight: its agents, the API probe and deliberately recorded demo runs.
 - At least four writers run at once, at least one per lane: the critical path, the frontend,
   bounded backend work, and support. Helpers are the first to stop when usage runs ahead of pace. Every headless run states its permission mode and turn limit.
 - Every worker stays inside its own worktree and is launched confined where its tool allows. Review

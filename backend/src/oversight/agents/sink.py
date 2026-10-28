@@ -3,6 +3,7 @@
 
 from typing import Protocol
 
+from oversight.workspace import SuiteRun
 from oversight_contracts.common import AgentId
 from oversight_contracts.review import FinishDeclaration
 
@@ -15,6 +16,10 @@ class ChangeSink(Protocol):
         `True` when the edit was recorded. `False` when it was not: the change manager has sent
         an `error`, and the edit's nodes never reached the UI, so the runtime sends its focus
         with no nodes."""
+        ...
+
+    async def tests_executed(self, agent_id: AgentId, run: SuiteRun) -> None:
+        """Publish the captured agent suite without adding metadata to its tool result."""
         ...
 
     async def proposed(

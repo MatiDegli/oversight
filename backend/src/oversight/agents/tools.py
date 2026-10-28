@@ -17,7 +17,15 @@ from typing import Literal, cast
 from pydantic import ValidationError
 
 from oversight.graph import WorkspaceGraph
-from oversight.workspace import FileRead, FileTooLarge, Tree, Workspace, WorkspaceError
+from oversight.workspace import (
+    FileRead,
+    FileTooLarge,
+    SuiteRun,
+    SuiteUnavailable,
+    Tree,
+    Workspace,
+    WorkspaceError,
+)
 from oversight_contracts.events import FocusRange, SuiteResult
 from oversight_contracts.review import FinishDeclaration
 
@@ -27,6 +35,7 @@ MAX_SEARCH_MATCHES = 50
 MAX_SEARCH_LINE = 200
 SEARCH_FOCUS_NODES = 5
 MAX_TEST_OUTPUT = 4_000
+_JSON_TYPES = {"string": str, "integer": int, "boolean": bool, "array": list, "null": type(None)}
 
 TOOL_NAMES = ("list_files", "read_file", "search", "edit_file", "run_tests", "finish")
 
@@ -106,6 +115,7 @@ class ToolOutcome:
     node_ids: list[str] = field(default_factory=lambda: list[str]())
     edited_path: str | None = None
     tests: SuiteResult | None = None
+    suite_run: SuiteRun | None = None
     finish_summary: str | None = None
     declaration: FinishDeclaration | None = None
 
@@ -130,6 +140,31 @@ def _line(arguments: dict[str, object], key: str) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise ToolError(f"argument {key!r} must be a line number from 1")
     return value
+
+
+def _validate(name: str, arguments: dict[str, object]) -> None:
+    for tool in TOOL_SCHEMAS:
+        function = cast(dict[str, object], tool["function"])
+        if function["name"] != name:
+            continue
+        schema = cast(dict[str, object], function["parameters"])
+        properties = cast(dict[str, dict[str, object]], schema["properties"])
+        required = cast(list[str], schema["required"])
+        signature = f"{name}({', '.join(properties)})"
+        unknown = arguments.keys() - properties.keys()
+        missing = set(required) - arguments.keys()
+        if unknown or missing:
+            raise ToolError(
+                f"invalid arguments (unknown: {', '.join(sorted(unknown)) or 'none'}; "
+                f"missing: {', '.join(sorted(missing)) or 'none'}); expected {signature}"
+            )
+        for key, value in arguments.items():
+            kind = cast(str | list[str], properties[key]["type"])
+            kinds = [kind] if isinstance(kind, str) else kind
+            valid = any(type(value) is _JSON_TYPES.get(item) for item in kinds)
+            if not valid:
+                raise ToolError(f"argument {key!r} must be {kind}; expected {signature}")
+        return
 
 
 async def _in_thread_to_the_end[T](fn: Callable[[], T]) -> T:
@@ -195,6 +230,7 @@ class Toolbox:
             if not isinstance(parsed, dict):
                 raise ToolError("arguments must be a JSON object")
             arguments = cast(dict[str, object], parsed)
+            _validate(name, arguments)
             match name:
                 case "list_files":
                     return await self._list_files()
@@ -214,6 +250,14 @@ class Toolbox:
             message = "arguments are not valid JSON"
         except (ToolError, WorkspaceError) as error:
             message = self._workspace.redact(str(error))
+        except SuiteUnavailable as error:
+            message = f"cannot access the file: {error.strerror or type(error.cause).__name__}"
+            return ToolOutcome(
+                content=f"Error: {message}",
+                ok=False,
+                summary=_failed(name, raw_arguments),
+                suite_run=error.run,
+            )
         except OSError as error:
             message = f"cannot access the file: {error.strerror or type(error).__name__}"
         return ToolOutcome(
@@ -356,7 +400,10 @@ class Toolbox:
             raise ToolError(f"{path} changed since you last read it; read it again")
         index = current.content.find(old)
         if index == -1:
-            raise ToolError(f"old_text does not appear in {path}; it must appear exactly once")
+            raise ToolError(
+                f"old_text does not appear in {path}; read the file again and copy the exact "
+                "text without line numbers; it must appear exactly once"
+            )
         # From index + 1, not past the match: "ana" appears twice in "banana".
         if current.content.find(old, index + 1) != -1:
             raise ToolError(
@@ -391,12 +438,23 @@ class Toolbox:
         else:
             headline = f"Ran tests: {result.passed} of {result.passed + result.failed} pass"
         output = run.output[-MAX_TEST_OUTPUT:]
+        counts = f"{result.passed} passed, {result.failed} failed, {result.skipped} skipped"
+        failed = ", ".join(result.failed_tests) or "none reported"
+        content = f"Suite outcome: {result.outcome}; {counts}\nFailed tests: {failed}"
+        if len(run.output) > MAX_TEST_OUTPUT:
+            content += f"\nOutput truncated: showing the last {MAX_TEST_OUTPUT} characters."
         return ToolOutcome(
-            content=f"{headline}\n\n{output}", ok=True, summary=headline, tests=result
+            content=f"{content}\n\n{output}",
+            ok=True,
+            summary=headline,
+            tests=result,
+            suite_run=run,
         )
 
     def _finish(self, arguments: dict[str, object]) -> ToolOutcome:
         note = cast(str, _string(arguments, "summary"))
+        if not note.strip():
+            raise ToolError("summary must not be blank; expected finish(summary: nonblank string)")
         try:
             declaration = FinishDeclaration.model_validate(
                 {key: value for key, value in arguments.items() if key != "summary"}

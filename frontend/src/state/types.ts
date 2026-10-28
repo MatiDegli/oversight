@@ -3,6 +3,8 @@ import type {
   AgentStatus,
   AgentStep,
   ChangeGraph,
+  ChangeFacts,
+  SuiteExecution,
   ChangeProposed,
   ChangeResolved,
   ChangeUpdated,
@@ -50,6 +52,8 @@ export interface State {
    */
   agentCosts: Record<string, number | null>;
   errors: ErrorReport[];
+  testExecutions: Record<number, SuiteExecution>;
+  changeFacts: Record<string, ChangeFacts[]>;
 }
 
 export function createInitialState(): State {
@@ -68,6 +72,8 @@ export function createInitialState(): State {
     spendUnknown: false,
     agentCosts: {},
     errors: [],
+    testExecutions: {},
+    changeFacts: {},
   };
 }
 
