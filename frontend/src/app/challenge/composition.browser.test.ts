@@ -6,7 +6,7 @@ import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import type { GraphProbeHost } from "../../graph";
 
-let browser: Browser;
+let browser: Browser | undefined;
 const servers: ViteDevServer[] = [];
 beforeAll(async () => {
   browser = await chromium.launch({ headless: true });
@@ -38,6 +38,7 @@ afterAll(async () => {
   await Promise.all(servers.map((server) => server.close()));
 });
 async function visit(index: number, path: string, run: (page: Page) => Promise<void>) {
+  if (!browser) throw new Error("Browser has not started");
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   try {
     const origin = servers[index]?.resolvedUrls?.local[0];
