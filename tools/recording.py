@@ -81,7 +81,38 @@ def validate_text(text: str, *, fake_fixture: bool = False) -> list[ServerEvent]
                 )
             if event.seq != 1:
                 raise RecordError("the log contains another run.started")
+    if not fake_fixture:
+        validate_completeness(events)
     return events
+
+
+def validate_completeness(events: list[ServerEvent]) -> None:
+    """Require a complete edit, proposal and merged approval before real publication."""
+    if not any(event.type == "graph.snapshot" for event in events):
+        raise RecordError("the run is missing graph.snapshot")
+    if not any(
+        event.type == "change.updated" and event.payload.author == "agent" for event in events
+    ):
+        raise RecordError("the run is missing an agent-authored change.updated")
+    if not any(
+        event.type == "change.proposed" and event.payload.tests.outcome == "passed"
+        for event in events
+    ):
+        raise RecordError("the run is missing change.proposed with passed tests")
+    approval_seq = next(
+        (
+            event.seq
+            for event in events
+            if event.type == "change.resolved"
+            and event.payload.decision == "approved"
+            and event.payload.merge == "merged"
+        ),
+        None,
+    )
+    if approval_seq is None:
+        raise RecordError("the run is missing change.resolved approved with merge merged")
+    if not any(event.type == "graph.delta" and event.seq > approval_seq for event in events):
+        raise RecordError("the run is missing graph.delta after a merged approval")
 
 
 def receipt(text: str, events: list[ServerEvent], *, fake_fixture: bool = False) -> Provenance:

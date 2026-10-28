@@ -60,40 +60,57 @@ def write_store(path: Path, run_id: str, events: list[tuple[EventPayload, str]])
     return path
 
 
-def real_store(tmp_path: Path, run_id: str = RUN_ID) -> Path:
+def real_store(tmp_path: Path, run_id: str = RUN_ID, *, extra: EventPayload | None = None) -> Path:
+    payloads: list[EventPayload] = [started(run_id), step()]
+    payloads.extend(
+        event.payload
+        for event in read_jsonl(FIXTURES / "handwritten-level1.jsonl")
+        if event.type
+        in ("graph.snapshot", "change.updated", "change.proposed", "change.resolved", "graph.delta")
+    )
+    if extra is not None:
+        payloads.append(extra)
     return write_store(
         tmp_path / "runs" / f"{run_id}.sqlite",
         run_id,
         [
-            (started(run_id), "2026-10-27T14:03:12.000Z"),
-            (step(), "2026-10-27T14:03:13.000Z"),
+            (payload, "2026-10-27T14:03:12.000Z" if index == 0 else "2026-10-27T14:03:13.000Z")
+            for index, payload in enumerate(payloads)
         ],
     )
 
 
-def test_exports_a_tiny_store(tmp_path: Path) -> None:
+def test_exports_a_complete_store(tmp_path: Path) -> None:
     store = real_store(tmp_path)
     out = tmp_path / "recorded.jsonl"
     exported = record_run.record_run(store, out)
-    assert exported.count == 2
+    assert exported.count == 7
     assert exported.model == "muse-spark"
     assert exported.first_ts == "2026-10-27T14:03:12.000Z"
     assert exported.last_ts == "2026-10-27T14:03:13.000Z"
-    assert [event.type for event in read_jsonl(out)] == ["run.started", "agent.step"]
+    assert [event.type for event in read_jsonl(out)] == [
+        "run.started",
+        "agent.step",
+        "graph.snapshot",
+        "change.updated",
+        "change.proposed",
+        "change.resolved",
+        "graph.delta",
+    ]
     bundled = recording.load_recording(out)
     assert bundled["text"] == out.read_text()
     assert bundled["provenance"] == {
         "exporter": "oversight.record_run.v1",
         "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
         "run_id": RUN_ID,
-        "event_count": 2,
+        "event_count": 7,
     }
 
 
 @pytest.mark.parametrize(
     "path", ["/etc/private/demo.py", "//server/private/demo.py", r"\\server\private\demo.py"]
 )
-def test_refuses_an_absolute_path_and_deletes_the_output(tmp_path: Path, path: str) -> None:
+def test_refuses_an_absolute_path_without_creating_output(tmp_path: Path, path: str) -> None:
     store = write_store(
         tmp_path / "runs" / f"{RUN_ID}.sqlite",
         RUN_ID,
@@ -108,7 +125,7 @@ def test_refuses_an_absolute_path_and_deletes_the_output(tmp_path: Path, path: s
     assert not out.exists()
 
 
-def test_refuses_a_fake_run_and_deletes_the_output(tmp_path: Path) -> None:
+def test_refuses_a_fake_run_without_creating_output(tmp_path: Path) -> None:
     store = write_store(
         tmp_path / "runs" / f"{RUN_ID}.sqlite",
         RUN_ID,
@@ -150,7 +167,7 @@ def test_latest_picks_the_newest_store(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(record_run, "RUNTIME_DIR", tmp_path)
     out = tmp_path / "recorded.jsonl"
     assert record_run.main(["--latest", "--out", str(out)]) == 0
-    assert [event.type for event in read_jsonl(out)] == ["run.started", "agent.step"]
+    assert len(read_jsonl(out)) == 7
 
 
 def test_main_records_a_named_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -227,11 +244,7 @@ def test_refuses_credentials_before_publishing(
         updated = next(e.payload for e in events if isinstance(e.payload, ChangeUpdated))
         file = updated.file.model_copy(update={"modified": f'api_key = "{secret}"\n'})
         payload = updated.model_copy(update={"file": file})
-    store = write_store(
-        tmp_path / "runs" / f"{RUN_ID}.sqlite",
-        RUN_ID,
-        [(started(), "2026-10-27T14:03:12.000Z"), (payload, "2026-10-27T14:03:13.000Z")],
-    )
+    store = real_store(tmp_path, extra=payload)
     before = store.read_bytes()
     out = tmp_path / "recorded.jsonl"
     with pytest.raises(record_run.RecordError, match="secret") as error:
