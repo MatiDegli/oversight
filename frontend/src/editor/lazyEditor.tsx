@@ -1,6 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import { Component, lazy, Suspense, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, ErrorInfo, ReactNode } from "react";
 import { loadedEditor, loadEditor } from "./loader";
 import type { EditorImplementation } from "./loader";
 
@@ -31,6 +31,9 @@ class EditorBoundary extends Component<
   override state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
+  }
+  override componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error(error, info.componentStack);
   }
   override render() {
     return this.state.failed ? (
