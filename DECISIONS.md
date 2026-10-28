@@ -160,6 +160,9 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   and seven endpoints that return 501 reserve the wire format, so a later level can add behavior
   without a breaking change. File creation moves to 1.4.0.
 
+- **GET /tree in the next contract batch (maintainer, Tue Oct 27, 2026):** reserve the runtime
+  workspace tree endpoint there. The shell's file navigation needs it. No contract changes here.
+
 ## Design
 
 - **Signal lives in `DESIGN.md` at the root, with `PRODUCT.md` beside it:** the design skill
@@ -261,6 +264,84 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   bounded consequence of the code addition, not an unsolicited rearrangement or a mode change;
   restoring it preserves the person's layout and DESIGN.md's “nothing moves by itself” rule.
 
+### Design rethink (maintainer, Tue Oct 27, 2026)
+
+- **R1: module folding accepted.** Modules join classes as foldable groups. Every module starts
+  as one card and opens on a read or an edit inside it; its header toggles it open or folded.
+  Calls share one counted edge per directed module pair when either module is folded.
+  This keeps labels readable as the repository grows without losing call direction.
+- **R2: drag module frames only.** Function rows keep their column. Edges re-route on every
+  animation frame during a drag. This prevents stretched frames and routes that snap on drop.
+- **R3: function edges on demand.** Module edges show at rest. Function edges appear on hover,
+  selection and working agents' cones; calls within one file stay hidden. This reduces clutter
+  while keeping the calls relevant to the current work visible.
+- **R4: local light, amended by the maintainer on 2026-10-27.** The approved v4 field keeps
+  square LEDs and box-shaped light from the current node and last read, not a round glow.
+  The full amendment is recorded under v4 below and in DESIGN.md; it replaces the earlier
+  mode-dependent source tables. Local light must not flood the graph or obscure its controls.
+- **R5: motion that reports work, settled by the maintainer on 2026-10-27.** The approved v4
+  motion rules now replace the pending section in DESIGN.md: event-driven card, row, value,
+  state and review transitions, graph folding, agent travel and merge settlement, all off under
+  reduced motion. The v4 Motion decision below records the timing and marker behavior.
+- **Shell zones accepted.** The top bar, left rail, sidebar, focus panel, graph stage,
+  agents panel, bottom dock and status line give each feature a known home. The v4 Layout
+  decision below and DESIGN.md now settle their dimensions and width rules. The maintainer updated
+  AGENTS.md for focus panel tabs and the Files view. Approve keeps no keyboard shortcut, so the shell's keyboard map has no approve
+  key, and Ctrl K offers no Approve command; the existing "Approve answers only a pointer click"
+  decision applies. Nothing else waits on AGENTS.md.
+- **Terminal placed now, built last.** Its home is the bottom dock. Implementation waits for an
+  independently reviewed security plan: bind to 127.0.0.1, use a per-session token, check Origin
+  and Host, and kill the terminal with the server. Agents never reach it. This reserves its place
+  without adding shell access before its boundaries are reviewed.
+
+### Approved v4 shell (maintainer, 2026-10-27)
+
+- **v4 is the shell target (maintainer, 2026-10-27).** The seven approved images in
+  `docs/sketches/v4/` define watch, focus, conversation, review, changes, settings and the agent
+  marker. DESIGN.md adopts them inside Signal, retaining AGENTS.md's authority and the matte
+  review header. Reason: later shell work needs one agreed visual target rather than accumulated
+  additions; a sample in a sketch does not change a contract or make a feature available.
+- **Layout: zones and docks (maintainer, 2026-10-27).** At 1920x1080, top bar 52px, left rail
+  56px, sidebar 280px, focus panel 880px, graph at least 560px, agents panel 400px or rail 56px,
+  bottom dock 280px high and status line 24px. Opening any focus tab folds the agents panel.
+  By 1440px, sidebar and expanded agents panel overlay; below 1280px a width notice appears.
+  With focus open, the sidebar overlays below 1832px; below 1552px the focus panel shrinks from
+  880px, reserving 112px for both rails and 560px for the graph (608px of focus at 1280px).
+  Explicit maximize may hide the graph and offers restoration. Ctrl K jumps and runs commands
+  but has no Approve command; the keyboard map has no Approve key. Reason: files, diffs, review,
+  conversation and settings need stable homes without losing the graph or making a merge fire
+  from typing. The terminal is placed here but still built last.
+- **Motion: R5 applied (maintainer, 2026-10-27).** Nothing moves without a cause. The enumerated
+  card, step, value, pill, fold, review, highlight and merge transitions take 160 to 320ms with
+  the existing easing. On each agent.focus the lettered marker glides along the edge route when
+  one exists, carrying its light; approval fades both out. Working rings and the status lamp
+  report ongoing work. Reduced motion disables every animation. Reason: visible event changes
+  make work legible in use and on video without opening panels or stealing focus.
+- **Surfaces: layered dark neutrals (maintainer, 2026-10-27).** Shell #09090a, panel #0d0d0f,
+  page #101012, card #151518 to #111113, raised #1b1b1f and inset #09090b replace the dark
+  surfaces. Divider is white at 6%, border at 10%, top highlight at 4.5%; cards have a soft
+  shadow. Agent and slot cards carry a 2px agent-colored top line; the active tab uses its
+  subject's agent color or neutral. Graph overlays frost at 12px blur; group labels are 11.5px,
+  uppercase and tracked. Every color remains a theme token, accents and day colors unchanged.
+  Reason: the approved layers distinguish work surfaces without adding a hue. DESIGN.md records
+  the target token overrides, full contrast matrix and nearest passing proposals for failures;
+  its frontmatter keeps the current theme until the shell front implements the target. Approved
+  values are not silently adjusted. This supersedes the blanket ban on panel shadows and overlay blur.
+- **R4 amended: the Signal LED field (maintainer, 2026-10-27).** Keep 7px square LEDs, three
+  dithered lit levels, box-shaped light, a faint 28px resting grid and an expanding working ring.
+  Only the current node (full) and last read (about 0.4) emit light; spreads are about 26px and
+  72px at 100%, scaled with zoom. Title, legend, zoom controls and every overlay mask the field.
+  Reason: preserve Signal's material and show exactly where an agent works without lighting an
+  entire frame. The round-glow reading and former cone/selection light sources are superseded.
+- **Settings as a focus tab (maintainer, 2026-10-27).** No repeated title inside. Left navigation
+  and Saved line frame merge-mode cards and rules, budget input and threshold bar, steps stepper,
+  size and cone inputs with units, protected-area rows with type/remove/add, and model-slot cards
+  with model selectors; cross-review and key-status rows sit below the cards. Reason: make decisions
+  and limits scannable in the same shell as the work. Values are illustrative: unsupported rows
+  and choices, including a second provider-key row with no backing, are dropped. Fixed contract
+  limits are not made editable by the sketch, and reserved features are not presented as working
+  controls.
+
 ### Where Impeccable clashes with our rules
 
 Ours wins in every case below.
@@ -270,15 +351,15 @@ Ours wins in every case below.
   raises it, ours wins: the graph's ground is `#000000`, plain black until the dot field
   (AGENTS.md); panels use near-blacks.
 - **Its core stance** ("go all out", "dream big and bold") against Signal's restraint: color is an
-  agent or a state, panels are flat. Hence the forbidden commands.
+  agent or a state, panels stay plain within the approved tonal layers. Hence the forbidden commands.
 - **"Dark or light is never a default; pick it from the use scene."** Ours: dark everywhere
   (AGENTS.md). The use scene is long supervision and a dark demo video; day mode is the gallery's.
 - **The detector's "pulsing dot" and its craft floor's "one authored moment" of motion.** Ours: a
-  working agent's status lamp pulses, the one motion on the person's surface, because it reports
-  work in progress; it stops under reduced motion.
+  working agent's status lamp pulses because it reports work in progress; the v4 R5 list also
+  permits transitions tied to events. All stop under reduced motion.
 - **The detector's "colored glow on a dark background".** Ours: the dot field's light and the rings
   are agent-colored light on black, because the light says which agent works where; it is dithered
-  dots on its own canvas, not a glow on an element, and comes after level 1.
+  LEDs on its own canvas, not a glow on an element, brought forward without blocking a level.
 - **document's process:** it extracts DESIGN.md from the code, asks before replacing one, and
   writes a sidecar (`.impeccable/design.json`). Ours: DESIGN.md is written by hand from the agreed
   design, document is forbidden, and no sidecar is committed.
@@ -318,8 +399,8 @@ Ours wins in every case below.
 - **Classes start folded (maintainer, 2026-10-27):** one row names the class and its method count; a click toggles it, and a new change adding or modifying a method opens it. Reads and cone membership project onto the folded row (nearest distance). Preset positions plus fold state determine all positions; only later rows and modules in that column slide for 240ms with cubic-bezier(0.2, 0.7, 0.2, 1), or jump under reduced motion. Incoming calls share a target trunk outside frames; endpoint taps alone traverse their own containing frame.
 
 - **Graph cleanup evidence (2026-10-27):** comparison images and work reports stay outside the product repository; the start camera stays at 100%, frames settled header bounds, and treats the heading, notices and bottom overlays as viewport edges when choosing the nearest clear gutter.
-- **Dot field brought forward (maintainer, 2026-10-27):** the dot field, rings and breathing light
-  behind the graph move from "after level 1" to now, built as DESIGN.md specifies; it must never
+- **Dot field brought forward (maintainer, 2026-10-27):** the dot field and working rings
+  behind the graph move from "after level 1" to now, with the v4 R4 amendment above; it must never
   block level 1, so with no WebGL, a failed draw or a lost context the graph shows plain ground.
 
 ## Change manager stages
@@ -352,3 +433,157 @@ Ours wins in every case below.
   remains over 500 lines to keep the residual file and revision transactions within this agreed
   scope; no function exceeds 80 lines. Two unsuccessful fidelity/review repair rounds stop the
   sequence for a coordinator decision.
+
+## Level 2 closed on Tue Oct 27
+
+Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
+start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
+scripted two-agent replay. A real recorded run will be bundled for the static replay.
+
+Level 3 wiring starts now. Contracts 1.4.0 delivery A was approved by the maintainer, 2026-10-27.
+
+## 2026-10-27 — Approved shell frame and Chrome close-tab key
+
+The maintainer's shell-frame brief supersedes the earlier flat-surface rules in DESIGN.md:
+shell `#09090a`, panel `#0d0d0f`, page `#101012`, card gradient `#151518` to `#111113`,
+raised `#1b1b1f`, inset `#09090b`, translucent dividers and borders, a top highlight and
+soft card shadow. Graph overlays use the translucent panel token with 12 px backdrop blur.
+Group labels use uppercase 11.5 px text with tracking. Agent accents stay unchanged.
+The contrast matrix covers every requested text token on all seven surfaces and both card
+ends at 4.5:1; no text token needed adjustment.
+
+Follow-up: **Shell-frame docs front (DESIGN.md parity)** owns this supersession. When it
+lands, update DESIGN.md to these approved surface values and M8's bounded-blur rules, then
+remove the seven-token `approved` override in `frontend/src/theme/theme.test.ts` in the same
+change, restoring direct parity with DESIGN.md. The parity test rejects overrides once the
+documented value matches, so landing the docs update cannot silently retain a stale override.
+
+At 1920 px the fixed zones are a 52 px header, 56 px view rail, optional 280 px sidebar,
+880 px focus panel, graph of at least 560 px, 400 px agents panel or 56 px agents rail,
+optional 280 px dock, and 24 px status line. At 1440 px and below, the sidebar and full
+agents panel overlay. The focus panel yields width to preserve the graph's 560 px minimum.
+Maximize is an explicit action; its Show graph button restores the same mounted graph.
+The start-from-function task panel keeps its expanded exception, overlaying when necessary.
+
+Focus tabs are person-owned reducer state: file, live diff and review retain their own
+camera scope, six-tab cap, oldest inactive eviction and previous-active close behavior.
+The rail's Watch button closes only the active tab, like Escape; other tabs remain open.
+Closing the last tab returns to watch.
+Events update tab contents and review state but never navigate. The dock and sidebar
+contain honest placeholders until their owning fronts land. Replay provenance and connection
+failures belong to the status line, with a retry that restarts only the transport session.
+
+A headed Chromium test sends native XTest keys through Xvfb, rather than Playwright's CDP
+keyboard dispatch (which bypasses browser accelerators). Native Ctrl+W closes the browser tab
+without delivering W to the page; native Alt+W reaches it. Therefore Alt+W closes an Oversight
+focus tab. Ctrl+B toggles the sidebar, Ctrl+backquote the dock, and Escape closes the active
+tab. Shell shortcuts are ignored in text fields, task boxes and Monaco. Review's existing
+keys remain local; Approve has no shortcut or command. While the shortcuts sheet is open,
+all shell shortcuts pause except Escape, which dismisses only the sheet.
+
+## Contracts 1.4.0 delivery A
+
+1. **Guarded decisions and tree shape** — approved by the maintainer, 2026-10-27.
+   Require revision/head guards, explicit live provenance and published agent bases. Reserve
+   GET /tree with required nullable file hashes, a joint 2,000-entry cap and a future 8 MiB
+   hashing budget; no traversal is enabled yet.
+2. **Finish declarations** — approved by the maintainer, 2026-10-27.
+   Optional files, tests_run and pytest ids preserve agent claims separately from observed facts.
+3. **Evidence rules** — approved by the maintainer, 2026-10-27.
+   Reserve cross_review, test_integrity, added_tests_fail_before, run_test_integrity,
+   tests_reach_changes and within_zone; incomplete observations cannot authorize a merge.
+4. **Fixed profiles** — approved by the maintainer, 2026-10-27.
+   Keep the five-rule v1 set frozen. Review/integrity/probes have 6/7/8 rules;
+   run/reach/zone each have 9 independently; v2 has all 11. Zone excludes run and reach.
+   Profiles wait for their wired producers and explicit enablement.
+5. **Server provenance** — approved by the maintainer, 2026-10-27.
+   Requests cannot supply decision authority, starter identity or reviewer evidence.
+6. **FIFO queue** — approved by the maintainer, 2026-10-27.
+   Queue one standalone task or an exact plan revision; a plan reserves both slots together.
+7. **Atomic A after level 2** — approved by the maintainer, 2026-10-27.
+   Migrate contracts, generated outputs, routes, consumers, fixtures and guards together.
+   Writer rejection is isolated per event; a terminal post-effect refusal retains the slot.
+   Historical constructors use explicit replay mode, independently of fake-provider permission.
+8. **Zones** — approved by the maintainer, 2026-10-27.
+   Future assignments cover whole files or nodes with ranges and descendants.
+9. **Lead standalone queueing** — approved by the maintainer, 2026-10-27.
+   A lead may later queue individual tasks it owns; this grants no merge authority.
+10. **Lead plan requests** — approved by the maintainer, 2026-10-27.
+    A lead may request a plan; requesting grants no dispatch authority.
+11. **Creation at 1.5.0** — approved by the maintainer, 2026-10-27.
+    Keep SaveFile exactly 1.3 in A. Deliver required nullable base_hash only with safe creation,
+    zones and inventory, including exclusive publication and verified existing parents.
+12. **Bounded section 4.9 exception** — approved by the maintainer, 2026-10-27.
+    Permit enum extensions and required guards in 1.4.0, then nullable base_hash in 1.5.0.
+    Each version identifies one schema; this does not permit republishing changed 1.4.0 bytes.
+13. **Personal plan authorization** — approved by the maintainer, 2026-10-27.
+    Only the person queues and dispatches the exact reviewed plan revision.
+14. **Plan agents belong to that authorization** — approved by the maintainer, 2026-10-27.
+    Their AgentStatus.started_by is None even if a lead requested the plan. Plan.started_by
+    preserves that requester; it does not grant the lead authority to revise these agents.
+15. **API guard refusal code** — approved by the maintainer, 2026-10-27.
+    Add forbidden (HTTP 403) within this same 1.4.0 delivery for requests whose Host or Origin
+    is not on the allow list, supporting the planned DNS rebinding defense. The API guard is
+    a separate front that supplies enforcement.
+
+The tuple gate compares all changed array constraints with the byte-exact 1.3.0 baseline.
+It discovers fields generically and checks generated TypeScript, including local references and
+nullable unions. Four independent negative controls cover small max, min-only, historical
+findings/evidence and a newly constrained existing field. Generator and TypeScript pins stay put.
+
+## API guard — approved by the maintainer, 2026-10-27
+
+- **G1:** Add `OVERSIGHT_VITE_PORT`. One shared policy permits only literal loopback
+  authorities (`localhost`, `127.0.0.1`, `[::1]`) at the resolved backend and optional Vite ports.
+- **G2:** The backend defaults V to unset. Empty V parses as unset; invalid ports, including
+  V equal to P, fail startup. Ports are integers in 1-65535; omitted authority ports use
+  protocol defaults.
+- **G3:** Development launchers fall back to V=5710, resolve environment over `.env` once,
+  and export P/V to both servers. Shots supplies distinct free ports; demo explicitly clears V.
+- **G4:** With the terminal off, absent-Origin HTTP is allowed after Host validation, including
+  writes, preserving CLI/eval/recording callers. Every supplied Origin must be one exact allowed
+  `http://` origin. No CORS, forwarded-header trust, wildcard, suffix or DNS-based admission.
+- **G5:** Refusals use the typed `forbidden` error with HTTP 403. WebSockets are denied before
+  acceptance, by HTTP denial where supported and otherwise by closing the handshake.
+- **G6:** Use the already approved `forbidden` code from contracts 1.4.0; this front changes no
+  contracts. 1.5.0 remains reserved for safe creation, zones and inventory.
+
+The guard precedes all routing in live and server replay, including static, unknown and reserved
+routes. Pure ASGI preserves unbuffered SSE. A future terminal consumes this same policy and adds
+same-authority checks for unsafe HTTP and every WebSocket, authentication and its stricter IPv4
+listener requirement. See guard decisions G1–G3; their defaults and decline outcomes apply.
+
+too_large (413) rides in 1.4.0; limits come with the API guard front (maintainer, M6, 2026-10-27)
+
+## 2026-10-27 — M8: bounded backdrop blur
+
+M8 narrows the shell-frame exception to DESIGN.md's Flat Panel Rule: only the graph legend,
+zoom controls and segmented controls may use the fixed 12 px `overlay-blur` token. Segmented
+controls are reserved for a later front; none are added here. Other overlays and popovers use
+the 96% `overlay-fill` theme token with `top-highlight`, without backdrop blur. This covers the
+watch heading, impact cone, narrow-window notice and shortcuts sheet. Blur radii never animate.
+The earlier shell zones, colors, tabs and keyboard decisions remain in force.
+
+Compositor evidence is reproducible with `node frontend/shots/compositor.ts --label before`
+on the pre-M8 tree and `--label after` on M8. Both use the Vite dev shell fixture at 1920×1080,
+review's camera, a deterministic 180-frame pan and a controlled JS field clock; three samples
+per version. The runner verifies identical camera paths, layout positions and field draw counts.
+Raw Chromium traces and JSON reports stay in `.shots/`. Its metric is the union of top-level
+task durations on renderer Compositor and VizCompositorThread, summed across threads, in ms;
+it is compositor task occupancy, not GPU execution time or a frame-latency measurement.
+
+Measured results (Chromium 156.0.8078.4, ANGLE SwiftShader software renderer):
+
+| Version | Commit | Samples | Median compositor occupancy (ms) |
+| --- | --- | --- | --- |
+| before | `16842be` | 3 | 2189.663 |
+| after | `b1c2a82` | 3 | 1816.517 |
+
+Delta (after − before): -373.146 ms (-17.041%). The sample totals were
+2613.844, 2083.882, 2189.663 ms before and 1199.853, 2270.919, 1816.517 ms after.
+Each sample has 180 camera frames and 177 field draws, with identical motion across all six.
+`frontend/shots/compositor-evidence.json` preserves the totals, commit ids, renderer and motion
+hashes; its test checks the medians, delta and sample counts against this entry. During the
+review fix, the totals were recalculated from all six raw traces and matched these reports.
+The measured median improved, but three samples with this dispersion and a software renderer
+do not establish a hardware-GPU speedup or a frame-latency improvement.

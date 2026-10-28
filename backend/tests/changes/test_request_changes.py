@@ -12,6 +12,7 @@ from changes_helpers import (
     hold_a_save_that_ends_suspect,
     queued_callbacks_ran,
 )
+from decision_helpers import observed_target
 
 from oversight.changes import ChangeNotFound, WrongState
 from oversight.workspace import WorkspaceError
@@ -52,7 +53,7 @@ async def conflicted(h: Harness, extra: dict[str, str] | None = None) -> tuple[s
     await h.run_agent(1, EDIT)
     main_mod = TEMPLATE["shop/mod.py"].replace("return 1", "return 5")
     main_head = await commit_on_main(h, {"shop/mod.py": main_mod, **(extra or {})})
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert h.payloads(ChangeResolved)[-1].merge == "conflict"
     return h.payloads(ChangeProposed)[-1].head_commit, main_head
 
@@ -84,7 +85,9 @@ async def test_revision_keeps_worktree_and_base(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     [first] = h.payloads(ChangeProposed)
 
-    revision = await h.manager.request_changes("change-1", "Make it 4.")
+    revision = await h.manager.request_changes(
+        "change-1", "Make it 4.", **observed_target(h.manager, "change-1")
+    )
 
     assert revision is not None and revision.note is None
     assert revision.comment.startswith("Make it 4.\n\nFunctions one call away")
@@ -110,7 +113,7 @@ async def test_revision_keeps_worktree_and_base(h: Harness) -> None:
     assert (await worktree_git(h, "rev-parse", f"{second.head_commit}^")).strip() == (
         first.head_commit
     )
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     order = [
         (e.type, e.payload.revision)
         for e in h.events()
@@ -131,42 +134,55 @@ async def test_revision_keeps_worktree_and_base(h: Harness) -> None:
 @bounded
 async def test_request_changes_states(h: Harness) -> None:
     with pytest.raises(ChangeNotFound):
-        h.manager.request_changes("change-9", "Again.")
+        h.manager.request_changes("change-9", "Again.", **observed_target(h.manager, "change-9"))
     await h.open(1)
     with pytest.raises(WrongState):
-        h.manager.request_changes("change-1", "Again.")  # working
+        h.manager.request_changes(
+            "change-1", "Again.", **observed_target(h.manager, "change-1")
+        )  # working
     assert await h.edit(1, *EDIT)
     assert await h.finish(1)
 
-    task = h.manager.request_changes("change-1", "Again.")
+    task = h.manager.request_changes("change-1", "Again.", **observed_target(h.manager, "change-1"))
     for decide in (h.manager.request_changes, h.manager.approve, h.manager.reject):
         with pytest.raises(WrongState):
-            decide("change-1", "Again.")  # deciding
+            decide("change-1", "Again.", **observed_target(h.manager, "change-1"))  # deciding
     assert await task is not None
     with pytest.raises(WrongState):
-        h.manager.request_changes("change-1", "Again.")  # working: the revision runs
+        h.manager.request_changes(
+            "change-1", "Again.", **observed_target(h.manager, "change-1")
+        )  # working: the revision runs
     with pytest.raises(WrongState):
-        h.manager.reject("change-1", None)
+        h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     h.manager.run_ended("agent-1", None, steps=3)
     with pytest.raises(WrongState):
-        h.manager.request_changes("change-1", "Again.")  # unproposed
-    await h.manager.reject("change-1", None)
+        h.manager.request_changes(
+            "change-1", "Again.", **observed_target(h.manager, "change-1")
+        )  # unproposed
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     with pytest.raises(WrongState):
-        h.manager.request_changes("change-1", "Again.")  # closed
+        h.manager.request_changes(
+            "change-1", "Again.", **observed_target(h.manager, "change-1")
+        )  # closed
     assert decisions(h) == ["changes_requested", "rejected"]
 
 
 @bounded
 async def test_failed_revision_is_unproposed(h: Harness) -> None:
     await h.run_agent(1, EDIT)
-    assert await h.manager.request_changes("change-1", "Make it 4.") is not None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Make it 4.", **observed_target(h.manager, "change-1")
+        )
+        is not None
+    )
 
     h.manager.run_ended("agent-1", None, steps=5)  # the revision ended without proposing
 
     for decide in (h.manager.request_changes, h.manager.approve):
         with pytest.raises(WrongState):
-            decide("change-1", "Again.")
-    await h.manager.reject("change-1", None)
+            decide("change-1", "Again.", **observed_target(h.manager, "change-1"))
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     assert decisions(h) == ["changes_requested", "rejected"]
     assert h.payloads(ChangeResolved)[-1].revision == 1
     done = h.payloads(AgentStatus)[-1]
@@ -179,7 +195,9 @@ async def test_redo_on_the_new_base(h: Harness) -> None:
     old_head, main_head = await conflicted(h)
     shown = len(h.payloads(ChangeUpdated))
 
-    revision = await h.manager.request_changes("change-1", "Redo it on main.")
+    revision = await h.manager.request_changes(
+        "change-1", "Redo it on main.", **observed_target(h.manager, "change-1")
+    )
 
     assert revision is not None and revision.comment == "Redo it on main."
     assert revision.note is not None and "conflict markers" in revision.note
@@ -198,7 +216,7 @@ async def test_redo_on_the_new_base(h: Harness) -> None:
     second = h.payloads(ChangeProposed)[-1]
     assert (second.revision, second.base_commit) == (2, main_head)
     assert [f.path for f in second.files] == ["shop/mod.py"]
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert h.payloads(ChangeResolved)[-1].merge == "merged"
     merged = (await h.workspace.main.read_text("shop/mod.py")).content
     assert "return 3" in merged and "<<<" not in merged
@@ -209,7 +227,12 @@ async def test_base_move_failure_keeps_the_conflict(h: Harness) -> None:
     old_head, _ = await conflicted(h)
     h.workspace.arm("merge", tree="agent-1")
 
-    assert await h.manager.request_changes("change-1", "Redo.") is None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Redo.", **observed_target(h.manager, "change-1")
+        )
+        is None
+    )
 
     [error] = errors(h, "Requesting changes on change-1 failed")
     assert "unchanged" in error.message and not error.fatal
@@ -217,7 +240,12 @@ async def test_base_move_failure_keeps_the_conflict(h: Harness) -> None:
     assert await worktree_git(h, "status", "--porcelain") == ""
     assert decisions(h) == ["approved"]
     assert not h.manager.main_suspect
-    assert await h.manager.request_changes("change-1", "Redo.") is not None  # still `conflict`
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Redo.", **observed_target(h.manager, "change-1")
+        )
+        is not None
+    )  # still `conflict`
 
 
 @bounded
@@ -226,7 +254,12 @@ async def test_main_not_clean_keeps_the_conflict(h: Harness) -> None:
     async with h.workspace.locks(main=True):
         await h.workspace.main.write_text("stray.txt", "left over\n", expected_hash=None)
 
-    assert await h.manager.request_changes("change-1", "Redo.") is None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Redo.", **observed_target(h.manager, "change-1")
+        )
+        is None
+    )
 
     [error] = errors(h, "main has uncommitted changes")
     assert "unchanged" in error.message
@@ -241,24 +274,36 @@ async def test_move_shown_again_by_the_next_proposal(h: Harness) -> None:
     shown = len(h.payloads(ChangeUpdated))
     h.fail_once = ChangeUpdated
 
-    assert await h.manager.request_changes("change-1", "Redo.") is not None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Redo.", **observed_target(h.manager, "change-1")
+        )
+        is not None
+    )
 
     assert errors(h, "shop/mod.py was not shown")
     assert len(h.payloads(ChangeUpdated)) == shown
     assert await h.finish(1)
     [update] = h.payloads(ChangeUpdated)[shown:]
     assert update.file.original is not None and "return 5" in update.file.original
-    assert h.types()[-2:] == ["change.updated", "change.proposed"]
+    assert h.types()[-4:] == [
+        "change.updated",
+        "tests.executed",
+        "change.proposed",
+        "change.facts_recorded",
+    ]
 
 
 @bounded
 async def test_redo_after_failed_combined_tests_names_them(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     main_head = await commit_on_main(h, {"tests/test_twice.py": STRICT})
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     assert h.payloads(ChangeResolved)[-1].merge == "conflict"
 
-    revision = await h.manager.request_changes("change-1", "Fix twice.")
+    revision = await h.manager.request_changes(
+        "change-1", "Fix twice.", **observed_target(h.manager, "change-1")
+    )
 
     assert revision is not None and revision.note is not None
     assert "tests/test_twice.py::test_twice" in revision.note
@@ -274,7 +319,12 @@ async def test_requested_kept_until_sent(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     h.fail_once, h.fail_times = ChangeResolved, 2
 
-    assert await h.manager.request_changes("change-1", "Make it 4.") is not None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Make it 4.", **observed_target(h.manager, "change-1")
+        )
+        is not None
+    )
 
     assert decisions(h) == []
     assert errors(h, "The request for changes on change-1 was not sent")
@@ -296,7 +346,12 @@ async def test_requested_still_unsent_fails_the_proposal(h: Harness) -> None:
     before Reject, whose close-out then sends it before `rejected`."""
     await h.run_agent(1, EDIT)
     h.fail_once, h.fail_times = ChangeResolved, 6
-    assert await h.manager.request_changes("change-1", "Make it 4.") is not None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Make it 4.", **observed_target(h.manager, "change-1")
+        )
+        is not None
+    )
     assert await h.edit(1, "shop/mod.py", "return 3", "return 4")
 
     assert not await h.finish(1)  # unproposed
@@ -305,8 +360,8 @@ async def test_requested_still_unsent_fails_the_proposal(h: Harness) -> None:
     [fatal] = errors(h, "its request for changes is still unsent")
     assert fatal.fatal
     with pytest.raises(WrongState):
-        h.manager.approve("change-1", None)
-    await h.manager.reject("change-1", None)
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     assert decisions(h) == ["changes_requested", "rejected"]
     assert h.payloads(ChangeResolved)[0].comment == "Make it 4."
     assert h.fail_once is None  # every armed failure was used
@@ -316,7 +371,12 @@ async def test_requested_still_unsent_fails_the_proposal(h: Harness) -> None:
 async def test_requested_unsent_at_shutdown_is_named(h: Harness) -> None:
     await h.run_agent(1, EDIT)
     h.fail_once, h.fail_times = ChangeResolved, 4
-    assert await h.manager.request_changes("change-1", "Make it 4.") is not None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Make it 4.", **observed_target(h.manager, "change-1")
+        )
+        is not None
+    )
     h.manager.run_ended("agent-1", None, steps=4)
 
     await h.manager.aclose()
@@ -340,7 +400,9 @@ async def test_cancel_after_worktree_merge(h: Harness, cut: str) -> None:
             h.workspace.arm("merge", tree="agent-1")  # the recovery's `merge --abort`
 
     with pytest.raises(asyncio.CancelledError):
-        await h.manager.request_changes("change-1", "Redo.")
+        await h.manager.request_changes(
+            "change-1", "Redo.", **observed_target(h.manager, "change-1")
+        )
 
     assert decisions(h) == ["approved"]
     [error] = errors(h, "Requesting changes on change-1 was cancelled")
@@ -348,8 +410,10 @@ async def test_cancel_after_worktree_merge(h: Harness, cut: str) -> None:
     if cut == "abort":
         assert "unknown" in error.message
         with pytest.raises(WrongState):
-            h.manager.request_changes("change-1", "Redo.")  # broken
-        await h.manager.reject("change-1", None)
+            h.manager.request_changes(
+                "change-1", "Redo.", **observed_target(h.manager, "change-1")
+            )  # broken
+        await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
         assert not h.worktree_dir("agent-1").exists() and not await h.has_branch("agent-1")
         assert decisions(h) == ["approved", "rejected"]
         return
@@ -363,7 +427,9 @@ async def test_cancel_after_worktree_merge(h: Harness, cut: str) -> None:
         assert parents == [old_head, main_head] and "merged" in error.message
         assert "<<<<<<< " in (h.payloads(ChangeUpdated)[-1].file.modified or "")
 
-    revision = await h.manager.request_changes("change-1", "Redo.")  # still `conflict`
+    revision = await h.manager.request_changes(
+        "change-1", "Redo.", **observed_target(h.manager, "change-1")
+    )  # still `conflict`
 
     assert revision is not None and revision.note is not None
     assert "shop/mod.py" in revision.note
@@ -382,15 +448,19 @@ async def test_second_cancel_during_the_recovery_ends_broken(h: Harness) -> None
     h.workspace.arm("merge", tree="agent-1", mode="cut")  # the recovery's `merge --abort`
 
     with pytest.raises(asyncio.CancelledError):
-        await h.manager.request_changes("change-1", "Redo.")
+        await h.manager.request_changes(
+            "change-1", "Redo.", **observed_target(h.manager, "change-1")
+        )
 
     assert not h.manager.main_suspect
     assert await worktree_git(h, "rev-parse", "-q", "--verify", "MERGE_HEAD") != ""
     [error] = errors(h, "Requesting changes on change-1 was cancelled")
     assert "unknown" in error.message
     with pytest.raises(WrongState):
-        h.manager.request_changes("change-1", "Redo.")  # broken
-    await h.manager.reject("change-1", None)
+        h.manager.request_changes(
+            "change-1", "Redo.", **observed_target(h.manager, "change-1")
+        )  # broken
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
     assert not h.worktree_dir("agent-1").exists() and not await h.has_branch("agent-1")
     assert decisions(h) == ["approved", "rejected"]
     assert not h.manager.main_suspect
@@ -409,7 +479,7 @@ async def test_cancel_after_the_conflict_is_stored(h: Harness, kind: str) -> Non
     else:
         main_head = await commit_on_main(h, {"tests/test_twice.py": STRICT})
     h.hold = ChangeResolved
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     await h.held.wait()
     approval.cancel()
     await queued_callbacks_ran()
@@ -422,8 +492,12 @@ async def test_cancel_after_the_conflict_is_stored(h: Harness, kind: str) -> Non
     assert (resolved.decision, resolved.merge) == ("approved", "conflict")
     assert not h.manager.main_suspect
     with pytest.raises(WrongState, match="is conflict"):
-        h.manager.approve("change-1", None)  # a second Approve would send a second resolution
-    revision = await h.manager.request_changes("change-1", "Redo.")
+        h.manager.approve(
+            "change-1", None, **observed_target(h.manager, "change-1")
+        )  # a second Approve would send a second resolution
+    revision = await h.manager.request_changes(
+        "change-1", "Redo.", **observed_target(h.manager, "change-1")
+    )
 
     assert revision is not None and revision.note is not None
     if kind == "merge":
@@ -448,7 +522,7 @@ async def test_no_decision_enters_while_the_recovery_runs(h: Harness) -> None:
     h.hold = ChangeResolved
     # The first `status` is the conflict's own check; the second is the recovery's.
     h.workspace.arm("status", mode="hold", skip=1)
-    approval = h.manager.approve("change-1", None)
+    approval = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     try:
         await h.held.wait()
         approval.cancel()
@@ -458,15 +532,17 @@ async def test_no_decision_enters_while_the_recovery_runs(h: Harness) -> None:
 
         for decide in (h.manager.request_changes, h.manager.approve, h.manager.reject):
             with pytest.raises(WrongState, match="is deciding"):
-                decide("change-1", "While it recovers.")
+                decide("change-1", "While it recovers.", **observed_target(h.manager, "change-1"))
     finally:
         h.workspace.resume.set()
     with pytest.raises(asyncio.CancelledError):
         await approval
 
     with pytest.raises(WrongState, match="is conflict"):
-        h.manager.approve("change-1", None)
-    revision = await h.manager.request_changes("change-1", "Redo.")
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    revision = await h.manager.request_changes(
+        "change-1", "Redo.", **observed_target(h.manager, "change-1")
+    )
     assert revision is not None and revision.note is not None
     parents = (await worktree_git(h, "rev-list", "--parents", "-n", "1", "HEAD")).split()[1:]
     assert parents[1] == main_head
@@ -478,7 +554,12 @@ async def test_redo_keeps_mains_callers(h: Harness) -> None:
     """R4: main added a caller of the changed function in a file the agent never touched; the
     revision's head comes from the merged tree, so the caller stays in the graph and the cone."""
     await conflicted(h, {"shop/use.py": USE_FILE})
-    assert await h.manager.request_changes("change-1", "Redo.") is not None
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Redo.", **observed_target(h.manager, "change-1")
+        )
+        is not None
+    )
     await resolve_markers(h, "    return 3\n")
 
     assert await h.finish(1)
@@ -505,7 +586,9 @@ async def test_request_changes_queued_behind_a_failing_save_starts_no_revision(
     before = (await worktree_git(h, "rev-parse", "HEAD")).strip()
     resolved = [r.decision for r in h.payloads(ChangeResolved)]
     save = await hold_a_save_that_ends_suspect(h)
-    request = h.manager.request_changes("change-1", "Redo it.")  # the app's check passed
+    request = h.manager.request_changes(
+        "change-1", "Redo it.", **observed_target(h.manager, "change-1")
+    )  # the app's check passed
     await queued_callbacks_ran()
     assert not request.done()  # it waits for main's lock
     h.workspace.resume.set()
@@ -519,4 +602,9 @@ async def test_request_changes_queued_behind_a_failing_save_starts_no_revision(
     ]
     assert (error.source, error.fatal, error.change_id) == ("server", False, "change-1")
     assert [r.decision for r in h.payloads(ChangeResolved)] == resolved  # no request was sent
-    assert await h.manager.request_changes("change-1", "Again.") is None  # not stuck deciding
+    assert (
+        await h.manager.request_changes(
+            "change-1", "Again.", **observed_target(h.manager, "change-1")
+        )
+        is None
+    )  # not stuck deciding

@@ -1,7 +1,6 @@
 import { Folder, GitBranch } from "lucide-react";
 
 import type { State } from "../state";
-import { replayBuild, replaySource } from "../transport";
 import { SpendMeter } from "./SpendMeter";
 import { readyCount } from "./view";
 
@@ -38,7 +37,6 @@ export function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () 
           </p>
         </>
       )}
-      {replayBuild && <p className="text-sm text-muted">{replaySource.label}</p>}
       {/* Always mounted, so the counter's arrival is announced and nothing else moves. */}
       <div role="status" aria-label="Review queue" className="ml-auto flex items-center">
         {ready > 0 && (
@@ -54,7 +52,7 @@ export function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () 
           </button>
         )}
       </div>
-      <SpendMeter state={state} />
+      <SpendMeter state={state} showBrake={false} />
     </header>
   );
 }

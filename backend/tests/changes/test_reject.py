@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 from changes_helpers import Harness, bounded
+from decision_helpers import observed_target
 
 from oversight.agents import RunEnd
 from oversight.changes import WrongState
@@ -17,7 +18,7 @@ async def test_reject_discards_and_leaves_main(h: Harness) -> None:
     await h.run_agent(1, ("shop/mod.py", "return 1", "return 3"))
     pre, snapshot = await h.main_head(), h.manager.snapshot
 
-    await h.manager.reject("change-1", "Not this way.")
+    await h.manager.reject("change-1", "Not this way.", **observed_target(h.manager, "change-1"))
 
     assert await h.main_head() == pre
     assert h.manager.snapshot is snapshot
@@ -44,9 +45,9 @@ async def test_reject_after_a_halt_with_no_proposal(h: Harness) -> None:
     await asyncio.to_thread(tree.root.symlink_to, moved)
     h.manager.run_ended("agent-1", RunEnd("halted", "The worktree cannot be used.", 0, None))
     with pytest.raises(WrongState):
-        h.manager.approve("change-1", None)
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
-    await h.manager.reject("change-1", None)
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert "change.proposed" not in h.types()
     [resolved] = h.payloads(ChangeResolved)

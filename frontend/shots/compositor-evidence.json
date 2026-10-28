@@ -1,0 +1,26 @@
+{
+  "chromium": "156.0.8078.4",
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+  "build": "Vite dev shell fixture",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "metric": "Union of top-level RunTask wall durations on Compositor and VizCompositorThread, summed across threads; not GPU execution time",
+  "before": {
+    "commit": "16842be45682ee47cec58dff7d40fcf529be537e",
+    "samplesMs": [2613.844, 2083.882, 2189.663],
+    "medianMs": 2189.663,
+    "frames": 180,
+    "fieldDraws": 177,
+    "motionSha256": "4e7c648e47802b6619e657cc633d20c1ffcaede9a4dae506c114d9544efe7f30"
+  },
+  "after": {
+    "commit": "b1c2a82ac4048659394dae44c34949dfe3837cb8",
+    "samplesMs": [1199.853, 2270.919, 1816.517],
+    "medianMs": 1816.517,
+    "frames": 180,
+    "fieldDraws": 177,
+    "motionSha256": "4e7c648e47802b6619e657cc633d20c1ffcaede9a4dae506c114d9544efe7f30"
+  }
+}

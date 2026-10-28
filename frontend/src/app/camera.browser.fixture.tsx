@@ -1,4 +1,4 @@
-// Browser-only component harness; never imported by the application.
+// Browser-only test harness; never imported by the application.
 import type { GraphSnapshot, ServerEvent } from "@contracts";
 import { useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -9,9 +9,9 @@ import type { Framing, GraphApi } from "../graph";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import { fieldInput } from "./fieldScope";
 import { graphScope } from "./graphScope";
-import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import { TopBar } from "./TopBar";
 import { initialView } from "./view";
+import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import demoGraph from "../../../fixtures/graph/demo-repo.json";
 import demoPreset from "../../../fixtures/layouts/demo-repo.json";
@@ -25,6 +25,7 @@ const events = log
   .filter((event) => event.seq <= 20);
 const recorded = events.reduce(applyEvent, createInitialState());
 if (!recorded.graph) throw new Error("The fixture has no graph");
+const recordedGraph = recorded.graph;
 const proposal = recorded.changes["change-1"]?.proposal;
 if (!proposal) throw new Error("The fixture has no cone");
 const cone = proposal.impact;
@@ -34,7 +35,9 @@ const positions = Object.fromEntries(
   nodes.map((node, index) => [node.id, { x: (index % 10) * 170, y: Math.floor(index / 10) * 90 }]),
 );
 positions[CHANGED] = { x: 1900, y: 200 };
-positions[CALLER] = { x: 1900, y: 1300 };
+for (const node of nodes.filter((n) => n.parent_id === "shop.cart:Cart")) {
+  positions[node.id] = { x: 1900, y: 2500 + node.start_line * 3 };
+}
 stateStore.setState({ state: { ...recorded, graph: { ...recorded.graph, positions } } });
 
 const host = document.createElement("div");
@@ -51,9 +54,9 @@ async function loadCone() {
 /** Exercise the camera without importing Frame's unrelated Monaco editor and workers. */
 function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
   const state = stateStore.getState().state;
-  const startArea = useRef<HTMLDivElement>(null);
   const api = useRef<GraphApi | null>(null);
   const card = useRef<HTMLDivElement>(null);
+  const startArea = useRef<HTMLDivElement>(null);
   const [framing, setFraming] = useState<Framing | null>(null);
   const view = useMemo(
     () => ({
@@ -63,7 +66,7 @@ function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
     }),
     [mode],
   );
-  // Use Frame's scope builders so live preview lights stay separate from review framing.
+  // Use Frame's scope builders so the harness exercises the actual lights and dimming.
   const { cone: impact, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
   const field = useMemo(() => fieldInput(state, view, liveCone), [state, view, liveCone]);
   return (
@@ -78,39 +81,38 @@ function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
             frameKey={mode}
             cone={impact}
             liveCone={liveCone}
-            startAreaRef={demo ? startArea : undefined}
-            litIds={litIds}
             field={field}
+            litIds={litIds}
             onFramed={setFraming}
             coneCardRef={card}
             apiRef={api}
+            startAreaRef={startArea}
           />
-          {impact && (
-            <div ref={card} className="absolute top-6 left-6 w-(--cone-card-width)">
-              <ImpactConeCard
-                cone={impact}
-                nodes={nodes}
-                outOfView={framing?.outOfView}
-                onReveal={(id) => api.current?.reveal(id)}
-              />
+          <div className="pointer-events-none absolute inset-6 flex flex-col gap-(--spacing-md)">
+            <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
+              {impact ? (
+                <div ref={card} className="pointer-events-auto w-(--cone-card-width)">
+                  <ImpactConeCard
+                    cone={impact}
+                    nodes={nodes}
+                    outOfView={framing?.outOfView}
+                    onReveal={(id) => api.current?.reveal(id)}
+                  />
+                </div>
+              ) : mode === "watch" ? (
+                <GraphHeading state={stateStore.getState().state} />
+              ) : null}
             </div>
-          )}
-          {demo ? (
-            <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
-              <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
-                <GraphHeading state={state} />
+            <div data-graph-clear-area ref={startArea} className="min-h-0 flex-1" />
+            <div className="flex items-end justify-between gap-(--spacing-lg)">
+              <div className="pointer-events-auto min-w-0">
+                <Legend state={stateStore.getState().state} />
               </div>
-              <div ref={startArea} className="min-h-0 flex-1" />
-              <div className="flex items-end justify-between gap-(--spacing-lg)">
-                <Legend state={state} />
+              <div className="pointer-events-auto">
                 <ZoomControls api={api} />
               </div>
             </div>
-          ) : (
-            <div className="absolute right-6 bottom-6">
-              <ZoomControls api={api} />
-            </div>
-          )}
+          </div>
         </main>
         {demo && <aside aria-label="Agents" className="w-(--agents-panel-width) shrink-0" />}
       </div>
@@ -148,6 +150,7 @@ export const graphTest = {
   changed: CHANGED,
   caller: CALLER,
   mount: () => {
+    stateStore.setState({ state: { ...recorded, graph: { ...recordedGraph, positions } } });
     render("watch");
   },
   mountEmpty() {
@@ -170,7 +173,36 @@ export const graphTest = {
   close: () => {
     render("watch");
   },
+  update() {
+    const state = stateStore.getState().state;
+    const change = state.changes["change-1"];
+    if (!change) throw new Error("Missing fixture change");
+    stateStore.setState({
+      state: {
+        ...state,
+        changes: {
+          ...state.changes,
+          "change-1": {
+            ...change,
+            graph: {
+              ...change.graph,
+              edges_removed:
+                state.graph?.edges.filter((edge) => edge.src === CALLER).map((edge) => edge.id) ??
+                [],
+            },
+          },
+        },
+      },
+    });
+    render("panel");
+  },
+  prepareReview: loadCone,
   mountCone,
+  unmount: () => {
+    flushSync(() => {
+      root.render(null);
+    });
+  },
 };
 
 declare global {

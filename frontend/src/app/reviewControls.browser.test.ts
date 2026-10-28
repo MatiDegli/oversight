@@ -36,6 +36,9 @@ it.each(["merge", "tests"] as const)(
           ts: "2026-10-27T14:04:00Z",
           type: "change.resolved",
           payload: {
+            review_seq: null,
+            requested_by: null,
+            head_commit: null,
             change_id: "change-1",
             agent_id: "agent-1",
             revision: 1,
@@ -50,6 +53,8 @@ it.each(["merge", "tests"] as const)(
                     kind,
                     paths: [],
                     tests: {
+                      cases: null,
+                      cases_complete: null,
                       outcome: "failed",
                       passed: 27,
                       failed: 1,
@@ -115,6 +120,9 @@ it("requires a comment, stays pending until SSE, and reopens the same change aft
         ts: "2026-10-27T14:04:00Z",
         type: "change.resolved",
         payload: {
+          review_seq: null,
+          requested_by: null,
+          head_commit: null,
           change_id: "change-1",
           agent_id: agent.agent_id,
           revision: 1,

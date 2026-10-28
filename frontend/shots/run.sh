@@ -72,6 +72,7 @@ wait_for() {
 backend_port=$(free_port)
 vite_port=$(free_port)
 while [ "$vite_port" = "$backend_port" ]; do vite_port=$(free_port); done
+export OVERSIGHT_PORT=$backend_port OVERSIGHT_VITE_PORT=$vite_port
 url="http://127.0.0.1:$vite_port/"
 
 # The fake player, with no pauses, on its own port: a running `make dev` keeps its ports. The
@@ -101,7 +102,7 @@ OVERSIGHT_SCAN_LOG="$root/$out/scan-log.jsonl" OVERSIGHT_VITE_CACHE_DIR="$root/$
 pids+=("$!")
 
 wait_for "http://127.0.0.1:$backend_port/health" "${pids[0]}" backend 60
-wait_for "$url" "${pids[1]}" vite 60
+wait_for "${url}graph" "${pids[1]}" vite 60
 wait_for "$scan_url" "${pids[2]}" scan-vite 60
 echo "shots: replay of $log on :$backend_port, UI on $url, scan page on $scan_url"
 

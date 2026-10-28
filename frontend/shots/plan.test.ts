@@ -49,9 +49,11 @@ void test("the real list: watch, review, live diff, task slots and file view run
     "watch-fit-dark.png",
     "review-dark.png",
     "live-diff-dark.png",
+    "focus-dark.png",
     "task-one-slot-dark.png",
     "task-two-slots-braked-dark.png",
     "file-view-dark.png",
+    "file-view-task-dark.png",
   ]);
   assert.deepEqual(
     scenes.map((scene) => scene.name),
@@ -60,9 +62,11 @@ void test("the real list: watch, review, live diff, task slots and file view run
       "watch-fit",
       "review",
       "live-diff",
+      "focus",
       "task-one-slot",
       "task-two-slots-braked",
       "file-view",
+      "file-view-task",
     ],
   );
   assert.ok(scenes.every((scene) => scene.enabled || (scene.needs ?? "") !== ""));
@@ -115,7 +119,9 @@ void test("a log without a pre-proposal edit still captures watch, review and fi
       ["watch-fit", source],
       ["review", source],
       ["live-diff", null],
+      ["focus", null],
       ["file-view", source],
+      ["file-view-task", source],
     ],
   );
   // Scenes using the served log do not even parse an editing cut.

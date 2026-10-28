@@ -2,6 +2,7 @@
 
 import pytest
 from changes_helpers import ADD_THRICE, GIT_TIMEOUT_S, THRICE, Harness, bounded
+from decision_helpers import observed_target
 
 from oversight.changes import ChangeNotFound, WrongState
 from oversight_contracts.events import AgentStatus, ChangeProposed, ChangeResolved
@@ -17,7 +18,7 @@ async def test_approve_merges_with_a_merge_commit(h: Harness) -> None:
     pre = await h.main_head()
     before = len(h.workspace.calls)
 
-    await h.manager.approve("change-1", "Looks good.")
+    await h.manager.approve("change-1", "Looks good.", **observed_target(h.manager, "change-1"))
     decision = h.workspace.calls[before:]
 
     merge, *parents = (await h.main_git("rev-list", "--parents", "-n", "1", "HEAD")).stdout.split()
@@ -55,18 +56,20 @@ async def test_approve_merges_with_a_merge_commit(h: Harness) -> None:
 async def test_early_repeated_and_unknown_approvals_fail(h: Harness) -> None:
     await h.open(1)
     with pytest.raises(WrongState):
-        h.manager.approve("change-1", None)  # still working
+        h.manager.approve(
+            "change-1", None, **observed_target(h.manager, "change-1")
+        )  # still working
     assert await h.edit(1, "shop/mod.py", "return 1", "return 3")
     assert await h.finish(1)
 
-    task = h.manager.approve("change-1", None)
+    task = h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
     with pytest.raises(WrongState):
-        h.manager.approve("change-1", None)  # deciding
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))  # deciding
     await task
     with pytest.raises(WrongState):
-        h.manager.approve("change-1", None)  # closed
+        h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))  # closed
     with pytest.raises(ChangeNotFound):
-        h.manager.approve("change-9", None)
+        h.manager.approve("change-9", None, **observed_target(h.manager, "change-9"))
     assert len(h.payloads(ChangeResolved)) == 1
 
 
@@ -74,14 +77,14 @@ async def test_early_repeated_and_unknown_approvals_fail(h: Harness) -> None:
 async def test_body_only_edit_chains(h: Harness) -> None:
     first = h.manager.snapshot.version
     await h.run_agent(1, ("shop/mod.py", "return 1", "return 3"))
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     [empty] = h.payloads(GraphDelta)  # graph_delta finds no change, but the version moved
     assert (empty.from_version, empty.nodes_changed, empty.edges_added) == (first, [], [])
     assert empty.to_version == h.manager.snapshot.version != first
 
     await h.run_agent(2, ("shop/mod.py", "return 3", "return 4"))
-    await h.manager.approve("change-2", None)
+    await h.manager.approve("change-2", None, **observed_target(h.manager, "change-2"))
     second = h.payloads(GraphDelta)[1]
     assert second.from_version == empty.to_version
     assert [r.decision for r in h.payloads(ChangeResolved)] == ["approved", "approved"]
@@ -93,7 +96,7 @@ async def test_empty_change_approves_as_a_merge_of_nothing(h: Harness) -> None:
     assert await h.finish(1)
     pre = await h.main_head()
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert await h.main_head() == pre
     [resolved] = h.payloads(ChangeResolved)

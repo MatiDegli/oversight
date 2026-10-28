@@ -7,6 +7,7 @@ import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect } from "vitest";
 
 import type {} from "./review.browser.fixture";
+import { fixtureCacheDir } from "../../shots/browserCache.support";
 import type { GraphProbeHost } from "../graph";
 
 let server: ViteDevServer | undefined;
@@ -16,7 +17,7 @@ let html: string;
 beforeAll(async () => {
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/review-vite-cache", import.meta.url)),
+    cacheDir: fixtureCacheDir(expect.getState().testPath),
     server: {
       host: "127.0.0.1",
       port: 0,

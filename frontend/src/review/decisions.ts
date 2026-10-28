@@ -1,4 +1,10 @@
-import type { ChangeResolved, ErrorReport } from "@contracts";
+import type {
+  ApproveChange,
+  RejectChange,
+  RequestChanges,
+  ChangeResolved,
+  ErrorReport,
+} from "@contracts";
 
 import type { ChangeState, State } from "../state";
 import { commandFailure } from "../transport";
@@ -90,15 +96,15 @@ export function decisionView(
 }
 
 export interface DecisionClient {
-  approveChange(id: string, body: { comment?: string | null }): Promise<unknown>;
-  requestChanges(id: string, body: { comment: string }): Promise<unknown>;
-  rejectChange(id: string, body: { comment?: string | null }): Promise<unknown>;
+  approveChange: (id: string, body: ApproveChange) => Promise<unknown>;
+  requestChanges: (id: string, body: RequestChanges) => Promise<unknown>;
+  rejectChange: (id: string, body: RejectChange) => Promise<unknown>;
 }
 
 /**
  * Sends one decision. The attempt turns pending before the request leaves, so the buttons disable
  * on the click; 202 changes nothing more (the answer comes as events) and a failure records its
- * line. An empty comment is left out: no body means no comment.
+ * line. An empty comment is left out; the observed target is always sent.
  */
 export async function sendDecision(
   client: DecisionClient,
@@ -107,17 +113,32 @@ export async function sendDecision(
   action: DecisionAction,
   comment: string,
   record: (attempt: DecisionAttempt) => void,
+  target?: Pick<RejectChange, "revision" | "head_commit">,
 ): Promise<void> {
   if (action === "request-changes" && comment.trim() === "") return;
   const started = startAttempt(state, changeId, action);
   record(started);
   const text = comment.trim();
-  const body = text === "" ? {} : { comment: text };
+  const proposal = state.changes[changeId]?.proposal;
+  const agentId = state.changes[changeId]?.agent_id;
+  const base = agentId ? state.agents[agentId]?.base_commit : null;
+  const head_commit = target?.head_commit ?? proposal?.head_commit ?? base;
+  const revision = target?.revision ?? proposal?.revision ?? 0;
+  if (!head_commit || (action !== "reject" && revision === 0)) {
+    record({
+      phase: "failed",
+      action,
+      revision,
+      message: "Refresh and review the change before deciding.",
+    });
+    return;
+  }
+  const body = { revision, head_commit, ...(text === "" ? {} : { comment: text }) };
   try {
     await (action === "approve"
       ? client.approveChange(changeId, body)
       : action === "request-changes"
-        ? client.requestChanges(changeId, { comment: text })
+        ? client.requestChanges(changeId, { ...body, comment: text })
         : client.rejectChange(changeId, body));
   } catch (error) {
     record({

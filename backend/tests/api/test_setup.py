@@ -47,7 +47,7 @@ async def client_for(
     live: LiveRun = app.state.live
     live._manager = manager  # pyright: ignore[reportPrivateUsage]
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app), base_url="http://localhost"
+        transport=httpx.ASGITransport(app), base_url=f"http://localhost:{settings.port}"
     ) as client:
         yield client
 
@@ -64,7 +64,7 @@ async def proposed_run(
     app = create_app(settings, client_factory=Scripts())
     live: LiveRun = app.state.live
     manager = Mock(spec=ChangeManager, main_suspect=False)
-    manager.request_changes.side_effect = lambda _id, comment: asyncio.create_task(
+    manager.request_changes.side_effect = lambda _id, comment, **_guard: asyncio.create_task(
         asyncio.sleep(0, result=Revision(comment, None))
     )
     live._manager = manager  # pyright: ignore[reportPrivateUsage]
@@ -73,7 +73,7 @@ async def proposed_run(
     live._kept["agent-1"] = Mock(spec=AgentRun, steps=1)  # pyright: ignore[reportPrivateUsage]
     live.ledger.state = LedgerState(0.0, ())
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app), base_url="http://localhost"
+        transport=httpx.ASGITransport(app), base_url=f"http://localhost:{settings.port}"
     ) as client:
         yield client, live
 
@@ -100,7 +100,8 @@ async def test_metered_revision_lists_setup_problems_and_starts_no_run(
         assert manager is not None
         monkeypatch.setattr(live, "_settings", replace(settings, **overrides))
         response = await client.post(
-            "/changes/change-1/request-changes", json={"comment": "Revise, please."}
+            "/changes/change-1/request-changes",
+            json={"comment": "Revise, please.", "revision": 1, "head_commit": "seeded-head"},
         )
         assert response.status_code == 503, response.text
         assert response.json()["error"] == {
@@ -129,7 +130,8 @@ async def test_unmetered_revision_ignores_missing_meta_setup(
     )
     async with asyncio.timeout(DEADLINE_S), proposed_run(settings, profile) as (client, live):
         response = await client.post(
-            "/changes/change-1/request-changes", json={"comment": "Revise, please."}
+            "/changes/change-1/request-changes",
+            json={"comment": "Revise, please.", "revision": 1, "head_commit": "seeded-head"},
         )
         assert response.status_code == 202, response.text
         await asyncio.wait({live._runs["agent-1"]})  # pyright: ignore[reportPrivateUsage]
@@ -170,7 +172,7 @@ async def test_start_returns_only_the_selected_slots_setup_problems(
             "missing": [{"name": name, "problem": problem, "slots": ["B"]}],
         }
         health = Health.model_validate((await client.get("/health")).json())
-        assert health.ok and health.contract_version == "1.3.0"
+        assert health.ok and health.contract_version == "1.4.0"
         assert health.missing_settings == missing_settings(settings, offered_profiles(settings))
         assert all(entry.slots == ["A", "B"] for entry in health.missing_settings)
     assert clients.calls == 0

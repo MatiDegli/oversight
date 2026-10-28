@@ -26,6 +26,13 @@ export function parseEvent(text: string): ServerEvent {
     "change.assessed",
     "merge_mode.changed",
     "plan.updated",
+    "change.reviewed",
+    "change.facts_recorded",
+    "tests.executed",
+    "revert.resolved",
+    "queue.updated",
+    "lead.status",
+
     "usage.tick",
     "error",
   ];

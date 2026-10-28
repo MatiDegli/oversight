@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 import pytest
+from decision_helpers import observed_body, observed_target
 from live_helpers import DEADLINE_S, BySlot, live_server, live_settings, start, two_fakes
 from revise_helpers import HeldRequests, ready, revisable, revisable_b, scripted_a
 
 from oversight.agents import AgentRun, ScriptedModel, parse_script
+from oversight_contracts.commands import RequestChanges
 
 pytestmark = pytest.mark.anyio
 
@@ -66,7 +68,9 @@ async def test_shutdown_during_revise_finishes_the_request_with_the_revision(
         live = s.live
         await start(s)
         await ready(s)
-        live.request_changes("change-1", "Shorter, please.")
+        live.request_changes(
+            "change-1", RequestChanges(comment="Shorter, please.", **observed_body(s, "change-1"))
+        )
         await held.at["agent-1"].wait()
         revise, decision = live._runs["agent-1"], live._decisions["agent-1"]  # pyright: ignore[reportPrivateUsage]
         revise.cancel()
@@ -95,14 +99,19 @@ async def test_shutdown_before_the_request_is_taken_leaves_the_change_ready(
         probe = ProbeLock()
         live.workspace._locks._main._lock = probe  # pyright: ignore[reportPrivateUsage]
         async with live.workspace.locks(main=True):
-            live.request_changes("change-1", "Shorter, please.")
+            live.request_changes(
+                "change-1",
+                RequestChanges(comment="Shorter, please.", **observed_body(s, "change-1")),
+            )
             await probe.contended.wait()
             revise = live._runs["agent-1"]  # pyright: ignore[reportPrivateUsage]
             revise.cancel()
             await asyncio.wait({revise})
         assert state_of(s) == "ready"
         assert resolutions(s) == [] and live._decisions == {}  # pyright: ignore[reportPrivateUsage]
-        live.request_changes("change-1", "Shorter, please.")
+        live.request_changes(
+            "change-1", RequestChanges(comment="Shorter, please.", **observed_body(s, "change-1"))
+        )
         events = await ready(s, after=first[-1].seq)
         assert resolutions(s) == [("change-1", "changes_requested")] and events
 
@@ -133,7 +142,9 @@ async def test_shutdown_before_revise_starts_ends_the_change_itself(
         await start(s)
         await ready(s)
         # What `request_changes` does, in two steps: the decision first, held in its publish.
-        decision = manager.request_changes("change-1", "Shorter, please.")
+        decision = manager.request_changes(
+            "change-1", "Shorter, please.", **observed_target(manager, "change-1")
+        )
         live._decisions["agent-1"] = decision  # pyright: ignore[reportPrivateUsage]
         await held.at["agent-1"].wait()
         agent, run = live._agents["agent-1"], live._kept["agent-1"]  # pyright: ignore[reportPrivateUsage]
@@ -173,9 +184,13 @@ async def test_shutdown_drains_decisions_that_pop_meanwhile(
             await ready(s, agent)
         signals = PopSignals()
         live._decisions = signals  # pyright: ignore[reportPrivateUsage]
-        live.request_changes("change-1", "Shorter, please.")
+        live.request_changes(
+            "change-1", RequestChanges(comment="Shorter, please.", **observed_body(s, "change-1"))
+        )
         await held.at["agent-1"].wait()
-        live.request_changes("change-2", "Shorter, please.")
+        live.request_changes(
+            "change-2", RequestChanges(comment="Shorter, please.", **observed_body(s, "change-2"))
+        )
         stopping = asyncio.create_task(live._stop_runs())  # pyright: ignore[reportPrivateUsage]
         await signals.popped["agent-2"].wait()  # gone, while the drain waits for the first
         assert not stopping.done() and set(signals) == {"agent-1"}

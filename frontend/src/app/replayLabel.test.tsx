@@ -19,26 +19,30 @@ afterEach(() => {
   transport.replayBuild = true;
 });
 
-function expectHeaderLabel(markup: string) {
+function expectStatusLabel(markup: string) {
   const header = /<header\b[^>]*>(.*?)<\/header>/.exec(markup)?.[1];
+  const status = /<footer\b[^>]*aria-label="Status line"[^>]*>(.*?)<\/footer>/.exec(markup)?.[1];
   const main = /<main\b[^>]*>(.*?)<\/main>/.exec(markup)?.[1];
-  expect(header).toContain(replaySource.label);
+  expect(status).toContain(replaySource.label);
+  expect(header).not.toContain(replaySource.label);
   expect(main).toBeDefined();
   expect(main).not.toContain(replaySource.label);
   expect(markup.split(replaySource.label)).toHaveLength(2);
 }
 
-it("renders the replay label once in the app header, outside the graph main", () => {
-  expectHeaderLabel(renderToStaticMarkup(<App />));
+it("renders the replay label once in the status line, outside the graph main", () => {
+  expectStatusLabel(renderToStaticMarkup(<App />));
 });
 
-it("keeps the replay label in the header while review is open", () => {
+it("keeps the replay label in the status line while review is open", () => {
   const state = through(20);
   const view = openReview(state, initialView, "change-1");
   if (!view) throw new Error("Missing review fixture");
-  expectHeaderLabel(
+  expectStatusLabel(
     renderToStaticMarkup(
       <Frame
+        replayLabel={replaySource.label}
+        replayOf={replaySource.kind}
         state={state}
         view={view}
         onNodeTap={vi.fn()}
