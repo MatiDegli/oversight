@@ -62,6 +62,8 @@ def _read_report(path: Path, targets: Sequence[BehaviorTarget]) -> dict[str, Beh
         if not isinstance(row, dict):
             raise WorkspaceError("invalid behavior observation")
         row = cast(dict[str, Any], row)
+        if "problem" not in row:
+            raise WorkspaceError("invalid behavior observation: missing key 'problem'")
         if row.get("problem") not in (None, "import failed"):
             raise WorkspaceError("invalid behavior observation")
         results = row.get("results")
