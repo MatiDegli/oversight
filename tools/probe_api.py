@@ -1,7 +1,7 @@
 """The API probe (docs/proposal.md, front 6).
 
     uv run --frozen python tools/probe_api.py meta|baseten [--model ID] [--report PATH]
-                                                          [--details PATH]
+                                     [--details PATH] [--checks NAME[,NAME...]]
 
 Calls a provider's Chat Completions endpoint through the official OpenAI SDK, at most MAX_CALLS
 times per run, and writes what it found to docs/api-probe.md. It spends credits, so make check
@@ -19,6 +19,7 @@ Exit codes: 0 the report was written, 1 the run was aborted, 2 the provider's ke
 
 import argparse
 import json
+import math
 import random
 import re
 import statistics
@@ -45,6 +46,43 @@ DEFAULT_REPORT = Path(__file__).resolve().parents[1] / "docs" / "api-probe.md"
 ORDER = ("meta", "baseten")
 Obj = dict[str, Any]
 Redact = Callable[[str], str]
+DEFAULT_CHECKS = (
+    "chat",
+    "tools_call",
+    "tools_result",
+    "json_fallback",
+    "parallel",
+    "reasoning_default",
+    "reasoning_low",
+    "reasoning_none",
+    "limits",
+    "stream",
+    "usage",
+    "latency",
+    "rate_headers",
+)
+DECISION_CHECKS = ("decision_reasoning_off", "structured_choice", "choice_logprobs")
+DECISIONS = ("asked", "not_asked", "cannot_tell")
+DECISION_PROMPT = (
+    "Task: Change the default discount rate to 0.0850.\n"
+    "Keep existing behavior otherwise.\n"
+    "Behavior difference: The default discount rate is now 0.0850.\n"
+    "Classify whether the task asked for this difference: asked, not_asked, or cannot_tell. "
+    'Reply only with a JSON object containing the decision string, e.g. {"decision":"asked"}.'
+)
+DECISION_FORMAT: Obj = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "decision",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {"decision": {"type": "string", "enum": list(DECISIONS)}},
+            "required": ["decision"],
+            "additionalProperties": False,
+        },
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -476,6 +514,7 @@ class Session:
         self._rand = rand
         self.calls: list[Obj] = []
         self.replies: dict[str, Reply] = {}
+        self.decision_settings: Obj | None = None
 
     def send(self, step: str, params: Obj, *, stream: bool = False) -> Reply:
         if len(self.calls) >= self._limit:
@@ -748,6 +787,295 @@ def check_json_fallback(session: Session, model: str) -> Check:
     return Check("json_fallback", question, answer, f"{took(first)}; {took(second)}", used)
 
 
+def decision_value(content: object) -> str | None:
+    """Exactly one decision field; duplicate keys, prose and fences fail the schema."""
+    if not isinstance(content, str):
+        return None
+    try:
+        pairs = as_list(json.loads(content, object_pairs_hook=list))
+    except ValueError:
+        return None
+    if len(pairs) == 1:
+        pair = pairs[0]
+        if isinstance(pair, tuple) and pair[0] == "decision" and pair[1] in DECISIONS:
+            return str(pair[1])
+    return None
+
+
+def option_for_token(token: str, prefix: str, *, structured: bool) -> str | None:
+    """Recognize an option start, including tokens merged with the JSON opening quote."""
+    if not token.startswith(prefix):
+        return None
+    start = token[len(prefix) :]
+    if not start:
+        return None
+    matches = [
+        option
+        for option in DECISIONS
+        if option.startswith(start)
+        or (
+            start.startswith(option)
+            and (
+                start[len(option) :].startswith('"')
+                if structured
+                else not start[len(option) :].strip()
+            )
+        )
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def logprob_answer_span(body: Obj, text: str) -> tuple[str, int | None]:
+    """Align to message.content, never to an occurrence of an option inside reasoning."""
+    message = message_of(body)
+    content = message.get("content")
+    if not isinstance(content, str) or not content or text.count(content) != 1:
+        return "cannot tell", None
+    offset = text.index(content)
+    if text == content:
+        scope = "answer only"
+    elif text.endswith(content) and message.get("reasoning_content") == text[:offset]:
+        scope = "reasoning and answer"
+    else:
+        return "cannot tell", None
+    if decision_value(content) is not None:
+        match = re.search(r'"decision"\s*:\s*"', content)
+        return scope, offset + match.end() if match else None
+    if content.strip() in DECISIONS:
+        return scope, offset + len(content) - len(content.lstrip())
+    return scope, None
+
+
+def option_distribution(entry: Obj, prefix: str, *, structured: bool) -> Obj:
+    matched: dict[str, list[float]] = {option: [] for option in DECISIONS}
+    seen: set[str] = set()
+    for value in as_list(entry.get("top_logprobs")):
+        alternative = as_obj(value)
+        word, logprob = alternative.get("token"), alternative.get("logprob")
+        if not isinstance(word, str) or word in seen:
+            continue
+        seen.add(word)
+        if not isinstance(logprob, (int, float)) or not math.isfinite(logprob) or logprob > 0:
+            continue
+        option = option_for_token(word, prefix, structured=structured)
+        if option is not None:
+            matched[option].append(float(logprob))
+    logs = [value for values in matched.values() for value in values]
+    result: Obj = {
+        "probabilities": dict.fromkeys(DECISIONS),
+        "complete": False,
+        "unmatched_mass": max(0.0, 1.0 - math.fsum(math.exp(v) for v in logs)),
+    }
+    if logs:
+        peak = max(logs)
+        masses = {
+            option: math.fsum(math.exp(v - peak) for v in values)
+            for option, values in matched.items()
+        }
+        total = math.fsum(masses.values())
+        result["probabilities"] = {
+            option: mass / total if matched[option] else None for option, mass in masses.items()
+        }
+        result["complete"] = all(matched.values())
+    return result
+
+
+def choice_probabilities(body: Obj) -> Obj:
+    """Conditional probabilities at the first divergent answer token, not sequence likelihoods.
+
+    Only returned top alternatives contribute. Missing options stay unknown; unmatched mass
+    includes other alternatives and the unreported tail. These labels diverge at their first
+    letter: skip the shared JSON prefix/quote, then inspect the first value token. Later enum
+    tokens are not multiplied. No tokenizer or additional model calls are required.
+    """
+    content = as_obj(choice_of(body).get("logprobs")).get("content")
+    entries = [as_obj(e) for e in as_list(content)]
+    result: Obj = {
+        "present": isinstance(content, list),
+        "scope": "cannot tell",
+        "position": None,
+        "probabilities": dict.fromkeys(DECISIONS),
+        "unmatched_mass": None,
+        "complete": False,
+    }
+    text = "".join(str(e.get("token", "")) for e in entries)
+    scope, start = logprob_answer_span(body, text)
+    result["scope"] = scope
+    if start is None:
+        return result
+    offset = 0
+    for position, entry in enumerate(entries):
+        end = offset + len(str(entry.get("token", "")))
+        if end > start:
+            distribution = option_distribution(
+                entry,
+                text[offset:start],
+                structured=decision_value(message_of(body).get("content")) is not None,
+            )
+            return result | distribution | {"position": position}
+        offset = end
+    return result
+
+
+def decision_params(session: Session, model: str) -> Obj:
+    return {
+        "model": model,
+        "messages": [{"role": "user", "content": DECISION_PROMPT}],
+        **(session.decision_settings or {}),
+        "response_format": DECISION_FORMAT,
+    }
+
+
+def check_decision_reasoning_off(session: Session, provider: Provider, model: str) -> Check:
+    key = "decision_reasoning_off"
+    settings = (
+        [{"reasoning_effort": "minimal"}]
+        if provider.name == "meta"
+        else [
+            {"reasoning_effort": "none"},
+            {"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}},
+        ]
+    )
+    attempts: list[Obj] = []
+    session.decision_settings = None
+    check = Check(
+        key,
+        "Decision classification with reasoning off",
+        "reasoning off is not established",
+        "",
+        False,
+        {"attempts": attempts},
+    )
+    evidence: list[str] = []
+    best_tokens: int | None = None
+    for number, setting in enumerate(settings, 1):
+        # Isolate the reasoning switch: no response_format in this check.
+        params = {
+            "model": model,
+            "messages": [{"role": "user", "content": DECISION_PROMPT}],
+            **setting,
+        }
+        try:
+            reply = session.send(f"{key}_{number}", params)
+        except BudgetExhausted:
+            check.evidence += f"; remaining attempt skipped: {MAX_CALLS}-call budget spent"
+            break
+        tokens = reasoning_tokens(reply.body)
+        attempt: Obj = {"setting": setting, "status": reply.status, "reasoning_tokens": tokens}
+        attempts.append(attempt)
+        detail = f"{json.dumps(setting)}: {took(reply)}"
+        if reply.status == 200:
+            if session.decision_settings is None or (
+                tokens is not None and (best_tokens is None or tokens < best_tokens)
+            ):
+                session.decision_settings = setting
+                best_tokens = tokens
+            detail += f"; reasoning_tokens={tokens if tokens is not None else 'unknown'}"
+            attempt["content"] = message_of(reply.body).get("content")
+            detail += f"; content={attempt['content']!r}"
+        else:
+            attempt["error"] = error_text(reply)
+            detail += f"; {error_text(reply)}"
+        evidence.append(detail)
+        check.evidence = "; ".join(evidence)
+        check.data["setting"] = session.decision_settings
+        if reply.status == 200 and tokens == 0:
+            check.answer, check.passed = "accepted; zero reasoning tokens reported", True
+            break
+    return check
+
+
+def check_structured_choice(session: Session, model: str) -> Check:
+    key, question = "structured_choice", "Decision constrained by strict JSON Schema"
+    reply = session.send(key, decision_params(session, model))
+    if reply.status != 200:
+        return rejected(key, question, reply, False)
+    passed = decision_value(message_of(reply.body).get("content")) is not None
+    return Check(
+        key,
+        question,
+        "accepted" if passed else "ignored",
+        f"{took(reply)}; content={message_of(reply.body).get('content')!r}; "
+        f"reasoning_tokens={reasoning_tokens(reply.body)}",
+        passed,
+        {"reasoning_tokens": reasoning_tokens(reply.body)},
+    )
+
+
+def check_choice_logprobs(session: Session, model: str) -> Check:
+    key, question = "choice_logprobs", "Decision log probabilities over the three options"
+    params = decision_params(session, model) | {"logprobs": True, "top_logprobs": 5}
+    reply = session.send(key, params)
+    evidence = [took(reply)]
+    if reply.status != 200:
+        evidence.append(error_text(reply))
+        params.pop("response_format")
+        try:
+            reply = session.send(f"{key}_unstructured", params)
+        except BudgetExhausted:
+            return Check(
+                key,
+                question,
+                "not established",
+                "; ".join(evidence) + "; fallback skipped: call budget spent",
+                False,
+            )
+        evidence.append(f"without response_format: {took(reply)}")
+    if reply.status != 200:
+        check = rejected(key, question, reply, False)
+        check.evidence = "; ".join([*evidence, error_text(reply)])
+        return check
+    data = choice_probabilities(reply.body)
+    data["reasoning_tokens"] = reasoning_tokens(reply.body)
+    evidence.append(
+        f"choices[0].logprobs.content present={data['present']}; scope={data['scope']}; "
+        f"first divergent position={data['position']}; "
+        f"conditional probabilities={json.dumps(data['probabilities'])}; "
+        f"unmatched mass (including unreported tail)={data['unmatched_mass']}; "
+        f"reasoning_tokens={reasoning_tokens(reply.body)}"
+    )
+    return Check(
+        key,
+        question,
+        "available" if data["complete"] else "not established",
+        "; ".join(evidence),
+        data["complete"],
+        data,
+    )
+
+
+def decision_verdict(checks: dict[str, Check]) -> str:
+    off = checks.get("decision_reasoning_off")
+    structured, logged = checks.get("structured_choice"), checks.get("choice_logprobs")
+    off_ok = off is not None and off.passed is True
+    constrained = (
+        off_ok
+        and structured is not None
+        and structured.passed is True
+        and structured.data.get("reasoning_tokens") == 0
+    )
+    probability = (
+        off_ok
+        and logged is not None
+        and logged.passed is True
+        and logged.data.get("reasoning_tokens") == 0
+    )
+    reasons: list[str] = []
+    if not off_ok:
+        reasons.append("reasoning off is not established")
+    if structured is None or structured.passed is not True:
+        reasons.append("strict structured choice did not pass")
+    if logged is None or logged.passed is not True:
+        reasons.append("answer logprobs with all three option starts were not observed")
+    if any(c is not None and c.data.get("reasoning_tokens") != 0 for c in (structured, logged)):
+        reasons.append("zero reasoning tokens not reported on every choice call")
+    reasons.append("probabilities condition on observed option starts, not full sequences")
+    return (
+        f"constrained choice: {'yes' if constrained else 'no'}; "
+        f"probability over options: {'yes' if probability else 'no'} ({'; '.join(reasons)})."
+    )
+
+
 def usage_line(body: Obj) -> str:
     """Input, output, cached and reasoning tokens of one response; ? where not reported."""
     usage = usage_of(body)
@@ -851,7 +1179,58 @@ def build_verdict(provider: Provider, checks: dict[str, Check]) -> str:
                 f" One sample each, on a trivial prompt: low gave {now} reasoning tokens and the "
                 f"default {before}, so what each setting costs is still unmeasured."
             )
+    if any(key in checks for key in DECISION_CHECKS):
+        head += " " + decision_verdict(checks)
     return head
+
+
+def run_legacy_checks(
+    session: Session,
+    model: str,
+    selected: set[str],
+    found: dict[str, Check],
+    run: Callable[[str, Callable[[], Check]], None],
+    *,
+    explicit: bool,
+) -> None:
+    history: list[Obj] | None = None
+
+    def first_turn() -> Check:
+        nonlocal history
+        check, history = check_tools_call(session, model)
+        return check
+
+    if "chat" in selected:
+        chat = check_chat(session, model)
+        if session.replies["chat"].status != 200:
+            raise Aborted(f"the first call failed: {chat.evidence}")
+        found["chat"] = chat
+    run("tools_call", first_turn)
+    if history is not None:
+        conversation = history
+        run("tools_result", lambda: check_tools_result(session, model, conversation))
+        if found.get("tools_result") and found["tools_result"].passed is False:
+            run("json_fallback", lambda: check_json_fallback(session, model))
+        run("parallel", lambda: check_parallel(session, model))
+    elif found.get("tools_call") and found["tools_call"].passed is False:
+        run("json_fallback", lambda: check_json_fallback(session, model))
+    elif "tools_result" in selected:
+        found["tools_result"] = Check(
+            "tools_result", "A tool result sent back", "not run", "the first turn did not read"
+        )
+    if explicit:
+        if "json_fallback" not in found:
+            run("json_fallback", lambda: check_json_fallback(session, model))
+        if "parallel" not in found:
+            run("parallel", lambda: check_parallel(session, model))
+    run("reasoning_default", lambda: check_reasoning_default(session))
+    run("reasoning_low", lambda: check_reasoning_set(session, model, "low"))
+    run("reasoning_none", lambda: check_reasoning_set(session, model, "none"))
+    run("limits", lambda: check_limits(session, model))
+    run("stream", lambda: check_stream(session, model))
+    run("usage", lambda: check_usage(session))
+    run("latency", lambda: check_latency(session))
+    run("rate_headers", lambda: check_rate_headers(session))
 
 
 def run_probe(
@@ -861,58 +1240,49 @@ def run_probe(
     now: datetime | None = None,
     sleep: Callable[[float], None] = time.sleep,
     rand: Callable[[], float] = random.random,
+    checks: tuple[str, ...] | None = None,
 ) -> Result:
     """Run the checks in priority order. The session refuses the call after MAX_CALLS."""
     session = Session(transport, sleep=sleep, rand=rand)
-    checks: dict[str, Check] = {}
-    history: list[Obj] | None = None
+    selected = set(DEFAULT_CHECKS if checks is None else checks)
+    unknown = selected - set(DEFAULT_CHECKS + DECISION_CHECKS)
+    if unknown:
+        raise ValueError(f"unknown checks: {', '.join(sorted(unknown))}")
+    found: dict[str, Check] = {}
+    session.decision_settings = {
+        "reasoning_effort": "minimal" if provider.name == "meta" else "none"
+    }
 
     def run(key: str, step: Callable[[], Check]) -> None:
+        if key not in selected:
+            return
         try:
-            checks[key] = step()
+            found[key] = step()
         except BudgetExhausted:
-            checks[key] = Check(key, key, "skipped", f"the run's {MAX_CALLS}-call budget was spent")
+            found[key] = Check(key, key, "skipped", f"the run's {MAX_CALLS}-call budget was spent")
 
-    def first_turn() -> Check:
-        nonlocal history
-        check, history = check_tools_call(session, model)
-        return check
-
-    chat = check_chat(session, model)
-    if session.replies["chat"].status != 200:
-        raise Aborted(f"the first call failed: {chat.evidence}")
-    checks["chat"] = chat
-    run("tools_call", first_turn)
-    if history is not None:
-        conversation = history
-        run("tools_result", lambda: check_tools_result(session, model, conversation))
-        if checks["tools_result"].passed is False:  # the route is not decided until JSON is tried
-            run("json_fallback", lambda: check_json_fallback(session, model))
-        run("parallel", lambda: check_parallel(session, model))
-    elif checks["tools_call"].passed is False:
-        run("json_fallback", lambda: check_json_fallback(session, model))
-    else:
-        checks["tools_result"] = Check(
-            "tools_result", "A tool result sent back", "not run", "the first turn did not read"
-        )
-    run("reasoning_default", lambda: check_reasoning_default(session))
-    run("reasoning_low", lambda: check_reasoning_set(session, model, "low"))
-    run("reasoning_none", lambda: check_reasoning_set(session, model, "none"))
-    run("limits", lambda: check_limits(session, model))
-    run("stream", lambda: check_stream(session, model))
-    run("usage", lambda: check_usage(session))
-    run("latency", lambda: check_latency(session))
-    run("rate_headers", lambda: check_rate_headers(session))
+    run_legacy_checks(session, model, selected, found, run, explicit=checks is not None)
+    run("decision_reasoning_off", lambda: check_decision_reasoning_off(session, provider, model))
+    for key, step in (
+        ("structured_choice", lambda: check_structured_choice(session, model)),
+        ("choice_logprobs", lambda: check_choice_logprobs(session, model)),
+    ):
+        if not session.decision_settings and key in selected:
+            found[key] = Check(key, key, "not run", "no accepted reasoning setting", False)
+        else:
+            run(key, step)
     return Result(
         provider=provider.name,
         title=provider.title,
         base_url=provider.base_url,
         model_requested=model,
-        model_reported=session.replies["chat"].body.get("model"),
+        model_reported=next(
+            (r.body.get("model") for r in session.replies.values() if r.status == 200), None
+        ),
         date=(now or datetime.now(ART)).strftime("%Y-%m-%d %H:%M ART"),
-        checks=list(checks.values()),
+        checks=list(found.values()),
         calls=session.calls,
-        verdict=build_verdict(provider, checks),
+        verdict=build_verdict(provider, found),
     )
 
 
@@ -1022,12 +1392,23 @@ def write_report(
     path.write_text(text, encoding="utf-8")
 
 
+def parse_checks(value: str) -> tuple[str, ...]:
+    names = tuple(value.split(","))
+    if any(name not in DEFAULT_CHECKS + DECISION_CHECKS for name in names):
+        raise argparse.ArgumentTypeError(
+            "checks must be comma-separated names from: "
+            + ", ".join(DEFAULT_CHECKS + DECISION_CHECKS)
+        )
+    return names
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Probe a provider's chat and tool-calling API.")
     parser.add_argument("provider", choices=ORDER)
     parser.add_argument("--model", help="override the provider's model id")
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--details", type=Path, help="also write the result as JSON here")
+    parser.add_argument("--checks", type=parse_checks, help="run only these comma-separated checks")
     args = parser.parse_args(argv)
     provider = PROVIDERS[args.provider]
     settings = Settings.load()
@@ -1044,7 +1425,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         result = run_probe(
-            SdkTransport(provider.base_url, key), provider, args.model or provider.model
+            SdkTransport(provider.base_url, key),
+            provider,
+            args.model or provider.model,
+            checks=args.checks,
         )
     except Aborted as err:
         say(f"aborted: {err}")
