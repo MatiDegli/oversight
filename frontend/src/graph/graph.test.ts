@@ -33,6 +33,7 @@ const node = (id: string, kind: GraphNode["kind"], parent_id: string | null = nu
   start_line: 1,
   end_line: 4,
   is_test: false,
+  examples: null,
 });
 const nodes = [
   node("billing", "module"),
@@ -45,6 +46,7 @@ const agent = (slot: "A" | "B"): AgentStatus => ({
   started_by: null,
   queued_task_id: null,
   base_commit: null,
+  examples: null,
   agent_id: `agent-${slot}`,
   change_id: `change-${slot}`,
   slot,

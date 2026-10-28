@@ -53,7 +53,9 @@ type RuleId = Literal[
     "run_test_integrity",
     "tests_reach_changes",
     "within_zone",
+    "protected_paths",
 ]
+"""Closed rule identifiers; protected_paths belongs only to its new profile."""
 
 
 type NodeId = str

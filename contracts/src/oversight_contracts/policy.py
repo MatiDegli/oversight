@@ -87,6 +87,7 @@ _PROBE_RULES = _INTEGRITY_RULES | frozenset[RuleId]({"added_tests_fail_before"})
 SAFE_MERGE_V2_RULES = _PROBE_RULES | frozenset[RuleId](
     {"run_test_integrity", "tests_reach_changes", "within_zone"}
 )
+SAFE_MERGE_PATHS_V1_RULES = _PROBE_RULES | frozenset[RuleId]({"protected_paths"})
 POLICY_RULES: dict[str, frozenset[RuleId]] = {
     "safe-merge-v1": SAFE_MERGE_V1_RULES,
     "safe-merge-review-v1": _REVIEW_RULES,
@@ -96,6 +97,7 @@ POLICY_RULES: dict[str, frozenset[RuleId]] = {
     "safe-merge-reach-v1": _PROBE_RULES | frozenset[RuleId]({"tests_reach_changes"}),
     "safe-merge-zone-v1": _PROBE_RULES | frozenset[RuleId]({"within_zone"}),
     "safe-merge-v2": SAFE_MERGE_V2_RULES,
+    "safe-merge-paths-v1": SAFE_MERGE_PATHS_V1_RULES,
 }
 
 
@@ -119,7 +121,7 @@ _INPUTS: dict[RuleId, type[ContractModel]] = {
     "existing_tests_untouched": _ExistingTests,
 }
 
-for _rule in SAFE_MERGE_V2_RULES - SAFE_MERGE_V1_RULES:
+for _rule in (SAFE_MERGE_V2_RULES | SAFE_MERGE_PATHS_V1_RULES) - SAFE_MERGE_V1_RULES:
     _THRESHOLDS[_rule] = {"violations_max": 0, "complete": True}
     _INPUTS[_rule] = CheckInputs
 

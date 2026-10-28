@@ -77,7 +77,18 @@ async def test_boundary_change_has_named_differing_rows_and_private_reasons(tmp_
         assert len(price.rows) <= 8
         assert by_id["shop.cart:Cart.total"].reason == "method or class (not probed yet)"
         assert by_id["shop.pricing:added"].reason == "added (no base version)"
-        assert all("behavior" not in event.model_dump_json() for event in s.events())
+        for event in s.events():
+            # Contract defaults reserve publication slots without exposing measurements.
+            non_defaults = event.model_dump_json(exclude_defaults=True)
+            assert "behavior" not in non_defaults
+            assert "measured_cone" not in non_defaults
+            serialized = event.model_dump_json()
+            for private in (
+                "quantity=10",
+                "method or class (not probed yet)",
+                "added (no base version)",
+            ):
+                assert private not in serialized
         assert_clean(s.live.workspace)
 
 

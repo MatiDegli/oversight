@@ -16,6 +16,7 @@ from oversight_contracts.commands import ErrorResponse
 pytestmark = pytest.mark.anyio
 ROOT = Path(__file__).resolve().parents[3]
 ROUTES = [
+    ("POST", "/dictation"),
     ("GET", "/merge-mode"),
     ("PUT", "/merge-mode"),
     ("POST", "/plans"),
@@ -71,7 +72,7 @@ async def test_reserved_routes_never_read_bodies_or_cause_effects(
         assert commands.mock_calls == []
 
 
-@pytest.mark.parametrize("prefix", ["merge-mode", "plans"])
+@pytest.mark.parametrize("prefix", ["merge-mode", "plans", "dictation"])
 async def test_reserved_prefixes_do_not_fall_back_to_the_static_ui(
     tmp_path: Path, prefix: str
 ) -> None:
@@ -89,7 +90,11 @@ async def test_reserved_prefixes_do_not_fall_back_to_the_static_ui(
         response = await client.get(f"/{prefix}/unknown/route")
         assert response.status_code == 404
         assert ErrorResponse.model_validate(response.json()).error.code == "not_found"
-        reserved = await client.get(f"/{prefix}" if prefix == "merge-mode" else "/plans/plan-999")
+        reserved = (
+            await client.post("/dictation")
+            if prefix == "dictation"
+            else await client.get(f"/{prefix}" if prefix == "merge-mode" else "/plans/plan-999")
+        )
         assert reserved.status_code == 501
     # Keep this assertion independent of the backend's prefix list and route registration.
     config = (ROOT / "frontend/vite.config.ts").read_text()

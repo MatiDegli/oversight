@@ -399,12 +399,12 @@ async def test_human_save_never_arms_a_review(tmp_path: Path) -> None:
         assert not any(e.type == "change.reviewed" for e in events(live))
 
 
-async def test_ask_me_preserves_level2_log(
+async def test_ask_me_preserves_validated_level2_events(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from oversight.app import ReplayConfig, create_app
-    from oversight.events import EventStore, write_jsonl
+    from oversight.events import EventStore, read_jsonl, write_jsonl
     from oversight.settings import REPO_ROOT
 
     source = REPO_ROOT / "fixtures/events/scripted-level2.jsonl"
@@ -429,7 +429,11 @@ async def test_ask_me_preserves_level2_log(
                 break
         out = tmp_path / "replayed.jsonl"
         write_jsonl(out, store._events)
-        assert out.read_bytes() == source.read_bytes()
+        # Serialization includes additive contract defaults; the original recording stays intact.
+        expected = b"".join(
+            event.model_dump_json().encode() + b"\n" for event in read_jsonl(source)
+        )
+        assert out.read_bytes() == expected
     assert not reviewer.calls
 
 

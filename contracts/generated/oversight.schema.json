@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.4.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.5.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -260,6 +260,21 @@
           ],
           "default": null,
           "description": "The agent base used to guard an unproposed rejection."
+        },
+        "examples": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TaskExample-Output"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The accepted task examples, retained for live observation and replay."
         }
       },
       "required": [
@@ -276,7 +291,8 @@
         "zone",
         "started_by",
         "queued_task_id",
-        "base_commit"
+        "base_commit",
+        "examples"
       ],
       "title": "AgentStatus",
       "type": "object"
@@ -416,6 +432,22 @@
           ],
           "default": null
         },
+        "answers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ReviewCard-Input"
+              },
+              "maxItems": 8,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The answered review cards for the observed revision and head."
+        },
         "revision": {
           "description": "The proposed revision the caller observed.",
           "exclusiveMinimum": 0,
@@ -430,6 +462,61 @@
         "head_commit"
       ],
       "title": "ApproveChange",
+      "type": "object"
+    },
+    "BehaviorDiffRow-Input": {
+      "additionalProperties": false,
+      "description": "One bounded display sample; rendered text is never executable input.",
+      "properties": {
+        "inputs": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "before": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "after": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "unstable": {
+          "default": false,
+          "description": "Repeated fresh-process executions disagreed; never stable change evidence.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "inputs",
+        "before",
+        "after"
+      ],
+      "title": "BehaviorDiffRow",
+      "type": "object"
+    },
+    "BehaviorDiffRow-Output": {
+      "additionalProperties": false,
+      "description": "One bounded display sample; rendered text is never executable input.",
+      "properties": {
+        "inputs": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "before": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "after": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "unstable": {
+          "default": false,
+          "description": "Repeated fresh-process executions disagreed; never stable change evidence.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "inputs",
+        "before",
+        "after",
+        "unstable"
+      ],
+      "title": "BehaviorDiffRow",
       "type": "object"
     },
     "Budget": {
@@ -702,6 +789,96 @@
             "$ref": "#/$defs/NonEmptyText"
           },
           "type": "array"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FactsSummaryLine"
+              },
+              "maxItems": 3,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Server-written deterministic summary: task; changed files/nodes and tests;\nobserved behavior and cost. At most three lines, at most 720 characters total.\nUnknown measurements remain explicit. Never copied from the author's report."
+        },
+        "behavior_diff": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/NodeBehaviorDiff"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-node comparisons; null means no behavior-probe evidence was recorded."
+        },
+        "measured_cone": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/MeasuredCaller"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-caller measurements; inherited counts count invocations, not cone nodes."
+        },
+        "review_cards": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ReviewCard-Output"
+              },
+              "maxItems": 8,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The current candidate's questions and supporting evidence, one per unrequested choice."
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ShapeFact"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Structural findings; null means no shape analysis was recorded."
+        },
+        "shape_complete": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the bounded structural checks completed; null means unavailable."
         }
       },
       "required": [
@@ -720,7 +897,13 @@
         "zone",
         "reach",
         "complete",
-        "problems"
+        "problems",
+        "summary",
+        "behavior_diff",
+        "measured_cone",
+        "review_cards",
+        "shape",
+        "shape_complete"
       ],
       "title": "ChangeFacts",
       "type": "object"
@@ -862,6 +1045,21 @@
         },
         "impact": {
           "$ref": "#/$defs/ImpactCone"
+        },
+        "examples": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TaskExample-Output"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The task examples and confirmations captured for this proposal."
         }
       },
       "required": [
@@ -877,7 +1075,8 @@
         "lines_removed",
         "graph",
         "tests",
-        "impact"
+        "impact",
+        "examples"
       ],
       "title": "ChangeProposed",
       "type": "object"
@@ -1064,6 +1263,22 @@
           ],
           "default": null,
           "description": "The immutable assessment used for this decision, when available."
+        },
+        "answers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ReviewCard-Output"
+              },
+              "maxItems": 8,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The accepted human answers, copied by the server from a decision command."
         }
       },
       "required": [
@@ -1081,7 +1296,8 @@
         "requested_by",
         "head_commit",
         "reasons",
-        "assessment"
+        "assessment",
+        "answers"
       ],
       "title": "ChangeResolved",
       "type": "object"
@@ -1226,6 +1442,60 @@
       "title": "ChangeUpdatedEvent",
       "type": "object"
     },
+    "ChangeUsage": {
+      "additionalProperties": false,
+      "description": "All work attributed to a change, including failed, stopped and rejected work.",
+      "properties": {
+        "cost_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Total US dollars across all buckets; null unless the accounting is complete."
+        },
+        "unknown_calls": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Unknown-cost calls across buckets; null for an incomplete inventory."
+        },
+        "by_role": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/RoleUsage"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Disjoint role/model/round buckets; null when attribution was not reconstructed."
+        }
+      },
+      "required": [
+        "cost_usd",
+        "unknown_calls",
+        "by_role"
+      ],
+      "title": "ChangeUsage",
+      "type": "object"
+    },
     "ChangeView": {
       "additionalProperties": false,
       "description": "An archived view of one change.",
@@ -1299,6 +1569,31 @@
             }
           ],
           "description": "The latest change resolution."
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-change accounting reconstructed through this view's seq, or unavailable."
+        },
+        "revision_rounds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Confirmed changes_requested resolutions through seq; null for incomplete history."
         }
       },
       "required": [
@@ -1309,7 +1604,9 @@
         "facts",
         "review",
         "assessment",
-        "resolution"
+        "resolution",
+        "usage",
+        "revision_rounds"
       ],
       "title": "ChangeView",
       "type": "object"
@@ -1467,6 +1764,50 @@
         "problems"
       ],
       "title": "CrossReview",
+      "type": "object"
+    },
+    "DictateTask": {
+      "additionalProperties": false,
+      "description": "Reserved JSON audio upload; feeds a task draft, never a decision command.",
+      "properties": {
+        "audio_base64": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Base64-encoded audio; required by the future implemented endpoint."
+        },
+        "media_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The audio MIME type; required by the future implemented endpoint."
+        },
+        "language": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An optional transcription language hint."
+        }
+      },
+      "title": "DictateTask",
       "type": "object"
     },
     "EdgeId": {
@@ -1716,6 +2057,53 @@
       ],
       "title": "EvidenceRef",
       "type": "object"
+    },
+    "ExamplePin-Input": {
+      "additionalProperties": false,
+      "description": "Human confirmation of the containing task example.",
+      "properties": {
+        "source_task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "confirmed_by": {
+          "const": "person",
+          "default": "person",
+          "description": "The existing single-user human principal; the server verifies confirmation.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_task"
+      ],
+      "title": "ExamplePin",
+      "type": "object"
+    },
+    "ExamplePin-Output": {
+      "additionalProperties": false,
+      "description": "Human confirmation of the containing task example.",
+      "properties": {
+        "source_task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "confirmed_by": {
+          "const": "person",
+          "default": "person",
+          "description": "The existing single-user human principal; the server verifies confirmation.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_task",
+        "confirmed_by"
+      ],
+      "title": "ExamplePin",
+      "type": "object"
+    },
+    "FactsSummaryLine": {
+      "maxLength": 240,
+      "minLength": 1,
+      "pattern": "^[^\\r\\n]+$",
+      "type": "string"
     },
     "FileContent": {
       "additionalProperties": false,
@@ -2136,6 +2524,21 @@
         "is_test": {
           "description": "In a test module: hidden by default, never listed in a cone.",
           "type": "boolean"
+        },
+        "examples": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/NodeExample"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Captured examples for this graph version; null means unavailable."
         }
       },
       "required": [
@@ -2147,7 +2550,8 @@
         "start_line",
         "end_line",
         "parent_id",
-        "is_test"
+        "is_test",
+        "examples"
       ],
       "title": "GraphNode",
       "type": "object"
@@ -2620,6 +3024,103 @@
       "title": "Limits",
       "type": "object"
     },
+    "MeasuredCaller": {
+      "additionalProperties": false,
+      "description": "Measured caller observations, never a replacement for the static cone.",
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "compared_count": {
+          "default": 0,
+          "description": "Inputs compared on both sides with equal typed inputs.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "differing_count": {
+          "default": 0,
+          "description": "Compared inputs with reproducible differing results; excludes unstable rows.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "At most eight samples of differing or unstable inputs; equal results count only in\ncompared_count. Counts cover all admitted comparisons.",
+          "items": {
+            "$ref": "#/$defs/BehaviorDiffRow-Output"
+          },
+          "maxItems": 8,
+          "type": "array"
+        },
+        "not_probed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why all or part of probing was unavailable, unsupported or budget-limited."
+        },
+        "outcome": {
+          "default": "not_compared",
+          "description": "Changed requires stable differences; unchanged requires complete comparison.",
+          "enum": [
+            "changed",
+            "unchanged",
+            "not_compared"
+          ],
+          "type": "string"
+        },
+        "unmatched_before": {
+          "default": 0,
+          "description": "Base invocations without an admitted matching proposed invocation.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unmatched_after": {
+          "default": 0,
+          "description": "Proposed invocations without an admitted matching base invocation.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "not_compared": {
+          "description": "Reasons for unmatched or excluded calls, including unequal inputs.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "type": "array"
+        },
+        "complete": {
+          "default": false,
+          "description": "All observed invocations of this caller were admitted and compared.",
+          "type": "boolean"
+        },
+        "problems": {
+          "description": "Recording, matching, instability and retention-limit diagnostics.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "node_id",
+        "compared_count",
+        "differing_count",
+        "rows",
+        "not_probed",
+        "outcome",
+        "unmatched_before",
+        "unmatched_after",
+        "not_compared",
+        "complete",
+        "problems"
+      ],
+      "title": "MeasuredCaller",
+      "type": "object"
+    },
     "MergeMode": {
       "enum": [
         "ask_me",
@@ -2753,6 +3254,145 @@
         "reasoning"
       ],
       "title": "ModelProfile",
+      "type": "object"
+    },
+    "NodeBehaviorDiff": {
+      "additionalProperties": false,
+      "description": "Server-observed comparisons for one changed node.",
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "compared_count": {
+          "default": 0,
+          "description": "Inputs compared on both sides with equal typed inputs.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "differing_count": {
+          "default": 0,
+          "description": "Compared inputs with reproducible differing results; excludes unstable rows.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "At most eight samples of differing or unstable inputs; equal results count only in\ncompared_count. Counts cover all admitted comparisons.",
+          "items": {
+            "$ref": "#/$defs/BehaviorDiffRow-Output"
+          },
+          "maxItems": 8,
+          "type": "array"
+        },
+        "not_probed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why all or part of probing was unavailable, unsupported or budget-limited."
+        }
+      },
+      "required": [
+        "node_id",
+        "compared_count",
+        "differing_count",
+        "rows",
+        "not_probed"
+      ],
+      "title": "NodeBehaviorDiff",
+      "type": "object"
+    },
+    "NodeExample": {
+      "additionalProperties": false,
+      "description": "A captured node-card example with explicit provenance.",
+      "properties": {
+        "example_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "inputs": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "expected_output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected rendered output; the empty string is a valid expectation."
+        },
+        "expected_behavior": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected behavior when output alone does not describe the example."
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An optional free-text explanation."
+        },
+        "pin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExamplePin-Output"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Human confirmation and originating task; null means unconfirmed."
+        },
+        "source": {
+          "description": "How the example was obtained; a test literal is not execution evidence.",
+          "enum": [
+            "test_literal",
+            "recorded_run",
+            "pinned_example",
+            "behavior_diff"
+          ],
+          "type": "string"
+        },
+        "source_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "evidence": {
+          "$ref": "#/$defs/EvidenceRef"
+        }
+      },
+      "required": [
+        "example_id",
+        "inputs",
+        "expected_output",
+        "expected_behavior",
+        "note",
+        "pin",
+        "source",
+        "source_id",
+        "evidence"
+      ],
+      "title": "NodeExample",
       "type": "object"
     },
     "NodeId": {
@@ -2943,6 +3583,17 @@
         "zone": {
           "$ref": "#/$defs/PlanZone"
         },
+        "depends_on": {
+          "description": "Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.",
+          "items": {
+            "enum": [
+              0,
+              1
+            ],
+            "type": "integer"
+          },
+          "type": "array"
+        },
         "agent_id": {
           "anyOf": [
             {
@@ -2958,6 +3609,7 @@
       "required": [
         "task",
         "zone",
+        "depends_on",
         "agent_id"
       ],
       "title": "PlanSubtask",
@@ -3346,6 +3998,22 @@
           ],
           "default": null
         },
+        "answers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ReviewCard-Input"
+              },
+              "maxItems": 8,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The answered review cards accompanying rejection."
+        },
         "revision": {
           "description": "The observed revision, including zero before any proposal.",
           "minimum": 0,
@@ -3394,6 +4062,22 @@
       "properties": {
         "comment": {
           "$ref": "#/$defs/NonEmptyText"
+        },
+        "answers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ReviewCard-Input"
+              },
+              "maxItems": 8,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The answered review cards accompanying the revision request."
         },
         "revision": {
           "description": "The proposed revision the caller observed.",
@@ -3559,6 +4243,141 @@
       "title": "RevertResult",
       "type": "object"
     },
+    "ReviewCard-Input": {
+      "additionalProperties": false,
+      "description": "One server-authored question about an exact change target.",
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "question": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "evidence_seq": {
+          "description": "The supporting event's id in this run; the server verifies target and existence.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "example": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BehaviorDiffRow-Input"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The smallest before/after example supporting this question, when available."
+        },
+        "answer": {
+          "anyOf": [
+            {
+              "enum": [
+                "yes",
+                "no",
+                "unsure"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The person's answer; null means unanswered."
+        },
+        "answered_by": {
+          "anyOf": [
+            {
+              "const": "person",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The existing single-user human principal, never inferred from the model."
+        }
+      },
+      "required": [
+        "node_id",
+        "question",
+        "evidence_seq"
+      ],
+      "title": "ReviewCard",
+      "type": "object"
+    },
+    "ReviewCard-Output": {
+      "additionalProperties": false,
+      "description": "One server-authored question about an exact change target.",
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "question": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "evidence_seq": {
+          "description": "The supporting event's id in this run; the server verifies target and existence.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "example": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BehaviorDiffRow-Output"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The smallest before/after example supporting this question, when available."
+        },
+        "answer": {
+          "anyOf": [
+            {
+              "enum": [
+                "yes",
+                "no",
+                "unsure"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The person's answer; null means unanswered."
+        },
+        "answered_by": {
+          "anyOf": [
+            {
+              "const": "person",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The existing single-user human principal, never inferred from the model."
+        }
+      },
+      "required": [
+        "node_id",
+        "question",
+        "evidence_seq",
+        "example",
+        "answer",
+        "answered_by"
+      ],
+      "title": "ReviewCard",
+      "type": "object"
+    },
     "ReviewChange": {
       "additionalProperties": false,
       "description": "Request advisory review of an exact candidate.",
@@ -3657,6 +4476,90 @@
       ],
       "type": "string"
     },
+    "RoleUsage": {
+      "additionalProperties": false,
+      "description": "One disjoint role/model/round bucket of attributed model calls.",
+      "properties": {
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "agent",
+                "review",
+                "plan",
+                "lead"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Existing tick roles: author, reviewer, planner or lead; null means unattributed."
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The exact reported model, or unknown."
+        },
+        "round": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Zero for initial work; subsequent confirmed revision requests increment it."
+        },
+        "cost_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Total US dollars; null if any call cost or required attribution is unknown."
+        },
+        "unknown_calls": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Calls with unknown dollar cost; null when the call inventory is incomplete."
+        }
+      },
+      "required": [
+        "role",
+        "model",
+        "round",
+        "cost_usd",
+        "unknown_calls"
+      ],
+      "title": "RoleUsage",
+      "type": "object"
+    },
     "RuleAssessment": {
       "additionalProperties": false,
       "description": "One rule's recorded inputs, limit, outcome and evidence.",
@@ -3721,7 +4624,8 @@
         "added_tests_fail_before",
         "run_test_integrity",
         "tests_reach_changes",
-        "within_zone"
+        "within_zone",
+        "protected_paths"
       ],
       "type": "string"
     },
@@ -3733,6 +4637,17 @@
       "additionalProperties": false,
       "description": "One temporal finding supported by an integrity fact.",
       "properties": {
+        "kind": {
+          "default": "loosened",
+          "description": "The weakening witnessed between failure and later execution; non-loosened\nkinds establish absence of failure, not proof that the case executed or passed.",
+          "enum": [
+            "loosened",
+            "removed",
+            "skipped",
+            "deleted"
+          ],
+          "type": "string"
+        },
         "test_id": {
           "$ref": "#/$defs/NonEmptyText"
         },
@@ -3747,7 +4662,7 @@
           "type": "integer"
         },
         "passed_seq": {
-          "description": "The execution where it passed.",
+          "description": "The execution where it passed; for non-loosened kinds, a later complete execution\nshowing absence of failure, not proof that the case executed or passed.",
           "exclusiveMinimum": 0,
           "type": "integer"
         },
@@ -3758,6 +4673,7 @@
         }
       },
       "required": [
+        "kind",
         "test_id",
         "failed_seq",
         "edited_seq",
@@ -4014,6 +4930,56 @@
       ],
       "type": "string"
     },
+    "ShapeFact": {
+      "additionalProperties": false,
+      "description": "One neutral structural observation, never an automatic size gate.",
+      "properties": {
+        "kind": {
+          "description": "The analyzer's structural finding kind.",
+          "enum": [
+            "duplicate_logic",
+            "import_cycle",
+            "import_added",
+            "function_length"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "node_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The affected node, or null for a file-level observation."
+        },
+        "message": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "evidence": {
+          "description": "Captured source or graph evidence supporting the observation.",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "node_id",
+        "message",
+        "evidence"
+      ],
+      "title": "ShapeFact",
+      "type": "object"
+    },
     "Slot": {
       "enum": [
         "A",
@@ -4081,6 +5047,34 @@
           ],
           "default": null,
           "description": "The requested edit zone."
+        },
+        "examples": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TaskExample-Input"
+              },
+              "maxItems": 5,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Examples submitted with the task before code is changed."
+        },
+        "examples_only": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True requests one model call without edit/test tools; null or false uses normal execution."
         }
       },
       "required": [
@@ -4140,6 +5134,17 @@
         },
         "zone": {
           "$ref": "#/$defs/PlanZone"
+        },
+        "depends_on": {
+          "description": "Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.",
+          "items": {
+            "enum": [
+              0,
+              1
+            ],
+            "type": "integer"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -4285,6 +5290,165 @@
         "cases_complete"
       ],
       "title": "SuiteResult",
+      "type": "object"
+    },
+    "TaskDictated": {
+      "additionalProperties": false,
+      "description": "Reserved future 200 response; never emitted while the endpoint answers 501.",
+      "properties": {
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The transcribed task draft; required for a successful future response."
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TaskDictated",
+      "type": "object"
+    },
+    "TaskExample-Input": {
+      "additionalProperties": false,
+      "description": "An example supplied with a task before editing begins.",
+      "properties": {
+        "example_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "inputs": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "expected_output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected rendered output; the empty string is a valid expectation."
+        },
+        "expected_behavior": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected behavior when output alone does not describe the example."
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An optional free-text explanation."
+        },
+        "pin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExamplePin-Input"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Human confirmation and originating task; null means unconfirmed."
+        }
+      },
+      "required": [
+        "example_id",
+        "inputs"
+      ],
+      "title": "TaskExample",
+      "type": "object"
+    },
+    "TaskExample-Output": {
+      "additionalProperties": false,
+      "description": "An example supplied with a task before editing begins.",
+      "properties": {
+        "example_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "inputs": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "expected_output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected rendered output; the empty string is a valid expectation."
+        },
+        "expected_behavior": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected behavior when output alone does not describe the example."
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An optional free-text explanation."
+        },
+        "pin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExamplePin-Output"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Human confirmation and originating task; null means unconfirmed."
+        }
+      },
+      "required": [
+        "example_id",
+        "inputs",
+        "expected_output",
+        "expected_behavior",
+        "note",
+        "pin"
+      ],
+      "title": "TaskExample",
       "type": "object"
     },
     "TestsExecutedEvent": {

@@ -36,16 +36,32 @@ def with_defaults(raw: Any) -> Any:
     result = {
         key: (value if key == "observed" else with_defaults(value)) for key, value in raw.items()
     }
+    if "qualname" in result and "is_test" in result:
+        result = {"examples": None, **result}
+    if "failed_seq" in result and "fact_index" in result:
+        result = {"kind": "loosened", **result}
+    if "task" in result and "zone" in result and "agent_id" in result and "state" not in result:
+        result = {"depends_on": [], **result}
     if "failed_tests" in result:
         result = {"cases": None, "cases_complete": None, **result}
     defaults = {
         "run.started": {"merge_mode": None},
+        "change.proposed": {"examples": None},
+        "change.facts_recorded": {
+            "summary": None,
+            "behavior_diff": None,
+            "measured_cone": None,
+            "review_cards": None,
+            "shape": None,
+            "shape_complete": None,
+        },
         "agent.status": {
             "plan_id": None,
             "zone": None,
             "started_by": None,
             "queued_task_id": None,
             "base_commit": None,
+            "examples": None,
         },
         "usage.tick": {"role": None, "change_id": None, "plan_id": None},
         "change.resolved": {
@@ -55,6 +71,7 @@ def with_defaults(raw: Any) -> Any:
             "head_commit": None,
             "reasons": [],
             "assessment": None,
+            "answers": None,
         },
         "plan.updated": {"started_by": None, "queued_task_id": None},
     }
@@ -116,7 +133,7 @@ def test_all_older_recordings_validate_and_get_serialized_defaults(log: Path) ->
 
 
 def test_defaults_and_request_response_shapes() -> None:
-    assert CONTRACT_VERSION == "1.4.0"
+    assert CONTRACT_VERSION == "1.5.0"
     assert MergeModeState().model_dump() == {"mode": "ask_me", "revision": 0}
     assert SetMergeMode(mode="ask_me", revision=0).model_dump() == {"mode": "ask_me", "revision": 0}
     assert CreatePlan(task="Split this").task == "Split this"

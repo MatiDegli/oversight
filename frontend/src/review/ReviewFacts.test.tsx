@@ -24,6 +24,12 @@ function appendEvent(state: State, event: ServerEvent): State {
 const proposal = state.changes["change-1"]?.proposal;
 if (!proposal) throw new Error("Missing proposal");
 const facts: ChangeFacts = {
+  summary: null,
+  behavior_diff: null,
+  measured_cone: null,
+  review_cards: null,
+  shape: null,
+  shape_complete: null,
   change_id: proposal.change_id,
   revision: proposal.revision,
   base_commit: proposal.base_commit,

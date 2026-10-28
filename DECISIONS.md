@@ -723,6 +723,35 @@ While the camera or elements animate, request a render from a microtask after ea
 step: Cytoscape 3.34 clears the step's redraw flag (cytoscape.js#3544). Install once per core and
 guard the private animation pool with a test; remove the helper with Cytoscape 3.34.5 or later.
 
+## Contracts 1.5.0 — approved by the maintainer, 2026-10-28
+
+Reserve the beyond-level-2 shapes without producing new evidence or enabling behavior:
+A1 facts summary; A2 per-node behavior diff; A3 measured callers alongside the static cone;
+A4 review cards and human answers; A5 usage by change, role/model and revision round;
+A6 task examples; A7 confirmed pins; A8 node examples with provenance; A9 neutral shape facts.
+B1 adds protected_paths and its fixed profile; B2 adds two-slot dependencies; B3 distinguishes
+temporal weakening kinds; B4 carries decision answers; B5 reserves examples-only starts;
+B6 adds archived usage and revision rounds; B7 reserves dictation request/response roots and
+POST /dictation, answering 501 not_implemented in live and replay before reading the body.
+Every attachment has a null or empty default so old payloads and recordings remain valid.
+
+The seven coordinator amendments override the original draft:
+1. Summary is a list of one to three single lines, each at most 240 characters, without padding.
+2. Behavior rows retain differing or unstable inputs only; equal results count in compared_count.
+3. At most eight cards/answers, one per unrequested choice, with node_id and an optional example.
+4. Usage roles match ticks: agent, review, plan and lead; accepted-change cost stays derived.
+5. ExamplePin, TaskExample and NodeExample live in examples.py; StartAgent accepts at most five.
+6. safe-merge-paths-v1 adds only protected_paths to probes; all existing profiles stay frozen.
+7. The delivery manifest is a frontend-only typed file; it requires no contract or event change.
+
+The active backend profile remains safe-merge-probes-v1. No protected-path evaluator, producers,
+UI, Revert or delivery manifest is implemented here. Cost per node and exception type are left
+out. These additions identify schema 1.5.0; safe creation, nullable SaveFile.base_hash, zones and
+inventory move to 1.6.0. Delivery A decisions 11–12 remain unchanged as the approval history.
+The tuple check now compares against the byte-exact 1.4.0 baseline, retaining the 1.3.0 baseline
+and negative controls. Baseline snapshots count toward the commit line limit; an indivisible
+snapshot requires the existing Commit-Exception trailer. Pydantic/JSON Schema enforce list bounds
+while TypeScript keeps ordinary arrays; the existing explicit two-slot tuples remain tuples.
 ## 2026-10-28 — Release-age exception for certifi
 
 certifi 2026.7.22 bundled the emSign root CAs whose intermediate keys were compromised

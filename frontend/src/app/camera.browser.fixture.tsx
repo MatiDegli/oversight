@@ -159,7 +159,14 @@ export const graphTest = {
   },
   loadDemo() {
     stateStore.setState({
-      state: { ...recorded, graph: { ...demoGraph, positions: demoPreset } as GraphSnapshot },
+      state: {
+        ...recorded,
+        graph: {
+          ...demoGraph,
+          nodes: demoGraph.nodes.map((node) => ({ ...node, examples: null })),
+          positions: demoPreset,
+        } as GraphSnapshot,
+      },
     });
     render("watch", true);
   },

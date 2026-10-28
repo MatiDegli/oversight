@@ -28,6 +28,7 @@ GENERATED = HERE / "generated"
 FRONTEND = HERE.parent / "frontend"
 
 REQUESTS: list[type[BaseModel]] = [
+    commands.DictateTask,
     commands.StartAgent,
     commands.EnqueueTask,
     commands.QueueRevision,
@@ -47,6 +48,7 @@ REQUESTS: list[type[BaseModel]] = [
     commands.RejectPlan,
 ]
 RESPONSES: list[type[BaseModel]] = [
+    commands.TaskDictated,
     commands.AgentCreated,
     commands.TreeResponse,
     commands.ChangeView,
@@ -121,6 +123,11 @@ def for_typescript(node: Any) -> Any:
             if "items" in converted:
                 raise ValueError("json2ts conversion requires a fixed tuple without trailing items")
             converted["items"] = converted.pop("prefixItems")
+        elif converted.get("type") == "array":
+            # Bounded lists stay ordinary arrays for consumers; Pydantic and the unmodified
+            # JSON Schema enforce their limits. Only explicit prefixItems become tuples.
+            converted.pop("minItems", None)
+            converted.pop("maxItems", None)
         return converted
     if isinstance(node, list):
         return [for_typescript(value) for value in cast(list[Any], node)]

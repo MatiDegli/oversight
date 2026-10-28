@@ -179,6 +179,7 @@ it.each(["merge", "tests"] as const)(
             decided_by: null,
             reasons: [],
             assessment: null,
+            answers: null,
           },
         });
       }, kind);
@@ -247,6 +248,7 @@ it("requires a comment, stays pending until SSE, and reopens the same change aft
           decided_by: null,
           reasons: [],
           assessment: null,
+          answers: null,
         },
       });
       window.reviewTest.emit({

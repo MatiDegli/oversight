@@ -25,8 +25,10 @@ export type RuleId =
   | "added_tests_fail_before"
   | "run_test_integrity"
   | "tests_reach_changes"
-  | "within_zone";
+  | "within_zone"
+  | "protected_paths";
 export type JsonValue = unknown;
+export type FactsSummaryLine = string;
 export type NodeKind = "module" | "class" | "function" | "method";
 export type EdgeId = string;
 export type EdgeKind = "imports" | "calls" | "inherits";
@@ -187,6 +189,10 @@ export interface AgentStatus {
    * The agent base used to guard an unproposed rejection.
    */
   base_commit: NonEmptyText | null;
+  /**
+   * The accepted task examples, retained for live observation and replay.
+   */
+  examples: TaskExample[] | null;
 }
 /**
  * Explicit graph nodes and workspace files selected for a subtask.
@@ -194,6 +200,39 @@ export interface AgentStatus {
 export interface PlanZone {
   node_ids: NodeId[];
   paths: WorkspacePath[];
+}
+/**
+ * An example supplied with a task before editing begins.
+ */
+export interface TaskExample {
+  example_id: NonEmptyText;
+  inputs: NonEmptyText;
+  /**
+   * Expected rendered output; the empty string is a valid expectation.
+   */
+  expected_output: string | null;
+  /**
+   * Expected behavior when output alone does not describe the example.
+   */
+  expected_behavior: NonEmptyText | null;
+  /**
+   * An optional free-text explanation.
+   */
+  note: string | null;
+  /**
+   * Human confirmation and originating task; null means unconfirmed.
+   */
+  pin: ExamplePin | null;
+}
+/**
+ * Human confirmation of the containing task example.
+ */
+export interface ExamplePin {
+  source_task: NonEmptyText;
+  /**
+   * The existing single-user human principal; the server verifies confirmation.
+   */
+  confirmed_by: "person";
 }
 export interface AgentStatusEvent {
   /**
@@ -280,10 +319,61 @@ export interface AgentStepEvent {
 export interface ApproveChange {
   comment?: string | null;
   /**
+   * The answered review cards for the observed revision and head.
+   */
+  answers?: ReviewCard[] | null;
+  /**
    * The proposed revision the caller observed.
    */
   revision: number;
   head_commit: NonEmptyText;
+}
+/**
+ * One server-authored question about an exact change target.
+ */
+export interface ReviewCard {
+  node_id: NodeId;
+  question: NonEmptyText;
+  /**
+   * The supporting event's id in this run; the server verifies target and existence.
+   */
+  evidence_seq: number;
+  /**
+   * The smallest before/after example supporting this question, when available.
+   */
+  example?: BehaviorDiffRow | null;
+  /**
+   * The person's answer; null means unanswered.
+   */
+  answer?: ("yes" | "no" | "unsure") | null;
+  /**
+   * The existing single-user human principal, never inferred from the model.
+   */
+  answered_by?: "person" | null;
+}
+/**
+ * One bounded display sample; rendered text is never executable input.
+ */
+export interface BehaviorDiffRow {
+  inputs: NonEmptyText;
+  before: NonEmptyText;
+  after: NonEmptyText;
+  /**
+   * Repeated fresh-process executions disagreed; never stable change evidence.
+   */
+  unstable?: boolean;
+}
+/**
+ * One bounded display sample; rendered text is never executable input.
+ */
+export interface BehaviorDiffRow1 {
+  inputs: NonEmptyText;
+  before: NonEmptyText;
+  after: NonEmptyText;
+  /**
+   * Repeated fresh-process executions disagreed; never stable change evidence.
+   */
+  unstable: boolean;
 }
 export interface Budget {
   budget_usd: number;
@@ -403,6 +493,32 @@ export interface ChangeFacts {
    * Missing evidence and analysis incompleteness diagnostics.
    */
   problems: NonEmptyText[];
+  /**
+   * Server-written deterministic summary: task; changed files/nodes and tests;
+   * observed behavior and cost. At most three lines, at most 720 characters total.
+   * Unknown measurements remain explicit. Never copied from the author's report.
+   */
+  summary: FactsSummaryLine[] | null;
+  /**
+   * Per-node comparisons; null means no behavior-probe evidence was recorded.
+   */
+  behavior_diff: NodeBehaviorDiff[] | null;
+  /**
+   * Per-caller measurements; inherited counts count invocations, not cone nodes.
+   */
+  measured_cone: MeasuredCaller[] | null;
+  /**
+   * The current candidate's questions and supporting evidence, one per unrequested choice.
+   */
+  review_cards: ReviewCard1[] | null;
+  /**
+   * Structural findings; null means no shape analysis was recorded.
+   */
+  shape: ShapeFact[] | null;
+  /**
+   * Whether the bounded structural checks completed; null means unavailable.
+   */
+  shape_complete: boolean | null;
 }
 /**
  * Claims made by the agent at finish, never server evidence.
@@ -459,6 +575,11 @@ export interface IntegrityFact {
  * One temporal finding supported by an integrity fact.
  */
 export interface RunRuleFinding {
+  /**
+   * The weakening witnessed between failure and later execution; non-loosened
+   * kinds establish absence of failure, not proof that the case executed or passed.
+   */
+  kind: "loosened" | "removed" | "skipped" | "deleted";
   test_id: NonEmptyText;
   /**
    * The execution where it failed.
@@ -469,7 +590,8 @@ export interface RunRuleFinding {
    */
   edited_seq: number;
   /**
-   * The execution where it passed.
+   * The execution where it passed; for non-loosened kinds, a later complete execution
+   * showing absence of failure, not proof that the case executed or passed.
    */
   passed_seq: number;
   /**
@@ -512,6 +634,118 @@ export interface ReachFacts {
   complete: boolean;
   /**
    * The graph or coverage evidence.
+   */
+  evidence: EvidenceRef[];
+}
+/**
+ * Server-observed comparisons for one changed node.
+ */
+export interface NodeBehaviorDiff {
+  node_id: NodeId;
+  /**
+   * Inputs compared on both sides with equal typed inputs.
+   */
+  compared_count: number;
+  /**
+   * Compared inputs with reproducible differing results; excludes unstable rows.
+   */
+  differing_count: number;
+  /**
+   * At most eight samples of differing or unstable inputs; equal results count only in
+   * compared_count. Counts cover all admitted comparisons.
+   */
+  rows: BehaviorDiffRow1[];
+  /**
+   * Why all or part of probing was unavailable, unsupported or budget-limited.
+   */
+  not_probed: NonEmptyText | null;
+}
+/**
+ * Measured caller observations, never a replacement for the static cone.
+ */
+export interface MeasuredCaller {
+  node_id: NodeId;
+  /**
+   * Inputs compared on both sides with equal typed inputs.
+   */
+  compared_count: number;
+  /**
+   * Compared inputs with reproducible differing results; excludes unstable rows.
+   */
+  differing_count: number;
+  /**
+   * At most eight samples of differing or unstable inputs; equal results count only in
+   * compared_count. Counts cover all admitted comparisons.
+   */
+  rows: BehaviorDiffRow1[];
+  /**
+   * Why all or part of probing was unavailable, unsupported or budget-limited.
+   */
+  not_probed: NonEmptyText | null;
+  /**
+   * Changed requires stable differences; unchanged requires complete comparison.
+   */
+  outcome: "changed" | "unchanged" | "not_compared";
+  /**
+   * Base invocations without an admitted matching proposed invocation.
+   */
+  unmatched_before: number;
+  /**
+   * Proposed invocations without an admitted matching base invocation.
+   */
+  unmatched_after: number;
+  /**
+   * Reasons for unmatched or excluded calls, including unequal inputs.
+   */
+  not_compared: NonEmptyText[];
+  /**
+   * All observed invocations of this caller were admitted and compared.
+   */
+  complete: boolean;
+  /**
+   * Recording, matching, instability and retention-limit diagnostics.
+   */
+  problems: NonEmptyText[];
+}
+/**
+ * One server-authored question about an exact change target.
+ */
+export interface ReviewCard1 {
+  node_id: NodeId;
+  question: NonEmptyText;
+  /**
+   * The supporting event's id in this run; the server verifies target and existence.
+   */
+  evidence_seq: number;
+  /**
+   * The smallest before/after example supporting this question, when available.
+   */
+  example: BehaviorDiffRow1 | null;
+  /**
+   * The person's answer; null means unanswered.
+   */
+  answer: ("yes" | "no" | "unsure") | null;
+  /**
+   * The existing single-user human principal, never inferred from the model.
+   */
+  answered_by: "person" | null;
+}
+/**
+ * One neutral structural observation, never an automatic size gate.
+ */
+export interface ShapeFact {
+  /**
+   * The analyzer's structural finding kind.
+   */
+  kind: "duplicate_logic" | "import_cycle" | "import_added" | "function_length";
+  path: WorkspacePath;
+  /**
+   * The affected node, or null for a file-level observation.
+   */
+  node_id: NodeId | null;
+  message: NonEmptyText;
+  /**
+   * Captured source or graph evidence supporting the observation.
    */
   evidence: EvidenceRef[];
 }
@@ -577,6 +811,39 @@ export interface GraphNode {
    * In a test module: hidden by default, never listed in a cone.
    */
   is_test: boolean;
+  /**
+   * Captured examples for this graph version; null means unavailable.
+   */
+  examples: NodeExample[] | null;
+}
+/**
+ * A captured node-card example with explicit provenance.
+ */
+export interface NodeExample {
+  example_id: NonEmptyText;
+  inputs: NonEmptyText;
+  /**
+   * Expected rendered output; the empty string is a valid expectation.
+   */
+  expected_output: string | null;
+  /**
+   * Expected behavior when output alone does not describe the example.
+   */
+  expected_behavior: NonEmptyText | null;
+  /**
+   * An optional free-text explanation.
+   */
+  note: string | null;
+  /**
+   * Human confirmation and originating task; null means unconfirmed.
+   */
+  pin: ExamplePin | null;
+  /**
+   * How the example was obtained; a test literal is not execution evidence.
+   */
+  source: "test_literal" | "recorded_run" | "pinned_example" | "behavior_diff";
+  source_id: NonEmptyText;
+  evidence: EvidenceRef;
 }
 export interface GraphEdge {
   id: EdgeId;
@@ -612,6 +879,10 @@ export interface ChangeProposed {
   graph: ChangeGraph;
   tests: SuiteResult;
   impact: ImpactCone;
+  /**
+   * The task examples and confirmations captured for this proposal.
+   */
+  examples: TaskExample[] | null;
 }
 export interface FileStat {
   path: WorkspacePath;
@@ -715,6 +986,10 @@ export interface ChangeResolved {
    * The immutable assessment used for this decision, when available.
    */
   assessment: ChangeAssessment | null;
+  /**
+   * The accepted human answers, copied by the server from a decision command.
+   */
+  answers: ReviewCard1[] | null;
 }
 export interface Conflict {
   kind: "merge" | "tests";
@@ -854,6 +1129,48 @@ export interface ChangeUpdatedEvent {
   payload: ChangeUpdated;
 }
 /**
+ * All work attributed to a change, including failed, stopped and rejected work.
+ */
+export interface ChangeUsage {
+  /**
+   * Total US dollars across all buckets; null unless the accounting is complete.
+   */
+  cost_usd: number | null;
+  /**
+   * Unknown-cost calls across buckets; null for an incomplete inventory.
+   */
+  unknown_calls: number | null;
+  /**
+   * Disjoint role/model/round buckets; null when attribution was not reconstructed.
+   */
+  by_role: RoleUsage[] | null;
+}
+/**
+ * One disjoint role/model/round bucket of attributed model calls.
+ */
+export interface RoleUsage {
+  /**
+   * Existing tick roles: author, reviewer, planner or lead; null means unattributed.
+   */
+  role: ("agent" | "review" | "plan" | "lead") | null;
+  /**
+   * The exact reported model, or unknown.
+   */
+  model: string | null;
+  /**
+   * Zero for initial work; subsequent confirmed revision requests increment it.
+   */
+  round: number | null;
+  /**
+   * Total US dollars; null if any call cost or required attribution is unknown.
+   */
+  cost_usd: number | null;
+  /**
+   * Calls with unknown dollar cost; null when the call inventory is incomplete.
+   */
+  unknown_calls: number | null;
+}
+/**
  * An archived view of one change.
  */
 export interface ChangeView {
@@ -886,12 +1203,37 @@ export interface ChangeView {
    * The latest change resolution.
    */
   resolution: ChangeResolved | null;
+  /**
+   * Per-change accounting reconstructed through this view's seq, or unavailable.
+   */
+  usage: ChangeUsage | null;
+  /**
+   * Confirmed changes_requested resolutions through seq; null for incomplete history.
+   */
+  revision_rounds: number | null;
 }
 /**
  * Request a proposed split without starting coding agents.
  */
 export interface CreatePlan {
   task: NonEmptyText;
+}
+/**
+ * Reserved JSON audio upload; feeds a task draft, never a decision command.
+ */
+export interface DictateTask {
+  /**
+   * Base64-encoded audio; required by the future implemented endpoint.
+   */
+  audio_base64?: NonEmptyText | null;
+  /**
+   * The audio MIME type; required by the future implemented endpoint.
+   */
+  media_type?: NonEmptyText | null;
+  /**
+   * An optional transcription language hint.
+   */
+  language?: NonEmptyText | null;
 }
 /**
  * Queue work without starting it immediately.
@@ -971,6 +1313,16 @@ export interface ErrorReportEvent {
  */
 export interface ErrorResponse {
   error: ErrorDetail;
+}
+/**
+ * Human confirmation of the containing task example.
+ */
+export interface ExamplePin1 {
+  source_task: NonEmptyText;
+  /**
+   * The existing single-user human principal; the server verifies confirmation.
+   */
+  confirmed_by?: "person";
 }
 /**
  * 200 from `GET /files?path=&agent=`.
@@ -1094,8 +1446,6 @@ export interface HistoryPage {
   through_seq: number;
   /**
    * The allowed historical event envelopes.
-   *
-   * @maxItems 100
    */
   events: ServerEvent[];
   /**
@@ -1280,6 +1630,10 @@ export interface Plan {
 export interface PlanSubtask {
   task: NonEmptyText;
   zone: PlanZone;
+  /**
+   * Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.
+   */
+  depends_on: (0 | 1)[];
   agent_id: AgentId | null;
 }
 /**
@@ -1512,6 +1866,10 @@ export interface QueueSnapshot {
 export interface RejectChange {
   comment?: string | null;
   /**
+   * The answered review cards accompanying rejection.
+   */
+  answers?: ReviewCard[] | null;
+  /**
    * The observed revision, including zero before any proposal.
    */
   revision: number;
@@ -1529,6 +1887,10 @@ export interface RejectPlan {
  */
 export interface RequestChanges {
   comment: NonEmptyText;
+  /**
+   * The answered review cards accompanying the revision request.
+   */
+  answers?: ReviewCard[] | null;
   /**
    * The proposed revision the caller observed.
    */
@@ -1594,6 +1956,37 @@ export interface StartAgent {
    * The requested edit zone.
    */
   zone?: PlanZone | null;
+  /**
+   * Examples submitted with the task before code is changed.
+   */
+  examples?: TaskExample1[] | null;
+  /**
+   * True requests one model call without edit/test tools; null or false uses normal execution.
+   */
+  examples_only?: boolean | null;
+}
+/**
+ * An example supplied with a task before editing begins.
+ */
+export interface TaskExample1 {
+  example_id: NonEmptyText;
+  inputs: NonEmptyText;
+  /**
+   * Expected rendered output; the empty string is a valid expectation.
+   */
+  expected_output?: string | null;
+  /**
+   * Expected behavior when output alone does not describe the example.
+   */
+  expected_behavior?: NonEmptyText | null;
+  /**
+   * An optional free-text explanation.
+   */
+  note?: string | null;
+  /**
+   * Human confirmation and originating task; null means unconfirmed.
+   */
+  pin?: ExamplePin1 | null;
 }
 /**
  * Request a coordination lead.
@@ -1620,6 +2013,19 @@ export interface StopLead {
 export interface SubtaskDraft {
   task: NonEmptyText;
   zone: PlanZone;
+  /**
+   * Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.
+   */
+  depends_on?: (0 | 1)[];
+}
+/**
+ * Reserved future 200 response; never emitted while the endpoint answers 501.
+ */
+export interface TaskDictated {
+  /**
+   * The transcribed task draft; required for a successful future response.
+   */
+  text: NonEmptyText | null;
 }
 /**
  * One regular file in the selected runtime tree.
@@ -1670,4 +2076,4 @@ export interface UpdatePlan {
   subtasks: [SubtaskDraft, SubtaskDraft];
 }
 
-export const CONTRACT_VERSION = "1.4.0";
+export const CONTRACT_VERSION = "1.5.0";

@@ -22,11 +22,12 @@ from oversight_contracts.common import (
     NonEmptyText as NonEmptyText,
 )
 from oversight_contracts.events import ChangeProposed, ChangeResolved, FileDiff, ServerEvent
+from oversight_contracts.examples import TaskExample
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.plans import PlanZone, SubtaskDraft
 from oversight_contracts.policy import ChangeAssessment
 from oversight_contracts.queue import QueueSpec
-from oversight_contracts.review import ChangeFacts, CrossReview
+from oversight_contracts.review import ChangeFacts, ChangeUsage, CrossReview, ReviewCard
 
 
 class StartAgent(ContractModel):
@@ -39,6 +40,10 @@ class StartAgent(ContractModel):
     """A ModelProfile id; the slot's default model when omitted."""
     zone: PlanZone | None = None
     """The requested edit zone."""
+    examples: list[TaskExample] | None = Field(default=None, max_length=5)
+    """Examples submitted with the task before code is changed."""
+    examples_only: bool | None = None
+    """True requests one model call without edit/test tools; null or false uses normal execution."""
 
 
 class AgentCreated(ContractModel):
@@ -59,6 +64,8 @@ class ApproveChange(ContractModel):
     """`POST /changes/{id}/approve`: approve the observed revision and head."""
 
     comment: str | None = None
+    answers: list[ReviewCard] | None = Field(default=None, max_length=8)
+    """The answered review cards for the observed revision and head."""
 
     revision: PositiveInt
     """The proposed revision the caller observed."""
@@ -70,6 +77,8 @@ class RequestChanges(ContractModel):
     """`POST /changes/{id}/request-changes`: the comment goes back to the agent."""
 
     comment: NonEmptyText
+    answers: list[ReviewCard] | None = Field(default=None, max_length=8)
+    """The answered review cards accompanying the revision request."""
 
     revision: PositiveInt
     """The proposed revision the caller observed."""
@@ -81,6 +90,8 @@ class RejectChange(ContractModel):
     """`POST /changes/{id}/reject`."""
 
     comment: str | None = None
+    answers: list[ReviewCard] | None = Field(default=None, max_length=8)
+    """The answered review cards accompanying rejection."""
 
     revision: NonNegativeInt
     """The observed revision, including zero before any proposal."""
@@ -322,6 +333,28 @@ class ChangeView(ContractModel):
     """The current candidate assessment."""
     resolution: ChangeResolved | None
     """The latest change resolution."""
+    usage: ChangeUsage | None = None
+    """Per-change accounting reconstructed through this view's seq, or unavailable."""
+    revision_rounds: NonNegativeInt | None = None
+    """Confirmed changes_requested resolutions through seq; null for incomplete history."""
+
+
+class DictateTask(ContractModel):
+    """Reserved JSON audio upload; feeds a task draft, never a decision command."""
+
+    audio_base64: NonEmptyText | None = None
+    """Base64-encoded audio; required by the future implemented endpoint."""
+    media_type: NonEmptyText | None = None
+    """The audio MIME type; required by the future implemented endpoint."""
+    language: NonEmptyText | None = None
+    """An optional transcription language hint."""
+
+
+class TaskDictated(ContractModel):
+    """Reserved future 200 response; never emitted while the endpoint answers 501."""
+
+    text: NonEmptyText | None = None
+    """The transcribed task draft; required for a successful future response."""
 
 
 class HistoryPage(ContractModel):

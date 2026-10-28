@@ -33,6 +33,7 @@ const apiPaths = [
   "/history",
   "/queue",
   "/leads",
+  "/dictation",
 ];
 
 export default defineConfig(({ command }) => {

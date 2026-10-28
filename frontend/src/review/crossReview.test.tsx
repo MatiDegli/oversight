@@ -170,6 +170,7 @@ it("shows the automatic round between revisions without a stale verdict, then th
       review_seq: 21,
       requested_by: null,
       assessment: null,
+      answers: null,
     },
   };
   let state = appendEvent(

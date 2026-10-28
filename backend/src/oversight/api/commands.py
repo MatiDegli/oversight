@@ -28,6 +28,7 @@ from oversight_contracts.commands import (
 )
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
+    ("POST", "/dictation", "Reserved /dictation"),
     ("GET", "/history", "Reserved /history"),
     ("POST", "/queue", "Reserved /queue"),
     ("GET", "/queue", "Reserved /queue"),
@@ -127,7 +128,7 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
 
     @router.post("/agents", status_code=201)
     async def start_agent(request: StartAgent, http: Request) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
-        # request.zone is reserved and ignored until zones are delivered in 1.5.0.
+        # request.zone is reserved and ignored until zones are delivered in 1.6.0.
         attempt_id = http.headers.get(TRACE_HEADER)
         if attempt_id is not None and not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
             raise ApiError(

@@ -34,6 +34,7 @@ const added = (id: string, kind: GraphNode["kind"], parent: GraphNode): GraphNod
   start_line: 1,
   end_line: 2,
   is_test: false,
+  examples: null,
 });
 const required = <T>(value: T | undefined): T => {
   if (value === undefined) throw new Error("Missing test value");

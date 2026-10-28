@@ -26,6 +26,7 @@ it.each(["module", "class"] as const)("offers no action for a %s", (kind) => {
     end_line: 40,
     parent_id: null,
     is_test: false,
+    examples: null,
   };
   expect(
     renderToStaticMarkup(

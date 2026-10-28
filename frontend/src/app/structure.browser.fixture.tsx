@@ -15,7 +15,11 @@ const recorded = log
   .split("\n")
   .map((line) => JSON.parse(line) as ServerEvent);
 const run = recorded.find((e) => e.type === "run.started");
-const graph = { ...demo, positions: preset } as GraphSnapshot;
+const graph = {
+  ...demo,
+  nodes: demo.nodes.map((node) => ({ ...node, examples: null })),
+  positions: preset,
+} as GraphSnapshot;
 graph.edges = [
   ...graph.edges,
   {

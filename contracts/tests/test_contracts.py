@@ -35,6 +35,7 @@ NODE = {
     "end_line": 21,
     "parent_id": "shop.pricing",
     "is_test": False,
+    "examples": None,
 }
 EDGE = {
     "id": "calls:shop.orders:create_order->shop.pricing:compute_price",
@@ -242,12 +243,14 @@ def test_every_event_round_trips_with_every_key_present_in_order(event_type: str
     original = event(event_type)
     defaults = {
         "run.started": {"merge_mode": None},
+        "change.proposed": {"examples": None},
         "agent.status": {
             "plan_id": None,
             "zone": None,
             "started_by": None,
             "queued_task_id": None,
             "base_commit": None,
+            "examples": None,
         },
         "change.resolved": {
             "decided_by": None,
@@ -256,6 +259,7 @@ def test_every_event_round_trips_with_every_key_present_in_order(event_type: str
             "head_commit": None,
             "reasons": [],
             "assessment": None,
+            "answers": None,
         },
         "usage.tick": {"role": None, "change_id": None, "plan_id": None},
     }
@@ -385,7 +389,16 @@ def test_the_schema_forbids_extra_keys_and_requires_every_response_key() -> None
         {"EnqueueTask", "StartLead", "QueueRevision", "StopLead", "ReviewChange", "RevertChange"}
     )
     requests.update(
-        {"SaveFile", "SetMergeMode", "CreatePlan", "UpdatePlan", "PlanRevision", "RejectPlan"}
+        {
+            "SaveFile",
+            "SetMergeMode",
+            "CreatePlan",
+            "UpdatePlan",
+            "PlanRevision",
+            "RejectPlan",
+            "DictateTask",
+            "SubtaskDraft",
+        }
     )
     objects = {name: d for name, d in schema["$defs"].items() if d.get("type") == "object"}
     assert "ChangeResolvedEvent" in objects
@@ -393,7 +406,7 @@ def test_the_schema_forbids_extra_keys_and_requires_every_response_key() -> None
         if "properties" not in definition:  # a dict, such as positions, has no properties
             continue
         assert definition["additionalProperties"] is False, name
-        if name not in requests:
+        if name not in requests and not name.endswith("-Input"):
             optional = {"missing"} if name == "ErrorDetail" else set()
             assert set(definition["required"]) == set(definition["properties"]) - optional, name
     assert "slot" not in schema["$defs"]["StartAgent"]["required"]
