@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import shutil
 import uuid
 from pathlib import Path
 
@@ -27,17 +28,31 @@ async def fetch_source(
     if root.exists():
         return await validate_source(profile, runtime_root, spawn=spawn)
     root.parent.mkdir(parents=True, exist_ok=True)
-    for argv, cwd in (
-        (
-            ["git", "clone", "--no-checkout", "--no-hardlinks", "--", profile.upstream, str(root)],
-            root.parent,
-        ),
-        (["git", "checkout", "--detach", profile.commit], root),
-    ):
-        result = await spawn(argv, cwd=cwd, timeout_s=120, env=SOURCE_GIT_ENV)
-        if result.returncode != 0 or result.timed_out:
-            raise ValueError(f"{profile.name}: {argv[1]} failed: {result.stderr}")
-    return await validate_source(profile, runtime_root, spawn=spawn)
+    # Claim an empty directory atomically; Git accepts it, and cleanup owns only this path.
+    root.mkdir()
+    try:
+        for argv, cwd in (
+            (
+                [
+                    "git",
+                    "clone",
+                    "--no-checkout",
+                    "--no-hardlinks",
+                    "--",
+                    profile.upstream,
+                    str(root),
+                ],
+                root.parent,
+            ),
+            (["git", "checkout", "--detach", profile.commit], root),
+        ):
+            result = await spawn(argv, cwd=cwd, timeout_s=120, env=SOURCE_GIT_ENV)
+            if result.returncode != 0 or result.timed_out:
+                raise ValueError(f"{profile.name}: {argv[1]} failed: {result.stderr}")
+        return await validate_source(profile, runtime_root, spawn=spawn)
+    except BaseException:
+        await asyncio.to_thread(shutil.rmtree, root)
+        raise
 
 
 async def export_graph(

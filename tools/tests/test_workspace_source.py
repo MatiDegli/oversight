@@ -29,10 +29,10 @@ class FakeGit:
         assert timeout_s > 0 and env is not None
         self.calls.append(tuple(argv))
         operation = argv[1]
-        if operation == self.fail:
-            return ProcessResult(1, "", "fake failure", False, False, 1)
         if operation == "clone":
             (Path(argv[-1]) / ".git").mkdir(parents=True)
+        if operation == self.fail:
+            return ProcessResult(1, "", "fake failure", False, False, 1)
         return ProcessResult(0, self.head if operation == "rev-parse" else "", "", False, False, 1)
 
 
@@ -82,6 +82,9 @@ async def test_prepare_failure_stops(tmp_path: Path, failure: str) -> None:
     with pytest.raises(ValueError, match="fake failure"):
         await workspace_source.fetch_source(BOLTONS, tmp_path / ".runtime", spawn=fake)
     assert fake.calls[-1][1] == failure
+    assert not BOLTONS.checkout(tmp_path / ".runtime").exists()
+    # A retry can prepare a clean checkout instead of rejecting a permanent partial clone.
+    await workspace_source.fetch_source(BOLTONS, tmp_path / ".runtime", spawn=FakeGit())
 
 
 @pytest.mark.anyio
@@ -116,3 +119,40 @@ async def test_export_bare_whole_tree_snapshot_without_layout(
     assert [call[1] for call in fake.calls] == ["rev-parse", "status"]
     output = capsys.readouterr().out
     assert BOLTONS.name in output and BOLTONS.commit in output
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failure", ["timeout", "oserror", "cancelled"])
+async def test_prepare_clone_interruption_removes_only_its_own_directory(tmp_path, failure):
+    root = BOLTONS.checkout(tmp_path)
+    neighbor = root.parent / "keep"
+    neighbor.mkdir(parents=True)
+    (neighbor / "sentinel").write_text("untouched")
+
+    async def interrupted(argv, **kwargs):
+        (root / ".git").mkdir(parents=True)
+        if failure == "oserror":
+            raise OSError("fake interruption")
+        if failure == "cancelled":
+            raise asyncio.CancelledError
+        return ProcessResult(None, "", "fake timeout", True, False, 1)
+
+    error = {"timeout": ValueError, "oserror": OSError, "cancelled": asyncio.CancelledError}[
+        failure
+    ]
+    with pytest.raises(error):
+        await workspace_source.fetch_source(BOLTONS, tmp_path, spawn=interrupted)
+    assert not root.exists()
+    assert (neighbor / "sentinel").read_text() == "untouched"
+
+
+@pytest.mark.anyio
+async def test_prepare_existing_partial_checkout_is_never_deleted(tmp_path):
+    root = BOLTONS.checkout(tmp_path)
+    root.mkdir(parents=True)
+    (root / "sentinel").write_text("untouched")
+    fake = FakeGit()
+    with pytest.raises(ValueError, match="missing or unsafe checkout"):
+        await workspace_source.fetch_source(BOLTONS, tmp_path, spawn=fake)
+    assert not fake.calls
+    assert (root / "sentinel").read_text() == "untouched"
