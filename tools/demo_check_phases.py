@@ -352,6 +352,25 @@ def check_level2(
         if not proposal.payload.impact.seeds:
             raise smoke.SmokeError(f"{who.slot} initial proposal has no impact seeds")
         wait_for(stream, who, "agent.status", proposal.seq, state="ready_for_review")
+        facts = stream.wait(
+            lambda e, change_id=who.change_id: (
+                e.type == "change.facts_recorded" and e.payload.change_id == change_id
+            ),
+            DECIDE_DEADLINE,
+            f"{who.slot} review facts",
+            after_seq=proposal.seq,
+        )
+        if facts.payload.revision != proposal.payload.revision or facts.payload.complete:
+            raise smoke.SmokeError(
+                "review facts require the proposed revision and missing producers"
+            )
+        suites = {e.seq: e.payload for e in stream.seen if e.type == "tests.executed"}
+        runs = [suites[seq] for seq in facts.payload.test_runs]
+        if not {"agent", "proposal"} <= {run.phase for run in runs}:
+            raise smoke.SmokeError("review facts need agent and proposal executions")
+        if not all(run.suite.cases and run.suite.cases_complete for run in runs):
+            raise smoke.SmokeError("scripted suites need complete per-test evidence")
+
         tick = wait_for(stream, who, "usage.tick", before)
         check_usage(tick, who.slot)
     saved, edited = save_review(base, stream, clock, a, proposals[0], graph_of(base, clock).seq)

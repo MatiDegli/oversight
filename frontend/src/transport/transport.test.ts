@@ -74,22 +74,26 @@ afterEach(() => {
 });
 
 describe("live transport", () => {
-  it("consumes reserved events in live streams without changing product state", async () => {
+  it("keeps wired review evidence while consuming the remaining reserved events", async () => {
     const { transport, store, source, onError } = setup();
     await transport.ready;
     for (const event of log) source().emit(event);
     const before = store.getState().state;
-    for (const [index, example] of [
-      ...reserved,
-      ...reservedA.filter((e) => e.type !== "change.resolved"),
-    ].entries()) {
-      source().raw(JSON.stringify({ ...example, seq: before.lastSeq + index + 1 }));
-    }
+    const delivered = [...reserved, ...reservedA.filter((e) => e.type !== "change.resolved")].map(
+      (example, index) =>
+        parseEvent(JSON.stringify({ ...example, seq: before.lastSeq + index + 1 })),
+    );
+    for (const event of delivered) source().emit(event);
+    const suite = delivered.find((event) => event.type === "tests.executed");
+    const facts = delivered.find((event) => event.type === "change.facts_recorded");
+    if (!suite || !facts) throw new Error("Missing suite and facts examples");
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
       lastSeq: before.lastSeq + reserved.length + reservedA.length - 1,
       clock: reservedA.at(-1)?.ts,
+      testExecutions: { [suite.seq]: suite.payload },
+      changeFacts: { [facts.payload.change_id]: [facts.payload] },
     });
   });
 

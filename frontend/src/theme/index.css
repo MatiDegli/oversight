@@ -308,9 +308,8 @@ body {
   background-color: var(--page);
 }
 
-/* Monaco disables the find input while its widget closes; its bundled disabled surface is
-   hardcoded, so keep that transition on the same field token as the enabled input. */
-.monaco-editor .find-widget .monaco-findInput.disabled {
+/* Closing find disables its field during the transition; Monaco hardcodes that surface. */
+:root .monaco-editor .monaco-findInput.disabled {
   background-color: var(--field);
 }
 

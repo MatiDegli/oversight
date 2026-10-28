@@ -2,9 +2,12 @@ from oversight.changes import _delivery as delivery
 from oversight.changes import _recovery as recovery
 from oversight.changes._resolution_validation import validate_resolution_evidence
 from oversight.changes._state import ChangeRecord
+from oversight.changes._suite_evidence import publish_suite
 from oversight.changes._support import ChangeContext
 from oversight.events import EventRejected
 from oversight.workspace import (
+    SuiteInterrupted,
+    SuiteUnavailable,
     WorkspaceError,
 )
 from oversight_contracts.events import (
@@ -66,13 +69,18 @@ async def combined_tests_pass(
     its commit. A failure or timeout aborts it and resolves as a tests conflict. A cancel
     during the run is `_recover`'s, which aborts on `MERGE_HEAD`."""
     main = ctx.workspace.main
-    run = await ctx.workspace.run_tests(main, timeout_s=rec.task.limits.test_timeout_s)
+    try:
+        run = await ctx.workspace.run_tests(main, timeout_s=rec.task.limits.test_timeout_s)
+    except (SuiteInterrupted, SuiteUnavailable) as error:
+        await publish_suite(ctx, rec, error.run, phase="combined", revision=rec.revision)
+        raise
+    execution = await publish_suite(ctx, rec, run, phase="combined", revision=rec.revision)
     if run.result.outcome == "passed":
         return True
     await ctx.git(main, "merge", "--abort")
     if not (await recovery.read_facts(ctx, rec.head_commit or rec.base_commit)).unchanged(pre):
         raise WorkspaceError("main did not return to its HEAD after the combined tests")
-    await conflicted(ctx, rec, comment, Conflict(kind="tests", paths=[], tests=run.result))
+    await conflicted(ctx, rec, comment, Conflict(kind="tests", paths=[], tests=execution.suite))
     return False
 
 

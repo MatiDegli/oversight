@@ -317,7 +317,14 @@ async def test_stop_during_the_proposal_publish(h: Harness) -> None:
 
     assert run.cancelled()
     order = [t for t in h.types() if t != "change.updated"]
-    assert order[-4:] == ["change.proposed", "agent.step", "agent.status", "change.resolved"]
+    assert order[-6:] == [
+        "tests.executed",
+        "change.proposed",
+        "change.facts_recorded",
+        "agent.step",
+        "agent.status",
+        "change.resolved",
+    ]
     await assert_stopped(h, 1, step=4)
     assert resolutions(h) == [("rejected", "stopped", 1)]
 

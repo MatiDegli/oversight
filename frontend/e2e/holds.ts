@@ -55,7 +55,10 @@ export function installHolds(holds: Hold[]) {
 
 export async function engaged(page: Page, hold: Hold) {
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as Holding).e2eHolds.held))
+    // Recorded suite steps can put the first hold beyond the default 15s wait.
+    .poll(() => page.evaluate(() => (window as unknown as Holding).e2eHolds.held), {
+      timeout: 30_000,
+    })
     .toContain(hold.delay);
   await expect(page.locator("#root")).toHaveAttribute("data-seq", String(hold.seq - 1));
 }
