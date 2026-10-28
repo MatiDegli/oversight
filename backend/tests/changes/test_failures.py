@@ -267,7 +267,8 @@ async def test_reject_from_broken_after_an_unconfirmed_merge(h: Harness) -> None
     await h.run_agent(1, EDIT)
     pre = await h.main_head()
     h.workspace.arm("commit", mode="after")
-    h.workspace.arm("status")
+    # The pre-commit integrity status must pass; fail the facts query after the commit lands.
+    h.workspace.arm("status", skip=1)
 
     await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 

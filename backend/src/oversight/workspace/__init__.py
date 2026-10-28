@@ -15,6 +15,13 @@ from oversight.workspace.errors import (
     WorkspaceError,
 )
 from oversight.workspace.files import FileRead, check_content, content_hash
+from oversight.workspace.integrity import (
+    IntegrityError,
+    MergeGuard,
+    prepare_merge_guard,
+    verify_merge_abort,
+    verify_merge_guard,
+)
 from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable
 from oversight.workspace.isolation_probe import print_isolation_probe
 from oversight.workspace.junit import MAX_TESTS, MAX_XML_BYTES, RunProblem, parse_junit
@@ -35,12 +42,14 @@ __all__ = [
     "Author",
     "FileRead",
     "FileTooLarge",
+    "IntegrityError",
     "InvalidPath",
     "IsolatedRunner",
     "IsolationUnavailable",
     "JUnitOutcome",
     "JUnitRun",
     "LockOrderError",
+    "MergeGuard",
     "ProcessResult",
     "RunProblem",
     "StaleFile",
@@ -56,7 +65,10 @@ __all__ = [
     "check_content",
     "content_hash",
     "parse_junit",
+    "prepare_merge_guard",
     "print_isolation_probe",
     "run_process",
     "validate_suite_execution",
+    "verify_merge_abort",
+    "verify_merge_guard",
 ]

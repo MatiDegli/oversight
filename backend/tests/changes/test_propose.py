@@ -33,7 +33,8 @@ async def test_proposal_commits_on_the_base_and_runs_the_tests(h: Harness) -> No
     assert [(e.node_id, e.distance) for e in proposal.impact.entries] == [(TWICE, 1)]
     # Already sent in full by the edit, so not republished.
     assert len(h.payloads(ChangeUpdated)) == 1
-    assert all(c.timeout_s == 29.0 for c in h.workspace.calls if c.tree == "agent-1")
+    # Integrity queries share the caller's deadline, including time already spent checking.
+    assert all(0 < c.timeout_s <= 29.0 for c in h.workspace.calls if c.tree == "agent-1")
 
 
 @bounded
