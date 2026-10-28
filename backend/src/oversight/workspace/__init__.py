@@ -14,7 +14,7 @@ from oversight.workspace.errors import (
     WorkspaceBusy,
     WorkspaceError,
 )
-from oversight.workspace.files import FileRead, check_content, content_hash
+from oversight.workspace.files import FileRead, check_content, content_hash, valid_agent_id
 from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable
 from oversight.workspace.isolation_probe import print_isolation_probe
 from oversight.workspace.junit import MAX_TESTS, MAX_XML_BYTES, RunProblem, parse_junit
@@ -28,11 +28,12 @@ from oversight.workspace.suite import (
     SuiteUnavailable,
     validate_suite_execution,
 )
-from oversight.workspace.tree import list_tree
+from oversight.workspace.tree import TREE_TIMEOUT_S, list_tree
 
 __all__ = [
     "MAX_TESTS",
     "MAX_XML_BYTES",
+    "TREE_TIMEOUT_S",
     "Author",
     "FileRead",
     "FileTooLarge",
@@ -60,5 +61,6 @@ __all__ = [
     "parse_junit",
     "print_isolation_probe",
     "run_process",
+    "valid_agent_id",
     "validate_suite_execution",
 ]

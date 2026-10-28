@@ -54,12 +54,19 @@ async def test_tree_on_main_and_agent_is_sorted_bounded_and_guarded(tmp_path: Pa
             == hashlib.sha256(b"z\r\n").hexdigest()
         )
         assert not tree.truncated
-        for agent in ("../outside", "/tmp/outside", "agent-1/../../outside", "agent-0"):
+        for agent in (
+            "../outside",
+            "/tmp/outside",
+            "agent-1/../../outside",
+            "agent-0",
+            "agent-10000",
+        ):
             assert error_code(await server.client.get("/tree", params={"agent": agent})) == (
                 422,
                 "invalid_request",
             )
         assert error_code(await server.client.get("/tree?agent=agent-999")) == (404, "not_found")
+        assert error_code(await server.client.get("/tree?agent=agent-9999")) == (404, "not_found")
         assert (
             await server.client.get("/tree", headers={"Host": "evil.invalid"})
         ).status_code == 403
@@ -119,6 +126,7 @@ def test_expired_walk_fails_instead_of_claiming_truncation(tmp_path: Path) -> No
 async def test_tree_timeout_is_off_loop_and_bounded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    import oversight.api.commands as commands
     import oversight.workspace.tree as module
 
     real_walk = module.walk_tree
@@ -128,12 +136,38 @@ async def test_tree_timeout_is_off_loop_and_bounded(
         return real_walk(root, deadline)
 
     monkeypatch.setattr(module, "TREE_TIMEOUT_S", 0.03)
+    monkeypatch.setattr(commands, "TREE_TIMEOUT_S", 0.03, raising=False)
     monkeypatch.setattr(module, "walk_tree", delayed)
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as server:
         pending = asyncio.create_task(server.client.get("/tree"))
         assert (await server.client.get("/health")).status_code == 200
-        assert error_code(await pending) == (500, "internal")
+        response = await pending
+        assert error_code(response) == (500, "internal")
+        assert response.json()["error"]["message"] == (
+            "listing files exceeded 0.03 seconds; retry the Files sidebar"
+        )
         await asyncio.sleep(0.1)  # let the cooperative worker observe its deadline and close fds
+
+
+def test_unreadable_subtree_does_not_hide_readable_siblings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "private").mkdir()
+    (tmp_path / "private" / "hidden.py").touch()
+    (tmp_path / "public").mkdir()
+    (tmp_path / "public" / "visible.py").touch()
+    real_open = os.open
+
+    def guarded_open(path, flags, mode=0o777, *, dir_fd=None):
+        if path == "private" and dir_fd is not None:
+            raise PermissionError("unreadable directory")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", guarded_open)
+    tree = listing(tmp_path)
+    assert tree.directories == ["public"]
+    assert [file.path for file in tree.files] == ["public/visible.py"]
+    assert not tree.truncated
 
 
 @pytest.mark.parametrize("hash_value", ["A" * 64, "f" * 63, "z" * 64])

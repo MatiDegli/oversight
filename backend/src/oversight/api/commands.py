@@ -12,7 +12,7 @@ from fastapi import APIRouter, Response
 
 from oversight.api.errors import ApiError
 from oversight.changes import ChangeNotFound, WrongState
-from oversight.workspace import FileTooLarge, InvalidPath, StaleFile, WorkspaceError
+from oversight.workspace import TREE_TIMEOUT_S, FileTooLarge, InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
     AgentCreated,
     ApproveChange,
@@ -178,7 +178,8 @@ def add_command_routes(router: APIRouter, commands: Commands | None) -> None:
             raise ApiError("invalid_path", str(error)) from None
         except TimeoutError:
             raise ApiError(
-                "internal", "listing files exceeded 2 seconds; retry the Files sidebar"
+                "internal",
+                f"listing files exceeded {TREE_TIMEOUT_S:g} seconds; retry the Files sidebar",
             ) from None
 
     @router.put("/files")

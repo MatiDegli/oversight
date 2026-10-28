@@ -18,7 +18,7 @@ export function FilesProvider({
   children,
   ...value
 }: Omit<FilesNavigation, "expanded" | "toggle"> & { children: ReactNode }) {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set(["shop", "tests"]));
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   return (
     <FilesContext
       value={{

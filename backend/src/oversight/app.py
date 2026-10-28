@@ -10,7 +10,6 @@ the store, the lock.
 import asyncio
 import contextlib
 import logging
-import re
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -70,7 +69,7 @@ from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
-from oversight.workspace import Tree, Workspace, WorkspaceError, list_tree
+from oversight.workspace import Tree, Workspace, WorkspaceError, list_tree, valid_agent_id
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import (
     AgentCreated,
@@ -835,7 +834,7 @@ class LiveRun:
     async def get_tree(self, agent_id: str | None) -> TreeResponse:
         tree = self.workspace.main
         if agent_id is not None:
-            if re.fullmatch(r"agent-[1-9][0-9]*", agent_id) is None:
+            if not valid_agent_id(agent_id):
                 raise ApiError("invalid_request", "agent must be an agent id, such as agent-1")
             try:
                 tree = self.workspace.worktree(agent_id)

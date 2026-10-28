@@ -2,6 +2,7 @@ import type { Route } from "./routes";
 import type { Core } from "cytoscape";
 
 import { visibleId } from "./foldVisibility";
+import { imageSource } from "./layerImages";
 
 export interface NodeBounds {
   id: string;
@@ -18,6 +19,8 @@ export interface NodeBounds {
  * so no capture depends on Cytoscape's private fields. It exposes no instance and changes nothing.
  */
 export interface GraphProbe {
+  /** Resolve only URLs owned by the graph's SVG layer cache; other URLs pass through. */
+  imageSource(url: string): string;
   /** Centers of the nodes the selector matches, in pixels from the graph element's top left. */
   nodeCenters(selector?: string): { id: string; x: number; y: number }[];
   /** Model-space bounds, including labels and distance badges, for framing assertions. */
@@ -64,6 +67,7 @@ export type GraphProbeHost = HTMLElement & { oversightGraph?: GraphProbe };
 
 export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
   host.oversightGraph = {
+    imageSource,
     nodeCenters: (selector = "node") =>
       cy.nodes(selector).map((node) => ({ id: node.id(), ...node.renderedPosition() })),
     nodeBounds: (selector = "node") =>

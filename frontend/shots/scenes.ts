@@ -292,6 +292,10 @@ export const scenes: readonly Scene[] = [
       await page.getByRole("button", { name: "Files", exact: true }).click();
       await page
         .getByRole("tree", { name: "Repository files" })
+        .getByRole("treeitem", { name: "shop", exact: true })
+        .click();
+      await page
+        .getByRole("tree", { name: "Repository files" })
         .getByRole("treeitem", { name: "pricing.py", exact: true })
         .waitFor();
       await page.getByRole("button", { name: "Toggle bottom dock", exact: true }).click();

@@ -112,7 +112,10 @@ def walk_tree(root: Path, deadline: float) -> tuple[list[str], list[TreeFile], b
                     truncated = True
                     break
                 if directory:
-                    descend(fd, entry.name, path)
+                    try:
+                        descend(fd, entry.name, path)
+                    except PermissionError:
+                        continue  # Skip unreadable subtrees while preserving readable siblings.
                     directories.append(path)
                 else:
                     files.append(TreeFile(path=path, hash=_hash(fd, entry.name, budget, deadline)))

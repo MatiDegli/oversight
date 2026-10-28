@@ -22,6 +22,24 @@ const response = {
 const tree = (page: Parameters<Parameters<typeof withPage>[0]>[0]) =>
   page.getByRole("tree", { name: "Repository files" });
 
+it("all repositories start with folders folded regardless of their names", async () => {
+  await withPage(async (page) => {
+    await page.route("**/tree?*", (route) =>
+      route.fulfill({ json: { ...response, directories: ["package", "shop", "tests"] } }),
+    );
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    for (const name of ["package", "shop", "tests"]) {
+      await browserExpect(tree(page).getByRole("treeitem", { name, exact: true })).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+    }
+    await browserExpect(
+      tree(page).getByRole("treeitem", { name: "cart.py", exact: true }),
+    ).toHaveCount(0);
+  });
+});
+
 it("Files rail and Ctrl B preserve folding; arrows and Enter open a file tab", async () => {
   await withPage(async (page) => {
     await page.route("**/tree?*", (route) => route.fulfill({ json: response }));
@@ -31,6 +49,9 @@ it("Files rail and Ctrl B preserve folding; arrows and Enter open a file tab", a
     ).toBeVisible();
     await browserExpect(page.getByLabel("Files sidebar")).toHaveCSS("width", "280px");
     const shop = tree(page).getByRole("treeitem", { name: "shop", exact: true });
+    await browserExpect(shop).toHaveAttribute("aria-expanded", "false");
+    await shop.click();
+    await browserExpect(shop).toHaveAttribute("aria-expanded", "true");
     await shop.click();
     await browserExpect(shop).toHaveAttribute("aria-expanded", "false");
     await page.keyboard.press("Control+b");
@@ -67,6 +88,7 @@ it("a file opens in a background tab while the review comment keeps focus and te
       }),
     );
     await page.getByRole("button", { name: "Files", exact: true }).click();
+    await tree(page).getByRole("treeitem", { name: "shop", exact: true }).click();
     await browserExpect(
       tree(page).getByRole("treeitem", { name: "cart.py", exact: true }),
     ).toBeVisible();
@@ -104,7 +126,12 @@ it("graph.delta and a merged resolution refresh the listing without unfolding fo
     await browserExpect.poll(() => requests).toBe(1);
     const shop = tree(page).getByRole("treeitem", { name: "shop", exact: true });
     await shop.click();
+    await browserExpect(shop).toHaveAttribute("aria-expanded", "true");
+    await shop.click();
     await browserExpect(shop).toHaveAttribute("aria-expanded", "false");
+    const tests = tree(page).getByRole("treeitem", { name: "tests", exact: true });
+    await tests.click();
+    await browserExpect(tests).toHaveAttribute("aria-expanded", "true");
     await page.evaluate(() => {
       window.fileViewTest.refreshFiles("graph.delta");
     });

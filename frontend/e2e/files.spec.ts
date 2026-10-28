@@ -35,6 +35,10 @@ test("the static Files tree opens recorded source read-only without backend requ
   const sidebar = page.getByRole("complementary", { name: "Files sidebar" });
   await expect(sidebar).toContainText("Recorded files");
   await expect(sidebar).not.toContainText(/\blive\b/i);
+  const folders = path.split("/").slice(0, -1);
+  for (const name of folders) {
+    await sidebar.getByRole("treeitem", { name, exact: true }).click();
+  }
   await sidebar.getByRole("treeitem", { name: path.split("/").at(-1), exact: true }).click();
   const file = page.getByRole("complementary", { name: "File view" });
   await expect(file.getByRole("heading", { name: path, exact: true })).toBeVisible();
