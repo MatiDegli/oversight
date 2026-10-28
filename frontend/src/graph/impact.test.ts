@@ -9,6 +9,7 @@ import { themes } from "../theme";
 import { frameCamera } from "./camera";
 import { changeZoom } from "./changeFrame";
 import { graphElements } from "./elements";
+import { imageSource } from "./layerImages";
 import { graphStyles } from "./styles";
 import { updateGraph } from "./updateGraph";
 
@@ -102,7 +103,7 @@ describe("review's impact graph", () => {
       expect(node.numericStyle("background-width")).toEqual([
         Number.parseFloat(theme["distance-badge-size"]),
       ]);
-      const svg = decodeURIComponent(String(node.style("background-image")));
+      const svg = decodeURIComponent(imageSource(String(node.style("background-image"))));
       expect(svg).toContain(`fill="${theme.text}"`);
       expect(svg).toContain(`fill="${theme.page}"`);
       expect(svg).toContain(`>${String(entry.distance)}</text>`);

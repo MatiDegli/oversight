@@ -708,3 +708,17 @@ the captured target and reviewer identity. It never marks or halts the author, a
 the failed tick as persisted. Concurrent cancellation propagates after the error is recorded.
 The existing 12,288-token provisional review budget and frozen 1.4.0 contracts remain unchanged;
 reducer/UI projection belongs to PR4, and frontend review-cost separation remains a follow-up.
+## 2026-10-28 — Incremental graph presentation
+
+Guard Cytoscape data, class and interaction-state writes: even equal writes trigger expensive
+compound restyles and SVG hashing. Keep fold scratch outside the style setter, retain selection
+and routing classes, share layers across background properties and encode embedded fonts once
+per family; keep the same SVG bytes, geometry, tokens and motion design.
+
+Give Cytoscape one short `blob:` URL per distinct layer image to avoid hashing font-sized data
+URIs on every restyle. Revoke the URLs when their stylesheet is replaced or the graph is destroyed.
+A future Content Security Policy must allow `blob:` in `img-src`.
+
+While the camera or elements animate, request a render from a microtask after each animation
+step: Cytoscape 3.34 clears the step's redraw flag (cytoscape.js#3544). Install once per core and
+guard the private animation pool with a test; remove the helper with Cytoscape 3.34.5 or later.

@@ -23,7 +23,7 @@ import openai
 from openai.types.chat import ChatCompletion
 
 from oversight.agents._trace_http import exchange_span, request_ready
-from oversight.telemetry import annotate, response_fields, span
+from oversight.telemetry import CURRENT, annotate, response_fields, span
 from oversight_contracts.events import ModelProfile
 
 type Message = dict[str, object]
@@ -282,7 +282,10 @@ class OpenAIClient:
         # The SDK's typed overloads cannot take parameters built as a dict, so the call is untyped
         # and its result is cast back to the SDK's own model.
         self._sdk = sdk
-        self._create: Callable[..., Awaitable[Any]] = sdk.chat.completions.with_raw_response.create
+        self._create: Callable[..., Awaitable[Any]] = sdk.chat.completions.create
+        self._create_raw: Callable[..., Awaitable[Any]] = (
+            sdk.chat.completions.with_raw_response.create
+        )
 
     async def aclose(self) -> None:
         if not self._sdk.is_closed():
@@ -346,9 +349,11 @@ class OpenAIClient:
                 return reply_of(completion)
 
     async def _completion(self, params: dict[str, object]) -> ChatCompletion:
+        if CURRENT.get() is None:
+            return cast(ChatCompletion, await self._create(**params))
         with exchange_span() as fields:
             try:
-                raw = await self._create(**params)
+                raw = await self._create_raw(**params)
                 fields.update(response_fields(raw.status_code, raw.headers))
                 fields["request_bytes"] = len(raw.http_request.content)
             except openai.APIStatusError as error:

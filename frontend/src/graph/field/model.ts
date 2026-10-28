@@ -3,7 +3,7 @@
 // canvas only draws the result, so everything DESIGN.md's "Dot field and rings" says about light is
 // tested here without a GPU. Every number comes from a theme token.
 import type { FieldLight, FieldMode, LightSource } from "./lights";
-import { breathing, motionOf, ringIntensity, ringRadiusAt } from "./motion";
+import { breathing, motionOf, ringFade, ringRadiusAt } from "./motion";
 import type { Motion, MotionTheme } from "./motion";
 
 /** A color as red, green and blue from 0 to 255. */
@@ -263,6 +263,18 @@ function addLight(
   const cx = (light.box.x1 + light.box.x2) / 2;
   const cy = (light.box.y1 + light.box.y2) / 2;
   const radius = ring && time !== null ? ringRadiusAt(config.motion, time) : 0;
+  const half = config.motion.ringBand / 2;
+  const ringStrength = config.motion.ringStrength * ringFade(config.motion, radius);
+  const pulseWeight = light.pulseWeight ?? 1;
+  // These bounds only reject candidates. Keep the original sqrt/edge checks below, and pad
+  // squared bounds for rounding at the edge (including Float32 column offsets).
+  const glowSquared = glow < 0 ? -1 : glow * glow;
+  const glowBound = glowSquared + Math.abs(glowSquared) * Number.EPSILON * 4;
+  const inner = Math.max(0, radius - half);
+  const outer = radius + half;
+  const ringPad = outer * outer * Number.EPSILON * 4;
+  const ringInner = inner * inner - ringPad;
+  const ringOuter = outer * outer + ringPad;
   for (let col = c0; col <= c1; col += 1) {
     const x = (col + 0.5) * config.cell;
     colX[col] = Math.max(light.box.x1 - x, 0, x - light.box.x2);
@@ -273,15 +285,26 @@ function addLight(
     const y = (row + 0.5) * config.cell;
     const dy = Math.max(light.box.y1 - y, 0, y - light.box.y2);
     const ry = y - cy;
+    const dySquared = dy * dy;
+    const rySquared = ry * ry;
+    const ringRow = ring && rySquared <= ringOuter;
     for (let col = c0; col <= c1; col += 1) {
       const dx = colX[col] ?? 0;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      let intensity = distance <= glow ? amplitude * falloff(config, distance) : 0;
-      if (ring) {
+      const distanceSquared = dx * dx + dySquared;
+      let intensity = 0;
+      if (distanceSquared <= glowBound) {
+        const distance = Math.sqrt(distanceSquared);
+        if (distance <= glow) intensity = amplitude * falloff(config, distance);
+      }
+      if (ringRow) {
         const rx = ringX[col] ?? 0;
-        intensity +=
-          (light.pulseWeight ?? 1) *
-          ringIntensity(config.motion, radius, Math.sqrt(rx * rx + ry * ry));
+        const squared = rx * rx + rySquared;
+        if (squared >= ringInner && squared <= ringOuter) {
+          const offset = Math.abs(Math.sqrt(squared) - radius);
+          if (offset < half)
+            intensity +=
+              pulseWeight * (ringStrength * (0.5 + 0.5 * Math.cos((Math.PI * offset) / half)));
+        }
       }
       if (intensity <= 0) continue;
       const k = row * cols + col;

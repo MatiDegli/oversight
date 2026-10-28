@@ -9,6 +9,7 @@ import { applyFrames } from "./frames";
 import { growthPositions, placeAdditions } from "./place";
 import { applyRoutes } from "./routes";
 import type { RouteTheme } from "./routes";
+import { writeData } from "./writes";
 
 type GeometryTheme = Parameters<typeof nodeGeometry>[0] & RouteTheme;
 
@@ -85,9 +86,10 @@ export function updateGraph(
       ) {
         element.move({ source: definition.data.source, target: definition.data.target });
       }
-      for (const key of OPTIONAL_DATA) if (!(key in definition.data)) element.removeData(key);
-      element.data(definition.data);
-      element.classes(definition.classes);
+      writeData(element, definition.data, OPTIONAL_DATA);
+      // Selection and routing own these classes; resetting either causes redundant restyles.
+      const owned = ["touching", "unroutable"].filter((name) => element.hasClass(name));
+      element.classes([...definition.classes.split(/\s+/).filter(Boolean), ...owned]);
     }
   });
   if (initial && cy.nodes().nonempty()) {

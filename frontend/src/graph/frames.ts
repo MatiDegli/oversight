@@ -9,6 +9,7 @@
 // whenever the graph is placed or a node is moved. It moves no node.
 import type { BoundingBoxOptions, Core, NodeCollection } from "cytoscape";
 
+import { writeData } from "./writes";
 import { nodeGeometry } from "./geometry";
 import type { GeometryTokens } from "./geometry";
 
@@ -50,7 +51,7 @@ export function applyFrames(cy: Core, theme: GeometryTokens): void {
           useCache: false,
         };
         const content = frame.children().boundingBox(options);
-        frame.data({ minW: content.w + extra.left, minH: content.h + extra.top });
+        writeData(frame, { minW: content.w + extra.left, minH: content.h + extra.top });
       }
     });
   }
