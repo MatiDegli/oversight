@@ -13,12 +13,14 @@ export interface LiveOptions {
   openStream?: (url: string) => EventStream;
   /** One failure per streak; `null` when a reopened stream is healthy again. */
   onError?: (error: unknown) => void;
+  onOpen?: () => void;
 }
 
 export function startLive({
   store,
   openStream = (url) => new EventSource(url),
   onError,
+  onOpen,
 }: LiveOptions): Transport {
   let stopped = false;
   let stream: EventStream | undefined;
@@ -53,7 +55,9 @@ export function startLive({
       const current = openStream(`/events?${params}`);
       stream = current;
       current.onopen = () => {
-        if (stopped || current !== stream || !disconnected) return;
+        if (stopped || current !== stream) return;
+        onOpen?.();
+        if (!disconnected) return;
         // A server with nothing new to send applies no event, so the shell would keep its alert.
         disconnected = false;
         if (reported && !badEvent) {

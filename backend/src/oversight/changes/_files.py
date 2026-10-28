@@ -32,9 +32,10 @@ async def save_for_review(
     if rec is None:
         raise ChangeNotFound(agent_id)
     check_editable(ctx, rec)
-    async with ctx.workspace.locks(agent_id=agent_id):
+    async with ctx.workspace.locks(main=True, agent_id=agent_id):
         check_editable(ctx, rec)  # a decision may have taken it while the save waited
         saved = await rec.tree.write_text(path, content, expected_hash=base_hash)
+        rec.observed_paths.add(path)
         rec.touched.add(path)
         head, files = await proposal.commit(ctx, rec, "user")
         if head != rec.head_commit:

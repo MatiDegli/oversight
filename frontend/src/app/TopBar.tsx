@@ -52,7 +52,7 @@ export function TopBar({ state, onOpenQueue }: { state: State; onOpenQueue?: () 
           </button>
         )}
       </div>
-      <SpendMeter state={state} />
+      <SpendMeter state={state} showBrake={false} />
     </header>
   );
 }

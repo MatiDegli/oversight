@@ -1,8 +1,11 @@
 """The tool loop through the scripted fake model: a whole task, the limits and the stops."""
 
 import asyncio
+from pathlib import Path
 from typing import cast
 
+import httpx2 as httpx
+import openai
 import pytest
 from agent_helpers import FAKE_MODEL_DIR, Recorder, make_run, script
 
@@ -11,6 +14,7 @@ from oversight.agents import (
     MUSE_SPARK_OPEN,
     ModelAPIError,
     ModelReply,
+    OpenAIClient,
     ScriptedModel,
     UnverifiedProfile,
     load_script,
@@ -83,6 +87,9 @@ async def test_whole_task_emits_the_expected_events_in_order(demo_tree: Opened) 
     assert summaries[3] == "Edited apply_coupon in pricing.py, lines 38 to 39"
     tests = steps(recorder)[4].tests
     assert tests is not None and tests.outcome == "passed" and tests.failed == 0
+    assert len(recorder.suites) == 1
+    assert recorder.suites[0].cases and not recorder.suites[0].problems
+    assert recorder.suites[0].tested_tree is not None
 
     search, read, edit = (cast(AgentFocus, f) for f in recorder.of("AgentFocus"))
     assert search.mode == "read" and "shop.pricing:apply_coupon" in search.node_ids
@@ -190,9 +197,44 @@ async def test_model_api_failure_reports_an_error_and_halts(small_tree: Opened) 
     end = await make_run(
         small_tree, Failing(parse_script('{"task": "t", "turns": []}')), recorder
     ).run()
-    assert end.state == "halted" and end.detail == "The model API failed."
+    assert end.state == "halted"
+    assert end.detail == "The model API failed: model API error after 5 attempts: HTTP 503."
     (error,) = cast(list[ErrorReport], recorder.of("ErrorReport"))
     assert error.source == "model_api" and error.fatal and error.agent_id == "agent-1"
+
+
+async def test_retry_after_past_deadline_reaches_the_halted_status(small_tree: Opened) -> None:
+    requests: list[httpx.Request] = []
+    sleeps: list[float] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(429, headers={"retry-after": "75"}, json={"error": "busy"})
+
+    async def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    recorder = Recorder()
+    async with openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(respond)) as http:
+        model = OpenAIClient(
+            MUSE_SPARK,
+            base_url="https://api.test/v1",
+            api_key="test-key",
+            max_output_tokens=2048,
+            http_client=http,
+            sleep=sleep,
+        )
+        end = await make_run(small_tree, model, recorder, max_wall_clock_s=10).run()
+
+    reason = "model API retry wait of 75 s exceeds the task deadline"
+    assert end.state == "halted" and end.steps == 0
+    assert end.detail == f"The model API failed: {reason}."
+    halted = cast(list[AgentStatus], recorder.of("AgentStatus"))[-1]
+    assert halted.state == "halted" and halted.detail == end.detail
+    (error,) = cast(list[ErrorReport], recorder.of("ErrorReport"))
+    assert error.message == reason and error.source == "model_api" and error.fatal
+    assert len(requests) == 1 and sleeps == []
+    assert "ready_for_review" not in states(recorder)
 
 
 async def test_model_calls_are_bounded_on_their_own(small_tree: Opened) -> None:
@@ -309,3 +351,48 @@ async def test_both_muse_profiles_may_run_agents(small_tree: Opened) -> None:
     empty = parse_script('{"task": "t", "turns": []}')
     for profile in (MUSE_SPARK, MUSE_SPARK_OPEN):
         make_run(small_tree, ScriptedModel(empty, profile=profile), Recorder())
+
+
+async def test_a_failed_suite_spawn_still_reaches_the_sink_without_changing_model_text(
+    small_tree: Opened,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, _ = small_tree
+    monkeypatch.setattr(workspace, "_demo_python", Path("/missing-demo-python"))
+    recorder = Recorder()
+    end = await make_run(
+        small_tree, script([("run_tests", {})], [("finish", {"summary": "Done."})]), recorder
+    ).run()
+    assert end.state == "ready_for_review"
+    assert len(recorder.suites) == 1 and recorder.suites[0].result.outcome == "error"
+    assert recorder.suites[0].tested_tree is not None
+    [step, _] = steps(recorder)
+    assert step.result == "error" and step.tests is None
+    assert step.error == "cannot access the file: No such file or directory"
+
+
+async def test_a_cancelled_suite_reaches_the_sink_with_partial_evidence(
+    small_tree: Opened,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from oversight.workspace import core as workspace_core
+
+    entered = asyncio.Event()
+
+    async def held_spawn(*args: object, **kwargs: object):
+        entered.set()
+        await asyncio.Event().wait()
+        raise AssertionError("not reached")
+
+    monkeypatch.setattr(workspace_core, "run_process", held_spawn)
+    recorder = Recorder()
+    running = asyncio.create_task(make_run(small_tree, script([("run_tests", {})]), recorder).run())
+    async with asyncio.timeout(60):
+        await entered.wait()
+    running.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await running
+    assert len(recorder.suites) == 1
+    assert recorder.suites[0].result.outcome == "timeout"
+    assert recorder.suites[0].tested_tree is not None and recorder.suites[0].problems
+    assert steps(recorder)[0].error == "interrupted before it finished"

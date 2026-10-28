@@ -46,12 +46,14 @@ from oversight.changes._state import (
     State,
     WrongState,
 )
+from oversight.changes._suite_evidence import publish_suite
 from oversight.changes._support import ChangeContext, ChangePorts
 from oversight.events import Clock, system_clock
 from oversight.graph import (
     WorkspaceGraph,
 )
 from oversight.workspace import (
+    SuiteRun,
     Tree,
     Workspace,
 )
@@ -131,6 +133,11 @@ class ChangeManager:
     async def file_edited(self, agent_id: AgentId, path: str) -> bool:
         """Send `change.updated` for an edit on disk; `False` after sending an `error` instead."""
         return await proposal.file_edited(self._ctx, agent_id, path)
+
+    async def tests_executed(self, agent_id: AgentId, run: SuiteRun) -> None:
+        rec = self._ctx.state.agents[agent_id]
+        async with self._ctx.workspace.locks(agent_id=agent_id):
+            await publish_suite(self._ctx, rec, run, phase="agent", revision=None)
 
     async def proposed(
         self,

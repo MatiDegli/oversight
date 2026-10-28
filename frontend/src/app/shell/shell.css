@@ -1,0 +1,246 @@
+.shell-frame {
+  overflow: hidden;
+}
+.shell-workspace {
+  display: flex;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.left-rail {
+  z-index: 4;
+}
+.rail-button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+}
+.rail-button:hover,
+.rail-button[aria-expanded="true"],
+.rail-button[aria-current] {
+  background: var(--raised);
+  color: var(--text);
+}
+.shell-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--divider);
+  z-index: 3;
+}
+.shell-center {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+.shell-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.graph-stage {
+  min-width: var(--graph-min-width);
+}
+.focus-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(var(--review-panel-width), calc(100% - var(--graph-min-width)));
+  flex-shrink: 0;
+  min-width: 0;
+  background: var(--page);
+  border-right: 1px solid var(--divider);
+}
+.focus-tabs {
+  display: flex;
+  height: 40px;
+  flex-shrink: 0;
+  background: var(--shell);
+  border-bottom: 1px solid var(--divider);
+}
+.focus-tab {
+  display: flex;
+  min-width: 100px;
+  max-width: 300px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--divider);
+  border-top: 2px solid transparent;
+  font-size: var(--caption-size);
+  color: var(--muted);
+}
+.focus-tab.is-active {
+  border-top-color: var(--text);
+  color: var(--text);
+  background: var(--page);
+}
+.focus-tab.is-active[data-slot="A"] {
+  border-top-color: var(--agent-a);
+}
+.focus-tab.is-active[data-slot="B"] {
+  border-top-color: var(--agent-b);
+}
+.focus-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.focus-body > aside {
+  width: 100%;
+  min-width: 0;
+  border-right: 0;
+}
+.is-maximized .focus-panel {
+  width: 100%;
+}
+.is-maximized .graph-stage {
+  display: none;
+}
+.bottom-dock {
+  display: flex;
+  flex-direction: column;
+  height: var(--dock-height);
+  flex-shrink: 0;
+  background: var(--shell);
+  border-top: 1px solid var(--border);
+}
+.dock-tab {
+  border-top: 2px solid transparent;
+  color: var(--muted);
+}
+.dock-tab[aria-selected="true"] {
+  border-top-color: var(--text);
+  background: var(--page);
+  color: var(--text);
+}
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: var(--status-line-height);
+  flex-shrink: 0;
+  padding: 0 14px;
+  border-top: 1px solid var(--divider);
+  background: var(--shell);
+  color: var(--muted);
+  font-size: 12px;
+}
+.status-line kbd {
+  font-family: var(--code-font);
+  font-size: 11px;
+}
+.narrow-notice {
+  display: none;
+  position: absolute;
+  z-index: 6;
+  top: 56px;
+  left: 64px;
+  padding: 8px 12px;
+  background: var(--overlay-fill);
+  box-shadow: var(--top-highlight);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: var(--caption-size);
+}
+.shortcuts-sheet {
+  margin: auto;
+  padding: 20px;
+  max-width: 480px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--overlay-fill);
+  color: var(--text);
+  box-shadow: var(--top-highlight), var(--card-shadow);
+}
+.shortcuts-sheet::backdrop {
+  background: var(--sheet-backdrop);
+}
+.shortcuts-list {
+  margin-top: 16px;
+}
+.shortcuts-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.shortcuts-list kbd {
+  font-family: var(--code-font);
+  color: var(--muted);
+}
+.group-label {
+  font-size: var(--group-label-size);
+  letter-spacing: var(--group-label-tracking);
+  text-transform: uppercase;
+}
+.frosted {
+  background: var(--overlay-panel);
+  backdrop-filter: blur(var(--overlay-blur));
+  box-shadow: var(--top-highlight);
+}
+.overlay-fill {
+  background: var(--overlay-fill);
+  box-shadow: var(--top-highlight);
+}
+.agent-card,
+[data-slot-card] {
+  background: linear-gradient(var(--card), var(--card-end));
+  box-shadow: var(--top-highlight), var(--card-shadow);
+  position: relative;
+  overflow: hidden;
+}
+.agent-card::before,
+[data-slot-card]::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--agent-a);
+}
+.agent-card[data-slot="B"]::before,
+[data-slot-card="B"]::before {
+  background: var(--agent-b);
+}
+@media (max-width: 1440px) {
+  .shell-sidebar {
+    position: absolute;
+    left: var(--left-rail-width);
+    top: 0;
+    bottom: 0;
+  }
+  .shell-workspace > .agents-expanded {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 3;
+    box-shadow: var(--card-shadow);
+  }
+}
+@media (max-width: 1279px) {
+  .narrow-notice {
+    display: block;
+  }
+}
+/* Keep the diff readable after the tabs and status line take their fixed space. */
+.focus-body [aria-label="Review panel"] > header {
+  padding-block: var(--spacing-md);
+}
+.focus-body [aria-label="Review panel"] > div > p {
+  padding-block: var(--spacing-md);
+}
+.focus-body [aria-label="Decision"] {
+  padding: var(--spacing-md) var(--spacing-lg);
+  gap: var(--spacing-sm);
+}
+.focus-body [aria-label="Decision"] textarea {
+  height: 64px;
+  resize: vertical;
+}
+.focus-body [aria-label="Decision"] > [role="status"]:empty {
+  display: none;
+}
