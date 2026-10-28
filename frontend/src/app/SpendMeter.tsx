@@ -15,7 +15,7 @@ const captions: Record<UsageTick["brake"], string | null> = {
  * edge, and a brake caption (icon and words) comes before it on the same line, so the total never
  * moves when the caption appears.
  */
-export function SpendMeter({ state }: { state: State }) {
+export function SpendMeter({ state, showBrake = true }: { state: State; showBrake?: boolean }) {
   const spend = selectSpend(state);
   if (!spend) return null;
   const caption = captions[spend.brake];
@@ -28,7 +28,7 @@ export function SpendMeter({ state }: { state: State }) {
       className="flex shrink-0 items-center gap-3.5 text-sm whitespace-nowrap text-muted"
     >
       <div role="status" aria-atomic="true" className="text-(length:--caption-size)">
-        {caption && (
+        {showBrake && caption && (
           <p className="flex items-center gap-1.5">
             <Icon aria-hidden="true" className="size-3.5 shrink-0" />
             {caption}

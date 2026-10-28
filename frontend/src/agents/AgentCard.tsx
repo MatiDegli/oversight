@@ -154,7 +154,8 @@ export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps
       onBlur={() => {
         inside.current = false;
       }}
-      className={`min-w-0 rounded-card border bg-card p-4 text-text ${border} ${focusRing}`}
+      data-slot={agent.slot}
+      className={`agent-card min-w-0 rounded-card border bg-card p-4 text-text ${border} ${focusRing}`}
     >
       <header className="flex flex-wrap items-center gap-2.5">
         <span
