@@ -21,7 +21,7 @@ export class DiffViewport {
   private lastInteraction = -Infinity;
   private frame: number | undefined;
   private readonly input = new AbortController();
-  private readonly subscription: { dispose: () => void };
+  private readonly subscriptions: { dispose: () => void }[];
 
   constructor(private readonly diff: editor.IStandaloneDiffEditor) {
     const host = diff.getContainerDomNode();
@@ -43,14 +43,22 @@ export class DiffViewport {
       },
       { capture: true, signal: this.input.signal },
     );
-    this.subscription = diff.onDidUpdateDiff(() => {
+    const settle = () => {
       if (this.frame !== undefined) cancelAnimationFrame(this.frame);
       // The diff event precedes Monaco's folded view-zone layout. Reveal after that layout.
       this.frame = requestAnimationFrame(() => {
         this.frame = undefined;
         this.reveal();
+        // Folding can change the visible model lines without changing scrollTop. Tell Monaco
+        // the viewport is ready so cold grammars color these lines without waiting for idle work.
+        this.diff.handleInitialized();
       });
-    });
+    };
+    this.subscriptions = [
+      diff.onDidUpdateDiff(settle),
+      diff.getOriginalEditor().onDidChangeHiddenAreas(settle),
+      diff.getModifiedEditor().onDidChangeHiddenAreas(settle),
+    ];
   }
 
   update(
@@ -116,7 +124,7 @@ export class DiffViewport {
 
   dispose() {
     this.input.abort();
-    this.subscription.dispose();
+    for (const subscription of this.subscriptions) subscription.dispose();
     if (this.frame !== undefined) cancelAnimationFrame(this.frame);
   }
 }

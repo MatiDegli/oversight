@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { expect } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type { Manifest } from "vite";
 import type { GraphProbeHost } from "../src/graph";
 
@@ -17,6 +17,38 @@ export const editorAssets = new Set(
 const deferredEntry = manifest["src/editor/implementation.ts"]?.file;
 if (!deferredEntry) throw new Error("The built site must have one deferred editor entry");
 export const implementation = deferredEntry;
+
+/** Reproduce a busy software-rendered frame loop without relying on the host's CPU speed. */
+export async function holdUnboundedIdleWork(page: Page) {
+  await page.evaluate(() => {
+    const idle = window.requestIdleCallback.bind(window);
+    const cancel = window.cancelIdleCallback.bind(window);
+    const held = new Set<number>();
+    let next = 0;
+    window.requestIdleCallback = (callback, options) => {
+      // Keep bounded work, including editor prefetch, running normally.
+      if (options?.timeout !== undefined) return idle(callback, options);
+      const id = --next;
+      held.add(id);
+      return id;
+    };
+    window.cancelIdleCallback = (id) => {
+      if (!held.delete(id)) cancel(id);
+    };
+  });
+}
+
+/** Prove the keyword is on screen at the hunk before releasing the cold grammar. */
+export async function expectFoldedFunction(panel: Locator, name: string) {
+  await expect(panel.locator(".modified .diff-hidden-lines")).not.toHaveCount(0);
+  await expect(panel.locator(".modified .line-insert").first()).toBeVisible();
+  await expect(
+    panel
+      .locator(".modified .view-line")
+      .filter({ hasText: `def ${name}(` })
+      .first(),
+  ).toBeVisible();
+}
 
 /** Monaco can paint plain text while its separate, lazy Python grammar is still cold. */
 export async function holdPythonGrammar(page: Page) {

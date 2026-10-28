@@ -87,3 +87,12 @@ jobs:
         run: make e2e
       - name: Monaco and graph tests in Chromium
         run: make test-browser
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-failure-evidence
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          retention-days: 7
