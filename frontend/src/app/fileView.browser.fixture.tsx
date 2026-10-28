@@ -47,6 +47,23 @@ export const fileViewTest = {
       applyEvents([event]);
     });
   },
+  recordDeletion() {
+    const { state, applyEvents } = stateStore.getState();
+    const source = events.find((event) => event.type === "change.updated");
+    if (!source) throw new Error("Missing file update");
+    flushSync(() => {
+      applyEvents([
+        {
+          ...source,
+          seq: state.lastSeq + 1,
+          payload: {
+            ...source.payload,
+            file: { ...source.payload.file, modified: null, status: "deleted" },
+          },
+        },
+      ]);
+    });
+  },
   commit(commit: string) {
     const { state } = stateStore.getState();
     if (state.graph)

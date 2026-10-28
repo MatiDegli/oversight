@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { ServerEvent } from "@contracts";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import { applyEvent, createInitialState } from "../state";
+import type { State } from "../state";
 import { recordedTree, visibleTree } from "./filesTree";
 import { createRecordedFiles } from "./recordedFiles";
 
@@ -137,4 +138,44 @@ it("agent reads use the latest update to the path across recorded revisions", as
   update("change-2", "unrelated file", "shop/other.py");
   update("change-3", "other agent", path, "agent-999");
   expect((await files.readFile(path, agent)).content).toBe("latest revision");
+});
+
+it("marks only the chosen deleted revision and explains why it cannot open", async () => {
+  const base = Object.values(state.changes)[0];
+  if (!base) throw new Error("Fixture missing change");
+  const path = "shop/deleted.py";
+  const deleted = {
+    ...base,
+    resolution: null,
+    files: {
+      [path]: {
+        author: "agent" as const,
+        node_ids: [],
+        file: {
+          path,
+          original: "original contents",
+          modified: null,
+          status: "deleted" as const,
+          lines_added: 0,
+          lines_removed: 1,
+        },
+      },
+    },
+  };
+  let current: State = { ...state, changes: { deletion: deleted } };
+  const files = createRecordedFiles(() => current);
+  const row = () =>
+    visibleTree(recordedTree(current), new Set(["shop"])).find((entry) => entry.path === path);
+  expect(row()).toMatchObject({ deleted: false });
+  expect((await files.readFile(path)).content).toBe("original contents");
+  await expect(files.readFile(path, base.agent_id)).rejects.toThrow(
+    "file was deleted in this change",
+  );
+  current = {
+    ...current,
+    changes: { deletion: { ...deleted, resolution: base.resolution } },
+  };
+  expect(row()).toMatchObject({ deleted: true });
+  await expect(files.readFile(path)).rejects.toThrow("file was deleted in this change");
+  await expect(files.readFile("no-recorded-contents.py")).rejects.toThrow("no source contents");
 });

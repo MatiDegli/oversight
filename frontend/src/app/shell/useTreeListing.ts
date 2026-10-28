@@ -42,6 +42,7 @@ export function useTreeListing({ state, loadTree }: FilesNavigation) {
     failure,
     tree: recorded ? recordedTree(state) : listing?.run_id === run ? listing : null,
     retry: () => {
+      setFailure(false);
       setRetry((value) => value + 1);
     },
   };

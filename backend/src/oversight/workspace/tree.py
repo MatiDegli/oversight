@@ -1,6 +1,7 @@
 """Bounded directory listing; descriptors prevent following replaced symlinks."""
 
 import asyncio
+import errno
 import hashlib
 import os
 import stat
@@ -118,6 +119,11 @@ def walk_tree(root: Path, deadline: float) -> tuple[list[str], list[TreeFile], b
                         descend(fd, entry.name, path)
                     except PermissionError:
                         continue  # Skip unreadable subtrees while preserving readable siblings.
+                    except OSError as error:
+                        if error.errno not in (errno.ELOOP, errno.ENOTDIR):
+                            raise
+                        # Replaced by a symlink or non-directory after stat; nothing was followed.
+                        continue
                     directories.append(path)
                 else:
                     files.append(TreeFile(path=path, hash=_hash(fd, entry.name, budget, deadline)))
