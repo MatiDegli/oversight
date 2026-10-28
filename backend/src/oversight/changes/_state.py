@@ -25,7 +25,7 @@ from oversight_contracts.events import (
 )
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot
 from oversight_contracts.policy import MergeModeState
-from oversight_contracts.review import FinishDeclaration
+from oversight_contracts.review import FinishDeclaration, RoleUsage
 
 type State = Literal[
     "working",
@@ -120,6 +120,7 @@ class ChangeRecord:
     """Per path, the `modified` last sent in a `change.updated`."""
     unpublished: set[str] = field(default_factory=lambda: set[str]())
     executions: dict[int, SuiteExecution] = field(default_factory=dict[int, SuiteExecution])
+    summary_usage: dict[int, RoleUsage] = field(default_factory=dict[int, RoleUsage])
     suite_runs: dict[int, SuiteRun] = field(default_factory=dict[int, SuiteRun])
     behavior_diffs: dict[int, BehaviorDiff] = field(default_factory=dict[int, BehaviorDiff])
     """Private per-revision computation; deliberately absent from event facts."""
