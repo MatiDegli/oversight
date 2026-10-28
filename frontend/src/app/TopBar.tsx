@@ -17,7 +17,9 @@ export function TopBar({
   state,
   onOpenQueue,
   onOpenPalette,
+  practice,
 }: {
+  practice?: { active: boolean; open: () => void };
   state: State;
   onOpenQueue?: () => void;
   onOpenPalette?: () => void;
@@ -60,8 +62,22 @@ export function TopBar({
           <kbd>Ctrl K</kbd>
         </button>
       )}
+      {practice && (
+        <button
+          type="button"
+          data-practice-entry
+          className={`shrink-0 text-sm underline ${focusRing}`}
+          onClick={practice.open}
+        >
+          {practice.active ? "Open practice" : "Two-change practice"}
+        </button>
+      )}
       {/* Always mounted, so the counter's arrival is announced and nothing else moves. */}
-      <div role="status" aria-label="Review queue" className="ml-auto flex items-center">
+      <div
+        role="status"
+        aria-label="Review queue"
+        className="ml-auto flex shrink-0 items-center whitespace-nowrap"
+      >
         {ready > 0 && (
           <button
             type="button"

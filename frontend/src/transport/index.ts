@@ -13,6 +13,9 @@ export { startLive } from "./live";
 export type { EventStream, LiveOptions } from "./live";
 export { startReplay } from "./replay";
 export type { ReplayOptions, ReplaySource } from "./replay";
+export { parseEvent } from "./events";
+export type { RecordedReplay, RecordingProvenance } from "./replay-source";
+export const replayRecording = recorded;
 export { chooseReplaySource } from "./replay-source";
 export type { ChosenReplaySource, ReplayKind } from "./replay-source";
 

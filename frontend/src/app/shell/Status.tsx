@@ -9,7 +9,11 @@ export function StatusLine(props: FrameProps & { dock: boolean; onToggleDock: ()
   const budget = selectBudgetLine(props.state);
   return (
     <footer aria-label="Status line" className="status-line">
-      <span>{props.replayLabel ?? (props.replayOf ? `Replay · ${props.replayOf}` : "Live")}</span>
+      <span>
+        {props.replayLabel ?? (props.replayOf ? `Replay · ${props.replayOf}` : "Live")}
+        {props.replayOf === "real recorded run" && " · Real recorded run"}
+        {props.practice?.active && " · Two-change practice"}
+      </span>
       {budget && (
         <span role="status" className="text-muted">
           {budget}

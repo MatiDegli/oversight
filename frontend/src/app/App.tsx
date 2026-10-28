@@ -14,6 +14,7 @@ import { createRecordedFiles } from "./recordedFiles";
 import { FilesProvider } from "./FilesContext";
 import { useEscapeCloses } from "./escape";
 import { Frame } from "./Frame";
+import { usePractice } from "./challenge/usePractice";
 import { startAppSession } from "./session";
 import {
   clickNode,
@@ -55,8 +56,20 @@ export function App() {
       : createRecordedFiles(() => stateStore.getState().state),
   );
   const state = useStore(stateStore, (store) => store.state);
+  const stopSession = useRef(() => {});
+  const practice = usePractice(
+    setView,
+    () => {
+      stopSession.current();
+    },
+    () => {
+      setRetry((value) => value + 1);
+    },
+    replayBuild,
+    replaySource,
+  );
   useEffect(() => {
-    return startAppSession(
+    const stop = startAppSession(
       document.getElementById("root"),
       (failure) => {
         setConnection(failure === null ? "connected" : "lost");
@@ -68,6 +81,8 @@ export function App() {
         setConnection("connected");
       },
     );
+    stopSession.current = stop;
+    return stop;
   }, [retry]);
   // The graph keeps one tap handler; it reads the store when the tap happens.
   const onNodeTap = useCallback(
@@ -163,6 +178,7 @@ export function App() {
     <FilesProvider state={state} loadTree={commands?.getTree} openFile={onOpenFile}>
       <Frame
         state={state}
+        practice={practice}
         files={files}
         view={view}
         onNodeTap={onNodeTap}
