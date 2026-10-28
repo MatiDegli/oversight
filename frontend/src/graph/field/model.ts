@@ -2,6 +2,7 @@
 // the lit nodes' boxes, and which of four levels its lamp shows after an 8 by 8 ordered dither. The
 // canvas only draws the result, so everything DESIGN.md's "Dot field and rings" says about light is
 // tested here without a GPU. Every number comes from a theme token.
+import { lightBoxKey } from "./marker";
 import type { FieldLight, FieldMode, LightSource } from "./lights";
 import { breathing, motionOf, ringFade, ringRadiusAt } from "./motion";
 import type { Motion, MotionTheme } from "./motion";
@@ -19,6 +20,7 @@ export interface Box {
 
 /** A light with the box it was drawn at and the color it takes from its token. */
 export interface PlacedLight {
+  steady?: boolean;
   box: Box;
   color: Rgb;
   weight: number;
@@ -114,7 +116,7 @@ export function placeLights(
 ): PlacedLight[] {
   const placed = new Map<string, PlacedLight>();
   for (const light of lights) {
-    const box = boxes.get(light.id);
+    const box = boxes.get(lightBoxKey(light));
     if (!box) continue;
     // Folded methods have distinct ids but share the class row's rendered bounds.
     const key = [light.source, box.x1, box.y1, box.x2, box.y2].join(":");
@@ -126,6 +128,7 @@ export function placeLights(
         weight: light.weight,
         pulses: light.pulses,
         pulseWeight: light.pulseWeight,
+        ...(light.steady ? { steady: true } : {}),
       });
     }
   }
@@ -204,7 +207,12 @@ function reach(config: FieldConfig, amplitude: number): number {
  */
 function amplitudeOf(config: FieldConfig, light: PlacedLight, time: number | null): number {
   const { motion, profile } = config;
-  const breath = !light.pulses ? 1 : time === null ? motion.breathingMax : breathing(motion, time);
+  const breath =
+    light.steady || !light.pulses
+      ? 1
+      : time === null
+        ? motion.breathingMax
+        : breathing(motion, time);
   return light.weight * profile.gain * (1 + (breath - 1) * (light.pulseWeight ?? 1));
 }
 
@@ -235,6 +243,7 @@ interface Work extends Accumulated {
   /** Per column, for the light being added: the distance to its box, and the offset from its center. */
   colX: Float32Array;
   ringX: Float32Array;
+  decay: Float64Array;
 }
 
 /** A light that reaches the screen, with what its glow and ring need. */
@@ -294,7 +303,8 @@ function addLight(
       let intensity = 0;
       if (distanceSquared <= glowBound) {
         const distance = Math.sqrt(distanceSquared);
-        if (distance <= glow) intensity = amplitude * falloff(config, distance);
+        if (distance <= glow)
+          intensity = amplitude * cachedFalloff(config, distance, row * cols + col, work.decay);
       }
       if (ringRow) {
         const rx = ringX[col] ?? 0;
@@ -321,17 +331,9 @@ function addLight(
  * grid it returns is one of them: it is valid until the next call.
  */
 export function createLampField() {
-  const empty = () => new Float32Array(0);
   let cells = 0;
-  const work: Work = {
-    sum: empty(),
-    red: empty(),
-    green: empty(),
-    blue: empty(),
-    data: new Uint8ClampedArray(0),
-    colX: empty(),
-    ringX: empty(),
-  };
+  let decays = new Map<string, Float64Array>();
+  const work = emptyWork();
 
   /**
    * Lights the cells of a `width` by `height` screen. `time` is the clock in seconds, or null for
@@ -373,8 +375,14 @@ export function createLampField() {
       return onScreen && (glow >= 0 || ring) ? [{ light, amplitude, glow, ring, box }] : [];
     });
     reaching.sort((a, b) => b.light.weight - a.light.weight);
-    for (const one of reaching.slice(0, config.limit))
+    const retained = new Map<string, Float64Array>();
+    for (const one of reaching.slice(0, config.limit)) {
+      const key = decayKey(config, one.light.box, cols, rows);
+      work.decay = decays.get(key) ?? new Float64Array(cells);
+      retained.set(key, work.decay);
       addLight(config, cols, rows, one, time, work);
+    }
+    decays = retained;
     quantize(config, cols, rows, work, work.data);
     return { cols, rows, data: work.data };
   };
@@ -439,4 +447,53 @@ function quantize(
       }
     }
   }
+}
+
+/** R4 uses the same physical spread in every view; only the graph camera scales it. */
+export function signalConfig(config: FieldConfig, zoom: number): FieldConfig {
+  return { ...config, profile: { near: 26 * zoom, far: 72 * zoom, gain: config.profile.gain } };
+}
+
+/** Box falloff is unchanged while the clock moves; keep exact doubles, bounded to visible sources. */
+function cachedFalloff(
+  config: FieldConfig,
+  distance: number,
+  index: number,
+  decay: Float64Array,
+): number {
+  const known = decay[index] ?? 0;
+  if (known !== 0) return known;
+  const value = falloff(config, distance);
+  decay[index] = value;
+  return value;
+}
+
+function emptyWork(): Work {
+  const empty = () => new Float32Array(0);
+  return {
+    sum: empty(),
+    red: empty(),
+    green: empty(),
+    blue: empty(),
+    data: new Uint8ClampedArray(0),
+    colX: empty(),
+    ringX: empty(),
+    decay: new Float64Array(0),
+  };
+}
+
+function decayKey(config: FieldConfig, box: Box, cols: number, rows: number): string {
+  return [
+    cols,
+    rows,
+    config.cell,
+    config.profile.near,
+    config.profile.far,
+    config.nearShare,
+    config.farShare,
+    box.x1,
+    box.y1,
+    box.x2,
+    box.y2,
+  ].join(":");
 }

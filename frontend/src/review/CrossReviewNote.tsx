@@ -25,7 +25,7 @@ const reasons: Record<string, string> = {
 export function CrossReviewNote({ change }: { change: ChangeState }) {
   if (change.personActed) return null;
   const { crossReview: review, crossReviewRound: round, needsYou: note } = change;
-  if (!review && !note) return null;
+  if (!review && !round && !note) return null;
   return (
     <section
       aria-label="Cross-review"

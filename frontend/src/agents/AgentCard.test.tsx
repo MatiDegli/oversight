@@ -4,8 +4,9 @@ import type { ServerEvent, SuiteResult } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { applyEvent, createInitialState, selectAgentCard } from "../state";
+import { applyEvent, createInitialState } from "../state";
 import type { State } from "../state";
+import { selectAgentCard } from "./selectors";
 import { AgentCard } from "./AgentCard";
 
 const events = readFileSync(

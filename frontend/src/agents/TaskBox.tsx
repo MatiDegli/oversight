@@ -114,7 +114,7 @@ export function TaskBoxView({
                 {selected === slot && (
                   <Check aria-hidden="true" className="ml-1 inline-block size-4 text-text" />
                 )}
-                {holder !== null && <span className="block text-muted">{holder}</span>}
+                {holder !== null && <span className="block min-h-[2lh] text-muted">{holder}</span>}
               </button>
             ))}
           </div>
@@ -155,7 +155,7 @@ export function TaskBoxView({
         to start
       </p>
       {/* Always mounted, so the reason is announced where it appears. */}
-      <div role="status" id={`${id}-line`} className="text-sm text-muted">
+      <div role="status" id={`${id}-line`} className="min-h-[2lh] text-sm text-muted">
         {line !== null && <p>{line}</p>}
       </div>
       {failure !== null && (

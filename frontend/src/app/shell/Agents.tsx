@@ -1,6 +1,6 @@
-import { AgentCard, slotUsage, TaskBox } from "../../agents";
+import { AgentCard, selectAgentCard, slotUsage, TaskBox } from "../../agents";
 import type { TaskBoxProps } from "../../agents";
-import { selectAgentCard, selectAgents } from "../../state";
+import { selectAgents } from "../../state";
 import type { State } from "../../state";
 import type { FrameProps } from "../Frame";
 import { agentLook, stateWords } from "./shared";

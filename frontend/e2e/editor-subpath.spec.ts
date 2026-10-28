@@ -35,9 +35,12 @@ test("the real /oversight/ replay prefetches once and keeps every request under 
   expect(timing.firstEditor).toBeGreaterThanOrEqual(timing.firstGraphAt);
   const origin = new URL(baseURL ?? "").origin;
   expect(
-    requested.filter(
-      (url) => new URL(url).origin !== origin || !new URL(url).pathname.startsWith("/oversight/"),
-    ),
+    requested
+      // Blob and data URLs do not reach the server.
+      .filter((url) => !["blob:", "data:"].includes(new URL(url).protocol))
+      .filter(
+        (url) => new URL(url).origin !== origin || !new URL(url).pathname.startsWith("/oversight/"),
+      ),
   ).toEqual([]);
   expect(await page.evaluate(() => window.editorStartup)).toMatchObject({
     idleScheduled: 1,

@@ -150,6 +150,7 @@ type = "forbidden"
 source_modules = [
     "oversight.app",
     "oversight.settings",
+    "oversight.telemetry",
     "oversight.__main__",
     "oversight.api",
     "oversight.changes",

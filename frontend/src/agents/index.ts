@@ -4,3 +4,4 @@ export { TaskBox } from "./TaskBox";
 export type { TaskBoxProps } from "./TaskBox";
 export { nextSlot, slotUsage } from "./taskBox";
 export { StartAgentHere } from "./StartAgentHere";
+export { selectAgentCard } from "./selectors";

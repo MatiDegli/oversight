@@ -61,7 +61,7 @@ def rule(inputs: PolicyInputs, name: RuleId) -> RuleAssessment:
 
 def test_complete_assessment_validates_and_preserves_identity(inputs: PolicyInputs) -> None:
     assessment = assess(inputs)
-    assert merges_alone(assessment)
+    assert not merges_alone(assessment)
     assert len(assessment.rules) == 5
     assert {item.rule for item in assessment.rules} == set(RULES)
     assert all(item.result == "pass" for item in assessment.rules)
@@ -121,7 +121,7 @@ def test_combined_suite(
     )
     changed = replace(inputs, suite=suite)
     assert rule(changed, "combined_tests").result == expected
-    assert merges_alone(assess(changed)) == (expected == "pass")
+    assert not merges_alone(assess(changed))
 
 
 @pytest.mark.parametrize(("count", "expected"), [(0, "pass"), (5, "pass"), (6, "fail")])
@@ -221,7 +221,7 @@ def test_existing_versus_added_tests(
         deleted_existing_test_paths=deleted,
     )
     assert rule(changed, "existing_tests_untouched").result == expected
-    assert merges_alone(assess(changed)) == (expected == "pass")
+    assert not merges_alone(assess(changed))
 
 
 @pytest.mark.parametrize(
@@ -321,6 +321,6 @@ def test_evaluation_is_repeatable_and_does_not_mutate_inputs(inputs: PolicyInput
     second = assess(inputs)
     assert first == second
     first.rules.clear()
-    assert merges_alone(second)
+    assert not merges_alone(second)
     assert not merges_alone(first)
     assert (inputs.cone.model_dump(), inputs.suite.model_dump(), dict(inputs.evidence)) == before

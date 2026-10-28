@@ -35,8 +35,11 @@ const accepted = () => new Promise<undefined>(() => undefined);
 const client = { approveChange: accepted, rejectChange: accepted, requestChanges: accepted };
 
 const commands = createCommandClient();
+let fileReadGate = Promise.resolve();
+let releaseFileReads = () => {};
 const files = createFileSession({
   async getFile(path, agentId) {
+    await fileReadGate;
     const state = stateStore.getState().state;
     const change = Object.values(state.changes).find((item) => item.agent_id === agentId);
     const content = change?.files[path]?.file.modified ?? "";
@@ -100,6 +103,14 @@ function Harness({ recorded }: { recorded: boolean }) {
 }
 
 export const reviewTest = {
+  holdFileReads() {
+    fileReadGate = new Promise<void>((resolve) => {
+      releaseFileReads = resolve;
+    });
+  },
+  releaseFileReads() {
+    releaseFileReads();
+  },
   emit(event: ServerEvent) {
     const state = stateStore.getState().state;
     stateStore.setState({ state: applyEvent(state, { ...event, seq: state.lastSeq + 1 }) });

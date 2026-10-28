@@ -4,6 +4,7 @@ Other modules import only what this file exports; everything else here is intern
 """
 
 from oversight.changes._manager import ChangeManager
+from oversight.changes._mode import ModeController
 from oversight.changes._review_port import ReviewCapture, ReviewPort
 from oversight.changes._shortcut_detector import (
     DetectionResult,
@@ -18,6 +19,7 @@ __all__ = [
     "ChangeNotFound",
     "DetectionResult",
     "Finding",
+    "ModeController",
     "ReviewCapture",
     "ReviewPort",
     "Revision",
