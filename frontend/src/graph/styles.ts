@@ -39,12 +39,17 @@ export function graphStyles(
   const px = Number.parseFloat;
   const agents = { A: "agent-a", B: "agent-b" } as const;
   const badgeSize = px(theme["distance-badge-size"]);
+  const badgeCache = new Map<number, string>();
   const badge = (distance: number) => {
+    const cached = badgeCache.get(distance);
+    if (cached) return cached;
     // SVG images cannot see the page's @font-face. Embed the local font for the numeric badge.
     // This decorates the existing node without synthetic graph nodes or layout changes.
     const font = `<style>@font-face{font-family:${theme["text-font"].split(",")[0] ?? "sans-serif"};src:url("${badgeFont}") format("woff2");font-weight:${String(theme["distance-badge-font-weight"])}}</style>`;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(badgeSize)}" height="${String(badgeSize)}">${font}<circle cx="${String(badgeSize / 2)}" cy="${String(badgeSize / 2)}" r="${String(badgeSize / 2)}" fill="${theme.text}"/><text x="50%" y="50%" dy=".35em" text-anchor="middle" fill="${theme.page}" font-family='${theme["text-font"]}' font-size="${theme["distance-badge-font-size"]}" font-weight="${String(theme["distance-badge-font-weight"])}">${String(distance)}</text></svg>`;
-    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    const image = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    badgeCache.set(distance, image);
+    return image;
   };
   const geometry = nodeGeometry(theme);
   const distanceBadge = (node: NodeSingular): Layer => ({
@@ -112,18 +117,43 @@ export function graphStyles(
     );
   };
   // One property per image: Cytoscape takes a list for each when a node carries several.
-  const layered = (layers: (node: NodeSingular) => Layer[]) => ({
-    "background-image": (node: NodeSingular) => layers(node).map((layer) => layer.image),
-    "background-width": (node: NodeSingular) => layers(node).map((layer) => layer.width),
-    "background-height": (node: NodeSingular) => layers(node).map((layer) => layer.height),
-    "background-position-x": (node: NodeSingular) => layers(node).map((layer) => layer.x),
-    "background-position-y": (node: NodeSingular) => layers(node).map((layer) => layer.y),
-    "background-offset-x": (node: NodeSingular) => layers(node).map((layer) => layer.offsetX),
-    "background-offset-y": (node: NodeSingular) => layers(node).map((layer) => layer.offsetY),
-    "background-clip": (node: NodeSingular) => layers(node).map((layer) => layer.clip),
-    "background-image-containment": (node: NodeSingular) =>
-      layers(node).map((layer) => (layer.clip === "none" ? "over" : "inside")),
-  });
+  const layerCache = new Map<string, Layer[]>();
+  const cachedLayers = (layers: (node: NodeSingular) => Layer[], node: NodeSingular) => {
+    const key = JSON.stringify([
+      node.isParent(),
+      node.hasClass("class"),
+      node.hasClass("module"),
+      node.hasClass("cone"),
+      node.data("title"),
+      node.data("count"),
+      node.data("marks"),
+      node.data("distance"),
+      node.isParent() ? node.outerWidth() : outer(node).width,
+      node.isParent() ? node.outerHeight() : outer(node).height,
+    ]);
+    let value = layerCache.get(key);
+    if (!value) {
+      value = layers(node);
+      if (layerCache.size >= 256) layerCache.clear();
+      layerCache.set(key, value);
+    }
+    return value;
+  };
+  const layered = (generate: (node: NodeSingular) => Layer[]) => {
+    const layers = (node: NodeSingular) => cachedLayers(generate, node);
+    return {
+      "background-image": (node: NodeSingular) => layers(node).map((layer) => layer.image),
+      "background-width": (node: NodeSingular) => layers(node).map((layer) => layer.width),
+      "background-height": (node: NodeSingular) => layers(node).map((layer) => layer.height),
+      "background-position-x": (node: NodeSingular) => layers(node).map((layer) => layer.x),
+      "background-position-y": (node: NodeSingular) => layers(node).map((layer) => layer.y),
+      "background-offset-x": (node: NodeSingular) => layers(node).map((layer) => layer.offsetX),
+      "background-offset-y": (node: NodeSingular) => layers(node).map((layer) => layer.offsetY),
+      "background-clip": (node: NodeSingular) => layers(node).map((layer) => layer.clip),
+      "background-image-containment": (node: NodeSingular) =>
+        layers(node).map((layer) => (layer.clip === "none" ? "over" : "inside")),
+    };
+  };
   const minimum = (key: "minW" | "minH") => (node: NodeSingular) =>
     `${String((node.data(key) as number | undefined) ?? 0)}px`;
   const routeOf = (edge: EdgeSingular) => edge.data("route") as Route;
@@ -372,6 +402,19 @@ export function graphStyles(
     // Watch mode: an edge no agent touches steps back; one at a node the person selected comes back.
     { selector: "edge.quiet", style: { opacity: theme["quiet-edge"] } },
     { selector: "edge.touching", style: { opacity: 1 } },
+    {
+      selector: "edge.aggregate",
+      style: {
+        label: (edge: EdgeSingular) => `×${String(edge.data("callCount"))}`,
+        "font-family": theme["text-font"],
+        "font-size": theme["frame-count-size"],
+        color: theme.muted,
+        "text-background-color": theme.ground,
+        "text-background-opacity": 1,
+        "text-background-padding": theme["spacing-xs"],
+        "text-background-shape": "roundrectangle",
+      },
+    },
     { selector: "node.dimmed, edge.dimmed", style: { opacity: theme["dim-node"] } },
     { selector: "node.module.dimmed", style: { opacity: theme["dim-module"] } },
     {

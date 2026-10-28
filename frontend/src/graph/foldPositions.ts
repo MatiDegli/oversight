@@ -16,6 +16,7 @@ export function foldPositions(
   elements: readonly GraphElement[],
   expanded: ReadonlySet<string>,
   theme: GeometryTokens,
+  foldedModules: ReadonlySet<string> = new Set(),
 ) {
   const g = nodeGeometry(theme);
   const nodes = elements.filter((e) => e.group === "nodes");
@@ -52,11 +53,12 @@ export function foldPositions(
   const roots = children.get("") ?? [];
   roots.forEach(measure);
   const positions = new Map<string, Point>();
-  const visible = representatives(nodes, expanded);
+  const visible = representatives(nodes, expanded, foldedModules);
   const place = (node: GraphElement, dy: number, hiddenBy?: string): number => {
     const box = full.get(node.data.id);
     if (!box) return 0;
-    const folded = node.data.kind === "class" && !expanded.has(node.data.id);
+    const moduleFold = node.data.kind === "module" && foldedModules.has(node.data.id);
+    const folded = moduleFold || (node.data.kind === "class" && !expanded.has(node.data.id));
     visible.set(node.data.id, hiddenBy ?? node.data.id);
     const kids = [...(children.get(node.data.id) ?? [])].sort(
       (a, b) =>
@@ -68,7 +70,7 @@ export function foldPositions(
       removed += place(kid, dy - removed, hiddenBy ?? (folded ? node.data.id : undefined));
     const height = folded ? g.headerHeight : box.height - removed;
     positions.set(node.data.id, { x: box.x + box.width / 2, y: box.y + dy + height / 2 });
-    return box.height - height;
+    return moduleFold ? removed : box.height - height;
   };
   const columns = new Map<number, GraphElement[]>();
   for (const root of roots) {
@@ -83,7 +85,11 @@ export function foldPositions(
   return { positions, visible };
 }
 
-function representatives(nodes: readonly GraphElement[], expanded: ReadonlySet<string>) {
+function representatives(
+  nodes: readonly GraphElement[],
+  expanded: ReadonlySet<string>,
+  foldedModules: ReadonlySet<string>,
+) {
   const visible = new Map<string, string>();
   const byId = new Map(nodes.map((node) => [node.data.id, node]));
   for (const node of nodes) {
@@ -92,7 +98,11 @@ function representatives(nodes: readonly GraphElement[], expanded: ReadonlySet<s
     while (ancestor.data.parent) {
       const parent = byId.get(ancestor.data.parent);
       if (!parent) break;
-      if (parent.data.kind === "class" && !expanded.has(parent.data.id)) id = parent.data.id;
+      if (
+        (parent.data.kind === "class" && !expanded.has(parent.data.id)) ||
+        foldedModules.has(parent.data.id)
+      )
+        id = parent.data.id;
       ancestor = parent;
     }
     visible.set(node.data.id, id);

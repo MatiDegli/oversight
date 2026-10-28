@@ -67,6 +67,16 @@ async function clickClass(page: Page) {
   await page.mouse.click(center.x, y ?? center.y);
 }
 async function settled(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            resolve();
+          }),
+        ),
+      ),
+  );
   await browserExpect.poll(async () => (await report(page)).animating).toBe(false);
 }
 

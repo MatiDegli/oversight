@@ -291,7 +291,22 @@ export function headerLayers(
     ];
   }
   return [
-    titleLayer(theme, title, HEADER.titleWidth, top),
+    titleLayer(
+      theme,
+      fitTitle(
+        theme,
+        title,
+        Math.max(
+          0,
+          size.width -
+            2 * inset -
+            Math.min(HEADER.countWidth, count.length * px(theme["frame-count-size"]) * GLYPH_EM) -
+            px(theme["node-word-gap"]),
+        ),
+      ),
+      Math.max(1, Math.min(HEADER.titleWidth, size.width - 2 * inset)),
+      top,
+    ),
     trailing(
       HEADER.countWidth,
       text(

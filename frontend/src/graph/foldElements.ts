@@ -24,9 +24,13 @@ function combinedMarks(nodes: GraphElement[]): NodeMarks | undefined {
 }
 
 /** Folded rows represent descendants' reads, changes, nearest cone distance and merged call edges. */
-export function foldElements(elements: GraphElement[], expanded: ReadonlySet<string>) {
+export function foldElements(
+  elements: GraphElement[],
+  expanded: ReadonlySet<string>,
+  foldedModules: ReadonlySet<string> = new Set(),
+) {
   const theme = getActiveTheme();
-  const { positions, visible } = foldPositions(elements, expanded, theme);
+  const { positions, visible } = foldPositions(elements, expanded, theme, foldedModules);
   const represented = new Map<string, GraphElement[]>();
   for (const node of elements.filter((e) => e.group === "nodes")) {
     const id = visible.get(node.data.id) ?? node.data.id;
@@ -36,7 +40,7 @@ export function foldElements(elements: GraphElement[], expanded: ReadonlySet<str
   for (const [id, group] of represented) {
     const original = group.find((e) => e.data.id === id);
     if (!original) continue;
-    const folded = original.data.kind === "class" && !expanded.has(id);
+    const folded = foldedModules.has(id) || (original.data.kind === "class" && !expanded.has(id));
     const classes = new Set(
       group
         .flatMap((e) => e.classes.split(" "))
@@ -58,7 +62,18 @@ export function foldElements(elements: GraphElement[], expanded: ReadonlySet<str
       ...original,
       data: {
         ...original.data,
-        ...(folded ? { h: nodeGeometry(theme).headerHeight } : {}),
+        ...(folded
+          ? {
+              w:
+                original.data.w ??
+                (original.data.kind === "module"
+                  ? nodeGeometry(theme).rowWidth +
+                    nodeGeometry(theme).outer.module.left +
+                    nodeGeometry(theme).outer.module.right
+                  : nodeGeometry(theme).rowWidth),
+              h: nodeGeometry(theme).headerHeight,
+            }
+          : {}),
         ...(marks ? { marks } : {}),
         ...(distance !== Infinity ? { distance } : {}),
       },
@@ -66,22 +81,48 @@ export function foldElements(elements: GraphElement[], expanded: ReadonlySet<str
       position: original.position ? positions.get(id) : undefined,
     });
   }
+  const byId = new Map(elements.filter((e) => e.group === "nodes").map((e) => [e.data.id, e]));
+  const moduleOf = (id: string) => {
+    let node = byId.get(id);
+    while (node?.data.parent) node = byId.get(node.data.parent);
+    return node?.data.id ?? id;
+  };
   const merged = new Map<string, GraphElement>();
   for (const edge of elements.filter((e) => e.group === "edges")) {
-    const source = visible.get(edge.data.source ?? "") ?? edge.data.source;
-    const target = visible.get(edge.data.target ?? "") ?? edge.data.target;
+    const sourceModule = moduleOf(edge.data.source ?? "");
+    const targetModule = moduleOf(edge.data.target ?? "");
+    const aggregate =
+      edge.data.kind === "calls" &&
+      sourceModule !== targetModule &&
+      (foldedModules.has(sourceModule) || foldedModules.has(targetModule));
+    const source = aggregate
+      ? sourceModule
+      : (visible.get(edge.data.source ?? "") ?? edge.data.source);
+    const target = aggregate
+      ? targetModule
+      : (visible.get(edge.data.target ?? "") ?? edge.data.target);
     const remapped = source !== edge.data.source || target !== edge.data.target;
     if (remapped && source === target) continue;
     const id = remapped ? `fold:${edge.data.kind}:${source ?? ""}>${target ?? ""}` : edge.data.id;
     const previous = merged.get(id);
     const classes = new Set([...(previous?.classes.split(" ") ?? []), ...edge.classes.split(" ")]);
+    if (aggregate) {
+      classes.add("aggregate");
+      classes.delete("quiet");
+    }
     if (previous && (!previous.classes.includes("dimmed") || !edge.classes.includes("dimmed")))
       classes.delete("dimmed");
     if (previous && (!previous.classes.includes("quiet") || !edge.classes.includes("quiet")))
       classes.delete("quiet");
     merged.set(id, {
       ...edge,
-      data: { ...edge.data, id, source, target },
+      data: {
+        ...edge.data,
+        id,
+        source,
+        target,
+        ...(aggregate ? { callCount: (previous?.data.callCount ?? 0) + 1 } : {}),
+      },
       classes: [...classes].join(" "),
     });
   }

@@ -213,8 +213,9 @@ export function hubOf(cy: Core): string | null {
 export function startCamera(cy: Core, area?: Box): void {
   const nodes = cy.nodes();
   if (nodes.empty()) return;
-  const hub = hubOf(cy);
-  const home = hub === null ? undefined : cy.getElementById(hub).ancestors().last();
+  const hub = (cy.scratch("fullHub") as string | undefined) ?? hubOf(cy);
+  const target = hub === null ? undefined : cy.getElementById(hub);
+  const home = target?.ancestors().nonempty() ? target.ancestors().last() : target;
   const bounds = (collection: Pick<CollectionReturnValue, "boundingBox">): Box => {
     const box = collection.boundingBox({ includeLabels: false, includeOverlays: false });
     return { x1: box.x1, y1: box.y1, x2: box.x2, y2: box.y2 };

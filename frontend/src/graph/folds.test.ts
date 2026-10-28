@@ -187,3 +187,52 @@ describe("fold projection", () => {
     ).not.toContain("quiet");
   });
 });
+
+it("aggregates only cross-file calls by directed module pair with either end folded", () => {
+  const modules = new Set(graph.nodes.filter((n) => n.kind === "module").map((n) => n.id));
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const moduleOf = (id: string) => {
+    let node = byId.get(id);
+    while (node?.parent_id) node = byId.get(node.parent_id);
+    return node?.id;
+  };
+  const reverse = {
+    group: "edges" as const,
+    data: {
+      id: "reverse",
+      kind: "calls" as const,
+      source: "shop.pricing:compute_price",
+      target: add,
+    },
+    classes: "calls possible",
+  };
+  for (const folded of [modules, new Set(["shop.cart"]), new Set(["shop.pricing"])]) {
+    const projected = foldElements([...full, reverse], allOpen, folded);
+    const expected = new Map<string, number>();
+    for (const e of [...full, reverse].filter((e) => e.data.kind === "calls")) {
+      const a = moduleOf(e.data.source ?? ""),
+        b = moduleOf(e.data.target ?? "");
+      if (a && b && a !== b && (folded.has(a) || folded.has(b)))
+        expected.set(`${a}>${b}`, (expected.get(`${a}>${b}`) ?? 0) + 1);
+    }
+    const actual = new Map(
+      projected.elements
+        .filter((e) => e.classes.includes("aggregate"))
+        .map((e) => [`${e.data.source ?? ""}>${e.data.target ?? ""}`, e.data.callCount]),
+    );
+    expect(actual).toEqual(expected);
+    expect(actual.get("shop.pricing>shop.cart")).toBe(1);
+    expect(actual.get("shop.cart>shop.pricing")).toBeGreaterThan(1);
+    const before = foldElements(full, allOpen, modules);
+    const after = foldElements(
+      full,
+      allOpen,
+      new Set([...modules].filter((id) => id !== "shop.pricing")),
+    );
+    for (const id of modules)
+      if (id !== "shop.pricing")
+        expect(after.elements.find((e) => e.data.id === id)?.position).toEqual(
+          before.elements.find((e) => e.data.id === id)?.position,
+        );
+  }
+});

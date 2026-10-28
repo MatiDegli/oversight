@@ -55,7 +55,15 @@ const graph: GraphSnapshot = {
     compute: { x: 650, y: 200 },
   },
 };
-stateStore.setState({ state: { ...createInitialState(), graph } });
+stateStore.setState({
+  state: {
+    ...createInitialState(),
+    graph,
+    focus: {
+      A: { agent_id: "A", mode: "read", node_ids: ["Cart:add", "stock", "compute"], ranges: [] },
+    },
+  },
+});
 const host = document.createElement("div");
 host.style.height = "100vh";
 document.body.replaceChildren(host);

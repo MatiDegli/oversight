@@ -7,7 +7,7 @@
 // meets its two nodes (offsets from the node's centre, in px) and where it bends, in the terms
 // Cytoscape's `segments` style takes (weights along the line between the two ends, distances
 // across it), which the stylesheet reads from the edge's data.
-import type { Core } from "cytoscape";
+import type { Core, EdgeCollection } from "cytoscape";
 
 import { crosses, orthogonalPath, simplify } from "./orthogonal";
 import type { XY } from "./orthogonal";
@@ -153,11 +153,47 @@ export function tuningFrom(theme: RouteTheme): Tuning {
   };
 }
 
+interface RoutingContext {
+  boxes: RouteBox[];
+  calls: RouteEdge[];
+  edges: EdgeCollection;
+}
+const contexts = new WeakMap<Core, RoutingContext>();
+
+function writeRoutes(cy: Core, edges: EdgeCollection, routes: ReadonlyMap<string, Route>) {
+  cy.batch(() => {
+    for (const edge of edges) {
+      const route = routes.get(edge.id());
+      edge.toggleClass("unroutable", !route && !edge.hasClass("imports"));
+      if (route) edge.data("route", route);
+      else if (edge.data("route") !== undefined) edge.removeData("route");
+    }
+  });
+}
+
+/** A module drag is a rigid translation: reuse measured boxes, never remeasure SVG labels. */
+export function dragRoutes(cy: Core, moduleId: string, dx: number, dy: number, theme: RouteTheme) {
+  const context = contexts.get(cy);
+  if (!context) return;
+  for (const box of context.boxes)
+    if (box.top === moduleId) {
+      box.x1 += dx;
+      box.x2 += dx;
+      box.y1 += dy;
+      box.y2 += dy;
+      box.anchorY += dy;
+    }
+  const routes = routeEdges(context.boxes, context.calls, tuningFrom(theme));
+  writeRoutes(cy, context.edges, routes);
+  cy.scratch("routeCount", Number(cy.scratch("routeCount") ?? 0) + 1);
+}
+
 /**
  * Routes the graph's call edges and stores each route in its edge's data, where the stylesheet reads
  * it. Run after the nodes are placed and again whenever one moves; it moves nothing itself.
  */
 export function applyRoutes(cy: Core, theme: RouteTheme): void {
+  cy.scratch("routeCount", Number(cy.scratch("routeCount") ?? 0) + 1);
   const px = Number.parseFloat;
   const boxes: RouteBox[] = cy.nodes().map((node) => {
     const box = node.boundingBox({ includeLabels: false, includeOverlays: false });
@@ -186,12 +222,7 @@ export function applyRoutes(cy: Core, theme: RouteTheme): void {
     .filter((edge) => !edge.hasClass("imports"))
     .map((edge) => ({ id: edge.id(), source: edge.source().id(), target: edge.target().id() }));
   const routes = routeEdges(boxes, calls, tuningFrom(theme));
-  cy.batch(() => {
-    for (const edge of cy.edges()) {
-      const route = routes.get(edge.id());
-      edge.toggleClass("unroutable", !route && !edge.hasClass("imports"));
-      if (route) edge.data("route", route);
-      else if (edge.data("route") !== undefined) edge.removeData("route");
-    }
-  });
+  const edges = cy.edges();
+  contexts.set(cy, { boxes, calls, edges });
+  writeRoutes(cy, edges, routes);
 }
