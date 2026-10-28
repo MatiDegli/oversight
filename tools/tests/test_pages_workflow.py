@@ -47,6 +47,16 @@ def assert_pinned_actions(text: str) -> None:
             assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-fA-F]{40}", action), action
 
 
+def assert_install_matches_ci(text: str) -> None:
+    build = block(block(text, "jobs"), "build")
+    installs = re.findall(r"^\s*- run: (.+)$", build, re.MULTILINE)
+    assert installs == ["make install"]
+    ci_jobs = block((PAGES.parent / "ci.yml").read_text(), "jobs")
+    for job in ("check", "browser"):
+        commands = re.findall(r"^\s*- run: (.+)$", block(ci_jobs, job), re.MULTILINE)
+        assert commands[0] == installs[0]
+
+
 def assert_pages_policy(text: str) -> None:
     assert_pinned_actions(text)
     # CI has repository-local actions; Pages deliberately permits only pinned remote actions.
@@ -78,12 +88,16 @@ def assert_pages_policy(text: str) -> None:
     ) in build
     assert "cp frontend/dist/pages/index.html frontend/dist/pages/404.html\n" in build
     assert "path: frontend/dist/pages" in build
-    assert "pnpm -C frontend install --offline --frozen-lockfile\n" in build
+    assert_install_matches_ci(text)
     assert "secrets" not in text
 
 
 def test_pages_deploys_only_the_selected_main_commit_with_least_privilege() -> None:
     assert_pages_policy(PAGES.read_text())
+
+
+def test_build_installs_exactly_as_ci_jobs() -> None:
+    assert_install_matches_ci(PAGES.read_text())
 
 
 @pytest.mark.parametrize("workflow", ["ci.yml", "pages.yml"])
@@ -135,6 +149,12 @@ def test_setup_actions_match_ci_and_pages_actions_keep_the_approved_pins() -> No
         ("head_sha || github.sha", "head_branch || github.ref"),
         ("--base /oversight/", "--base /"),
         ("--mode replay", "--mode production"),
+        (
+            "      - run: make install\n",
+            "      - run: uv sync --frozen\n"
+            "      - run: pnpm -C frontend fetch --frozen-lockfile\n"
+            "      - run: pnpm -C frontend install --offline --frozen-lockfile\n",
+        ),
         ("      contents: read", "      contents: read\n      id-token: write"),
     ],
 )
@@ -145,10 +165,30 @@ def test_policy_rejects_deployment_regressions(old: str, new: str) -> None:
         assert_pages_policy(text.replace(old, new))
 
 
+def smoke_script(text: str) -> str:
+    steps = re.findall(
+        r"^      - name: Smoke test the published HTML and a hashed asset\n"
+        r"((?:^        [^\n]*\n|^\n)*)",
+        text,
+        re.MULTILINE,
+    )
+    assert len(steps) == 1, "Expected one published HTML smoke step"
+    run = block(steps[0], "run", indent=8)
+    assert run.startswith("|\n"), "Expected a literal smoke script"
+    return run.removeprefix("|\n")
+
+
+def test_smoke_script_stays_anchored_when_later_run_step_is_appended() -> None:
+    text = PAGES.read_text()
+    later_step = "      - name: A later step\n        run: |\n          echo later\n"
+    script = smoke_script(text + later_step)
+    assert script == smoke_script(text)
+    assert '"$PAGE_URL" -o /tmp/pages.html' in script
+
+
 @pytest.mark.parametrize("response", ["valid", "wrong-base", "http-error", "empty-asset"])
 def test_published_smoke_checks_base_asset_and_http_failures(tmp_path: Path, response: str) -> None:
-    text = PAGES.read_text()
-    script = textwrap.dedent(text.split("        run: |\n")[-1])
+    script = smoke_script(PAGES.read_text())
     fake = tmp_path / "curl"
     fake.write_text(
         f"#!{sys.executable}\n"
