@@ -73,7 +73,17 @@ async def test_tree_on_main_and_agent_is_sorted_bounded_and_guarded(tmp_path: Pa
         assert (
             await server.client.get("/tree", headers={"Origin": "http://evil.invalid"})
         ).status_code == 403
-        created = AgentCreated.model_validate((await start(server)).json())
+        # C2a allows listing a nested .git safely, but refuses Git operations while it exists.
+        assert error_code(await start(server)) == (500, "internal")
+        assert any(
+            event.type == "error" and "nested or linked Git entry" in event.payload.message
+            for event in server.events()
+        )
+        (root / "a" / ".git" / "secret").unlink()
+        (root / "a" / ".git").rmdir()
+        started = await start(server)
+        assert started.status_code == 201, (started.text, server.events())
+        created = AgentCreated.model_validate(started.json())
         await server.until(is_type("agent.status", state="ready_for_review"))
         agent_tree = TreeResponse.model_validate(
             (await server.client.get("/tree", params={"agent": created.agent_id})).json()

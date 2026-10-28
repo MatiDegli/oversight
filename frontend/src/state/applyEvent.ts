@@ -109,6 +109,7 @@ export function applyEvent(state: State, event: ServerEvent): State {
                 node_ids: update.node_ids,
               },
             },
+            fileUpdateSeq: { ...change.fileUpdateSeq, [update.file.path]: event.seq },
             graph: update.graph,
             files_changed: update.files_changed,
             lines_added: update.lines_added,

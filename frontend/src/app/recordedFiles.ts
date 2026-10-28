@@ -16,7 +16,12 @@ export function createRecordedFiles(readState: () => State): FileAccess {
       const merged = changes
         .filter((change) => change.resolution?.merge === "merged")
         .sort((a, b) => (a.resolutionSeq ?? 0) - (b.resolutionSeq ?? 0));
-      const change = merged.at(-1) ?? changes[0];
+      const change =
+        agent === undefined
+          ? (merged.at(-1) ?? changes[0])
+          : changes.sort(
+              (a, b) => (b.fileUpdateSeq?.[path] ?? 0) - (a.fileUpdateSeq?.[path] ?? 0),
+            )[0];
       const file = change?.files[path]?.file;
       const content = agent !== undefined || merged.length ? file?.modified : file?.original;
       if (content === null || content === undefined)

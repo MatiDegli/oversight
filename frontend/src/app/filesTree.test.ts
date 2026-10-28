@@ -107,3 +107,34 @@ it("successive recorded merges use resolution order, independent of agent start 
     "latest",
   );
 });
+
+it("agent reads use the latest update to the path across recorded revisions", async () => {
+  const first = events.find((event) => event.type === "change.updated");
+  const run = events[0];
+  if (!first || !run) throw new Error("Fixture needs a run and an edit");
+  const path = first.payload.file.path;
+  const agent = first.payload.agent_id;
+  let current = applyEvent(createInitialState(), run);
+  const files = createRecordedFiles(() => current);
+  const update = (change_id: string, modified: string, filePath = path, agent_id = agent) => {
+    current = applyEvent(current, {
+      ...first,
+      seq: current.lastSeq + 1,
+      payload: {
+        ...first.payload,
+        change_id,
+        agent_id,
+        file: { ...first.payload.file, path: filePath, modified },
+      },
+    });
+    expect(current.gap).toBe(false);
+  };
+  update("change-1", "first revision");
+  update("change-2", "second revision");
+  expect((await files.readFile(path, agent)).content).toBe("second revision");
+  // Updating the first inserted change must win over object insertion order.
+  update("change-1", "latest revision");
+  update("change-2", "unrelated file", "shop/other.py");
+  update("change-3", "other agent", path, "agent-999");
+  expect((await files.readFile(path, agent)).content).toBe("latest revision");
+});

@@ -6,9 +6,11 @@ import os
 import stat
 import time
 from contextlib import closing
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from oversight.workspace.locks import offload
 from oversight_contracts.commands import TreeFile
 
 if TYPE_CHECKING:
@@ -130,7 +132,7 @@ def walk_tree(root: Path, deadline: float) -> tuple[list[str], list[TreeFile], b
 
 
 async def list_tree(tree: "Tree") -> tuple[list[str], list[TreeFile], bool]:
-    """Include lock acquisition in the two second request bound; disk work runs off-loop."""
+    """Bound lock acquisition and disk work; join cancelled work before releasing the lock."""
     deadline = time.monotonic() + TREE_TIMEOUT_S
     async with asyncio.timeout(TREE_TIMEOUT_S), tree.section(locked=True):
-        return await asyncio.to_thread(walk_tree, tree.root, deadline)
+        return await offload(partial(walk_tree, tree.root, deadline))
