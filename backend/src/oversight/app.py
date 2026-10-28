@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI
 
+from oversight import runtime_review
 from oversight.agents import (
     BASETEN_BASE_URL,
     FAKE_MODEL,
@@ -53,7 +54,7 @@ from oversight.api import (
     create_router,
     install_error_handlers,
 )
-from oversight.changes import ChangeManager, ChangeNotFound, Revision, WrongState
+from oversight.changes import ChangeManager, ReviewCapture, Revision, WrongState
 from oversight.events import (
     EventPayload,
     EventStore,
@@ -65,6 +66,8 @@ from oversight.events import (
 )
 from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
+from oversight.runtime_review import ReviewerCall
+from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
 from oversight.workspace import Tree, Workspace
@@ -83,6 +86,7 @@ from oversight_contracts.common import Slot
 from oversight_contracts.events import (
     AgentStatus,
     Budget,
+    ChangeProposed,
     ChangeResolved,
     ErrorReport,
     Limits,
@@ -182,8 +186,19 @@ class _Agent:
 class LiveRun:
     """One server's run: its workspace, store, ledger and manager, and the commands."""
 
-    def __init__(self, settings: Settings, client_factory: ClientFactory | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        client_factory: ClientFactory | None = None,
+        *,
+        reviewer: ReviewerCall | None = None,
+    ) -> None:
         self._settings = settings
+        self._closing = False
+        self._reviewer = reviewer
+        self._reviews: dict[str, asyncio.Task[None]] = {}
+        self._review_pending: dict[str, tuple[ReviewCapture, ChangeProposed]] = {}
+        self._author_models: dict[str, set[str | None]] = {}
         self._slot_profiles: dict[Slot, ModelProfile] = {}
         """The default profile of each slot this server offers, in `OFFERED_SLOTS` order."""
         self._scripts: dict[Slot, Script] = {}
@@ -316,13 +331,16 @@ class LiveRun:
             main_graph=graph,
             main_snapshot=snapshot,
             git_timeout_s=GIT_TIMEOUT_S,
+            review=self,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
 
     async def shutdown(self) -> None:
         """Every step runs, even after one failed or was cancelled; the first such is re-raised."""
+        self._closing = True
         failure: BaseException | None = None
         steps = (
+            self._drain_reviews,
             self._stop_runs,
             self._stop_venv,
             self._close_manager,
@@ -338,6 +356,18 @@ class LiveRun:
         self.workspace.release_runtime()
         if failure is not None:
             raise failure
+
+    def facts_ready(
+        self,
+        capture: ReviewCapture,
+        proposal: ChangeProposed,
+        *,
+        author: Literal["agent", "user"],
+    ) -> None:
+        runtime_review.facts_ready(self, capture, proposal, author=author)
+
+    async def _drain_reviews(self) -> None:
+        await runtime_review.drain_reviews(self)
 
     async def _stop_runs(self) -> None:
         """Cancel each run and each Request changes decision, and wait for them: a process group
@@ -427,6 +457,12 @@ class LiveRun:
             payload = payload.model_copy(update={"base_commit": base})
             validate_agent_status(payload, base_commit=base)
         stored = await self.store.publish(payload)
+        if (
+            self._settings.cross_review
+            and isinstance(payload, UsageTick)
+            and payload.role == "agent"
+        ):
+            self._author_models.setdefault(payload.agent_id, set()).add(payload.model)
         if isinstance(payload, ChangeResolved) and (
             payload.decision == "rejected" or payload.merge == "merged"
         ):
@@ -693,6 +729,7 @@ class LiveRun:
         finally:
             self._runs.pop(task.agent_id, None)
             manager.run_ended(task.agent_id, end, steps=run.steps if run else None)
+            runtime_review.run_ended(self, task.agent_id, end)
 
     async def _revise(
         self,
@@ -722,6 +759,7 @@ class LiveRun:
         finally:
             self._forget(self._runs, task.agent_id, asyncio.current_task())
             manager.run_ended(task.agent_id, end, steps=run.steps)
+            runtime_review.run_ended(self, task.agent_id, end)
 
     @staticmethod
     def _forget(records: dict[str, Any], agent_id: str, mine: object) -> None:
@@ -787,36 +825,7 @@ class LiveRun:
         )
 
     def request_changes(self, change_id: str, request: RequestChanges) -> None:
-        """Send the comment back to the agent, which resumes in its kept run. A revision spends
-        credits like a start, so a metered agent is refused while the brake is closed, and nothing
-        revises while main is suspect. The checks come before the manager's, so a refusal changes
-        nothing; `ChangeNotFound` and `WrongState` are the manager's, mapped by the route."""
-        manager = self._manager
-        if manager is None:
-            raise ApiError("wrong_state", "the run has not started")
-        if not request.comment.strip():
-            raise ApiError("invalid_request", "the comment is empty")
-        owner = next(
-            ((agent_id, a) for agent_id, a in self._agents.items() if a.change_id == change_id),
-            None,
-        )
-        if owner is None:
-            raise ChangeNotFound(change_id)
-        agent_id, agent = owner
-        if manager.main_suspect:
-            raise ApiError("wrong_state", MAIN_SUSPECT)
-        self._check_spending(agent.slot, agent.profile)
-        run = self._kept.get(agent_id)
-        if run is None:  # resolved, or its run never started: no state takes a request
-            raise ApiError("wrong_state", f"{change_id} has no run to resume")
-        decision = manager.request_changes(
-            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
-        )
-        # No `await` from the manager's flip to the registration: a shutdown finds both.
-        self._decisions[agent_id] = decision
-        self._runs[agent_id] = asyncio.create_task(
-            self._revise(manager, agent, run, decision), name=f"revise-{agent_id}"
-        )
+        request_revision(self, change_id, request)
 
     def stop(self, agent_id: str) -> None:
         """Stop the agent and discard its change. Allowed while main is suspect, like Reject."""
@@ -855,12 +864,18 @@ def create_app(
     replay: ReplayConfig | None = None,
     *,
     client_factory: ClientFactory | None = None,
+    reviewer: ReviewerCall | None = None,
 ) -> FastAPI:
     """Without `replay`, the live app. `client_factory` builds each agent's model client from its
     profile and slot; tests pass one, and without it each provider gets its own endpoint and key
-    and the fake model its slot's script."""
+    and the fake model its slot's script. `reviewer` supplies the separate review call transport;
+    PR3a does not install a production transport before PR3b accounting is available."""
     settings = settings or Settings.load()
-    app = _live_app(settings, client_factory) if replay is None else _replay_app(settings, replay)
+    app = (
+        _live_app(settings, client_factory, reviewer)
+        if replay is None
+        else _replay_app(settings, replay)
+    )
     # Last added runs first: guard -> bounded body -> routing (live and replay).
     app.add_middleware(BodyLimit)
     app.add_middleware(ApiGuard, policy=AuthorityPolicy(settings.port, settings.vite_port))
@@ -869,8 +884,12 @@ def create_app(
     return app
 
 
-def _live_app(settings: Settings, client_factory: ClientFactory | None) -> FastAPI:
-    live = LiveRun(settings, client_factory)
+def _live_app(
+    settings: Settings,
+    client_factory: ClientFactory | None,
+    reviewer: ReviewerCall | None = None,
+) -> FastAPI:
+    live = LiveRun(settings, client_factory, reviewer=reviewer)
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:

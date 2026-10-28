@@ -32,10 +32,10 @@ from oversight.changes import _delivery as delivery
 from oversight.changes import _files as files
 from oversight.changes import _proposal as proposal
 from oversight.changes import _revision as revision
-from oversight.changes._cross_review import ReviewCapture
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._resolution_validation import validate_resolution_intent
+from oversight.changes._review_port import ReviewCapture, ReviewPort
 from oversight.changes._state import (
     APPROVABLE,
     REJECTABLE,
@@ -77,6 +77,7 @@ class ChangeManager:
         main_snapshot: GraphSnapshot,
         clock: Clock = system_clock,
         git_timeout_s: float = 30,
+        review: ReviewPort | None = None,
     ) -> None:
         self._ctx = ChangeContext(
             workspace,
@@ -87,6 +88,7 @@ class ChangeManager:
             ChangeState(main_snapshot),
             ChangePorts(
                 drain=lambda rec: self._drain(rec),
+                review=review,
             ),
         )
 
@@ -234,20 +236,36 @@ class ChangeManager:
         return await cross_review.capture(self._ctx, change_id)
 
     def track_review(self, capture: ReviewCapture, task: asyncio.Task[Any]) -> None:
-        """Attach cancellable work to the admitted target; lifecycle ownership arrives in PR3a."""
+        """Attach the runtime-owned task so human admission cancels it without awaiting."""
         cross_review.current(self._ctx, capture).review_task = task
 
-    def review_current(self, capture: ReviewCapture) -> bool:
+    def review_current(self, capture: ReviewCapture, *, require_finished: bool = True) -> bool:
         try:
-            cross_review.current(self._ctx, capture)
+            cross_review.current(self._ctx, capture, require_finished=require_finished)
         except WrongState:
             return False
         return True
 
+    async def review_diff(self, capture: ReviewCapture) -> str:
+        """Read only the captured, clean worktree, under the usual main → worktree locks."""
+        rec = cross_review.current(self._ctx, capture)
+        async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
+            cross_review.current(self._ctx, capture)
+            await cross_review.verify_tree(self._ctx, capture)
+            diff = await self._ctx.git(
+                rec.tree,
+                "diff",
+                "--no-ext-diff",
+                capture.target.base_commit,
+                capture.target.head_commit,
+            )
+            cross_review.current(self._ctx, capture)
+            return diff
+
     def request_cross_review(
         self, capture: ReviewCapture, outcome: ReviewOutcome, *, review_seq: int
     ) -> asyncio.Task[Revision | None]:
-        """Direct server actor for tests and future runtime wiring; models have no decision tool."""
+        """Server actor used by runtime admission; models have no decision tool."""
         try:
             rec = cross_review.prepare(self._ctx, capture, outcome, review_seq)
         except cross_review.RoundExhausted:

@@ -667,3 +667,17 @@ PR1 already supplies the default-off switch. PR3a carries runtime registration, 
 lifecycle wiring, including explicit demo activation; PR3b carries call scope, accounting, the
 Meta brake and distinct review-ledger failure handling. PR4 carries replay/UI projection and
 recognition of the shared fixture. Contracts remain frozen at 1.4.0.
+
+## Cross-review runtime lifecycle (PR3a)
+
+Confirmed, uninterrupted agent proposal facts notify an internal ReviewPort with the captured
+candidate and explicit authorship. LiveRun waits for run_ended and a free, ready author before
+reviewing. Human saves never arm reviews; halted authors receive Needs you without new budget.
+HTTP and automatic Request changes share synchronous admission and task registration. Human
+admission cancels tracked reviews; shutdown closes admission and drains reviews before runs.
+
+The reviewer callable is injected. PR3a tests drive the PR1 adapter with scripted clients;
+production call transport remains unconfigured until PR3b supplies its scope and accounting.
+Enabling the switch without that transport produces reviewer_missing without a model call.
+The default-off path adds no events or tasks and preserves the existing level 2 replay bytes.
+Contracts stay at 1.4.0; reducer and UI projection remain PR4.

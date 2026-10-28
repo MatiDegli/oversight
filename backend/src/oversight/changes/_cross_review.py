@@ -1,15 +1,14 @@
 """Server authority for a captured review; no model calls, timers or runtime scheduling."""
 
 import asyncio
-from dataclasses import dataclass
 
 from oversight.agents import ReviewOutcome
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._resolution_validation import validate_resolution_intent
+from oversight.changes._review_port import ReviewCapture
 from oversight.changes._state import ChangeRecord, WrongState
 from oversight.changes._support import ChangeContext
 from oversight.events import format_needs_you
-from oversight.workspace import Tree
 from oversight_contracts.review import ChangeTarget
 
 
@@ -17,15 +16,13 @@ class RoundExhausted(WrongState):
     """The per-change automatic revision has already been consumed."""
 
 
-@dataclass(frozen=True)
-class ReviewCapture:
-    """Main is material context, not part of review freshness (maintainer decision 6c)."""
-
-    target: ChangeTarget
-    tree: Tree
-
-
-def current(ctx: ChangeContext, capture: ReviewCapture, *, reserved: bool = False) -> ChangeRecord:
+def current(
+    ctx: ChangeContext,
+    capture: ReviewCapture,
+    *,
+    reserved: bool = False,
+    require_finished: bool = True,
+) -> ChangeRecord:
     target = capture.target
     rec = ctx.state.changes.get(target.change_id)
     state = (
@@ -35,7 +32,7 @@ def current(ctx: ChangeContext, capture: ReviewCapture, *, reserved: bool = Fals
         rec is None
         or ctx.state.closing
         or rec.person_acted
-        or not rec.review_ready
+        or (require_finished and not rec.review_ready)
         or rec.delivery_rejected
         or state != "ready"
         or (reserved and (rec.state != "deciding" or not rec.review_reserved))
