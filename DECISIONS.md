@@ -678,3 +678,10 @@ PR1 already supplies the default-off switch. PR3a carries runtime registration, 
 lifecycle wiring, including explicit demo activation; PR3b carries call scope, accounting, the
 Meta brake and distinct review-ledger failure handling. PR4 carries replay/UI projection and
 recognition of the shared fixture. Contracts remain frozen at 1.4.0.
+
+## 2026-10-28 — Incremental graph presentation
+
+Guard Cytoscape data, class and interaction-state writes: even equal writes trigger expensive
+compound restyles and SVG hashing. Keep fold scratch outside the style setter, retain selection
+and routing classes, share layers across background properties and encode embedded fonts once
+per family; keep the same SVG bytes, geometry, tokens and motion design.

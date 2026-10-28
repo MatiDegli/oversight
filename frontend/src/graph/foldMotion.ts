@@ -2,6 +2,7 @@ import type { AnimationOptions, Core, Position } from "cytoscape";
 
 import { getActiveTheme } from "../theme";
 
+import { setScratch } from "./scratch";
 import { settle } from "./updateGraph";
 
 /** Slide only existing rows; compound frames follow their children, with no camera movement. */
@@ -27,7 +28,7 @@ export function slideRows(
     return;
   }
   const theme = getActiveTheme();
-  cy.scratch("foldAnimating", true);
+  setScratch(cy, "foldAnimating", true);
   for (const [i, [id, position]] of moving.entries()) {
     cy.getElementById(id).animate(
       { position },
@@ -41,7 +42,7 @@ export function slideRows(
                 settle(cy);
               },
               complete: () => {
-                cy.scratch("foldAnimating", false);
+                setScratch(cy, "foldAnimating", false);
                 settle(cy);
               },
             }

@@ -9,6 +9,7 @@
 // across it), which the stylesheet reads from the edge's data.
 import type { Core, EdgeCollection } from "cytoscape";
 
+import { writeData } from "./writes";
 import { crosses, orthogonalPath, simplify } from "./orthogonal";
 import type { XY } from "./orthogonal";
 
@@ -198,9 +199,9 @@ function writeRoutes(cy: Core, edges: EdgeCollection, routes: ReadonlyMap<string
   cy.batch(() => {
     for (const edge of edges) {
       const route = routes.get(edge.id());
-      edge.toggleClass("unroutable", !route && !edge.hasClass("imports"));
-      if (route) edge.data("route", route);
-      else if (edge.data("route") !== undefined) edge.removeData("route");
+      const unroutable = !route && !edge.hasClass("imports");
+      if (edge.hasClass("unroutable") !== unroutable) edge.toggleClass("unroutable", unroutable);
+      writeData(edge, { route });
     }
   });
 }

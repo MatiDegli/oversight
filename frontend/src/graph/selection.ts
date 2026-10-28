@@ -12,11 +12,14 @@ export function showSelection(cy: Core, nodeId: string | null) {
   cy.batch(() => {
     const elements = cy.elements();
     const target = nodeId === null ? cy.collection() : cy.getElementById(visibleId(cy, nodeId));
-    elements.unselectify();
-    elements.difference(target).filter(":selected").selectify().unselect().unselectify();
-    target.selectify().select().unselectify();
+    elements.filter(":selectable").unselectify();
+    if (!elements.filter(":selected").same(target)) {
+      elements.difference(target).filter(":selected").selectify().unselect().unselectify();
+      target.selectify().select().unselectify();
+    }
     // The edges at the selected node are the ones worth reading, so they leave the quiet.
-    cy.edges().removeClass("touching");
-    target.connectedEdges().addClass("touching");
+    const touching = target.connectedEdges();
+    cy.edges(".touching").difference(touching).removeClass("touching");
+    touching.not(".touching").addClass("touching");
   });
 }

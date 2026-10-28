@@ -3,6 +3,7 @@ import badgeFont from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyp
 
 import type { getActiveTheme } from "../theme";
 
+import { cacheLayers } from "./layerCache";
 import { nodeGeometry } from "./geometry";
 import { headerLayers, marksClearance, marksLayer } from "./layers";
 import type { Band, Layer, NodeMarks } from "./layers";
@@ -31,6 +32,7 @@ type GraphTheme = Widen<ReturnType<typeof getActiveTheme>>;
  * the frame, so a line can still cross it.)
  */
 const LAYER = { frame: 1, edge: 2, leaf: 3 } as const;
+const encodedBadgeFonts = new Map<string, string>();
 
 export function graphStyles(
   theme: GraphTheme,
@@ -39,12 +41,24 @@ export function graphStyles(
   const px = Number.parseFloat;
   const agents = { A: "agent-a", B: "agent-b" } as const;
   const badgeSize = px(theme["distance-badge-size"]);
+  const badges = new Map<number, string>();
   const badge = (distance: number) => {
+    const previous = badges.get(distance);
+    if (previous !== undefined) return previous;
     // SVG images cannot see the page's @font-face. Embed the local font for the numeric badge.
     // This decorates the existing node without synthetic graph nodes or layout changes.
-    const font = `<style>@font-face{font-family:${theme["text-font"].split(",")[0] ?? "sans-serif"};src:url("${badgeFont}") format("woff2");font-weight:${String(theme["distance-badge-font-weight"])}}</style>`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(badgeSize)}" height="${String(badgeSize)}">${font}<circle cx="${String(badgeSize / 2)}" cy="${String(badgeSize / 2)}" r="${String(badgeSize / 2)}" fill="${theme.text}"/><text x="50%" y="50%" dy=".35em" text-anchor="middle" fill="${theme.page}" font-family='${theme["text-font"]}' font-size="${theme["distance-badge-font-size"]}" font-weight="${String(theme["distance-badge-font-weight"])}">${String(distance)}</text></svg>`;
-    const image = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    const family = theme["text-font"].split(",")[0] ?? "sans-serif";
+    const fontKey = `${family}|${String(theme["distance-badge-font-weight"])}`;
+    let encodedFont = encodedBadgeFonts.get(fontKey);
+    if (encodedFont === undefined) {
+      const font = `<style>@font-face{font-family:${theme["text-font"].split(",")[0] ?? "sans-serif"};src:url("${badgeFont}") format("woff2");font-weight:${String(theme["distance-badge-font-weight"])}}</style>`;
+      encodedFont = encodeURIComponent(font);
+      encodedBadgeFonts.set(fontKey, encodedFont);
+    }
+    const open = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(badgeSize)}" height="${String(badgeSize)}">`;
+    const body = `<circle cx="${String(badgeSize / 2)}" cy="${String(badgeSize / 2)}" r="${String(badgeSize / 2)}" fill="${theme.text}"/><text x="50%" y="50%" dy=".35em" text-anchor="middle" fill="${theme.page}" font-family='${theme["text-font"]}' font-size="${theme["distance-badge-font-size"]}" font-weight="${String(theme["distance-badge-font-weight"])}">${String(distance)}</text></svg>`;
+    const image = `data:image/svg+xml,${encodeURIComponent(open)}${encodedFont}${encodeURIComponent(body)}`;
+    badges.set(distance, image);
     return image;
   };
   const geometry = nodeGeometry(theme);
@@ -113,6 +127,8 @@ export function graphStyles(
       outer(node).width - px(theme["node-pad-left"]) - px(theme["node-pad-right"]) - taken,
     );
   };
+  const frameOnce = cacheLayers(frameLayers, true);
+  const leafOnce = cacheLayers(leafLayers, false);
   // One property per image: Cytoscape takes a list for each when a node carries several.
   const layered = (layers: (node: NodeSingular) => Layer[]) => ({
     "background-image": (node: NodeSingular) => layers(node).map((layer) => layer.image),
@@ -223,16 +239,16 @@ export function graphStyles(
     {
       // A frame's title and count are its header row, drawn as images; its label would sit above it.
       selector: "node:parent",
-      style: { label: "", ...layered(frameLayers) },
+      style: { label: "", ...layered(frameOnce) },
     },
     {
       // An empty module or class is a box of one header row; it wears its frame's title and count.
       selector: "node.module:childless, node.class:childless",
-      style: { label: "", ...layered(leafLayers) },
+      style: { label: "", ...layered(leafOnce) },
     },
     {
       selector: "node.marked:childless",
-      style: layered(leafLayers),
+      style: layered(leafOnce),
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
       (["A", "B"] as const).map((slot) => {
@@ -301,7 +317,7 @@ export function graphStyles(
     },
     {
       selector: "node.cone:childless",
-      style: layered(leafLayers),
+      style: layered(leafOnce),
     },
     {
       selector: "edge",
