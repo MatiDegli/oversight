@@ -1,13 +1,25 @@
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium, expect as check } from "@playwright/test";
-import type { Browser } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { beforeAll, afterAll, it, expect } from "vitest";
 import type { Slot } from "@contracts";
 import { agentLook, agentSlots, themes } from "../../theme";
 import type { GraphProbeHost } from "../../graph";
+
+// Let Chromium serialize rgba and color-mix tokens consistently with the rendered utilities.
+async function resolvedTint(page: Page, family: string) {
+  return page.evaluate((family) => {
+    const probe = document.createElement("span");
+    probe.style.backgroundColor = `var(--${family}-tint)`;
+    document.body.append(probe);
+    const color = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return color;
+  }, family);
+}
 
 let server: ViteDevServer, browser: Browser, html: string, url: string;
 const out = fileURLToPath(new URL("../../../../.shots/agent-look/", import.meta.url));
@@ -68,6 +80,11 @@ it.each(Object.keys(themes) as (keyof typeof themes)[])(
         const rgb = (hex: string) =>
           `rgb(${[1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)).join(", ")})`;
         expect(topLine).toBe(rgb(themes[theme][agentLook[slot].family]));
+        const palette = themes[theme];
+        const { family, text } = agentLook[slot];
+        const tintColor = await resolvedTint(page, family);
+        await check(card.getByRole("status")).toHaveCSS("color", rgb(palette[text]));
+        await check(card.getByRole("status")).toHaveCSS("background-color", tintColor);
         await page.waitForFunction(
           () =>
             (document
@@ -82,10 +99,19 @@ it.each(Object.keys(themes) as (keyof typeof themes)[])(
         }, slot);
         const panel = page.getByRole("complementary", { name: "Review panel", exact: true });
         await check(panel).toBeVisible();
-        await check(panel.getByText("Ready for review", { exact: true })).toBeVisible();
+        const pill = panel.getByText("Ready for review", { exact: true });
+        await check(pill).toBeVisible();
+        await check(pill).toHaveCSS("color", rgb(palette[text]));
+        await check(pill).toHaveCSS("background-color", tintColor);
         await check(
           page.getByRole("group", { name: `Agent ${slot}: Ready for review`, exact: true }),
         ).toBeVisible();
+        const avatar = page
+          .getByRole("group", { name: `Agent ${slot}: Ready for review`, exact: true })
+          .locator(":scope > span")
+          .first();
+        await check(avatar).toHaveCSS("color", rgb(palette[text]));
+        await check(avatar).toHaveCSS("background-color", tintColor);
         await panel.locator(".monaco-editor .view-lines").first().waitFor();
         await page.screenshot({
           path: `${out}${slot}-${theme}-review.png`,

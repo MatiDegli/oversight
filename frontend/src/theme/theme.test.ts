@@ -439,3 +439,19 @@ it.each(agentSlots)(
     }
   },
 );
+
+// D/E keep their approved text: the backing must supply contrast on darker day surfaces.
+it.each(["D", "E"] as const)("keeps day %s tint text readable across shell surfaces", (slot) => {
+  const { family, text } = agentLook[slot];
+  for (const surface of surfaces) {
+    const background = composite(themes.day[`${family}-tint`], themes.day[surface]);
+    expect(
+      contrast(themes.day[text], background),
+      `${slot} tint over ${surface}`,
+    ).toBeGreaterThanOrEqual(4.5);
+  }
+  for (const suffix of ["-node", "-node-new"] as const)
+    expect(
+      contrast(themes.day[text], themes.day[`${family}${suffix}`].color),
+    ).toBeGreaterThanOrEqual(4.5);
+});

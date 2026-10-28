@@ -1232,6 +1232,11 @@ palette and existing signal effects take precedence over generic craft-floor rec
 Audit note: the supplied flat-background measurements do not cover composited tints. Applying
 the unmodified A/B tint recipe gives dark F text/card tint 4.04:1, day D text/shell tint 3.80:1
 and day E text/shell tint 3.76:1. Dark F plain text on raised is 4.46:1 (raised is outside the
-supplied dark surface set). Treatment clarification remains pending; the exact approved graphic
-and text values are preserved, and the contrast tests retain these failures rather than silently
-weakening the 4.5:1 floor.
+supplied dark surface set). The 4.5:1 floor remains unchanged.
+
+Day D/E keep their approved graphic/text pairs. Their tint and node backings use an opaque
+7% graphic mix over day-card; new-node backings use 4%. Opacity prevents darker shell
+surfaces from reducing contrast: D tint/node 4.76:1 and new-node 4.94:1; E tint/node 4.71:1
+and new-node 4.89:1. The 12% node mixes also failed (D 4.46:1, E 4.41:1). Regression tests
+cover tinted text across every shell surface and both node fills. F text treatment remains
+pending maintainer clarification.

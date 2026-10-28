@@ -119,14 +119,14 @@ colors:
   day-agent-c-node-new: "#f0edf0"
   day-agent-d: "#a2568a"
   day-agent-d-text: "#9c5084"
-  day-agent-d-tint: "rgba(162, 86, 138, 0.12)"
-  day-agent-d-node: "#f1e7eb"
-  day-agent-d-node-new: "#f6eff0"
+  day-agent-d-tint: "#f6eff0"
+  day-agent-d-node: "#f6eff0"
+  day-agent-d-node-new: "#f8f4f4"
   day-agent-e: "#3475c4"
   day-agent-e-text: "#2b6cba"
-  day-agent-e-tint: "rgba(52, 117, 196, 0.12)"
-  day-agent-e-node: "#e4ebf2"
-  day-agent-e-node-new: "#eef2f4"
+  day-agent-e-tint: "#eef2f4"
+  day-agent-e-node: "#eef2f4"
+  day-agent-e-node-new: "#f4f6f6"
   day-agent-f: "#623659"
   day-agent-f-text: "#623659"
   day-agent-f-tint: "rgba(98, 54, 89, 0.12)"
@@ -379,6 +379,11 @@ remain unchanged); dark node RGB scales the graphic channels so the maximum chan
 and new-node RGB scales to 20, rounded to the nearest integer, both at 95% alpha. Day tints
 use graphic RGB at 12% alpha; day node and new-node fills mix 12% and 7% graphic RGB over
 `day-card` in sRGB, rounded to the nearest integer. Existing A/B day fills stay unchanged.
+Day D/E need lighter backing: tint and node fills use an opaque 7% graphic mix over
+`day-card`, and new-node fills use 4%. The opaque tint keeps their exact approved text
+readable even over `day-shell`; a 12% translucent graphic tint and the 12% node mix fail
+4.5:1. D text reaches 4.76:1 on tint/node and 4.94:1 on new-node; E reaches 4.71:1 and
+4.89:1 respectively.
 
 ### Secondary
 
@@ -499,8 +504,10 @@ Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1
 | day-on-agent | day-agent-c | 9.85 |
 | day-agent-d / day-agent-d-text | page / card / field / ground / panel (graphic; text) | 4.63; 5.03 / 4.79; 5.21 / 4.75; 5.17 / 4.47; 4.86 / 4.23; 4.60 |
 | day-on-agent | day-agent-d | 4.96 |
+| day-agent-d-text | opaque tint / node / new-node | 4.76 / 4.76 / 4.94 |
 | day-agent-e / day-agent-e-text | page / card / field / ground / panel (graphic; text) | 4.37; 4.95 / 4.52; 5.13 / 4.48; 5.08 / 4.21; 4.78 / 3.99; 4.53 |
 | day-on-agent | day-agent-e | 4.68 |
+| day-agent-e-text | opaque tint / node / new-node | 4.71 / 4.71 / 4.89 |
 | day-agent-f / day-agent-f-text | page / card / field / ground / panel (graphic; text) | 8.94; 8.94 / 9.26; 9.26 / 9.18; 9.18 / 8.63; 8.63 / 8.18; 8.18 |
 | day-on-agent | day-agent-f | 9.58 |
 | day-passed | day-page / day-shell | 5.8 / 5.1 |
