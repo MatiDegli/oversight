@@ -582,7 +582,7 @@ async def test_git_refusals(workspace: Workspace, monkeypatch: pytest.MonkeyPatc
         ):
             with pytest.raises(WorkspaceError, match="not allowed"):
                 await workspace.git(workspace.main, *args)
-    assert [argv[-2:] for argv in spawned] == [("status", "--porcelain")]
+    assert [argv[-3:] for argv in spawned] == [("status", "--ignore-submodules=all", "--porcelain")]
 
 
 async def test_approval_waits_for_agent_edit(

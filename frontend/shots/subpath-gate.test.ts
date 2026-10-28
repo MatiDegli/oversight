@@ -6,7 +6,7 @@ import ts from "typescript";
 
 // Exercise the gate's actual request filter with negative inputs: a successful browser run
 // alone cannot prove that the assertion would catch a future request outside the base.
-void test("the subpath e2e gate rejects every request outside the deployment base", () => {
+void test("the subpath e2e gate rejects network requests outside the deployment base", () => {
   const source = ts.createSourceFile(
     "editor-subpath.spec.ts",
     readFileSync(new URL("../e2e/editor-subpath.spec.ts", import.meta.url), "utf8"),
@@ -23,7 +23,7 @@ void test("the subpath e2e gate rejects every request outside the deployment bas
       node.expression.expression.expression.getText(source) === "expect"
     ) {
       const argument = node.expression.expression.arguments[0]?.getText(source);
-      if (argument?.includes("requested.filter")) filters.push(argument);
+      if (argument?.includes("requested")) filters.push(argument);
     }
     ts.forEachChild(node, visit);
   }
@@ -36,16 +36,17 @@ void test("the subpath e2e gate rejects every request outside the deployment bas
     .map((node) => ts.transpile(node.getText(source)));
   const origin = "http://localhost:5710";
   const allowed = `${origin}/oversight/assets/app.js`;
+  // Main's gate excludes local resources, which never request a server path.
+  const local = [`blob:${origin}/graph-image`, "data:image/svg+xml,%3Csvg/%3E"];
   for (const forbidden of [
     `${origin}/outside.js`,
     "https://other.test/oversight/app.js",
-    `blob:${origin}/owned-graph-image`,
-    "blob:https://other.test/foreign-image",
+    `${origin}/oversight-other/app.js`,
   ]) {
     const rejected = runInNewContext(`${helpers.join("\n")}\n${filter}`, {
       URL,
       origin,
-      requested: [allowed, forbidden],
+      requested: [allowed, ...local, forbidden],
     }) as string[];
     assert.deepEqual(Array.from(rejected), [forbidden]);
   }

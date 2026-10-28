@@ -50,6 +50,7 @@ class Locks:
     def __init__(self) -> None:
         self._main = _TaskLock("main", is_main=True)
         self._agents: dict[str, _TaskLock] = {}
+        self._git = _TaskLock("Git lease", is_main=False)
         self._operations = 0
 
     def _agent(self, agent_id: str) -> _TaskLock:
@@ -63,7 +64,9 @@ class Locks:
     @property
     def idle(self) -> bool:
         """True when no lock is held and no tree operation is running."""
-        return self._operations == 0 and all(lock.owner is None for lock in self._all())
+        return self._operations == 0 and all(
+            lock.owner is None for lock in [*self._all(), self._git]
+        )
 
     def holds(self, *, main: bool = False, agent_id: str | None = None) -> bool:
         """True when the current task holds the main lock, or the named agent's lock."""
@@ -86,11 +89,29 @@ class Locks:
         task = _current_task()
         held = [other for other in self._all() if other.owner is task]
         if lock not in held:
+            if self._git.owner is task:
+                raise LockOrderError("tree locks come before the Git lease")
             if lock.is_main and held:
                 raise LockOrderError(f"the main lock comes before {held[0].name}'s")
             if not lock.is_main and any(not other.is_main for other in held):
                 raise LockOrderError(f"one worktree lock at a time: {lock.name} while holding one")
         await lock.acquire(task)
+
+    @asynccontextmanager
+    async def git_lease(self) -> AsyncGenerator[None]:
+        """Serialize all server Git with suites, including cancellation cleanup.
+
+        Order: main, worktree (or temporary), mode when applicable, then this lease.
+        Reentrancy is task-owned; a child task must acquire its own locks and lease.
+        """
+        task = _current_task()
+        if not any(lock.owner is task for lock in self._all()):
+            raise LockOrderError("the Git lease requires a tree lock")
+        await self._git.acquire(task)
+        try:
+            yield
+        finally:
+            self._git.release(task)
 
     @asynccontextmanager
     async def acquire(

@@ -132,13 +132,13 @@ function Decisions({
   view,
   onDecide,
   replayOf,
-  blocked = false,
+  blocked = null,
 }: {
   changeId: string;
   view: DecisionView;
   onDecide?: ReviewPanelProps["onDecide"];
   replayOf?: string;
-  blocked?: boolean;
+  blocked?: "loading" | "edits" | null;
 }) {
   const [comment, setComment] = useState("");
   // Set when Approve was activated without a pointer, so the person is told why nothing happened.
@@ -254,7 +254,7 @@ function Decisions({
         ) : (
           <p role="status">The agent is revising. Decisions reopen when it proposes again.</p>
         ))}
-      {blocked && (
+      {blocked === "edits" && (
         <p role="status" className="text-sm text-muted">
           Save or discard your review edits before approving or requesting changes.
         </p>
@@ -306,7 +306,10 @@ export function ReviewPanel({
   const hasFacts = proposal !== null && factsForRevision(state, proposal) !== undefined;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
-  const [editing, setEditing] = useState<{ path: string; blocked: boolean } | null>(null);
+  const [editing, setEditing] = useState<{
+    path: string;
+    blocked: "loading" | "edits" | null;
+  } | null>(null);
   const decision = change
     ? decisionView(change, state.errors, attempt, onDecide === undefined)
     : undefined;
@@ -442,7 +445,7 @@ export function ReviewPanel({
                               fileAccess.drafts.has(fileKey(name, data.agentId)) ||
                               fileAccess.inFlightSaves.has(fileKey(name, data.agentId)),
                           );
-                          setEditing({ path, blocked: blocked || hasDraft });
+                          setEditing({ path, blocked: hasDraft ? "edits" : blocked });
                         }}
                       />
                     ) : (
@@ -465,7 +468,9 @@ export function ReviewPanel({
           view={decisionView(change, state.errors, attempt, onDecide === undefined)}
           onDecide={onDecide}
           replayOf={replayOf}
-          blocked={editingBlocked}
+          blocked={
+            editingBlocked ? (editing?.path === openPath ? editing.blocked : "loading") : null
+          }
         />
       )}
     </aside>

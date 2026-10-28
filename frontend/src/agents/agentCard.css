@@ -1,0 +1,7 @@
+/* The summary replaces activity inside the same space, preserving every sibling's position. */
+.agent-card-body {
+  height: 144px;
+  margin-top: var(--spacing-sm);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}

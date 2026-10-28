@@ -34,6 +34,7 @@ from oversight.changes import _proposal as proposal
 from oversight.changes import _revision as revision
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
+from oversight.changes._mode import ModeController
 from oversight.changes._resolution_validation import validate_resolution_intent
 from oversight.changes._review_port import ReviewCapture, ReviewPort
 from oversight.changes._state import (
@@ -59,9 +60,10 @@ from oversight.workspace import (
     Tree,
     Workspace,
 )
-from oversight_contracts.commands import FileContent, FileSaved
+from oversight_contracts.commands import FileContent, FileSaved, SetMergeMode
 from oversight_contracts.common import AgentId, ChangeId
 from oversight_contracts.graph import GraphSnapshot
+from oversight_contracts.policy import MergeModeState
 from oversight_contracts.review import FinishDeclaration
 
 
@@ -90,7 +92,18 @@ class ChangeManager:
                 drain=lambda rec: self._drain(rec),
                 review=review,
             ),
+            ModeController(),
         )
+
+    def merge_mode(self) -> MergeModeState:
+        """The confirmed mode/revision for GET and future proposal capture."""
+        return self._ctx.mode.snapshot()
+
+    async def set_merge_mode(self, command: SetMergeMode) -> MergeModeState:
+        return await self._ctx.mode.set(self._ctx, command)
+
+    def authority_suspended(self) -> bool:
+        return self._ctx.mode.authority_suspended()
 
     @property
     def _suspect(self) -> bool:

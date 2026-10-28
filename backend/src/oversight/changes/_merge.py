@@ -6,9 +6,14 @@ from oversight.changes._suite_evidence import publish_suite
 from oversight.changes._support import ChangeContext
 from oversight.events import EventRejected
 from oversight.workspace import (
+    MergeGuard,
     SuiteInterrupted,
+    SuiteRun,
     SuiteUnavailable,
     WorkspaceError,
+    prepare_merge_guard,
+    verify_merge_abort,
+    verify_merge_guard,
 )
 from oversight_contracts.events import (
     ChangeResolved,
@@ -33,16 +38,27 @@ async def merge(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre:
         detail = "timed out" if result.timed_out else ctx.workspace.redact(result.stderr)
         raise WorkspaceError(f"git merge failed: {detail.strip()[-500:]}")
     if await ctx.yes_no(main, "rev-parse", "-q", "--verify", "MERGE_HEAD"):
-        if pre != rec.base_commit and not await combined_tests_pass(ctx, rec, comment, pre):
-            return
-        await ctx.git(
-            main,
-            "commit",
-            "-q",
-            "-m",
-            f"Merge {rec.change_id} ({rec.agent_id})",
-            commit_as="user",
+        guard = await prepare_merge_guard(
+            ctx.workspace, main, pre=pre, head=head, timeout_s=ctx.timeout
         )
+        tested_tree = (await ctx.git(main, "rev-parse", f"{head}^{{tree}}")).strip()
+        if pre != rec.base_commit:
+            run = await combined_tests_pass(ctx, rec, comment, pre, guard)
+            if run is None:
+                return
+            tested_tree = run.tested_tree
+        async with ctx.workspace.git_lease():
+            await verify_merge_guard(
+                ctx.workspace, main, guard, tested_tree=tested_tree, timeout_s=ctx.timeout
+            )
+            await ctx.git(
+                main,
+                "commit",
+                "-q",
+                "-m",
+                f"Merge {rec.change_id} ({rec.agent_id})",
+                commit_as="user",
+            )
     facts = await recovery.read_facts(ctx, head)
     if not facts.merged:
         raise WorkspaceError("the merge did not land on main")
@@ -55,6 +71,9 @@ async def conflict(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, p
     paths = sorted(p for p in names.split("\0") if p)
     if not paths:
         return False
+    await verify_merge_abort(
+        ctx.workspace, main, pre=pre, head=rec.head_commit or rec.base_commit, timeout_s=ctx.timeout
+    )
     await ctx.git(main, "merge", "--abort")
     if not (await recovery.read_facts(ctx, rec.head_commit or rec.base_commit)).unchanged(pre):
         raise WorkspaceError("main did not return to its HEAD after the conflict")
@@ -63,8 +82,8 @@ async def conflict(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, p
 
 
 async def combined_tests_pass(
-    ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre: str
-) -> bool:
+    ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre: str, guard: MergeGuard
+) -> SuiteRun | None:
     """R5: main moved since the change's base, so the merge, staged on main, is tested before
     its commit. A failure or timeout aborts it and resolves as a tests conflict. A cancel
     during the run is `_recover`'s, which aborts on `MERGE_HEAD`."""
@@ -74,14 +93,21 @@ async def combined_tests_pass(
     except (SuiteInterrupted, SuiteUnavailable) as error:
         await publish_suite(ctx, rec, error.run, phase="combined", revision=rec.revision)
         raise
+    if run.result.outcome == "passed":
+        await verify_merge_guard(
+            ctx.workspace, main, guard, tested_tree=run.tested_tree, timeout_s=ctx.timeout
+        )
     execution = await publish_suite(ctx, rec, run, phase="combined", revision=rec.revision)
     if run.result.outcome == "passed":
-        return True
+        return run
+    await verify_merge_abort(
+        ctx.workspace, main, pre=pre, head=rec.head_commit or rec.base_commit, timeout_s=ctx.timeout
+    )
     await ctx.git(main, "merge", "--abort")
     if not (await recovery.read_facts(ctx, rec.head_commit or rec.base_commit)).unchanged(pre):
         raise WorkspaceError("main did not return to its HEAD after the combined tests")
     await conflicted(ctx, rec, comment, Conflict(kind="tests", paths=[], tests=execution.suite))
-    return False
+    return None
 
 
 async def conflicted(

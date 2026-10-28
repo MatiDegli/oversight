@@ -215,3 +215,29 @@ describe("field transitions", () => {
     controller.dispose();
   });
 });
+
+it("R4 starts the ring for working input and stops it immediately, while approval fades its marker light", () => {
+  const signal = {
+    id: "a",
+    source: "agent-a",
+    weight: 1,
+    pulses: true,
+    marker: "agent-1",
+    steady: true,
+  } as const;
+  const controller = createFieldController(canvas, source);
+  controller.update({ mode: "watch", lights: [signal] });
+  advance(240);
+  expect(last()[3][0]?.pulses).toBe(true);
+  controller.update({ mode: "watch", lights: [{ ...signal, pulses: false }] });
+  expect(last()[3][0]?.pulses).toBe(false);
+  advance(480);
+  controller.update({ mode: "watch", lights: [] });
+  advance(600);
+  expect(last()[3][0]?.weight).toBeGreaterThan(0);
+  expect(last()[3][0]?.weight).toBeLessThan(1);
+  advance(720);
+  expect(last()[3]).toEqual([]);
+  expect(canvas.oversightField?.animating()).toBe(false);
+  controller.dispose();
+});

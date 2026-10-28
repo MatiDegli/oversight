@@ -4,11 +4,13 @@ import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial
+from pathlib import PurePosixPath
 
-from oversight.changes._probes import comparison
+from oversight.changes._probes import added_cases, comparison
 from oversight.changes._shortcut_detector import Finding, ShortcutKind, detect_shortcuts
-from oversight.changes._shortcuts_common import FuncNode, Source
+from oversight.changes._shortcuts_common import FuncNode, Source, is_test_file
 from oversight.changes._shortcuts_skips import DECORATOR_SKIP, module_markers
+from oversight.changes._shortcuts_unknown import COLLECTION_CONFIG
 from oversight.changes._state import ChangeRecord
 from oversight.changes._support import ChangeContext
 from oversight.workspace import SuiteRun, validate_suite_execution
@@ -27,6 +29,60 @@ MISSING_PRODUCERS = (
     "zone producer unavailable",
     "reach producer unavailable",
 )
+
+
+@dataclass(frozen=True, kw_only=True)
+class IntegrityStatus:
+    """Source producer status, independent of unrelated ChangeFacts producers."""
+
+    complete: bool
+    prohibited_paths: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, kw_only=True)
+class AddedTestsInventory:
+    """Exact added case ids; only a complete empty inventory certifies no additions."""
+
+    test_ids: tuple[str, ...]
+    complete: bool
+
+
+def integrity_status(
+    base_files: Mapping[str, str], head_files: Mapping[str, str]
+) -> IntegrityStatus:
+    """Classify captured full source maps; never infer status from diagnostic text."""
+    changes = [
+        (path, base_files.get(path), head_files.get(path))
+        for path in sorted(base_files.keys() | head_files.keys())
+        if base_files.get(path) != head_files.get(path)
+    ]
+    prohibited = tuple(
+        path
+        for path, old, _ in changes
+        if PurePosixPath(path).name in COLLECTION_CONFIG
+        or PurePosixPath(path).name == "conftest.py"
+        or (old is not None and is_test_file(path))
+    )
+    return IntegrityStatus(
+        complete=detect_shortcuts(changes, grouped=False).status != "unknown",
+        prohibited_paths=prohibited,
+    )
+
+
+def added_tests_inventory(rec: ChangeRecord, revision: int) -> AddedTestsInventory:
+    """Preserve the inventory producer's own diagnostics and bounded-report status."""
+    ids, problems = added_cases(rec, revision)
+    current = [
+        execution
+        for execution in rec.executions.values()
+        if execution.phase == "proposal" and execution.revision == revision
+    ]
+    return AddedTestsInventory(
+        test_ids=ids,
+        complete=not problems
+        and bool(current)
+        and all(execution.suite.cases_complete is True for execution in current),
+    )
 
 
 @dataclass(frozen=True)

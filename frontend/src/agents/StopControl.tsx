@@ -18,7 +18,7 @@ export function StopControl({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   return (
-    <div className="flex w-full flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <button
         type="button"
         className={`${control} self-start text-failed-text`}

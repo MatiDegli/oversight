@@ -6,6 +6,7 @@ from datetime import UTC
 from typing import Any
 
 from oversight.agents import Publish
+from oversight.changes._mode import ModeController
 from oversight.changes._review_port import ReviewPort
 from oversight.changes._state import ChangeRecord, ChangeState, Source
 from oversight.events import Clock
@@ -45,6 +46,7 @@ class ChangeContext:
     timeout: float
     state: ChangeState
     ports: ChangePorts
+    mode: ModeController
 
     def date(self) -> str:
         return self.clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
@@ -67,6 +69,8 @@ class ChangeContext:
     async def yes_no(self, tree: Tree, *args: str) -> bool:
         """A git query that answers with its exit code: 0 yes, 1 no, anything else fails."""
         result = await self.run(tree, *args)
+        if result.truncated:
+            raise WorkspaceError(f"git {args[0]} failed: output was truncated")
         if result.timed_out or result.returncode not in (0, 1):
             raise WorkspaceError(f"git {args[0]} failed: {self.workspace.redact(result.stderr)}")
         return result.returncode == 0

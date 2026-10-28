@@ -9,6 +9,7 @@ import fcntl
 import os
 import re
 import shutil
+import time
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, replace
@@ -37,6 +38,14 @@ from oversight.workspace.files import (
     verify_tree_root,
     write_file,
 )
+from oversight.workspace.integrity import (
+    GitIdentity,
+    guarded_git,
+    lease_until,
+    remaining,
+    veto_gitmodules,
+    veto_index,
+)
 from oversight.workspace.isolation import refuse_orphans
 from oversight.workspace.locks import Locks, offload
 from oversight.workspace.ranges import FileRange, read_range
@@ -58,6 +67,10 @@ GIT_FLAGS = (
     "core.autocrlf=false",
     "-c",
     "core.symlinks=false",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "diff.ignoreSubmodules=all",
 )
 FORBIDDEN_GIT = frozenset({"stash", "rebase"})
 EXCLUDE_NEWER = "14 days"
@@ -123,6 +136,12 @@ class Tree:
         self.agent_id = agent_id
         self.branch = branch
         self.base_commit = base_commit
+        common = workspace.runtime_root / "workspace" / ".git"
+        # Server-created worktrees use unique target basenames, also their admin-dir names.
+        # Never rediscover this identity through the mutable .git pointer or core.worktree.
+        directory = common if agent_id is None else common / "worktrees" / root.name
+        self.git_identity = GitIdentity(root, directory, common)
+        workspace.git_identities[root] = self.git_identity
 
     def verify_root(self) -> None:
         """`InvalidPath` unless the root is this tree's own plain directory, with no link to it."""
@@ -177,9 +196,11 @@ class Tree:
         """Commit every change, as `author`; return the new HEAD, or None if the tree is clean."""
         async with self.section(locked=True):
             git = self._workspace.git_ok
+            await self._workspace.veto_index(self)
             await git(self, "add", "-A")
             if not (await git(self, "status", "--porcelain")).strip():
                 return None
+            await self._workspace.veto_index(self)
             await git(self, "commit", "-q", "-m", message, author=author)
             return (await git(self, "rev-parse", "HEAD")).strip()
 
@@ -202,6 +223,7 @@ class Workspace:
         self._demo_python = demo_python or runtime_root / "demo-venv" / "bin" / "python"
         self._demo_python_given = demo_python is not None
         self._locks = Locks()
+        self.git_identities: dict[Path, GitIdentity] = {}
         self._main = Tree(self, runtime_root / "workspace", None, "main", None)
         self._trees: dict[str, Tree] = {}
         self._lock_fd: int | None = None
@@ -253,13 +275,15 @@ class Workspace:
 
     # --- Processes and git ------------------------------------------------------------------
 
-    def _git_env(self, author: Author | None, date: str | None) -> dict[str, str]:
+    def _git_env(self, tree: Tree, author: Author | None, date: str | None) -> dict[str, str]:
         who = author or OVERSIGHT_AUTHOR
         env = {
             "HOME": str(self._root / "tmp" / "home"),
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": "/dev/null",
+            # Read-only status queries must not normalize a suite-tampered real index.
+            "GIT_OPTIONAL_LOCKS": "0",
             # The runtime directory sits inside the IDE's own repository: never look above it.
             "GIT_CEILING_DIRECTORIES": str(self._root),
             "GIT_AUTHOR_NAME": who.name,
@@ -269,7 +293,7 @@ class Workspace:
         }
         if date:
             env |= {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
-        return env
+        return env | tree.git_identity.pins()
 
     async def git(
         self,
@@ -288,13 +312,36 @@ class Workspace:
             raise WorkspaceError("a git option before the subcommand is not allowed")
         if args[0] in FORBIDDEN_GIT:
             raise WorkspaceError(f"git {args[0]} is not allowed")
-        await offload(tree.verify_root)
-        return await run_process(
-            ["git", *GIT_FLAGS, *args],
-            cwd=tree.root,
+        scan_identity = tree.git_identity
+        if args[:2] == ("worktree", "remove"):
+            target = Path(args[-1])
+            if target not in self.git_identities:
+                raise WorkspaceError("Git worktree removal requires a registered tree")
+            scan_identity = self.git_identities[target]
+        return await guarded_git(
+            tree.git_identity,
+            args,
+            scan_identity=scan_identity,
+            verify=tree.verify_root,
+            lease=self.git_lease(),
+            flags=GIT_FLAGS,
+            env=self._git_env(tree, author, date),
             timeout_s=timeout_s,
-            env=self._git_env(author, date),
+            spawn=run_process,
         )
+
+    def git_lease(self) -> AbstractAsyncContextManager[None]:
+        """Shared by server Git, suites and future Revert; acquire after all tree/mode locks."""
+        return self._locks.git_lease()
+
+    async def veto_index(self, tree: Tree, *, timeout_s: float = 30) -> None:
+        """Reject gitlinks and .gitmodules before staging and again before a commit."""
+        deadline = time.monotonic() + timeout_s
+        async with lease_until(self.git_lease(), deadline):
+            veto_index(
+                await self.git_ok(tree, "ls-files", "-s", "-z", timeout_s=remaining(deadline))
+            )
+            await offload(partial(veto_gitmodules, tree.root, deadline))
 
     async def git_ok(
         self,
@@ -380,6 +427,8 @@ class Workspace:
                 await git(self._main, "commit", "-q", "-m", INITIAL_MESSAGE, date=INITIAL_DATE)
                 commit = (await git(self._main, "rev-parse", "HEAD")).strip()
                 self._trees.clear()
+                self.git_identities.clear()
+                self.git_identities[self._main.root] = self._main.git_identity
                 self._reset_done = True
                 return commit
 
@@ -458,6 +507,7 @@ class Workspace:
                 add = ("worktree", "add", "-q", "-b", agent_id, str(target), head)
                 await self.git_ok(self._main, *add)
                 tree = Tree(self, target, agent_id, agent_id, head)
+                await offload(tree.git_identity.verify_registration)
                 self._trees[agent_id] = tree
                 return tree
 
@@ -507,12 +557,16 @@ class Workspace:
         spawn: Spawn | None = None,
     ) -> SuiteRun:
         """Run the demo repo's tests in `tree`, under its lock, in the demo venv."""
-        async with tree.section(locked=True):
+        async with (
+            self.locks(main=True, agent_id=tree.agent_id),
+            tree.section(locked=False),
+            self.git_lease(),
+        ):
             await offload(lambda: self.tmp_dir.mkdir(mode=DIR_MODE, parents=True, exist_ok=True))
             tested_tree, tested_commit = await capture_test_tree(
                 tree.root,
                 self.tmp_dir,
-                env=self._git_env(None, None),
+                env=self._git_env(tree, None, None),
                 flags=GIT_FLAGS,
                 timeout_s=timeout_s,
             )

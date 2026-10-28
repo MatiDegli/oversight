@@ -36,3 +36,29 @@ it("keeps a hidden method's light on its class row, then follows its expanded bo
     cy.destroy();
   }
 });
+
+it("uses the folded card or the open header, never an open module's whole frame, and exposes zoom", () => {
+  const cy = cytoscape({
+    headless: true,
+    styleEnabled: true,
+    layout: { name: "preset" },
+    elements: [
+      { data: { id: "module" } },
+      { data: { id: "row", parent: "module" }, position: { x: 100, y: 200 } },
+    ],
+    style: [{ selector: "node", style: { width: 200, height: 200 } }],
+  });
+  const source = createBoxSource();
+  try {
+    source.attach(cy);
+    cy.zoom(0.5);
+    const box = source.boxes(["module"]).get("module");
+    expect(source.zoom?.()).toBe(0.5);
+    expect((box?.y2 ?? 0) - (box?.y1 ?? 0)).toBe(35);
+    expect(source.boxes(["row"]).get("row")?.y2).toBeGreaterThan(box?.y2 ?? 0);
+    expect(source.route?.("row", "module")).toBeNull();
+  } finally {
+    source.detach();
+    cy.destroy();
+  }
+});
