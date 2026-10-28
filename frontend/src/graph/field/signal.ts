@@ -1,3 +1,4 @@
+import { agentLook } from "../../theme";
 import type { State } from "../../state";
 import { getActiveTheme } from "../../theme";
 import type { FieldLight } from "./lights";
@@ -9,15 +10,21 @@ export type LastReads = Readonly<Record<string, string | undefined>>;
 export function selectSignalLights(
   state: State,
   lastReads: LastReads = {},
-  theme: { "watch-editing-weight": number; "live-diff-read-weight": number } = getActiveTheme(),
+  theme: {
+    "watch-editing-weight": number;
+    "live-diff-read-weight": number;
+    "light-source-limit": number;
+  } = getActiveTheme(),
 ): FieldLight[] {
   const lights: FieldLight[] = [];
-  for (const agent of Object.values(state.agents)) {
+  for (const agent of Object.values(state.agents).sort(
+    (a, b) => a.slot.localeCompare(b.slot) || a.agent_id.localeCompare(b.agent_id),
+  )) {
     const change = state.changes[agent.change_id];
     if (change?.status === "approved" || change?.status === "rejected") continue;
     const id = state.focus[agent.agent_id]?.node_ids[0];
     if (!id) continue;
-    const source = agent.slot === "A" ? "agent-a" : "agent-b";
+    const source = agentLook[agent.slot].family;
     lights.push({
       id,
       source,
@@ -36,5 +43,8 @@ export function selectSignalLights(
         steady: true,
       });
   }
-  return lights;
+  // Current foci precede last reads; stable slot/id order breaks ties. Keep the field budget.
+  return lights
+    .sort((a, b) => Number(Boolean(b.marker)) - Number(Boolean(a.marker)))
+    .slice(0, theme["light-source-limit"]);
 }

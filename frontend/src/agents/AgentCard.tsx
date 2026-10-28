@@ -1,3 +1,5 @@
+import { agentSlotStyle } from "../theme";
+import { agentLook as look } from "../theme";
 import type { AgentStatus, SuiteResult } from "@contracts";
 import { Check, CircleCheck, CircleX, Eye, FileDiff, X } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
@@ -19,34 +21,6 @@ const labels: Record<AgentStatus["state"], string> = {
   done: "Done",
   paused: "Paused",
 };
-
-// C-F are unreachable until the backend admits more than two agents.
-// Line B many-agents look replaces this neutral placeholder before backend admission.
-const unadmittedAgentLook = {
-  tint: "bg-raised text-muted",
-  border: "border-card-border",
-  fill: "bg-muted",
-  track: "bg-muted",
-} as const;
-
-const look = {
-  A: {
-    tint: "bg-agent-a-tint text-agent-a-text",
-    border: "border-agent-a",
-    fill: "bg-agent-a",
-    track: "bg-agent-a",
-  },
-  B: {
-    tint: "bg-agent-b-tint text-agent-b-text",
-    border: "border-agent-b",
-    fill: "bg-agent-b",
-    track: "bg-agent-b",
-  },
-  C: unadmittedAgentLook,
-  D: unadmittedAgentLook,
-  E: unadmittedAgentLook,
-  F: unadmittedAgentLook,
-} as const;
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
@@ -179,6 +153,7 @@ export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps
         inside.current = false;
       }}
       data-slot={agent.slot}
+      style={agentSlotStyle(agent.slot)}
       className={`agent-card min-w-0 shrink-0 rounded-card border bg-card p-3.5 text-text ${border} ${focusRing}`}
     >
       <CardHeader data={data} />
@@ -213,7 +188,7 @@ function RunningBody({ data }: { data: AgentCardDetail }) {
         className="mt-3 h-1 shrink-0 overflow-hidden rounded-full bg-raised"
       >
         <div
-          className={`h-full ${look[agent.slot].track}`}
+          className={`h-full ${look[agent.slot].fill}`}
           style={{ width: `${String(maxSteps > 0 ? Math.min(100, (step / maxSteps) * 100) : 0)}%` }}
         />
       </div>

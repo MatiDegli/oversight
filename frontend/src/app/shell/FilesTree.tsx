@@ -1,3 +1,4 @@
+import { agentSlotStyle } from "../../theme";
 import { ChevronDown, ChevronRight, File, FileCode2, Folder, FolderOpen } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
@@ -204,6 +205,7 @@ function TreeEntry({
             key={mark.slot}
             className="file-agent-mark"
             data-slot={mark.slot}
+            style={agentSlotStyle(mark.slot)}
             data-mode={mark.mode}
             aria-label={`Agent ${mark.slot} · ${mark.mode === "pending" ? "Pending change" : mark.mode === "edit" ? "Editing" : "Reading"}`}
             title={`Agent ${mark.slot} · ${mark.mode}`}

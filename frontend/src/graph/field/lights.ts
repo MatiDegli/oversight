@@ -1,3 +1,4 @@
+import type { AgentFamily } from "../../theme";
 import type { ImpactCone } from "@contracts";
 
 /** The field's four modes: watch, the live diff, the file view and review. */
@@ -11,7 +12,7 @@ export type FieldScope =
   | { mode: "file"; nodeId: string | null };
 
 /** The theme token a light takes its color from: an agent's color, or the cone's neutral one. */
-export type LightSource = "agent-a" | "agent-b" | "work-light";
+export type LightSource = AgentFamily | "work-light";
 
 export interface FieldLight {
   /** R4 current focus, keyed by agent so its light travels instead of crossfading two pools. */

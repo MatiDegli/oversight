@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import type { ServerEvent } from "@contracts";
 import { describe, expect, it } from "vitest";
 import { applyEvent, createInitialState } from "../../state";
+import { agentSlots } from "../../theme";
 import { themes } from "../../theme";
 import { selectSignalLights } from "./signal";
 import { FieldTransition } from "./transition";
@@ -33,8 +34,8 @@ describe("R4 sources", () => {
     const lights = selectSignalLights(state, { "agent-1": "last-a", "agent-2": "last-b" });
     expect(lights.map(({ id, source, weight }) => [id, source, weight])).toEqual([
       ["shop.pricing:compute_price", "agent-a", 1],
-      ["last-a", "agent-a", 0.4],
       ["current-b", "agent-b", 1],
+      ["last-a", "agent-a", 0.4],
       ["last-b", "agent-b", 0.4],
     ]);
     expect(
@@ -176,4 +177,37 @@ it("a working ring adds no ambient pool or breathing", () => {
     );
   };
   expect(block(0)).toEqual(block(1.45));
+});
+
+it("caps six agents at eight sources, current foci first, stable across insertion order", () => {
+  const state = through(13);
+  const original = state.agents["agent-1"];
+  if (!original) throw new Error("Missing fixture agent");
+  state.agents = {};
+  state.focus = {};
+  const reads: Record<string, string> = {};
+  for (const slot of [...agentSlots].reverse()) {
+    const id = `agent-${slot}`;
+    state.agents[id] = { ...original, agent_id: id, slot };
+    state.focus[id] = { agent_id: id, node_ids: [`current-${slot}`], mode: "edit", ranges: [] };
+    reads[id] = `read-${slot}`;
+  }
+  const lights = selectSignalLights(state, reads);
+  expect(themes.dark["light-source-limit"]).toBe(8);
+  expect(lights).toHaveLength(8);
+  expect(lights.map((light) => light.id)).toEqual([
+    ...agentSlots.map((slot) => `current-${slot}`),
+    "read-A",
+    "read-B",
+  ]);
+  expect(lights.slice(0, 6).map((light) => light.source)).toEqual(
+    agentSlots.map((slot) => `agent-${slot.toLowerCase()}`),
+  );
+  state.agents = Object.fromEntries(Object.entries(state.agents).reverse());
+  expect(selectSignalLights(state, reads)).toEqual(lights);
+  expect(
+    selectSignalLights(state, reads, { ...themes.dark, "light-source-limit": 3 }).map(
+      (light) => light.id,
+    ),
+  ).toEqual(["current-A", "current-B", "current-C"]);
 });

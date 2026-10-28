@@ -63,19 +63,10 @@
   border-radius: var(--radius-label);
   font-size: var(--group-label-size);
   font-weight: 700;
+  color: var(--slot-text);
 }
-.file-agent-mark[data-slot="A"] {
-  color: var(--agent-a-text);
-}
-.file-agent-mark[data-slot="B"] {
-  color: var(--agent-b-text);
-}
-.file-agent-mark[data-mode="edit"][data-slot="A"] {
-  background: var(--agent-a);
-  color: var(--on-agent);
-}
-.file-agent-mark[data-mode="edit"][data-slot="B"] {
-  background: var(--agent-b);
+.file-agent-mark[data-mode="edit"] {
+  background: var(--slot-graphic);
   color: var(--on-agent);
 }
 .shell-center {
@@ -123,11 +114,8 @@
   color: var(--text);
   background: var(--page);
 }
-.focus-tab.is-active[data-slot="A"] {
-  border-top-color: var(--agent-a);
-}
-.focus-tab.is-active[data-slot="B"] {
-  border-top-color: var(--agent-b);
+.focus-tab.is-active[data-slot]:not([data-slot="file"]) {
+  border-top-color: var(--slot-graphic);
 }
 .focus-body {
   display: flex;
@@ -246,11 +234,7 @@
   position: absolute;
   inset: 0 0 auto;
   height: 2px;
-  background: var(--agent-a);
-}
-.agent-card[data-slot="B"]::before,
-[data-slot-card="B"]::before {
-  background: var(--agent-b);
+  background: var(--slot-graphic);
 }
 @media (max-width: 1440px) {
   .shell-sidebar {

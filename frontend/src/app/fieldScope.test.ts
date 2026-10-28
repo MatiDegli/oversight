@@ -115,8 +115,8 @@ it.each([initialView, watching, reviewing, reading])(
     const lights = fieldInput(state, view).lights;
     expect(lights.map(({ id, source, weight }) => [id, source, weight])).toEqual([
       ["current-a", "agent-a", 1],
-      ["last-a", "agent-a", 0.4],
       ["current-b", "agent-b", 1],
+      ["last-a", "agent-a", 0.4],
       ["last-b", "agent-b", 0.4],
     ]);
     expect(lights.every((light) => light.steady)).toBe(true);

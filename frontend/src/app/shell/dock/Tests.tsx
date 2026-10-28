@@ -1,3 +1,4 @@
+import { agentSlotStyle } from "../../../theme";
 import { Check, X } from "lucide-react";
 import type { State } from "../../../state";
 import { agentLetter, duration, selectTestRuns } from "./selectors";
@@ -16,7 +17,14 @@ export function Tests({ state }: { state: State }) {
             return (
               <li key={run.id} className="dock-test-run">
                 <div className="dock-facts">
-                  <span className="dock-letter" data-slot={letter} aria-label={`Agent ${letter}`}>
+                  <span
+                    className="dock-letter"
+                    data-slot={letter}
+                    style={agentSlotStyle(
+                      run.agentId ? state.agents[run.agentId]?.slot : undefined,
+                    )}
+                    aria-label={`Agent ${letter}`}
+                  >
                     {letter}
                   </span>
                   <span className="dock-code">{run.label}</span>
@@ -29,7 +37,12 @@ export function Tests({ state }: { state: State }) {
           return (
             <li key={run.id} className="dock-test-run">
               <div className="dock-facts">
-                <span className="dock-letter" data-slot={letter} aria-label={`Agent ${letter}`}>
+                <span
+                  className="dock-letter"
+                  data-slot={letter}
+                  style={agentSlotStyle(run.agentId ? state.agents[run.agentId]?.slot : undefined)}
+                  aria-label={`Agent ${letter}`}
+                >
                   {letter}
                 </span>
                 <span className="dock-code">{run.label}</span>

@@ -1,3 +1,5 @@
+import { agentLook } from "../theme";
+import type { AgentFamily } from "../theme";
 // What a node draws besides its box and its name: on a row, the state word and the letter badges,
 // at the right of the name's line; on a module or class frame, its title and its count. Cytoscape
 // draws a label in one color and font, so these are small SVG images on the node (as the distance
@@ -21,12 +23,8 @@ export interface NodeMarks {
 }
 
 /** The theme values the layers read; the full theme satisfies it. */
-export interface LayerTheme {
+export interface LayerTheme extends Record<AgentFamily | `${AgentFamily}-text`, string> {
   "text-font": string;
-  "agent-a": string;
-  "agent-a-text": string;
-  "agent-b": string;
-  "agent-b-text": string;
   "on-agent": string;
   "module-label": string;
   faint: string;
@@ -83,10 +81,10 @@ function fontFaces(theme: LayerTheme): string {
   return `<style>${face(400, regular)}${face(600, semibold)}${face(700, bold)}</style>`;
 }
 
-const slotColors = (theme: LayerTheme, slot: Slot) =>
-  slot === "A"
-    ? { color: theme["agent-a"], text: theme["agent-a-text"] }
-    : { color: theme["agent-b"], text: theme["agent-b-text"] };
+const slotColors = (theme: LayerTheme, slot: Slot) => ({
+  color: theme[agentLook[slot].family],
+  text: theme[agentLook[slot].text],
+});
 
 const text = (
   theme: LayerTheme,

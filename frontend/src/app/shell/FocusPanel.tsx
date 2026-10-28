@@ -1,3 +1,4 @@
+import { agentSlotStyle } from "../../theme";
 import { Maximize2, Minimize2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { FileView } from "../../editor";
@@ -48,6 +49,7 @@ export function FocusPanel(
                 key={tab.id}
                 className={`focus-tab ${view.activeTab === tab.id ? "is-active" : ""}`}
                 data-slot={slot ?? "file"}
+                style={agentSlotStyle(slot)}
               >
                 <button
                   type="button"

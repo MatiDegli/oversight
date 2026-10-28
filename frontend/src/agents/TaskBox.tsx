@@ -1,3 +1,5 @@
+import { agentSlotStyle } from "../theme";
+import { agentLook } from "../theme";
 import type { Slot, StartAgent } from "@contracts";
 import { Check, Cpu, X } from "lucide-react";
 import { useId } from "react";
@@ -99,6 +101,7 @@ export function TaskBoxView({
               <button
                 key={slot}
                 data-slot-card={slot}
+                style={agentSlotStyle(slot)}
                 type="button"
                 aria-pressed={selected === slot}
                 aria-disabled={pending || holder !== null}
@@ -107,10 +110,7 @@ export function TaskBoxView({
                 }}
                 className={`min-w-0 flex-1 rounded-control border border-control-edge p-2 text-left text-(length:--caption-size) aria-pressed:bg-raised aria-disabled:cursor-not-allowed ${selected === slot ? "aria-pressed:border-text" : ""} ${focusRing}`}
               >
-                <span className={slot === "A" ? "text-agent-a-text" : "text-agent-b-text"}>
-                  {slot}
-                </span>{" "}
-                {label}
+                <span className={agentLook[slot].textClass}>{slot}</span> {label}
                 {selected === slot && (
                   <Check aria-hidden="true" className="ml-1 inline-block size-4 text-text" />
                 )}
