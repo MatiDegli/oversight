@@ -64,7 +64,10 @@ async def test_boundary_change_has_named_differing_rows_and_private_reasons(tmp_
     ]
     async with (
         asyncio.timeout(60),
-        live_server(live_settings(tmp_path, behavior_diff=True), Scripts([script(edits)])) as s,
+        live_server(
+            live_settings(tmp_path, behavior_diff=True, measured_cone=True),
+            Scripts([script(edits)]),
+        ) as s,
     ):
         rec = await run(s)
         measured = rec.behavior_diffs[1]
@@ -97,7 +100,10 @@ async def test_refactor_compares_without_claiming_equivalence(tmp_path):
     edit = (PRICING, "base = unit_price * quantity", "base = quantity * unit_price")
     async with (
         asyncio.timeout(60),
-        live_server(live_settings(tmp_path, behavior_diff=True), Scripts([script([edit])])) as s,
+        live_server(
+            live_settings(tmp_path, behavior_diff=True, measured_cone=True),
+            Scripts([script([edit])]),
+        ) as s,
     ):
         rec = await run(s)
         [result] = rec.behavior_diffs[1].functions
@@ -216,3 +222,46 @@ async def test_setting_is_opt_in_and_uses_environment_style(tmp_path: Path, monk
     assert Settings.load(env_file).behavior_diff is True
     monkeypatch.setenv("OVERSIGHT_BEHAVIOR_DIFF", "1")
     assert Settings.load(env_file).behavior_diff is False
+
+
+async def test_caller_setting_is_opt_in_and_uses_environment_style(tmp_path: Path, monkeypatch):
+    env_file = tmp_path / "config"
+    env_file.write_text("OVERSIGHT_MEASURED_CONE=TrUe\n")
+    monkeypatch.delenv("OVERSIGHT_MEASURED_CONE", raising=False)
+    assert Settings().measured_cone is False
+    assert Settings.load(env_file).measured_cone is True
+    monkeypatch.setenv("OVERSIGHT_MEASURED_CONE", "1")
+    assert Settings.load(env_file).measured_cone is False
+
+
+@pytest.mark.parametrize("behavior_diff", [False, True])
+@pytest.mark.parametrize("measured_cone", [False, True])
+async def test_direct_and_caller_measurement_switches_are_independent(
+    tmp_path, monkeypatch, behavior_diff, measured_cone
+):
+    from oversight.changes._measured import unavailable_measured
+
+    direct = BehaviorDiff(revision=1, functions=())
+    probe = AsyncMock(return_value=direct)
+    callers = AsyncMock(
+        side_effect=lambda _ctx, _rec, *, target, impact: unavailable_measured(
+            target, impact, "test recording unavailable"
+        )
+    )
+    monkeypatch.setattr("oversight.changes._proposal.probe_behavior", probe)
+    monkeypatch.setattr("oversight.changes._proposal.measure_cone", callers)
+    edit = (PRICING, "base = unit_price * quantity", "base = quantity * unit_price")
+    settings = live_settings(tmp_path, behavior_diff=behavior_diff, measured_cone=measured_cone)
+    async with asyncio.timeout(60), live_server(settings, Scripts([script([edit])])) as s:
+        rec = await run(s)
+        assert probe.await_count == int(behavior_diff)
+        assert callers.await_count == int(measured_cone)
+        assert rec.behavior_diffs == ({1: direct} if behavior_diff else {})
+        assert set(rec.measured_cones) == ({1} if measured_cone else set())
+        facts = next(e.payload for e in s.events() if e.type == "change.facts_recorded")
+        if measured_cone:
+            assert facts.measured_cone
+            assert all("test recording unavailable" in row.problems for row in facts.measured_cone)
+        else:
+            assert facts.measured_cone is None
+        assert_clean(s.live.workspace)

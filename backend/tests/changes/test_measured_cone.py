@@ -139,7 +139,7 @@ def test_partial_recording_cannot_certify_unchanged_and_wrong_identity_rejected(
 @pytest.mark.anyio
 async def test_real_chain_publishes_each_retained_caller_and_validates_evidence(h: Harness):
     await h.workspace.check_isolation()
-    h.manager._ctx.behavior_diff = True
+    h.manager._ctx.measured_cone = True
     await h.open(1)
     assert await h.edit(
         1,
@@ -309,7 +309,7 @@ async def test_published_measurements_reject_forged_projection_revision_and_exec
     from oversight.changes._facts import FactsEvidence, validate_change_facts
 
     await h.workspace.check_isolation()
-    h.manager._ctx.behavior_diff = True
+    h.manager._ctx.measured_cone = True
     _ctx, rec, target, impact = await prepared(h)
     facts = h.payloads(ChangeFacts)[-1]
     captured = FactsEvidence(
@@ -389,7 +389,7 @@ async def test_real_process_variation_is_unstable_and_not_a_stable_difference(h)
         current.hash,
     )
     await h.workspace.check_isolation()
-    h.manager._ctx.behavior_diff = True
+    h.manager._ctx.measured_cone = True
     await prepared(h)
     facts = h.payloads(ChangeFacts)[-1]
     assert facts.measured_cone

@@ -63,6 +63,8 @@ class Settings:
     """Independent reviewer profile, distinct from the author. OVERSIGHT_REVIEW_MODEL."""
     behavior_diff: bool = False
     """OVERSIGHT_BEHAVIOR_DIFF: private, finite behavior measurements; never published."""
+    measured_cone: bool = False
+    """OVERSIGHT_MEASURED_CONE: opt-in pytest caller evidence, independent of direct probes."""
     harness_pack: bool = False
     """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
     reviewer_fake_script: Path | None = None
@@ -117,6 +119,7 @@ class Settings:
             cross_review=merged.get("OVERSIGHT_CROSS_REVIEW", "false").lower() == "true",
             review_model=merged.get("OVERSIGHT_REVIEW_MODEL") or cls.review_model,
             behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
+            measured_cone=merged.get("OVERSIGHT_MEASURED_CONE", "false").lower() == "true",
             harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "false").lower() == "true",
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),

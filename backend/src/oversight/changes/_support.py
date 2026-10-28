@@ -73,6 +73,7 @@ class ChangeContext:
     ports: ChangePorts
     mode: ModeController
     behavior_diff: bool = False
+    measured_cone: bool = False
     assessment: "RulesScheduler" = field(init=False)
 
     def date(self) -> str:

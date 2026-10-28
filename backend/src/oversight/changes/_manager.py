@@ -85,6 +85,7 @@ class ChangeManager:
         git_timeout_s: float = 30,
         review: ReviewPort | None = None,
         behavior_diff: bool = False,
+        measured_cone: bool = False,
         monotonic: Callable[[], float] = time.monotonic,
         sleep_until: Callable[[float], Awaitable[None]] | None = None,
     ) -> None:
@@ -109,6 +110,7 @@ class ChangeManager:
             ),
             ModeController(),
             behavior_diff,
+            measured_cone,
         )
 
         self._ctx.assessment = RulesScheduler(
