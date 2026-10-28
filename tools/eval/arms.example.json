@@ -1,0 +1,14 @@
+[
+  {
+    "arm_id": "spark-low-plain",
+    "profile": "muse-spark",
+    "reasoning": "low",
+    "harness_pack": "off"
+  },
+  {
+    "arm_id": "spark-low-packed",
+    "profile": "muse-spark",
+    "reasoning": "low",
+    "harness_pack": "on"
+  }
+]

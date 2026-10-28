@@ -23,7 +23,7 @@ PROFILES = {
 }
 
 
-def profile(run: RunStarted, model: str) -> ModelProfile:
+def profile(run: RunStarted, model: str, reasoning: str | None = "__profile__") -> ModelProfile:
     if (
         run.contract_version != CONTRACT_VERSION
         or run.workspace != "demo-repo"
@@ -34,8 +34,11 @@ def profile(run: RunStarted, model: str) -> ModelProfile:
     advertised = {p.id: p for p in run.models}
     if len(advertised) != len(run.models) or model not in advertised:
         raise BenchError("model is not advertised uniquely")
+    expected = dict(PROFILES)
+    if reasoning != "__profile__":
+        expected[model] = (*PROFILES[model][:2], reasoning)
     if any(
-        p.id not in PROFILES or (p.provider, p.model, p.reasoning) != PROFILES[p.id]
+        p.id not in expected or (p.provider, p.model, p.reasoning) != expected[p.id]
         for p in run.models
     ):
         raise BenchError("unexpected advertised model profile")
@@ -44,7 +47,7 @@ def profile(run: RunStarted, model: str) -> ModelProfile:
     ):
         raise BenchError("invalid advertised slots")
     chosen = advertised[model]
-    if (chosen.provider, chosen.model, chosen.reasoning) != PROFILES[model]:
+    if (chosen.provider, chosen.model, chosen.reasoning) != expected[model]:
         raise BenchError("model profile does not match exact approved model/reasoning")
     if not any(s.slot == "A" for s in run.slots):
         raise BenchError("slot A is not offered")
@@ -72,9 +75,9 @@ def profile(run: RunStarted, model: str) -> ModelProfile:
 
 
 def allowance(model: str, tariff: Tariff | None) -> float:
-    rates = tariff or (
-        Tariff(input=1, output=2) if model == "muse-spark-open" else Tariff(input=0.1, output=0.2)
-    )
+    if model == "muse-spark-open" and tariff is None:
+        raise BenchError("Baseten requires an explicitly approved input/output tariff")
+    rates = tariff or Tariff(input=0.1, output=0.2)
     # 36 turns is the loop's separate bound, not its 30-tool-step allowance.
     return max(36 * (16000 * rates.input + 4096 * rates.output) / 1e6, 0.0870912)
 
@@ -95,7 +98,7 @@ class Session:
             raise BenchError("unexpected Python files in workspace graph")
         return graph
 
-    async def preflight(self, model: str) -> None:
+    async def preflight(self, model: str, reasoning: str | None = "__profile__") -> None:
         async with asyncio.timeout(30):
             snapshot = await self.graph()
             started = None
@@ -110,7 +113,7 @@ class Session:
             if started is None or snapshot.graph.commit != started.base_commit:
                 raise BenchError("server is not at its clean initial commit")
             self.run = started
-            self.model = profile(started, model)
+            self.model = profile(started, model, reasoning)
             await self.verify(self.clean)
 
     async def file(self, path: str) -> FileContent:
@@ -178,8 +181,11 @@ class Session:
                     raise BenchError("workspace became occupied during setup")
             return baseline, graph.graph.commit
 
-    def evidence(self, out: Path, tasks: list[Task], tariff: Tariff | None) -> None:
+    def evidence(
+        self, out: Path, tasks: list[Task], tariff: Tariff | None, experiment: dict | None = None
+    ) -> None:
         values: dict[str, Any] = {
+            "experiment": experiment,
             "run_started": self.run.model_dump(mode="json"),
             "selected_profile": self.model.model_dump(),
             "task_hashes": {t.id: t.hash for t in tasks},
