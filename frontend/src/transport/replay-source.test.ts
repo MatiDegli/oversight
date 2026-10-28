@@ -12,14 +12,29 @@ const provenance = {
 };
 
 describe("chooseReplaySource", () => {
-  it("labels a recorded log as a real recorded run, with its model and date", () => {
+  it("labels a recorded log with the date from its verified provenance run id", () => {
     const source = chooseReplaySource(recorded, fixture, provenance);
     expect(source.text).toBe(recorded);
     expect(source.kind).toBe("real recorded run");
-    expect(source.label).toBe(
-      "Replay · real recorded run · muse-spark-1.3-contributor · 2026-10-27",
+    expect(source.label).toBe("Recorded run · Oct 27, 2026");
+  });
+
+  it("uses the provenance date even when the first event has a different date", () => {
+    const laterEvents = recorded.replaceAll("2026-10-27T", "2026-10-28T");
+    expect(chooseReplaySource(laterEvents, fixture, provenance).label).toBe(
+      "Recorded run · Oct 27, 2026",
     );
   });
+
+  it.each(["run-undated", "run-20260230-140312", "run-20261327-140312"])(
+    "refuses an invalid provenance date: %s",
+    (runId) => {
+      const text = recorded.replace(provenance.run_id, runId);
+      expect(() => chooseReplaySource(text, fixture, { ...provenance, run_id: runId })).toThrow(
+        "provenance run id has no valid date",
+      );
+    },
+  );
 
   it.each([fixture, "not JSON", '{"not":"an event"}'])(
     "refuses unverified text instead of calling it a recording",

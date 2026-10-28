@@ -37,16 +37,17 @@ through others. Nothing reaches main until you approve it.
   (`PUT /files` with `agent_id`). Smoke tests, screenshot tooling and test resource caps are merged.
 - Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
   start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
-  scripted two-agent replay. A real recorded run will be bundled for the static replay.
-- The static replay build currently plays a hand-written event log and labels it as a fixture.
+  scripted two-agent replay.
+- The static replay build plays the real two-agent run in `fixtures/events/recorded-demo.jsonl`.
+  Its label, `Recorded run · Oct 27, 2026`, comes from the recording's provenance sidecar.
 
 To bundle a finished real run, install gitleaks 8.30.1 and run `make record RUN=<id>` (or
 `make record` for the latest run). This reads the SQLite log without model calls or credits and
 writes `fixtures/events/recorded-demo.jsonl` with a `.provenance.json` sidecar. Keep both files
 together: the static replay build verifies the exporter marker, SHA-256, run id, real model
 profiles and every event against the contracts, and scans for secrets again before bundling.
-Fake runs, unmarked fixtures, invalid events, secrets and absolute paths are refused. Without a
-recording the build uses the hand-written fixture and labels it as such.
+Fake runs, unmarked fixtures, invalid events, secrets and absolute paths are refused. The public
+static build requires the recording and its receipt; UI tests select their own fixtures explicitly.
 
 ## Next
 

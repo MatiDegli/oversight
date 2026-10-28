@@ -15,12 +15,12 @@ export interface Scene {
   name: string;
   enabled: boolean;
   /** Use a derived cut or a hand-written fixture instead of the served proposal log. */
-  log?: "editing" | "one-slot" | "handwritten-two-slots-braked.jsonl";
+  log?: "editing" | "proposed" | "one-slot" | "handwritten-two-slots-braked.jsonl";
   edgeShapes?: readonly ("bezier" | "taxi")[];
   /** What enables a disabled scene. Printed next to "skipped". */
   needs?: string;
   /** Puts the page in this scene's state, after the shell is ready. Nothing to do when omitted. */
-  prepare?: (page: Page, resume?: () => Promise<void>) => Promise<void>;
+  prepare?: (page: Page, context: { jsonl: string; resume?: () => Promise<void> }) => Promise<void>;
 }
 
 export interface Theme {
@@ -38,16 +38,26 @@ export interface Theme {
  * probe (src/graph/probe.ts), which the app exposes for this. A proposed change opens review; one
  * still being edited opens the live diff.
  */
-async function clickChangedNode(page: Page, panel: string): Promise<void> {
+async function clickChangedNode(page: Page, panel: string): Promise<string> {
   const graph = '[aria-label="Repository graph"]';
   const handle = await page.waitForFunction((selector) => {
     const host = document.querySelector<GraphProbeHost>(selector);
     const node = host?.oversightGraph?.nodeCenters("node.pending")[0];
     if (!host || !node) return null;
+    const slot = ["A", "B"].find((slot) =>
+      host.oversightGraph?.nodeBounds(`node.pending-${slot}`).some((bound) => bound.id === node.id),
+    );
+    if (!slot) return null;
     const box = host.getBoundingClientRect();
-    return { id: node.id, x: box.left + node.x, y: box.top + node.y };
+    return { id: node.id, x: box.left + node.x, y: box.top + node.y, slot };
   }, graph);
-  const { id, x, y } = (await handle.jsonValue()) as { id: string; x: number; y: number };
+  const { id, x, y, slot } = (await handle.jsonValue()) as {
+    id: string;
+    x: number;
+    y: number;
+    slot: string;
+  };
+  const pending = `node.pending-${slot}`;
   await page.mouse.click(x, y);
   await page.locator(`[aria-label="${panel}"] .line-insert`).first().waitFor();
   await page.waitForFunction((selector) => {
@@ -57,7 +67,7 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
   // Full lit bounds include labels and badges; the graph's position between panel and rail is its
   // viewport. Distant cone nodes use the out-of-view rows when the full cone cannot fit legibly.
   const framed = await page.evaluate(
-    ({ selector }) => {
+    ({ selector, pending }) => {
       const host = document.querySelector<GraphProbeHost>(selector);
       const view = host?.oversightGraph;
       return host && view
@@ -118,17 +128,20 @@ async function clickChangedNode(page: Page, panel: string): Promise<void> {
             ],
             pan: view.pan(),
             size: { width: host.clientWidth, height: host.clientHeight },
-            focus: view.nodeBounds("node.pending"),
+            // The panel frames its agent's change; the other agent stays pending on the graph.
+            focus: view.nodeBounds(pending),
             cone: view.nodeBounds("node.cone"),
             graph: view.nodeBounds(),
             modules: view.nodeBounds(".module"),
           }
         : null;
     },
-    { selector: graph },
+    { selector: graph, pending },
   );
-  if (!framed?.focus.length) throw new Error(`the clicked node ${id} is not on the graph`);
+  if (!framed?.focus.some((node) => node.id === id))
+    throw new Error(`the clicked node ${id} is not on the graph`);
   assertPanelFrame(framed, panel === "Review panel" ? "review" : "live-diff");
+  return pending;
 }
 
 async function openFileView(page: Page): Promise<void> {
@@ -197,6 +210,7 @@ export const scenes: readonly Scene[] = [
   {
     name: "watch",
     enabled: true,
+    log: "proposed",
     prepare: async (page) => {
       await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
     },
@@ -205,6 +219,7 @@ export const scenes: readonly Scene[] = [
   {
     name: "watch-fit",
     enabled: true,
+    log: "proposed",
     prepare: async (page) => {
       await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
       await page.getByRole("button", { name: "Fit the graph to the view" }).click();
@@ -215,18 +230,14 @@ export const scenes: readonly Scene[] = [
     },
   },
   // Review: the proposed change's node opens it, with Monaco's inline diff on the left and the graph
-  // dimmed but for the change and its cone. It needs a log that ends while the change is proposed: `make shots`
-  // serves handwritten-level1-proposed.jsonl, the hand-written log cut after seq 20.
+  // dimmed but for the change and its cone. Cut before the first decision to retain proposals.
   {
     name: "review",
     enabled: true,
-    prepare: async (page) => {
-      // The replay API has no worktrees. Read only the diff already present in this fixture.
-      const text = await readFile(
-        new URL("../../fixtures/events/handwritten-level1-proposed.jsonl", import.meta.url),
-        "utf8",
-      );
-      const updates = text
+    log: "proposed",
+    prepare: async (page, { jsonl }) => {
+      // The replay API has no worktrees. Read only the diff present in this scene's log.
+      const updates = jsonl
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line) as ServerEvent)
@@ -262,18 +273,20 @@ export const scenes: readonly Scene[] = [
     name: "live-diff",
     enabled: true,
     log: "editing",
-    prepare: (page) => clickChangedNode(page, "Live diff panel"),
+    prepare: async (page) => {
+      await clickChangedNode(page, "Live diff panel");
+    },
   },
   {
     name: "focus",
     enabled: true,
     log: "editing",
-    prepare: async (page, resume) => {
-      await clickChangedNode(page, "Live diff panel");
+    prepare: async (page, { resume }) => {
+      const pendingSelector = await clickChangedNode(page, "Live diff panel");
       await openFileView(page);
       if (!resume) throw new Error("Focus scene needs the rest of the proposal stream");
       await resume();
-      await page.getByRole("button", { name: /change ready for review/ }).click();
+      await page.getByRole("button", { name: /changes? ready for review/ }).click();
       await page.getByRole("complementary", { name: "Review panel", exact: true }).waitFor();
       await page.getByRole("tab", { name: /Live diff ·/ }).click();
       await page.getByRole("button", { name: "Files", exact: true }).click();
@@ -292,9 +305,9 @@ export const scenes: readonly Scene[] = [
             .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
             ?.oversightGraph?.animating() === false,
       );
-      const framed = await page.evaluate(() => {
+      const framed = await page.evaluate((selector) => {
         const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
-        const pending = host?.oversightGraph?.nodeCenters("node.pending") ?? [];
+        const pending = host?.oversightGraph?.nodeCenters(selector) ?? [];
         return (
           !!host &&
           pending.length > 0 &&
@@ -303,7 +316,7 @@ export const scenes: readonly Scene[] = [
               node.x > 0 && node.x < host.clientWidth && node.y > 0 && node.y < host.clientHeight,
           )
         );
-      });
+      }, pendingSelector);
       assert.equal(
         framed,
         true,

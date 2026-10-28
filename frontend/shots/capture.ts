@@ -135,14 +135,19 @@ async function main(): Promise<number> {
         target.searchParams.set("field-time", FIELD_TIME);
         await page.goto(target.href, { waitUntil: "load" });
         await waitUntilReady(page, lastSeq(captureLog));
-        await scene?.prepare?.(page, async () => {
-          liveLog = sourceLog;
-          for (const stream of streams)
-            stream.write(replayEventsAfter(sourceLog, lastSeq(captureLog)));
-          await page.waitForFunction(
-            (seq) => document.getElementById("root")?.dataset.seq === String(seq),
-            expectedSeq,
-          );
+        await scene?.prepare?.(page, {
+          jsonl: captureLog,
+          resume: async () => {
+            const proposed = logForScene(sceneSource, { log: "proposed" });
+            if (proposed === null) throw new Error("Missing proposal stream");
+            liveLog = proposed;
+            for (const stream of streams)
+              stream.write(replayEventsAfter(proposed, lastSeq(captureLog)));
+            await page.waitForFunction(
+              (seq) => document.getElementById("root")?.dataset.seq === String(seq),
+              lastSeq(proposed),
+            );
+          },
         });
         await page.evaluate((theme) => {
           document.documentElement.dataset.theme = theme;
