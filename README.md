@@ -36,8 +36,8 @@ through others. Nothing reaches main until you approve it.
   Stop/discard during work, a file edit on main and usage ticks. Saving the editable new side
   (`PUT /files` with `agent_id`) is an explicitly skipped TODO for its parallel front. Smoke
   tests, screenshot tooling and test resource caps are also merged.
-- The static replay build currently plays a hand-written event log and labels it as a fixture. A
-  real recorded run for the judges has not been bundled yet.
+- The static replay build plays the real two-agent run in `fixtures/events/recorded-demo.jsonl`.
+  Its label, `Recorded run · Oct 27, 2026`, comes from the recording's provenance sidecar.
 
 To bundle a finished real run, install gitleaks 8.30.1 and run `make record RUN=<id>` (or
 `make record` for the latest run). This reads the SQLite log without model calls or credits and

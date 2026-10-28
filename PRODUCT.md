@@ -12,8 +12,8 @@ web
   and decides what reaches main. They watch the agents work, read each change with its possible
   impact, and approve, request changes or reject. The graph exists for this person, not for the
   agents.
-- **Hackathon judges.** They evaluate Oversight through a 3-minute demo video and, once it exists,
-  a static build that replays one real recorded run in the browser, with no backend and no setup.
+- **Hackathon judges.** They evaluate Oversight through a 3-minute demo video and a static build
+  that replays one real recorded run in the browser, with no backend and no setup.
 
 ## Product Purpose
 
@@ -36,8 +36,8 @@ a chat transcript or a file list.
 - Developed in WSL; the UI is opened and recorded in a Windows browser on localhost.
 - The demo runs against a small Python project of our own (`demo-repo/`), copied to a fresh runtime
   workspace on every start.
-- Judges are meant to see the demo video and a static replay build. That build is planned: it will
-  play one real recorded run, labeled as such, once a run has been recorded (see Evidence on Hand).
+- Judges are meant to see the demo video and a static replay build. The build plays the bundled
+  real two-agent recording, labeled from its provenance (see Evidence on Hand).
 
 ## Capabilities and Constraints
 
@@ -62,12 +62,11 @@ a chat transcript or a file list.
 
 ## Evidence on Hand
 
-- **Exists today (Oct 26):** the demo repository (`demo-repo/`); one hand-written event log
-  (`fixtures/events/handwritten-level1.jsonl`), made by hand to build and test the UI, not a
-  recording; and a frontend that is still an empty shell (theme tokens, the state reducer and a
-  bare app component).
-- **Planned, not existing:** a real recorded run of a Muse Spark agent on the demo repository, and
-  the static replay build that plays it. Until a run is recorded, nothing may be presented as one.
+- **Exists today (Oct 28):** the demo repository (`demo-repo/`); hand-written and scripted fixtures
+  for UI tests; and the frontend with a graph, agent cards and Monaco review panels.
+- The real two-agent run (`fixtures/events/recorded-demo.jsonl` and its provenance sidecar) records
+  Muse Spark and Muse Spark Open, with both changes approved and merged. The static replay build
+  plays it without a backend, with the provenance-derived label `Recorded run · Oct 27, 2026`.
 - No users, testimonials, benchmarks or metrics exist yet; none may be invented.
 
 ## Product Principles

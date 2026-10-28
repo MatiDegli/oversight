@@ -47,6 +47,26 @@ function expectPublishable(text: string) {
 }
 
 describe("the public replay recording", () => {
+  it("the project README describes the default real recording and provenance label", () => {
+    const readme = readFileSync(new URL("../../../README.md", import.meta.url), "utf8");
+    const replay = readme.match(/- The static replay build[^\n]*(?:\n {2}[^\n]+)*/)?.[0];
+    expect(replay).toContain("fixtures/events/recorded-demo.jsonl");
+    expect(replay).toContain(replaySource.label);
+    expect(replay).toMatch(/label.*provenance/);
+    expect(replay).not.toMatch(/hand-written|not been bundled/);
+  });
+
+  it("the product evidence lists the real two-agent recording and static replay as existing", () => {
+    const product = readFileSync(new URL("../../../PRODUCT.md", import.meta.url), "utf8");
+    const evidence = product.split("## Evidence on Hand")[1]?.split("\n## ")[0];
+    expect(evidence).toContain("fixtures/events/recorded-demo.jsonl");
+    expect(evidence).toContain("Muse Spark and Muse Spark Open");
+    expect(evidence).toContain("static replay build");
+    expect(evidence).toContain(replaySource.label);
+    expect(evidence).not.toMatch(/Planned, not existing|empty shell|Until a run is recorded/);
+    expect(product).not.toMatch(/once it exists|That build is planned/);
+  });
+
   it("documents the bundled recording and its provenance label", () => {
     const readme = readFileSync(new URL("./README.md", import.meta.url), "utf8");
     expect(readme).toContain("fixtures/events/recorded-demo.jsonl");
