@@ -14,13 +14,11 @@ export function GraphStage({
   view,
   onNodeTap,
   layoutKey = "",
-  stacked = false,
 }: {
   state: State;
   view: View;
   onNodeTap: (id: string) => void;
   layoutKey?: string;
-  stacked?: boolean;
 }) {
   const [detail, setDetail] = useState<"Modules" | "Functions" | "Details">("Modules");
   const [zoom, setZoom] = useState(100);
@@ -62,11 +60,7 @@ export function GraphStage({
     [frameKey],
   );
   return (
-    <main
-      className={`graph-stage relative min-w-0 flex-1 bg-ground ${stacked ? "is-stacked" : ""}`}
-      aria-label="Graph stage"
-    >
-      {/* Stacked cards do not occlude the canvas; keep GraphView’s ref objects stable. */}
+    <main className="graph-stage relative min-w-0 flex-1 bg-ground" aria-label="Graph stage">
       <GraphView
         onZoom={setZoom}
         selectedId={view.selected}
@@ -85,13 +79,13 @@ export function GraphStage({
       />
       {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
               review) top left, the legend bottom left, the zoom controls bottom right. */}
-      <div className="graph-overlays pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
+      <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
         <div className="flex min-h-0 items-start justify-between gap-(--spacing-md)">
           <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
             {cone ? (
               <div
-                ref={stacked ? undefined : coneCardRef}
-                className="graph-cone pointer-events-auto min-h-0 w-(--cone-card-width) shrink-0 overflow-auto"
+                ref={coneCardRef}
+                className="pointer-events-auto min-h-0 w-(--cone-card-width) shrink-0 overflow-auto"
               >
                 <ImpactConeCard
                   cone={cone}
@@ -124,11 +118,7 @@ export function GraphStage({
           )}
         </div>
         {/* The start camera uses the space between overlays, measured after fonts load. */}
-        <div
-          data-graph-clear-area
-          ref={stacked ? undefined : startAreaRef}
-          className="min-h-0 flex-1"
-        />
+        <div data-graph-clear-area ref={startAreaRef} className="min-h-0 flex-1" />
         <div className="flex items-end justify-between gap-(--spacing-lg)">
           <div className="pointer-events-auto min-w-0">
             <Legend state={state} />

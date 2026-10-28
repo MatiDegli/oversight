@@ -17,6 +17,7 @@ import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
 import "./challenge/phone.css";
 import { usePhonePractice } from "./challenge/usePhonePractice";
+import { PracticeGraphStage } from "./challenge/PracticeGraphStage";
 export interface FrameProps {
   practice?: { active: boolean; open: () => void; content: ReactNode; focus: FocusTab };
   state: State;
@@ -53,6 +54,9 @@ export interface FrameProps {
 export function Frame(props: FrameProps) {
   const { state, onClosePanel } = props;
   const phone = usePhonePractice(props.practice?.active ?? false);
+  // Availability stays fixed throughout a replay session, so entry, exit and resizing
+  // keep the same graph owner. Only the practice composition knows about stacked overlays.
+  const Stage = props.practice ? PracticeGraphStage : GraphStage;
   const view =
     phone && props.practice
       ? {
@@ -113,11 +117,11 @@ export function Frame(props: FrameProps) {
                 onMaximize={shell.toggleMaximize}
               />
             )}
-            <GraphStage
+            <Stage
               state={state}
               view={view}
               onNodeTap={phone ? () => undefined : props.onNodeTap}
-              stacked={phone}
+              {...(props.practice ? { stacked: phone } : {})}
               layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
             />
           </div>

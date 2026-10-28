@@ -1,20 +1,26 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { freezePractice } from "./session";
-import { replayBuild, replaySource, replayRecording } from "../../transport";
+import { replayRecording } from "../../transport";
+import type { ChosenReplaySource } from "../../transport";
 import { viewReducer } from "../view";
 import type { View, FocusTab } from "../view";
 import { answerOnce, complete, freshAttempt, PracticePanel } from "./PracticePanel";
 import type { Attempt } from "./PracticePanel";
 
 import { availablePractice } from "./availability";
-const practice = availablePractice(replayBuild, replaySource, replayRecording);
 
 export function usePractice(
   setView: Dispatch<SetStateAction<View>>,
   stop: () => void,
   restart: () => void,
+  replayBuild: boolean,
+  replaySource: ChosenReplaySource,
 ) {
+  const practice = useMemo(
+    () => availablePractice(replayBuild, replaySource, replayRecording),
+    [replayBuild, replaySource],
+  );
   const [active, setActive] = useState(false);
   const [attempt, setAttempt] = useState<Attempt>(freshAttempt);
   if (!practice) return undefined;

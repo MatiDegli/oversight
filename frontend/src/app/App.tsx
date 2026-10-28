@@ -65,6 +65,8 @@ export function App() {
     () => {
       setRetry((value) => value + 1);
     },
+    replayBuild,
+    replaySource,
   );
   useEffect(() => {
     const stop = startAppSession(
