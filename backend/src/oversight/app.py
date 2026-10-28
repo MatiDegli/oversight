@@ -70,7 +70,7 @@ from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
-from oversight.workspace import Tree, Workspace
+from oversight.workspace import Tree, Workspace, WorkspaceError, list_tree, valid_agent_id
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import (
     AgentCreated,
@@ -81,6 +81,7 @@ from oversight_contracts.commands import (
     RequestChanges,
     SaveFile,
     StartAgent,
+    TreeResponse,
 )
 from oversight_contracts.common import Slot
 from oversight_contracts.events import (
@@ -833,6 +834,26 @@ class LiveRun:
         if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving
             raise ApiError("internal", "the run has not started")
         return await self._manager.read_file(agent_id, path)
+
+    async def get_tree(self, agent_id: str | None) -> TreeResponse:
+        tree = self.workspace.main
+        if agent_id is not None:
+            if not valid_agent_id(agent_id):
+                raise ApiError("invalid_request", "agent must be an agent id, such as agent-1")
+            try:
+                tree = self.workspace.worktree(agent_id)
+            except WorkspaceError:
+                raise ApiError("not_found", "there is no live worktree for that agent") from None
+        directories, files, truncated = await list_tree(tree)
+        return TreeResponse(
+            run_id=self.run_id,
+            agent_id=agent_id,
+            directories=directories,
+            files=files,
+            # The listing is locked, but a rescan need not have published these disk bytes.
+            graph_version=None,
+            truncated=truncated,
+        )
 
     async def save_file(self, request: SaveFile) -> FileSaved:
         if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving

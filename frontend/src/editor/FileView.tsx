@@ -88,7 +88,9 @@ export function FileView({ target, files, commit, onClose, startAgentAction }: F
         target,
         files,
         (next) => {
-          code.updateOptions({ readOnly: target.agentId !== null || !next.loaded });
+          code.updateOptions({
+            readOnly: files.readOnly || target.agentId !== null || !next.loaded,
+          });
           if (next.loaded && !revealed) {
             revealed = true;
             revealTarget();
@@ -174,6 +176,7 @@ export function FileView({ target, files, commit, onClose, startAgentAction }: F
       onKeyDown={(event) => {
         if (
           target.agentId === null &&
+          !files.readOnly &&
           !event.defaultPrevented &&
           !event.nativeEvent.isComposing &&
           (event.ctrlKey || event.metaKey) &&
@@ -187,10 +190,12 @@ export function FileView({ target, files, commit, onClose, startAgentAction }: F
       <header className="flex flex-wrap items-center gap-2.5 border-b border-page-border px-4 py-2.5">
         <h2 className="min-w-0 break-all text-base font-bold">{target.path}</h2>
         {state.dirty && <span className="text-sm text-muted">Unsaved edits</span>}
-        {target.agentId !== null ? (
+        {files.readOnly || target.agentId !== null ? (
           <span className="inline-flex items-center gap-2 text-sm text-muted">
             <LockKeyhole aria-hidden="true" className="size-4" />
-            Read-only · Agent {target.agentId}
+            {files.readOnly
+              ? "Read-only · Recorded file"
+              : `Read-only · Agent ${target.agentId ?? ""}`}
           </span>
         ) : (
           <>
