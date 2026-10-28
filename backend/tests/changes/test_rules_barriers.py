@@ -293,6 +293,8 @@ async def test_nested_filter_rules_path(h, reserved, transaction, monkeypatch, b
     await tx_tests.execute(h, reserved)
     assert injected and not sentinel.exists() and not h.payloads(ChangeResolved)
     assert not any(root == str(h.workspace.main.root) and cmd == "commit" for root, cmd in calls)
+    if boundary == "target":
+        assert terminal_code(h) == "integrity_invalid"
 
 
 @pytest.mark.parametrize("attack", ["metadata", "ordinary"])

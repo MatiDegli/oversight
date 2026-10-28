@@ -213,12 +213,13 @@ async def run(ctx: ChangeContext, rec: ChangeRecord, evidence: WriteEvidence) ->
 
 async def settle(tx: Transaction, error: BaseException) -> None:
     ctx, rec = tx.ctx, tx.reservation.wait.rec
-    if tx.guard is not None and isinstance(error, IntegrityError):
-        # Set the latch; recovery must still verify abort or mark main suspect.
-        with suppress(IntegrityError):
-            await tx.metadata()
     try:
         async with ctx.workspace.git_lease():
+            if tx.guard is not None and rec.evidence is not tx.definitive:
+                # An authorization query may detect moved HEAD before the final barrier.
+                # Latch metadata damage even then; an authorized, landed commit is recovery's.
+                with suppress(IntegrityError):
+                    await tx.metadata()
             if tx.tree is None:
                 tx.tree = (
                     await ctx.git(ctx.workspace.main, "rev-parse", f"{tx.pre}^{{tree}}")

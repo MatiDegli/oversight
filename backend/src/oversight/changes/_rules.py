@@ -149,8 +149,11 @@ def availability(ctx: ChangeContext) -> tuple[str, str] | None:
 async def terminal(
     ctx: ChangeContext, reservation: RulesReservation, code: str, reason: str
 ) -> None:
-    if code == "worktree_unverifiable" and "output was truncated" in reason:
-        code = "git_failed"  # Preflight's generic bucket must not credit partial raw queries.
+    if code == "worktree_unverifiable":
+        if reason.startswith("Rules preflight failed: code=integrity_invalid; reason="):
+            code = "integrity_invalid"
+        elif "output was truncated" in reason:
+            code = "git_failed"  # Preserve preflight's known failures through its generic bucket.
     await ctx.assessment.report_terminal(
         reservation.wait, code, reason, lambda: current(ctx, reservation)
     )

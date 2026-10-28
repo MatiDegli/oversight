@@ -9,7 +9,7 @@ from test_assessment import full_evidence, latest, make_clock, rec, terminals
 from test_mode import available, select
 from test_policy_profiles import policy_inputs
 
-from oversight_contracts.events import ChangeResolved
+from oversight_contracts.events import ChangeProposed, ChangeResolved
 from oversight_contracts.policy import ChangeAssessment
 
 pytestmark = pytest.mark.anyio
@@ -23,6 +23,7 @@ async def reserved(h, monkeypatch, case):
     await select(h, "merge_when_safe", 0)
     full_evidence(h, policy_inputs())  # Deliberately small, passing proposal observations.
     root = h.workspace.main.root
+    tree = await h.open(1)
     if case.startswith("cone"):
         count = int(case[-1]) - 1  # twice is already a caller.
         with (root / EDIT[0]).open("a") as stream:
@@ -30,7 +31,6 @@ async def reserved(h, monkeypatch, case):
                 stream.write(f"\ndef caller_{n}():\n    return value()\n")
         await h.workspace.main.commit_all("Add main callers", h.workspace.user_author())
         await h.manager.rescan()
-    tree = await h.open(1)
     await h.edit(1, *EDIT)
     if case in {"files3", "files4"}:
         for n in range(int(case[-1]) - 1):
@@ -80,6 +80,9 @@ async def test_actual_combination_limits(h, reserved, transaction, case):
     await tx_tests.execute(h, reserved)
     pending, definitive = h.payloads(ChangeAssessment)
     assert latest(h) == pending
+    if case.startswith("cone"):
+        assert len(h.payloads(ChangeProposed)[0].impact.entries) == 1
+        assert definitive.candidate_tree != pending.candidate_tree
     assert all(r.result == "pass" for r in pending.rules if r.rule != "combined_tests")
     passes = case in {"files3", "lines60", "cone5"}
     if passes:
