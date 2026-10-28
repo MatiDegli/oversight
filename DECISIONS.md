@@ -689,3 +689,7 @@ per family; keep the same SVG bytes, geometry, tokens and motion design.
 Give Cytoscape one short `blob:` URL per distinct layer image to avoid hashing font-sized data
 URIs on every restyle. Revoke the URLs when their stylesheet is replaced or the graph is destroyed.
 A future Content Security Policy must allow `blob:` in `img-src`.
+
+While the camera or elements animate, request a render from a microtask after each animation
+step: Cytoscape 3.34 clears the step's redraw flag (cytoscape.js#3544). Install once per core and
+guard the private animation pool with a test; remove the helper with Cytoscape 3.34.5 or later.

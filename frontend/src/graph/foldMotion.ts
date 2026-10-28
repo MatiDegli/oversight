@@ -2,6 +2,7 @@ import type { AnimationOptions, Core, Position } from "cytoscape";
 
 import { getActiveTheme } from "../theme";
 
+import { drawEveryAnimationFrame } from "./animationFrames";
 import { setScratch } from "./scratch";
 import { settle } from "./updateGraph";
 
@@ -28,6 +29,7 @@ export function slideRows(
     return;
   }
   const theme = getActiveTheme();
+  drawEveryAnimationFrame(cy);
   setScratch(cy, "foldAnimating", true);
   for (const [i, [id, position]] of moving.entries()) {
     cy.getElementById(id).animate(

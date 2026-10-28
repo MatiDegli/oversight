@@ -2,6 +2,7 @@ import type { AnimationOptions, Core, CollectionReturnValue } from "cytoscape";
 
 import { getActiveTheme } from "../theme";
 
+import { drawEveryAnimationFrame } from "./animationFrames";
 import { changeFrame } from "./changeFrame";
 import { visibleId } from "./foldVisibility";
 import { FIT_PADDING } from "./geometry";
@@ -314,6 +315,7 @@ function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
     return;
   }
   const theme = getActiveTheme();
+  drawEveryAnimationFrame(cy);
   cy.animate(viewport, {
     duration: Number.parseFloat(theme["transition-duration"]),
     // Cytoscape accepts the CSS form at run time; its types list only the named easings.
