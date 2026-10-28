@@ -2,7 +2,7 @@
 
 C1 is opt-in: `Workspace.run_tests(..., spawn=IsolatedRunner(runtime_root))`.
 Existing callers keep their current runner. Availability policy and UI notices belong to C3;
-Git leases, pins and merge commit checks belong to C2a; metadata snapshots/restoration to C2b.
+Git leases, pins and merge commit checks are C2a; metadata snapshots/restoration are C2b.
 There are no contract changes.
 
 ## Pre-Git integrity (C2a)
@@ -52,15 +52,45 @@ must agree. Optional index refreshes are disabled for server Git (`GIT_OPTIONAL_
 Without a main advance the existing proposal-tree path remains, checked against the exact
 agent commit tree, without claiming a new combined suite.
 
-C2a does not snapshot or restore the full Git metadata or real index. The fingerprint is a
-tamper tripwire, not a restorable snapshot. Before abort, the captured previous main and exact
-merge markers must still be verifiable; mismatches and unknown locks leave main suspect rather
-than resetting it from an untrusted ORIG_HEAD. Snapshot-dependent metadata comparison and
-verified restoration remain C2b.
+## Suite boundaries (C2b)
+
+Every `Workspace.run_tests` call, including selected-case base/head probes and the kernel probe,
+captures metadata before capture's first Git. The snapshot retains common config/config.worktree,
+info, hooks and configured hooksPath directories, the linked-tree pointer and admin directories,
+HEAD, branch and replacement refs, packed-refs, objects/info (including alternates), shallow and
+all real indexes, including absence. Main and the other admin directories in the common repository
+are covered too. Object data is excluded; capture's temporary index lives separately in tmp.
+
+Reads use descriptor-relative O_NOFOLLOW on every directory and file, reject nonregular files,
+hardlinks and symlinks, and enforce 10-second, 16,384-entry and 128-MiB aggregate budgets. A file
+is limited to 4 MiB, or 64 MiB for an index. Config includes and unsupported hooksPath syntax
+fail closed rather than allowing Git to discover more inputs. Admin roots are pinned by device
+and inode. There is no filesystem sandbox: concurrent external writers remain a residual.
+
+After runner cleanup, while retaining main/worktree locks and the Git lease, C2b compares and
+restores changed metadata once. It rewrites files atomically and rereads the complete snapshot;
+refs and pseudorefs use validated names/contents and an exclusive-lock compare-and-swap. The
+real index also requires its exclusive lock. Existing locks are never removed, and no reset is
+used. Unconfirmed namespace death skips comparison/restoration entirely. Unknown locks, changed
+admin identities, unreadable metadata, failed CAS or failed readback latch `main_suspect` and
+block all server Git and Approve until restart, without retrying an effect.
+
+Successful restoration still refuses the run with `integrity_invalid`. Every metadata discrepancy
+latches `workspace.integrity.rules_suspended` until a new server session. C3 consumes this latch;
+it is independent of runner availability, so verified restoration permits further isolated suites.
+Ordinary working-file changes, including ignored out.json/.coverage artifacts, add an
+`integrity_invalid` problem to that execution's evidence (cases_complete becomes false), without
+suspending session authority. They do not restore working files or relax C2a's commit barriers.
+Before abort, the previous main and exact merge markers must still verify; uncertain recovery
+keeps main suspect rather than resetting it from an untrusted ORIG_HEAD.
+
 Availability policy, execution discrimination and CI integration belong to C3. The attack
 tests retain pointer, config, fsmonitor, hooks, alternates, shallow, replacement refs, branch
-refs, index, MERGE_HEAD and abort cases; the metadata matrix asserts the pre-Git refusal,
-not C2b restoration. The regression executes a real agent suite leaving a malicious nested
+refs, index, MERGE_HEAD and abort cases. C2b's matrix runs real tampering pytest suites on main
+and linked trees, then verifies restitution or main_suspect and the persistent authority latch.
+It also covers lock/CAS races, readback failure, cancellation, index absence and local artifact
+vetoes. Removing restoration locally makes the later server `add` execute the filter sentinel.
+The C2a regression executes a real agent suite leaving a malicious nested
 repository, and checks a filter sentinel after every server Git through proposal capture,
 as-clicked approval, preparation and the combined suite. Removing the scan and veto locally
 must make capture execute the filter and fail that regression.

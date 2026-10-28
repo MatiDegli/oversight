@@ -30,7 +30,8 @@ async def approve(ctx: ChangeContext, rec: ChangeRecord, comment: str | None) ->
             # the change back to `ready`.
             await ctx.error(
                 "server",
-                "Main became suspect before this approval ran; reject the change or restart.",
+                "code=main_suspect; reason=Main became suspect before this approval ran; "
+                "reject the change or restart.",
                 rec,
                 fatal=False,
             )

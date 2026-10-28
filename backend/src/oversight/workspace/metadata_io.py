@@ -111,16 +111,21 @@ def read_entry(path: Path, budget: Budget) -> Entry | None:
 def collect(
     path: Path, budget: Budget, entries: dict[Path, Entry], *, skip: frozenset[Path]
 ) -> None:
-    entry = read_entry(path, budget)
-    if entry is None:
-        return
-    entries[path] = entry
-    if entry.data is not None or path in skip:
-        return
-    with directory(path, budget.deadline) as fd, os.scandir(fd) as children:
-        for child in children:
-            remaining(budget.deadline)
-            collect(path / child.name, budget, entries, skip=skip)
+    pending = [path]
+    while pending:
+        current = pending.pop()
+        entry = read_entry(current, budget)
+        if entry is None:
+            continue
+        entries[current] = entry
+        if entry.data is not None or current in skip:
+            continue
+        with directory(current, budget.deadline) as fd, os.scandir(fd) as children:
+            for child in children:
+                remaining(budget.deadline)
+                pending.append(current / child.name)
+                if budget.entries + len(pending) > MAX_ENTRIES:
+                    raise IntegrityError("metadata snapshot exceeds its entry budget", ".git")
 
 
 def _same(fd: int, path: Path, expected: Entry | None, deadline: float) -> None:

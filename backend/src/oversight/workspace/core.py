@@ -321,11 +321,17 @@ class Workspace:
             if target not in self.git_identities:
                 raise WorkspaceError("Git worktree removal requires a registered tree")
             scan_identity = self.git_identities[target]
+
+        def verify() -> None:
+            # A caller may have queued before a suite latched uncertainty under the lease.
+            self.integrity.before_git()
+            tree.verify_root()
+
         return await guarded_git(
             tree.git_identity,
             args,
             scan_identity=scan_identity,
-            verify=tree.verify_root,
+            verify=verify,
             lease=self.git_lease(),
             flags=GIT_FLAGS,
             env=self._git_env(tree, author, date),

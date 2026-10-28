@@ -12,6 +12,7 @@ from oversight.workspace.locks import offload
 from oversight.workspace.runner import Spawn, run_process
 from oversight.workspace.snapshot import finish_snapshot, take_snapshot
 from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
+from oversight.workspace.suite_files import file_problems, file_stamp
 from oversight.workspace.test_tree import capture_test_tree
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ async def guarded_suite(
     snapshot = await offload(partial(take_snapshot, tree.git_identity, state, timeout_s))
     runner = spawn or run_process
     try:
+        before = await offload(partial(file_stamp, tree.root))
         tested_tree, tested_commit = await capture_test_tree(
             tree.root,
             workspace.tmp_dir,
@@ -54,9 +56,21 @@ async def guarded_suite(
                 case_ids=case_ids,
             )
         except (SuiteInterrupted, SuiteUnavailable) as error:
-            error.run = replace(error.run, tested_tree=tested_tree, tested_commit=tested_commit)
+            problems = await offload(partial(file_problems, tree.root, before))
+            error.run = replace(
+                error.run,
+                tested_tree=tested_tree,
+                tested_commit=tested_commit,
+                problems=(*error.run.problems, *problems),
+            )
             raise
-        return replace(run, tested_tree=tested_tree, tested_commit=tested_commit)
+        problems = await offload(partial(file_problems, tree.root, before))
+        return replace(
+            run,
+            tested_tree=tested_tree,
+            tested_commit=tested_commit,
+            problems=(*run.problems, *problems),
+        )
     finally:
         if isinstance(runner, IsolatedRunner) and not runner.cleanup_complete:
             error = IntegrityError(

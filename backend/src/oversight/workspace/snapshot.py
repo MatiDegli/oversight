@@ -81,19 +81,23 @@ def _hooks_paths(config: bytes, root: Path) -> tuple[Path, ...]:
 
 
 def _is_ref(path: Path, common: Path) -> bool:
-    return path.name in {"HEAD", "packed-refs"} or path.is_relative_to(common / "refs")
+    return path.name in {
+        "HEAD",
+        "ORIG_HEAD",
+        "MERGE_HEAD",
+        "AUTO_MERGE",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+        "BISECT_HEAD",
+        "packed-refs",
+    } or path.is_relative_to(common / "refs")
 
 
 def _sanitize_ref(path: Path, entry: Entry | None, common: Path) -> None:
-    if path.is_relative_to(common / "refs"):
-        parts = path.relative_to(common).parts
-        if any(
-            not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", part)
-            or ".." in part
-            or part.endswith((".lock", "."))
-            for part in parts
-        ):
-            raise IntegrityError("unsafe ref name for restoration", str(path))
+    if path.is_relative_to(common / "refs") and not _ref_name(
+        os.fsencode(path.relative_to(common))
+    ):
+        raise IntegrityError("unsafe ref name for restoration", str(path))
     if entry is None:
         return
     data = entry.data
@@ -103,15 +107,32 @@ def _sanitize_ref(path: Path, entry: Entry | None, common: Path) -> None:
         valid = all(
             row.startswith(b"#")
             or re.fullmatch(rb"\^[0-9a-f]{40}(?:[0-9a-f]{24})?", row)
-            or re.fullmatch(rb"[0-9a-f]{40}(?:[0-9a-f]{24})? refs/[A-Za-z0-9_./-]+", row)
+            or (
+                re.fullmatch(rb"[0-9a-f]{40}(?:[0-9a-f]{24})? refs/[A-Za-z0-9_./-]+", row)
+                and _ref_name(row.split(b" ", 1)[1])
+            )
             for row in data.splitlines()
         )
     else:
-        valid = bool(
-            re.fullmatch(rb"(?:[0-9a-f]{40}(?:[0-9a-f]{24})?|ref: refs/[A-Za-z0-9_./-]+)\n", data)
+        valid = bool(re.fullmatch(rb"[0-9a-f]{40}(?:[0-9a-f]{24})?\n", data)) or (
+            data.startswith(b"ref: ") and data.endswith(b"\n") and _ref_name(data[5:-1])
         )
     if not valid:
         raise IntegrityError("unsafe ref contents for restoration", str(path))
+
+
+def _ref_name(name: bytes) -> bool:
+    parts = name.split(b"/")
+    return (
+        len(parts) >= 2
+        and parts[0] == b"refs"
+        and all(
+            re.fullmatch(rb"[A-Za-z0-9_][A-Za-z0-9_.-]*", part)
+            and b".." not in part
+            and not part.endswith((b".lock", b"."))
+            for part in parts
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -184,7 +205,7 @@ class MetadataSnapshot:
             cas = _is_ref(path, self.identity.common)
             if cas:
                 _sanitize_ref(path, wanted, self.identity.common)
-            replace_file(path, actual, wanted, deadline, cas=cas)
+            replace_file(path, actual, wanted, deadline, cas=cas or path.name == "index")
         for path in sorted(observed, key=lambda p: len(p.parts), reverse=True):
             if path not in self.entries and observed[path].data is None:
                 remove_directory(path, deadline)
