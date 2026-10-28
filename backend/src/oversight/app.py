@@ -66,6 +66,7 @@ from oversight.events import (
 from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
 from oversight.runtime_accounting import write_tick
+from oversight.runtime_decisions import RuntimeDecisions
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings
@@ -254,6 +255,8 @@ class LiveRun:
             ),
         )
         self.ledger = LedgerFile(settings.runtime_dir / "ledger.json")
+        # Difference-decision composition: F2 calls explicitly; owns only Baseten decision spend.
+        self.difference_decisions = RuntimeDecisions(self)
         self._usage = UsageLedger(0.0)
         self._manager: ChangeManager | None = None
         self._venv: asyncio.Task[None] | None = None
@@ -372,6 +375,7 @@ class LiveRun:
         self._closing = True
         failure: BaseException | None = None
         steps = (
+            self.difference_decisions.close,
             self._drain_reviews,
             self._stop_runs,
             self._stop_venv,

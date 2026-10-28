@@ -8,11 +8,11 @@ from typing import Any, cast
 import httpx2 as httpx
 import openai
 import pytest
+from decision_client_helpers import INPUT, FakeApi, body, client, ok, status
 
 from oversight.agents import (
     MUSE_SPARK_OPEN,
     DecisionClient,
-    DecisionInput,
     DecisionUnavailable,
     ModelReply,
     RetryPolicy,
@@ -20,57 +20,8 @@ from oversight.agents import (
     classify_difference,
 )
 from oversight.agents.client import CALL_SCOPE, CallScope
-from oversight_contracts.review import BehaviorDiffRow, ChangeTarget, NodeBehaviorDiff
-
-from .test_client import FakeApi, ok, status
 
 pytestmark = pytest.mark.anyio
-INPUT = DecisionInput(
-    target=ChangeTarget(
-        change_id="change-1",
-        revision=1,
-        base_commit="base",
-        head_commit="head",
-        main_commit="main",
-        candidate_tree="tree",
-    ),
-    agent_id="agent-1",
-    task="Use a discount of 0.085.",
-    difference=NodeBehaviorDiff(
-        node_id="pricing.discount",
-        compared_count=1,
-        differing_count=1,
-        rows=[BehaviorDiffRow(inputs="price=100", before="float:90.0", after="float:91.5")],
-    ),
-)
-
-
-def body(text: str = '{"choice":"asked_for"}', **updates: Any) -> dict[str, Any]:
-    return {
-        "id": "decision",
-        "object": "chat.completion",
-        "created": 0,
-        "model": MUSE_SPARK_OPEN.model,
-        "choices": [
-            {"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": text}}
-        ],
-        "usage": {
-            "prompt_tokens": 40,
-            "completion_tokens": 20,
-            "completion_tokens_details": {"reasoning_tokens": 15},
-        },
-    } | updates
-
-
-def client(api: FakeApi, **kwargs: Any) -> DecisionClient:
-    return DecisionClient(
-        MUSE_SPARK_OPEN,
-        base_url="https://decision.test/v1",
-        api_key="test",
-        max_output_tokens=512,
-        http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(api.handle)),
-        **kwargs,
-    )
 
 
 async def allow() -> None:
