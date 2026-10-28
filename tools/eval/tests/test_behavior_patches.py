@@ -19,7 +19,8 @@ PATCHES = catalog.load_patches()
 @pytest.mark.parametrize("patch", PATCHES, ids=lambda patch: patch.id)
 async def test_each_patch_applies_alone_and_preserves_demo_tests(patch, tmp_path):
     root = tmp_path / "demo"
-    for name, content in read_template().items():
+    baseline = read_template()
+    for name, content in baseline.items():
         target = root / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content.encode("utf-8"))
@@ -32,7 +33,7 @@ async def test_each_patch_applies_alone_and_preserves_demo_tests(patch, tmp_path
         p.relative_to(root).as_posix()
         for p in root.rglob("*")
         if p.is_file()
-        and p.read_bytes().decode("utf-8") != read_template().get(p.relative_to(root).as_posix())
+        and p.read_bytes().decode("utf-8") != baseline.get(p.relative_to(root).as_posix())
     }
     assert changed and all(p.startswith("shop/") and p.endswith(".py") for p in changed)
     evidence = tmp_path / "original-tests.txt"
