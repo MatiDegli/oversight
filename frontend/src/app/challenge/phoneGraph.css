@@ -1,0 +1,198 @@
+@media (width < 1280px) {
+  .pp-graph {
+    flex: none;
+    padding: 10px 16px 12px;
+    background: var(--ground);
+    border-bottom: 1px solid var(--border);
+  }
+  .pp-graph-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 18px;
+    margin-bottom: 8px;
+  }
+  .pp-graph-heading > span:last-child {
+    color: var(--text);
+  }
+  .pp-graph-foot {
+    color: var(--faint);
+    font-size: 12px;
+    line-height: 18px;
+    margin-top: 6px;
+  }
+  .pp-piece {
+    position: relative;
+    height: 130px;
+  }
+  .pp-call {
+    height: 114px;
+  }
+  .pp-node,
+  .pp-fold,
+  .pp-callee {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: var(--radius-node);
+    background: var(--card);
+    border: 1px solid var(--node-border);
+    font-size: 14px;
+    line-height: 20px;
+    white-space: nowrap;
+  }
+  .pp-node {
+    height: 42px;
+    width: 282px;
+    border: 1.5px dashed var(--pp-agent);
+    background: var(--pp-node);
+  }
+  .pp-node > span:first-child {
+    flex: 1;
+    font-size: 16px;
+  }
+  .pp-node small {
+    font-size: 12px;
+    color: var(--pp-agent-text);
+  }
+  .pp-node .pp-letter {
+    background: var(--pp-agent);
+    color: var(--on-agent);
+  }
+  .pp-node.is-merged {
+    border: 1px solid var(--node-border);
+    background: var(--card);
+  }
+  .pp-node.is-merged .pp-letter {
+    background: var(--pp-tint);
+    color: var(--pp-agent-text);
+  }
+  .pp-node.is-merged small {
+    color: var(--muted);
+  }
+  .pp-cone .pp-node {
+    right: 0;
+    width: 264px;
+  }
+  .pp-fold {
+    height: 34px;
+    width: 198px;
+    justify-content: space-between;
+  }
+  .pp-distance {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    background: var(--text);
+    color: var(--page);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .pp-distance-1 {
+    top: 50px;
+  }
+  .pp-distance-2 {
+    top: 96px;
+  }
+  .pp-callee {
+    width: 230px;
+    height: 36px;
+    right: 0;
+    top: 78px;
+  }
+  .pp-call-label {
+    position: absolute;
+    top: 42px;
+    left: 120px;
+    padding-inline: 6px;
+    background: var(--ground);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .pp-taxi {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: var(--lit-edge);
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+  }
+  .pp-taxi .pp-arrow {
+    fill: var(--lit-edge);
+    stroke: none;
+  }
+  .pp-taxi.is-pending {
+    stroke: var(--agent-b);
+    stroke-dasharray: 6 4;
+    stroke-width: 2;
+  }
+  .pp-taxi.is-pending .pp-arrow {
+    fill: var(--agent-b);
+    stroke-dasharray: none;
+  }
+  .pp-combined {
+    padding-block: 8px;
+  }
+  .pp-combined .pp-graph-heading {
+    margin-bottom: 6px;
+  }
+  .pp-combined .pp-graph-foot {
+    margin-top: 4px;
+    font-size: 11.5px;
+    line-height: 16px;
+  }
+  .pp-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    height: 138px;
+  }
+  .pp-piece.is-compact {
+    height: 138px;
+    min-width: 0;
+  }
+  .is-compact .pp-node {
+    width: 100%;
+    padding: 6px 8px;
+  }
+  .is-compact .pp-node > span:first-child {
+    font-size: 14px;
+  }
+  .is-compact .pp-letter {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
+  .is-compact .pp-fold {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  .is-compact .pp-distance-1 {
+    top: 54px;
+  }
+  .is-compact .pp-distance-2 {
+    top: 104px;
+  }
+  .is-compact .pp-callee {
+    width: 100%;
+    height: 34px;
+    top: 104px;
+    padding: 6px 8px;
+  }
+  .is-compact .pp-call-label {
+    left: 36px;
+    top: 56px;
+    padding-inline: 4px;
+  }
+}

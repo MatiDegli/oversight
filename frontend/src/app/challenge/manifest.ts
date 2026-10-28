@@ -10,6 +10,7 @@ export interface PracticeManifest {
   revealThroughSeq: number;
   cases: {
     changeId: string;
+    title: string;
     revision: number;
     head: string;
     kind: "none";
@@ -31,6 +32,7 @@ export const manifest: PracticeManifest = {
   cases: [
     {
       changeId: "change-2",
+      title: "Validate reservation quantities",
       revision: 1,
       head: "611be2392dc213dfc4c15ae9cef5e1c80bd6f982",
       kind: "none",
@@ -40,6 +42,7 @@ export const manifest: PracticeManifest = {
     },
     {
       changeId: "change-1",
+      title: "Validate pricing inputs",
       revision: 1,
       head: "cbd82aec10824a0f99541f797ace7855fb98afcf",
       kind: "none",
@@ -86,6 +89,11 @@ export function validateManifest(candidate: PracticeManifest, recording: Recorde
       "revision" in event.payload &&
       event.payload.revision === item.revision;
     if (
+      typeof item.title !== "string" ||
+      !item.title.trim() ||
+      item.title !== item.title.trim() ||
+      item.title.length > 80 ||
+      /[\r\n]/.test(item.title) ||
       proposal.revision !== item.revision ||
       proposal.head_commit !== item.head ||
       change.resolution !== null ||
