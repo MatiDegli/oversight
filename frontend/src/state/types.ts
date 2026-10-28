@@ -3,6 +3,7 @@ import type {
   AgentStatus,
   AgentStep,
   ChangeGraph,
+  CrossReview,
   ChangeFacts,
   SuiteExecution,
   ChangeProposed,
@@ -13,6 +14,8 @@ import type {
   RunStarted,
   UsageTick,
 } from "@contracts";
+
+import type { NeedsYou } from "./needsYou";
 
 export interface ChangeState {
   change_id: string;
@@ -25,6 +28,12 @@ export interface ChangeState {
   lines_removed: number;
   proposal: ChangeProposed | null;
   resolution: ChangeResolved | null;
+  /** Evidence survives new revisions; only the current note is invalidated. */
+  reviews: { seq: number; review: CrossReview }[];
+  crossReview: CrossReview | null;
+  crossReviewRound: ChangeResolved | null;
+  needsYou: NeedsYou | null;
+  personActed: boolean;
 }
 
 export interface State {
@@ -95,5 +104,10 @@ export function createChange(change_id: string, agent_id: string): ChangeState {
     lines_removed: 0,
     proposal: null,
     resolution: null,
+    reviews: [],
+    crossReview: null,
+    crossReviewRound: null,
+    needsYou: null,
+    personActed: false,
   };
 }

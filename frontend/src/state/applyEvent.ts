@@ -1,5 +1,6 @@
 import type { ServerEvent } from "@contracts";
 
+import { matchesNeedsYou, parseNeedsYou } from "./needsYou";
 import { createChange, createInitialState } from "./types";
 import type { State } from "./types";
 
@@ -97,6 +98,9 @@ export function applyEvent(state: State, event: ServerEvent): State {
           ...state.changes,
           [update.change_id]: {
             ...change,
+            ...(update.author === "user"
+              ? { personActed: true, crossReview: null, needsYou: null }
+              : {}),
             files: {
               ...change.files,
               [update.file.path]: {
@@ -123,6 +127,11 @@ export function applyEvent(state: State, event: ServerEvent): State {
           ...state.changes,
           [proposal.change_id]: {
             ...change,
+            ...(!change.proposal ||
+            proposal.revision !== change.proposal.revision ||
+            proposal.head_commit !== change.proposal.head_commit
+              ? { crossReview: null, needsYou: null }
+              : {}),
             status: "ready_for_review",
             proposal,
             resolution: null,
@@ -146,6 +155,11 @@ export function applyEvent(state: State, event: ServerEvent): State {
           [resolution.change_id]: {
             ...change,
             resolution,
+            crossReviewRound:
+              resolution.decided_by === "cross_review" ? resolution : change.crossReviewRound,
+            ...((resolution.decided_by ?? "person") === "person"
+              ? { personActed: true, crossReview: null, needsYou: null }
+              : {}),
             status:
               resolution.merge === "conflict"
                 ? "conflict"
@@ -185,17 +199,63 @@ export function applyEvent(state: State, event: ServerEvent): State {
           ],
         },
       };
-    // Reserved contracts: consume the sequence without enabling level 3 behavior.
+    case "change.reviewed": {
+      const review = event.payload;
+      const change = state.changes[review.change_id];
+      if (!change) return next;
+      const current =
+        !change.personActed &&
+        change.status === "ready_for_review" &&
+        change.proposal?.revision === review.revision &&
+        change.proposal.head_commit === review.head_commit &&
+        change.proposal.base_commit === review.base_commit;
+      return {
+        ...next,
+        changes: {
+          ...state.changes,
+          [review.change_id]: {
+            ...change,
+            reviews: [...change.reviews, { seq: event.seq, review }],
+            crossReview: current ? review : change.crossReview,
+          },
+        },
+      };
+    }
+    // Reserved contracts: consume the sequence without enabling unrelated level 3 behavior.
     case "change.assessed":
     case "merge_mode.changed":
     case "plan.updated":
-    case "change.reviewed":
     case "revert.resolved":
     case "queue.updated":
     case "lead.status":
       return next;
-    case "error":
-      return { ...next, errors: [...state.errors, event.payload] };
+    case "error": {
+      const report = event.payload;
+      const note = parseNeedsYou(report.message);
+      const change = report.change_id ? state.changes[report.change_id] : undefined;
+      const duplicate =
+        note &&
+        state.errors.some((error) => {
+          const previous = parseNeedsYou(error.message);
+          return (
+            error.change_id === report.change_id &&
+            previous?.revision === note.revision &&
+            previous.head === note.head &&
+            previous.code === note.code
+          );
+        });
+      return {
+        ...next,
+        errors: duplicate ? state.errors : [...state.errors, report],
+        changes:
+          change &&
+          !change.personActed &&
+          change.status === "ready_for_review" &&
+          matchesNeedsYou(note, change.proposal)
+            ? { ...state.changes, [change.change_id]: { ...change, needsYou: note } }
+            : state.changes,
+      };
+    }
     default: {
       const exhaustive: never = event;
       return exhaustive;
