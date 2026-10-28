@@ -303,8 +303,10 @@ class Workspace:
         author: Author | None = None,
         date: str | None = None,
     ) -> str:
-        """Like `git`, but a failure raises `WorkspaceError`; returns stdout."""
+        """Like `git`, but failure or truncated output raises `WorkspaceError`; returns stdout."""
         result = await self.git(tree, *args, timeout_s=timeout_s, author=author, date=date)
+        if result.truncated:
+            raise WorkspaceError(f"git {args[0]} failed: output was truncated")
         if result.returncode != 0:
             detail = self.redact(result.stderr.strip())[-500:]
             raise WorkspaceError(f"git {args[0]} failed: {detail}")

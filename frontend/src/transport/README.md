@@ -31,8 +31,9 @@ event application function as live transport, and rejects sequence/version incon
 
 `pnpm -C frontend exec vite build --mode replay` chooses bundled replay at build time and makes no
 backend requests. The current bundle plays the real recorded run in
-`fixtures/events/recorded-demo.jsonl`. Its header label uses the date from the recording's provenance
-sidecar (`Recorded run · Oct 27, 2026` for the current export).
+`fixtures/events/recorded-demo.jsonl`. Its status-line label reads the provenance date
+(`Recorded run · Oct 27, 2026` for the current export). A missing recording or
+receipt fails the public build; the e2e and scan seams select their fixtures explicitly.
 
 `createCommandClient` exposes every JSON command in proposal 4.7. Accepted commands return no
 result; SSE provides their results. HTTP errors use `CommandError` with `status`, contract `code`

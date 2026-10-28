@@ -525,6 +525,9 @@ all shell shortcuts pause except Escape, which dismisses only the sheet.
     Add forbidden (HTTP 403) within this same 1.4.0 delivery for requests whose Host or Origin
     is not on the allow list, supporting the planned DNS rebinding defense. The API guard is
     a separate front that supplies enforcement.
+16. **Size refusal code** — approved by the maintainer, 2026-10-27 (M6).
+    `too_large` (HTTP 413) rides in 1.4.0. Body and file limits are now enforced by the
+    size-limits front, after API guard admission and before routing or side effects.
 
 The tuple gate compares all changed array constraints with the byte-exact 1.3.0 baseline.
 It discovers fields generically and checks generated TypeScript, including local references and
@@ -553,7 +556,36 @@ routes. Pure ASGI preserves unbuffered SSE. A future terminal consumes this same
 same-authority checks for unsafe HTTP and every WebSocket, authentication and its stricter IPv4
 listener requirement. See guard decisions G1–G3; their defaults and decline outcomes apply.
 
-too_large (413) rides in 1.4.0; limits come with the API guard front (maintainer, M6, 2026-10-27)
+## Shared byte limits — 2026-10-27
+
+`backend/src/oversight/limits.py` holds byte ceilings and bounded read helpers shared by the
+independent backend modules, keeping import boundaries intact. HTTP bodies and event lines have
+separate 1 MiB limits; regular files use 256 KiB, while agent ranged reads allow up to 64 MiB.
+Event line limits exclude the trailing newline and apply to both import and export. Ledger
+writes are compact and refuse growth beyond their read cap before replacing the previous file.
+
+## Monaco's vendored DOMPurify — 2026-10-27
+
+Pin Monaco's DOMPurify dependency to 3.4.17 and patch monaco-editor@0.57.0 with the official
+3.4.17 ES build from the pnpm store, preserving its license and default export and omitting only
+the sourcemap reference. Its vendored 3.4.15 build matches the official 3.4.15 ES build apart from
+the absent sourcemap reference. Monaco imports that vendored file directly from domSanitize.js,
+so a dependency override alone does not fix the sanitizer the app runs. Monaco 0.57.0 is the
+latest release and no Monaco release includes the fix yet. Drop the patch once Monaco ships
+DOMPurify >= 3.4.17; an offline unit test in make check pins the vendored version so an update
+cannot silently lose the patch.
+
+DOMPurify 3.4.17 fixes GHSA-6688-9rhm-gjv2, GHSA-c6gr-qvv4-5v3f,
+GHSA-cg2g-xh64-v4q7 (critical), GHSA-mrv2-3pqr-j5jr (high), and GHSA-p98j-92pf-mc4p.
+Published on 2026-10-12, it satisfies the 14-day release-age rule. The app never enables IN_PLACE,
+SAFE_FOR_TEMPLATES, or the XHTML parser, so this is defense in depth. No other dependency or
+version changes. The patch is kept as the official build rather than reformatted or minimized,
+even though replacing it produces a patch over 500 lines.
+
+DOMPurify is dual-licensed (`MPL-2.0 OR Apache-2.0`); this project takes it under Apache-2.0.
+
+Verification: the patched `esm/vs/base/browser/dompurify/dompurify.js` equals `dompurify@3.4.17`'s `dist/purify.es.mjs` except the sourcemap line.
+Monaco's `min/` and `dev/` bundles still carry 3.4.15; the app does not load them.
 
 ## 2026-10-27 — M8: bounded backdrop blur
 
@@ -587,3 +619,30 @@ hashes; its test checks the medians, delta and sample counts against this entry.
 review fix, the totals were recalculated from all six raw traces and matched these reports.
 The measured median improved, but three samples with this dispersion and a software renderer
 do not establish a hardware-GPU speedup or a frame-latency improvement.
+
+## Cross-review core and provisional reviewer budget
+
+Cross-review is opt-in (`OVERSIGHT_CROSS_REVIEW=false`). Its core and adapter do not schedule
+reviews or publish events yet. A reviewer uses the opposite slot's model, a fresh client and a
+separate message history. Fake reviews require an entirely fake configuration and use scripts
+named for the reviewer, independently of the author scripts.
+
+The reviewer uses `REVIEW_MAX_OUTPUT_TOKENS = 12_288` with explicit `reasoning_effort="low"`
+on Meta and Baseten. This provisional budget leaves room for twenty findings of 1,000 characters
+and reasoning; 32,768 has no documented provider validation. Paid acceptance must measure provider
+acceptance and long-output throughput at the actual budget against the planned 90-second deadline.
+No paid probe was run for this change. Length, empty or invalid output stays diagnosed unknown,
+without a recovery call or a silent budget reduction. `run.started.limits.max_output_tokens`
+continues to describe the author's 4,096-token budget; the review budget has no event field in the
+frozen 1.4.0 contracts.
+
+## 2026-10-27 — Union merges for the decision log
+
+Use Git's built-in union merge driver for `DECISIONS.md`, declared as
+`DECISIONS.md merge=union` in `.gitattributes`. Parallel fronts append decisions at the same
+end of the file; union keeps both entries without the repeated merge conflicts. Offline tooling
+tests exercise both `git merge` and `git merge-tree --write-tree` in temporary repositories.
+
+Union also keeps both sides when two branches edit the same existing line, reporting no
+conflict even when the decisions disagree. Reviewers must check edits to old entries for
+duplicates or contradictions; a clean merge does not establish agreement.

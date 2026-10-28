@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from oversight.agents.client import Usage
-from oversight.limits import SizeLimitError, bounded_text
+from oversight.limits import MAX_FILE_BYTES, SizeLimitError, bounded_text
 from oversight_contracts.events import UsageTick
 
 _log = logging.getLogger(__name__)
@@ -149,8 +149,12 @@ class LedgerFile:
             text = bounded_text(self.path)
         except FileNotFoundError:
             return LedgerState()
-        except (OSError, UnicodeDecodeError, SizeLimitError) as error:
-            raise LedgerError(f"the ledger cannot be read: {error.__class__.__name__}") from error
+        except SizeLimitError as error:
+            raise LedgerError(str(error)) from error
+        except (OSError, UnicodeDecodeError) as error:
+            raise LedgerError(
+                f"{self.path.name} cannot be read: {error.__class__.__name__}"
+            ) from error
         try:
             return _parse_ledger(text)
         except json.JSONDecodeError as error:
@@ -162,12 +166,17 @@ class LedgerFile:
             "spent_usd": state.spent_usd,
             "unknown": [asdict(entry) for entry in state.unknown],
         }
+        text = json.dumps(body, separators=(",", ":")) + "\n"
+        if len(text.encode("utf-8")) > MAX_FILE_BYTES:
+            raise LedgerError(
+                f"{self.path.name} exceeds the {MAX_FILE_BYTES}-byte size limit; "
+                "settle the ledger before recording more unknown usage"
+            )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, temp = tempfile.mkstemp(prefix=".ledger-", suffix=".tmp", dir=self.path.parent)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(body, handle, indent=2)
-                handle.write("\n")
+                handle.write(text)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temp, self.path)

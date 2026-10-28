@@ -120,7 +120,7 @@ def _take_report(path: Path) -> list[str] | None:
         return None
     except SizeLimitError:
         path.unlink(missing_ok=True)
-        return None
+        raise
     path.unlink(missing_ok=True)
     return lines
 
@@ -161,6 +161,7 @@ async def run_suite(
         f"--junitxml={junit}",
         *(["--", *case_ids] if case_ids else []),
     ]
+    report_error: str | None = None
     failure: OSError | asyncio.CancelledError | None = None
     try:
         process = await spawn(argv, cwd=tree_root, timeout_s=timeout_s, env=env)
@@ -168,9 +169,15 @@ async def run_suite(
         failure = error
         process = ProcessResult(None, "", "", isinstance(error, asyncio.CancelledError), False, 0)
     finally:
-        lines = await offload(lambda: _take_report(report))
+        try:
+            lines = await offload(lambda: _take_report(report))
+        except SizeLimitError as error:
+            lines = None
+            report_error = str(error)
         cases, problems = await offload(lambda: _take_cases(junit))
     tally = parse_report(lines or [])
+    if report_error is not None:
+        tally.failed_tests.append(report_error)
     result = summarize(
         tally,
         returncode=process.returncode,
@@ -181,6 +188,8 @@ async def run_suite(
     text = process.stdout
     if process.stderr.strip():
         text += "\n" + process.stderr
+    if report_error is not None:
+        text += "\n" + report_error
     # JUnit adds one terminal footer; keep the tool response in its existing format.
     text = "\n".join(row for row in text.split("\n") if f"generated xml file: {junit}" not in row)
     if process.timed_out:

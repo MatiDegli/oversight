@@ -7,6 +7,8 @@ import pytest
 
 from oversight.limits import MAX_FILE_BYTES
 from oversight.workspace import FileTooLarge
+from oversight.workspace import ranges as ranges_module
+from oversight.workspace.errors import WorkspaceError
 from oversight.workspace.files import content_hash, read_file, write_file
 from oversight.workspace.ranges import read_range
 
@@ -72,3 +74,28 @@ def test_streamed_range_preserves_line_rules_and_hash_with_split_utf8(tmp_path) 
     assert result.lengths == [len(line) for line in result.lines]
     assert result.total == len(text.splitlines())
     assert result.hash == content_hash(data)
+
+
+def test_range_boundary_and_growth_after_stat(tmp_path, monkeypatch) -> None:
+    cap = 8192
+    monkeypatch.setattr(ranges_module, "MAX_RANGE_FILE_BYTES", cap)
+    target = tmp_path / "growing.txt"
+    target.write_bytes(b"x" * cap)
+    assert read_range(tmp_path, target.name, 1, 1, 4).lengths == [cap]
+    original = os.fstat
+    calls = 0
+
+    def grow(fd):
+        nonlocal calls
+        info = original(fd)
+        calls += 1
+        # open_file checks regular-file status first; grow after the range's own size check.
+        if calls == 2:
+            with target.open("ab") as handle:
+                handle.write(b"x")
+        return info
+
+    monkeypatch.setattr(os, "fstat", grow)
+    with pytest.raises(WorkspaceError, match=r"growing.txt exceeds the 8192-byte size limit"):
+        read_range(tmp_path, target.name, 1, 1, 4)
+    assert calls == 2

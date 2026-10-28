@@ -10,6 +10,10 @@ import provenance from "../../../fixtures/events/recorded-demo.jsonl.provenance.
 import { createInitialState, applyEvent, selectAgentCard } from "../state";
 import { replaySource } from "./index";
 import { parseEvent } from "./events";
+import { chooseReplaySource } from "./replay-source";
+
+// Documentation describes the verified export, independently of the entry point under test.
+const recordingLabel = chooseReplaySource(recorded, "", provenance).label;
 
 const secretScanArgs = [
   "stdin",
@@ -51,7 +55,7 @@ describe("the public replay recording", () => {
     const readme = readFileSync(new URL("../../../README.md", import.meta.url), "utf8");
     const replay = readme.match(/- The static replay build[^\n]*(?:\n {2}[^\n]+)*/)?.[0];
     expect(replay).toContain("fixtures/events/recorded-demo.jsonl");
-    expect(replay).toContain(replaySource.label);
+    expect(replay).toContain(recordingLabel);
     expect(replay).toMatch(/label.*provenance/);
     expect(replay).not.toMatch(/hand-written|not been bundled/);
   });
@@ -62,7 +66,7 @@ describe("the public replay recording", () => {
     expect(evidence).toContain("fixtures/events/recorded-demo.jsonl");
     expect(evidence).toContain("Muse Spark and Muse Spark Open");
     expect(evidence).toContain("static replay build");
-    expect(evidence).toContain(replaySource.label);
+    expect(evidence).toContain(recordingLabel);
     expect(evidence).not.toMatch(/Planned, not existing|empty shell|Until a run is recorded/);
     expect(product).not.toMatch(/once it exists|That build is planned/);
   });
