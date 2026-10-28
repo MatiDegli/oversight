@@ -123,7 +123,9 @@ async def save_main_transaction(
             return FileSaved(path=path, hash=saved)  # the same bytes: no commit, no event
         try:
             # `:(literal)`: the path is a file's name, never a glob or a pathspec's magic.
+            await ctx.workspace.veto_index(main, timeout_s=ctx.timeout)
             await ctx.git(main, "add", "--", f":(literal){path}")
+            await ctx.workspace.veto_index(main, timeout_s=ctx.timeout)
             await ctx.git(main, "commit", "-q", "-m", f"Edit {path}", commit_as="user")
         except Exception as failure:
             await settle_save(ctx, path, pre, original, saved, failure)
