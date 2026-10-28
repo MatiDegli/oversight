@@ -226,7 +226,7 @@ async def _run(
 ) -> SuiteRun:
     try:
         return await ctx.workspace.run_tests(
-            tree, timeout_s=rec.task.limits.test_timeout_s, case_ids=ids
+            tree, timeout_s=rec.task.limits.test_timeout_s, case_ids=ids, isolation="required"
         )
     except SuiteUnavailable as error:
         return error.run

@@ -44,6 +44,22 @@ jobs:
       - uses: ./.github/actions/setup-gitleaks
       - run: make check-ci
       - run: make smoke
+      - name: Report network isolation probe
+        run: |
+          uv run --frozen python -m oversight isolation-probe > /tmp/isolation-probe.json
+          uv run --frozen python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          verdict = json.loads(Path("/tmp/isolation-probe.json").read_text())
+          status = verdict["status"]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Network isolation probe: **{status}**\n\n")
+              summary.write("```json\n" + json.dumps(verdict, indent=2) + "\n```\n")
+          if status not in {"confirmed", "unavailable"}:
+              raise SystemExit(1)
+          PY
 
   browser:
     name: browser tests

@@ -8,8 +8,14 @@ from changes_helpers import EDIT, TESTS, Harness
 from test_probes_wiring import add_test, assert_clean
 
 from oversight.changes import _probes, _proposal
+from oversight.workspace import IsolationPolicy
 from oversight_contracts.events import ChangeProposed, SuiteExecution
 from oversight_contracts.review import ChangeFacts
+
+
+@pytest.fixture
+def session_c() -> bool:
+    return True
 
 
 @pytest.mark.anyio
@@ -53,11 +59,13 @@ async def test_deleted_test_and_support_files_are_absent_from_base_probe(
     original = h.workspace.run_tests
     checked = []
 
-    async def check_overlay(tree, *, timeout_s, case_ids=()):
+    async def check_overlay(
+        tree, *, timeout_s, case_ids=(), isolation: IsolationPolicy = "best_effort"
+    ):
         if case_ids and tree.root != h.worktree_dir("agent-1"):
             checked.append(tree.root)
             assert all(not (tree.root / path).exists() for path in paths)
-        return await original(tree, timeout_s=timeout_s, case_ids=case_ids)
+        return await original(tree, timeout_s=timeout_s, case_ids=case_ids, isolation=isolation)
 
     monkeypatch.setattr(h.workspace, "run_tests", check_overlay)
     assert await h.finish(1)

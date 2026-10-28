@@ -55,7 +55,9 @@ def directory(path: Path, deadline: float) -> Generator[int]:
         os.close(fd)
 
 
-def read_at(fd: int, name: str, path: Path, budget: Budget) -> Entry | None:
+def read_at(
+    fd: int, name: str, path: Path, budget: Budget, *, kind: str = "Git metadata"
+) -> Entry | None:
     remaining(budget.deadline)
     try:
         info = os.stat(name, dir_fd=fd, follow_symlinks=False)
@@ -65,10 +67,10 @@ def read_at(fd: int, name: str, path: Path, budget: Budget) -> Entry | None:
         budget.charge(0)
         return Entry(stat.S_IMODE(info.st_mode), None)
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-        raise IntegrityError("nonregular or linked Git metadata", str(path))
-    limit = MAX_INDEX if name == "index" else MAX_FILE
+        raise IntegrityError(f"nonregular or linked {kind}", str(path))
+    limit = MAX_INDEX if name == "index" and kind == "Git metadata" else MAX_FILE
     if info.st_size > limit:
-        raise IntegrityError("oversized Git metadata", str(path))
+        raise IntegrityError(f"oversized {kind}: read limit exceeded", str(path))
     with os.fdopen(os.open(name, READ, dir_fd=fd), "rb") as handle:
         opened = os.fstat(handle.fileno())
         if (opened.st_dev, opened.st_ino, opened.st_mode, opened.st_nlink) != (
@@ -77,7 +79,7 @@ def read_at(fd: int, name: str, path: Path, budget: Budget) -> Entry | None:
             info.st_mode,
             1,
         ):
-            raise IntegrityError("Git metadata changed during open", str(path))
+            raise IntegrityError(f"{kind} changed during open", str(path))
         chunks: list[bytes] = []
         size = 0
         while True:
@@ -87,7 +89,7 @@ def read_at(fd: int, name: str, path: Path, budget: Budget) -> Entry | None:
                 break
             size += len(chunk)
             if size > limit:
-                raise IntegrityError("oversized Git metadata", str(path))
+                raise IntegrityError(f"oversized {kind}: read limit exceeded", str(path))
             chunks.append(chunk)
         after = os.fstat(handle.fileno())
         if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (
@@ -95,7 +97,7 @@ def read_at(fd: int, name: str, path: Path, budget: Budget) -> Entry | None:
             opened.st_mtime_ns,
             opened.st_ctime_ns,
         ):
-            raise IntegrityError("Git metadata changed during read", str(path))
+            raise IntegrityError(f"{kind} changed during read", str(path))
     budget.charge(size)
     return Entry(stat.S_IMODE(info.st_mode), b"".join(chunks))
 

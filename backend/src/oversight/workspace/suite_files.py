@@ -32,7 +32,7 @@ def file_stamp(root: Path) -> Stamp:
                     data = os.fsencode(os.readlink(name, dir_fd=fd))
                     budget.charge(len(data))
                 else:
-                    entry = read_at(fd, name, path / name, budget)
+                    entry = read_at(fd, name, path / name, budget, kind="working file")
                     if entry is None:
                         raise IntegrityError("suite file disappeared during comparison", key)
                     data = hashlib.sha256(entry.data).digest() if entry.data is not None else b""

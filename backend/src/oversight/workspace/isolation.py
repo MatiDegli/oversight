@@ -1,4 +1,4 @@
-"""Opt-in Linux network/PID isolation, with private entry evidence and bounded cleanup.
+"""Linux network/PID isolation, with private entry evidence and bounded cleanup.
 
 The server authenticates entry before releasing the helper to exec pytest. A pidfd pins namespace
 init until cleanup finishes: its exit follows the kernel's teardown of every namespace member,
@@ -181,7 +181,7 @@ async def _cleanup(
 
 
 class IsolatedRunner:
-    """A Spawn implementation explicitly injected into run_tests; no availability policy here."""
+    """A Spawn implementation selected by C3 or injected for local acceptance/tests."""
 
     def __init__(self, runtime: Path, *, port: int = 0) -> None:
         self.runtime = runtime.resolve()
@@ -189,6 +189,7 @@ class IsolatedRunner:
         self.entry: dict[str, object] | None = None
         self._ready = False
         self.cleanup_complete = True
+        self.failure: str | None = None
 
     async def version(self, cwd: Path) -> str:
         result = await self._run(["--version"], cwd, 5, None, 1000, probe=True)
@@ -216,12 +217,13 @@ class IsolatedRunner:
         env: Mapping[str, str] | None = None,
         output_cap: int = DEFAULT_OUTPUT_CAP,
     ) -> ProcessResult:
-        if not self._ready:
-            await self.preflight()
         self.entry = None
         try:
+            if not self._ready:
+                await self.preflight()
             return await self._run(argv, cwd, timeout_s, env, output_cap)
         except OSError as error:
+            self.failure = str(error)
             raise IsolationUnavailable(str(error)) from error
 
     async def _run(

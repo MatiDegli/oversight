@@ -1,7 +1,6 @@
 """Suite metadata snapshots, verified restitution and session-long authority suspension."""
 
 import configparser
-import json
 import os
 import re
 import time
@@ -52,6 +51,27 @@ def _anchor(path: Path, deadline: float) -> tuple[int, int]:
         return info.st_dev, info.st_ino
 
 
+def _unquote(value: str) -> str:
+    """Git config quoting: unescape quotes/backslashes, retaining lone backslashes literally."""
+    result: list[str] = []
+    quoted = False
+    escaped = False
+    escapes = {"n": "\n", "t": "\t", "b": "\b", '"': '"', "\\": "\\"}
+    for char in value:
+        if escaped:
+            result.append(escapes.get(char, "\\" + char))
+            escaped = False
+        elif char == '"':
+            quoted = not quoted
+        elif quoted and char == "\\":
+            escaped = True
+        else:
+            result.append(char)
+    if quoted or escaped:
+        raise ValueError("unterminated Git config quote")
+    return "".join(result)
+
+
 def _hooks_paths(config: bytes, root: Path) -> tuple[Path, ...]:
     """Read only simple local Git config, never ask Git to expand an include or a path.
 
@@ -70,8 +90,8 @@ def _hooks_paths(config: bytes, root: Path) -> tuple[Path, ...]:
             if key.lower() != "hookspath":
                 continue
             value = value.strip()
-            if value.startswith('"'):
-                value = json.loads(value)
+            if '"' in value:
+                value = _unquote(value)
             if not value or value.startswith("~") or "\0" in value:
                 raise IntegrityError("unsupported Git hooksPath", "config")
             path = Path(os.path.abspath(root / value))
