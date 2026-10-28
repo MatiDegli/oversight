@@ -29,6 +29,12 @@ manifest. It is not the maintainer's answer. Keep that file, tests inspecting it
 results away from the labeler. `sheet.py` reads only public artifacts and never reads the key.
 Do not include key metadata in any labeling packet or detector prompt.
 
+The key stays tracked publicly before any labeling or detector run: its content and Git history
+pre-register construction answers alongside the frozen manifest hash. The maintainer labels from
+the shuffled sheet without opening it. Fronts tuning or changing behavior diff use only dev
+patches and never read bench patches or the key. The key and its tests change only with a new
+manifest version.
+
 All paid benches together share US$20 of the US$150 project budget. First run one pilot task per
 arm, then project cumulative spend. If it exceeds the cap, reduce repetitions before removing
 arms. A higher-reasoning arm is conditional on the remaining budget. Preserve arms, repetitions

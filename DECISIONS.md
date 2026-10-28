@@ -722,3 +722,14 @@ A future Content Security Policy must allow `blob:` in `img-src`.
 While the camera or elements animate, request a render from a microtask after each animation
 step: Cytoscape 3.34 clears the step's redraw flag (cytoscape.js#3544). Install once per core and
 guard the private animation pool with a test; remove the helper with Cytoscape 3.34.5 or later.
+
+## 2026-10-28 — Bench construction key published before labeling
+
+Keep the behavior bench's construction key tracked in the public repository. It is committed
+before any labeling or detector run, so its content and Git history pre-register the construction
+answers alongside the frozen manifest hash. This makes the intended answers auditable without
+presenting them as the maintainer's labels.
+
+The maintainer labels from the shuffled sheet without opening the key. Fronts that tune or change
+the behavior diff use only development patches and never read the bench patches or construction
+key. The key and its tests change only with a new manifest version.
