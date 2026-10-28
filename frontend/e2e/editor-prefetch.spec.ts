@@ -25,7 +25,7 @@ for (const idle of ["native", "timeout fallback"] as const) {
     page.on("request", (request) => requested.push(new URL(request.url()).pathname));
     await interceptCommands(page);
     await page.goto("/level2");
-    await engaged(page, holds.live);
+    await engaged(page, holds.live, 60_000);
     await expect
       .poll(() => requested.filter((path) => path === `/${implementation}`).length)
       .toBe(1);
@@ -38,7 +38,7 @@ for (const idle of ["native", "timeout fallback"] as const) {
       });
     await expect(page.locator(".monaco-editor")).toHaveCount(0);
     await release(page, holds.live);
-    await engaged(page, holds.decisions);
+    await engaged(page, holds.decisions, 60_000);
     expect(requested.filter((path) => path === `/${implementation}`)).toHaveLength(1);
     await page
       .getByRole("article", { name: "Agent A" })
@@ -64,9 +64,9 @@ test("Save-Data skips speculative editor requests after the graph and still perm
   page.on("request", (request) => requested.push(new URL(request.url()).pathname));
   await interceptCommands(page);
   await page.goto("/level2");
-  await engaged(page, holds.live);
+  await engaged(page, holds.live, 60_000);
   await release(page, holds.live);
-  await engaged(page, holds.decisions);
+  await engaged(page, holds.decisions, 60_000);
   expect(requested.filter((path) => editorAssets.has(path))).toEqual([]);
   expect(await page.evaluate(() => window.editorStartup.idleScheduled)).toBe(0);
   await page

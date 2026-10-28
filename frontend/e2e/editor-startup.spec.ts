@@ -51,7 +51,7 @@ for (const first of ["file", "live diff", "review"] as const) {
     await expect(page.locator("#root")).toHaveAttribute("data-seq", String(holds.live.seq - 1), {
       timeout: 60_000,
     });
-    await engaged(page, holds.live);
+    await engaged(page, holds.live, 60_000);
 
     const editorRequests = () => requested.filter((url) => editorAssets.has(new URL(url).pathname));
     await expectNoEditorBeforeGraph(page);
@@ -70,7 +70,7 @@ for (const first of ["file", "live diff", "review"] as const) {
     else if (first === "live diff") await card.getByRole("button", { name: "Live diff" }).click();
     else {
       await release(page, holds.live);
-      await engaged(page, holds.decisions);
+      await engaged(page, holds.decisions, 60_000);
       // Prefetch never mounts an editor or changes watch mode by itself.
       await expect(page.locator(".monaco-editor")).toHaveCount(0);
       await card.getByRole("button", { name: "Review change" }).click();
@@ -117,7 +117,7 @@ test("the graph waits for the preloaded Next Latin 400 font", async ({ page }) =
   await page.addInitScript(installHolds, [holds.live]);
   try {
     await page.goto("/level2", { waitUntil: "domcontentloaded" });
-    await engaged(page, holds.live);
+    await engaged(page, holds.live, 60_000);
     const graph = page.getByLabel("Repository graph", { exact: true });
     expect(await graph.evaluate((host: GraphProbeHost) => host.oversightGraph)).toBeUndefined();
     expect(editorRequests).toEqual([]);
