@@ -41,7 +41,7 @@ void test("a disabled scene or theme is skipped with the reason, never dropped",
   assert.match(jobs[3]?.skip ?? "", /scene review: the review panel/);
 });
 
-void test("the real list: watch, review, live diff, task slots and file view run in dark; light remains skipped", () => {
+void test("the real list includes the bottom dock in dark; light remains skipped", () => {
   const jobs = planJobs(scenes, themes);
   const running = jobs.filter((job) => job.skip === null).map((job) => job.file);
   assert.deepEqual(running, [
@@ -55,6 +55,7 @@ void test("the real list: watch, review, live diff, task slots and file view run
     "file-view-dark.png",
     "file-view-task-dark.png",
     "palette-open-dark.png",
+    "dock-open-dark.png",
   ]);
   assert.deepEqual(
     scenes.map((scene) => scene.name),
@@ -69,6 +70,7 @@ void test("the real list: watch, review, live diff, task slots and file view run
       "file-view",
       "file-view-task",
       "palette-open",
+      "dock-open",
     ],
   );
   assert.ok(scenes.every((scene) => scene.enabled || (scene.needs ?? "") !== ""));
@@ -109,7 +111,7 @@ void test("live diff uses a derived cut through the last edit before the proposa
   assert.equal(editingLog('{"seq":1,"type":"change.proposed"}'), null);
 });
 
-void test("a log without a pre-proposal edit still captures watch, review and file view, skipping only live diff", () => {
+void test("a log without a pre-proposal edit captures the dock, skipping only editing scenes", () => {
   const source = '{"seq":1,"type":"change.proposed"}\n{"seq":2,"type":"change.updated"}\n';
   const enabled = scenes.filter(
     (scene) => scene.enabled && (!scene.log || ["editing", "proposed"].includes(scene.log)),
@@ -125,6 +127,7 @@ void test("a log without a pre-proposal edit still captures watch, review and fi
       ["file-view", source],
       ["file-view-task", source],
       ["palette-open", source],
+      ["dock-open", source],
     ],
   );
   // Scenes using the served log do not even parse an editing cut.
