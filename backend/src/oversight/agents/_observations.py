@@ -14,7 +14,10 @@ def test_observation(run: SuiteRun, max_chars: int, *, harness_pack: bool = Fals
     if harness_pack:
         output = retain_failure(run.output, max_chars)
         if len(run.output) > max_chars:
-            content += "\nOutput truncated: retaining the first failure and final tail."
+            if output == run.output[-max_chars:]:
+                content += f"\nOutput truncated: showing the last {max_chars} characters."
+            else:
+                content += "\nOutput truncated: retaining the first failure and final tail."
         return f"{content}\n\n{output}"
     if len(run.output) > max_chars:
         content += f"\nOutput truncated: showing the last {max_chars} characters."
