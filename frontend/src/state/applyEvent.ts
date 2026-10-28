@@ -146,6 +146,7 @@ export function applyEvent(state: State, event: ServerEvent): State {
           [resolution.change_id]: {
             ...change,
             resolution,
+            resolutionSeq: event.seq,
             status:
               resolution.merge === "conflict"
                 ? "conflict"

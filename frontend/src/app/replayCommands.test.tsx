@@ -27,7 +27,7 @@ it("creates the command client in a live build and never in the replay build", (
   transport.replayBuild = true;
   renderToStaticMarkup(<App />);
   expect(transport.createCommandClient).not.toHaveBeenCalled();
-  expect(frame.files).toBeUndefined();
+  expect(frame.files?.readOnly).toBe(true);
   transport.replayBuild = false;
   const getFile = vi.fn();
   const saveFile = vi.fn();

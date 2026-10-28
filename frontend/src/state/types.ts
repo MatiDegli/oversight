@@ -25,6 +25,8 @@ export interface ChangeState {
   lines_removed: number;
   proposal: ChangeProposed | null;
   resolution: ChangeResolved | null;
+  /** Applied event order for recorded file contents after successive merges. */
+  resolutionSeq?: number;
 }
 
 export interface State {

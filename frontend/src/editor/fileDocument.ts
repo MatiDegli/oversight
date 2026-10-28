@@ -21,6 +21,7 @@ export interface FileDraft {
 
 /** Page-owned state. Saving and its reconciliation must survive the editor's disposal. */
 export interface FileAccess {
+  readOnly?: boolean;
   drafts: Map<string, FileDraft>;
   inFlightSaves: Map<string, Promise<FileSaved>>;
   saved: Map<string, FileContent>;
@@ -69,7 +70,7 @@ export class FileDocument {
     review = false,
   ) {
     this.key = fileKey(target.path, target.agentId);
-    this.writable = target.agentId === null || review;
+    this.writable = !files.readOnly && (target.agentId === null || review);
     const draft = this.writable ? files.drafts.get(this.key) : undefined;
     if (draft) this.replace(draft.content);
     this.subscription = model.onDidChangeContent((event) => {

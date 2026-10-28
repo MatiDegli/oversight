@@ -25,11 +25,58 @@
   color: var(--text);
 }
 .shell-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   width: var(--sidebar-width);
   flex-shrink: 0;
   background: var(--panel);
   border-right: 1px solid var(--divider);
   z-index: 3;
+}
+.files-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding-right: 8px;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: var(--caption-size);
+  cursor: pointer;
+}
+.files-tree-row:hover,
+.files-tree-row[aria-selected="true"] {
+  color: var(--text);
+  background: var(--raised);
+}
+.files-tree:focus-visible .files-tree-row[aria-selected="true"] {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.file-agent-mark {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-label);
+  font-size: var(--group-label-size);
+  font-weight: 700;
+}
+.file-agent-mark[data-slot="A"] {
+  color: var(--agent-a-text);
+}
+.file-agent-mark[data-slot="B"] {
+  color: var(--agent-b-text);
+}
+.file-agent-mark[data-mode="edit"][data-slot="A"] {
+  background: var(--agent-a);
+  color: var(--on-agent);
+}
+.file-agent-mark[data-mode="edit"][data-slot="B"] {
+  background: var(--agent-b);
+  color: var(--on-agent);
 }
 .shell-center {
   display: flex;

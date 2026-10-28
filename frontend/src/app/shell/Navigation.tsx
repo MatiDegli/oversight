@@ -1,6 +1,7 @@
 import { Files, GitPullRequest, Keyboard, Network, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { focusRing } from "./shared";
+import { FilesTree } from "./FilesTree";
 
 type Section = "Files" | "Changes";
 export function LeftRail({
@@ -79,11 +80,13 @@ export function Sidebar({ section, onClose }: { section: Section; onClose: () =>
           <X aria-hidden="true" className="size-4" />
         </button>
       </header>
-      <p className="p-3.5 text-sm text-muted">
-        {section === "Files"
-          ? "The repository’s files will appear here."
-          : "Changes awaiting review and past decisions will appear here."}
-      </p>
+      {section === "Files" ? (
+        <FilesTree />
+      ) : (
+        <p className="p-3.5 text-sm text-muted">
+          Changes awaiting review and past decisions will appear here.
+        </p>
+      )}
     </aside>
   );
 }

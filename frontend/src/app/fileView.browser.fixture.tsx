@@ -32,6 +32,21 @@ export const fileViewTest = {
       createRoot(host).render(<App />);
     });
   },
+  refreshFiles(type: "graph.delta" | "change.resolved") {
+    const { state, applyEvents } = stateStore.getState();
+    const source = events.find((event) => event.type === type);
+    if (!source) throw new Error("Missing refresh event");
+    const event = { ...source, seq: state.lastSeq + 1 };
+    if (event.type === "graph.delta")
+      event.payload = {
+        ...event.payload,
+        from_version: state.graph?.version ?? "v0",
+        to_version: `v${String(event.seq)}`,
+      };
+    flushSync(() => {
+      applyEvents([event]);
+    });
+  },
   commit(commit: string) {
     const { state } = stateStore.getState();
     if (state.graph)
