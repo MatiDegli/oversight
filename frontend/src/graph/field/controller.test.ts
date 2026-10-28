@@ -201,6 +201,31 @@ describe("field transitions", () => {
     controller.dispose();
   });
 
+  it.each(["update", "frame"])(
+    "paints the final empty scene when a slow %s draw crosses the transition deadline",
+    (phase) => {
+      const controller = createFieldController(canvas, source);
+      controller.update(light);
+      advance(240);
+      const crossDeadline = () => {
+        now = 481;
+      };
+      if (phase === "update") renderer.draw.mockImplementationOnce(crossDeadline);
+      controller.update({ ...light, lights: [] });
+      if (phase === "frame") {
+        renderer.draw.mockImplementationOnce(crossDeadline);
+        advance(479);
+      }
+      expect(last()[3]).toHaveLength(1);
+      expect(canvas.oversightField?.animating()).toBe(true);
+      advance(496);
+      expect(last()[3]).toEqual([]);
+      expect(canvas.oversightField?.animating()).toBe(false);
+      expect(frames.size).toBe(0);
+      controller.dispose();
+    },
+  );
+
   it("jumps immediately under reduced motion, including when it is enabled mid-transition", () => {
     const controller = createFieldController(canvas, source);
     controller.update(light);
