@@ -1,0 +1,1 @@
+Return True from Cart.remove when the SKU existed and False otherwise, preserving removal and missing-SKU no-op behavior.

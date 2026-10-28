@@ -1,0 +1,11 @@
+--- a/shop/models.py
++++ b/shop/models.py
+@@ -7,6 +7,8 @@
+ 
+ def format_cents(cents: int) -> str:
+     """Format an amount in cents as dollars, for example 1250 -> '$12.50'."""
++    if cents == 0:
++        return "$0"
+     sign = "-" if cents < 0 else ""
+     dollars, rest = divmod(abs(cents), 100)
+     return f"{sign}${dollars}.{rest:02d}"

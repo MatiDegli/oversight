@@ -1,0 +1,14 @@
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -40,8 +40,9 @@
+     return total - total * percent // 100
+ 
+ 
+-def add_tax(total: int) -> int:
+-    return total + total * TAX_PERCENT // 100
++def add_tax(total: int, percent: int = TAX_PERCENT) -> int:
++    tax = (total * percent + 50) // 100
++    return total + tax
+ 
+ 
+ def shipping_cost(total: int) -> int:

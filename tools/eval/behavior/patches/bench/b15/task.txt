@@ -1,0 +1,1 @@
+Reject negative quantities in compute_price with ValueError. Allow zero and preserve prices for positive quantities.

@@ -1,0 +1,1 @@
+Make shipping_cost return zero for an items total of exactly zero. Keep the current shipping rule for every other total.

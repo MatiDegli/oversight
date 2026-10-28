@@ -1,0 +1,11 @@
+--- a/shop/inventory.py
++++ b/shop/inventory.py
+@@ -37,4 +37,7 @@
+ 
+     def low_stock(self, threshold: int = 5) -> list[str]:
+         """SKUs whose available units are at or below the threshold."""
+-        return sorted(sku for sku in self._stock if self.available(sku) <= threshold)
++        if threshold < 0:
++            raise ValueError("threshold must be nonnegative")
++        matches = (sku for sku in self._stock if self.available(sku) <= threshold)
++        return sorted(matches, key=str.casefold)

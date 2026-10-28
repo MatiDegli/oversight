@@ -1,0 +1,1 @@
+Let add_tax accept an explicit percent argument, defaulting to TAX_PERCENT. Preserve the existing integer-cent calculation.

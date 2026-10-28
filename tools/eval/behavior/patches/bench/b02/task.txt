@@ -1,0 +1,1 @@
+Add an optional floor argument to compute_price, default None. When supplied, clamp the final price to that minimum; preserve the current calculation when omitted.

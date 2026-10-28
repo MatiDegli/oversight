@@ -1,0 +1,10 @@
+--- a/shop/models.py
++++ b/shop/models.py
+@@ -45,6 +45,7 @@
+ 
+     @email.setter
+     def email(self, value: str) -> None:
++        value = value.strip()
+         if "@" not in value:
+             raise ValueError(f"invalid email address: {value!r}")
+         self._email = value.lower()

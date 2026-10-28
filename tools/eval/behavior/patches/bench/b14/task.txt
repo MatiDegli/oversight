@@ -1,0 +1,1 @@
+Trim surrounding whitespace in Customer.email before validation and lowercasing. Invalid addresses must still raise ValueError without replacing the previous value.
