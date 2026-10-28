@@ -10,6 +10,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE.parents[2] / "demo-repo"
 FROZEN_MANIFEST_SHA256 = "5fe04cae2491380078c1a2a9a34059f574bb590e38bc8c8b3d503bc590dfcc30"
+FROZEN_CONSTRUCTION_SHA256 = "1f322590e002b864b991f1ac3e003db56c577963ce5f11b17565251c43b4ed31"
 IGNORED = {".git", "__pycache__", ".pytest_cache", ".venv"}
 
 

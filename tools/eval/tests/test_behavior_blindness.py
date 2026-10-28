@@ -1,12 +1,14 @@
-"""Catch copied construction clues in task text without changing frozen artifacts."""
+"""Catch construction clues in tasks and added comments without changing frozen artifacts."""
 
 import json
 import re
+from dataclasses import replace
 
 import pytest
 from tools.eval.behavior import catalog
 
-BENCH = [patch for patch in catalog.load_patches() if patch.set == "bench"]
+PATCHES = catalog.load_patches()
+BENCH = [patch for patch in PATCHES if patch.set == "bench"]
 CONSTRUCTION = {
     row["id"]: row
     for row in json.loads((catalog.HERE / "construction-key.json").read_bytes())["patches"]
@@ -31,23 +33,47 @@ def distinctive_tokens(row: dict) -> set[str]:
     return {location.split()[0].casefold()} | details | numbers | quoted | filenames
 
 
-def assert_no_construction_hint(task: str, row: dict) -> None:
+def assert_no_construction_hint(text: str, row: dict) -> None:
     shared = {
         token
         for token in distinctive_tokens(row)
-        if re.search(r"(?<!\w)" + re.escape(token) + r"(?!\w)", task.casefold())
+        if re.search(r"(?<!\w)" + re.escape(token) + r"(?!\w)", text.casefold())
     }
-    assert not shared, f"{row['id']}: task reveals construction clues: {sorted(shared)}"
+    assert not shared, f"{row['id']}: public text reveals construction clues: {sorted(shared)}"
 
 
-@pytest.mark.parametrize("patch", BENCH, ids=lambda patch: patch.id)
-def test_bench_tasks_do_not_reveal_construction_clues(patch):
-    assert_no_construction_hint(patch.task, CONSTRUCTION[patch.id])
+@pytest.mark.parametrize(
+    ("patch", "source"),
+    [(patch, "task") for patch in BENCH] + [(patch, "comments") for patch in PATCHES],
+    ids=[f"{patch.id}-task" for patch in BENCH] + [f"{patch.id}-comments" for patch in PATCHES],
+)
+def test_public_text_does_not_reveal_construction_clues(patch, source):
+    texts = (
+        [patch.task]
+        if source == "task"
+        else [
+            line[1:].lstrip()
+            for line in patch.diff.splitlines()
+            if line.startswith("+") and line[1:].lstrip().startswith("#")
+        ]
+    )
+    for text in texts:
+        assert_no_construction_hint(text, CONSTRUCTION[patch.id])
+
+
+@pytest.mark.parametrize("hint", ["rounding", "599", "coupon-lookups.txt", "Sample"])
+@pytest.mark.parametrize("indent", ["", "    ", "\t"])
+def test_blindness_guard_rejects_hints_in_added_comments(hint, indent):
+    row = next(row for row in CONSTRUCTION.values() if hint.casefold() in distinctive_tokens(row))
+    patch = next(patch for patch in BENCH if patch.id == row["id"])
+    changed = replace(patch, diff=patch.diff + f"+{indent}# Reviewer hint: {hint}.\n")
+    with pytest.raises(AssertionError, match="reveals construction clues"):
+        test_public_text_does_not_reveal_construction_clues(changed, "comments")
 
 
 @pytest.mark.parametrize("hint", ["rounding", "599", "coupon-lookups.txt", "Sample"])
 def test_blindness_guard_rejects_planted_hints(hint):
     row = next(row for row in CONSTRUCTION.values() if hint.casefold() in distinctive_tokens(row))
     patch = next(patch for patch in BENCH if patch.id == row["id"])
-    with pytest.raises(AssertionError, match="task reveals construction clues"):
+    with pytest.raises(AssertionError, match="reveals construction clues"):
         assert_no_construction_hint(patch.task + f"\nReviewer hint: {hint}.\n", row)

@@ -44,7 +44,11 @@ def test_baseline_and_construction_balance():
     catalog.check_baseline()
     assert tree_hash(read_template()) == catalog.read_manifest()["baseline_sha256"]
     assert Counter(p.set for p in PATCHES) == {"bench": 20, "dev": 4}
-    construction = json.loads((catalog.HERE / "construction-key.json").read_bytes())["patches"]
+    raw = (catalog.HERE / "construction-key.json").read_bytes()
+    assert catalog.sha256(raw) == catalog.FROZEN_CONSTRUCTION_SHA256, (
+        "frozen construction key changed"
+    )
+    construction = json.loads(raw)["patches"]
     assert {row["id"] for row in construction} == {p.id for p in PATCHES}
     groups = {p.id: p.set for p in PATCHES}
     bench = [row for row in construction if groups[row["id"]] == "bench"]
@@ -58,6 +62,24 @@ def test_baseline_and_construction_balance():
     assert all(
         row["where"] and row["witness"] and row["reachability_reason"] for row in construction
     )
+
+
+@pytest.mark.parametrize("field", ["witness", "planted"])
+def test_construction_freeze_rejects_edits_preserving_balance(field, tmp_path, monkeypatch):
+    root = tmp_path / "catalog"
+    shutil.copytree(catalog.HERE, root)
+    path = root / "construction-key.json"
+    key = json.loads(path.read_bytes())
+    if field == "witness":
+        key["patches"][0]["witness"] += " Changed witness."
+    else:
+        # Swap two reachable bench labels so all construction counts still agree.
+        for row in key["patches"][1:3]:
+            row["planted"] = not row["planted"]
+    path.write_text(json.dumps(key))
+    monkeypatch.setattr(catalog, "HERE", root)
+    with pytest.raises(AssertionError, match="frozen construction key changed"):
+        test_baseline_and_construction_balance()
 
 
 @pytest.mark.parametrize("artifact", ["task.txt", "change.diff"])

@@ -55,8 +55,9 @@ The catalog checks the baseline tree and both artifacts of every patch. A patch 
 of the UTF-8 encoding of `json.dumps({"task.txt": task, "change.diff": diff}, sort_keys=True,
 ensure_ascii=False, separators=(",", ":"))`, with the original file bytes decoded as UTF-8,
 including line endings. `manifest.json` itself is pinned in `catalog.py`; there is no automatic
-refreeze command. Editing the task, diff or manifest fails closed. The construction key is
-intentionally outside this public fingerprint and is never needed to generate a sheet.
+refreeze command. Editing the task, diff or manifest fails closed. The construction key has its
+own pinned SHA-256 checked by the construction-balance test; it stays outside the public
+fingerprint and is never read to generate a sheet.
 
 Apply exactly one patch to a fresh disposable copy, never to the real template:
 
