@@ -54,7 +54,12 @@ def _usage(raw: object) -> Usage:
         value = data.get(key)
         return value if isinstance(value, int) else None
 
-    return Usage(count("input_tokens"), count("output_tokens"), count("cached_tokens"))
+    return Usage(
+        count("input_tokens"),
+        count("output_tokens"),
+        count("cached_tokens"),
+        count("reasoning_tokens"),
+    )
 
 
 def parse_script(text: str, profile: ModelProfile = FAKE_MODEL) -> Script:

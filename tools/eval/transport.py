@@ -11,6 +11,7 @@ import httpx
 from pydantic import TypeAdapter
 from tools.eval.tasks import BenchError
 
+from oversight.telemetry import TRACE_HEADER
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import Health
 from oversight_contracts.events import ServerEvent
@@ -20,6 +21,8 @@ EVENT = TypeAdapter(ServerEvent)
 
 class API:
     def __init__(self, server: str) -> None:
+        self.trace_enabled = False
+        self.trace_attempt: str | None = None
         parsed = urlparse(server)
         if (
             parsed.scheme != "http"
@@ -39,6 +42,8 @@ class API:
         )
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        if path == "/agents" and self.trace_attempt:
+            kwargs["headers"] = {TRACE_HEADER: self.trace_attempt}
         # POST is deliberately never retried, including an ambiguous lost start response.
         deadline = 180 if path == "/agents" else 15
         async with asyncio.timeout(deadline):

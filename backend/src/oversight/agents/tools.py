@@ -16,6 +16,7 @@ from typing import Literal, cast
 
 from pydantic import ValidationError
 
+from oversight.agents._observations import test_observation
 from oversight.graph import WorkspaceGraph
 from oversight.workspace import (
     FileRead,
@@ -437,14 +438,8 @@ class Toolbox:
             headline = "Ran tests: the suite could not run"
         else:
             headline = f"Ran tests: {result.passed} of {result.passed + result.failed} pass"
-        output = run.output[-MAX_TEST_OUTPUT:]
-        counts = f"{result.passed} passed, {result.failed} failed, {result.skipped} skipped"
-        failed = ", ".join(result.failed_tests) or "none reported"
-        content = f"Suite outcome: {result.outcome}; {counts}\nFailed tests: {failed}"
-        if len(run.output) > MAX_TEST_OUTPUT:
-            content += f"\nOutput truncated: showing the last {MAX_TEST_OUTPUT} characters."
         return ToolOutcome(
-            content=f"{content}\n\n{output}",
+            content=test_observation(run, MAX_TEST_OUTPUT),
             ok=True,
             summary=headline,
             tests=result,
