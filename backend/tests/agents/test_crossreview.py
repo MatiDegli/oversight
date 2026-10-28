@@ -57,6 +57,7 @@ def test_prompt_contains_the_complete_change_context_and_protocol() -> None:
     prompt = build_prompt(INPUTS)
     assert prompt_data(prompt) == {
         "reviewer_model": MODEL,
+        "task": "",
         "summary": INPUTS.summary,
         "unified_diff": INPUTS.diff,
         "diff_omitted_chars": 0,
@@ -280,7 +281,7 @@ def test_full_finding_lines_are_capped_and_truncation_is_noted(size: int) -> Non
     assert result.findings[0].text == line[:MAX_FINDING_CHARS]
     assert bool(result.problems) == (size > MAX_FINDING_CHARS)
     if result.problems:
-        assert "cut to 300 characters" in result.problems[0]
+        assert "cut to 1,000 characters" in result.problems[0]
 
 
 def test_oversize_location_and_number_are_diagnostics_not_exceptions() -> None:
@@ -348,12 +349,10 @@ def test_negative_round_count_cannot_grant_an_extra_round() -> None:
 @pytest.mark.parametrize("size", [MAX_COMMENT_CHARS - 1, MAX_COMMENT_CHARS, MAX_COMMENT_CHARS + 1])
 def test_comment_cap_boundary_keeps_short_comments_whole(size: int) -> None:
     header = f"Cross-review written by a model ({MODEL}).\n"
-    lines: list[str] = []
-    for i in range(6):
-        prefix = f"BLOCKING pricing.py:{i + 1}: "
-        lines.append(prefix + "x" * (MAX_FINDING_CHARS - len(prefix)))
+    prefix = "BLOCKING pricing.py:1: "
+    lines = [prefix + "x" * (MAX_FINDING_CHARS - len(prefix))]
     last_size = size - len(header) - sum(map(len, lines)) - len(lines)
-    prefix = "SHOULD-FIX pricing.py:7: "
+    prefix = "SHOULD-FIX pricing.py:2: "
     lines.append(prefix + "y" * (last_size - len(prefix)))
     original = header + "\n".join(lines)
     assert len(original) == size

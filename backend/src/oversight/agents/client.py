@@ -55,6 +55,14 @@ FAKE_MODEL = ModelProfile(
     id="fake", label="Scripted fake model", provider="fake", model="fake-scripted", reasoning=None
 )
 
+FAKE_MODEL_B = ModelProfile(
+    id="fake-b",
+    label="Scripted fake model B",
+    provider="fake",
+    model="fake-scripted-b",
+    reasoning=None,
+)
+
 UNVERIFIED_PROFILES: frozenset[str] = frozenset()
 """Profiles whose reasoning setting no probe has confirmed. A run on one is refused, since the agent
 would ride the provider's default. Empty: docs/api-probe.md confirmed both Muse profiles'. A new
@@ -131,6 +139,14 @@ class ModelAPIError(Exception):
     """The model call failed for good: a refused request, or retries used up."""
 
 
+class EmptyChoicesError(ModelAPIError):
+    """No verdict, but retain the response identity and usage for the review adapter."""
+
+    def __init__(self, reply: ModelReply) -> None:
+        super().__init__("the API returned no choices")
+        self.reply = reply
+
+
 @dataclass(frozen=True)
 class RetryPolicy:
     max_attempts: int = 5
@@ -187,12 +203,17 @@ def usage_of(completion: ChatCompletion) -> Usage:
 
 def reply_of(completion: ChatCompletion) -> ModelReply:
     if not completion.choices:
-        raise ModelAPIError("the API returned no choices")
+        raise EmptyChoicesError(ModelReply(None, [], usage_of(completion), completion.model))
     message = completion.choices[0].message
     calls = [
-        ToolCall(id=call.id, name=call.function.name, arguments=call.function.arguments or "{}")
+        ToolCall(
+            id=call.id,
+            name=call.function.name if call.type == "function" else call.custom.name,
+            arguments=(call.function.arguments or "{}")
+            if call.type == "function"
+            else call.custom.input,
+        )
         for call in message.tool_calls or []
-        if call.type == "function"
     ]
     return ModelReply(
         text=message.content or None,
