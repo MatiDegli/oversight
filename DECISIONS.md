@@ -1161,3 +1161,41 @@ Proof 2 ends on the inbox: this many agents for this many hours, and these were 
 the person had to make. Build the inbox together with item 9, keeping item numbers, anchors and
 the decided queue's order. It changes the look, so the maintainer sees a shot before merge.
 This gives the person one place to answer and makes the run's need for human decisions visible.
+
+## 2026-10-28 — Contracts 1.6.0 — approved by the maintainer
+
+Slot now admits A through F as identifiers only. Existing two-subtask plans keep their explicit
+pair tuples, dependency indices 0/1 and assignment validators; widening slots does not enlarge a
+plan. OVERSIGHT_MAX_AGENTS, default 4 and maximum 6, is a backend setting outside contracts. The
+current backend still offers only A and B; admission of further agents belongs to its own front.
+
+StartAgent and AgentStatus alone gain optional answering: DecisionRef, default null. It links
+a new task to its originating inbox entry, copied unchanged into every status for that task so
+events alone suffice in live observation and replay. This closes the open contract question in
+"A decisions inbox is the form of Needs you" without changing ReviewCard answers, their person
+principal, ChangeResolved.answers or any other event field or type.
+
+The discriminated reference retains card identity (node_id, question, evidence_seq), scoped to
+change_id, revision and head_commit; no separate card id is introduced. Change-level kinds are
+checks_unavailable, follow_main, risky_area and examples_before_code. Uniqueness is one entry per
+(kind, change_id, revision) for change-level kinds (several unavailable checks form one entry),
+per (change_id, revision, node_id, question) for cards, and per (agent_id, revision) for lead plans.
+The lead revision names LeadStatus, not a plan_id. evidence_seq is the event that raised the
+entry, retaining a card's existing evidence_seq. All references are run-local. Candidate revision
+and head prevent an older answer from consuming a newer candidate's entry. Pydantic validates
+intrinsic shape; the producer verifies event existence, target equality and entry uniqueness.
+
+A bounded compatibility scope exception keeps make check green: exhaustive frontend look maps
+retain A/B exactly and use named C-F placeholders backed by existing neutral theme tokens, with
+slot letters still visible. These placeholders are unreachable until the backend admits more
+than two agents; line B's many-agents look replaces them with the maintainer's chosen colors and
+lands before backend admission. File activity and a test filter use Slot, typed status fixtures
+include answering: null, and the backend health test expects 1.6.0. No runtime behavior changes;
+the answering echo belongs to item 9's backend front.
+
+Safe creation, nullable SaveFile.base_hash, zones and inventory move from the reserved 1.6.0
+bundle to 1.7.0 because they are not designed yet and must not hold these approved additions.
+SaveFile stays unchanged. Delivery A decisions 11–12 remain unchanged as the approval history.
+The exact 1.5.0 schema bytes are frozen before regeneration as the new tuple-check baseline,
+with a hash assertion and both older baselines and independent negative controls retained.
+Generated files still come only from make contracts and keep byte-for-byte drift checking.

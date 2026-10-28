@@ -112,6 +112,7 @@ const agent = (slot: "A" | "B", state: AgentStatus["state"] = "working"): AgentS
   queued_task_id: null,
   base_commit: null,
   examples: null,
+  answering: null,
   agent_id: slot,
   change_id: slot,
   slot,

@@ -199,7 +199,7 @@ contracts: ## regenerate contracts/generated: JSON Schema and TypeScript from th
 	$(UV) python contracts/generate.py
 
 check-contract-tuples:
-	node contracts/check_tuples.cjs --base contracts/baselines/1.4.0.schema.json --schema contracts/generated/oversight.schema.json --types contracts/generated/contracts.ts --node-modules frontend/node_modules
+	node contracts/check_tuples.cjs --base contracts/baselines/1.5.0.schema.json --schema contracts/generated/oversight.schema.json --types contracts/generated/contracts.ts --node-modules frontend/node_modules
 
 check-contracts: check-contract-tuples
 	$(UV) python contracts/generate.py --check

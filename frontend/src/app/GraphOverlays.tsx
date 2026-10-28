@@ -32,7 +32,17 @@ export function GraphHeading({ state }: { state: State }) {
   );
 }
 
-const slotSwatch = { A: "bg-agent-a", B: "bg-agent-b" } as const;
+// C-F are unreachable until the backend admits more than two agents.
+// Line B many-agents look replaces this neutral placeholder before backend admission.
+const unadmittedSlotSwatch = "bg-muted";
+const slotSwatch = {
+  A: "bg-agent-a",
+  B: "bg-agent-b",
+  C: unadmittedSlotSwatch,
+  D: unadmittedSlotSwatch,
+  E: unadmittedSlotSwatch,
+  F: unadmittedSlotSwatch,
+} as const;
 
 /**
  * What the graph's looks mean, in the states it can draw now. A glyph is never the only signal: each

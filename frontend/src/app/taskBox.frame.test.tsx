@@ -1,3 +1,4 @@
+import type { Slot } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -11,7 +12,7 @@ import { initialView } from "./view";
 vi.mock("../editor/monaco", () => ({ monaco: { editor: {} } }));
 
 /** The recorded run up to `seq`; `slots` limits it to the slots a level 1 server announces. */
-function render(seq: number, props: Partial<FrameProps> = {}, slots?: ("A" | "B")[]) {
+function render(seq: number, props: Partial<FrameProps> = {}, slots?: Slot[]) {
   const state = through(seq);
   const run = state.run;
   return renderToStaticMarkup(

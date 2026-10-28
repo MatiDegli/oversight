@@ -24,6 +24,7 @@ from oversight_contracts.common import (
     Timestamp,
     WorkspacePath,
 )
+from oversight_contracts.decisions import DecisionRef
 from oversight_contracts.examples import TaskExample
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot, ImpactCone
 from oversight_contracts.plans import Plan, PlanZone
@@ -126,6 +127,10 @@ class AgentStatus(ContractModel):
     """The agent base used to guard an unproposed rejection."""
     examples: list[TaskExample] | None = None
     """The accepted task examples, retained for live observation and replay."""
+    answering: DecisionRef | None = None
+    """The originating inbox entry, copied unchanged into every status for this task; null when
+    unlinked or absent from older recordings. Producer-side validation verifies the reference.
+    """
 
 
 class CaseResult(ContractModel):

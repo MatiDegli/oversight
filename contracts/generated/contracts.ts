@@ -4,7 +4,7 @@
 export type NonEmptyText = string;
 export type AgentId = string;
 export type ChangeId = string;
-export type Slot = "A" | "B";
+export type Slot = "A" | "B" | "C" | "D" | "E" | "F";
 export type WorkspacePath = string;
 export type NodeId = string;
 export type Timestamp = string;
@@ -12,6 +12,7 @@ export type AgentState =
   "starting" | "working" | "ready_for_review" | "revising" | "paused" | "halted" | "done" | "stopped";
 export type PlanId = string;
 export type QueuedTaskId = string;
+export type DecisionRef = ReviewCardDecisionRef | ChangeDecisionRef | LeadPlanDecisionRef;
 export type CaseOutcome = "passed" | "failed" | "error" | "skipped";
 export type MergeMode = "ask_me" | "merge_when_safe";
 export type RuleId =
@@ -193,6 +194,11 @@ export interface AgentStatus {
    * The accepted task examples, retained for live observation and replay.
    */
   examples: TaskExample[] | null;
+  /**
+   * The originating inbox entry, copied unchanged into every status for this task; null when
+   * unlinked or absent from older recordings. Producer-side validation verifies the reference.
+   */
+  answering: DecisionRef | null;
 }
 /**
  * Explicit graph nodes and workspace files selected for a subtask.
@@ -233,6 +239,51 @@ export interface ExamplePin {
    * The existing single-user human principal; the server verifies confirmation.
    */
   confirmed_by: "person";
+}
+/**
+ * One card entry per (change_id, revision, node_id, question).
+ *
+ * Retain the card's question and evidence_seq unchanged, scoped by its candidate revision and
+ * head so an answer to an older candidate cannot consume a newer candidate's entry.
+ */
+export interface ReviewCardDecisionRef {
+  change_id: ChangeId;
+  revision: number;
+  head_commit: NonEmptyText;
+  /**
+   * The event that raised this inbox entry in the current run.
+   */
+  evidence_seq: number;
+  kind: "review_card";
+  node_id: NodeId;
+  question: NonEmptyText;
+}
+/**
+ * One entry per (kind, change_id, revision), guarded by the candidate head.
+ *
+ * Several unavailable checks of one candidate form one checks_unavailable entry. evidence_seq
+ * identifies the event that raised the entry, not each check's supporting evidence.
+ */
+export interface ChangeDecisionRef {
+  change_id: ChangeId;
+  revision: number;
+  head_commit: NonEmptyText;
+  /**
+   * The event that raised this inbox entry in the current run.
+   */
+  evidence_seq: number;
+  kind: "checks_unavailable" | "follow_main" | "risky_area" | "examples_before_code";
+}
+/**
+ * One entry per (agent_id, revision) of the lead status whose plan awaits approval.
+ *
+ * This names a lead-status revision, not a plan_id. evidence_seq is the event that raised it.
+ */
+export interface LeadPlanDecisionRef {
+  kind: "lead_plan";
+  agent_id: AgentId;
+  revision: number;
+  evidence_seq: number;
 }
 export interface AgentStatusEvent {
   /**
@@ -1964,6 +2015,11 @@ export interface StartAgent {
    * True requests one model call without edit/test tools; null or false uses normal execution.
    */
   examples_only?: boolean | null;
+  /**
+   * The originating inbox entry, copied unchanged into every status for this task; null when
+   * unlinked or absent from older recordings. Producer-side validation verifies the reference.
+   */
+  answering?: DecisionRef | null;
 }
 /**
  * An example supplied with a task before editing begins.
@@ -2076,4 +2132,4 @@ export interface UpdatePlan {
   subtasks: [SubtaskDraft, SubtaskDraft];
 }
 
-export const CONTRACT_VERSION = "1.5.0";
+export const CONTRACT_VERSION = "1.6.0";
