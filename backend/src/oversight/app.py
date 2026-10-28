@@ -21,6 +21,7 @@ from fastapi import FastAPI
 from oversight.agents import (
     BASETEN_BASE_URL,
     FAKE_MODEL,
+    FAKE_MODEL_B,
     META_BASE_URL,
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
@@ -63,7 +64,7 @@ from oversight.events import (
     run_store_path,
 )
 from oversight.graph import WorkspaceGraph, read_layout
-from oversight.limits import bounded_text
+from oversight.limits import SizeLimitError, bounded_text
 from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
 from oversight.workspace import Tree, Workspace
@@ -111,7 +112,7 @@ BLOCK_AT = 0.9
 OFFERED_SLOTS: tuple[Slot, ...] = ("A", "B")
 """The slots this server offers, in the order a start with no slot tries them. A fake B with no
 script of its own is left out (`LiveRun._offer`)."""
-PROFILES = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL)}
+PROFILES = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL, FAKE_MODEL_B)}
 PROVIDER_URLS = {"meta": META_BASE_URL, "baseten": BASETEN_BASE_URL}
 """The Chat Completions endpoint of each provider that has one; the key is `{provider}_api_key`."""
 MAIN_SUSPECT = "main's state is unknown: reject the change and restart the server"
@@ -257,7 +258,7 @@ class LiveRun:
                 if slot == "A":
                     raise ValueError("the fake model needs OVERSIGHT_FAKE_SCRIPT")
                 return
-            self._scripts[slot] = load_script(script)
+            self._scripts[slot] = load_script(script, profile)
         self._slot_profiles[slot] = profile
 
     # --- Startup and shutdown -----------------------------------------------------------------
@@ -906,6 +907,8 @@ def ledger_command(settings: Settings, settle_usd: float | None) -> str:
             return bounded_text(ledger.path).rstrip()
         except FileNotFoundError:
             return "no ledger yet: nothing spent"
+        except SizeLimitError as error:
+            return f"cannot read ledger: {error}; {SETTLE_HOW}"
     workspace = Workspace(settings.runtime_dir, TEMPLATE, pytest_pin=pytest_pin())
 
     async def settle() -> None:

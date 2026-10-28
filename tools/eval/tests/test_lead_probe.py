@@ -11,6 +11,7 @@ from tools.eval.tasks import BenchError
 
 from oversight.agents.client import MUSE_SPARK, ModelReply, ToolCall, Usage
 from oversight.settings import Settings
+from oversight.workspace import ProcessResult
 from oversight_contracts.graph import GraphSnapshot
 
 
@@ -25,6 +26,33 @@ def snapshot():
     return GraphSnapshot(
         version="v1", commit="demo", nodes=[], edges=[], parse_errors=[], positions={}
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("command", ["init", "rev-parse"])
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+async def test_demo_graph_rejects_truncated_git_output(monkeypatch, command, stream):
+    calls = []
+
+    async def git(argv, **kwargs):
+        calls.append(argv)
+        truncated = argv[1] == command
+        marker = "\n[... 100 bytes omitted ...]\n" if truncated else ""
+        return ProcessResult(
+            0,
+            marker if stream == "stdout" else "valid revision",
+            marker if stream == "stderr" else "",
+            False,
+            truncated,
+            1,
+        )
+
+    monkeypatch.setattr(probe, "run_process", git)
+    with pytest.raises(BenchError, match=f"temporary git {command} .*output was truncated"):
+        await probe.demo_graph()
+
+    assert calls[-1][1] == command
+    assert not (probe.REPO / "demo-repo" / ".git").exists()
 
 
 def plan(graph):

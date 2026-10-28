@@ -129,6 +129,8 @@ async def demo_graph() -> GraphSnapshot:
             )
             if result.returncode != 0 or result.timed_out:
                 raise BenchError("temporary git copy failed")
+            if result.truncated:
+                raise BenchError(f"temporary git {' '.join(command)} failed: output was truncated")
             commit = result.stdout.strip()
         snapshot = await asyncio.to_thread(WorkspaceGraph(root).scan, commit)
         if snapshot.parse_errors:

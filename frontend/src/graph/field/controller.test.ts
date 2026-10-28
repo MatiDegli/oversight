@@ -18,6 +18,7 @@ let nextFrame = 0;
 const frames = new Map<number, FrameRequestCallback>();
 const compute = vi.fn(() => ({ cols: 1, rows: 1, data: new Uint8ClampedArray(4) }));
 const renderer = {
+  check: vi.fn(),
   resize: vi.fn(),
   draw: vi.fn(),
   pixel: vi.fn(),
@@ -94,15 +95,28 @@ describe("field fallback", () => {
     });
     expect(canvas.oversightField?.animating()).toBe(true);
     canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+    expect(renderer.check).toHaveBeenCalledOnce();
     expect(canvas.oversightField?.state()).toBe("plain");
     expect(canvas.oversightField?.animating()).toBe(false);
     expect(canvas.oversightField?.lamp(0, 0)).toBeNull();
     expect(canvas.hidden).toBe(true);
     expect(renderer.dispose).toHaveBeenCalledOnce();
     canvas.dispatchEvent(new Event("webglcontextrestored"));
+    expect(renderer.check).toHaveBeenCalledTimes(2);
     expect(canvas.oversightField?.state()).toBe("plain");
     controller.dispose();
   });
+});
+
+it.each([0.75, 1, 1.5, 2, 3])("caps device pixel ratio %s at one on draw and resize", (ratio) => {
+  window.devicePixelRatio = ratio;
+  const controller = createFieldController(canvas, source);
+  expect(renderer.resize).toHaveBeenLastCalledWith(70, 70, Math.min(ratio, 1));
+  Object.assign(canvas, { clientWidth: 141, clientHeight: 93 });
+  window.dispatchEvent(new Event("resize"));
+  expect(renderer.resize).toHaveBeenLastCalledWith(141, 93, Math.min(ratio, 1));
+  expect(renderer.check).not.toHaveBeenCalled();
+  controller.dispose();
 });
 
 describe("field transitions", () => {

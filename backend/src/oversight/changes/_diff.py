@@ -1,11 +1,47 @@
 """Line counts and file statuses for a change's files, and git's name-status output."""
 
+import asyncio
+from collections import OrderedDict
 from difflib import SequenceMatcher
+from hashlib import sha256
+from threading import Lock
 
 from oversight_contracts.common import FileStatus
 
+_CACHE_LIMIT = 128
+_counts: OrderedDict[tuple[bytes | None, bytes | None], tuple[int, int]] = OrderedDict()
+_cache_lock = Lock()
+
+
+async def count_lines_async(original: str | None, modified: str | None) -> tuple[int, int]:
+    """Keep hashing and uncached matching off the event loop, including on cache misses."""
+    return await asyncio.to_thread(count_lines, original, modified)
+
 
 def count_lines(original: str | None, modified: str | None) -> tuple[int, int]:
+    """Cached counts for worker-thread callers; retain hashes and counts, never file contents."""
+    key = (_digest(original), _digest(modified))
+    with _cache_lock:
+        cached = _counts.get(key)
+        if cached is not None:
+            _counts.move_to_end(key)
+            return cached
+    result = _count_lines(original, modified)
+    with _cache_lock:
+        _counts[key] = result
+        _counts.move_to_end(key)
+        if len(_counts) > _CACHE_LIMIT:
+            _counts.popitem(last=False)
+    return result
+
+
+def _digest(content: str | None) -> bytes | None:
+    if content is None:
+        return None
+    return sha256(content.encode("utf-8", errors="surrogatepass")).digest()
+
+
+def _count_lines(original: str | None, modified: str | None) -> tuple[int, int]:
     """Lines added and removed from `original` to `modified`; `None` is a missing file."""
     old = original.splitlines() if original else []
     new = modified.splitlines() if modified else []

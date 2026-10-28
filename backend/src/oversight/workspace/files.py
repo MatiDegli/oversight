@@ -159,7 +159,7 @@ def open_file(root: Path, path: str) -> BinaryIO:
 def _read_bytes(root: Path, path: str) -> bytes:
     with open_file(root, path) as handle:
         try:
-            return bounded_read(handle)
+            return bounded_read(handle, name=path)
         except SizeLimitError as error:
             raise FileTooLarge(str(error)) from error
 

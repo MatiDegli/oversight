@@ -24,7 +24,7 @@ from oversight_contracts.events import (
     UsageTick,
     UsageTickEvent,
 )
-from recording import Provenance, provenance_path
+from recording import Provenance, RecordError, provenance_path
 
 META = ModelProfile(
     id="muse-spark",
@@ -381,3 +381,34 @@ def test_output_cannot_replace_input(tmp_path: Path) -> None:
     before = log.read_bytes()
     assert manifest.main([str(log), "--out", str(out)]) == 1
     assert log.read_bytes() == before
+
+
+def test_requested_model_absent_from_profiles_is_unknown(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = write_log(tmp_path, [started(META), status(1, OPEN), usage(1, OPEN.model)])
+    result = manifest.build_manifest(log)
+    assert result.checks == ["agent-1: requested model is unknown"]
+    agent = result.agents[0]
+    assert agent.requested_profile is None
+    assert agent.requested_model is None
+    assert agent.provider is None
+    assert agent.reported_models == {OPEN.model: 1}
+    assert manifest.main([str(log)]) == 1
+    assert capsys.readouterr().err.splitlines() == [
+        "manifest check: agent-1: requested model is unknown"
+    ]
+
+
+def test_duplicate_model_profile_ids_are_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    duplicate = OPEN.model_copy(update={"id": META.id})
+    log = write_log(tmp_path, [started(META, duplicate), status(1, META)])
+    with pytest.raises(RecordError, match=r"duplicate model profile ids in run\.started"):
+        manifest.build_manifest(log)
+    assert manifest.main([str(log)]) == 1
+    assert capsys.readouterr().err.splitlines() == [
+        "manifest refused: duplicate model profile ids in run.started"
+    ]
+    assert not Path(str(log) + ".manifest.json").exists()

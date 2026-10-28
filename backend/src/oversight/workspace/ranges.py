@@ -2,9 +2,11 @@
 
 import codecs
 import hashlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from oversight.limits import MAX_RANGE_FILE_BYTES
 from oversight.workspace.errors import WorkspaceError
 from oversight.workspace.files import open_file
 
@@ -20,7 +22,7 @@ class FileRange:
 def read_range(root: Path, path: str, first: int, last: int, chars: int) -> FileRange:
     """Keep only selected line prefixes, but stream all bytes for a coherent edit hash.
 
-    A fixed-size read and incremental decoder handle even a multi-gigabyte single line.
+    A fixed-size read and incremental decoder handle long lines within the absolute file cap.
     Match str.splitlines(), including CRLF across chunk boundaries and Unicode separators.
     """
     digest = hashlib.sha256()
@@ -44,8 +46,16 @@ def read_range(root: Path, path: str, first: int, last: int, chars: int) -> File
 
     try:
         with open_file(root, path) as handle:
+            if os.fstat(handle.fileno()).st_size > MAX_RANGE_FILE_BYTES:
+                raise WorkspaceError(f"{path} exceeds the {MAX_RANGE_FILE_BYTES}-byte size limit")
+            consumed = 0
             while True:
-                chunk = handle.read(8192)
+                chunk = handle.read(min(8192, MAX_RANGE_FILE_BYTES - consumed + 1))
+                consumed += len(chunk)
+                if consumed > MAX_RANGE_FILE_BYTES:
+                    raise WorkspaceError(
+                        f"{path} exceeds the {MAX_RANGE_FILE_BYTES}-byte size limit"
+                    )
                 digest.update(chunk)
                 text = decoder.decode(chunk, final=not chunk)
                 for char in text:
