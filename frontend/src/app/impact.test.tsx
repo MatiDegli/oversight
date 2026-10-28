@@ -70,7 +70,7 @@ it("leaves watch without a cone", () => {
   );
 });
 
-it("keeps live cone lights and dimming separate from the review card and camera scope", () => {
+it("keeps live cone dimming separate from R4 emitters, the review card and camera scope", () => {
   const html = render(
     { ...initialView, diff: { changeId: "change-1", path: "shop/pricing.py" } },
     14,
@@ -84,7 +84,7 @@ it("keeps live cone lights and dimming separate from the review card and camera 
       .filter((light) => light.source === "work-light")
       .map((light) => light.id)
       .sort(),
-  ).toEqual(props.liveCone?.entries.map((entry) => entry.node_id).sort());
+  ).toEqual([]);
   expect(props.litIds).toEqual(
     expect.arrayContaining(props.liveCone?.entries.map((entry) => entry.node_id) ?? []),
   );
