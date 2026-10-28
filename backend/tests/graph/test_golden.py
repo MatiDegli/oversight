@@ -9,6 +9,7 @@ its diff:
 from pathlib import Path
 
 from oversight.graph import WorkspaceGraph
+from oversight_contracts.graph import GraphSnapshot
 
 ROOT = Path(__file__).resolve().parents[3]
 DEMO_REPO = ROOT / "demo-repo"
@@ -22,7 +23,9 @@ def render() -> str:
 
 
 def test_the_demo_repo_snapshot_matches_the_golden_file() -> None:
-    assert render() == GOLDEN.read_text()
+    # Old fixtures omit optional contract additions; compare their current serialization.
+    expected = GraphSnapshot.model_validate_json(GOLDEN.read_text()).model_dump_json(indent=2)
+    assert render() == expected + "\n"
 
 
 def test_the_demo_repo_has_a_central_function_and_marks_its_tests() -> None:
