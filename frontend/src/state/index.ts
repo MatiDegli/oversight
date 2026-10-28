@@ -18,3 +18,12 @@ export { createChange, createInitialState } from "./types";
 export type { ChangeState, State } from "./types";
 
 export { parseNeedsYou, matchesNeedsYou } from "./needsYou";
+
+export { selectDecisionInbox, selectDecisionInboxCount } from "./decisionInbox";
+export { decisionIdentityKey, matchesDecision } from "./decisionIdentity";
+export type {
+  DecisionInboxEntry,
+  InboxExample,
+  InboxIdentity,
+  RevertInboxRef,
+} from "./decisionIdentity";
