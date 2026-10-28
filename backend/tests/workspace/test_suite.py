@@ -1,10 +1,13 @@
+import asyncio
 import json
 import stat
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
 
-from oversight.workspace.runner import DEFAULT_OUTPUT_CAP, run_process
+from oversight.limits import MAX_FILE_BYTES
+from oversight.workspace.runner import DEFAULT_OUTPUT_CAP, ProcessResult, run_process
 from oversight.workspace.suite import OUTPUT_TAIL, parse_report, run_suite, summarize
 
 
@@ -132,3 +135,39 @@ async def test_a_long_run_still_ends_its_output_with_the_summary(tmp_path: Path)
     )
     assert len(run.output) == OUTPUT_TAIL
     assert run.output.endswith("\n== 2 passed in 0.1s ==\n")
+
+
+@pytest.mark.anyio
+async def test_an_oversized_report_names_the_report_and_is_removed(tmp_path: Path) -> None:
+    report: Path | None = None
+
+    async def spawn(
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: Mapping[str, str] | None = None,
+        output_cap: int = DEFAULT_OUTPUT_CAP,
+    ) -> ProcessResult:
+        nonlocal report
+        assert env is not None
+        report = Path(env["OVERSIGHT_REPORT"])
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_bytes(b"x" * (MAX_FILE_BYTES + 1))
+        return ProcessResult(0, "pytest finished", "", False, False, 12)
+
+    run = await run_suite(
+        python=tmp_path / "python",
+        plugin_dir=tmp_path,
+        runtime_root=tmp_path,
+        tree_root=tmp_path,
+        timeout_s=60,
+        redact=lambda text: text,
+        spawn=spawn,
+    )
+    assert report is not None
+    assert run.result.outcome == "error"
+    reason = f"{report.name} exceeds the {MAX_FILE_BYTES}-byte size limit"
+    assert run.result.failed_tests == [reason]
+    assert run.output.endswith(reason)
+    assert not await asyncio.to_thread(report.exists)

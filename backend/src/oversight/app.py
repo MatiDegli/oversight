@@ -64,7 +64,7 @@ from oversight.events import (
     run_store_path,
 )
 from oversight.graph import WorkspaceGraph, read_layout
-from oversight.limits import bounded_text
+from oversight.limits import SizeLimitError, bounded_text
 from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
 from oversight.workspace import Tree, Workspace
@@ -907,6 +907,8 @@ def ledger_command(settings: Settings, settle_usd: float | None) -> str:
             return bounded_text(ledger.path).rstrip()
         except FileNotFoundError:
             return "no ledger yet: nothing spent"
+        except SizeLimitError as error:
+            return f"cannot read ledger: {error}; {SETTLE_HOW}"
     workspace = Workspace(settings.runtime_dir, TEMPLATE, pytest_pin=pytest_pin())
 
     async def settle() -> None:
