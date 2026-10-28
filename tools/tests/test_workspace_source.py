@@ -1,6 +1,8 @@
 """Explicit source preparation and graph export use fake Git, never the network."""
 
 import asyncio
+import shutil
+import threading
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -156,3 +158,79 @@ async def test_prepare_existing_partial_checkout_is_never_deleted(tmp_path):
         await workspace_source.fetch_source(BOLTONS, tmp_path, spawn=fake)
     assert not fake.calls
     assert (root / "sentinel").read_text() == "untouched"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("original_cancelled", [False, True])
+async def test_cleanup_finishes_despite_repeated_cancellation(
+    tmp_path, monkeypatch, original_cancelled
+):
+    root = BOLTONS.checkout(tmp_path)
+    clone_started = asyncio.Event()
+    cleanup_started = asyncio.Event()
+    release_cleanup = threading.Event()
+    loop = asyncio.get_running_loop()
+    original_rmtree = shutil.rmtree
+    failure = ValueError("original clone failure")
+
+    async def interrupted(argv, **kwargs):
+        (root / ".git").mkdir()
+        clone_started.set()
+        if original_cancelled:
+            await asyncio.Future()
+        raise failure
+
+    def delayed_rmtree(path):
+        loop.call_soon_threadsafe(cleanup_started.set)
+        assert release_cleanup.wait(5), "test did not release cleanup"
+        original_rmtree(path)
+
+    monkeypatch.setattr(workspace_source.shutil, "rmtree", delayed_rmtree)
+    task = asyncio.create_task(workspace_source.fetch_source(BOLTONS, tmp_path, spawn=interrupted))
+    try:
+        async with asyncio.timeout(5):
+            await clone_started.wait()
+            if original_cancelled:
+                task.cancel("original clone cancellation")
+            await cleanup_started.wait()
+            for _ in range(3):
+                task.cancel("cancellation during cleanup")
+                await asyncio.sleep(0)
+                assert not task.done(), "fetch returned before cleanup finished"
+            release_cleanup.set()
+            if original_cancelled:
+                with pytest.raises(asyncio.CancelledError, match="original clone cancellation"):
+                    await task
+            else:
+                with pytest.raises(ValueError) as caught:
+                    await task
+                assert caught.value is failure
+        assert not root.exists()
+    finally:
+        release_cleanup.set()
+        # Also retrieve the old implementation's failure when testing the red case.
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("original_cancelled", [False, True])
+async def test_cleanup_error_preserves_original_failure(tmp_path, monkeypatch, original_cancelled):
+    failure = (
+        asyncio.CancelledError("original clone cancellation")
+        if original_cancelled
+        else ValueError("original clone failure")
+    )
+    cleaned = []
+
+    async def interrupted(argv, **kwargs):
+        raise failure
+
+    def failed_rmtree(path):
+        cleaned.append(path)
+        raise OSError("cleanup failure")
+
+    monkeypatch.setattr(workspace_source.shutil, "rmtree", failed_rmtree)
+    with pytest.raises(type(failure)) as caught:
+        await workspace_source.fetch_source(BOLTONS, tmp_path, spawn=interrupted)
+    assert caught.value is failure
+    assert cleaned == [BOLTONS.checkout(tmp_path)]

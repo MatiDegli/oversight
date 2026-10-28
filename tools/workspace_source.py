@@ -51,7 +51,17 @@ async def fetch_source(
                 raise ValueError(f"{profile.name}: {argv[1]} failed: {result.stderr}")
         return await validate_source(profile, runtime_root, spawn=spawn)
     except BaseException:
-        await asyncio.to_thread(shutil.rmtree, root)
+        cleanup = asyncio.create_task(asyncio.to_thread(shutil.rmtree, root))
+        while True:
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                if not cleanup.cancelled():
+                    continue
+            except BaseException:
+                # Cleanup is best effort; its failure must never replace the clone failure.
+                pass
+            break
         raise
 
 
