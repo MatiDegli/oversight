@@ -9,12 +9,12 @@ pytest's text.
 import asyncio
 import json
 import uuid
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
-from oversight.limits import SizeLimitError, bounded_text
+from oversight.limits import MAX_REPORT_BYTES, MAX_REPORT_LINE_BYTES, SizeLimitError
 from oversight.test_output import retain_failure
 from oversight.workspace.junit import MAX_XML_BYTES, parse_junit
 from oversight.workspace.locks import offload
@@ -114,16 +114,32 @@ def summarize(
     )
 
 
-def _take_report(path: Path) -> list[str] | None:
+def _take_report(path: Path) -> Iterator[str] | None:
+    """Return None if absent; consume bounded lines and remove the report on completion/error."""
     try:
-        lines = bounded_text(path, errors="replace").splitlines()
+        handle = path.open("rb")
     except FileNotFoundError:
         return None
-    except SizeLimitError:
-        path.unlink(missing_ok=True)
-        raise
-    path.unlink(missing_ok=True)
-    return lines
+
+    def lines() -> Iterator[str]:
+        try:
+            with handle:
+                total = 0
+                while row := handle.readline(MAX_REPORT_LINE_BYTES + 1):
+                    total += len(row)
+                    if total > MAX_REPORT_BYTES:
+                        raise SizeLimitError(
+                            f"{path.name} exceeds the {MAX_REPORT_BYTES}-byte size limit"
+                        )
+                    if len(row) > MAX_REPORT_LINE_BYTES:
+                        raise SizeLimitError(
+                            f"{path.name} exceeds the {MAX_REPORT_LINE_BYTES}-byte size limit"
+                        )
+                    yield from row.decode("utf-8", errors="replace").splitlines()
+        finally:
+            path.unlink(missing_ok=True)
+
+    return lines()
 
 
 async def run_suite(
@@ -173,20 +189,24 @@ async def run_suite(
         failure = error
         process = ProcessResult(None, "", "", isinstance(error, asyncio.CancelledError), False, 0)
     finally:
+
+        def take_report() -> tuple[Tally, bool]:
+            lines = _take_report(report)
+            return parse_report(lines or ()), lines is not None
+
         try:
-            lines = await offload(lambda: _take_report(report))
+            tally, report_found = await offload(take_report)
         except SizeLimitError as error:
-            lines = None
+            tally, report_found = Tally(), False
             report_error = str(error)
         cases, problems = await offload(lambda: _take_cases(junit))
-    tally = parse_report(lines or [])
     if report_error is not None:
         tally.failed_tests.append(report_error)
     result = summarize(
         tally,
         returncode=process.returncode,
         timed_out=process.timed_out,
-        report_found=lines is not None,
+        report_found=report_found,
         duration_ms=process.duration_ms,
     )
     text = process.stdout
