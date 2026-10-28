@@ -91,17 +91,54 @@ describe("live transport", () => {
     await transport.ready;
     for (const event of log) source().emit(event);
     const before = store.getState().state;
-    for (const [index, example] of [
+    // Review facts and test executions are now wired; only the remaining reserved events
+    // must leave product state untouched. The next test covers the full mixed stream.
+    const unwired = [
       ...reserved,
-      ...reservedA.filter((e) => e.type !== "change.resolved"),
-    ].entries()) {
+      ...reservedA.filter(
+        (e) => !["change.resolved", "tests.executed", "change.facts_recorded"].includes(e.type),
+      ),
+    ];
+    expect(unwired.map((event) => event.type)).toEqual([
+      "change.assessed",
+      "merge_mode.changed",
+      "plan.updated",
+      "change.reviewed",
+      "revert.resolved",
+      "queue.updated",
+      "lead.status",
+    ]);
+    for (const [index, example] of unwired.entries()) {
       source().raw(JSON.stringify({ ...example, seq: before.lastSeq + index + 1 }));
     }
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
+      lastSeq: before.lastSeq + reserved.length + reservedA.length - 3,
+      clock: reservedA.at(-1)?.ts,
+    });
+  });
+
+  it("keeps wired review evidence while consuming the remaining reserved events", async () => {
+    const { transport, store, source, onError } = setup();
+    await transport.ready;
+    for (const event of log) source().emit(event);
+    const before = store.getState().state;
+    const delivered = [...reserved, ...reservedA.filter((e) => e.type !== "change.resolved")].map(
+      (example, index) =>
+        parseEvent(JSON.stringify({ ...example, seq: before.lastSeq + index + 1 })),
+    );
+    for (const event of delivered) source().emit(event);
+    const suite = delivered.find((event) => event.type === "tests.executed");
+    const facts = delivered.find((event) => event.type === "change.facts_recorded");
+    if (!suite || !facts) throw new Error("Missing suite and facts examples");
+    expect(onError).not.toHaveBeenCalled();
+    expect(store.getState().state).toEqual({
+      ...before,
       lastSeq: before.lastSeq + reserved.length + reservedA.length - 1,
       clock: reservedA.at(-1)?.ts,
+      testExecutions: { [suite.seq]: suite.payload },
+      changeFacts: { [facts.payload.change_id]: [facts.payload] },
     });
   });
 

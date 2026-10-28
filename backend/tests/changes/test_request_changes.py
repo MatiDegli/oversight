@@ -286,7 +286,12 @@ async def test_move_shown_again_by_the_next_proposal(h: Harness) -> None:
     assert await h.finish(1)
     [update] = h.payloads(ChangeUpdated)[shown:]
     assert update.file.original is not None and "return 5" in update.file.original
-    assert h.types()[-2:] == ["change.updated", "change.proposed"]
+    assert h.types()[-4:] == [
+        "change.updated",
+        "tests.executed",
+        "change.proposed",
+        "change.facts_recorded",
+    ]
 
 
 @bounded

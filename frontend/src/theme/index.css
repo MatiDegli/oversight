@@ -325,6 +325,11 @@ body {
   background-color: var(--page);
 }
 
+/* Closing find disables its field during the transition; Monaco hardcodes that surface. */
+:root .monaco-editor .monaco-findInput.disabled {
+  background-color: var(--field);
+}
+
 /* The file's selected source span uses the same neutral token as Monaco's range highlight. */
 .file-span {
   background-color: var(--file-span);

@@ -77,6 +77,7 @@ def parse_script(text: str) -> Script:
                 tool_calls=calls,
                 usage=_usage(raw_turn.get("usage")),
                 model=FAKE_MODEL.model,
+                finish_reason=cast(str | None, raw_turn.get("finish_reason")),
             )
         )
     return Script(

@@ -321,7 +321,10 @@ def test_scripted_level2_fixture_is_fake_and_unchanged(tmp_path: Path) -> None:
     assert manifest.main([str(log), "--out", str(out)]) == 0
     result = manifest.build_manifest(log)
     assert result.recording_kind == "scripted fake model"
-    a, b = result.agents
+    assert len(result.agents) == 2
+    agents_by_slot = {agent.slot: agent for agent in result.agents}
+    assert set(agents_by_slot) == {"A", "B"}
+    a, b = agents_by_slot["A"], agents_by_slot["B"]
     assert a.provider == b.provider == "fake"
     assert a.requested_model == b.requested_model == "scripted fake model"
     assert (a.calls, b.calls) == (10, 7)
