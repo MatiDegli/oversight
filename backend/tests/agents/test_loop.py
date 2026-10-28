@@ -4,6 +4,8 @@ import asyncio
 from pathlib import Path
 from typing import cast
 
+import httpx2 as httpx
+import openai
 import pytest
 from agent_helpers import FAKE_MODEL_DIR, Recorder, make_run, script
 
@@ -12,6 +14,7 @@ from oversight.agents import (
     MUSE_SPARK_OPEN,
     ModelAPIError,
     ModelReply,
+    OpenAIClient,
     ScriptedModel,
     UnverifiedProfile,
     load_script,
@@ -194,9 +197,44 @@ async def test_model_api_failure_reports_an_error_and_halts(small_tree: Opened) 
     end = await make_run(
         small_tree, Failing(parse_script('{"task": "t", "turns": []}')), recorder
     ).run()
-    assert end.state == "halted" and end.detail == "The model API failed."
+    assert end.state == "halted"
+    assert end.detail == "The model API failed: model API error after 5 attempts: HTTP 503."
     (error,) = cast(list[ErrorReport], recorder.of("ErrorReport"))
     assert error.source == "model_api" and error.fatal and error.agent_id == "agent-1"
+
+
+async def test_retry_after_past_deadline_reaches_the_halted_status(small_tree: Opened) -> None:
+    requests: list[httpx.Request] = []
+    sleeps: list[float] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(429, headers={"retry-after": "75"}, json={"error": "busy"})
+
+    async def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    recorder = Recorder()
+    async with openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(respond)) as http:
+        model = OpenAIClient(
+            MUSE_SPARK,
+            base_url="https://api.test/v1",
+            api_key="test-key",
+            max_output_tokens=2048,
+            http_client=http,
+            sleep=sleep,
+        )
+        end = await make_run(small_tree, model, recorder, max_wall_clock_s=10).run()
+
+    reason = "model API retry wait of 75 s exceeds the task deadline"
+    assert end.state == "halted" and end.steps == 0
+    assert end.detail == f"The model API failed: {reason}."
+    halted = cast(list[AgentStatus], recorder.of("AgentStatus"))[-1]
+    assert halted.state == "halted" and halted.detail == end.detail
+    (error,) = cast(list[ErrorReport], recorder.of("ErrorReport"))
+    assert error.message == reason and error.source == "model_api" and error.fatal
+    assert len(requests) == 1 and sleeps == []
+    assert "ready_for_review" not in states(recorder)
 
 
 async def test_model_calls_are_bounded_on_their_own(small_tree: Opened) -> None:
