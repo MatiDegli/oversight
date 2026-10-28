@@ -51,8 +51,7 @@ def review(
     return CrossReview.model_validate({**data, **updates})
 
 
-@pytest.fixture
-def ready() -> PolicyInputs:
+def policy_inputs() -> PolicyInputs:
     return PolicyInputs(
         change_id="change-1",
         revision=1,
@@ -95,6 +94,11 @@ def ready() -> PolicyInputs:
             for i, rule in enumerate(sorted(POLICY_RULES[PROFILE]))
         },
     )
+
+
+@pytest.fixture
+def ready() -> PolicyInputs:
+    return policy_inputs()
 
 
 def result(inputs: PolicyInputs, name: RuleId) -> RuleAssessment:

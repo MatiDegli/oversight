@@ -100,6 +100,7 @@ class ModeController:
             ) from error
         self._state = state
         self._suspended = False
+        ctx.assessment.mode_changed()
 
     @staticmethod
     def _observe_receipt(receipt: asyncio.Task[None]) -> None:
