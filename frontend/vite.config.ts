@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import { noticesPlugin } from "./tools/notices.ts";
 import { recordedReplayPlugin } from "./tools/recorded-replay.ts";
 
 // One origin in development: Vite serves the UI and forwards the API and the SSE stream to FastAPI.
@@ -50,7 +51,7 @@ export default defineConfig(({ command }) => {
   const backend = `http://127.0.0.1:${String(backendPort)}`;
   return {
     ...(cacheDir === undefined || cacheDir === "" ? {} : { cacheDir }),
-    plugins: [recordedReplayPlugin(), react(), tailwindcss()],
+    plugins: [noticesPlugin(), recordedReplayPlugin(), react(), tailwindcss()],
     worker: { format: "es" },
     resolve: {
       alias: {

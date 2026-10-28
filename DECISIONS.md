@@ -587,6 +587,17 @@ DOMPurify is dual-licensed (`MPL-2.0 OR Apache-2.0`); this project takes it unde
 Verification: the patched `esm/vs/base/browser/dompurify/dompurify.js` equals `dompurify@3.4.17`'s `dist/purify.es.mjs` except the sourcemap line.
 Monaco's `min/` and `dev/` bundles still carry 3.4.15; the app does not load them.
 
+## Dependency licenses
+
+- **Named typing-extensions exception (decided by the maintainer, 2026-10-27):**
+  typing-extensions uses PSF-2.0, a permissive license, and is a transitive runtime
+  dependency of pydantic, pydantic-core, FastAPI, starlette, anyio, httpx2, openai,
+  opentelemetry-api and typing-inspection, so it cannot be dropped. The license
+  check permits only the exact pair `typing-extensions` and `PSF-2.0`; the
+  exception covers that package only. Every other license outside the AGENTS.md
+  list is rejected, with OFL-1.1 still restricted to the two Atkinson font
+  packages. THIRD_PARTY_NOTICES.md retains the PSF-2.0 declaration.
+
 ## 2026-10-27 — M8: bounded backdrop blur
 
 M8 narrows the shell-frame exception to DESIGN.md's Flat Panel Rule: only the graph legend,
