@@ -33,7 +33,8 @@ from oversight.changes import _delivery as delivery
 from oversight.changes import _files as files
 from oversight.changes import _proposal as proposal
 from oversight.changes import _revision as revision
-from oversight.changes._assessment import RulesScheduler, closed_admission
+from oversight.changes import _rules as rules
+from oversight.changes._assessment import RulesScheduler
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._mode import ModeController
@@ -65,7 +66,7 @@ from oversight.workspace import (
 from oversight_contracts.commands import FileContent, FileSaved, SetMergeMode
 from oversight_contracts.common import AgentId, ChangeId
 from oversight_contracts.graph import GraphSnapshot
-from oversight_contracts.policy import MergeModeState
+from oversight_contracts.policy import ChangeAssessment, MergeModeState
 from oversight_contracts.review import FinishDeclaration
 
 
@@ -101,7 +102,7 @@ class ChangeManager:
             ChangePorts(
                 drain=lambda rec: self._drain(rec),
                 review=review,
-                rules_admission=closed_admission,
+                rules_admission=self._admit_rules,
             ),
             ModeController(),
         )
@@ -339,6 +340,24 @@ class ChangeManager:
         rec.evidence = evidence
         rec.taken = rec.revision
         return self._decide(rec, approval.approve(self._ctx, rec, comment))
+
+    def _admit_rules(self, rec: ChangeRecord, assessment: ChangeAssessment) -> str | None:
+        wait = self._ctx.assessment.waits.get(rec.change_id)
+        if wait is None or not self._ctx.assessment.valid(wait):
+            return None
+        try:
+            reservation = rules.capture(self._ctx, wait, assessment)
+        except ValueError as error:
+            return str(error)
+        try:
+            self._take(rec.change_id, APPROVABLE, "rules approval", person=False)
+        except WrongState:
+            return None
+        rec.taken = rec.revision
+        rec.rules_consumed.add(rec.revision)
+        rec.evidence = reservation.evidence
+        self._decide(rec, approval.approve_rules(self._ctx, reservation))
+        return None
 
     def reject(
         self, change_id: ChangeId, comment: str | None, *, revision: int, head_commit: str

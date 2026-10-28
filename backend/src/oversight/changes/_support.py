@@ -6,6 +6,7 @@ from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
 from oversight.agents import Publish
+from oversight.changes._evidence import WriteEvidence
 from oversight.changes._mode import ModeController
 from oversight.changes._review_port import ReviewPort
 from oversight.changes._state import ChangeRecord, ChangeState, Source
@@ -32,6 +33,10 @@ if TYPE_CHECKING:
 _log = logging.getLogger("oversight.changes._manager")
 
 
+async def closed_rules_transaction(rec: ChangeRecord, evidence: WriteEvidence) -> str:
+    return "Rules merge transaction is unavailable; review this change yourself (P3a)."
+
+
 @dataclass
 class ChangePorts:
     """Lambdas resolve facade methods at call time, including class-level spies."""
@@ -40,6 +45,9 @@ class ChangePorts:
     review: ReviewPort | None = None
     rules_evidence: Callable[["PolicyInputs"], "RulesEvidence"] | None = None
     rules_admission: Callable[[ChangeRecord, ChangeAssessment], str | None] | None = None
+    rules_transaction: Callable[[ChangeRecord, WriteEvidence], Awaitable[str | None]] = (
+        closed_rules_transaction
+    )
 
 
 @dataclass

@@ -176,14 +176,14 @@ class RulesScheduler:
             wait.unresolved_removed = 0 if not wait.proposal.graph.nodes_removed else None
             self.wake(rec)
 
-    def valid(self, wait: AssessmentWait) -> bool:
+    def valid(self, wait: AssessmentWait, *, check_main: bool = True) -> bool:
         rec = wait.rec
         return (
             wait.active
             and self.waits.get(rec.change_id) is wait
             and not self.ctx.state.closing
             and rec.state == "ready"
-            and wait.main_commit == self.ctx.state.snapshot.commit
+            and (not check_main or wait.main_commit == self.ctx.state.snapshot.commit)
             and rec.resolution is None
             and rec.revision not in rec.rules_consumed
             and (rec.revision, rec.head_commit, rec.base_commit)
@@ -232,8 +232,13 @@ class RulesScheduler:
             await self.terminal(wait, EXPIRED.format(seconds=EVIDENCE_TIMEOUT_S))
 
     async def terminal(self, wait: AssessmentWait, reason: str) -> None:
+        await self.report_terminal(wait, "policy_invalid", reason, lambda: self.valid(wait))
+
+    async def report_terminal(
+        self, wait: AssessmentWait, code: str, reason: str, current: Callable[[], bool]
+    ) -> None:
         # No await between this final validation and entering the publisher's target claim.
-        if not self.valid(wait):
+        if not current():
             return
         receipt = await self.ctx.publish(
             ErrorReport(
@@ -241,9 +246,7 @@ class RulesScheduler:
                 agent_id=wait.rec.agent_id,
                 change_id=wait.rec.change_id,
                 fatal=False,
-                message=format_needs_you(
-                    wait.target.revision, wait.target.head, "policy_invalid", reason
-                ),
+                message=format_needs_you(wait.target.revision, wait.target.head, code, reason),
             )
         )
         if isinstance(receipt, StoredEvent):
@@ -384,6 +387,13 @@ class RulesScheduler:
             await self.ctx.publish(assessment)
             wait.latest = assessment
             if not self.valid(wait):
+                if self.valid(wait, check_main=False):
+                    await self.report_terminal(
+                        wait,
+                        "main_moved",
+                        "Main moved during rules evaluation; review this change yourself.",
+                        lambda: self.valid(wait, check_main=False),
+                    )
                 return
             if any(rule.result == "fail" for rule in assessment.rules):
                 self.invalidate(wait.rec)
