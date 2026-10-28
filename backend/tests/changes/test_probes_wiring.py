@@ -9,6 +9,7 @@ from decision_helpers import observed_target
 
 from oversight.changes._facts import FactsEvidence, validate_change_facts
 from oversight.changes._probes import comparison
+from oversight.changes._summary_capture import capture_summary
 from oversight.workspace import IsolationPolicy, base_probe_checkout
 from oversight_contracts.events import CaseResult, SuiteExecution, SuiteResult
 from oversight_contracts.review import ChangeFacts, ChangeTarget
@@ -201,6 +202,9 @@ async def test_validator_rejects_forged_probe_result_and_reference(h: Harness) -
         rec.executions,
         rec.suite_runs,
         tuple(facts.added_tests),
+        summary_evidence=capture_summary(
+            rec, added_test_ids=tuple(probe.test_id for probe in facts.added_tests)
+        ),
     )
     validate_change_facts(facts, evidence)
     for update in ({"result": "fails_before_passes_after"}, {"before_seq": facts.test_runs[0]}):

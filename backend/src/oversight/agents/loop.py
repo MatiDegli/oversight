@@ -21,6 +21,7 @@ from oversight.agents._prompts import SYSTEM_PROMPT as SYSTEM_PROMPT
 from oversight.agents._prompts import prompt_version, system_prompt
 from oversight.agents._replies import ReplyError, ReplyRecovery
 from oversight.agents._trace import model_turn, publications, timed, traced_drive
+from oversight.agents._usage import publish_usage
 from oversight.agents.client import (
     CALL_SCOPE,
     CallScope,
@@ -44,7 +45,6 @@ from oversight_contracts.events import (
     AgentStep,
     ErrorReport,
     Limits,
-    UsageTick,
 )
 from oversight_contracts.review import FinishDeclaration
 
@@ -479,22 +479,4 @@ class AgentRun:
             raise cut_short
 
     async def _usage(self, reply: ModelReply) -> None:
-        cost = self._pricing.cost(reply.usage) if self._pricing is not None else None
-        # Baseten receipts show cost without debiting Meta credits or inheriting its brake.
-        meta_credits = self._model.profile.provider != "baseten"
-        spent = self._ledger.record(cost) if meta_credits else self._ledger.spent_usd
-        await self._publish(
-            UsageTick(
-                agent_id=self._task.agent_id,
-                role="agent",
-                change_id=self._task.change_id,
-                model=reply.model,
-                input_tokens=reply.usage.input_tokens,
-                output_tokens=reply.usage.output_tokens,
-                cached_tokens=reply.usage.cached_tokens,
-                cost_usd=cost,
-                spent_usd=spent,
-                budget_usd=self._ledger.budget_usd,
-                brake=self._ledger.brake if meta_credits else "ok",
-            )
-        )
+        await publish_usage(self, reply)

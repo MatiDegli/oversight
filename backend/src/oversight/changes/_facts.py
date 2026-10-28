@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from pathlib import PurePosixPath
 
@@ -17,6 +17,8 @@ from oversight.changes._shortcuts_common import FuncNode, Source, is_test_file
 from oversight.changes._shortcuts_skips import DECORATOR_SKIP, module_markers
 from oversight.changes._shortcuts_unknown import COLLECTION_CONFIG
 from oversight.changes._state import ChangeRecord
+from oversight.changes._summary import SummaryEvidence, build_summary
+from oversight.changes._summary_capture import capture_summary
 from oversight.changes._support import ChangeContext
 from oversight.workspace import SuiteRun, validate_suite_execution
 from oversight_contracts.events import SuiteExecution
@@ -125,6 +127,7 @@ class FactsEvidence:
     runs: Mapping[int, SuiteRun]
     added_tests: tuple[AddedTestProbe, ...] = ()
     integrity_status: IntegrityStatus | None = None
+    summary_evidence: SummaryEvidence = field(default_factory=SummaryEvidence)
 
 
 def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
@@ -165,6 +168,10 @@ def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
             )
         ):
             raise ValueError("proposal execution tested another candidate")
+    if facts.summary != build_summary(
+        evidence.summary_evidence, evidence.executions, revision=facts.revision
+    ):
+        raise ValueError("facts summary differs from captured evidence")
     if facts.integrity != list(evidence.integrity):
         raise ValueError("facts integrity differs from captured source observations")
     if facts.added_tests != list(evidence.added_tests):
@@ -350,6 +357,7 @@ async def capture_facts(
             }
         )
     )
+    inventory = await asyncio.to_thread(added_tests_inventory, rec, revision)
     return FactsEvidence(
         rec.agent_id,
         target,
@@ -360,6 +368,9 @@ async def capture_facts(
         dict(rec.executions),
         dict(rec.suite_runs),
         integrity_status=status,
+        summary_evidence=capture_summary(
+            rec, added_test_ids=inventory.test_ids if inventory.complete else None
+        ),
     )
 
 
@@ -367,6 +378,9 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
     """Construct and validate after change.proposed, with no I/O or mutable reads."""
     facts = ChangeFacts(
         **evidence.target.model_dump(),
+        summary=build_summary(
+            evidence.summary_evidence, evidence.executions, revision=evidence.target.revision
+        ),
         declared=evidence.declared,
         edited_paths=list(evidence.edited_paths),
         test_runs=sorted(evidence.executions),
