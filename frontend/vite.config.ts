@@ -74,6 +74,7 @@ export default defineConfig(({ command }) => {
           extends: true,
           test: {
             name: "unit",
+            maxWorkers: 4,
             include: ["src/**/*.test.{ts,tsx}"],
             exclude: ["src/**/*.browser.test.{ts,tsx}"],
           },

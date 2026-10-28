@@ -1,5 +1,7 @@
 import { stateStore } from "../state";
 import { startAppTransport } from "../transport";
+import { afterFirstGraphDraw } from "../graph";
+import { prefetchEditorWhenIdle } from "../editor";
 
 /** The shell owns the transport lifetime and exposes the applied cursor to screenshot clients. */
 export function startAppSession(
@@ -8,6 +10,10 @@ export function startAppSession(
   onOpen?: () => void,
 ) {
   let active = true;
+  let cancelPrefetch: () => void = () => undefined;
+  const stopWaitingForGraph = afterFirstGraphDraw(() => {
+    cancelPrefetch = prefetchEditorWhenIdle();
+  });
   if (root) root.dataset.seq = String(stateStore.getState().state.lastSeq);
   const unsubscribe = stateStore.subscribe(({ state }, previous) => {
     if (root) root.dataset.seq = String(state.lastSeq);
@@ -24,6 +30,8 @@ export function startAppSession(
   void transport.ready.catch(report);
   return () => {
     active = false;
+    stopWaitingForGraph();
+    cancelPrefetch();
     unsubscribe();
     transport.stop();
   };

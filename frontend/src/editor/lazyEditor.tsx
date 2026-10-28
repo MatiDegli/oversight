@@ -1,6 +1,8 @@
 import { TriangleAlert } from "lucide-react";
-import { Component, lazy, Suspense } from "react";
+import { Component, lazy, Suspense, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
+import { loadedEditor, loadEditor } from "./loader";
+import type { EditorImplementation } from "./loader";
 
 function EditorFallback({ failed, filePanel }: { failed: boolean; filePanel: boolean }) {
   const message = (
@@ -41,15 +43,20 @@ class EditorBoundary extends Component<
 
 /** Each public component owns its Suspense boundary; importing the facade loads no editor. */
 export function deferEditor<Props extends object>(
-  load: () => Promise<{ default: ComponentType<Props> }>,
+  select: (module: EditorImplementation) => ComponentType<Props>,
   filePanel = false,
 ) {
-  const Deferred = lazy(load);
+  const Deferred = lazy(() => loadEditor().then((module) => ({ default: select(module) })));
   return function DeferredEditor(props: Props) {
+    // Fix the identity for this mount: a cold open must not remount when the cache fills.
+    const [View] = useState(() => {
+      const loaded = loadedEditor();
+      return loaded ? select(loaded) : Deferred;
+    });
     return (
       <EditorBoundary filePanel={filePanel}>
         <Suspense fallback={<EditorFallback failed={false} filePanel={filePanel} />}>
-          <Deferred {...props} />
+          <View {...props} />
         </Suspense>
       </EditorBoundary>
     );

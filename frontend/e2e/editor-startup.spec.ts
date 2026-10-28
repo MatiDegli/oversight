@@ -1,25 +1,16 @@
-import { readFileSync } from "node:fs";
-
 import { expect, test } from "@playwright/test";
 import type { Locator } from "@playwright/test";
-import type { Manifest } from "vite";
 
 import type { GraphProbeHost } from "../src/graph";
 import { themes } from "../src/theme";
 import { engaged, installHolds, release } from "./holds";
 import { holds } from "./level2-log";
 import { interceptCommands, tapNode } from "./level2-support";
-
-const manifest = JSON.parse(
-  readFileSync(new URL("../dist/replay/.vite/manifest.json", import.meta.url), "utf8"),
-) as Manifest;
-const editorAssets = new Set(
-  Object.entries(manifest)
-    .filter(([key]) => key.startsWith("src/editor/") || key.includes("monaco-editor"))
-    .flatMap(([, chunk]) => [chunk.file, ...(chunk.css ?? []), ...(chunk.assets ?? [])])
-    .map((file) => `/${file}`),
-);
-if (editorAssets.size === 0) throw new Error("The built site must have deferred editor assets");
+import {
+  editorAssets,
+  expectNoEditorBeforeGraph,
+  recordEditorStartup,
+} from "./editor-startup-support";
 
 async function expectPython(panel: Locator) {
   // Read the painted keyword's color, rather than merely checking a language id or token class.
@@ -40,7 +31,7 @@ async function expectPython(panel: Locator) {
 }
 
 for (const first of ["file", "live diff", "review"] as const) {
-  test(`cold watch loads no Monaco; ${first} loads a local Python editor on demand`, async ({
+  test(`no editor before first graph; ${first} still colors Python and shows its contents`, async ({
     page,
     baseURL,
   }) => {
@@ -53,6 +44,7 @@ for (const first of ["file", "live diff", "review"] as const) {
       if (message.type() === "error") problems.push(message.text());
     });
     await interceptCommands(page);
+    await page.addInitScript(recordEditorStartup);
     await page.addInitScript(installHolds, [holds.live, holds.decisions]);
     await page.goto("/level2");
     // Software canvas rendering can stretch the replay's many short event timers on CI.
@@ -62,7 +54,7 @@ for (const first of ["file", "live diff", "review"] as const) {
     await engaged(page, holds.live);
 
     const editorRequests = () => requested.filter((url) => editorAssets.has(new URL(url).pathname));
-    expect(editorRequests()).toEqual([]);
+    await expectNoEditorBeforeGraph(page);
     await expect(page.locator(".monaco-editor")).toHaveCount(0);
     const font = page.locator('link[rel="preload"][as="font"]');
     await expect(font).toHaveAttribute("href", /atkinson-hyperlegible-next-latin-400.*\.woff2$/);
@@ -79,8 +71,8 @@ for (const first of ["file", "live diff", "review"] as const) {
     else {
       await release(page, holds.live);
       await engaged(page, holds.decisions);
-      // Finishing the agent still leaves watch mode free of editor downloads.
-      expect(editorRequests()).toEqual([]);
+      // Prefetch never mounts an editor or changes watch mode by itself.
+      await expect(page.locator(".monaco-editor")).toHaveCount(0);
       await card.getByRole("button", { name: "Review change" }).click();
     }
     const panel = page.getByRole("complementary", {
@@ -110,6 +102,10 @@ for (const first of ["file", "live diff", "review"] as const) {
 }
 
 test("the graph waits for the preloaded Next Latin 400 font", async ({ page }) => {
+  const editorRequests: string[] = [];
+  page.on("request", (request) => {
+    if (editorAssets.has(new URL(request.url()).pathname)) editorRequests.push(request.url());
+  });
   let releaseFont!: () => void;
   const waiting = new Promise<void>((resolve) => {
     releaseFont = resolve;
@@ -124,6 +120,7 @@ test("the graph waits for the preloaded Next Latin 400 font", async ({ page }) =
     await engaged(page, holds.live);
     const graph = page.getByLabel("Repository graph", { exact: true });
     expect(await graph.evaluate((host: GraphProbeHost) => host.oversightGraph)).toBeUndefined();
+    expect(editorRequests).toEqual([]);
     releaseFont();
     await expect
       .poll(() =>

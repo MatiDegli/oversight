@@ -1,4 +1,5 @@
 export { GraphView } from "./GraphView";
+export { afterFirstGraphDraw, whenFirstGraphDrawn } from "./firstDraw";
 export type { GraphApi, GraphViewProps } from "./GraphView";
 export { loadGraphEvents } from "./devLog";
 export { graphElements } from "./elements";
