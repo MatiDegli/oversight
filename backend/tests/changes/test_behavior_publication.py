@@ -262,3 +262,76 @@ def test_large_nested_display_is_capped_before_json_serialization():
     assert json.loads(rendered)["value"][0] == "list"
     assert "..." in rendered
     assert sample["value"] == value
+
+
+@pytest.mark.parametrize("field", ["value", "message", "class"])
+@pytest.mark.parametrize("raw_dict", [False, True])
+def test_untrusted_display_leaves_converge_to_bounded_json(monkeypatch, field, raw_dict):
+    leaf = (
+        {"x" * MAX_RENDERED + str(i): {"nested": "é" * MAX_RENDERED} for i in range(32)}
+        if raw_dict
+        else 10 ** (2 * MAX_RENDERED)
+    )
+    kind = "value" if field == "value" else "raised"
+    sample = {"kind": kind, "class": "Error", "message": "message", field: leaf}
+    original = json.dumps
+    original_sample = original(sample)
+    calls = 0
+
+    def bounded_dumps(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        # Fail promptly on the old infinite loop without hanging the event loop or test worker.
+        assert calls <= 32, "display clipping failed to converge"
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr("oversight.changes._behavior_publish.json.dumps", bounded_dumps)
+    row = BehaviorRow("f()", sample, sample, False)
+    evidence = capture_behavior(BehaviorDiff(1, (FunctionBehavior("sample:f", rows=(row,)),)))
+    projected = project_behavior(evidence, revision=1)
+    assert projected is not None
+    for rendered in (projected[0].rows[0].before, projected[0].rows[0].after):
+        assert len(rendered) <= MAX_RENDERED
+        display = json.loads(rendered)
+        assert display["kind"] == kind
+        if raw_dict:
+            assert isinstance(display[field], dict)
+            assert "..." in rendered
+        else:
+            assert display == {"kind": kind}
+    assert original(sample) == original_sample
+
+
+@pytest.mark.anyio
+async def test_incomplete_repeat_appends_to_existing_unrepresentable_reason():
+    rec, inputs, found = comparison_fixture(3)
+    unrepresentable = {"kind": "unrepresentable"}
+    before = BehaviorObservation((unrepresentable, *observation([1, 2])["sample:f"].results))
+    after = BehaviorObservation((unrepresentable, *observation([3, 4])["sample:f"].results))
+    worker = AsyncMock(
+        side_effect=[
+            {"sample:f": before},
+            {"sample:f": after},
+            observation([1]),
+            {"sample:f": BehaviorObservation(problem="unavailable")},
+            observation([2]),
+            {"sample:f": BehaviorObservation(problem="unavailable")},
+        ]
+    )
+    await _compare(
+        cast(Any, SimpleNamespace(run_behavior=worker)),
+        rec,
+        cast(Any, ["base", "head"]),
+        inputs,
+        found,
+        time.monotonic() + 30,
+        set(),
+    )
+    assert found[0].reason == "unrepresentable input; incomplete repeat"
+    projected = project_behavior(capture_behavior(BehaviorDiff(1, tuple(found))), revision=1)
+    assert projected is not None
+    [published] = projected
+    assert published.compared_count == 2
+    assert published.differing_count == 0
+    assert published.rows == []
+    assert published.not_probed == "probe unavailable"

@@ -212,10 +212,13 @@ async def _measure_function(
                 )
                 incomplete |= observation.problem is not None or identity is None
                 unstable |= identity is not None and identity != _identity((old, new)[side])
+            reason = result.reason
+            if incomplete and (reason is None or "incomplete repeat" not in reason):
+                reason = f"{reason}; incomplete repeat" if reason else "incomplete repeat"
             result = replace(
                 result,
                 differing=result.differing + int(not unstable and not incomplete),
-                reason=result.reason or ("incomplete repeat" if incomplete else None),
+                reason=reason,
             )
             # There is no per-row completeness field: keep incomplete samples out of public rows.
             if not incomplete and len(rows) < MAX_ROWS:
