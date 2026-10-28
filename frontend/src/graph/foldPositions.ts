@@ -3,6 +3,7 @@ import type { Point } from "@contracts";
 import type { GraphElement } from "./elements";
 import { nodeGeometry } from "./geometry";
 import type { GeometryTokens } from "./geometry";
+import { packColumns } from "./packColumns";
 
 interface Box {
   x: number;
@@ -11,7 +12,7 @@ interface Box {
   height: number;
 }
 
-/** Compact only a folded class's later siblings and the later modules in that preset column. */
+/** Project from the expanded preset each time; unfolding never accumulates layout offsets. */
 export function foldPositions(
   elements: readonly GraphElement[],
   expanded: ReadonlySet<string>,
@@ -53,6 +54,7 @@ export function foldPositions(
   const roots = children.get("") ?? [];
   roots.forEach(measure);
   const positions = new Map<string, Point>();
+  const heights = new Map<string, number>();
   const visible = representatives(nodes, expanded, foldedModules);
   const place = (node: GraphElement, dy: number, hiddenBy?: string): number => {
     const box = full.get(node.data.id);
@@ -70,7 +72,8 @@ export function foldPositions(
       removed += place(kid, dy - removed, hiddenBy ?? (folded ? node.data.id : undefined));
     const height = folded ? g.headerHeight : box.height - removed;
     positions.set(node.data.id, { x: box.x + box.width / 2, y: box.y + dy + height / 2 });
-    return moduleFold ? removed : box.height - height;
+    heights.set(node.data.id, height);
+    return box.height - height;
   };
   const columns = new Map<number, GraphElement[]>();
   for (const root of roots) {
@@ -82,6 +85,7 @@ export function foldPositions(
     let removed = 0;
     for (const root of column) removed += place(root, -removed);
   }
+  if (foldedModules.size) boundColumns(roots, children, full, heights, positions, g);
   return { positions, visible };
 }
 
@@ -108,4 +112,53 @@ function representatives(
     visible.set(node.data.id, id);
   }
   return visible;
+}
+
+/** Reflow only when a projected column exceeds nine header slots, keeping small presets intact. */
+function boundColumns(
+  roots: GraphElement[],
+  children: ReadonlyMap<string, GraphElement[]>,
+  full: ReadonlyMap<string, Box>,
+  heights: ReadonlyMap<string, number>,
+  positions: Map<string, Point>,
+  g: ReturnType<typeof nodeGeometry>,
+) {
+  const maxHeight = 9 * (g.headerHeight + g.rowGap);
+  const cards = roots.map((root) => ({
+    id: root.data.id,
+    width: full.get(root.data.id)?.width ?? g.rowWidth,
+    height: heights.get(root.data.id) ?? g.headerHeight,
+  }));
+  const columns = new Map<number, { top: number; bottom: number }>();
+  for (const card of cards) {
+    const p = positions.get(card.id);
+    if (!p) continue;
+    const x = full.get(card.id)?.x ?? 0;
+    const old = columns.get(x);
+    columns.set(x, {
+      top: Math.min(old?.top ?? Infinity, p.y - card.height / 2),
+      bottom: Math.max(old?.bottom ?? -Infinity, p.y + card.height / 2),
+    });
+  }
+  if ([...columns.values()].every((c) => c.bottom - c.top <= maxHeight)) return;
+  cards.sort((a, b) => {
+    const left = full.get(a.id),
+      right = full.get(b.id);
+    return (
+      (left?.x ?? 0) - (right?.x ?? 0) ||
+      (left?.y ?? 0) - (right?.y ?? 0) ||
+      a.id.localeCompare(b.id)
+    );
+  });
+  const packed = packColumns(cards, maxHeight, g.gutter, g.rowGap);
+  const translate = (id: string, dx: number, dy: number) => {
+    const point = positions.get(id);
+    if (point) positions.set(id, { x: point.x + dx, y: point.y + dy });
+    for (const child of children.get(id) ?? []) translate(child.data.id, dx, dy);
+  };
+  for (const card of cards) {
+    const before = positions.get(card.id),
+      after = packed.get(card.id);
+    if (before && after) translate(card.id, after.x - before.x, after.y - before.y);
+  }
 }
