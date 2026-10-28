@@ -406,3 +406,55 @@ async def test_real_process_variation_is_unstable_and_not_a_stable_difference(h)
         measured.suites[0].run.measured.calls[0].result
         != measured.suites[2].run.measured.calls[0].result
     )
+
+
+@pytest.mark.anyio
+async def test_mid_run_wrapped_isolation_failure_names_cause_and_keeps_base_evidence(
+    h, monkeypatch
+):
+    from oversight.changes._measured import measure_cone
+    from oversight.workspace import IsolationUnavailable, SuiteUnavailable
+    from oversight.workspace.suite import run_suite
+
+    ctx, rec, target, impact = await prepared(h)
+    await h.workspace.check_isolation()
+    original = h.workspace.run_tests
+    sides = []
+
+    async def refused(argv, **kwargs):
+        raise IsolationUnavailable("namespace entry refused after preflight")
+
+    async def run(tree, **kwargs):
+        sides.append(tree.base_commit)
+        assert kwargs["isolation"] == "required"
+        if len(sides) == 1:
+            return await original(tree, **kwargs)
+        # Exercise the real runner's OSError wrapper before guarded-suite identity capture.
+        try:
+            return await run_suite(
+                python=tree.root / "unused-python",
+                plugin_dir=tree.root,
+                runtime_root=h.workspace.runtime_root,
+                tree_root=tree.root,
+                timeout_s=kwargs["timeout_s"],
+                redact=h.workspace.redact,
+                spawn=refused,
+                case_ids=kwargs["case_ids"],
+                measured_targets=kwargs["measured_targets"],
+            )
+        except SuiteUnavailable as error:
+            assert isinstance(error.cause, IsolationUnavailable)
+            raise
+
+    monkeypatch.setattr(h.workspace, "run_tests", run)
+    async with h.workspace.locks(main=True, agent_id=rec.agent_id):
+        measured = await measure_cone(ctx, rec, target=target, impact=impact)
+    [caller] = project_measured(measured, target)
+    assert sides == [target.base_commit, target.head_commit]
+    assert len(measured.suites) == 1 and measured.suites[0].seq in rec.executions
+    assert caller.outcome == "not_compared" and not caller.complete
+    assert "isolation unavailable" in caller.not_compared
+    assert "isolation unavailable" in caller.problems
+    assert not any("SuiteUnavailable" in reason for reason in caller.not_compared)
+    assert not list(h.workspace.tmp_dir.glob("base-probe-*"))
+    assert not list(h.workspace.tmp_dir.glob("*.calls*"))

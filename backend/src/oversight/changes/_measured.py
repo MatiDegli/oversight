@@ -406,11 +406,14 @@ async def measure_cone(
         )
         raise
     except Exception as error:
+        isolation_failed = isinstance(error, IsolationUnavailable) or (
+            isinstance(error, SuiteUnavailable) and isinstance(error.cause, IsolationUnavailable)
+        )
         reason = (
             "caller measurement budget exhausted"
             if isinstance(error, TimeoutError)
             else "isolation unavailable"
-            if isinstance(error, IsolationUnavailable)
+            if isolation_failed
             else f"caller measurement unavailable ({type(error).__name__})"
         )
         evidence = replace(evidence, problems=(reason,))
