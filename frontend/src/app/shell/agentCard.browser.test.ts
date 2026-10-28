@@ -4,13 +4,13 @@ import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import type {} from "./ready.browser.fixture";
+import type {} from "./agentCard.browser.fixture";
 
 let server: ViteDevServer, browser: Browser, html: string, url: string;
 beforeAll(async () => {
   server = await createServer({
-    root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/agent-card-cache", import.meta.url)),
+    root: fileURLToPath(new URL("../../../", import.meta.url)),
+    cacheDir: fileURLToPath(new URL("../../../../.shots/agent-card-cache", import.meta.url)),
     server: {
       host: "127.0.0.1",
       port: 0,
@@ -20,15 +20,15 @@ beforeAll(async () => {
   });
   html = await server.transformIndexHtml(
     "/",
-    '<!doctype html><html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import { readyTest } from "/src/agents/ready.browser.fixture.tsx"; window.readyTest = readyTest;</script></body></html>',
+    '<!doctype html><html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import { readyTest } from "/src/app/shell/agentCard.browser.fixture.tsx"; window.readyTest = readyTest;</script></body></html>',
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
   browser = await chromium.launch();
 }, 60_000);
 afterAll(async () => {
-  await browser?.close();
-  await server?.close();
+  await browser.close();
+  await server.close();
 });
 
 async function outside(page: Page) {

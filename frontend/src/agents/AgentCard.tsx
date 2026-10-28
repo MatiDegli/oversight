@@ -261,7 +261,7 @@ function CardHeader({ data }: { data: AgentCardDetail }) {
       </span>
       <span
         role={readyForReview ? "status" : undefined}
-        className={`ml-auto shrink-0 rounded-full p-(--status-pill-padding) text-(length:--label-size) font-semibold ${own.tint}`}
+        className={`ml-auto rounded-full shrink-0 p-(--status-pill-padding) text-(length:--label-size) font-semibold ${own.tint}`}
       >
         {agent.state === "working" ? data.activityLabel : labels[agent.state]}
       </span>

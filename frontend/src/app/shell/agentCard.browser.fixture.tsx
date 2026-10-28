@@ -1,10 +1,10 @@
 import type { ServerEvent } from "@contracts";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
-import { Frame } from "../app/Frame";
-import { initialView } from "../app/view";
-import { applyEvent, createInitialState } from "../state";
+import log from "../../../../fixtures/events/handwritten-level1.jsonl?raw";
+import { Frame } from "../Frame";
+import { initialView } from "../view";
+import { applyEvent, createInitialState } from "../../state";
 
 const events = log
   .trim()
@@ -26,7 +26,7 @@ host.style.height = "100vh";
 document.body.replaceChildren(host);
 const root = createRoot(host);
 function render() {
-  flushSync(() =>
+  flushSync(() => {
     root.render(
       <Frame
         state={state}
@@ -40,8 +40,8 @@ function render() {
         onStartAgent={() => Promise.resolve()}
         onStopAgent={() => Promise.resolve()}
       />,
-    ),
-  );
+    );
+  });
 }
 export const readyTest = {
   mount: render,

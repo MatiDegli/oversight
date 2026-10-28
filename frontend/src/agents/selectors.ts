@@ -14,7 +14,7 @@ export function selectAgentCard(state: State, agentId: string) {
   const activity =
     latest?.summary ??
     (range
-      ? `${focus?.mode === "edit" ? "Editing" : "Reading"} ${node ? `${node.name} in ` : ""}${range.path}`
+      ? `${focus.mode === "edit" ? "Editing" : "Reading"} ${node ? `${node.name} in ` : ""}${range.path}`
       : "Waiting for the first tool call.");
   return {
     ...data,
