@@ -1,0 +1,124 @@
+"""The standalone worker runs with a package, without importing the backend."""
+
+import ast
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+from oversight.workspace import run_process
+
+WORKER = Path(__file__).parents[2] / "src/oversight/workspace/behavior_worker.py"
+
+
+async def invoke(tmp_path: Path, body: str, calls: list[str], timeout_s: float = 0.1):
+    (tmp_path / "sample.py").write_text(body)
+    request, report = tmp_path / "request.json", tmp_path / "report.json"
+    request.write_text(json.dumps([{"id": "f", "module": "sample", "name": "f", "calls": calls}]))
+    process = await run_process(
+        [
+            sys.executable,
+            "-B",
+            str(WORKER),
+            str(tmp_path),
+            str(request),
+            str(report),
+            str(timeout_s),
+        ],
+        cwd=tmp_path,
+        timeout_s=5,
+        env={"PYTHONHASHSEED": "0", "HOME": str(tmp_path)},
+    )
+    assert process.returncode == 0, process.stderr
+    assert process.stdout == process.stderr == ""
+    return json.loads(report.read_text())["f"]
+
+
+@pytest.mark.anyio
+async def test_typed_values_are_deterministic_and_distinct(tmp_path):
+    calls = [repr(((value,), {})) for value in (None, True, 1, 1.0, -0.0, "1", b"1", [1], (1,))]
+    rows = await invoke(tmp_path, "def f(x): return x\n", calls)
+    encoded = [json.dumps(row, sort_keys=True) for row in rows["results"]]
+    assert len(set(encoded)) == len(calls)
+    assert all(row["kind"] == "value" for row in rows["results"])
+    rows = await invoke(
+        tmp_path,
+        "def f(): return {1: (float('nan'), -0.0), 'set': {3, 1}, 'frozen': frozenset({1})}\n",
+        ["((), {})", "((), {})"],
+    )
+    assert rows["results"][0] == rows["results"][1]
+    assert '"nan"' in json.dumps(rows) and '"-0x0.0p+0"' in json.dumps(rows)
+
+
+@pytest.mark.anyio
+async def test_exceptions_timeout_output_and_deepcopy(tmp_path):
+    body = (
+        "import os\n"
+        "def f(x=[]):\n"
+        "    print('noise'); os.write(2, b'noise')\n"
+        "    if x == 'raise': raise ValueError('bad' * 1000)\n"
+        "    if x == 'hang':\n"
+        "        while True: pass\n"
+        "    x.append(1)\n"
+        "    return x\n"
+    )
+    result = await invoke(
+        tmp_path, body, ["((), {})", "((), {})", "(('raise',), {})", "(('hang',), {})", "((), {})"]
+    )
+    rows = result["results"]
+    assert rows[0] == rows[1] == rows[4]  # Mutable defaults are copied too.
+    assert rows[2]["kind"] == "raised" and rows[2]["class"] == "builtins.ValueError"
+    assert len(rows[2]["message"]) <= 512
+    assert rows[3] == {"kind": "timed_out"}
+
+
+@pytest.mark.anyio
+async def test_encoding_caps_cycles_and_object_fields(tmp_path):
+    body = (
+        "class Box:\n    def __init__(self): self.payload = [1, b'x']\n"
+        "def f(x):\n"
+        "    if x == 0: return Box()\n"
+        "    if x == 1: return 'z' * 1000000\n"
+        "    if x == 2: return list(range(100000))\n"
+        "    a = []; a.append(a); return a\n"
+    )
+    result = await invoke(tmp_path, body, [repr(((i,), {})) for i in range(4)])
+    text = json.dumps(result)
+    assert len(text) < 16_384
+    assert "sample.Box" in text and "payload" in text
+    assert "cut" in text and "cycle" in text
+
+
+@pytest.mark.anyio
+async def test_import_failure_is_not_a_function_exception(tmp_path):
+    result = await invoke(tmp_path, "raise ImportError('missing side')\n", ["((), {})"])
+    assert result["problem"] == "import failed"
+    assert not result["results"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("literal", ["not a literal", "((), {})"])
+async def test_literal_and_binding_setup_errors_are_unrepresentable(tmp_path, literal):
+    result = await invoke(tmp_path, "def f(x): return x\n", [literal])
+    assert result["results"][0]["kind"] == "unrepresentable"
+
+
+@pytest.mark.anyio
+async def test_deepcopy_setup_error_is_not_a_function_exception(tmp_path):
+    body = (
+        "class Uncopyable:\n"
+        "    def __deepcopy__(self, memo): raise ValueError('setup')\n"
+        "def f(x=Uncopyable()): raise ValueError('body')\n"
+    )
+    result = await invoke(tmp_path, body, ["((), {})"])
+    assert result["results"][0]["kind"] == "unrepresentable"
+
+
+def test_worker_is_stdlib_only():
+    tree = ast.parse(WORKER.read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(alias.name.split(".")[0] in sys.stdlib_module_names for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            assert node.module and node.module.split(".")[0] in sys.stdlib_module_names

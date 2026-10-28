@@ -83,6 +83,7 @@ class ChangeManager:
         clock: Clock = system_clock,
         git_timeout_s: float = 30,
         review: ReviewPort | None = None,
+        behavior_diff: bool = False,
         monotonic: Callable[[], float] = time.monotonic,
         sleep_until: Callable[[float], Awaitable[None]] | None = None,
     ) -> None:
@@ -105,6 +106,7 @@ class ChangeManager:
                 rules_admission=self._admit_rules,
             ),
             ModeController(),
+            behavior_diff,
         )
 
         self._ctx.assessment = RulesScheduler(

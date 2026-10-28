@@ -62,6 +62,7 @@ class ChangeContext:
     state: ChangeState
     ports: ChangePorts
     mode: ModeController
+    behavior_diff: bool = False
     assessment: "RulesScheduler" = field(init=False)
 
     def date(self) -> str:

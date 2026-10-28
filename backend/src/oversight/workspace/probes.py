@@ -53,17 +53,18 @@ async def base_probe_checkout(
         await offload(tree.git_identity.verify_registration)
         for path in paths:
             tree.resolve(path)  # Validate every target, including parents, before checkout.
-        await workspace.git_ok(
-            tree,
-            "restore",
-            "--source",
-            head,
-            "--staged",
-            "--worktree",
-            "--",
-            *paths,
-            timeout_s=timeout_s,
-        )
+        if paths:
+            await workspace.git_ok(
+                tree,
+                "restore",
+                "--source",
+                head,
+                "--staged",
+                "--worktree",
+                "--",
+                *paths,
+                timeout_s=timeout_s,
+            )
         yield tree
     finally:
         try:
