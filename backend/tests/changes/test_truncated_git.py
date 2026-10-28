@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from changes_helpers import EDIT, Harness, bounded
+from decision_helpers import observed_target
 
 from oversight.workspace import ProcessResult, Tree
 from oversight_contracts.events import ChangeProposed, ChangeResolved, ErrorReport
@@ -75,7 +76,7 @@ async def test_approval_refuses_truncated_worktree_query(
     pre, snapshot = await h.main_head(), h.manager.snapshot
     hits = truncate_once(h, monkeypatch, command)
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert len(hits) == 1
     [error] = h.payloads(ErrorReport)
@@ -86,7 +87,9 @@ async def test_approval_refuses_truncated_worktree_query(
     await assert_main_unchanged(h, pre)
     assert await tree.head() == head
     assert await tree.read_text(EDIT[0]) == content
-    await h.manager.approve("change-1", None)  # the failed query left the change reviewable
+    await h.manager.approve(
+        "change-1", None, **observed_target(h.manager, "change-1")
+    )  # the failed query left the change reviewable
     assert h.payloads(ChangeResolved)[0].merge == "merged"
 
 
@@ -105,7 +108,7 @@ async def test_truncated_conflict_paths_abort_merge_and_preserve_main(
     content = await h.workspace.main.read_text(EDIT[0])
     hits = truncate_once(h, monkeypatch, "diff", tree="main")
 
-    await h.manager.approve("change-1", None)
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert len(hits) == 1
     [error] = h.payloads(ErrorReport)
@@ -127,7 +130,7 @@ async def test_truncated_worktree_listing_does_not_delete_worktree_or_branch(
     pre = await h.main_head()
     hits = truncate_once(h, monkeypatch, "worktree", tree="main")
 
-    await h.manager.reject("change-1", None)
+    await h.manager.reject("change-1", None, **observed_target(h.manager, "change-1"))
 
     assert len(hits) == 1
     [error] = h.payloads(ErrorReport)
