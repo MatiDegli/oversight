@@ -10,7 +10,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import cast
 
@@ -18,6 +18,7 @@ from oversight.limits import SizeLimitError, bounded_text
 from oversight.test_output import retain_failure
 from oversight.workspace.junit import MAX_XML_BYTES, parse_junit
 from oversight.workspace.locks import offload
+from oversight.workspace.measured_report import CallReport, CallTarget, read_calls
 from oversight.workspace.runner import ProcessResult, Spawn
 from oversight_contracts.events import CaseResult, SuiteExecution, SuiteResult
 
@@ -33,6 +34,7 @@ class SuiteRun:
     problems: tuple[str, ...] = ("JUnit report unavailable",)
     tested_tree: str | None = None
     tested_commit: str | None = None
+    measured: CallReport | None = None
     """The tail of pytest's output, 8 KB at most, with the workspace's location removed."""
 
 
@@ -137,6 +139,7 @@ async def run_suite(
     spawn: Spawn,
     case_ids: tuple[str, ...] = (),
     harness_pack: bool = False,
+    measured_targets: tuple[CallTarget, ...] | None = None,
 ) -> SuiteRun:
     report = runtime_root / "tmp" / f"{uuid.uuid4().hex}.jsonl"
     junit = report.with_suffix(".xml")
@@ -148,6 +151,10 @@ async def run_suite(
         "PYTHONHASHSEED": "0",
         "OVERSIGHT_REPORT": str(report),
     }
+    request = report.with_suffix(".calls-input")
+    recording = report.with_suffix(".calls")
+    if measured_targets is not None:
+        env.update(OVERSIGHT_CALL_TARGETS=str(request), OVERSIGHT_CALL_REPORT=str(recording))
     argv = [
         str(python),
         "-m",
@@ -166,6 +173,10 @@ async def run_suite(
     report_error: str | None = None
     failure: OSError | asyncio.CancelledError | None = None
     try:
+        if measured_targets is not None:
+            await offload(
+                lambda: request.write_text(json.dumps([asdict(t) for t in measured_targets]))
+            )
         process = await spawn(argv, cwd=tree_root, timeout_s=timeout_s, env=env)
     except (OSError, asyncio.CancelledError) as error:
         failure = error
@@ -177,6 +188,14 @@ async def run_suite(
             lines = None
             report_error = str(error)
         cases, problems = await offload(lambda: _take_cases(junit))
+        measured = None
+        if measured_targets is not None:
+            try:
+                measured = await offload(lambda: read_calls(recording, measured_targets))
+            finally:
+                await offload(
+                    lambda: (request.unlink(missing_ok=True), recording.unlink(missing_ok=True))
+                )
     tally = parse_report(lines or [])
     if report_error is not None:
         tally.failed_tests.append(report_error)
@@ -198,7 +217,11 @@ async def run_suite(
         problems += ("suite timed out",)
     text = redact(text)
     output = retain_failure(text, OUTPUT_TAIL) if harness_pack else text[-OUTPUT_TAIL:]
-    run = SuiteRun(result, output, cases, problems)
+    if measured is not None and (problems or failure or result.outcome in ("error", "timeout")):
+        measured = replace(
+            measured, complete=False, problems=(*measured.problems, "suite incomplete")
+        )
+    run = SuiteRun(result, output, cases, problems, measured=measured)
     if isinstance(failure, asyncio.CancelledError):
         raise SuiteInterrupted(run) from failure
     if isinstance(failure, OSError):
