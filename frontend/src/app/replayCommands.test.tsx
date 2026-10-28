@@ -8,12 +8,13 @@ import { App } from "./index";
 // The static replay site has no backend: the app must not even create the command client there.
 const transport = vi.hoisted(() => ({ replayBuild: true, createCommandClient: vi.fn() }));
 const frame = vi.hoisted(() => ({ files: undefined as FileAccess | undefined }));
-vi.mock("./Frame", () => ({
-  Frame: (props: FrameProps) => {
+vi.mock("./Frame", () => {
+  const capture = (props: FrameProps) => {
     frame.files = props.files;
     return null;
-  },
-}));
+  };
+  return { Frame: capture, ConnectedFrame: capture };
+});
 vi.mock("../transport", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../transport")>()),
   get replayBuild() {
