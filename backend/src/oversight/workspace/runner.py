@@ -90,7 +90,7 @@ class _Stream:
         return (bytes(self.head) + gap + bytes(self.tail)).decode("utf-8", errors="replace")
 
 
-class _Collector(asyncio.SubprocessProtocol):
+class ProcessCollector(asyncio.SubprocessProtocol):
     """Keeps the head and the tail of each stream, drains the rest, and reports exit and EOF."""
 
     def __init__(self, cap: int) -> None:
@@ -114,7 +114,7 @@ class _Collector(asyncio.SubprocessProtocol):
         _resolve(self.closed)
 
 
-def _child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
+def child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
     """An allowlist, never `os.environ`: no API key reaches a child. HOME comes from the caller."""
     base = {
         "PATH": os.environ.get("PATH", os.defpath),
@@ -131,22 +131,26 @@ def _killpg(pgid: int, sig: signal.Signals) -> None:
         os.killpg(pgid, sig)
 
 
-async def _done(future: "asyncio.Future[None]", within_s: float) -> bool:
+async def wait_done(future: "asyncio.Future[None]", within_s: float) -> bool:
     """Wait for a future without cancelling it; True when it finished within the timeout."""
     finished, _ = await asyncio.wait({future}, timeout=within_s)
     return bool(finished)
 
 
 async def _reap(
-    transport: asyncio.SubprocessTransport, collector: _Collector, pgid: int, *, terminate: bool
+    transport: asyncio.SubprocessTransport,
+    collector: ProcessCollector,
+    pgid: int,
+    *,
+    terminate: bool,
 ) -> None:
     """End the group and bound every wait. Pipes are closed even if a descendant holds them."""
     if terminate:
         _killpg(pgid, signal.SIGTERM)
-        await _done(collector.exited, TERM_GRACE_S)
+        await wait_done(collector.exited, TERM_GRACE_S)
     _killpg(pgid, signal.SIGKILL)
-    if await _done(collector.exited, KILL_WAIT_S):
-        await _done(collector.closed, PIPE_DRAIN_S)
+    if await wait_done(collector.exited, KILL_WAIT_S):
+        await wait_done(collector.closed, PIPE_DRAIN_S)
     transport.close()
 
 
@@ -159,12 +163,12 @@ async def _execute(
     abort: asyncio.Event,
 ) -> ProcessResult:
     started = time.monotonic()
-    collector = _Collector(cap)
+    collector = ProcessCollector(cap)
     transport, _ = await asyncio.get_running_loop().subprocess_exec(
         lambda: collector,
         *argv,
         cwd=cwd,
-        env=_child_env(env),
+        env=child_env(env),
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -190,7 +194,7 @@ async def _execute(
     )
 
 
-async def _settle(task: "asyncio.Future[ProcessResult]") -> None:
+async def settle_cleanup(task: "asyncio.Future[ProcessResult]") -> None:
     """Wait for the cleanup to end; further cancellations are absorbed until it does."""
     while not task.done():
         with contextlib.suppress(asyncio.CancelledError):
@@ -216,5 +220,5 @@ async def run_process(
         return await asyncio.shield(task)
     except asyncio.CancelledError:
         abort.set()
-        await _settle(task)
+        await settle_cleanup(task)
         raise
