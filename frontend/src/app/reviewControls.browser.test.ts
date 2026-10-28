@@ -17,6 +17,118 @@ async function typeEdit(page: Page, text: string) {
   await page.keyboard.insertText(text);
 }
 
+it("blocks decisions during editor loading without claiming there are review edits", async () => {
+  await withPage(false, async (page) => {
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/src/editor/implementation.ts*", async (route) => {
+      await waiting;
+      await route.continue();
+    });
+    try {
+      await page.evaluate(() => {
+        window.reviewTest.holdFileReads();
+      });
+      await page.getByRole("button", { name: "Review change" }).click();
+      await browserExpect(panel(page).getByText("Loading editor…")).toBeVisible();
+      const approve = panel(page).getByRole("button", { name: "Approve and merge" });
+      const request = panel(page).getByRole("button", { name: "Request changes", exact: true });
+      const comment = panel(page).getByRole("textbox", { name: /Comment/ });
+      const editsNotice = panel(page).getByText(
+        "Save or discard your review edits before approving or requesting changes.",
+      );
+      await comment.fill("Cover empty carts");
+      await browserExpect(approve).toBeDisabled();
+      await browserExpect(request).toBeDisabled();
+      await browserExpect(editsNotice).toHaveCount(0);
+      await browserExpect(
+        panel(page).getByRole("button", { name: "Reject", exact: true }),
+      ).toBeEnabled();
+      release();
+      await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "loading");
+      await browserExpect(approve).toBeDisabled();
+      await browserExpect(request).toBeDisabled();
+      await browserExpect(editsNotice).toHaveCount(0);
+      await browserExpect(comment).toBeFocused();
+      await page.evaluate(() => {
+        window.reviewTest.releaseFileReads();
+      });
+      await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "clean");
+      await browserExpect(approve).toBeEnabled();
+      await browserExpect(request).toBeEnabled();
+      await browserExpect(comment).toBeFocused();
+      await browserExpect(editsNotice).toHaveCount(0);
+
+      await typeEdit(page, "\n# person edit\n");
+      await browserExpect(editsNotice).toBeVisible();
+      await browserExpect(approve).toBeDisabled();
+      await browserExpect(request).toBeDisabled();
+      await panel(page).getByRole("button", { name: "Discard edits", exact: true }).click();
+      await browserExpect(editsNotice).toHaveCount(0);
+      await browserExpect(approve).toBeEnabled();
+      await browserExpect(request).toBeEnabled();
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: "wait" });
+    }
+  });
+});
+
+it("does not claim review edits while a newly selected file loads", async () => {
+  await withPage(false, async (page) => {
+    await open(page);
+    await page.evaluate(() => {
+      const change = window.reviewTest.state().changes["change-1"];
+      const file = change?.files["shop/pricing.py"]?.file;
+      const proposal = change?.proposal;
+      const stat = proposal?.files[0];
+      if (!file || !proposal || !stat) throw new Error("Missing proposal file");
+      window.reviewTest.emit({
+        seq: 0,
+        ts: "2026-10-27T14:04:00Z",
+        type: "change.updated",
+        payload: {
+          change_id: proposal.change_id,
+          agent_id: proposal.agent_id,
+          author: "agent",
+          file: { ...file, path: "shop/orders.py" },
+          node_ids: [],
+          graph: proposal.graph,
+          files_changed: 2,
+          lines_added: proposal.lines_added,
+          lines_removed: proposal.lines_removed,
+        },
+      });
+      window.reviewTest.emit({
+        seq: 0,
+        ts: "2026-10-27T14:04:01Z",
+        type: "change.proposed",
+        payload: { ...proposal, files: [...proposal.files, { ...stat, path: "shop/orders.py" }] },
+      });
+      window.reviewTest.holdFileReads();
+    });
+    const comment = panel(page).getByRole("textbox", { name: /Comment/ });
+    await comment.fill("Cover empty carts");
+    const fileButton = panel(page).getByRole("button", { name: /shop\/orders.py/ });
+    await fileButton.click();
+    await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "loading");
+    const approve = panel(page).getByRole("button", { name: "Approve and merge" });
+    const request = panel(page).getByRole("button", { name: "Request changes", exact: true });
+    await browserExpect(approve).toBeDisabled();
+    await browserExpect(request).toBeDisabled();
+    await browserExpect(panel(page).getByText(/Save or discard your review edits/)).toHaveCount(0);
+    await page.evaluate(() => {
+      window.reviewTest.releaseFileReads();
+    });
+    await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "clean");
+    await browserExpect(approve).toBeEnabled();
+    await browserExpect(request).toBeEnabled();
+    await browserExpect(fileButton).toBeFocused();
+  });
+});
+
 it.each(["merge", "tests"] as const)(
   "allows Request changes after a %s conflict",
   async (kind) => {
@@ -221,8 +333,20 @@ it("edits only the new side, saves with its base hash and agent id, and keeps te
       expect(saves[0]?.base_hash).toMatch(/^[a-f0-9]{64}$/);
       // Closing and reopening retains the stale draft and its original hash.
       await page.getByRole("button", { name: "Close review" }).click();
+      await page.evaluate(() => {
+        window.reviewTest.holdFileReads();
+      });
       await page.getByRole("button", { name: "Review change" }).click();
+      await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "loading");
+      await browserExpect(panel(page).getByText(/Save or discard your review edits/)).toBeVisible();
+      await page.evaluate(() => {
+        window.reviewTest.releaseFileReads();
+      });
       await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "dirty");
+      await browserExpect(panel(page).getByText(/Save or discard your review edits/)).toBeVisible();
+      await browserExpect(
+        panel(page).getByRole("button", { name: "Approve and merge" }),
+      ).toBeDisabled();
       failure = "wrong_state";
       await save.click();
       await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "failed");

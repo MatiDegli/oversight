@@ -149,7 +149,7 @@ it("a terminal review receipt never releases the person's command wait", () => {
   ).toBe("pending");
 });
 
-it("retains the first automatic round and second adverse review through a new revision", () => {
+it("shows the automatic round between revisions without a stale verdict, then the next review", () => {
   const resolved: ServerEvent = {
     seq: 0,
     ts: "2026-10-28T12:00:00Z",
@@ -184,6 +184,12 @@ it("retains the first automatic round and second adverse review through a new re
   });
   expect(current(state).crossReview).toBeNull();
   expect(current(state).needsYou).toBeNull();
+  const betweenReviews = renderToStaticMarkup(<CrossReviewNote change={current(state)} />);
+  expect(betweenReviews).toContain('aria-label="Cross-review"');
+  expect(betweenReviews).toContain("One automatic Request changes round was used.");
+  expect(betweenReviews).not.toMatch(
+    /Changes requested|No findings|Review unavailable|fake-scripted|Needs you/,
+  );
   state = reviewed(state, {
     revision: 2,
     head_commit: "next",
