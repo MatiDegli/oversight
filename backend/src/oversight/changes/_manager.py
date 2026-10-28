@@ -34,6 +34,7 @@ from oversight.changes import _files as files
 from oversight.changes import _proposal as proposal
 from oversight.changes import _revision as revision
 from oversight.changes import _rules as rules
+from oversight.changes import _transaction as transaction
 from oversight.changes._assessment import RulesScheduler
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
@@ -104,6 +105,7 @@ class ChangeManager:
                 drain=lambda rec: self._drain(rec),
                 review=review,
                 rules_admission=self._admit_rules,
+                rules_transaction=lambda rec, evidence: transaction.run(self._ctx, rec, evidence),
             ),
             ModeController(),
             behavior_diff,
@@ -349,7 +351,7 @@ class ChangeManager:
             return None
         try:
             reservation = rules.capture(self._ctx, wait, assessment)
-        except ValueError as error:
+        except (ValueError, WrongState) as error:
             return str(error)
         try:
             self._take(rec.change_id, APPROVABLE, "rules approval", person=False)

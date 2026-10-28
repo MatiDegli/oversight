@@ -1,9 +1,11 @@
+from typing import TYPE_CHECKING
+
 from oversight.changes import _delivery as delivery
 from oversight.changes import _recovery as recovery
 from oversight.changes._resolution_validation import validate_resolution_evidence
 from oversight.changes._state import ChangeRecord
 from oversight.changes._suite_evidence import publish_suite
-from oversight.changes._support import ChangeContext
+from oversight.changes._support import ChangeContext, RulesFailure
 from oversight.events import EventRejected
 from oversight.workspace import (
     MergeGuard,
@@ -20,11 +22,22 @@ from oversight_contracts.events import (
     Conflict,
 )
 
+if TYPE_CHECKING:
+    from oversight.changes._transaction import Transaction
 
-async def merge(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre: str) -> None:
+
+async def merge(
+    ctx: ChangeContext,
+    rec: ChangeRecord,
+    comment: str | None,
+    pre: str,
+    *,
+    transaction: "Transaction | None" = None,
+) -> None:
     main = ctx.workspace.main
     head = rec.head_commit or rec.base_commit
-    rec.fallback = "broken"  # from here on, main may change
+    if transaction is None:
+        rec.fallback = "broken"  # rules owns verified recovery and its fallback
     # --no-ff on every merge: --no-commit alone fast-forwards a head that descends from main,
     # leaving HEAD moved and nothing for `merge --abort` to undo.
     result = await ctx.run(main, "merge", "--no-ff", "--no-commit", head)
@@ -41,28 +54,49 @@ async def merge(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre:
         guard = await prepare_merge_guard(
             ctx.workspace, main, pre=pre, head=head, timeout_s=ctx.timeout
         )
+        if transaction is not None:
+            transaction.guard = guard
+            if guard.candidate_tree == transaction.tree:
+                raise RulesFailure("policy_invalid", "The rules combination is empty.")
         tested_tree = (await ctx.git(main, "rev-parse", f"{head}^{{tree}}")).strip()
-        if pre != rec.base_commit:
-            run = await combined_tests_pass(ctx, rec, comment, pre, guard)
+        run = None
+        if transaction is not None or pre != rec.base_commit:
+            run = await combined_tests_pass(
+                ctx, rec, comment, pre, guard, required=transaction is not None
+            )
             if run is None:
                 return
             tested_tree = run.tested_tree
-        async with ctx.workspace.git_lease():
-            await verify_merge_guard(
-                ctx.workspace, main, guard, tested_tree=tested_tree, timeout_s=ctx.timeout
-            )
+        authorization = (
+            transaction.authorize(guard, run)
+            if transaction is not None and run is not None
+            else ctx.workspace.git_lease()
+        )
+        async with authorization:
+            if transaction is None:
+                await verify_merge_guard(
+                    ctx.workspace, main, guard, tested_tree=tested_tree, timeout_s=ctx.timeout
+                )
             await ctx.git(
                 main,
                 "commit",
                 "-q",
                 "-m",
-                f"Merge {rec.change_id} ({rec.agent_id})",
-                commit_as="user",
+                f"Merge {rec.change_id} ({rec.agent_id})"
+                + ("\n\nMerged-by: rules" if transaction is not None else ""),
+                commit_as="rules" if transaction is not None else "user",
             )
+            if transaction is not None:
+                await recovery.verify_rules_merge(ctx, rec, guard)
+    elif transaction is not None:
+        raise RulesFailure("policy_invalid", "The rules combination is empty or already merged.")
     facts = await recovery.read_facts(ctx, head)
     if not facts.merged:
         raise WorkspaceError("the merge did not land on main")
-    await delivery.record_merge(ctx, rec, comment, facts.head)
+    if transaction is not None:
+        await transaction.record(facts.head)
+    else:
+        await delivery.record_merge(ctx, rec, comment, facts.head)
 
 
 async def conflict(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre: str) -> bool:
@@ -82,14 +116,25 @@ async def conflict(ctx: ChangeContext, rec: ChangeRecord, comment: str | None, p
 
 
 async def combined_tests_pass(
-    ctx: ChangeContext, rec: ChangeRecord, comment: str | None, pre: str, guard: MergeGuard
+    ctx: ChangeContext,
+    rec: ChangeRecord,
+    comment: str | None,
+    pre: str,
+    guard: MergeGuard,
+    *,
+    required: bool = False,
 ) -> SuiteRun | None:
     """R5: main moved since the change's base, so the merge, staged on main, is tested before
     its commit. A failure or timeout aborts it and resolves as a tests conflict. A cancel
     during the run is `_recover`'s, which aborts on `MERGE_HEAD`."""
     main = ctx.workspace.main
     try:
-        run = await ctx.workspace.run_tests(main, timeout_s=rec.task.limits.test_timeout_s)
+        if required:
+            run = await ctx.workspace.run_tests(
+                main, timeout_s=rec.task.limits.test_timeout_s, isolation="required"
+            )
+        else:
+            run = await ctx.workspace.run_tests(main, timeout_s=rec.task.limits.test_timeout_s)
     except (SuiteInterrupted, SuiteUnavailable) as error:
         await publish_suite(ctx, rec, error.run, phase="combined", revision=rec.revision)
         raise
@@ -100,6 +145,8 @@ async def combined_tests_pass(
     execution = await publish_suite(ctx, rec, run, phase="combined", revision=rec.revision)
     if run.result.outcome == "passed":
         return run
+    if required:
+        raise RulesFailure("suite_failed", "The required combined suite did not pass.")
     await verify_merge_abort(
         ctx.workspace, main, pre=pre, head=rec.head_commit or rec.base_commit, timeout_s=ctx.timeout
     )
@@ -118,6 +165,8 @@ async def conflicted(
     Approve or a Request changes, does not know. The change stays `deciding`, with `conflict`
     as its fallback: the decision's end, or its recovery, makes it `conflict`, and no other
     decision enters before."""
+    if rec.evidence is not None and rec.evidence.actor == "rules":
+        raise RulesFailure("git_failed", f"The rules combination has a {conflict.kind} conflict.")
     resolution = delivery.resolution(
         ctx, rec, "approved", comment, decided_by="person", conflict=conflict
     )
