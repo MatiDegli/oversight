@@ -587,3 +587,14 @@ hashes; its test checks the medians, delta and sample counts against this entry.
 review fix, the totals were recalculated from all six raw traces and matched these reports.
 The measured median improved, but three samples with this dispersion and a software renderer
 do not establish a hardware-GPU speedup or a frame-latency improvement.
+
+## 2026-10-27 — Union merges for the decision log
+
+Use Git's built-in union merge driver for `DECISIONS.md`, declared as
+`DECISIONS.md merge=union` in `.gitattributes`. Parallel fronts append decisions at the same
+end of the file; union keeps both entries without the repeated merge conflicts. Offline tooling
+tests exercise both `git merge` and `git merge-tree --write-tree` in temporary repositories.
+
+Union also keeps both sides when two branches edit the same existing line, reporting no
+conflict even when the decisions disagree. Reviewers must check edits to old entries for
+duplicates or contradictions; a clean merge does not establish agreement.
