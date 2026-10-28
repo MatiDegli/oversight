@@ -132,13 +132,13 @@ function Decisions({
   view,
   onDecide,
   replayOf,
-  blocked = false,
+  blocked = null,
 }: {
   changeId: string;
   view: DecisionView;
   onDecide?: ReviewPanelProps["onDecide"];
   replayOf?: string;
-  blocked?: boolean;
+  blocked?: "loading" | "edits" | null;
 }) {
   const [comment, setComment] = useState("");
   // Set when Approve was activated without a pointer, so the person is told why nothing happened.
@@ -254,7 +254,7 @@ function Decisions({
         ) : (
           <p role="status">The agent is revising. Decisions reopen when it proposes again.</p>
         ))}
-      {blocked && (
+      {blocked === "edits" && (
         <p role="status" className="text-sm text-muted">
           Save or discard your review edits before approving or requesting changes.
         </p>
@@ -465,7 +465,7 @@ export function ReviewPanel({
           view={decisionView(change, state.errors, attempt, onDecide === undefined)}
           onDecide={onDecide}
           replayOf={replayOf}
-          blocked={editingBlocked}
+          blocked={editingBlocked ? (editing === null ? "loading" : "edits") : null}
         />
       )}
     </aside>

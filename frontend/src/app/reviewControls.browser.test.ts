@@ -17,6 +17,54 @@ async function typeEdit(page: Page, text: string) {
   await page.keyboard.insertText(text);
 }
 
+it("blocks decisions during editor loading without claiming there are review edits", async () => {
+  await withPage(false, async (page) => {
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/src/editor/implementation.ts*", async (route) => {
+      await waiting;
+      await route.continue();
+    });
+    try {
+      await page.getByRole("button", { name: "Review change" }).click();
+      await browserExpect(panel(page).getByText("Loading editor…")).toBeVisible();
+      const approve = panel(page).getByRole("button", { name: "Approve and merge" });
+      const request = panel(page).getByRole("button", { name: "Request changes", exact: true });
+      const comment = panel(page).getByRole("textbox", { name: /Comment/ });
+      const editsNotice = panel(page).getByText(
+        "Save or discard your review edits before approving or requesting changes.",
+      );
+      await comment.fill("Cover empty carts");
+      await browserExpect(approve).toBeDisabled();
+      await browserExpect(request).toBeDisabled();
+      await browserExpect(editsNotice).toHaveCount(0);
+      await browserExpect(
+        panel(page).getByRole("button", { name: "Reject", exact: true }),
+      ).toBeEnabled();
+      release();
+      await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "clean");
+      await browserExpect(approve).toBeEnabled();
+      await browserExpect(request).toBeEnabled();
+      await browserExpect(comment).toBeFocused();
+      await browserExpect(editsNotice).toHaveCount(0);
+
+      await typeEdit(page, "\n# person edit\n");
+      await browserExpect(editsNotice).toBeVisible();
+      await browserExpect(approve).toBeDisabled();
+      await browserExpect(request).toBeDisabled();
+      await panel(page).getByRole("button", { name: "Discard edits", exact: true }).click();
+      await browserExpect(editsNotice).toHaveCount(0);
+      await browserExpect(approve).toBeEnabled();
+      await browserExpect(request).toBeEnabled();
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: "wait" });
+    }
+  });
+});
+
 it.each(["merge", "tests"] as const)(
   "allows Request changes after a %s conflict",
   async (kind) => {
