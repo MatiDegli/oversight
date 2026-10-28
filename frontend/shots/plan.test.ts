@@ -54,6 +54,7 @@ void test("the real list includes the bottom dock in dark; light remains skipped
     "task-two-slots-braked-dark.png",
     "file-view-dark.png",
     "file-view-task-dark.png",
+    "palette-open-dark.png",
     "dock-open-dark.png",
   ]);
   assert.deepEqual(
@@ -68,6 +69,7 @@ void test("the real list includes the bottom dock in dark; light remains skipped
       "task-two-slots-braked",
       "file-view",
       "file-view-task",
+      "palette-open",
       "dock-open",
     ],
   );
@@ -124,6 +126,7 @@ void test("a log without a pre-proposal edit captures the dock, skipping only ed
       ["focus", null],
       ["file-view", source],
       ["file-view-task", source],
+      ["palette-open", source],
       ["dock-open", source],
     ],
   );
