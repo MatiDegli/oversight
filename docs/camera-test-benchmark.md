@@ -356,7 +356,9 @@ which includes the Monaco fix and sixth editor browser case from `fc94088`.
 The documentation-only commit recording these results changes no measured code.
 The earlier failed `69d7e0c` gate above remains part of the history.
 
-The `2b3234d` camera measurements and both recorded gates below predate the final `origin/main` merge (`985bc0b`); its `frontend/vite.config.ts` changes are config-only, and fixture-server startup contributes to measured wall time.
+The `2b3234d` camera measurements and both recorded gates below predate the earlier `origin/main` merge (`985bc0b`); its `frontend/vite.config.ts` changes are config-only, and fixture-server startup contributes to measured wall time.
+
+They also predate the later `origin/main` merge (`9c6496b`), which changed `frontend/src/theme/index.css` (loaded by the camera test page) and `frontend/src/editor/LiveDiff.browser.test.ts`. The camera measurements and both recorded gates below have not been re-measured for this benchmark on that merged tip; the 73/73 result on `2b3234d` is historical evidence and does not validate the merged 88-case suite.
 
 ### Regression checks and cache coverage
 
