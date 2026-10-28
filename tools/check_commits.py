@@ -32,7 +32,7 @@ SUBJECT = re.compile(
 TRAILER = re.compile(r"^[A-Za-z][A-Za-z0-9-]*: \S")
 EXCEPTION = re.compile(r"^Commit-Exception: \S")
 LOCKFILES = ("uv.lock", "pnpm-lock.yaml")
-NOT_COUNTED = ("contracts/generated/", "fixtures/")
+NOT_COUNTED = ("contracts/generated/", "contracts/baselines/", "fixtures/")
 ZERO = "0" * 40
 
 

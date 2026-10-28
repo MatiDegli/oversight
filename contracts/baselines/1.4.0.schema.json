@@ -1,0 +1,4632 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Oversight contracts 1.4.0, generated: run `make contracts`.",
+  "title": "OversightContracts",
+  "$defs": {
+    "AddedTestProbe": {
+      "additionalProperties": false,
+      "description": "Observed before and after behavior of one added test.",
+      "properties": {
+        "test_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "before_seq": {
+          "description": "The base-probe execution event.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "after_seq": {
+          "description": "The head-probe execution event.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "result": {
+          "description": "The core's exact evidence-backed fact kind.",
+          "enum": [
+            "fails_before_passes_after",
+            "passes_before_and_after",
+            "fails_after",
+            "not_collected_after",
+            "skipped",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "test_id",
+        "before_seq",
+        "after_seq",
+        "result"
+      ],
+      "title": "AddedTestProbe",
+      "type": "object"
+    },
+    "AgentCreated": {
+      "additionalProperties": false,
+      "description": "201 from `POST /agents`.",
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "slot": {
+          "$ref": "#/$defs/Slot"
+        }
+      },
+      "required": [
+        "agent_id",
+        "change_id",
+        "slot"
+      ],
+      "title": "AgentCreated",
+      "type": "object"
+    },
+    "AgentFocus": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "mode": {
+          "enum": [
+            "read",
+            "edit"
+          ],
+          "type": "string"
+        },
+        "ranges": {
+          "description": "A search may cover several files.",
+          "items": {
+            "$ref": "#/$defs/FocusRange"
+          },
+          "type": "array"
+        },
+        "node_ids": {
+          "description": "The innermost nodes over the ranges, resolved on the agent's own copy. A search covers only\nits first 5 matching nodes, in both lists.",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "agent_id",
+        "mode",
+        "ranges",
+        "node_ids"
+      ],
+      "title": "AgentFocus",
+      "type": "object"
+    },
+    "AgentFocusEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "agent.focus",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/AgentFocus"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "AgentFocusEvent",
+      "type": "object"
+    },
+    "AgentId": {
+      "pattern": "^agent-[1-9]\\d*$",
+      "type": "string"
+    },
+    "AgentMessage": {
+      "additionalProperties": false,
+      "description": "`POST /agents/{id}/message`, level 3: answers 501 until then.",
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "AgentMessage",
+      "type": "object"
+    },
+    "AgentState": {
+      "enum": [
+        "starting",
+        "working",
+        "ready_for_review",
+        "revising",
+        "paused",
+        "halted",
+        "done",
+        "stopped"
+      ],
+      "type": "string"
+    },
+    "AgentStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "slot": {
+          "$ref": "#/$defs/Slot"
+        },
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "task": {
+          "type": "string"
+        },
+        "model": {
+          "description": "A ModelProfile id.",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/AgentState"
+        },
+        "step": {
+          "description": "Tool calls finished so far.",
+          "type": "integer"
+        },
+        "max_steps": {
+          "description": "Grows when a revision starts.",
+          "type": "integer"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why it halted or stopped, in one sentence."
+        },
+        "plan_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The originating plan; null for standalone agents or older recordings."
+        },
+        "zone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanZone"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The server-assigned edit zone."
+        },
+        "started_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The lead that started this agent."
+        },
+        "queued_task_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QueuedTaskId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The queue item dispatching this agent."
+        },
+        "base_commit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The agent base used to guard an unproposed rejection."
+        }
+      },
+      "required": [
+        "agent_id",
+        "slot",
+        "change_id",
+        "task",
+        "model",
+        "state",
+        "step",
+        "max_steps",
+        "detail",
+        "plan_id",
+        "zone",
+        "started_by",
+        "queued_task_id",
+        "base_commit"
+      ],
+      "title": "AgentStatus",
+      "type": "object"
+    },
+    "AgentStatusEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "agent.status",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/AgentStatus"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "AgentStatusEvent",
+      "type": "object"
+    },
+    "AgentStep": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "step": {
+          "description": "1-based.",
+          "type": "integer"
+        },
+        "tool": {
+          "description": "The tool the model named, even one that does not exist.",
+          "type": "string"
+        },
+        "summary": {
+          "description": "Built by the server from the tool and its arguments, never from model text.",
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "ok",
+            "error"
+          ],
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The error returned to the model, shortened."
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "tests": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SuiteResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set for run_tests."
+        }
+      },
+      "required": [
+        "agent_id",
+        "step",
+        "tool",
+        "summary",
+        "result",
+        "error",
+        "duration_ms",
+        "tests"
+      ],
+      "title": "AgentStep",
+      "type": "object"
+    },
+    "AgentStepEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "agent.step",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/AgentStep"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "AgentStepEvent",
+      "type": "object"
+    },
+    "ApproveChange": {
+      "additionalProperties": false,
+      "description": "`POST /changes/{id}/approve`: approve the observed revision and head.",
+      "properties": {
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "revision": {
+          "description": "The proposed revision the caller observed.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "revision",
+        "head_commit"
+      ],
+      "title": "ApproveChange",
+      "type": "object"
+    },
+    "Budget": {
+      "additionalProperties": false,
+      "properties": {
+        "budget_usd": {
+          "type": "number"
+        },
+        "spent_usd": {
+          "description": "From the ledger, before this run.",
+          "type": "number"
+        },
+        "warn_at": {
+          "description": "[0.5, 0.8].",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "block_at": {
+          "description": "0.9: above it the server refuses new agents.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "budget_usd",
+        "spent_usd",
+        "warn_at",
+        "block_at"
+      ],
+      "title": "Budget",
+      "type": "object"
+    },
+    "CaseOutcome": {
+      "enum": [
+        "passed",
+        "failed",
+        "error",
+        "skipped"
+      ],
+      "type": "string"
+    },
+    "CaseResult": {
+      "additionalProperties": false,
+      "description": "One observed pytest node outcome.",
+      "properties": {
+        "test_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CaseOutcome"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A bounded diagnostic without absolute paths."
+        }
+      },
+      "required": [
+        "test_id",
+        "outcome",
+        "detail"
+      ],
+      "title": "CaseResult",
+      "type": "object"
+    },
+    "ChangeAssessedEvent": {
+      "additionalProperties": false,
+      "description": "One recorded change assessment.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "change.assessed",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ChangeAssessment"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "ChangeAssessedEvent",
+      "type": "object"
+    },
+    "ChangeAssessment": {
+      "additionalProperties": false,
+      "description": "One evaluation of an exact change revision against current main.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "base_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "main_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "candidate_tree": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "policy_version": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "mode": {
+          "$ref": "#/$defs/MergeMode"
+        },
+        "mode_revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleAssessment"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "change_id",
+        "agent_id",
+        "revision",
+        "base_commit",
+        "head_commit",
+        "main_commit",
+        "candidate_tree",
+        "policy_version",
+        "mode",
+        "mode_revision",
+        "rules"
+      ],
+      "title": "ChangeAssessment",
+      "type": "object"
+    },
+    "ChangeFacts": {
+      "additionalProperties": false,
+      "description": "Neutral facts about an exact candidate.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "revision": {
+          "description": "Zero before any proposal; otherwise the exact proposed revision.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "base_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "main_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "candidate_tree": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "declared": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FinishDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The finish declaration, when available."
+        },
+        "edited_paths": {
+          "description": "Every observed edited path, including restored edits.",
+          "items": {
+            "$ref": "#/$defs/WorkspacePath"
+          },
+          "type": "array"
+        },
+        "test_runs": {
+          "description": "Execution event seqs in chronological order.",
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "integrity": {
+          "description": "Neutral detector observations, kept separate per affected test.",
+          "items": {
+            "$ref": "#/$defs/IntegrityFact"
+          },
+          "type": "array"
+        },
+        "added_tests": {
+          "description": "Added-test probe results.",
+          "items": {
+            "$ref": "#/$defs/AddedTestProbe"
+          },
+          "type": "array"
+        },
+        "run_findings": {
+          "description": "Evidence-backed temporal findings.",
+          "items": {
+            "$ref": "#/$defs/RunRuleFinding"
+          },
+          "type": "array"
+        },
+        "zone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ZoneFacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Zone evidence, or unknown."
+        },
+        "reach": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReachFacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Test-reach evidence, or unknown."
+        },
+        "complete": {
+          "description": "Whether the required observations are complete.",
+          "type": "boolean"
+        },
+        "problems": {
+          "description": "Missing evidence and analysis incompleteness diagnostics.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "change_id",
+        "revision",
+        "base_commit",
+        "head_commit",
+        "main_commit",
+        "candidate_tree",
+        "declared",
+        "edited_paths",
+        "test_runs",
+        "integrity",
+        "added_tests",
+        "run_findings",
+        "zone",
+        "reach",
+        "complete",
+        "problems"
+      ],
+      "title": "ChangeFacts",
+      "type": "object"
+    },
+    "ChangeFactsRecordedEvent": {
+      "additionalProperties": false,
+      "description": "The change.facts_recorded envelope.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "change.facts_recorded",
+          "description": "The event discriminator.",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ChangeFacts"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "ChangeFactsRecordedEvent",
+      "type": "object"
+    },
+    "ChangeGraph": {
+      "additionalProperties": false,
+      "description": "One change against its own base commit.",
+      "properties": {
+        "nodes_added": {
+          "description": "In the change's version, not in its base.",
+          "items": {
+            "$ref": "#/$defs/GraphNode"
+          },
+          "type": "array"
+        },
+        "nodes_modified": {
+          "description": "The node's own source differs from the base, excluding the bodies of nodes nested in it.",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        },
+        "nodes_removed": {
+          "description": "In the base, gone from the change's version.",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        },
+        "edges_added": {
+          "description": "To draw the added nodes' calls.",
+          "items": {
+            "$ref": "#/$defs/GraphEdge"
+          },
+          "type": "array"
+        },
+        "edges_removed": {
+          "items": {
+            "$ref": "#/$defs/EdgeId"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "nodes_added",
+        "nodes_modified",
+        "nodes_removed",
+        "edges_added",
+        "edges_removed"
+      ],
+      "title": "ChangeGraph",
+      "type": "object"
+    },
+    "ChangeId": {
+      "pattern": "^change-[1-9]\\d*$",
+      "type": "string"
+    },
+    "ChangeProposed": {
+      "additionalProperties": false,
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "description": "1, then +1 after each Request changes.",
+          "type": "integer"
+        },
+        "task": {
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The agent's note, from finish; null when the run halted."
+        },
+        "base_commit": {
+          "type": "string"
+        },
+        "head_commit": {
+          "description": "The commit on the agent's branch that holds this revision.",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/FileStat"
+          },
+          "type": "array"
+        },
+        "lines_added": {
+          "type": "integer"
+        },
+        "lines_removed": {
+          "type": "integer"
+        },
+        "graph": {
+          "$ref": "#/$defs/ChangeGraph"
+        },
+        "tests": {
+          "$ref": "#/$defs/SuiteResult"
+        },
+        "impact": {
+          "$ref": "#/$defs/ImpactCone"
+        }
+      },
+      "required": [
+        "change_id",
+        "agent_id",
+        "revision",
+        "task",
+        "summary",
+        "base_commit",
+        "head_commit",
+        "files",
+        "lines_added",
+        "lines_removed",
+        "graph",
+        "tests",
+        "impact"
+      ],
+      "title": "ChangeProposed",
+      "type": "object"
+    },
+    "ChangeProposedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "change.proposed",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ChangeProposed"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "ChangeProposedEvent",
+      "type": "object"
+    },
+    "ChangeResolved": {
+      "additionalProperties": false,
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "description": "Zero when the change was never proposed.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "decision": {
+          "enum": [
+            "approved",
+            "changes_requested",
+            "rejected"
+          ],
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "const": "stopped",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "\"stopped\": the agent was stopped and its change discarded."
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "merge": {
+          "anyOf": [
+            {
+              "enum": [
+                "merged",
+                "conflict"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set exactly when approved."
+        },
+        "merge_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Main's new HEAD, set exactly when merged."
+        },
+        "conflict": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Conflict"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set exactly when the merge is \"conflict\"."
+        },
+        "decided_by": {
+          "anyOf": [
+            {
+              "enum": [
+                "person",
+                "rules",
+                "cross_review",
+                "lead_agent"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Recorded decision or revision-request provenance."
+        },
+        "review_seq": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The review triggering this revision request."
+        },
+        "requested_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The lead requesting this revision."
+        },
+        "head_commit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The head receiving this resolution, or the agent base at revision zero."
+        },
+        "reasons": {
+          "description": "Recorded server-authored reasons for this decision.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "assessment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeAssessment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The immutable assessment used for this decision, when available."
+        }
+      },
+      "required": [
+        "change_id",
+        "agent_id",
+        "revision",
+        "decision",
+        "reason",
+        "comment",
+        "merge",
+        "merge_commit",
+        "conflict",
+        "decided_by",
+        "review_seq",
+        "requested_by",
+        "head_commit",
+        "reasons",
+        "assessment"
+      ],
+      "title": "ChangeResolved",
+      "type": "object"
+    },
+    "ChangeResolvedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "change.resolved",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ChangeResolved"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "ChangeResolvedEvent",
+      "type": "object"
+    },
+    "ChangeReviewedEvent": {
+      "additionalProperties": false,
+      "description": "The change.reviewed envelope.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "change.reviewed",
+          "description": "The event discriminator.",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/CrossReview"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "ChangeReviewedEvent",
+      "type": "object"
+    },
+    "ChangeUpdated": {
+      "additionalProperties": false,
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "author": {
+          "enum": [
+            "agent",
+            "user"
+          ],
+          "type": "string"
+        },
+        "file": {
+          "$ref": "#/$defs/FileDiff"
+        },
+        "node_ids": {
+          "description": "Nodes of that file the change adds, modifies or removes.",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        },
+        "graph": {
+          "$ref": "#/$defs/ChangeGraph"
+        },
+        "files_changed": {
+          "description": "Totals for the whole change, here and below.",
+          "type": "integer"
+        },
+        "lines_added": {
+          "type": "integer"
+        },
+        "lines_removed": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "change_id",
+        "agent_id",
+        "author",
+        "file",
+        "node_ids",
+        "graph",
+        "files_changed",
+        "lines_added",
+        "lines_removed"
+      ],
+      "title": "ChangeUpdated",
+      "type": "object"
+    },
+    "ChangeUpdatedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "change.updated",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ChangeUpdated"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "ChangeUpdatedEvent",
+      "type": "object"
+    },
+    "ChangeView": {
+      "additionalProperties": false,
+      "description": "An archived view of one change.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "seq": {
+          "description": "The event position read with this view.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "proposal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeProposed"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The latest proposal and its diff statistics."
+        },
+        "files": {
+          "description": "Archived full diff contents.",
+          "items": {
+            "$ref": "#/$defs/FileDiff"
+          },
+          "type": "array"
+        },
+        "facts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeFacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Facts matching the current target."
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CrossReview"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The latest review matching the current candidate."
+        },
+        "assessment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeAssessment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The current candidate assessment."
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeResolved"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The latest change resolution."
+        }
+      },
+      "required": [
+        "change_id",
+        "seq",
+        "proposal",
+        "files",
+        "facts",
+        "review",
+        "assessment",
+        "resolution"
+      ],
+      "title": "ChangeView",
+      "type": "object"
+    },
+    "Confidence": {
+      "enum": [
+        "exact",
+        "possible"
+      ],
+      "type": "string"
+    },
+    "Conflict": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "merge",
+            "tests"
+          ],
+          "type": "string"
+        },
+        "paths": {
+          "description": "Conflicting files, for a merge conflict.",
+          "items": {
+            "$ref": "#/$defs/WorkspacePath"
+          },
+          "type": "array"
+        },
+        "tests": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SuiteResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The combined result's tests, for a test failure."
+        }
+      },
+      "required": [
+        "kind",
+        "paths",
+        "tests"
+      ],
+      "title": "Conflict",
+      "type": "object"
+    },
+    "CreatePlan": {
+      "additionalProperties": false,
+      "description": "Request a proposed split without starting coding agents.",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "title": "CreatePlan",
+      "type": "object"
+    },
+    "CrossReview": {
+      "additionalProperties": false,
+      "description": "An advisory review of an exact candidate.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "revision": {
+          "description": "The exact proposed revision under review.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "base_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "main_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "candidate_tree": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "author_model": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "reviewer_model": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "reviewer_provider": {
+          "description": "The reviewing inference provider.",
+          "enum": [
+            "meta",
+            "baseten",
+            "fake"
+          ],
+          "type": "string"
+        },
+        "reasoning": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The explicit reviewing reasoning setting."
+        },
+        "verdict": {
+          "description": "An advisory review result.",
+          "enum": [
+            "clean",
+            "changes_requested",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "findings": {
+          "description": "Findings retained from this review.",
+          "items": {
+            "$ref": "#/$defs/ReviewFinding"
+          },
+          "type": "array"
+        },
+        "complete": {
+          "description": "Whether review material and output were complete.",
+          "type": "boolean"
+        },
+        "problems": {
+          "description": "Review failures and incompleteness diagnostics.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "change_id",
+        "revision",
+        "base_commit",
+        "head_commit",
+        "main_commit",
+        "candidate_tree",
+        "author_model",
+        "reviewer_model",
+        "reviewer_provider",
+        "reasoning",
+        "verdict",
+        "findings",
+        "complete",
+        "problems"
+      ],
+      "title": "CrossReview",
+      "type": "object"
+    },
+    "EdgeId": {
+      "type": "string"
+    },
+    "EdgeKind": {
+      "enum": [
+        "imports",
+        "calls",
+        "inherits"
+      ],
+      "type": "string"
+    },
+    "EnqueueTask": {
+      "additionalProperties": false,
+      "description": "Queue work without starting it immediately.",
+      "properties": {
+        "agent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QueuedAgentTask"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One standalone coding task."
+        },
+        "plan_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One proposed two-agent plan."
+        },
+        "plan_revision": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The exact queued plan revision."
+        }
+      },
+      "title": "EnqueueTask",
+      "type": "object"
+    },
+    "ErrorCode": {
+      "enum": [
+        "not_found",
+        "wrong_state",
+        "slot_busy",
+        "spend_brake",
+        "not_configured",
+        "invalid_path",
+        "stale_file",
+        "not_implemented",
+        "invalid_request",
+        "internal",
+        "forbidden",
+        "too_large"
+      ],
+      "type": "string"
+    },
+    "ErrorDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "type": "string"
+        },
+        "missing": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/MissingSetting"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Present only for not_configured; other errors keep their existing wire shape."
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorDetail",
+      "type": "object"
+    },
+    "ErrorReport": {
+      "additionalProperties": false,
+      "description": "A failure shown without breaking the demo.",
+      "properties": {
+        "source": {
+          "enum": [
+            "model_api",
+            "agent",
+            "tools",
+            "git",
+            "tests",
+            "graph",
+            "server"
+          ],
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "agent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "change_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fatal": {
+          "description": "The agent's run halted because of it.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "message",
+        "agent_id",
+        "change_id",
+        "fatal"
+      ],
+      "title": "ErrorReport",
+      "type": "object"
+    },
+    "ErrorReportEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "error",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ErrorReport"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "ErrorReportEvent",
+      "type": "object"
+    },
+    "ErrorResponse": {
+      "additionalProperties": false,
+      "description": "Every error, from every command.",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ErrorDetail"
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "title": "ErrorResponse",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "An event or Git object in this run, optionally narrowed to a workspace path.",
+      "properties": {
+        "event_seq": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "git_object": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "path": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspacePath"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "event_seq",
+        "git_object",
+        "path"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "FileContent": {
+      "additionalProperties": false,
+      "description": "200 from `GET /files?path=&agent=`.",
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "content": {
+          "type": "string"
+        },
+        "hash": {
+          "description": "SHA-256 of the content, in hex.",
+          "type": "string"
+        },
+        "agent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Whose worktree it was read from; null for main."
+        }
+      },
+      "required": [
+        "path",
+        "content",
+        "hash",
+        "agent_id"
+      ],
+      "title": "FileContent",
+      "type": "object"
+    },
+    "FileDiff": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "status": {
+          "$ref": "#/$defs/FileStatus"
+        },
+        "original": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The whole file at the change's base; null if added."
+        },
+        "modified": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The whole file in the change's version; null if deleted."
+        },
+        "lines_added": {
+          "type": "integer"
+        },
+        "lines_removed": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "status",
+        "original",
+        "modified",
+        "lines_added",
+        "lines_removed"
+      ],
+      "title": "FileDiff",
+      "type": "object"
+    },
+    "FileSaved": {
+      "additionalProperties": false,
+      "description": "200 from `PUT /files`.",
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "hash": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "hash"
+      ],
+      "title": "FileSaved",
+      "type": "object"
+    },
+    "FileStat": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "status": {
+          "$ref": "#/$defs/FileStatus"
+        },
+        "lines_added": {
+          "type": "integer"
+        },
+        "lines_removed": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "status",
+        "lines_added",
+        "lines_removed"
+      ],
+      "title": "FileStat",
+      "type": "object"
+    },
+    "FileStatus": {
+      "enum": [
+        "added",
+        "modified",
+        "deleted"
+      ],
+      "type": "string"
+    },
+    "FinishDeclaration": {
+      "additionalProperties": false,
+      "description": "Claims made by the agent at finish, never server evidence.",
+      "properties": {
+        "files": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/WorkspacePath"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Files declared by the agent."
+        },
+        "tests_run": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the agent declares running tests."
+        },
+        "tests": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/NonEmptyText"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pytest ids declared by the agent."
+        }
+      },
+      "required": [
+        "files",
+        "tests_run",
+        "tests"
+      ],
+      "title": "FinishDeclaration",
+      "type": "object"
+    },
+    "FocusRange": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "start_line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null: the whole file."
+        },
+        "end_line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "start_line",
+        "end_line"
+      ],
+      "title": "FocusRange",
+      "type": "object"
+    },
+    "GraphDelta": {
+      "additionalProperties": false,
+      "properties": {
+        "from_version": {
+          "type": "string"
+        },
+        "to_version": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "cause": {
+          "enum": [
+            "merge",
+            "user_edit",
+            "rescan",
+            "revert"
+          ],
+          "type": "string"
+        },
+        "nodes_added": {
+          "items": {
+            "$ref": "#/$defs/GraphNode"
+          },
+          "type": "array"
+        },
+        "nodes_changed": {
+          "description": "Same id, other fields.",
+          "items": {
+            "$ref": "#/$defs/GraphNode"
+          },
+          "type": "array"
+        },
+        "nodes_removed": {
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        },
+        "edges_added": {
+          "items": {
+            "$ref": "#/$defs/GraphEdge"
+          },
+          "type": "array"
+        },
+        "edges_changed": {
+          "description": "Same id, other confidence or reason.",
+          "items": {
+            "$ref": "#/$defs/GraphEdge"
+          },
+          "type": "array"
+        },
+        "edges_removed": {
+          "items": {
+            "$ref": "#/$defs/EdgeId"
+          },
+          "type": "array"
+        },
+        "parse_errors": {
+          "description": "The full current list.",
+          "items": {
+            "$ref": "#/$defs/ParseError"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "from_version",
+        "to_version",
+        "commit",
+        "cause",
+        "nodes_added",
+        "nodes_changed",
+        "nodes_removed",
+        "edges_added",
+        "edges_changed",
+        "edges_removed",
+        "parse_errors"
+      ],
+      "title": "GraphDelta",
+      "type": "object"
+    },
+    "GraphDeltaEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "graph.delta",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/GraphDelta"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "GraphDeltaEvent",
+      "type": "object"
+    },
+    "GraphEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/EdgeId"
+        },
+        "kind": {
+          "$ref": "#/$defs/EdgeKind"
+        },
+        "src": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "dst": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PossibleReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set exactly when the confidence is \"possible\"."
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "src",
+        "dst",
+        "confidence",
+        "reason"
+      ],
+      "title": "GraphEdge",
+      "type": "object"
+    },
+    "GraphNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "kind": {
+          "$ref": "#/$defs/NodeKind"
+        },
+        "name": {
+          "description": "`total`; a module's last segment.",
+          "type": "string"
+        },
+        "qualname": {
+          "description": "`Product.total`; a module's dotted path.",
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "start_line": {
+          "description": "The first decorator's line, if any.",
+          "type": "integer"
+        },
+        "end_line": {
+          "type": "integer"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The module for top-level definitions, the class for methods; null for modules."
+        },
+        "is_test": {
+          "description": "In a test module: hidden by default, never listed in a cone.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "qualname",
+        "path",
+        "start_line",
+        "end_line",
+        "parent_id",
+        "is_test"
+      ],
+      "title": "GraphNode",
+      "type": "object"
+    },
+    "GraphResponse": {
+      "additionalProperties": false,
+      "description": "200 from `GET /graph`: main's graph and the seq it reflects, read together.",
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "graph": {
+          "$ref": "#/$defs/GraphSnapshot"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "graph"
+      ],
+      "title": "GraphResponse",
+      "type": "object"
+    },
+    "GraphSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "description": "A hash of every file's hash.",
+          "type": "string"
+        },
+        "commit": {
+          "description": "Main's HEAD, which the graph was parsed from.",
+          "type": "string"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/GraphNode"
+          },
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/GraphEdge"
+          },
+          "type": "array"
+        },
+        "parse_errors": {
+          "description": "Files kept at their last good parse.",
+          "items": {
+            "$ref": "#/$defs/ParseError"
+          },
+          "type": "array"
+        },
+        "positions": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Point"
+          },
+          "description": "The saved preset layout; empty when there is none.",
+          "propertyNames": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "version",
+        "commit",
+        "nodes",
+        "edges",
+        "parse_errors",
+        "positions"
+      ],
+      "title": "GraphSnapshot",
+      "type": "object"
+    },
+    "GraphSnapshotEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "graph.snapshot",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/GraphSnapshot"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "GraphSnapshotEvent",
+      "type": "object"
+    },
+    "Health": {
+      "additionalProperties": false,
+      "description": "200 from `GET /health`.",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "contract_version": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "live",
+            "replay"
+          ],
+          "type": "string"
+        },
+        "missing_settings": {
+          "items": {
+            "$ref": "#/$defs/MissingSetting"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ok",
+        "run_id",
+        "contract_version",
+        "mode",
+        "missing_settings"
+      ],
+      "title": "Health",
+      "type": "object"
+    },
+    "HistoryPage": {
+      "additionalProperties": false,
+      "description": "One bounded page of historical event envelopes.",
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "through_seq": {
+          "description": "The fixed pagination upper bound.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "events": {
+          "description": "The allowed historical event envelopes.",
+          "items": {
+            "$ref": "#/$defs/ServerEvent"
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "next_seq": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The next after_seq cursor, or null."
+        }
+      },
+      "required": [
+        "run_id",
+        "through_seq",
+        "events",
+        "next_seq"
+      ],
+      "title": "HistoryPage",
+      "type": "object"
+    },
+    "ImpactCone": {
+      "additionalProperties": false,
+      "description": "The functions possibly affected by a change; never presented as a complete list.",
+      "properties": {
+        "seeds": {
+          "description": "The change's added and modified nodes.",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        },
+        "entries": {
+          "description": "By distance, then id; seeds and tests left out.",
+          "items": {
+            "$ref": "#/$defs/ImpactEntry"
+          },
+          "type": "array"
+        },
+        "edges_followed": {
+          "description": "\"exact\" in v1.",
+          "enum": [
+            "exact",
+            "exact_and_possible"
+          ],
+          "type": "string"
+        },
+        "max_depth": {
+          "type": "integer"
+        },
+        "max_nodes": {
+          "type": "integer"
+        },
+        "omitted_by_depth": {
+          "description": "Reachable beyond max_depth.",
+          "type": "integer"
+        },
+        "omitted_by_limit": {
+          "description": "Cut by max_nodes.",
+          "type": "integer"
+        },
+        "tests_reaching": {
+          "description": "Test functions whose exact calls reach a seed, at any depth.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seeds",
+        "entries",
+        "edges_followed",
+        "max_depth",
+        "max_nodes",
+        "omitted_by_depth",
+        "omitted_by_limit",
+        "tests_reaching"
+      ],
+      "title": "ImpactCone",
+      "type": "object"
+    },
+    "ImpactEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "distance": {
+          "description": "1: it calls a seed directly.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "node_id",
+        "distance"
+      ],
+      "title": "ImpactEntry",
+      "type": "object"
+    },
+    "IntegrityFact": {
+      "additionalProperties": false,
+      "description": "A neutral source observation retained per affected test.",
+      "properties": {
+        "kind": {
+          "description": "The detector's exact neutral fact kind.",
+          "enum": [
+            "test_removed",
+            "assertion_loosened",
+            "skip_added",
+            "expected_value_changed",
+            "literal_branch",
+            "stub_left",
+            "parse_error"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "line": {
+          "description": "The observed one-based line.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "evidence": {
+          "description": "Source events or Git objects.",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "type": "array"
+        },
+        "test_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The individual affected pytest id, when resolved."
+        },
+        "node_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The resolved graph node, when known."
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "line",
+        "text",
+        "evidence",
+        "test_id",
+        "node_id"
+      ],
+      "title": "IntegrityFact",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "LeadCreated": {
+      "additionalProperties": false,
+      "description": "The created coordination lead.",
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        }
+      },
+      "required": [
+        "agent_id"
+      ],
+      "title": "LeadCreated",
+      "type": "object"
+    },
+    "LeadStatus": {
+      "additionalProperties": false,
+      "description": "The server-owned coordination lead state.",
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "description": "The monotonically increasing lead-state revision.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "model": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "state": {
+          "description": "The lead's lifecycle state.",
+          "enum": [
+            "starting",
+            "working",
+            "halted",
+            "stopped",
+            "done"
+          ],
+          "type": "string"
+        },
+        "step": {
+          "description": "Completed public-command tool calls.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The lifecycle explanation."
+        }
+      },
+      "required": [
+        "agent_id",
+        "revision",
+        "task",
+        "model",
+        "state",
+        "step",
+        "detail"
+      ],
+      "title": "LeadStatus",
+      "type": "object"
+    },
+    "LeadStatusEvent": {
+      "additionalProperties": false,
+      "description": "The lead.status envelope.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "lead.status",
+          "description": "The event discriminator.",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/LeadStatus"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "LeadStatusEvent",
+      "type": "object"
+    },
+    "Limits": {
+      "additionalProperties": false,
+      "properties": {
+        "max_steps": {
+          "description": "Tool calls per task.",
+          "type": "integer"
+        },
+        "max_output_tokens": {
+          "description": "Per model call.",
+          "type": "integer"
+        },
+        "max_wall_clock_s": {
+          "description": "Per task.",
+          "type": "integer"
+        },
+        "test_timeout_s": {
+          "type": "integer"
+        },
+        "cone_max_depth": {
+          "type": "integer"
+        },
+        "cone_max_nodes": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_steps",
+        "max_output_tokens",
+        "max_wall_clock_s",
+        "test_timeout_s",
+        "cone_max_depth",
+        "cone_max_nodes"
+      ],
+      "title": "Limits",
+      "type": "object"
+    },
+    "MergeMode": {
+      "enum": [
+        "ask_me",
+        "merge_when_safe"
+      ],
+      "type": "string"
+    },
+    "MergeModeChangedEvent": {
+      "additionalProperties": false,
+      "description": "The new server merge mode.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "merge_mode.changed",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/MergeModeState"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "MergeModeChangedEvent",
+      "type": "object"
+    },
+    "MergeModeState": {
+      "additionalProperties": false,
+      "description": "Server-owned merge mode and its monotonically increasing revision.",
+      "properties": {
+        "mode": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/MergeMode"
+            }
+          ],
+          "default": "ask_me"
+        },
+        "revision": {
+          "default": 0,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "revision"
+      ],
+      "title": "MergeModeState",
+      "type": "object"
+    },
+    "MissingSetting": {
+      "additionalProperties": false,
+      "description": "A setup problem: names and affected slots only, never configuration values.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/SettingName"
+        },
+        "problem": {
+          "enum": [
+            "missing",
+            "invalid"
+          ],
+          "type": "string"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/Slot"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "problem",
+        "slots"
+      ],
+      "title": "MissingSetting",
+      "type": "object"
+    },
+    "ModelProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "\"muse-spark\", \"muse-spark-open\", \"fake\".",
+          "type": "string"
+        },
+        "label": {
+          "description": "\"Muse Spark\".",
+          "type": "string"
+        },
+        "provider": {
+          "enum": [
+            "meta",
+            "baseten",
+            "fake"
+          ],
+          "type": "string"
+        },
+        "model": {
+          "description": "The exact id sent to the API, such as \"meta-models/muse-spark-open-1026\".",
+          "type": "string"
+        },
+        "reasoning": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The reasoning setting sent on every call; null if the API has none."
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "provider",
+        "model",
+        "reasoning"
+      ],
+      "title": "ModelProfile",
+      "type": "object"
+    },
+    "NodeId": {
+      "type": "string"
+    },
+    "NodeKind": {
+      "enum": [
+        "module",
+        "class",
+        "function",
+        "method"
+      ],
+      "type": "string"
+    },
+    "NonEmptyText": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "ParseError": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "line",
+        "message"
+      ],
+      "title": "ParseError",
+      "type": "object"
+    },
+    "Plan": {
+      "additionalProperties": false,
+      "description": "The complete versioned state of a two-agent plan.",
+      "properties": {
+        "plan_id": {
+          "$ref": "#/$defs/PlanId"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "graph_version": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "state": {
+          "default": "planning",
+          "enum": [
+            "planning",
+            "proposed",
+            "starting",
+            "running",
+            "completed",
+            "rejected",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "subtasks": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/PlanSubtask"
+                },
+                {
+                  "$ref": "#/$defs/PlanSubtask"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "started_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The lead that requested this plan."
+        },
+        "queued_task_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QueuedTaskId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The queue item dispatching this plan."
+        }
+      },
+      "required": [
+        "plan_id",
+        "revision",
+        "task",
+        "graph_version",
+        "state",
+        "subtasks",
+        "detail",
+        "started_by",
+        "queued_task_id"
+      ],
+      "title": "Plan",
+      "type": "object"
+    },
+    "PlanCreated": {
+      "additionalProperties": false,
+      "description": "The created plan identifier; generation continues through events.",
+      "properties": {
+        "plan_id": {
+          "$ref": "#/$defs/PlanId"
+        }
+      },
+      "required": [
+        "plan_id"
+      ],
+      "title": "PlanCreated",
+      "type": "object"
+    },
+    "PlanId": {
+      "pattern": "^plan-[1-9]\\d*$",
+      "type": "string"
+    },
+    "PlanRevision": {
+      "additionalProperties": false,
+      "description": "The expected revision for a plan command.",
+      "properties": {
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "PlanRevision",
+      "type": "object"
+    },
+    "PlanSubtask": {
+      "additionalProperties": false,
+      "description": "A subtask and the agent assigned when the plan starts.",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "zone": {
+          "$ref": "#/$defs/PlanZone"
+        },
+        "agent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "task",
+        "zone",
+        "agent_id"
+      ],
+      "title": "PlanSubtask",
+      "type": "object"
+    },
+    "PlanUpdatedEvent": {
+      "additionalProperties": false,
+      "description": "The complete new plan revision.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "plan.updated",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Plan"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "PlanUpdatedEvent",
+      "type": "object"
+    },
+    "PlanZone": {
+      "additionalProperties": false,
+      "description": "Explicit graph nodes and workspace files selected for a subtask.",
+      "properties": {
+        "node_ids": {
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        },
+        "paths": {
+          "items": {
+            "$ref": "#/$defs/WorkspacePath"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "node_ids",
+        "paths"
+      ],
+      "title": "PlanZone",
+      "type": "object"
+    },
+    "Point": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Point",
+      "type": "object"
+    },
+    "PossibleReason": {
+      "enum": [
+        "unknown_receiver",
+        "several_candidates",
+        "rebound_name",
+        "star_import",
+        "dynamic_dispatch"
+      ],
+      "type": "string"
+    },
+    "QueueRevision": {
+      "additionalProperties": false,
+      "description": "The queue item revision observed by the person.",
+      "properties": {
+        "revision": {
+          "description": "The queue revision observed by the caller.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "QueueRevision",
+      "type": "object"
+    },
+    "QueueSnapshot": {
+      "additionalProperties": false,
+      "description": "The queue state read atomically with its event position.",
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "seq": {
+          "description": "The event position read with this state.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tasks": {
+          "description": "The queue's current items.",
+          "items": {
+            "$ref": "#/$defs/QueuedTask"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "tasks"
+      ],
+      "title": "QueueSnapshot",
+      "type": "object"
+    },
+    "QueueUpdatedEvent": {
+      "additionalProperties": false,
+      "description": "The queue.updated envelope.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "queue.updated",
+          "description": "The event discriminator.",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/QueuedTask"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "QueueUpdatedEvent",
+      "type": "object"
+    },
+    "QueuedAgentTask": {
+      "additionalProperties": false,
+      "description": "One coding task waiting for a slot.",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "slot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Slot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The requested slot, or any free slot."
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The requested profile, or slot default."
+        },
+        "zone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanZone"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The requested edit zone, or unknown."
+        }
+      },
+      "required": [
+        "task",
+        "slot",
+        "model",
+        "zone"
+      ],
+      "title": "QueuedAgentTask",
+      "type": "object"
+    },
+    "QueuedTask": {
+      "additionalProperties": false,
+      "description": "One server-owned versioned queue item.",
+      "properties": {
+        "agent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QueuedAgentTask"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One standalone coding task."
+        },
+        "plan_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One proposed two-agent plan."
+        },
+        "plan_revision": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The exact queued plan revision."
+        },
+        "queued_task_id": {
+          "$ref": "#/$defs/QueuedTaskId"
+        },
+        "revision": {
+          "description": "The current queue-item revision.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "description": "The queue-item lifecycle state.",
+          "enum": [
+            "queued",
+            "starting",
+            "running",
+            "completed",
+            "cancelled",
+            "blocked",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "agent_ids": {
+          "description": "Agents assigned during dispatch.",
+          "items": {
+            "$ref": "#/$defs/AgentId"
+          },
+          "type": "array"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The dispatch or failure explanation."
+        },
+        "started_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The lead that queued this task."
+        }
+      },
+      "required": [
+        "agent",
+        "plan_id",
+        "plan_revision",
+        "queued_task_id",
+        "revision",
+        "state",
+        "agent_ids",
+        "detail",
+        "started_by"
+      ],
+      "title": "QueuedTask",
+      "type": "object"
+    },
+    "QueuedTaskId": {
+      "pattern": "^queued-task-[1-9]\\d*$",
+      "type": "string"
+    },
+    "ReachFacts": {
+      "additionalProperties": false,
+      "description": "Evidence of test reachability.",
+      "properties": {
+        "basis": {
+          "description": "The basis of test reachability.",
+          "enum": [
+            "call_graph",
+            "coverage"
+          ],
+          "type": "string"
+        },
+        "edges_followed": {
+          "anyOf": [
+            {
+              "const": "exact",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact call edges, or null for coverage."
+        },
+        "unreached_nodes": {
+          "description": "Changed functions without demonstrated test reach.",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "type": "array"
+        },
+        "complete": {
+          "description": "Whether all changed functions were classified.",
+          "type": "boolean"
+        },
+        "evidence": {
+          "description": "The graph or coverage evidence.",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "edges_followed",
+        "unreached_nodes",
+        "complete",
+        "evidence"
+      ],
+      "title": "ReachFacts",
+      "type": "object"
+    },
+    "RejectChange": {
+      "additionalProperties": false,
+      "description": "`POST /changes/{id}/reject`.",
+      "properties": {
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "revision": {
+          "description": "The observed revision, including zero before any proposal.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "revision",
+        "head_commit"
+      ],
+      "title": "RejectChange",
+      "type": "object"
+    },
+    "RejectPlan": {
+      "additionalProperties": false,
+      "description": "Refuse a proposed plan without starting its agents.",
+      "properties": {
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "RejectPlan",
+      "type": "object"
+    },
+    "RequestChanges": {
+      "additionalProperties": false,
+      "description": "`POST /changes/{id}/request-changes`: the comment goes back to the agent.",
+      "properties": {
+        "comment": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "revision": {
+          "description": "The proposed revision the caller observed.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "comment",
+        "revision",
+        "head_commit"
+      ],
+      "title": "RequestChanges",
+      "type": "object"
+    },
+    "RevertChange": {
+      "additionalProperties": false,
+      "description": "Request an inverse of a rules merge.",
+      "properties": {
+        "resolution_seq": {
+          "description": "The original rules resolution.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "merge_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "main_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "resolution_seq",
+        "merge_commit",
+        "main_commit"
+      ],
+      "title": "RevertChange",
+      "type": "object"
+    },
+    "RevertResolvedEvent": {
+      "additionalProperties": false,
+      "description": "The revert.resolved envelope.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "revert.resolved",
+          "description": "The event discriminator.",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/RevertResult"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "RevertResolvedEvent",
+      "type": "object"
+    },
+    "RevertResult": {
+      "additionalProperties": false,
+      "description": "The outcome of a person-authorized rules merge inverse.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "revision": {
+          "description": "The original merged revision.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "resolution_seq": {
+          "description": "The original rules resolution.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "merge_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "decided_by": {
+          "const": "person",
+          "description": "The principal requesting this revert.",
+          "type": "string"
+        },
+        "result": {
+          "description": "The revert outcome.",
+          "enum": [
+            "reverted",
+            "needs_you"
+          ],
+          "type": "string"
+        },
+        "main_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "revert_commit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The committed inverse, if successful."
+        },
+        "paths": {
+          "description": "Conflicting paths, when known.",
+          "items": {
+            "$ref": "#/$defs/WorkspacePath"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why intervention is required."
+        },
+        "tests": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SuiteResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The inverse candidate's test result."
+        }
+      },
+      "required": [
+        "change_id",
+        "revision",
+        "resolution_seq",
+        "merge_commit",
+        "decided_by",
+        "result",
+        "main_commit",
+        "revert_commit",
+        "paths",
+        "reason",
+        "tests"
+      ],
+      "title": "RevertResult",
+      "type": "object"
+    },
+    "ReviewChange": {
+      "additionalProperties": false,
+      "description": "Request advisory review of an exact candidate.",
+      "properties": {
+        "revision": {
+          "description": "The revision to review.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "main_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "revision",
+        "head_commit",
+        "main_commit"
+      ],
+      "title": "ReviewChange",
+      "type": "object"
+    },
+    "ReviewFinding": {
+      "additionalProperties": false,
+      "description": "One advisory model observation.",
+      "properties": {
+        "severity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewSeverity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null means an unclassified finding."
+        },
+        "text": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspacePath"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The affected workspace file."
+        },
+        "line": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The affected one-based line."
+        },
+        "node_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The affected graph node."
+        }
+      },
+      "required": [
+        "severity",
+        "text",
+        "path",
+        "line",
+        "node_id"
+      ],
+      "title": "ReviewFinding",
+      "type": "object"
+    },
+    "ReviewSeverity": {
+      "enum": [
+        "BLOCKING",
+        "SHOULD-FIX",
+        "NIT"
+      ],
+      "type": "string"
+    },
+    "RuleAssessment": {
+      "additionalProperties": false,
+      "description": "One rule's recorded inputs, limit, outcome and evidence.",
+      "properties": {
+        "rule": {
+          "$ref": "#/$defs/RuleId"
+        },
+        "observed": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/JsonValue"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "threshold": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        "result": {
+          "enum": [
+            "pass",
+            "fail",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "rule",
+        "observed",
+        "threshold",
+        "result",
+        "evidence"
+      ],
+      "title": "RuleAssessment",
+      "type": "object"
+    },
+    "RuleId": {
+      "enum": [
+        "combined_tests",
+        "small_cone",
+        "small_change",
+        "known_spend",
+        "existing_tests_untouched",
+        "cross_review",
+        "test_integrity",
+        "added_tests_fail_before",
+        "run_test_integrity",
+        "tests_reach_changes",
+        "within_zone"
+      ],
+      "type": "string"
+    },
+    "RunId": {
+      "pattern": "^run-\\d{8}-\\d{6}$",
+      "type": "string"
+    },
+    "RunRuleFinding": {
+      "additionalProperties": false,
+      "description": "One temporal finding supported by an integrity fact.",
+      "properties": {
+        "test_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "failed_seq": {
+          "description": "The execution where it failed.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "edited_seq": {
+          "description": "The edit weakening its assertion.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "passed_seq": {
+          "description": "The execution where it passed.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "fact_index": {
+          "description": "The supporting integrity fact in this payload.",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "test_id",
+        "failed_seq",
+        "edited_seq",
+        "passed_seq",
+        "fact_index"
+      ],
+      "title": "RunRuleFinding",
+      "type": "object"
+    },
+    "RunStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "contract_version": {
+          "type": "string"
+        },
+        "prompt_version": {
+          "description": "A name and a hash of the system prompt and tool schemas.",
+          "type": "string"
+        },
+        "workspace": {
+          "description": "\"demo-repo\".",
+          "type": "string"
+        },
+        "base_commit": {
+          "description": "Main's first commit in the runtime workspace.",
+          "type": "string"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/ModelProfile"
+          },
+          "type": "array"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/SlotInfo"
+          },
+          "type": "array"
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits"
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget"
+        },
+        "merge_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MergeModeState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Initial server merge mode; null in recordings without mode metadata."
+        }
+      },
+      "required": [
+        "run_id",
+        "contract_version",
+        "prompt_version",
+        "workspace",
+        "base_commit",
+        "models",
+        "slots",
+        "limits",
+        "budget",
+        "merge_mode"
+      ],
+      "title": "RunStarted",
+      "type": "object"
+    },
+    "RunStartedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "run.started",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/RunStarted"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "RunStartedEvent",
+      "type": "object"
+    },
+    "SaveFile": {
+      "additionalProperties": false,
+      "description": "`PUT /files`: writes main, or the named agent's worktree while it is idle in review.",
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "content": {
+          "type": "string"
+        },
+        "base_hash": {
+          "description": "SHA-256 of the content the user started from; the save fails with stale_file if the file\nchanged since.",
+          "type": "string"
+        },
+        "agent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "path",
+        "content",
+        "base_hash"
+      ],
+      "title": "SaveFile",
+      "type": "object"
+    },
+    "ServerEvent": {
+      "discriminator": {
+        "mapping": {
+          "agent.focus": "#/$defs/AgentFocusEvent",
+          "agent.status": "#/$defs/AgentStatusEvent",
+          "agent.step": "#/$defs/AgentStepEvent",
+          "change.assessed": "#/$defs/ChangeAssessedEvent",
+          "change.facts_recorded": "#/$defs/ChangeFactsRecordedEvent",
+          "change.proposed": "#/$defs/ChangeProposedEvent",
+          "change.resolved": "#/$defs/ChangeResolvedEvent",
+          "change.reviewed": "#/$defs/ChangeReviewedEvent",
+          "change.updated": "#/$defs/ChangeUpdatedEvent",
+          "error": "#/$defs/ErrorReportEvent",
+          "graph.delta": "#/$defs/GraphDeltaEvent",
+          "graph.snapshot": "#/$defs/GraphSnapshotEvent",
+          "lead.status": "#/$defs/LeadStatusEvent",
+          "merge_mode.changed": "#/$defs/MergeModeChangedEvent",
+          "plan.updated": "#/$defs/PlanUpdatedEvent",
+          "queue.updated": "#/$defs/QueueUpdatedEvent",
+          "revert.resolved": "#/$defs/RevertResolvedEvent",
+          "run.started": "#/$defs/RunStartedEvent",
+          "tests.executed": "#/$defs/TestsExecutedEvent",
+          "usage.tick": "#/$defs/UsageTickEvent"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/RunStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/GraphSnapshotEvent"
+        },
+        {
+          "$ref": "#/$defs/GraphDeltaEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentStatusEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentStepEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentFocusEvent"
+        },
+        {
+          "$ref": "#/$defs/ChangeUpdatedEvent"
+        },
+        {
+          "$ref": "#/$defs/ChangeProposedEvent"
+        },
+        {
+          "$ref": "#/$defs/ChangeResolvedEvent"
+        },
+        {
+          "$ref": "#/$defs/UsageTickEvent"
+        },
+        {
+          "$ref": "#/$defs/ErrorReportEvent"
+        },
+        {
+          "$ref": "#/$defs/ChangeAssessedEvent"
+        },
+        {
+          "$ref": "#/$defs/MergeModeChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/PlanUpdatedEvent"
+        },
+        {
+          "$ref": "#/$defs/ChangeReviewedEvent"
+        },
+        {
+          "$ref": "#/$defs/ChangeFactsRecordedEvent"
+        },
+        {
+          "$ref": "#/$defs/TestsExecutedEvent"
+        },
+        {
+          "$ref": "#/$defs/RevertResolvedEvent"
+        },
+        {
+          "$ref": "#/$defs/QueueUpdatedEvent"
+        },
+        {
+          "$ref": "#/$defs/LeadStatusEvent"
+        }
+      ]
+    },
+    "SetMergeMode": {
+      "additionalProperties": false,
+      "description": "Select a merge mode using the last observed server revision.",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/MergeMode"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "revision"
+      ],
+      "title": "SetMergeMode",
+      "type": "object"
+    },
+    "SettingName": {
+      "enum": [
+        "META_API_KEY",
+        "BASETEN_API_KEY",
+        "OVERSIGHT_BUDGET_USD",
+        "MUSE_SPARK_INPUT_USD_PER_M",
+        "MUSE_SPARK_OUTPUT_USD_PER_M"
+      ],
+      "type": "string"
+    },
+    "Slot": {
+      "enum": [
+        "A",
+        "B"
+      ],
+      "type": "string"
+    },
+    "SlotInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "slot": {
+          "$ref": "#/$defs/Slot"
+        },
+        "default_model": {
+          "description": "A ModelProfile id.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slot",
+        "default_model"
+      ],
+      "title": "SlotInfo",
+      "type": "object"
+    },
+    "StartAgent": {
+      "additionalProperties": false,
+      "description": "`POST /agents`.",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "slot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Slot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The free slot when omitted."
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A ModelProfile id; the slot's default model when omitted."
+        },
+        "zone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanZone"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The requested edit zone."
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "title": "StartAgent",
+      "type": "object"
+    },
+    "StartLead": {
+      "additionalProperties": false,
+      "description": "Request a coordination lead.",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The offered Meta profile, or default."
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "title": "StartLead",
+      "type": "object"
+    },
+    "StopLead": {
+      "additionalProperties": false,
+      "description": "Stop the observed lead state.",
+      "properties": {
+        "revision": {
+          "description": "The lead-state revision observed by the person.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "StopLead",
+      "type": "object"
+    },
+    "SubtaskDraft": {
+      "additionalProperties": false,
+      "description": "An editable subtask before the server assigns its agent.",
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "zone": {
+          "$ref": "#/$defs/PlanZone"
+        }
+      },
+      "required": [
+        "task",
+        "zone"
+      ],
+      "title": "SubtaskDraft",
+      "type": "object"
+    },
+    "SuiteExecution": {
+      "additionalProperties": false,
+      "description": "The server-observed execution of a specific Git tree.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The proposed revision, if already assigned."
+        },
+        "phase": {
+          "description": "The purpose of this execution.",
+          "enum": [
+            "agent",
+            "proposal",
+            "combined",
+            "base_probe",
+            "head_probe"
+          ],
+          "type": "string"
+        },
+        "tested_commit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The tested commit, when one exists."
+        },
+        "tested_tree": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "suite": {
+          "$ref": "#/$defs/SuiteResult"
+        }
+      },
+      "required": [
+        "change_id",
+        "agent_id",
+        "revision",
+        "phase",
+        "tested_commit",
+        "tested_tree",
+        "suite"
+      ],
+      "title": "SuiteExecution",
+      "type": "object"
+    },
+    "SuiteResult": {
+      "additionalProperties": false,
+      "description": "A test run's result. Not \"TestResult\", which pytest would try to collect.",
+      "properties": {
+        "outcome": {
+          "enum": [
+            "passed",
+            "failed",
+            "error",
+            "timeout"
+          ],
+          "type": "string"
+        },
+        "passed": {
+          "type": "integer"
+        },
+        "failed": {
+          "description": "Failures and errors.",
+          "type": "integer"
+        },
+        "skipped": {
+          "type": "integer"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "failed_tests": {
+          "description": "Pytest node ids, 20 at most.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cases": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CaseResult"
+              },
+              "maxItems": 200,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "At most 200 observed pytest node outcomes."
+        },
+        "cases_complete": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether all per-node outcomes were resolved and retained."
+        }
+      },
+      "required": [
+        "outcome",
+        "passed",
+        "failed",
+        "skipped",
+        "duration_ms",
+        "failed_tests",
+        "cases",
+        "cases_complete"
+      ],
+      "title": "SuiteResult",
+      "type": "object"
+    },
+    "TestsExecutedEvent": {
+      "additionalProperties": false,
+      "description": "The tests.executed envelope.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "tests.executed",
+          "description": "The event discriminator.",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SuiteExecution"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "TestsExecutedEvent",
+      "type": "object"
+    },
+    "Timestamp": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+      "type": "string"
+    },
+    "TreeFile": {
+      "additionalProperties": false,
+      "description": "One regular file in the selected runtime tree.",
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/WorkspacePath"
+        },
+        "hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Lowercase hex SHA-256 of exact file bytes, or null when hashing was not completed."
+        }
+      },
+      "required": [
+        "path",
+        "hash"
+      ],
+      "title": "TreeFile",
+      "type": "object"
+    },
+    "TreeResponse": {
+      "additionalProperties": false,
+      "description": "200 from `GET /tree?agent=`: a plain, bounded runtime listing.",
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "agent_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Whose worktree was listed; null for main."
+        },
+        "directories": {
+          "description": "Sorted unique directory paths; excludes the root and trailing slashes.",
+          "items": {
+            "$ref": "#/$defs/WorkspacePath"
+          },
+          "type": "array"
+        },
+        "files": {
+          "description": "Regular files, sorted by unique workspace-relative path.",
+          "items": {
+            "$ref": "#/$defs/TreeFile"
+          },
+          "type": "array"
+        },
+        "graph_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Matching published main graph version; null for agents or unverified consistency."
+        },
+        "truncated": {
+          "description": "True exactly when eligible entries were omitted by the 2,000-entry cap.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "run_id",
+        "agent_id",
+        "directories",
+        "files",
+        "graph_version",
+        "truncated"
+      ],
+      "title": "TreeResponse",
+      "type": "object"
+    },
+    "UpdatePlan": {
+      "additionalProperties": false,
+      "description": "Replace both proposed subtasks using the expected plan revision.",
+      "properties": {
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "graph_version": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "subtasks": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/SubtaskDraft"
+            },
+            {
+              "$ref": "#/$defs/SubtaskDraft"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "revision",
+        "graph_version",
+        "subtasks"
+      ],
+      "title": "UpdatePlan",
+      "type": "object"
+    },
+    "UsageTick": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The model id the API reported for this call."
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null: not reported. Never 0 for unknown."
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cached_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null: unknown."
+        },
+        "spent_usd": {
+          "description": "The ledger's total, this call included.",
+          "type": "number"
+        },
+        "budget_usd": {
+          "type": "number"
+        },
+        "brake": {
+          "enum": [
+            "ok",
+            "warn_50",
+            "warn_80",
+            "blocked"
+          ],
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "agent",
+                "review",
+                "plan",
+                "lead"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The purpose of this model call."
+        },
+        "change_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The change associated with this call."
+        },
+        "plan_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The plan associated with this call."
+        }
+      },
+      "required": [
+        "agent_id",
+        "model",
+        "input_tokens",
+        "output_tokens",
+        "cached_tokens",
+        "cost_usd",
+        "spent_usd",
+        "budget_usd",
+        "brake",
+        "role",
+        "change_id",
+        "plan_id"
+      ],
+      "title": "UsageTick",
+      "type": "object"
+    },
+    "UsageTickEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "usage.tick",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/UsageTick"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "UsageTickEvent",
+      "type": "object"
+    },
+    "WorkspacePath": {
+      "type": "string"
+    },
+    "ZoneFacts": {
+      "additionalProperties": false,
+      "description": "Observed zone classification.",
+      "properties": {
+        "outside": {
+          "description": "Observed edits outside the assigned zone.",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "type": "array"
+        },
+        "complete": {
+          "description": "Whether every edit was classified.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "outside",
+        "complete"
+      ],
+      "title": "ZoneFacts",
+      "type": "object"
+    }
+  }
+}

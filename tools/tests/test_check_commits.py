@@ -49,6 +49,7 @@ def test_lockfiles_generated_files_fixtures_and_binaries_are_not_counted() -> No
             "900\t0\tuv.lock",
             "900\t0\tfrontend/pnpm-lock.yaml",
             "900\t0\tcontracts/generated/contracts.ts",
+            "4632\t0\tcontracts/baselines/1.4.0.schema.json",
             "900\t0\tfixtures/events/level1.jsonl",
             "-\t-\tfrontend/public/logo.png",
         ]

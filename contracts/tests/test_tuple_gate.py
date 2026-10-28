@@ -9,6 +9,7 @@ from oversight.workspace import run_process
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = ROOT / "contracts/baselines/1.3.0.schema.json"
+BASE_1_4 = ROOT / "contracts/baselines/1.4.0.schema.json"
 
 
 def test_baseline_is_the_approved_1_3_bytes() -> None:
@@ -17,7 +18,14 @@ def test_baseline_is_the_approved_1_3_bytes() -> None:
     )
 
 
+def test_baseline_is_the_approved_1_4_bytes() -> None:
+    assert hashlib.sha256(BASE_1_4.read_bytes()).hexdigest() == (
+        "112778a4ea151b9f868b0a985250a38f6aa2a2a4b9ac84b438dc6ec89b909348"
+    )
+
+
 @pytest.mark.anyio
+@pytest.mark.parametrize("baseline", [BASE, BASE_1_4], ids=["1.3", "1.4"])
 @pytest.mark.parametrize(
     "fixture,fields",
     [
@@ -28,7 +36,9 @@ def test_baseline_is_the_approved_1_3_bytes() -> None:
         ("existing-min", ["AgentFocus.ranges"]),
     ],
 )
-async def test_gate_reports_the_concrete_tuple(fixture: str | None, fields: list[str]) -> None:
+async def test_gate_reports_the_concrete_tuple(
+    fixture: str | None, fields: list[str], baseline: Path
+) -> None:
     stem = ROOT / (
         f"contracts/tests/fixtures/tuples/{fixture}" if fixture else "contracts/generated/contracts"
     )
@@ -42,7 +52,7 @@ async def test_gate_reports_the_concrete_tuple(fixture: str | None, fields: list
             "node",
             "contracts/check_tuples.cjs",
             "--base",
-            str(BASE),
+            str(baseline),
             "--schema",
             str(schema),
             "--types",
