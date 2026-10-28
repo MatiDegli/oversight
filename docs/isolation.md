@@ -1,8 +1,8 @@
 # Network-isolated test runner (C1)
 
-C1 is opt-in: `Workspace.run_tests(..., spawn=IsolatedRunner(runtime_root))`.
-Existing callers keep their current runner. Availability policy and UI notices belong to C3;
-Git leases, pins and merge commit checks are C2a; metadata snapshots/restoration are C2b.
+C1 provides `IsolatedRunner`; C3 selects it automatically for sessions born with C.
+The caller policy and startup notice are described below. Git leases, pins and merge commit
+checks are C2a; metadata snapshots/restoration are C2b.
 There are no contract changes.
 
 ## Pre-Git integrity (C2a)
@@ -129,3 +129,47 @@ Launch programs are constant isolated-mode Python strings, never runtime files. 
 sets parent-death SIGKILL, checks its parent and refuses setuid/setgid or file capabilities on
 unshare. C1 removes network access; it does not isolate the filesystem or protect the interpreter,
 stdlib, venv, backend or other writable files against a deliberate filesystem attack.
+
+## Session availability and caller policy (C3)
+
+At server startup, after the runtime lock and before reset, one automatic check exercises
+C1's trusted launcher, authenticated helper confirmation and bounded cleanup. A localhost
+listener confirms the outside connection and the helper must confirm its denied inside
+connection. It executes only a constant `pass` with the server interpreter, never pytest,
+never the demo venv and never a provider API. This is separate from local delivery acceptance.
+`workspace.isolation` is a read-only snapshot: checked, born_with_c, invalidated,
+rules_suspended, reason, available and rules_available. C2b's suspension remains independent
+of C availability: restored Git tampering suspends rules but permits isolated suites.
+
+| Caller | Policy | With C | Born without C |
+| --- | --- | --- | --- |
+| Agent run_tests | best_effort (default) | Isolated | Network open |
+| Proposal suite | best_effort (default) | Isolated | Network open |
+| Human combined suite, Ask me | best_effort (default) | Isolated | Network open |
+| Rules and Revert (future callers) | required | Isolated | Refused with reason |
+| Added-test base/head probes | required | Isolated | Skipped; facts unknown |
+
+The only changed changes-module call site is `_probes._run`, which passes
+`isolation="required"`. Unavailable probes publish no suite execution and retain unknown
+facts with an unavailable diagnostic. Required refuses before suite capture or execution;
+it never falls back. The merge-mode availability port is intentionally left for a later PR:
+its consumer must consult rules_available before enabling rules or Revert.
+
+A session born without C never enables C later, rules, their probes or Revert. Ask me needs
+no acceptance step: startup emits a log warning and an existing nonfatal `error` event from
+`tests`, explaining that tests retain network access and rules/probes/Revert stay disabled.
+Settings presentation belongs to the later UI wiring. A session born with C never selects the
+open runner, including after invalidation. Only failed isolation effect/entry/cleanup evidence
+invalidates C; ordinary suite failures, timeouts and artifact vetoes do not. Git metadata
+changes use C2b's rules_suspended latch, without invalidating C after verified restoration.
+No stable cleanup/snapshot guarantee is claimed for the open path.
+
+CI runs `uv run --frozen python -m oversight isolation-probe` in one additional step and
+writes the JSON verdict to the job summary. `confirmed` and `unavailable` succeed;
+`failed` (or an unrecognized verdict or command error) fails the step. No action, permission
+or secret is added. The optional full probe above remains the local acceptance command;
+it does not establish or upgrade a running server's capability.
+
+The maintainer accepted the filesystem residual: C removes the network; it does not isolate
+the filesystem; it closes known Git routes and vetoes what it cannot attest. Read-only mounts
+are outside this package. C3 changes no contracts.

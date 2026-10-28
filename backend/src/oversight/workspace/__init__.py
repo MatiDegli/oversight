@@ -4,6 +4,7 @@ Other modules import only what this file exports; everything else here is intern
 imports only `oversight_contracts`, shared byte limits and the standard library.
 """
 
+from oversight.workspace.capability import OPEN_NOTICE, IsolationCapability, IsolationPolicy
 from oversight.workspace.core import Author, Tree, Workspace
 from oversight.workspace.errors import (
     FileTooLarge,
@@ -39,12 +40,15 @@ from oversight.workspace.suite import (
 __all__ = [
     "MAX_TESTS",
     "MAX_XML_BYTES",
+    "OPEN_NOTICE",
     "Author",
     "FileRead",
     "FileTooLarge",
     "IntegrityError",
     "InvalidPath",
     "IsolatedRunner",
+    "IsolationCapability",
+    "IsolationPolicy",
     "IsolationUnavailable",
     "JUnitOutcome",
     "JUnitRun",

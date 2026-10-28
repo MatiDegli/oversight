@@ -70,7 +70,7 @@ from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
-from oversight.workspace import Tree, Workspace
+from oversight.workspace import OPEN_NOTICE, Tree, Workspace
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import (
     AgentCreated,
@@ -281,6 +281,9 @@ class LiveRun:
     async def startup(self) -> None:
         settings = self._settings
         await self.workspace.acquire_runtime()  # a second server fails here with WorkspaceBusy
+        capability = await self.workspace.check_isolation()
+        if not capability.available:
+            _log.warning("%s Reason: %s", OPEN_NOTICE, capability.reason)
         base = await self.workspace.reset()
         ledger_error: str | None = None
         try:
@@ -319,6 +322,8 @@ class LiveRun:
         graph = WorkspaceGraph(self.workspace.main.root, self.layout)
         snapshot = await asyncio.to_thread(graph.scan, base)
         await self.store.publish(snapshot)
+        if not capability.available:
+            await self._report("tests", OPEN_NOTICE + " Reason: " + str(capability.reason))
         if ledger_error is not None:
             await self._report(
                 "server",

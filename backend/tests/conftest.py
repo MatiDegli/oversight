@@ -15,3 +15,16 @@ def baseten_verified(monkeypatch: pytest.MonkeyPatch) -> None:
     server's start check and the loop's own both read their own `UNVERIFIED_PROFILES`."""
     monkeypatch.setattr("oversight.app.UNVERIFIED_PROFILES", frozenset())
     monkeypatch.setattr("oversight.agents.client.UNVERIFIED_PROFILES", frozenset())
+
+
+@pytest.fixture(autouse=True)
+def no_kernel_startup_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default server tests model an unavailable host; kernel acceptance is a separate gate."""
+    from unittest.mock import AsyncMock
+
+    from oversight.workspace import IsolationUnavailable
+
+    monkeypatch.setattr(
+        "oversight.workspace.capability.check_effect",
+        AsyncMock(side_effect=IsolationUnavailable("injected unavailable host")),
+    )

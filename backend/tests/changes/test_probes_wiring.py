@@ -9,7 +9,7 @@ from decision_helpers import observed_target
 
 from oversight.changes._facts import FactsEvidence, validate_change_facts
 from oversight.changes._probes import comparison
-from oversight.workspace import base_probe_checkout
+from oversight.workspace import IsolationPolicy, base_probe_checkout
 from oversight_contracts.events import CaseResult, SuiteExecution, SuiteResult
 from oversight_contracts.review import ChangeFacts, ChangeTarget
 
@@ -132,8 +132,8 @@ async def test_timeout_keeps_partial_execution_and_unknown(h: Harness, monkeypat
     await add_test(h, "def test_added():\n    assert True\n")
     original = h.workspace.run_tests
 
-    async def timeout(tree, *, timeout_s, case_ids=()):
-        run = await original(tree, timeout_s=timeout_s, case_ids=case_ids)
+    async def timeout(tree, *, timeout_s, case_ids=(), isolation: IsolationPolicy = "best_effort"):
+        run = await original(tree, timeout_s=timeout_s, case_ids=case_ids, isolation=isolation)
         if case_ids and tree.root != h.worktree_dir("agent-1"):
             return replace(
                 run,
@@ -241,7 +241,7 @@ def test_absence_and_truncation_do_not_prove_success(incomplete: bool) -> None:
 async def test_side_deadline_and_external_cancel_preserve_execution(
     h: Harness, monkeypatch
 ) -> None:
-    from oversight.workspace import SuiteInterrupted
+    from oversight.workspace import IsolationPolicy, SuiteInterrupted
 
     await h.open(1)
     await add_test(h, "def test_added():\n    assert True\n")
@@ -250,8 +250,10 @@ async def test_side_deadline_and_external_cancel_preserve_execution(
     original = h.workspace.run_tests
     entered = asyncio.Event()
 
-    async def interrupted(tree, *, timeout_s, case_ids=()):
-        run = await original(tree, timeout_s=timeout_s, case_ids=case_ids)
+    async def interrupted(
+        tree, *, timeout_s, case_ids=(), isolation: IsolationPolicy = "best_effort"
+    ):
+        run = await original(tree, timeout_s=timeout_s, case_ids=case_ids, isolation=isolation)
         if case_ids and tree.root != h.worktree_dir("agent-1"):
             entered.set()
             try:
@@ -352,8 +354,10 @@ async def test_head_mutated_by_suite_cannot_certify_the_proposed_tree(
     await add_test(h, "def test_added():\n    assert True\n")
     original = h.workspace.run_tests
 
-    async def mutate_after_suite(tree, *, timeout_s, case_ids=()):
-        run = await original(tree, timeout_s=timeout_s, case_ids=case_ids)
+    async def mutate_after_suite(
+        tree, *, timeout_s, case_ids=(), isolation: IsolationPolicy = "best_effort"
+    ):
+        run = await original(tree, timeout_s=timeout_s, case_ids=case_ids, isolation=isolation)
         if not case_ids:
             source = await tree.read_text("shop/mod.py")
             await tree.write_text(

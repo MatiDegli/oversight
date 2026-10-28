@@ -17,6 +17,11 @@ from functools import partial
 from pathlib import Path
 
 from oversight.limits import bounded_text
+from oversight.workspace.capability import (
+    IsolationCapability,
+    IsolationPolicy,
+    SessionIsolation,
+)
 from oversight.workspace.errors import (
     LockOrderError,
     UnsafeDeletion,
@@ -46,12 +51,12 @@ from oversight.workspace.integrity import (
     veto_gitmodules,
     veto_index,
 )
-from oversight.workspace.isolation import refuse_orphans
+from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable, refuse_orphans
 from oversight.workspace.locks import Locks, offload
 from oversight.workspace.ranges import FileRange, read_range
 from oversight.workspace.runner import ProcessResult, Spawn, run_process
 from oversight.workspace.snapshot import IntegrityState
-from oversight.workspace.suite import SuiteRun
+from oversight.workspace.suite import SuiteRun, SuiteUnavailable
 from oversight.workspace.suite_guard import guarded_suite
 from oversight_contracts.common import AgentId
 
@@ -225,6 +230,7 @@ class Workspace:
         self._demo_python_given = demo_python is not None
         self._locks = Locks()
         self.integrity = IntegrityState()
+        self._isolation = SessionIsolation(runtime_root, self.integrity)
         self.git_identities: dict[Path, GitIdentity] = {}
         self._main = Tree(self, runtime_root / "workspace", None, "main", None)
         self._trees: dict[str, Tree] = {}
@@ -232,6 +238,15 @@ class Workspace:
         self._reset_done = False
 
     # --- Accessors --------------------------------------------------------------------------
+
+    @property
+    def isolation(self) -> IsolationCapability:
+        """Read-only session capability; the integrity suspension is an independent latch."""
+        return self._isolation.capability
+
+    async def check_isolation(self) -> IsolationCapability:
+        """One automatic startup check, never a local acceptance or a suite."""
+        return await self._isolation.check()
 
     @property
     def main(self) -> Tree:
@@ -564,6 +579,7 @@ class Workspace:
         timeout_s: float,
         case_ids: tuple[str, ...] = (),
         spawn: Spawn | None = None,
+        isolation: IsolationPolicy = "best_effort",
     ) -> SuiteRun:
         """Run the demo repo's tests in `tree`, under its lock, in the demo venv."""
         async with (
@@ -572,17 +588,31 @@ class Workspace:
             self.git_lease(),
         ):
             await offload(lambda: self.tmp_dir.mkdir(mode=DIR_MODE, parents=True, exist_ok=True))
-            return await guarded_suite(
-                self,
-                tree,
-                python=self._demo_python,
-                plugin_dir=PLUGIN_DIR,
-                flags=GIT_FLAGS,
-                git_env=self._git_env(tree, None, None),
-                timeout_s=timeout_s,
-                case_ids=case_ids,
-                spawn=spawn or run_process,
-            )
+            runner = self._isolation.select(isolation, spawn, run_process)
+            try:
+                return await guarded_suite(
+                    self,
+                    tree,
+                    python=self._demo_python,
+                    plugin_dir=PLUGIN_DIR,
+                    flags=GIT_FLAGS,
+                    git_env=self._git_env(tree, None, None),
+                    timeout_s=timeout_s,
+                    case_ids=case_ids,
+                    spawn=runner,
+                )
+            except SuiteUnavailable as error:
+                if isinstance(error.cause, IsolationUnavailable):
+                    self._isolation.invalidate(str(error.cause))
+                raise
+            except IsolationUnavailable as error:
+                self._isolation.invalidate(str(error))
+                raise
+            finally:
+                if isinstance(runner, IsolatedRunner) and (
+                    runner.failure is not None or not runner.cleanup_complete
+                ):
+                    self._isolation.invalidate(runner.failure or "namespace cleanup unverified")
 
 
 __all__ = ["Author", "Tree", "Workspace"]
