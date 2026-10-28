@@ -5,8 +5,11 @@
 import { getActiveTheme } from "../../theme";
 
 import type { BoxSource } from "./boxSource";
-import { createLampField, fieldConfig, parseHex, placeLights } from "./model";
-import type { LampGrid } from "./model";
+import { createLampField, fieldConfig, parseHex, placeLights, signalConfig } from "./model";
+import { overlayBoxes, contains } from "./mask";
+import { MarkerMotion } from "./marker";
+import { MarkerLayer } from "./markerLayer";
+import type { Box, LampGrid } from "./model";
 import { fieldClock, shouldAnimate } from "./motion";
 import { createLampRenderer } from "./renderer";
 import type { LampLook, LampRenderer } from "./renderer";
@@ -75,6 +78,10 @@ export function createFieldController(canvas: FieldHost, source: BoxSource): Fie
 
 class FieldRuntime implements FieldController {
   private readonly lamps = createLampField();
+  private readonly markers = new MarkerMotion();
+  private readonly markerLayer: MarkerLayer;
+  private masks: Box[] = [];
+  private readonly overlayObserver?: MutationObserver;
   private readonly frozen =
     import.meta.env.DEV && typeof location !== "undefined" ? fieldClock(location.search) : null;
   private readonly query =
@@ -100,6 +107,21 @@ class FieldRuntime implements FieldController {
     private readonly canvas: FieldHost,
     private readonly source: BoxSource,
   ) {
+    this.markerLayer = new MarkerLayer(canvas);
+    const stage =
+      typeof canvas.closest === "function" ? canvas.closest('[aria-label="Graph stage"]') : null;
+    if (stage) {
+      this.overlayObserver = new MutationObserver((records) => {
+        // Ignore our own paint and Cytoscape; their lifecycle already calls onGraph.
+        if (records.some((record) => !canvas.parentElement?.contains(record.target))) this.redraw();
+      });
+      this.overlayObserver.observe(stage.closest(".shell-frame") ?? stage, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "style", "hidden"],
+      });
+    }
     this.renderer = createLampRenderer(canvas);
     this.checkContext = this.renderer?.check;
     canvas.hidden = this.renderer === null;
@@ -146,6 +168,7 @@ class FieldRuntime implements FieldController {
     this.grid = null;
     // Hide even a preserved/partially drawn buffer: the graph must show plain ground.
     this.canvas.hidden = true;
+    this.markerLayer.dispose();
     this.schedule();
   }
 
@@ -157,19 +180,18 @@ class FieldRuntime implements FieldController {
     try {
       const { lights, config } = this.transition.sample(now);
       this.renderer.resize(width, height, Math.min(window.devicePixelRatio || 1, 1));
-      const placed = placeLights(
-        this.theme,
-        lights,
-        this.source.boxes(lights.map((light) => light.id)),
-      );
+      const boxes = this.markers.boxes(lights, this.source, now);
+      const placed = placeLights(this.theme, lights, boxes);
+      this.masks = overlayBoxes(this.canvas);
       this.grid = this.lamps(
-        config,
+        this.source.zoom ? signalConfig(config, this.source.zoom()) : config,
         width,
         height,
         placed,
         this.reducedMotion ? null : (this.frozen ?? now / 1000),
       );
-      this.renderer.draw(this.grid, this.look);
+      this.renderer.draw(this.grid, this.look, this.masks);
+      this.markerLayer.draw(lights, boxes, this.masks, width, height);
       this.draws += 1;
     } catch (error) {
       console.error("The dot field stopped drawing", error);
@@ -202,7 +224,10 @@ class FieldRuntime implements FieldController {
   };
   private onMotion = () => {
     this.reducedMotion = this.query?.matches ?? false;
-    if (this.reducedMotion) this.transition.finish();
+    if (this.reducedMotion) {
+      this.transition.finish();
+      this.markers.finish();
+    }
     this.schedule();
     this.redraw();
   };
@@ -222,6 +247,14 @@ class FieldRuntime implements FieldController {
   };
 
   private setTarget() {
+    this.markers.set(
+      this.input.lights,
+      this.source,
+      performance.now(),
+      this.theme["transition-duration"],
+      this.theme["transition-easing"],
+      this.reducedMotion,
+    );
     this.transition.set(
       this.input,
       fieldConfig(this.theme, this.input.mode),
@@ -242,6 +275,7 @@ class FieldRuntime implements FieldController {
 
   private lamp(x: number, y: number): ReturnType<FieldProbe["lamp"]> {
     if (!this.grid) return null;
+    if (contains(this.masks, x, y)) return { level: 0, color: [...parseHex(this.theme.ground)] };
     const col = Math.floor(x / this.look.cell);
     const row = Math.floor(y / this.look.cell);
     if (col < 0 || row < 0 || col >= this.grid.cols || row >= this.grid.rows) return null;
@@ -271,6 +305,8 @@ class FieldRuntime implements FieldController {
     this.frame = 0;
     this.unsubscribe();
     this.observer.disconnect();
+    this.overlayObserver?.disconnect();
+    this.markerLayer.dispose();
     this.query?.removeEventListener("change", this.onMotion);
     document.removeEventListener("visibilitychange", this.onVisibility);
     window.removeEventListener("resize", this.redraw);

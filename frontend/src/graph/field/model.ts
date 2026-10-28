@@ -2,6 +2,7 @@
 // the lit nodes' boxes, and which of four levels its lamp shows after an 8 by 8 ordered dither. The
 // canvas only draws the result, so everything DESIGN.md's "Dot field and rings" says about light is
 // tested here without a GPU. Every number comes from a theme token.
+import { lightBoxKey } from "./marker";
 import type { FieldLight, FieldMode, LightSource } from "./lights";
 import { breathing, motionOf, ringFade, ringRadiusAt } from "./motion";
 import type { Motion, MotionTheme } from "./motion";
@@ -19,6 +20,7 @@ export interface Box {
 
 /** A light with the box it was drawn at and the color it takes from its token. */
 export interface PlacedLight {
+  steady?: boolean;
   box: Box;
   color: Rgb;
   weight: number;
@@ -114,7 +116,7 @@ export function placeLights(
 ): PlacedLight[] {
   const placed = new Map<string, PlacedLight>();
   for (const light of lights) {
-    const box = boxes.get(light.id);
+    const box = boxes.get(lightBoxKey(light));
     if (!box) continue;
     // Folded methods have distinct ids but share the class row's rendered bounds.
     const key = [light.source, box.x1, box.y1, box.x2, box.y2].join(":");
@@ -126,6 +128,7 @@ export function placeLights(
         weight: light.weight,
         pulses: light.pulses,
         pulseWeight: light.pulseWeight,
+        ...(light.steady ? { steady: true } : {}),
       });
     }
   }
@@ -204,7 +207,12 @@ function reach(config: FieldConfig, amplitude: number): number {
  */
 function amplitudeOf(config: FieldConfig, light: PlacedLight, time: number | null): number {
   const { motion, profile } = config;
-  const breath = !light.pulses ? 1 : time === null ? motion.breathingMax : breathing(motion, time);
+  const breath =
+    light.steady || !light.pulses
+      ? 1
+      : time === null
+        ? motion.breathingMax
+        : breathing(motion, time);
   return light.weight * profile.gain * (1 + (breath - 1) * (light.pulseWeight ?? 1));
 }
 
@@ -439,4 +447,9 @@ function quantize(
       }
     }
   }
+}
+
+/** R4 uses the same physical spread in every view; only the graph camera scales it. */
+export function signalConfig(config: FieldConfig, zoom: number): FieldConfig {
+  return { ...config, profile: { near: 26 * zoom, far: 72 * zoom, gain: config.profile.gain } };
 }

@@ -3,7 +3,7 @@
 // them: each fragment finds its cell, keeps the lamp's square (72% of the cell) and, on a lamp that
 // is off, the guide dot every few cells. The gaps between lamps stay transparent, so the ground
 // behind the canvas shows. Where WebGL2 is missing this returns null and the graph shows plain ground.
-import type { LampGrid, Rgb } from "./model";
+import type { Box, LampGrid, Rgb } from "./model";
 
 /** What the shader draws besides the grid: sizes in CSS px and the guide dot's color. */
 export interface LampLook {
@@ -21,7 +21,7 @@ export interface LampRenderer {
   check: () => void;
   /** Sizes the drawing buffer to a CSS size at a device pixel ratio. */
   resize(width: number, height: number, ratio: number): void;
-  draw(grid: LampGrid, look: LampLook): void;
+  draw(grid: LampGrid, look: LampLook, masks?: readonly Box[]): void;
   /** The pixel last drawn at a point in CSS px, as red, green, blue and alpha, or null off the buffer. */
   pixel(x: number, y: number): [number, number, number, number] | null;
   /** True once the browser took the context away. */
@@ -205,11 +205,12 @@ function renderer(
         check(gl);
       }
     },
-    draw(grid, look) {
+    draw(grid, look, masks = []) {
       gl.activeTexture(gl.TEXTURE0);
       upload(gl, grid, texture, uploaded);
       uploaded = { cols: grid.cols, rows: grid.rows };
       paint(gl, canvas, initialized, grid, look, ratio);
+      clearMasks(gl, canvas.height, ratio, masks);
     },
     pixel(x, y) {
       const px = Math.floor(x * ratio);
@@ -282,4 +283,24 @@ function paint(
   gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+/** Clear after the lamps and guides, including travelling light. */
+function clearMasks(
+  gl: WebGL2RenderingContext,
+  height: number,
+  ratio: number,
+  boxes: readonly Box[],
+) {
+  if (boxes.length === 0) return;
+  gl.enable(gl.SCISSOR_TEST);
+  for (const box of boxes) {
+    const left = Math.floor(box.x1 * ratio);
+    const top = Math.floor(box.y1 * ratio);
+    const right = Math.ceil(box.x2 * ratio);
+    const bottom = Math.ceil(box.y2 * ratio);
+    gl.scissor(left, height - bottom, right - left, bottom - top);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+  gl.disable(gl.SCISSOR_TEST);
 }
