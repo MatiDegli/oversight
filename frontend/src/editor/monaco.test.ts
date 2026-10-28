@@ -12,6 +12,17 @@ vi.mock("monaco-editor/editor/editor.worker.js?worker", () => ({
 
 afterEach(() => vi.unstubAllGlobals());
 
+it("ships DOMPurify 3.4.17 in Monaco's vendored sanitizer", () => {
+  const source = readFileSync(
+    new URL(import.meta.resolve("monaco-editor/base/browser/dompurify/dompurify.js")),
+    "utf8",
+  );
+  expect(source, "Restore the Monaco DOMPurify patch before updating Monaco").toContain(
+    "@license DOMPurify 3.4.17 |",
+  );
+  expect(source).toMatch(/DOMPurify\.version = ["']3\.4\.17["']/);
+});
+
 it("resolves the configured worker through the installed package exports", () => {
   const source = readFileSync(new URL("./monaco.ts", import.meta.url), "utf8");
   const worker = /from "([^"]+)\?worker"/.exec(source)?.[1];
