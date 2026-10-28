@@ -123,7 +123,9 @@ async def save_main_transaction(
             return FileSaved(path=path, hash=saved)  # the same bytes: no commit, no event
         try:
             # `:(literal)`: the path is a file's name, never a glob or a pathspec's magic.
+            await ctx.workspace.veto_index(main, timeout_s=ctx.timeout)
             await ctx.git(main, "add", "--", f":(literal){path}")
+            await ctx.workspace.veto_index(main, timeout_s=ctx.timeout)
             await ctx.git(main, "commit", "-q", "-m", f"Edit {path}", commit_as="user")
         except Exception as failure:
             await settle_save(ctx, path, pre, original, saved, failure)
@@ -223,7 +225,7 @@ async def rescan_transaction(ctx: ChangeContext) -> None:
 async def main_blocked(ctx: ChangeContext) -> str | None:
     """Why main cannot take a commit or a rescan now, or None: M5's check, then `check_main`'s
     facts. The caller holds main's lock, and `check_main` takes it again."""
-    if ctx.state.suspect:
+    if ctx.state.suspect or ctx.workspace.integrity.main_suspect:
         return SUSPECT
     clean = await check_main(ctx)
     if clean is None:

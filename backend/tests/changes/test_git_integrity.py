@@ -6,14 +6,51 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from changes_helpers import EDIT, Harness, bounded
+from changes_helpers import EDIT, PATH, Harness, bounded, edit_main
 from decision_helpers import observed_target
 from git_attack_helpers import malicious_sub, raw_git, suite_attack
 
-from oversight.workspace import ProcessResult, SuiteRun, Tree, core, run_process, test_tree
+from oversight.workspace import (
+    ProcessResult,
+    SuiteRun,
+    Tree,
+    WorkspaceError,
+    core,
+    run_process,
+    test_tree,
+)
 from oversight_contracts.events import ChangeProposed, ChangeResolved, ErrorReport
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize("when", ["before_add", "after_add"])
+@bounded
+async def test_main_save_vetoes_gitlinks(
+    h: Harness, monkeypatch: pytest.MonkeyPatch, when: str
+) -> None:
+    pre = await h.main_head()
+    content, base = await edit_main(h, PATH, "return 1", "return 4")
+    real = h.workspace.git
+
+    async def poison() -> None:
+        await raw_git(
+            h.workspace.main.root, "update-index", "--add", "--cacheinfo", f"160000,{pre},sub"
+        )
+
+    async def git(target: Tree, *args: str, **kwargs: Any) -> ProcessResult:
+        assert args[0] != "commit", "main save let a gitlink reach commit"
+        result = await real(target, *args, **kwargs)
+        if args[0] == "add" and when == "after_add":
+            await poison()
+        return result
+
+    if when == "before_add":
+        await poison()
+    monkeypatch.setattr(h.workspace, "git", git)
+    with pytest.raises(WorkspaceError, match=r"saving .* failed"):
+        await h.manager.save_main(PATH, content, base)
+    assert await h.main_head() == pre
 
 
 def monitor_every_server_git(

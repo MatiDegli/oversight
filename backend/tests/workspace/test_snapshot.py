@@ -1,0 +1,100 @@
+"""Raw snapshots retain the real index and refuse uncertain metadata without Git."""
+
+import os
+import time
+from pathlib import Path
+from unittest.mock import AsyncMock
+
+import pytest
+
+from oversight.workspace import Workspace, core, test_tree
+from oversight.workspace.integrity import IntegrityError
+from oversight.workspace.metadata_io import MAX_FILE, Budget, read_entry, replace_file
+from oversight.workspace.snapshot import MetadataSnapshot, finish_snapshot, take_snapshot
+
+pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize("absent", [False, True])
+async def test_capture_keeps_the_real_index_separate(workspace: Workspace, absent: bool) -> None:
+    tree = await workspace.create_worktree("agent-1")
+    index = tree.git_identity.directory / "index"
+    if absent:
+        index.unlink()
+    before = index.read_bytes() if index.exists() else None
+    snapshot = take_snapshot(tree.git_identity, workspace.integrity, 5)
+    async with workspace.locks(main=True, agent_id=tree.agent_id), workspace.git_lease():
+        await test_tree.capture_test_tree(
+            tree.root,
+            workspace.tmp_dir,
+            env=workspace._git_env(tree, None, None),
+            flags=core.GIT_FLAGS,
+            timeout_s=5,
+        )
+        finish_snapshot(snapshot, workspace.integrity)
+    assert (index.read_bytes() if index.exists() else None) == before
+    assert not workspace.integrity.rules_suspended
+
+
+@pytest.mark.parametrize("kind", ["symlink", "parent_link", "fifo", "oversize", "deadline"])
+async def test_unsafe_snapshot_never_spawns(
+    workspace: Workspace, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kind: str
+) -> None:
+    info = workspace.main.git_identity.common / "info"
+    target = info / "test-input"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "safe").write_text("untouched")
+    timeout = 5
+    if kind == "symlink":
+        target.symlink_to(outside / "safe")
+    elif kind == "parent_link":
+        info.rename(info.with_name("saved-info"))
+        info.symlink_to(outside, target_is_directory=True)
+    elif kind == "fifo":
+        os.mkfifo(target)
+    elif kind == "oversize":
+        with target.open("wb") as handle:
+            handle.truncate(MAX_FILE + 1)
+    else:
+        timeout = 0
+    spawn = AsyncMock()
+    monkeypatch.setattr(core, "run_process", spawn)
+    monkeypatch.setattr(test_tree, "run_process", spawn)
+    with pytest.raises(IntegrityError, match="code=main_suspect"):
+        await workspace.run_tests(workspace.main, timeout_s=timeout, spawn=spawn)
+    spawn.assert_not_awaited()
+    assert workspace.integrity.rules_suspended and workspace.integrity.main_suspect
+    assert (outside / "safe").read_text() == "untouched"
+
+
+async def test_ref_compare_and_swap_does_not_overwrite_new_writer(workspace: Workspace) -> None:
+    path = workspace.main.git_identity.common / "refs/heads/main"
+    deadline = time.monotonic() + 5
+    previous = read_entry(path, Budget(deadline))
+    path.write_bytes(b"1" * 40 + b"\n")
+    with pytest.raises(IntegrityError, match="compare-and-swap failed"):
+        replace_file(path, previous, previous, deadline, cas=True)
+    assert path.read_bytes() == b"1" * 40 + b"\n"
+    assert not path.with_suffix(".lock").exists()
+
+
+@pytest.mark.parametrize("lock", ["index.lock", "HEAD.lock", "refs/heads/main.lock"])
+async def test_unknown_lock_is_never_removed(workspace: Workspace, lock: str) -> None:
+    snapshot = take_snapshot(workspace.main.git_identity, workspace.integrity, 5)
+    path = workspace.main.git_identity.common / lock
+    path.write_bytes(b"unknown owner")
+    with pytest.raises(IntegrityError, match="code=main_suspect"):
+        finish_snapshot(snapshot, workspace.integrity)
+    assert path.read_bytes() == b"unknown owner"
+    assert workspace.integrity.rules_suspended and workspace.integrity.main_suspect
+
+
+async def test_snapshot_api_does_not_invoke_git(
+    workspace: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spawn = AsyncMock()
+    monkeypatch.setattr(core, "run_process", spawn)
+    snapshot = MetadataSnapshot.take(workspace.main.git_identity, time.monotonic() + 5)
+    finish_snapshot(snapshot, workspace.integrity)
+    spawn.assert_not_awaited()

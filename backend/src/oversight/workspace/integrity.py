@@ -84,7 +84,7 @@ class GitIdentity:
                 )
             if not valid or os.path.realpath(self.directory) != str(self.directory):
                 raise IntegrityError("unexpected Git registration", ".git")
-        except OSError as error:
+        except (OSError, UnicodeError, SizeLimitError) as error:
             raise IntegrityError("unreadable Git registration", ".git") from error
 
     def pins(self) -> dict[str, str]:

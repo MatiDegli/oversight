@@ -25,6 +25,14 @@ from oversight.workspace.runner import run_process
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.parametrize("data", [b"x" * (256 * 1024 + 1), b"\xff"])
+async def test_registration_wraps_invalid_pointer(workspace: Workspace, data: bytes) -> None:
+    tree = await workspace.create_worktree("agent-1")
+    (tree.root / ".git").write_bytes(data)
+    with pytest.raises(IntegrityError, match="unreadable Git registration"):
+        tree.git_identity.verify_registration()
+
+
 @pytest.mark.parametrize("name", [".git", ".GiT"])
 @pytest.mark.parametrize("kind", ["file", "directory", "file_link", "directory_link"])
 @pytest.mark.parametrize("at_root", [False, True])

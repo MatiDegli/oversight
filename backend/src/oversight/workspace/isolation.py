@@ -188,6 +188,7 @@ class IsolatedRunner:
         self.port = port
         self.entry: dict[str, object] | None = None
         self._ready = False
+        self.cleanup_complete = True
 
     async def version(self, cwd: Path) -> str:
         result = await self._run(["--version"], cwd, 5, None, 1000, probe=True)
@@ -263,6 +264,7 @@ class IsolatedRunner:
         args += [os.readlink(f"/proc/self/ns/{name}") for name in ("net", "pid", "mnt")]
         args += [str(os.stat("/proc").st_dev), MARKER + str(self.runtime), str(self.port)]
         command = [*FLAGS, *argv] if probe else [*signature(self.runtime, binary)[1:], *args, *argv]
+        self.cleanup_complete = False
         try:
             transport, _ = await asyncio.get_running_loop().subprocess_exec(
                 lambda: collector,
@@ -275,6 +277,7 @@ class IsolatedRunner:
                 pass_fds=(writefd, ackread),
             )
         except BaseException:
+            self.cleanup_complete = True  # No process was launched.
             os.close(readfd)
             os.close(ackwrite)
             raise
@@ -337,6 +340,7 @@ class IsolatedRunner:
             entry.cancel()
             await asyncio.gather(entry, watcher, return_exceptions=True)
             await _cleanup(transport, collector, init)
+            self.cleanup_complete = True
         if not confirmed and not abort.is_set():
             raise IsolationUnavailable("helper did not confirm entry")
         return ProcessResult(

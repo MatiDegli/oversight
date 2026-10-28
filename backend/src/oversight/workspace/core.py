@@ -12,7 +12,7 @@ import shutil
 import time
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
@@ -50,8 +50,9 @@ from oversight.workspace.isolation import refuse_orphans
 from oversight.workspace.locks import Locks, offload
 from oversight.workspace.ranges import FileRange, read_range
 from oversight.workspace.runner import ProcessResult, Spawn, run_process
-from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
-from oversight.workspace.test_tree import capture_test_tree
+from oversight.workspace.snapshot import IntegrityState
+from oversight.workspace.suite import SuiteRun
+from oversight.workspace.suite_guard import guarded_suite
 from oversight_contracts.common import AgentId
 
 PLUGIN_DIR = Path(__file__).resolve().parent / "report_plugin"
@@ -223,6 +224,7 @@ class Workspace:
         self._demo_python = demo_python or runtime_root / "demo-venv" / "bin" / "python"
         self._demo_python_given = demo_python is not None
         self._locks = Locks()
+        self.integrity = IntegrityState()
         self.git_identities: dict[Path, GitIdentity] = {}
         self._main = Tree(self, runtime_root / "workspace", None, "main", None)
         self._trees: dict[str, Tree] = {}
@@ -306,6 +308,7 @@ class Workspace:
         """Run git in `tree`. The caller holds the tree's lock. `args` start with the subcommand:
         the only global options are the ones this module adds, so a caller cannot move the git
         directory or the work tree, or define an alias. `stash` and `rebase` never spawn."""
+        self.integrity.before_git()
         if not self._locks.holds(main=tree.agent_id is None, agent_id=tree.agent_id):
             raise LockOrderError("git runs only while the caller holds the tree's lock")
         if not args or args[0].startswith("-"):
@@ -318,11 +321,17 @@ class Workspace:
             if target not in self.git_identities:
                 raise WorkspaceError("Git worktree removal requires a registered tree")
             scan_identity = self.git_identities[target]
+
+        def verify() -> None:
+            # A caller may have queued before a suite latched uncertainty under the lease.
+            self.integrity.before_git()
+            tree.verify_root()
+
         return await guarded_git(
             tree.git_identity,
             args,
             scan_identity=scan_identity,
-            verify=tree.verify_root,
+            verify=verify,
             lease=self.git_lease(),
             flags=GIT_FLAGS,
             env=self._git_env(tree, author, date),
@@ -563,28 +572,17 @@ class Workspace:
             self.git_lease(),
         ):
             await offload(lambda: self.tmp_dir.mkdir(mode=DIR_MODE, parents=True, exist_ok=True))
-            tested_tree, tested_commit = await capture_test_tree(
-                tree.root,
-                self.tmp_dir,
-                env=self._git_env(tree, None, None),
+            return await guarded_suite(
+                self,
+                tree,
+                python=self._demo_python,
+                plugin_dir=PLUGIN_DIR,
                 flags=GIT_FLAGS,
+                git_env=self._git_env(tree, None, None),
                 timeout_s=timeout_s,
+                case_ids=case_ids,
+                spawn=spawn or run_process,
             )
-            try:
-                run = await run_suite(
-                    python=self._demo_python,
-                    plugin_dir=PLUGIN_DIR,
-                    runtime_root=self._root,
-                    tree_root=tree.root,
-                    timeout_s=timeout_s,
-                    redact=self.redact,
-                    spawn=spawn or run_process,
-                    case_ids=case_ids,
-                )
-            except (SuiteInterrupted, SuiteUnavailable) as error:
-                error.run = replace(error.run, tested_tree=tested_tree, tested_commit=tested_commit)
-                raise
-            return replace(run, tested_tree=tested_tree, tested_commit=tested_commit)
 
 
 __all__ = ["Author", "Tree", "Workspace"]
