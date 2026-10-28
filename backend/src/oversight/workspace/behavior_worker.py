@@ -7,6 +7,7 @@ The report is a bounded file, never stdout. Limits deliberately measure only a f
 
 import ast
 import copy
+import hashlib
 import importlib
 import inspect
 import json
@@ -96,6 +97,65 @@ def encode(
         seen.remove(id(value))
 
 
+def fingerprint(value: Any, seen: set[int] | None = None) -> str:
+    """Hash the full typed value under the call alarm; refuse uncertain representations.
+
+    The display encoder's depth, item and text cuts never become equality evidence.
+    Unsupported values and cycles may be displayed privately, but are not compared.
+    """
+    seen = set() if seen is None else seen
+    kind = cast(Any, type(value))
+    digest = hashlib.sha256()
+
+    def token(part: str | bytes) -> None:
+        raw = part.encode("utf-8", errors="surrogatepass") if isinstance(part, str) else part
+        digest.update(str(len(raw)).encode() + b":" + raw)
+
+    token(kind.__module__ + "." + kind.__qualname__)
+    if value is None:
+        pass
+    elif kind is bool:
+        token(str(value))
+    elif kind is int:
+        token(hex(value))
+    elif kind is float:
+        token("nan" if math.isnan(value) else value.hex())
+    elif kind in (str, bytes):
+        token(value)
+    else:
+        if id(value) in seen:
+            raise ValueError("cyclic result")
+        seen.add(id(value))
+        try:
+            if kind in (list, tuple, set, frozenset):
+                items = (fingerprint(item, seen) for item in value)
+                if kind in (set, frozenset):
+                    items = sorted(items)
+                for item in items:
+                    token(item)
+            elif kind is dict:
+                for key, item in sorted(
+                    (fingerprint(k, seen), fingerprint(v, seen)) for k, v in value.items()
+                ):
+                    token(key)
+                    token(item)
+            else:
+                # __dict__ alone misses slots, descriptors and opaque native state.
+                raise ValueError("unsupported full result")
+        finally:
+            seen.remove(id(value))
+    return digest.hexdigest()
+
+
+def value_result(value: Any) -> dict[str, Any]:
+    display = encode(value)
+    try:
+        identity = fingerprint(value)
+    except (ValueError, TypeError, RecursionError):
+        return {"kind": "unrepresentable", "value": display}
+    return {"kind": "value", "value": display, "fingerprint": identity}
+
+
 class CallTimeout(BaseException):
     pass
 
@@ -120,11 +180,18 @@ def call(function: Callable[..., Any], literal: str, timeout_s: float) -> dict[s
         arguments = copy.deepcopy((bound.args, bound.kwargs))
         try:
             value = function(*arguments[0], **arguments[1])
-            return {"kind": "value", "value": encode(value)}
         except CallTimeout:
             raise
         except BaseException as error:
-            return {"kind": "raised", "class": class_name(error), "message": str(error)[:MAX_TEXT]}
+            message = str(error)
+            full_class = f"{type(error).__module__}.{type(error).__qualname__}"
+            return {
+                "kind": "raised",
+                "class": class_name(error),
+                "message": message[:MAX_TEXT],
+                "fingerprint": fingerprint(("raised", full_class, message)),
+            }
+        return value_result(value)
 
     try:
         result = limited(execute, timeout_s)
@@ -133,7 +200,7 @@ def call(function: Callable[..., Any], literal: str, timeout_s: float) -> dict[s
     except BaseException as error:
         result = {"kind": "unrepresentable", "class": class_name(error)}
     if len(canonical(result).encode()) > MAX_RESULT:
-        return {"kind": "value", "value": ["cut", "encoded result size"]}
+        return {**result, "value": ["cut", "encoded result size"]}
     return result
 
 
