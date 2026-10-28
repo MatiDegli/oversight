@@ -128,7 +128,16 @@ const probeLabels: Record<AddedTestProbe["result"], string> = {
 };
 
 /** Compact, scrollable evidence; events never move focus or open it automatically. */
-export function ReviewFacts({ state, proposal }: { state: State; proposal: ChangeProposed }) {
+export function ReviewFacts({
+  state,
+  proposal,
+  scrollable = true,
+}: {
+  state: State;
+  proposal: ChangeProposed;
+  /** The summary review shares one scroll region with the rest of its context. */
+  scrollable?: boolean;
+}) {
   const facts = factsForRevision(state, proposal);
   if (!facts) return <span> · Facts incomplete: facts for this revision are unavailable</span>;
   const executions = facts.test_runs
@@ -146,7 +155,9 @@ export function ReviewFacts({ state, proposal }: { state: State; proposal: Chang
         <summary className="cursor-pointer rounded-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text">
           Review signals · {facts.complete ? "Recorded facts" : "Incomplete"}
         </summary>
-        <div className="mt-2 max-h-48 overflow-y-auto break-words text-muted">
+        <div
+          className={`mt-2 break-words text-muted${scrollable ? " max-h-48 overflow-y-auto" : ""}`}
+        >
           <p>Signals for your review. You decide.</p>
           <p>
             Size: {proposal.files.length} files, +{proposal.lines_added}/−{proposal.lines_removed}{" "}
