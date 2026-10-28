@@ -10,6 +10,7 @@ from oversight.changes._state import ChangeRecord
 from oversight.changes._suite_evidence import added_ids, publish_suite
 from oversight.changes._support import ChangeContext
 from oversight.workspace import (
+    IsolationUnavailable,
     SuiteInterrupted,
     SuiteRun,
     SuiteUnavailable,
@@ -186,7 +187,10 @@ async def probe_added_tests(
             await publish_suite(ctx, rec, error.run, phase=phase, revision=revision)
             raise
         except (TimeoutError, WorkspaceError, OSError) as error:
-            problems.append(f"added tests: {phase} unavailable ({type(error).__name__})")
+            detail = f"added tests: {phase} unavailable ({type(error).__name__})"
+            if isinstance(error, IsolationUnavailable):
+                detail += ": " + ctx.workspace.redact(str(error))
+            problems.append(detail)
             if run is None:
                 seqs.append(None)
                 continue
@@ -209,24 +213,20 @@ async def probe_added_tests(
     )
     for probe in probes:
         if probe.result == "unknown":
-            complete = all(
-                rec.executions[seq].suite.cases_complete for seq in (before_seq, after_seq)
-            )
-            base = rec.executions[before_seq].suite
-            base_error = base.outcome == "error" or any(
-                case.outcome == "error"
-                and case.test_id in {probe.test_id, probe.test_id.split("::", 1)[0]}
-                for case in base.cases or []
-            )
-            reason = (
-                "base setup or import error"
-                if base_error
-                else "before case not collected"
-                if complete
-                else "incomplete probe evidence"
-            )
+            reason = _unknown_reason(probe, rec.executions[before_seq], rec.executions[after_seq])
             problems.append(f"added tests: {probe.test_id}: {reason}")
     return probes, tuple(problems)
+
+
+def _unknown_reason(probe: AddedTestProbe, before: SuiteExecution, after: SuiteExecution) -> str:
+    base = before.suite
+    if base.outcome == "error" or any(
+        case.outcome == "error" and case.test_id in {probe.test_id, probe.test_id.split("::", 1)[0]}
+        for case in base.cases or []
+    ):
+        return "base setup or import error"
+    complete = before.suite.cases_complete and after.suite.cases_complete
+    return "before case not collected" if complete else "incomplete probe evidence"
 
 
 async def _run(

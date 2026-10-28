@@ -1,6 +1,7 @@
 """Session isolation authority, independent of local acceptance and Git integrity latches."""
 
 import asyncio
+import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,8 @@ from typing import Literal
 from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable
 from oversight.workspace.runner import Spawn
 from oversight.workspace.snapshot import IntegrityState
+
+_log = logging.getLogger(__name__)
 
 type IsolationPolicy = Literal["required", "best_effort"]
 
@@ -110,8 +113,11 @@ class SessionIsolation:
             raise
 
     def invalidate(self, reason: str) -> None:
+        if self._invalidated:
+            return
         self._invalidated = True
-        self._reason = reason
+        self._reason = reason.replace(str(self.runtime), ".runtime")
+        _log.warning("Session isolation revoked: %s", self._reason)
 
     def select(self, policy: IsolationPolicy, injected: Spawn | None, open_runner: Spawn) -> Spawn:
         if policy not in ("required", "best_effort"):
