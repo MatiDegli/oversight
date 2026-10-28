@@ -1,0 +1,6498 @@
+{
+  "boltons": {
+    "x": 163.0,
+    "y": 27915.0
+  },
+  "boltons.cacheutils": {
+    "x": 609.0,
+    "y": 11663.5
+  },
+  "boltons.cacheutils:CachedFunction": {
+    "x": 614.0,
+    "y": 11454.0
+  },
+  "boltons.cacheutils:CachedFunction.__call__": {
+    "x": 614.0,
+    "y": 11470.0
+  },
+  "boltons.cacheutils:CachedFunction.__init__": {
+    "x": 614.0,
+    "y": 11413.0
+  },
+  "boltons.cacheutils:CachedFunction.__repr__": {
+    "x": 614.0,
+    "y": 11527.0
+  },
+  "boltons.cacheutils:CachedMethod": {
+    "x": 614.0,
+    "y": 11709.5
+  },
+  "boltons.cacheutils:CachedMethod.__call__": {
+    "x": 614.0,
+    "y": 11754.0
+  },
+  "boltons.cacheutils:CachedMethod.__get__": {
+    "x": 614.0,
+    "y": 11697.0
+  },
+  "boltons.cacheutils:CachedMethod.__init__": {
+    "x": 614.0,
+    "y": 11640.0
+  },
+  "boltons.cacheutils:CachedMethod.__repr__": {
+    "x": 614.0,
+    "y": 11811.0
+  },
+  "boltons.cacheutils:LRI": {
+    "x": 614.0,
+    "y": 10317.0
+  },
+  "boltons.cacheutils:LRI.__delitem__": {
+    "x": 614.0,
+    "y": 10390.0
+  },
+  "boltons.cacheutils:LRI.__eq__": {
+    "x": 614.0,
+    "y": 10846.0
+  },
+  "boltons.cacheutils:LRI.__getitem__": {
+    "x": 614.0,
+    "y": 10276.0
+  },
+  "boltons.cacheutils:LRI.__init__": {
+    "x": 614.0,
+    "y": 9763.0
+  },
+  "boltons.cacheutils:LRI.__ior__": {
+    "x": 614.0,
+    "y": 10789.0
+  },
+  "boltons.cacheutils:LRI.__repr__": {
+    "x": 614.0,
+    "y": 10903.0
+  },
+  "boltons.cacheutils:LRI.__setitem__": {
+    "x": 614.0,
+    "y": 10219.0
+  },
+  "boltons.cacheutils:LRI._get_flattened_ll": {
+    "x": 614.0,
+    "y": 9934.0
+  },
+  "boltons.cacheutils:LRI._get_link_and_move_to_front_of_ll": {
+    "x": 614.0,
+    "y": 9991.0
+  },
+  "boltons.cacheutils:LRI._init_ll": {
+    "x": 614.0,
+    "y": 9820.0
+  },
+  "boltons.cacheutils:LRI._print_ll": {
+    "x": 614.0,
+    "y": 9877.0
+  },
+  "boltons.cacheutils:LRI._remove_from_ll": {
+    "x": 614.0,
+    "y": 10162.0
+  },
+  "boltons.cacheutils:LRI._set_key_and_add_to_front_of_ll": {
+    "x": 614.0,
+    "y": 10048.0
+  },
+  "boltons.cacheutils:LRI._set_key_and_evict_last_in_ll": {
+    "x": 614.0,
+    "y": 10105.0
+  },
+  "boltons.cacheutils:LRI.clear": {
+    "x": 614.0,
+    "y": 10561.0
+  },
+  "boltons.cacheutils:LRI.copy": {
+    "x": 614.0,
+    "y": 10618.0
+  },
+  "boltons.cacheutils:LRI.get": {
+    "x": 614.0,
+    "y": 10333.0
+  },
+  "boltons.cacheutils:LRI.pop": {
+    "x": 614.0,
+    "y": 10447.0
+  },
+  "boltons.cacheutils:LRI.popitem": {
+    "x": 614.0,
+    "y": 10504.0
+  },
+  "boltons.cacheutils:LRI.setdefault": {
+    "x": 614.0,
+    "y": 10675.0
+  },
+  "boltons.cacheutils:LRI.update": {
+    "x": 614.0,
+    "y": 10732.0
+  },
+  "boltons.cacheutils:LRU": {
+    "x": 614.0,
+    "y": 11000.0
+  },
+  "boltons.cacheutils:LRU.__getitem__": {
+    "x": 614.0,
+    "y": 11016.0
+  },
+  "boltons.cacheutils:MinIDMap": {
+    "x": 614.0,
+    "y": 13587.5
+  },
+  "boltons.cacheutils:MinIDMap.__contains__": {
+    "x": 614.0,
+    "y": 13632.0
+  },
+  "boltons.cacheutils:MinIDMap.__init__": {
+    "x": 614.0,
+    "y": 13404.0
+  },
+  "boltons.cacheutils:MinIDMap.__iter__": {
+    "x": 614.0,
+    "y": 13689.0
+  },
+  "boltons.cacheutils:MinIDMap.__len__": {
+    "x": 614.0,
+    "y": 13746.0
+  },
+  "boltons.cacheutils:MinIDMap._clean": {
+    "x": 614.0,
+    "y": 13575.0
+  },
+  "boltons.cacheutils:MinIDMap.drop": {
+    "x": 614.0,
+    "y": 13518.0
+  },
+  "boltons.cacheutils:MinIDMap.get": {
+    "x": 614.0,
+    "y": 13461.0
+  },
+  "boltons.cacheutils:MinIDMap.iteritems": {
+    "x": 614.0,
+    "y": 13803.0
+  },
+  "boltons.cacheutils:RLock": {
+    "x": 614.0,
+    "y": 9605.5
+  },
+  "boltons.cacheutils:RLock.__enter__": {
+    "x": 614.0,
+    "y": 9593.0
+  },
+  "boltons.cacheutils:RLock.__exit__": {
+    "x": 614.0,
+    "y": 9650.0
+  },
+  "boltons.cacheutils:ThresholdCounter": {
+    "x": 614.0,
+    "y": 12762.0
+  },
+  "boltons.cacheutils:ThresholdCounter.__contains__": {
+    "x": 614.0,
+    "y": 12835.0
+  },
+  "boltons.cacheutils:ThresholdCounter.__getitem__": {
+    "x": 614.0,
+    "y": 12721.0
+  },
+  "boltons.cacheutils:ThresholdCounter.__init__": {
+    "x": 614.0,
+    "y": 12265.0
+  },
+  "boltons.cacheutils:ThresholdCounter.__len__": {
+    "x": 614.0,
+    "y": 12778.0
+  },
+  "boltons.cacheutils:ThresholdCounter.add": {
+    "x": 614.0,
+    "y": 12379.0
+  },
+  "boltons.cacheutils:ThresholdCounter.elements": {
+    "x": 614.0,
+    "y": 12436.0
+  },
+  "boltons.cacheutils:ThresholdCounter.get": {
+    "x": 614.0,
+    "y": 13234.0
+  },
+  "boltons.cacheutils:ThresholdCounter.get_common_count": {
+    "x": 614.0,
+    "y": 12550.0
+  },
+  "boltons.cacheutils:ThresholdCounter.get_commonality": {
+    "x": 614.0,
+    "y": 12664.0
+  },
+  "boltons.cacheutils:ThresholdCounter.get_uncommon_count": {
+    "x": 614.0,
+    "y": 12607.0
+  },
+  "boltons.cacheutils:ThresholdCounter.items": {
+    "x": 614.0,
+    "y": 13177.0
+  },
+  "boltons.cacheutils:ThresholdCounter.iteritems": {
+    "x": 614.0,
+    "y": 13120.0
+  },
+  "boltons.cacheutils:ThresholdCounter.iterkeys": {
+    "x": 614.0,
+    "y": 12892.0
+  },
+  "boltons.cacheutils:ThresholdCounter.itervalues": {
+    "x": 614.0,
+    "y": 13006.0
+  },
+  "boltons.cacheutils:ThresholdCounter.keys": {
+    "x": 614.0,
+    "y": 12949.0
+  },
+  "boltons.cacheutils:ThresholdCounter.most_common": {
+    "x": 614.0,
+    "y": 12493.0
+  },
+  "boltons.cacheutils:ThresholdCounter.threshold": {
+    "x": 614.0,
+    "y": 12322.0
+  },
+  "boltons.cacheutils:ThresholdCounter.update": {
+    "x": 614.0,
+    "y": 13291.0
+  },
+  "boltons.cacheutils:ThresholdCounter.values": {
+    "x": 614.0,
+    "y": 13063.0
+  },
+  "boltons.cacheutils:_HashedKey": {
+    "x": 614.0,
+    "y": 11170.0
+  },
+  "boltons.cacheutils:_HashedKey.__hash__": {
+    "x": 614.0,
+    "y": 11186.0
+  },
+  "boltons.cacheutils:_HashedKey.__init__": {
+    "x": 614.0,
+    "y": 11129.0
+  },
+  "boltons.cacheutils:_HashedKey.__repr__": {
+    "x": 614.0,
+    "y": 11243.0
+  },
+  "boltons.cacheutils:cached": {
+    "x": 614.0,
+    "y": 11880.0
+  },
+  "boltons.cacheutils:cachedmethod": {
+    "x": 614.0,
+    "y": 11937.0
+  },
+  "boltons.cacheutils:cachedproperty": {
+    "x": 614.0,
+    "y": 12079.0
+  },
+  "boltons.cacheutils:cachedproperty.__get__": {
+    "x": 614.0,
+    "y": 12095.0
+  },
+  "boltons.cacheutils:cachedproperty.__init__": {
+    "x": 614.0,
+    "y": 12038.0
+  },
+  "boltons.cacheutils:cachedproperty.__repr__": {
+    "x": 614.0,
+    "y": 12152.0
+  },
+  "boltons.cacheutils:make_cache_key": {
+    "x": 614.0,
+    "y": 11312.0
+  },
+  "boltons.debugutils": {
+    "x": 163.0,
+    "y": 28682.0
+  },
+  "boltons.debugutils:pdb_on_exception": {
+    "x": 168.0,
+    "y": 28672.0
+  },
+  "boltons.debugutils:pdb_on_signal": {
+    "x": 168.0,
+    "y": 28615.0
+  },
+  "boltons.debugutils:trace_print_hook": {
+    "x": 168.0,
+    "y": 28729.0
+  },
+  "boltons.debugutils:wrap_trace": {
+    "x": 168.0,
+    "y": 28786.0
+  },
+  "boltons.deprutils": {
+    "x": 609.0,
+    "y": 56332.5
+  },
+  "boltons.deprutils:DeprecatableModule": {
+    "x": 614.0,
+    "y": 56322.5
+  },
+  "boltons.deprutils:DeprecatableModule.__getattribute__": {
+    "x": 614.0,
+    "y": 56367.0
+  },
+  "boltons.deprutils:DeprecatableModule.__init__": {
+    "x": 614.0,
+    "y": 56310.0
+  },
+  "boltons.deprutils:deprecate_module_member": {
+    "x": 614.0,
+    "y": 56436.0
+  },
+  "boltons.dictutils": {
+    "x": 609.0,
+    "y": 6673.5
+  },
+  "boltons.dictutils:FastIterOrderedMultiDict": {
+    "x": 614.0,
+    "y": 6852.0
+  },
+  "boltons.dictutils:FastIterOrderedMultiDict.__reversed__": {
+    "x": 614.0,
+    "y": 7039.0
+  },
+  "boltons.dictutils:FastIterOrderedMultiDict._clear_ll": {
+    "x": 614.0,
+    "y": 6697.0
+  },
+  "boltons.dictutils:FastIterOrderedMultiDict._insert": {
+    "x": 614.0,
+    "y": 6754.0
+  },
+  "boltons.dictutils:FastIterOrderedMultiDict._remove": {
+    "x": 614.0,
+    "y": 6811.0
+  },
+  "boltons.dictutils:FastIterOrderedMultiDict._remove_all": {
+    "x": 614.0,
+    "y": 6868.0
+  },
+  "boltons.dictutils:FastIterOrderedMultiDict.iteritems": {
+    "x": 614.0,
+    "y": 6925.0
+  },
+  "boltons.dictutils:FastIterOrderedMultiDict.iterkeys": {
+    "x": 614.0,
+    "y": 6982.0
+  },
+  "boltons.dictutils:FrozenDict": {
+    "x": 614.0,
+    "y": 9153.0
+  },
+  "boltons.dictutils:FrozenDict.__copy__": {
+    "x": 614.0,
+    "y": 9283.0
+  },
+  "boltons.dictutils:FrozenDict.__hash__": {
+    "x": 614.0,
+    "y": 9226.0
+  },
+  "boltons.dictutils:FrozenDict.__reduce_ex__": {
+    "x": 614.0,
+    "y": 9169.0
+  },
+  "boltons.dictutils:FrozenDict.__repr__": {
+    "x": 614.0,
+    "y": 9112.0
+  },
+  "boltons.dictutils:FrozenDict._raise_frozen_typeerror": {
+    "x": 614.0,
+    "y": 9340.0
+  },
+  "boltons.dictutils:FrozenDict.fromkeys": {
+    "x": 614.0,
+    "y": 9055.0
+  },
+  "boltons.dictutils:FrozenDict.updated": {
+    "x": 614.0,
+    "y": 8998.0
+  },
+  "boltons.dictutils:FrozenHashError": {
+    "x": 614.0,
+    "y": 8885.0
+  },
+  "boltons.dictutils:ManyToMany": {
+    "x": 614.0,
+    "y": 8303.5
+  },
+  "boltons.dictutils:ManyToMany.__contains__": {
+    "x": 614.0,
+    "y": 8519.0
+  },
+  "boltons.dictutils:ManyToMany.__delitem__": {
+    "x": 614.0,
+    "y": 8120.0
+  },
+  "boltons.dictutils:ManyToMany.__eq__": {
+    "x": 614.0,
+    "y": 8690.0
+  },
+  "boltons.dictutils:ManyToMany.__getitem__": {
+    "x": 614.0,
+    "y": 8006.0
+  },
+  "boltons.dictutils:ManyToMany.__init__": {
+    "x": 614.0,
+    "y": 7892.0
+  },
+  "boltons.dictutils:ManyToMany.__iter__": {
+    "x": 614.0,
+    "y": 8576.0
+  },
+  "boltons.dictutils:ManyToMany.__len__": {
+    "x": 614.0,
+    "y": 8633.0
+  },
+  "boltons.dictutils:ManyToMany.__repr__": {
+    "x": 614.0,
+    "y": 8747.0
+  },
+  "boltons.dictutils:ManyToMany.__setitem__": {
+    "x": 614.0,
+    "y": 8063.0
+  },
+  "boltons.dictutils:ManyToMany.add": {
+    "x": 614.0,
+    "y": 8234.0
+  },
+  "boltons.dictutils:ManyToMany.get": {
+    "x": 614.0,
+    "y": 7949.0
+  },
+  "boltons.dictutils:ManyToMany.iteritems": {
+    "x": 614.0,
+    "y": 8405.0
+  },
+  "boltons.dictutils:ManyToMany.keys": {
+    "x": 614.0,
+    "y": 8462.0
+  },
+  "boltons.dictutils:ManyToMany.remove": {
+    "x": 614.0,
+    "y": 8291.0
+  },
+  "boltons.dictutils:ManyToMany.replace": {
+    "x": 614.0,
+    "y": 8348.0
+  },
+  "boltons.dictutils:ManyToMany.update": {
+    "x": 614.0,
+    "y": 8177.0
+  },
+  "boltons.dictutils:OneToOne": {
+    "x": 614.0,
+    "y": 7449.5
+  },
+  "boltons.dictutils:OneToOne.__delitem__": {
+    "x": 614.0,
+    "y": 7323.0
+  },
+  "boltons.dictutils:OneToOne.__init__": {
+    "x": 614.0,
+    "y": 7152.0
+  },
+  "boltons.dictutils:OneToOne.__ior__": {
+    "x": 614.0,
+    "y": 7722.0
+  },
+  "boltons.dictutils:OneToOne.__repr__": {
+    "x": 614.0,
+    "y": 7779.0
+  },
+  "boltons.dictutils:OneToOne.__setitem__": {
+    "x": 614.0,
+    "y": 7266.0
+  },
+  "boltons.dictutils:OneToOne.clear": {
+    "x": 614.0,
+    "y": 7380.0
+  },
+  "boltons.dictutils:OneToOne.copy": {
+    "x": 614.0,
+    "y": 7437.0
+  },
+  "boltons.dictutils:OneToOne.pop": {
+    "x": 614.0,
+    "y": 7494.0
+  },
+  "boltons.dictutils:OneToOne.popitem": {
+    "x": 614.0,
+    "y": 7551.0
+  },
+  "boltons.dictutils:OneToOne.setdefault": {
+    "x": 614.0,
+    "y": 7608.0
+  },
+  "boltons.dictutils:OneToOne.unique": {
+    "x": 614.0,
+    "y": 7209.0
+  },
+  "boltons.dictutils:OneToOne.update": {
+    "x": 614.0,
+    "y": 7665.0
+  },
+  "boltons.dictutils:OrderedMultiDict": {
+    "x": 614.0,
+    "y": 5314.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__delitem__": {
+    "x": 614.0,
+    "y": 5159.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__eq__": {
+    "x": 614.0,
+    "y": 5216.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__getitem__": {
+    "x": 614.0,
+    "y": 5102.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__getstate__": {
+    "x": 614.0,
+    "y": 4190.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__init__": {
+    "x": 614.0,
+    "y": 4133.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__ior__": {
+    "x": 614.0,
+    "y": 5330.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__iter__": {
+    "x": 614.0,
+    "y": 6299.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__ne__": {
+    "x": 614.0,
+    "y": 5273.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__new__": {
+    "x": 614.0,
+    "y": 4076.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__reduce__": {
+    "x": 614.0,
+    "y": 4304.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__repr__": {
+    "x": 614.0,
+    "y": 6413.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__reversed__": {
+    "x": 614.0,
+    "y": 6356.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__setitem__": {
+    "x": 614.0,
+    "y": 5045.0
+  },
+  "boltons.dictutils:OrderedMultiDict.__setstate__": {
+    "x": 614.0,
+    "y": 4247.0
+  },
+  "boltons.dictutils:OrderedMultiDict._clear_ll": {
+    "x": 614.0,
+    "y": 4361.0
+  },
+  "boltons.dictutils:OrderedMultiDict._insert": {
+    "x": 614.0,
+    "y": 4418.0
+  },
+  "boltons.dictutils:OrderedMultiDict._remove": {
+    "x": 614.0,
+    "y": 5558.0
+  },
+  "boltons.dictutils:OrderedMultiDict._remove_all": {
+    "x": 614.0,
+    "y": 5615.0
+  },
+  "boltons.dictutils:OrderedMultiDict.add": {
+    "x": 614.0,
+    "y": 4475.0
+  },
+  "boltons.dictutils:OrderedMultiDict.addlist": {
+    "x": 614.0,
+    "y": 4532.0
+  },
+  "boltons.dictutils:OrderedMultiDict.clear": {
+    "x": 614.0,
+    "y": 4703.0
+  },
+  "boltons.dictutils:OrderedMultiDict.copy": {
+    "x": 614.0,
+    "y": 4817.0
+  },
+  "boltons.dictutils:OrderedMultiDict.counts": {
+    "x": 614.0,
+    "y": 6071.0
+  },
+  "boltons.dictutils:OrderedMultiDict.fromkeys": {
+    "x": 614.0,
+    "y": 4874.0
+  },
+  "boltons.dictutils:OrderedMultiDict.get": {
+    "x": 614.0,
+    "y": 4589.0
+  },
+  "boltons.dictutils:OrderedMultiDict.getlist": {
+    "x": 614.0,
+    "y": 4646.0
+  },
+  "boltons.dictutils:OrderedMultiDict.inverted": {
+    "x": 614.0,
+    "y": 6014.0
+  },
+  "boltons.dictutils:OrderedMultiDict.items": {
+    "x": 614.0,
+    "y": 6242.0
+  },
+  "boltons.dictutils:OrderedMultiDict.iteritems": {
+    "x": 614.0,
+    "y": 5672.0
+  },
+  "boltons.dictutils:OrderedMultiDict.iterkeys": {
+    "x": 614.0,
+    "y": 5729.0
+  },
+  "boltons.dictutils:OrderedMultiDict.itervalues": {
+    "x": 614.0,
+    "y": 5786.0
+  },
+  "boltons.dictutils:OrderedMultiDict.keys": {
+    "x": 614.0,
+    "y": 6128.0
+  },
+  "boltons.dictutils:OrderedMultiDict.pop": {
+    "x": 614.0,
+    "y": 5387.0
+  },
+  "boltons.dictutils:OrderedMultiDict.popall": {
+    "x": 614.0,
+    "y": 5444.0
+  },
+  "boltons.dictutils:OrderedMultiDict.poplast": {
+    "x": 614.0,
+    "y": 5501.0
+  },
+  "boltons.dictutils:OrderedMultiDict.setdefault": {
+    "x": 614.0,
+    "y": 4760.0
+  },
+  "boltons.dictutils:OrderedMultiDict.sorted": {
+    "x": 614.0,
+    "y": 5900.0
+  },
+  "boltons.dictutils:OrderedMultiDict.sortedvalues": {
+    "x": 614.0,
+    "y": 5957.0
+  },
+  "boltons.dictutils:OrderedMultiDict.todict": {
+    "x": 614.0,
+    "y": 5843.0
+  },
+  "boltons.dictutils:OrderedMultiDict.update": {
+    "x": 614.0,
+    "y": 4931.0
+  },
+  "boltons.dictutils:OrderedMultiDict.update_extend": {
+    "x": 614.0,
+    "y": 4988.0
+  },
+  "boltons.dictutils:OrderedMultiDict.values": {
+    "x": 614.0,
+    "y": 6185.0
+  },
+  "boltons.dictutils:OrderedMultiDict.viewitems": {
+    "x": 614.0,
+    "y": 6584.0
+  },
+  "boltons.dictutils:OrderedMultiDict.viewkeys": {
+    "x": 614.0,
+    "y": 6470.0
+  },
+  "boltons.dictutils:OrderedMultiDict.viewvalues": {
+    "x": 614.0,
+    "y": 6527.0
+  },
+  "boltons.dictutils:subdict": {
+    "x": 614.0,
+    "y": 8816.0
+  },
+  "boltons.easterutils": {
+    "x": 163.0,
+    "y": 28088.5
+  },
+  "boltons.easterutils:gobs_program": {
+    "x": 168.0,
+    "y": 28107.0
+  },
+  "boltons.ecoutils": {
+    "x": 163.0,
+    "y": 29475.0
+  },
+  "boltons.ecoutils:_args2cmd": {
+    "x": 168.0,
+    "y": 29693.0
+  },
+  "boltons.ecoutils:_args2sh": {
+    "x": 168.0,
+    "y": 29636.0
+  },
+  "boltons.ecoutils:_escape_shell_args": {
+    "x": 168.0,
+    "y": 29579.0
+  },
+  "boltons.ecoutils:dumps": {
+    "x": 168.0,
+    "y": 29408.0
+  },
+  "boltons.ecoutils:get_profile": {
+    "x": 168.0,
+    "y": 29351.0
+  },
+  "boltons.ecoutils:get_profile_json": {
+    "x": 168.0,
+    "y": 29465.0
+  },
+  "boltons.ecoutils:get_python_info": {
+    "x": 168.0,
+    "y": 29294.0
+  },
+  "boltons.ecoutils:main": {
+    "x": 168.0,
+    "y": 29522.0
+  },
+  "boltons.excutils": {
+    "x": 609.0,
+    "y": 37186.5
+  },
+  "boltons.excutils:ExceptionCauseMixin": {
+    "x": 614.0,
+    "y": 36709.5
+  },
+  "boltons.excutils:ExceptionCauseMixin.__new__": {
+    "x": 614.0,
+    "y": 36583.0
+  },
+  "boltons.excutils:ExceptionCauseMixin.__str__": {
+    "x": 614.0,
+    "y": 36868.0
+  },
+  "boltons.excutils:ExceptionCauseMixin._get_exc_str": {
+    "x": 614.0,
+    "y": 36811.0
+  },
+  "boltons.excutils:ExceptionCauseMixin._get_message": {
+    "x": 614.0,
+    "y": 36697.0
+  },
+  "boltons.excutils:ExceptionCauseMixin._get_trace_str": {
+    "x": 614.0,
+    "y": 36754.0
+  },
+  "boltons.excutils:ExceptionCauseMixin.get_str": {
+    "x": 614.0,
+    "y": 36640.0
+  },
+  "boltons.excutils:MathError": {
+    "x": 614.0,
+    "y": 37688.0
+  },
+  "boltons.excutils:_DeferredLine": {
+    "x": 614.0,
+    "y": 37306.0
+  },
+  "boltons.excutils:_DeferredLine.__eq__": {
+    "x": 614.0,
+    "y": 37208.0
+  },
+  "boltons.excutils:_DeferredLine.__init__": {
+    "x": 614.0,
+    "y": 37151.0
+  },
+  "boltons.excutils:_DeferredLine.__len__": {
+    "x": 614.0,
+    "y": 37436.0
+  },
+  "boltons.excutils:_DeferredLine.__ne__": {
+    "x": 614.0,
+    "y": 37265.0
+  },
+  "boltons.excutils:_DeferredLine.__repr__": {
+    "x": 614.0,
+    "y": 37379.0
+  },
+  "boltons.excutils:_DeferredLine.__str__": {
+    "x": 614.0,
+    "y": 37322.0
+  },
+  "boltons.excutils:_DeferredLine.strip": {
+    "x": 614.0,
+    "y": 37493.0
+  },
+  "boltons.excutils:_TBItem": {
+    "x": 614.0,
+    "y": 37022.0
+  },
+  "boltons.excutils:_TBItem.__repr__": {
+    "x": 614.0,
+    "y": 37038.0
+  },
+  "boltons.excutils:_extract_from_frame": {
+    "x": 614.0,
+    "y": 37562.0
+  },
+  "boltons.excutils:_extract_from_tb": {
+    "x": 614.0,
+    "y": 37619.0
+  },
+  "boltons.excutils:_format_exc": {
+    "x": 614.0,
+    "y": 36937.0
+  },
+  "boltons.excutils:main": {
+    "x": 614.0,
+    "y": 37871.0
+  },
+  "boltons.excutils:math_lol": {
+    "x": 614.0,
+    "y": 37814.0
+  },
+  "boltons.excutils:whoops_math": {
+    "x": 614.0,
+    "y": 37757.0
+  },
+  "boltons.fileutils": {
+    "x": 609.0,
+    "y": 30996.0
+  },
+  "boltons.fileutils:AtomicSaver": {
+    "x": 614.0,
+    "y": 31014.0
+  },
+  "boltons.fileutils:AtomicSaver.__enter__": {
+    "x": 614.0,
+    "y": 31087.0
+  },
+  "boltons.fileutils:AtomicSaver.__exit__": {
+    "x": 614.0,
+    "y": 31144.0
+  },
+  "boltons.fileutils:AtomicSaver.__init__": {
+    "x": 614.0,
+    "y": 30916.0
+  },
+  "boltons.fileutils:AtomicSaver._open_part_file": {
+    "x": 614.0,
+    "y": 30973.0
+  },
+  "boltons.fileutils:AtomicSaver.setup": {
+    "x": 614.0,
+    "y": 31030.0
+  },
+  "boltons.fileutils:DummyFile": {
+    "x": 614.0,
+    "y": 31782.5
+  },
+  "boltons.fileutils:DummyFile.__enter__": {
+    "x": 614.0,
+    "y": 32169.0
+  },
+  "boltons.fileutils:DummyFile.__exit__": {
+    "x": 614.0,
+    "y": 32226.0
+  },
+  "boltons.fileutils:DummyFile.__init__": {
+    "x": 614.0,
+    "y": 31371.0
+  },
+  "boltons.fileutils:DummyFile.__next__": {
+    "x": 614.0,
+    "y": 32112.0
+  },
+  "boltons.fileutils:DummyFile.close": {
+    "x": 614.0,
+    "y": 31428.0
+  },
+  "boltons.fileutils:DummyFile.fileno": {
+    "x": 614.0,
+    "y": 31485.0
+  },
+  "boltons.fileutils:DummyFile.flush": {
+    "x": 614.0,
+    "y": 31542.0
+  },
+  "boltons.fileutils:DummyFile.next": {
+    "x": 614.0,
+    "y": 31599.0
+  },
+  "boltons.fileutils:DummyFile.read": {
+    "x": 614.0,
+    "y": 31656.0
+  },
+  "boltons.fileutils:DummyFile.readline": {
+    "x": 614.0,
+    "y": 31713.0
+  },
+  "boltons.fileutils:DummyFile.readlines": {
+    "x": 614.0,
+    "y": 31770.0
+  },
+  "boltons.fileutils:DummyFile.seek": {
+    "x": 614.0,
+    "y": 31827.0
+  },
+  "boltons.fileutils:DummyFile.tell": {
+    "x": 614.0,
+    "y": 31884.0
+  },
+  "boltons.fileutils:DummyFile.truncate": {
+    "x": 614.0,
+    "y": 31941.0
+  },
+  "boltons.fileutils:DummyFile.write": {
+    "x": 614.0,
+    "y": 31998.0
+  },
+  "boltons.fileutils:DummyFile.writelines": {
+    "x": 614.0,
+    "y": 32055.0
+  },
+  "boltons.fileutils:FilePerms": {
+    "x": 614.0,
+    "y": 30075.0
+  },
+  "boltons.fileutils:FilePerms._FilePermProperty": {
+    "x": 614.0,
+    "y": 29948.5
+  },
+  "boltons.fileutils:FilePerms._FilePermProperty.__get__": {
+    "x": 614.0,
+    "y": 29936.0
+  },
+  "boltons.fileutils:FilePerms._FilePermProperty.__init__": {
+    "x": 614.0,
+    "y": 29879.0
+  },
+  "boltons.fileutils:FilePerms._FilePermProperty.__set__": {
+    "x": 614.0,
+    "y": 29993.0
+  },
+  "boltons.fileutils:FilePerms._FilePermProperty._update_integer": {
+    "x": 614.0,
+    "y": 30050.0
+  },
+  "boltons.fileutils:FilePerms.__init__": {
+    "x": 614.0,
+    "y": 30119.0
+  },
+  "boltons.fileutils:FilePerms.__int__": {
+    "x": 614.0,
+    "y": 30290.0
+  },
+  "boltons.fileutils:FilePerms.__repr__": {
+    "x": 614.0,
+    "y": 30347.0
+  },
+  "boltons.fileutils:FilePerms.from_int": {
+    "x": 614.0,
+    "y": 30176.0
+  },
+  "boltons.fileutils:FilePerms.from_path": {
+    "x": 614.0,
+    "y": 30233.0
+  },
+  "boltons.fileutils:atomic_rename": {
+    "x": 614.0,
+    "y": 30701.0
+  },
+  "boltons.fileutils:atomic_rename#2": {
+    "x": 614.0,
+    "y": 30815.0
+  },
+  "boltons.fileutils:atomic_save": {
+    "x": 614.0,
+    "y": 30530.0
+  },
+  "boltons.fileutils:copy_tree": {
+    "x": 614.0,
+    "y": 31270.0
+  },
+  "boltons.fileutils:iter_find_files": {
+    "x": 614.0,
+    "y": 31213.0
+  },
+  "boltons.fileutils:mkdir_p": {
+    "x": 614.0,
+    "y": 29734.0
+  },
+  "boltons.fileutils:path_to_unicode": {
+    "x": 614.0,
+    "y": 30587.0
+  },
+  "boltons.fileutils:replace": {
+    "x": 614.0,
+    "y": 30644.0
+  },
+  "boltons.fileutils:replace#2": {
+    "x": 614.0,
+    "y": 30758.0
+  },
+  "boltons.fileutils:rotate_file": {
+    "x": 614.0,
+    "y": 32295.0
+  },
+  "boltons.fileutils:set_cloexec": {
+    "x": 614.0,
+    "y": 30416.0
+  },
+  "boltons.fileutils:set_cloexec#2": {
+    "x": 614.0,
+    "y": 30473.0
+  },
+  "boltons.formatutils": {
+    "x": 609.0,
+    "y": 53263.0
+  },
+  "boltons.formatutils:BaseFormatField": {
+    "x": 614.0,
+    "y": 53168.0
+  },
+  "boltons.formatutils:BaseFormatField.__init__": {
+    "x": 614.0,
+    "y": 53013.0
+  },
+  "boltons.formatutils:BaseFormatField.__repr__": {
+    "x": 614.0,
+    "y": 53298.0
+  },
+  "boltons.formatutils:BaseFormatField.__str__": {
+    "x": 614.0,
+    "y": 53355.0
+  },
+  "boltons.formatutils:BaseFormatField.fstr": {
+    "x": 614.0,
+    "y": 53241.0
+  },
+  "boltons.formatutils:BaseFormatField.set_conv": {
+    "x": 614.0,
+    "y": 53184.0
+  },
+  "boltons.formatutils:BaseFormatField.set_fname": {
+    "x": 614.0,
+    "y": 53070.0
+  },
+  "boltons.formatutils:BaseFormatField.set_fspec": {
+    "x": 614.0,
+    "y": 53127.0
+  },
+  "boltons.formatutils:DeferredValue": {
+    "x": 614.0,
+    "y": 53651.5
+  },
+  "boltons.formatutils:DeferredValue.__float__": {
+    "x": 614.0,
+    "y": 53639.0
+  },
+  "boltons.formatutils:DeferredValue.__format__": {
+    "x": 614.0,
+    "y": 53867.0
+  },
+  "boltons.formatutils:DeferredValue.__init__": {
+    "x": 614.0,
+    "y": 53468.0
+  },
+  "boltons.formatutils:DeferredValue.__int__": {
+    "x": 614.0,
+    "y": 53582.0
+  },
+  "boltons.formatutils:DeferredValue.__repr__": {
+    "x": 614.0,
+    "y": 53810.0
+  },
+  "boltons.formatutils:DeferredValue.__str__": {
+    "x": 614.0,
+    "y": 53696.0
+  },
+  "boltons.formatutils:DeferredValue.__unicode__": {
+    "x": 614.0,
+    "y": 53753.0
+  },
+  "boltons.formatutils:DeferredValue.get_value": {
+    "x": 614.0,
+    "y": 53525.0
+  },
+  "boltons.formatutils:construct_format_field_str": {
+    "x": 614.0,
+    "y": 52684.0
+  },
+  "boltons.formatutils:get_format_args": {
+    "x": 614.0,
+    "y": 52855.0
+  },
+  "boltons.formatutils:infer_positional_format_args": {
+    "x": 614.0,
+    "y": 52798.0
+  },
+  "boltons.formatutils:split_format_str": {
+    "x": 614.0,
+    "y": 52741.0
+  },
+  "boltons.formatutils:tokenize_format_str": {
+    "x": 614.0,
+    "y": 52912.0
+  },
+  "boltons.funcutils": {
+    "x": 609.0,
+    "y": 43328.5
+  },
+  "boltons.funcutils:CachedInstancePartial": {
+    "x": 614.0,
+    "y": 42952.5
+  },
+  "boltons.funcutils:CachedInstancePartial.__get__": {
+    "x": 614.0,
+    "y": 43054.0
+  },
+  "boltons.funcutils:CachedInstancePartial.__partialmethod__": {
+    "x": 614.0,
+    "y": 42940.0
+  },
+  "boltons.funcutils:CachedInstancePartial.__set_name__": {
+    "x": 614.0,
+    "y": 42997.0
+  },
+  "boltons.funcutils:CachedInstancePartial._partialmethod": {
+    "x": 614.0,
+    "y": 42883.0
+  },
+  "boltons.funcutils:ExistingArgument": {
+    "x": 614.0,
+    "y": 44241.0
+  },
+  "boltons.funcutils:FunctionBuilder": {
+    "x": 614.0,
+    "y": 43778.0
+  },
+  "boltons.funcutils:FunctionBuilder.__init__": {
+    "x": 614.0,
+    "y": 43566.0
+  },
+  "boltons.funcutils:FunctionBuilder._argspec_to_dict": {
+    "x": 614.0,
+    "y": 43509.0
+  },
+  "boltons.funcutils:FunctionBuilder._compile": {
+    "x": 614.0,
+    "y": 44079.0
+  },
+  "boltons.funcutils:FunctionBuilder.add_arg": {
+    "x": 614.0,
+    "y": 43965.0
+  },
+  "boltons.funcutils:FunctionBuilder.from_func": {
+    "x": 614.0,
+    "y": 43737.0
+  },
+  "boltons.funcutils:FunctionBuilder.get_arg_names": {
+    "x": 614.0,
+    "y": 43908.0
+  },
+  "boltons.funcutils:FunctionBuilder.get_defaults_dict": {
+    "x": 614.0,
+    "y": 43851.0
+  },
+  "boltons.funcutils:FunctionBuilder.get_func": {
+    "x": 614.0,
+    "y": 43794.0
+  },
+  "boltons.funcutils:FunctionBuilder.get_invocation_str": {
+    "x": 614.0,
+    "y": 43680.0
+  },
+  "boltons.funcutils:FunctionBuilder.get_sig_str": {
+    "x": 614.0,
+    "y": 43623.0
+  },
+  "boltons.funcutils:FunctionBuilder.remove_arg": {
+    "x": 614.0,
+    "y": 44022.0
+  },
+  "boltons.funcutils:InstancePartial": {
+    "x": 614.0,
+    "y": 42697.0
+  },
+  "boltons.funcutils:InstancePartial.__get__": {
+    "x": 614.0,
+    "y": 42770.0
+  },
+  "boltons.funcutils:InstancePartial.__partialmethod__": {
+    "x": 614.0,
+    "y": 42713.0
+  },
+  "boltons.funcutils:InstancePartial._partialmethod": {
+    "x": 614.0,
+    "y": 42656.0
+  },
+  "boltons.funcutils:MissingArgument": {
+    "x": 614.0,
+    "y": 44160.0
+  },
+  "boltons.funcutils:_indent": {
+    "x": 614.0,
+    "y": 44310.0
+  },
+  "boltons.funcutils:_parse_wraps_expected": {
+    "x": 614.0,
+    "y": 43408.0
+  },
+  "boltons.funcutils:copy_function": {
+    "x": 614.0,
+    "y": 42498.0
+  },
+  "boltons.funcutils:dir_dict": {
+    "x": 614.0,
+    "y": 42441.0
+  },
+  "boltons.funcutils:format_exp_repr": {
+    "x": 614.0,
+    "y": 43180.0
+  },
+  "boltons.funcutils:format_invocation": {
+    "x": 614.0,
+    "y": 43123.0
+  },
+  "boltons.funcutils:format_nonexp_repr": {
+    "x": 614.0,
+    "y": 43237.0
+  },
+  "boltons.funcutils:get_module_callables": {
+    "x": 614.0,
+    "y": 42327.0
+  },
+  "boltons.funcutils:inspect_formatargspec": {
+    "x": 614.0,
+    "y": 42270.0
+  },
+  "boltons.funcutils:mro_items": {
+    "x": 614.0,
+    "y": 42384.0
+  },
+  "boltons.funcutils:noop": {
+    "x": 614.0,
+    "y": 44367.0
+  },
+  "boltons.funcutils:once": {
+    "x": 614.0,
+    "y": 44424.0
+  },
+  "boltons.funcutils:partial_ordering": {
+    "x": 614.0,
+    "y": 42555.0
+  },
+  "boltons.funcutils:update_wrapper": {
+    "x": 614.0,
+    "y": 43351.0
+  },
+  "boltons.funcutils:wraps": {
+    "x": 614.0,
+    "y": 43294.0
+  },
+  "boltons.gcutils": {
+    "x": 609.0,
+    "y": 52326.5
+  },
+  "boltons.gcutils:GCToggler": {
+    "x": 614.0,
+    "y": 52402.0
+  },
+  "boltons.gcutils:GCToggler.__enter__": {
+    "x": 614.0,
+    "y": 52418.0
+  },
+  "boltons.gcutils:GCToggler.__exit__": {
+    "x": 614.0,
+    "y": 52475.0
+  },
+  "boltons.gcutils:GCToggler.__init__": {
+    "x": 614.0,
+    "y": 52361.0
+  },
+  "boltons.gcutils:_all_types": {
+    "x": 614.0,
+    "y": 52260.0
+  },
+  "boltons.gcutils:get_all": {
+    "x": 614.0,
+    "y": 52203.0
+  },
+  "boltons.ioutils": {
+    "x": 609.0,
+    "y": 1937.5
+  },
+  "boltons.ioutils:MultiFileReader": {
+    "x": 614.0,
+    "y": 3750.0
+  },
+  "boltons.ioutils:MultiFileReader.__init__": {
+    "x": 614.0,
+    "y": 3709.0
+  },
+  "boltons.ioutils:MultiFileReader.read": {
+    "x": 614.0,
+    "y": 3766.0
+  },
+  "boltons.ioutils:MultiFileReader.seek": {
+    "x": 614.0,
+    "y": 3823.0
+  },
+  "boltons.ioutils:SpooledBytesIO": {
+    "x": 614.0,
+    "y": 2526.5
+  },
+  "boltons.ioutils:SpooledBytesIO._rolled": {
+    "x": 614.0,
+    "y": 2628.0
+  },
+  "boltons.ioutils:SpooledBytesIO.buffer": {
+    "x": 614.0,
+    "y": 2685.0
+  },
+  "boltons.ioutils:SpooledBytesIO.len": {
+    "x": 614.0,
+    "y": 2742.0
+  },
+  "boltons.ioutils:SpooledBytesIO.read": {
+    "x": 614.0,
+    "y": 2286.0
+  },
+  "boltons.ioutils:SpooledBytesIO.readline": {
+    "x": 614.0,
+    "y": 2457.0
+  },
+  "boltons.ioutils:SpooledBytesIO.readlines": {
+    "x": 614.0,
+    "y": 2514.0
+  },
+  "boltons.ioutils:SpooledBytesIO.rollover": {
+    "x": 614.0,
+    "y": 2571.0
+  },
+  "boltons.ioutils:SpooledBytesIO.seek": {
+    "x": 614.0,
+    "y": 2400.0
+  },
+  "boltons.ioutils:SpooledBytesIO.tell": {
+    "x": 614.0,
+    "y": 2799.0
+  },
+  "boltons.ioutils:SpooledBytesIO.write": {
+    "x": 614.0,
+    "y": 2343.0
+  },
+  "boltons.ioutils:SpooledIOBase": {
+    "x": 614.0,
+    "y": 1131.0
+  },
+  "boltons.ioutils:SpooledIOBase.__bool__": {
+    "x": 614.0,
+    "y": 2116.0
+  },
+  "boltons.ioutils:SpooledIOBase.__del__": {
+    "x": 614.0,
+    "y": 2173.0
+  },
+  "boltons.ioutils:SpooledIOBase.__enter__": {
+    "x": 614.0,
+    "y": 1888.0
+  },
+  "boltons.ioutils:SpooledIOBase.__eq__": {
+    "x": 614.0,
+    "y": 2002.0
+  },
+  "boltons.ioutils:SpooledIOBase.__exit__": {
+    "x": 614.0,
+    "y": 1945.0
+  },
+  "boltons.ioutils:SpooledIOBase.__init__": {
+    "x": 614.0,
+    "y": 121.0
+  },
+  "boltons.ioutils:SpooledIOBase.__iter__": {
+    "x": 614.0,
+    "y": 1831.0
+  },
+  "boltons.ioutils:SpooledIOBase.__len__": {
+    "x": 614.0,
+    "y": 1774.0
+  },
+  "boltons.ioutils:SpooledIOBase.__ne__": {
+    "x": 614.0,
+    "y": 2059.0
+  },
+  "boltons.ioutils:SpooledIOBase.__next__": {
+    "x": 614.0,
+    "y": 1717.0
+  },
+  "boltons.ioutils:SpooledIOBase._checkClosed": {
+    "x": 614.0,
+    "y": 178.0
+  },
+  "boltons.ioutils:SpooledIOBase._file": {
+    "x": 614.0,
+    "y": 976.0
+  },
+  "boltons.ioutils:SpooledIOBase._get_softspace": {
+    "x": 614.0,
+    "y": 862.0
+  },
+  "boltons.ioutils:SpooledIOBase._rolled": {
+    "x": 614.0,
+    "y": 748.0
+  },
+  "boltons.ioutils:SpooledIOBase._set_softspace": {
+    "x": 614.0,
+    "y": 919.0
+  },
+  "boltons.ioutils:SpooledIOBase.buf": {
+    "x": 614.0,
+    "y": 1318.0
+  },
+  "boltons.ioutils:SpooledIOBase.buffer": {
+    "x": 614.0,
+    "y": 691.0
+  },
+  "boltons.ioutils:SpooledIOBase.close": {
+    "x": 614.0,
+    "y": 1033.0
+  },
+  "boltons.ioutils:SpooledIOBase.closed": {
+    "x": 614.0,
+    "y": 1204.0
+  },
+  "boltons.ioutils:SpooledIOBase.fileno": {
+    "x": 614.0,
+    "y": 1375.0
+  },
+  "boltons.ioutils:SpooledIOBase.flush": {
+    "x": 614.0,
+    "y": 1090.0
+  },
+  "boltons.ioutils:SpooledIOBase.getvalue": {
+    "x": 614.0,
+    "y": 1489.0
+  },
+  "boltons.ioutils:SpooledIOBase.isatty": {
+    "x": 614.0,
+    "y": 1147.0
+  },
+  "boltons.ioutils:SpooledIOBase.len": {
+    "x": 614.0,
+    "y": 805.0
+  },
+  "boltons.ioutils:SpooledIOBase.pos": {
+    "x": 614.0,
+    "y": 1261.0
+  },
+  "boltons.ioutils:SpooledIOBase.read": {
+    "x": 614.0,
+    "y": 235.0
+  },
+  "boltons.ioutils:SpooledIOBase.readable": {
+    "x": 614.0,
+    "y": 1603.0
+  },
+  "boltons.ioutils:SpooledIOBase.readline": {
+    "x": 614.0,
+    "y": 406.0
+  },
+  "boltons.ioutils:SpooledIOBase.readlines": {
+    "x": 614.0,
+    "y": 463.0
+  },
+  "boltons.ioutils:SpooledIOBase.rollover": {
+    "x": 614.0,
+    "y": 577.0
+  },
+  "boltons.ioutils:SpooledIOBase.seek": {
+    "x": 614.0,
+    "y": 349.0
+  },
+  "boltons.ioutils:SpooledIOBase.seekable": {
+    "x": 614.0,
+    "y": 1546.0
+  },
+  "boltons.ioutils:SpooledIOBase.tell": {
+    "x": 614.0,
+    "y": 634.0
+  },
+  "boltons.ioutils:SpooledIOBase.truncate": {
+    "x": 614.0,
+    "y": 1432.0
+  },
+  "boltons.ioutils:SpooledIOBase.writable": {
+    "x": 614.0,
+    "y": 1660.0
+  },
+  "boltons.ioutils:SpooledIOBase.write": {
+    "x": 614.0,
+    "y": 292.0
+  },
+  "boltons.ioutils:SpooledIOBase.writelines": {
+    "x": 614.0,
+    "y": 520.0
+  },
+  "boltons.ioutils:SpooledStringIO": {
+    "x": 614.0,
+    "y": 3209.5
+  },
+  "boltons.ioutils:SpooledStringIO.__init__": {
+    "x": 614.0,
+    "y": 2912.0
+  },
+  "boltons.ioutils:SpooledStringIO._rolled": {
+    "x": 614.0,
+    "y": 3368.0
+  },
+  "boltons.ioutils:SpooledStringIO._traverse_codepoints": {
+    "x": 614.0,
+    "y": 3083.0
+  },
+  "boltons.ioutils:SpooledStringIO.buffer": {
+    "x": 614.0,
+    "y": 3311.0
+  },
+  "boltons.ioutils:SpooledStringIO.len": {
+    "x": 614.0,
+    "y": 3539.0
+  },
+  "boltons.ioutils:SpooledStringIO.read": {
+    "x": 614.0,
+    "y": 2969.0
+  },
+  "boltons.ioutils:SpooledStringIO.readline": {
+    "x": 614.0,
+    "y": 3197.0
+  },
+  "boltons.ioutils:SpooledStringIO.readlines": {
+    "x": 614.0,
+    "y": 3254.0
+  },
+  "boltons.ioutils:SpooledStringIO.rollover": {
+    "x": 614.0,
+    "y": 3425.0
+  },
+  "boltons.ioutils:SpooledStringIO.seek": {
+    "x": 614.0,
+    "y": 3140.0
+  },
+  "boltons.ioutils:SpooledStringIO.tell": {
+    "x": 614.0,
+    "y": 3482.0
+  },
+  "boltons.ioutils:SpooledStringIO.write": {
+    "x": 614.0,
+    "y": 3026.0
+  },
+  "boltons.ioutils:is_text_fileobj": {
+    "x": 614.0,
+    "y": 3608.0
+  },
+  "boltons.iterutils": {
+    "x": 609.0,
+    "y": 50478.5
+  },
+  "boltons.iterutils:GUIDerator": {
+    "x": 614.0,
+    "y": 51608.5
+  },
+  "boltons.iterutils:GUIDerator.__init__": {
+    "x": 614.0,
+    "y": 51539.0
+  },
+  "boltons.iterutils:GUIDerator.__iter__": {
+    "x": 614.0,
+    "y": 51653.0
+  },
+  "boltons.iterutils:GUIDerator.__next__": {
+    "x": 614.0,
+    "y": 51710.0
+  },
+  "boltons.iterutils:GUIDerator.reseed": {
+    "x": 614.0,
+    "y": 51596.0
+  },
+  "boltons.iterutils:PathAccessError": {
+    "x": 614.0,
+    "y": 51239.0
+  },
+  "boltons.iterutils:PathAccessError.__init__": {
+    "x": 614.0,
+    "y": 51198.0
+  },
+  "boltons.iterutils:PathAccessError.__repr__": {
+    "x": 614.0,
+    "y": 51255.0
+  },
+  "boltons.iterutils:PathAccessError.__str__": {
+    "x": 614.0,
+    "y": 51312.0
+  },
+  "boltons.iterutils:SequentialGUIDerator": {
+    "x": 614.0,
+    "y": 51835.5
+  },
+  "boltons.iterutils:SequentialGUIDerator.__next__": {
+    "x": 614.0,
+    "y": 51880.0
+  },
+  "boltons.iterutils:SequentialGUIDerator.reseed": {
+    "x": 614.0,
+    "y": 51823.0
+  },
+  "boltons.iterutils:_validate_positive_int": {
+    "x": 614.0,
+    "y": 49672.0
+  },
+  "boltons.iterutils:backoff": {
+    "x": 614.0,
+    "y": 50242.0
+  },
+  "boltons.iterutils:backoff_iter": {
+    "x": 614.0,
+    "y": 50299.0
+  },
+  "boltons.iterutils:bucketize": {
+    "x": 614.0,
+    "y": 50356.0
+  },
+  "boltons.iterutils:chunk_ranges": {
+    "x": 614.0,
+    "y": 49843.0
+  },
+  "boltons.iterutils:chunked": {
+    "x": 614.0,
+    "y": 49615.0
+  },
+  "boltons.iterutils:chunked_filter": {
+    "x": 614.0,
+    "y": 49786.0
+  },
+  "boltons.iterutils:chunked_iter": {
+    "x": 614.0,
+    "y": 49729.0
+  },
+  "boltons.iterutils:default_enter": {
+    "x": 614.0,
+    "y": 50983.0
+  },
+  "boltons.iterutils:default_exit": {
+    "x": 614.0,
+    "y": 51040.0
+  },
+  "boltons.iterutils:default_visit": {
+    "x": 614.0,
+    "y": 50926.0
+  },
+  "boltons.iterutils:first": {
+    "x": 614.0,
+    "y": 50698.0
+  },
+  "boltons.iterutils:flatten": {
+    "x": 614.0,
+    "y": 50812.0
+  },
+  "boltons.iterutils:flatten_iter": {
+    "x": 614.0,
+    "y": 50755.0
+  },
+  "boltons.iterutils:frange": {
+    "x": 614.0,
+    "y": 50185.0
+  },
+  "boltons.iterutils:get_path": {
+    "x": 614.0,
+    "y": 51381.0
+  },
+  "boltons.iterutils:is_collection": {
+    "x": 614.0,
+    "y": 49102.0
+  },
+  "boltons.iterutils:is_iterable": {
+    "x": 614.0,
+    "y": 48988.0
+  },
+  "boltons.iterutils:is_scalar": {
+    "x": 614.0,
+    "y": 49045.0
+  },
+  "boltons.iterutils:lstrip": {
+    "x": 614.0,
+    "y": 49273.0
+  },
+  "boltons.iterutils:lstrip_iter": {
+    "x": 614.0,
+    "y": 49330.0
+  },
+  "boltons.iterutils:one": {
+    "x": 614.0,
+    "y": 50641.0
+  },
+  "boltons.iterutils:pairwise": {
+    "x": 614.0,
+    "y": 49900.0
+  },
+  "boltons.iterutils:pairwise_iter": {
+    "x": 614.0,
+    "y": 49957.0
+  },
+  "boltons.iterutils:partition": {
+    "x": 614.0,
+    "y": 50413.0
+  },
+  "boltons.iterutils:redundant": {
+    "x": 614.0,
+    "y": 50584.0
+  },
+  "boltons.iterutils:remap": {
+    "x": 614.0,
+    "y": 51097.0
+  },
+  "boltons.iterutils:research": {
+    "x": 614.0,
+    "y": 51438.0
+  },
+  "boltons.iterutils:rstrip": {
+    "x": 614.0,
+    "y": 49387.0
+  },
+  "boltons.iterutils:rstrip_iter": {
+    "x": 614.0,
+    "y": 49444.0
+  },
+  "boltons.iterutils:same": {
+    "x": 614.0,
+    "y": 50869.0
+  },
+  "boltons.iterutils:soft_sorted": {
+    "x": 614.0,
+    "y": 51949.0
+  },
+  "boltons.iterutils:split": {
+    "x": 614.0,
+    "y": 49159.0
+  },
+  "boltons.iterutils:split_iter": {
+    "x": 614.0,
+    "y": 49216.0
+  },
+  "boltons.iterutils:strip": {
+    "x": 614.0,
+    "y": 49501.0
+  },
+  "boltons.iterutils:strip_iter": {
+    "x": 614.0,
+    "y": 49558.0
+  },
+  "boltons.iterutils:unique": {
+    "x": 614.0,
+    "y": 50470.0
+  },
+  "boltons.iterutils:unique_iter": {
+    "x": 614.0,
+    "y": 50527.0
+  },
+  "boltons.iterutils:untyped_sorted": {
+    "x": 614.0,
+    "y": 52006.0
+  },
+  "boltons.iterutils:windowed": {
+    "x": 614.0,
+    "y": 50014.0
+  },
+  "boltons.iterutils:windowed_iter": {
+    "x": 614.0,
+    "y": 50071.0
+  },
+  "boltons.iterutils:xfrange": {
+    "x": 614.0,
+    "y": 50128.0
+  },
+  "boltons.jsonutils": {
+    "x": 609.0,
+    "y": 38277.0
+  },
+  "boltons.jsonutils:JSONLIterator": {
+    "x": 614.0,
+    "y": 38295.5
+  },
+  "boltons.jsonutils:JSONLIterator.__init__": {
+    "x": 614.0,
+    "y": 38169.0
+  },
+  "boltons.jsonutils:JSONLIterator.__iter__": {
+    "x": 614.0,
+    "y": 38397.0
+  },
+  "boltons.jsonutils:JSONLIterator._align_to_newline": {
+    "x": 614.0,
+    "y": 38283.0
+  },
+  "boltons.jsonutils:JSONLIterator._init_rel_seek": {
+    "x": 614.0,
+    "y": 38340.0
+  },
+  "boltons.jsonutils:JSONLIterator.cur_byte_pos": {
+    "x": 614.0,
+    "y": 38226.0
+  },
+  "boltons.jsonutils:JSONLIterator.next": {
+    "x": 614.0,
+    "y": 38454.0
+  },
+  "boltons.jsonutils:_main": {
+    "x": 614.0,
+    "y": 38523.0
+  },
+  "boltons.jsonutils:reverse_iter_lines": {
+    "x": 614.0,
+    "y": 38068.0
+  },
+  "boltons.listutils": {
+    "x": 609.0,
+    "y": 23168.5
+  },
+  "boltons.listutils:BarrelList": {
+    "x": 614.0,
+    "y": 23102.0
+  },
+  "boltons.listutils:BarrelList.__add__": {
+    "x": 614.0,
+    "y": 23631.0
+  },
+  "boltons.listutils:BarrelList.__contains__": {
+    "x": 614.0,
+    "y": 22776.0
+  },
+  "boltons.listutils:BarrelList.__delitem__": {
+    "x": 614.0,
+    "y": 22890.0
+  },
+  "boltons.listutils:BarrelList.__eq__": {
+    "x": 614.0,
+    "y": 23289.0
+  },
+  "boltons.listutils:BarrelList.__ge__": {
+    "x": 614.0,
+    "y": 23574.0
+  },
+  "boltons.listutils:BarrelList.__getitem__": {
+    "x": 614.0,
+    "y": 22833.0
+  },
+  "boltons.listutils:BarrelList.__getslice__": {
+    "x": 614.0,
+    "y": 23004.0
+  },
+  "boltons.listutils:BarrelList.__gt__": {
+    "x": 614.0,
+    "y": 23517.0
+  },
+  "boltons.listutils:BarrelList.__iadd__": {
+    "x": 614.0,
+    "y": 23745.0
+  },
+  "boltons.listutils:BarrelList.__imul__": {
+    "x": 614.0,
+    "y": 23859.0
+  },
+  "boltons.listutils:BarrelList.__init__": {
+    "x": 614.0,
+    "y": 21978.0
+  },
+  "boltons.listutils:BarrelList.__iter__": {
+    "x": 614.0,
+    "y": 22605.0
+  },
+  "boltons.listutils:BarrelList.__le__": {
+    "x": 614.0,
+    "y": 23460.0
+  },
+  "boltons.listutils:BarrelList.__len__": {
+    "x": 614.0,
+    "y": 22719.0
+  },
+  "boltons.listutils:BarrelList.__lt__": {
+    "x": 614.0,
+    "y": 23403.0
+  },
+  "boltons.listutils:BarrelList.__mul__": {
+    "x": 614.0,
+    "y": 23802.0
+  },
+  "boltons.listutils:BarrelList.__ne__": {
+    "x": 614.0,
+    "y": 23346.0
+  },
+  "boltons.listutils:BarrelList.__radd__": {
+    "x": 614.0,
+    "y": 23688.0
+  },
+  "boltons.listutils:BarrelList.__reduce__": {
+    "x": 614.0,
+    "y": 23175.0
+  },
+  "boltons.listutils:BarrelList.__repr__": {
+    "x": 614.0,
+    "y": 23118.0
+  },
+  "boltons.listutils:BarrelList.__reversed__": {
+    "x": 614.0,
+    "y": 22662.0
+  },
+  "boltons.listutils:BarrelList.__setitem__": {
+    "x": 614.0,
+    "y": 22947.0
+  },
+  "boltons.listutils:BarrelList.__setslice__": {
+    "x": 614.0,
+    "y": 23061.0
+  },
+  "boltons.listutils:BarrelList._as_list": {
+    "x": 614.0,
+    "y": 23232.0
+  },
+  "boltons.listutils:BarrelList._balance_list": {
+    "x": 614.0,
+    "y": 22149.0
+  },
+  "boltons.listutils:BarrelList._cur_size_limit": {
+    "x": 614.0,
+    "y": 22035.0
+  },
+  "boltons.listutils:BarrelList._translate_index": {
+    "x": 614.0,
+    "y": 22092.0
+  },
+  "boltons.listutils:BarrelList.append": {
+    "x": 614.0,
+    "y": 22263.0
+  },
+  "boltons.listutils:BarrelList.clear": {
+    "x": 614.0,
+    "y": 23973.0
+  },
+  "boltons.listutils:BarrelList.copy": {
+    "x": 614.0,
+    "y": 24030.0
+  },
+  "boltons.listutils:BarrelList.count": {
+    "x": 614.0,
+    "y": 24201.0
+  },
+  "boltons.listutils:BarrelList.del_slice": {
+    "x": 614.0,
+    "y": 22491.0
+  },
+  "boltons.listutils:BarrelList.extend": {
+    "x": 614.0,
+    "y": 22320.0
+  },
+  "boltons.listutils:BarrelList.from_iterable": {
+    "x": 614.0,
+    "y": 22548.0
+  },
+  "boltons.listutils:BarrelList.index": {
+    "x": 614.0,
+    "y": 24258.0
+  },
+  "boltons.listutils:BarrelList.insert": {
+    "x": 614.0,
+    "y": 22206.0
+  },
+  "boltons.listutils:BarrelList.iter_slice": {
+    "x": 614.0,
+    "y": 22434.0
+  },
+  "boltons.listutils:BarrelList.pop": {
+    "x": 614.0,
+    "y": 22377.0
+  },
+  "boltons.listutils:BarrelList.remove": {
+    "x": 614.0,
+    "y": 23916.0
+  },
+  "boltons.listutils:BarrelList.reverse": {
+    "x": 614.0,
+    "y": 24144.0
+  },
+  "boltons.listutils:BarrelList.sort": {
+    "x": 614.0,
+    "y": 24087.0
+  },
+  "boltons.listutils:SplayList": {
+    "x": 614.0,
+    "y": 24383.5
+  },
+  "boltons.listutils:SplayList.shift": {
+    "x": 614.0,
+    "y": 24371.0
+  },
+  "boltons.listutils:SplayList.swap": {
+    "x": 614.0,
+    "y": 24428.0
+  },
+  "boltons.mathutils": {
+    "x": 1055.0,
+    "y": 29161.5
+  },
+  "boltons.mathutils:Bits": {
+    "x": 1060.0,
+    "y": 29265.5
+  },
+  "boltons.mathutils:Bits.__and__": {
+    "x": 1060.0,
+    "y": 29025.0
+  },
+  "boltons.mathutils:Bits.__eq__": {
+    "x": 1060.0,
+    "y": 28911.0
+  },
+  "boltons.mathutils:Bits.__getitem__": {
+    "x": 1060.0,
+    "y": 28797.0
+  },
+  "boltons.mathutils:Bits.__hash__": {
+    "x": 1060.0,
+    "y": 29196.0
+  },
+  "boltons.mathutils:Bits.__init__": {
+    "x": 1060.0,
+    "y": 28740.0
+  },
+  "boltons.mathutils:Bits.__len__": {
+    "x": 1060.0,
+    "y": 28854.0
+  },
+  "boltons.mathutils:Bits.__lshift__": {
+    "x": 1060.0,
+    "y": 29082.0
+  },
+  "boltons.mathutils:Bits.__or__": {
+    "x": 1060.0,
+    "y": 28968.0
+  },
+  "boltons.mathutils:Bits.__repr__": {
+    "x": 1060.0,
+    "y": 29823.0
+  },
+  "boltons.mathutils:Bits.__rshift__": {
+    "x": 1060.0,
+    "y": 29139.0
+  },
+  "boltons.mathutils:Bits.as_bin": {
+    "x": 1060.0,
+    "y": 29310.0
+  },
+  "boltons.mathutils:Bits.as_bytes": {
+    "x": 1060.0,
+    "y": 29481.0
+  },
+  "boltons.mathutils:Bits.as_hex": {
+    "x": 1060.0,
+    "y": 29367.0
+  },
+  "boltons.mathutils:Bits.as_int": {
+    "x": 1060.0,
+    "y": 29424.0
+  },
+  "boltons.mathutils:Bits.as_list": {
+    "x": 1060.0,
+    "y": 29253.0
+  },
+  "boltons.mathutils:Bits.from_bin": {
+    "x": 1060.0,
+    "y": 29595.0
+  },
+  "boltons.mathutils:Bits.from_bytes": {
+    "x": 1060.0,
+    "y": 29766.0
+  },
+  "boltons.mathutils:Bits.from_hex": {
+    "x": 1060.0,
+    "y": 29652.0
+  },
+  "boltons.mathutils:Bits.from_int": {
+    "x": 1060.0,
+    "y": 29709.0
+  },
+  "boltons.mathutils:Bits.from_list": {
+    "x": 1060.0,
+    "y": 29538.0
+  },
+  "boltons.mathutils:ceil": {
+    "x": 1060.0,
+    "y": 28582.0
+  },
+  "boltons.mathutils:clamp": {
+    "x": 1060.0,
+    "y": 28525.0
+  },
+  "boltons.mathutils:floor": {
+    "x": 1060.0,
+    "y": 28639.0
+  },
+  "boltons.mboxutils": {
+    "x": 609.0,
+    "y": 41998.0
+  },
+  "boltons.mboxutils:mbox_readonlydir": {
+    "x": 614.0,
+    "y": 42016.5
+  },
+  "boltons.mboxutils:mbox_readonlydir.__init__": {
+    "x": 614.0,
+    "y": 42004.0
+  },
+  "boltons.mboxutils:mbox_readonlydir.flush": {
+    "x": 614.0,
+    "y": 42061.0
+  },
+  "boltons.namedutils": {
+    "x": 163.0,
+    "y": 30553.0
+  },
+  "boltons.namedutils:namedlist": {
+    "x": 168.0,
+    "y": 30600.0
+  },
+  "boltons.namedutils:namedtuple": {
+    "x": 168.0,
+    "y": 30543.0
+  },
+  "boltons.pathutils": {
+    "x": 163.0,
+    "y": 28342.5
+  },
+  "boltons.pathutils:augpath": {
+    "x": 168.0,
+    "y": 28304.0
+  },
+  "boltons.pathutils:expandpath": {
+    "x": 168.0,
+    "y": 28418.0
+  },
+  "boltons.pathutils:shrinkuser": {
+    "x": 168.0,
+    "y": 28361.0
+  },
+  "boltons.queueutils": {
+    "x": 609.0,
+    "y": 35897.5
+  },
+  "boltons.queueutils:BasePriorityQueue": {
+    "x": 614.0,
+    "y": 35746.0
+  },
+  "boltons.queueutils:BasePriorityQueue.__init__": {
+    "x": 614.0,
+    "y": 35534.0
+  },
+  "boltons.queueutils:BasePriorityQueue.__len__": {
+    "x": 614.0,
+    "y": 35990.0
+  },
+  "boltons.queueutils:BasePriorityQueue._cull": {
+    "x": 614.0,
+    "y": 35819.0
+  },
+  "boltons.queueutils:BasePriorityQueue._pop_entry": {
+    "x": 614.0,
+    "y": 35648.0
+  },
+  "boltons.queueutils:BasePriorityQueue._push_entry": {
+    "x": 614.0,
+    "y": 35591.0
+  },
+  "boltons.queueutils:BasePriorityQueue.add": {
+    "x": 614.0,
+    "y": 35705.0
+  },
+  "boltons.queueutils:BasePriorityQueue.peek": {
+    "x": 614.0,
+    "y": 35876.0
+  },
+  "boltons.queueutils:BasePriorityQueue.pop": {
+    "x": 614.0,
+    "y": 35933.0
+  },
+  "boltons.queueutils:BasePriorityQueue.remove": {
+    "x": 614.0,
+    "y": 35762.0
+  },
+  "boltons.queueutils:HeapPriorityQueue": {
+    "x": 614.0,
+    "y": 36115.5
+  },
+  "boltons.queueutils:HeapPriorityQueue._pop_entry": {
+    "x": 614.0,
+    "y": 36103.0
+  },
+  "boltons.queueutils:HeapPriorityQueue._push_entry": {
+    "x": 614.0,
+    "y": 36160.0
+  },
+  "boltons.queueutils:SortedPriorityQueue": {
+    "x": 614.0,
+    "y": 36285.5
+  },
+  "boltons.queueutils:SortedPriorityQueue._pop_entry": {
+    "x": 614.0,
+    "y": 36273.0
+  },
+  "boltons.queueutils:SortedPriorityQueue._push_entry": {
+    "x": 614.0,
+    "y": 36330.0
+  },
+  "boltons.setutils": {
+    "x": 609.0,
+    "y": 27068.5
+  },
+  "boltons.setutils:IndexedSet": {
+    "x": 614.0,
+    "y": 25947.5
+  },
+  "boltons.setutils:IndexedSet.__contains__": {
+    "x": 614.0,
+    "y": 25194.0
+  },
+  "boltons.setutils:IndexedSet.__eq__": {
+    "x": 614.0,
+    "y": 25422.0
+  },
+  "boltons.setutils:IndexedSet.__getitem__": {
+    "x": 614.0,
+    "y": 26961.0
+  },
+  "boltons.setutils:IndexedSet.__iand__": {
+    "x": 614.0,
+    "y": 26733.0
+  },
+  "boltons.setutils:IndexedSet.__init__": {
+    "x": 614.0,
+    "y": 24681.0
+  },
+  "boltons.setutils:IndexedSet.__ior__": {
+    "x": 614.0,
+    "y": 26676.0
+  },
+  "boltons.setutils:IndexedSet.__isub__": {
+    "x": 614.0,
+    "y": 26790.0
+  },
+  "boltons.setutils:IndexedSet.__iter__": {
+    "x": 614.0,
+    "y": 25251.0
+  },
+  "boltons.setutils:IndexedSet.__ixor__": {
+    "x": 614.0,
+    "y": 26847.0
+  },
+  "boltons.setutils:IndexedSet.__len__": {
+    "x": 614.0,
+    "y": 25137.0
+  },
+  "boltons.setutils:IndexedSet.__repr__": {
+    "x": 614.0,
+    "y": 25365.0
+  },
+  "boltons.setutils:IndexedSet.__reversed__": {
+    "x": 614.0,
+    "y": 25308.0
+  },
+  "boltons.setutils:IndexedSet.__rsub__": {
+    "x": 614.0,
+    "y": 26334.0
+  },
+  "boltons.setutils:IndexedSet._add_dead": {
+    "x": 614.0,
+    "y": 25023.0
+  },
+  "boltons.setutils:IndexedSet._as_container": {
+    "x": 614.0,
+    "y": 25992.0
+  },
+  "boltons.setutils:IndexedSet._bulk_discard": {
+    "x": 614.0,
+    "y": 25080.0
+  },
+  "boltons.setutils:IndexedSet._compact": {
+    "x": 614.0,
+    "y": 24795.0
+  },
+  "boltons.setutils:IndexedSet._cull": {
+    "x": 614.0,
+    "y": 24852.0
+  },
+  "boltons.setutils:IndexedSet._dead_index_count": {
+    "x": 614.0,
+    "y": 24738.0
+  },
+  "boltons.setutils:IndexedSet._discard_many": {
+    "x": 614.0,
+    "y": 26562.0
+  },
+  "boltons.setutils:IndexedSet._get_apparent_index": {
+    "x": 614.0,
+    "y": 24966.0
+  },
+  "boltons.setutils:IndexedSet._get_real_index": {
+    "x": 614.0,
+    "y": 24909.0
+  },
+  "boltons.setutils:IndexedSet.add": {
+    "x": 614.0,
+    "y": 25536.0
+  },
+  "boltons.setutils:IndexedSet.clear": {
+    "x": 614.0,
+    "y": 25707.0
+  },
+  "boltons.setutils:IndexedSet.count": {
+    "x": 614.0,
+    "y": 27075.0
+  },
+  "boltons.setutils:IndexedSet.difference": {
+    "x": 614.0,
+    "y": 26220.0
+  },
+  "boltons.setutils:IndexedSet.difference_update": {
+    "x": 614.0,
+    "y": 26505.0
+  },
+  "boltons.setutils:IndexedSet.discard": {
+    "x": 614.0,
+    "y": 25650.0
+  },
+  "boltons.setutils:IndexedSet.from_iterable": {
+    "x": 614.0,
+    "y": 25479.0
+  },
+  "boltons.setutils:IndexedSet.index": {
+    "x": 614.0,
+    "y": 27246.0
+  },
+  "boltons.setutils:IndexedSet.intersection": {
+    "x": 614.0,
+    "y": 26106.0
+  },
+  "boltons.setutils:IndexedSet.intersection_update": {
+    "x": 614.0,
+    "y": 26448.0
+  },
+  "boltons.setutils:IndexedSet.isdisjoint": {
+    "x": 614.0,
+    "y": 25764.0
+  },
+  "boltons.setutils:IndexedSet.issubset": {
+    "x": 614.0,
+    "y": 25821.0
+  },
+  "boltons.setutils:IndexedSet.issuperset": {
+    "x": 614.0,
+    "y": 25878.0
+  },
+  "boltons.setutils:IndexedSet.iter_difference": {
+    "x": 614.0,
+    "y": 26163.0
+  },
+  "boltons.setutils:IndexedSet.iter_intersection": {
+    "x": 614.0,
+    "y": 26049.0
+  },
+  "boltons.setutils:IndexedSet.iter_slice": {
+    "x": 614.0,
+    "y": 26904.0
+  },
+  "boltons.setutils:IndexedSet.pop": {
+    "x": 614.0,
+    "y": 27018.0
+  },
+  "boltons.setutils:IndexedSet.remove": {
+    "x": 614.0,
+    "y": 25593.0
+  },
+  "boltons.setutils:IndexedSet.reverse": {
+    "x": 614.0,
+    "y": 27132.0
+  },
+  "boltons.setutils:IndexedSet.sort": {
+    "x": 614.0,
+    "y": 27189.0
+  },
+  "boltons.setutils:IndexedSet.symmetric_difference": {
+    "x": 614.0,
+    "y": 26277.0
+  },
+  "boltons.setutils:IndexedSet.symmetric_difference_update": {
+    "x": 614.0,
+    "y": 26619.0
+  },
+  "boltons.setutils:IndexedSet.union": {
+    "x": 614.0,
+    "y": 25935.0
+  },
+  "boltons.setutils:IndexedSet.update": {
+    "x": 614.0,
+    "y": 26391.0
+  },
+  "boltons.setutils:_ComplementSet": {
+    "x": 614.0,
+    "y": 28511.5
+  },
+  "boltons.setutils:_ComplementSet.__and__": {
+    "x": 614.0,
+    "y": 28043.0
+  },
+  "boltons.setutils:_ComplementSet.__bool__": {
+    "x": 614.0,
+    "y": 29525.0
+  },
+  "boltons.setutils:_ComplementSet.__contains__": {
+    "x": 614.0,
+    "y": 27758.0
+  },
+  "boltons.setutils:_ComplementSet.__eq__": {
+    "x": 614.0,
+    "y": 29297.0
+  },
+  "boltons.setutils:_ComplementSet.__ge__": {
+    "x": 614.0,
+    "y": 28898.0
+  },
+  "boltons.setutils:_ComplementSet.__gt__": {
+    "x": 614.0,
+    "y": 28955.0
+  },
+  "boltons.setutils:_ComplementSet.__hash__": {
+    "x": 614.0,
+    "y": 29354.0
+  },
+  "boltons.setutils:_ComplementSet.__iand__": {
+    "x": 614.0,
+    "y": 28100.0
+  },
+  "boltons.setutils:_ComplementSet.__init__": {
+    "x": 614.0,
+    "y": 27530.0
+  },
+  "boltons.setutils:_ComplementSet.__ior__": {
+    "x": 614.0,
+    "y": 28271.0
+  },
+  "boltons.setutils:_ComplementSet.__isub__": {
+    "x": 614.0,
+    "y": 29240.0
+  },
+  "boltons.setutils:_ComplementSet.__iter__": {
+    "x": 614.0,
+    "y": 29468.0
+  },
+  "boltons.setutils:_ComplementSet.__le__": {
+    "x": 614.0,
+    "y": 28727.0
+  },
+  "boltons.setutils:_ComplementSet.__len__": {
+    "x": 614.0,
+    "y": 29411.0
+  },
+  "boltons.setutils:_ComplementSet.__lt__": {
+    "x": 614.0,
+    "y": 28784.0
+  },
+  "boltons.setutils:_ComplementSet.__or__": {
+    "x": 614.0,
+    "y": 28214.0
+  },
+  "boltons.setutils:_ComplementSet.__repr__": {
+    "x": 614.0,
+    "y": 27587.0
+  },
+  "boltons.setutils:_ComplementSet.__rsub__": {
+    "x": 614.0,
+    "y": 29126.0
+  },
+  "boltons.setutils:_ComplementSet.__sub__": {
+    "x": 614.0,
+    "y": 29069.0
+  },
+  "boltons.setutils:_ComplementSet.__xor__": {
+    "x": 614.0,
+    "y": 28499.0
+  },
+  "boltons.setutils:_ComplementSet.add": {
+    "x": 614.0,
+    "y": 27815.0
+  },
+  "boltons.setutils:_ComplementSet.complement": {
+    "x": 614.0,
+    "y": 27701.0
+  },
+  "boltons.setutils:_ComplementSet.complemented": {
+    "x": 614.0,
+    "y": 27644.0
+  },
+  "boltons.setutils:_ComplementSet.difference": {
+    "x": 614.0,
+    "y": 29012.0
+  },
+  "boltons.setutils:_ComplementSet.difference_update": {
+    "x": 614.0,
+    "y": 29183.0
+  },
+  "boltons.setutils:_ComplementSet.discard": {
+    "x": 614.0,
+    "y": 28385.0
+  },
+  "boltons.setutils:_ComplementSet.intersection": {
+    "x": 614.0,
+    "y": 27986.0
+  },
+  "boltons.setutils:_ComplementSet.isdisjoint": {
+    "x": 614.0,
+    "y": 28613.0
+  },
+  "boltons.setutils:_ComplementSet.issubset": {
+    "x": 614.0,
+    "y": 28670.0
+  },
+  "boltons.setutils:_ComplementSet.issuperset": {
+    "x": 614.0,
+    "y": 28841.0
+  },
+  "boltons.setutils:_ComplementSet.pop": {
+    "x": 614.0,
+    "y": 27929.0
+  },
+  "boltons.setutils:_ComplementSet.remove": {
+    "x": 614.0,
+    "y": 27872.0
+  },
+  "boltons.setutils:_ComplementSet.symmetric_difference": {
+    "x": 614.0,
+    "y": 28442.0
+  },
+  "boltons.setutils:_ComplementSet.symmetric_difference_update": {
+    "x": 614.0,
+    "y": 28556.0
+  },
+  "boltons.setutils:_ComplementSet.union": {
+    "x": 614.0,
+    "y": 28157.0
+  },
+  "boltons.setutils:_ComplementSet.update": {
+    "x": 614.0,
+    "y": 28328.0
+  },
+  "boltons.setutils:_norm_args_notimplemented": {
+    "x": 614.0,
+    "y": 27429.0
+  },
+  "boltons.setutils:_norm_args_typeerror": {
+    "x": 614.0,
+    "y": 27372.0
+  },
+  "boltons.setutils:complement": {
+    "x": 614.0,
+    "y": 27315.0
+  },
+  "boltons.socketutils": {
+    "x": 609.0,
+    "y": 33874.0
+  },
+  "boltons.socketutils:BufferedSocket": {
+    "x": 614.0,
+    "y": 33402.5
+  },
+  "boltons.socketutils:BufferedSocket.__init__": {
+    "x": 614.0,
+    "y": 32706.0
+  },
+  "boltons.socketutils:BufferedSocket.buffer": {
+    "x": 614.0,
+    "y": 33561.0
+  },
+  "boltons.socketutils:BufferedSocket.close": {
+    "x": 614.0,
+    "y": 34074.0
+  },
+  "boltons.socketutils:BufferedSocket.family": {
+    "x": 614.0,
+    "y": 33903.0
+  },
+  "boltons.socketutils:BufferedSocket.fileno": {
+    "x": 614.0,
+    "y": 34017.0
+  },
+  "boltons.socketutils:BufferedSocket.flush": {
+    "x": 614.0,
+    "y": 33504.0
+  },
+  "boltons.socketutils:BufferedSocket.getpeername": {
+    "x": 614.0,
+    "y": 33675.0
+  },
+  "boltons.socketutils:BufferedSocket.getrecvbuffer": {
+    "x": 614.0,
+    "y": 32991.0
+  },
+  "boltons.socketutils:BufferedSocket.getsendbuffer": {
+    "x": 614.0,
+    "y": 33048.0
+  },
+  "boltons.socketutils:BufferedSocket.getsockname": {
+    "x": 614.0,
+    "y": 33618.0
+  },
+  "boltons.socketutils:BufferedSocket.getsockopt": {
+    "x": 614.0,
+    "y": 33732.0
+  },
+  "boltons.socketutils:BufferedSocket.gettimeout": {
+    "x": 614.0,
+    "y": 32820.0
+  },
+  "boltons.socketutils:BufferedSocket.peek": {
+    "x": 614.0,
+    "y": 33162.0
+  },
+  "boltons.socketutils:BufferedSocket.proto": {
+    "x": 614.0,
+    "y": 33960.0
+  },
+  "boltons.socketutils:BufferedSocket.recv": {
+    "x": 614.0,
+    "y": 33105.0
+  },
+  "boltons.socketutils:BufferedSocket.recv_close": {
+    "x": 614.0,
+    "y": 33219.0
+  },
+  "boltons.socketutils:BufferedSocket.recv_size": {
+    "x": 614.0,
+    "y": 33333.0
+  },
+  "boltons.socketutils:BufferedSocket.recv_until": {
+    "x": 614.0,
+    "y": 33276.0
+  },
+  "boltons.socketutils:BufferedSocket.send": {
+    "x": 614.0,
+    "y": 33390.0
+  },
+  "boltons.socketutils:BufferedSocket.sendall": {
+    "x": 614.0,
+    "y": 33447.0
+  },
+  "boltons.socketutils:BufferedSocket.setblocking": {
+    "x": 614.0,
+    "y": 32877.0
+  },
+  "boltons.socketutils:BufferedSocket.setmaxsize": {
+    "x": 614.0,
+    "y": 32934.0
+  },
+  "boltons.socketutils:BufferedSocket.setsockopt": {
+    "x": 614.0,
+    "y": 33789.0
+  },
+  "boltons.socketutils:BufferedSocket.settimeout": {
+    "x": 614.0,
+    "y": 32763.0
+  },
+  "boltons.socketutils:BufferedSocket.shutdown": {
+    "x": 614.0,
+    "y": 34131.0
+  },
+  "boltons.socketutils:BufferedSocket.type": {
+    "x": 614.0,
+    "y": 33846.0
+  },
+  "boltons.socketutils:ConnectionClosed": {
+    "x": 614.0,
+    "y": 34293.0
+  },
+  "boltons.socketutils:Error": {
+    "x": 614.0,
+    "y": 34212.0
+  },
+  "boltons.socketutils:MessageTooLong": {
+    "x": 614.0,
+    "y": 34390.0
+  },
+  "boltons.socketutils:MessageTooLong.__init__": {
+    "x": 614.0,
+    "y": 34406.0
+  },
+  "boltons.socketutils:NetstringInvalidSize": {
+    "x": 614.0,
+    "y": 35152.0
+  },
+  "boltons.socketutils:NetstringInvalidSize.__init__": {
+    "x": 614.0,
+    "y": 35168.0
+  },
+  "boltons.socketutils:NetstringMessageTooLong": {
+    "x": 614.0,
+    "y": 35265.0
+  },
+  "boltons.socketutils:NetstringMessageTooLong.__init__": {
+    "x": 614.0,
+    "y": 35281.0
+  },
+  "boltons.socketutils:NetstringProtocolError": {
+    "x": 614.0,
+    "y": 35055.0
+  },
+  "boltons.socketutils:NetstringSocket": {
+    "x": 614.0,
+    "y": 34787.0
+  },
+  "boltons.socketutils:NetstringSocket.__init__": {
+    "x": 614.0,
+    "y": 34632.0
+  },
+  "boltons.socketutils:NetstringSocket._calc_msgsize_maxsize": {
+    "x": 614.0,
+    "y": 34860.0
+  },
+  "boltons.socketutils:NetstringSocket.fileno": {
+    "x": 614.0,
+    "y": 34689.0
+  },
+  "boltons.socketutils:NetstringSocket.read_ns": {
+    "x": 614.0,
+    "y": 34917.0
+  },
+  "boltons.socketutils:NetstringSocket.setmaxsize": {
+    "x": 614.0,
+    "y": 34803.0
+  },
+  "boltons.socketutils:NetstringSocket.settimeout": {
+    "x": 614.0,
+    "y": 34746.0
+  },
+  "boltons.socketutils:NetstringSocket.write_ns": {
+    "x": 614.0,
+    "y": 34974.0
+  },
+  "boltons.socketutils:RLock": {
+    "x": 614.0,
+    "y": 32548.5
+  },
+  "boltons.socketutils:RLock.__enter__": {
+    "x": 614.0,
+    "y": 32536.0
+  },
+  "boltons.socketutils:RLock.__exit__": {
+    "x": 614.0,
+    "y": 32593.0
+  },
+  "boltons.socketutils:Timeout": {
+    "x": 614.0,
+    "y": 34503.0
+  },
+  "boltons.socketutils:Timeout.__init__": {
+    "x": 614.0,
+    "y": 34519.0
+  },
+  "boltons.statsutils": {
+    "x": 609.0,
+    "y": 55054.0
+  },
+  "boltons.statsutils:Stats": {
+    "x": 614.0,
+    "y": 55072.0
+  },
+  "boltons.statsutils:Stats.__init__": {
+    "x": 614.0,
+    "y": 54290.0
+  },
+  "boltons.statsutils:Stats.__iter__": {
+    "x": 614.0,
+    "y": 54404.0
+  },
+  "boltons.statsutils:Stats.__len__": {
+    "x": 614.0,
+    "y": 54347.0
+  },
+  "boltons.statsutils:Stats._calc_count": {
+    "x": 614.0,
+    "y": 54575.0
+  },
+  "boltons.statsutils:Stats._calc_iqr": {
+    "x": 614.0,
+    "y": 54917.0
+  },
+  "boltons.statsutils:Stats._calc_kurtosis": {
+    "x": 614.0,
+    "y": 55316.0
+  },
+  "boltons.statsutils:Stats._calc_max": {
+    "x": 614.0,
+    "y": 54689.0
+  },
+  "boltons.statsutils:Stats._calc_mean": {
+    "x": 614.0,
+    "y": 54632.0
+  },
+  "boltons.statsutils:Stats._calc_median": {
+    "x": 614.0,
+    "y": 54803.0
+  },
+  "boltons.statsutils:Stats._calc_median_abs_dev": {
+    "x": 614.0,
+    "y": 55145.0
+  },
+  "boltons.statsutils:Stats._calc_min": {
+    "x": 614.0,
+    "y": 54746.0
+  },
+  "boltons.statsutils:Stats._calc_mode": {
+    "x": 614.0,
+    "y": 54860.0
+  },
+  "boltons.statsutils:Stats._calc_pearson_type": {
+    "x": 614.0,
+    "y": 55373.0
+  },
+  "boltons.statsutils:Stats._calc_rel_std_dev": {
+    "x": 614.0,
+    "y": 55202.0
+  },
+  "boltons.statsutils:Stats._calc_skewness": {
+    "x": 614.0,
+    "y": 55259.0
+  },
+  "boltons.statsutils:Stats._calc_std_dev": {
+    "x": 614.0,
+    "y": 55088.0
+  },
+  "boltons.statsutils:Stats._calc_trimean": {
+    "x": 614.0,
+    "y": 54974.0
+  },
+  "boltons.statsutils:Stats._calc_variance": {
+    "x": 614.0,
+    "y": 55031.0
+  },
+  "boltons.statsutils:Stats._get_bin_bounds": {
+    "x": 614.0,
+    "y": 55715.0
+  },
+  "boltons.statsutils:Stats._get_pow_diffs": {
+    "x": 614.0,
+    "y": 55658.0
+  },
+  "boltons.statsutils:Stats._get_quantile": {
+    "x": 614.0,
+    "y": 55430.0
+  },
+  "boltons.statsutils:Stats._get_sorted_data": {
+    "x": 614.0,
+    "y": 54461.0
+  },
+  "boltons.statsutils:Stats.clear_cache": {
+    "x": 614.0,
+    "y": 54518.0
+  },
+  "boltons.statsutils:Stats.describe": {
+    "x": 614.0,
+    "y": 55886.0
+  },
+  "boltons.statsutils:Stats.format_histogram": {
+    "x": 614.0,
+    "y": 55829.0
+  },
+  "boltons.statsutils:Stats.get_histogram_counts": {
+    "x": 614.0,
+    "y": 55772.0
+  },
+  "boltons.statsutils:Stats.get_quantile": {
+    "x": 614.0,
+    "y": 55487.0
+  },
+  "boltons.statsutils:Stats.get_zscore": {
+    "x": 614.0,
+    "y": 55544.0
+  },
+  "boltons.statsutils:Stats.trim_relative": {
+    "x": 614.0,
+    "y": 55601.0
+  },
+  "boltons.statsutils:_StatsProperty": {
+    "x": 614.0,
+    "y": 54132.5
+  },
+  "boltons.statsutils:_StatsProperty.__get__": {
+    "x": 614.0,
+    "y": 54177.0
+  },
+  "boltons.statsutils:_StatsProperty.__init__": {
+    "x": 614.0,
+    "y": 54120.0
+  },
+  "boltons.statsutils:_get_conv_func": {
+    "x": 614.0,
+    "y": 56012.0
+  },
+  "boltons.statsutils:describe": {
+    "x": 614.0,
+    "y": 55955.0
+  },
+  "boltons.statsutils:format_histogram_counts": {
+    "x": 614.0,
+    "y": 56069.0
+  },
+  "boltons.strutils": {
+    "x": 609.0,
+    "y": 39982.5
+  },
+  "boltons.strutils:DeaccenterDict": {
+    "x": 614.0,
+    "y": 39603.0
+  },
+  "boltons.strutils:DeaccenterDict.__missing__": {
+    "x": 614.0,
+    "y": 39619.0
+  },
+  "boltons.strutils:HTMLTextExtractor": {
+    "x": 614.0,
+    "y": 39887.0
+  },
+  "boltons.strutils:HTMLTextExtractor.__init__": {
+    "x": 614.0,
+    "y": 39789.0
+  },
+  "boltons.strutils:HTMLTextExtractor.get_text": {
+    "x": 614.0,
+    "y": 40017.0
+  },
+  "boltons.strutils:HTMLTextExtractor.handle_charref": {
+    "x": 614.0,
+    "y": 39903.0
+  },
+  "boltons.strutils:HTMLTextExtractor.handle_data": {
+    "x": 614.0,
+    "y": 39846.0
+  },
+  "boltons.strutils:HTMLTextExtractor.handle_entityref": {
+    "x": 614.0,
+    "y": 39960.0
+  },
+  "boltons.strutils:MultiReplace": {
+    "x": 614.0,
+    "y": 40912.0
+  },
+  "boltons.strutils:MultiReplace.__init__": {
+    "x": 614.0,
+    "y": 40871.0
+  },
+  "boltons.strutils:MultiReplace._get_value": {
+    "x": 614.0,
+    "y": 40928.0
+  },
+  "boltons.strutils:MultiReplace.sub": {
+    "x": 614.0,
+    "y": 40985.0
+  },
+  "boltons.strutils:_match_case": {
+    "x": 614.0,
+    "y": 39233.0
+  },
+  "boltons.strutils:a10n": {
+    "x": 614.0,
+    "y": 39347.0
+  },
+  "boltons.strutils:args2cmd": {
+    "x": 614.0,
+    "y": 40542.0
+  },
+  "boltons.strutils:args2sh": {
+    "x": 614.0,
+    "y": 40485.0
+  },
+  "boltons.strutils:asciify": {
+    "x": 614.0,
+    "y": 39461.0
+  },
+  "boltons.strutils:bytes2human": {
+    "x": 614.0,
+    "y": 39688.0
+  },
+  "boltons.strutils:camel2under": {
+    "x": 614.0,
+    "y": 38720.0
+  },
+  "boltons.strutils:cardinalize": {
+    "x": 614.0,
+    "y": 39062.0
+  },
+  "boltons.strutils:complement_int_list": {
+    "x": 614.0,
+    "y": 40713.0
+  },
+  "boltons.strutils:ellipsize": {
+    "x": 614.0,
+    "y": 41282.0
+  },
+  "boltons.strutils:escape_shell_args": {
+    "x": 614.0,
+    "y": 40428.0
+  },
+  "boltons.strutils:find_hashtags": {
+    "x": 614.0,
+    "y": 39290.0
+  },
+  "boltons.strutils:format_int_list": {
+    "x": 614.0,
+    "y": 40656.0
+  },
+  "boltons.strutils:gunzip_bytes": {
+    "x": 614.0,
+    "y": 40143.0
+  },
+  "boltons.strutils:gzip_bytes": {
+    "x": 614.0,
+    "y": 40200.0
+  },
+  "boltons.strutils:html2text": {
+    "x": 614.0,
+    "y": 40086.0
+  },
+  "boltons.strutils:human_readable_list": {
+    "x": 614.0,
+    "y": 41225.0
+  },
+  "boltons.strutils:indent": {
+    "x": 614.0,
+    "y": 40314.0
+  },
+  "boltons.strutils:int_ranges_from_int_list": {
+    "x": 614.0,
+    "y": 40770.0
+  },
+  "boltons.strutils:is_ascii": {
+    "x": 614.0,
+    "y": 39518.0
+  },
+  "boltons.strutils:is_uuid": {
+    "x": 614.0,
+    "y": 40371.0
+  },
+  "boltons.strutils:iter_splitlines": {
+    "x": 614.0,
+    "y": 40257.0
+  },
+  "boltons.strutils:multi_replace": {
+    "x": 614.0,
+    "y": 41054.0
+  },
+  "boltons.strutils:ordinalize": {
+    "x": 614.0,
+    "y": 39005.0
+  },
+  "boltons.strutils:parse_int_list": {
+    "x": 614.0,
+    "y": 40599.0
+  },
+  "boltons.strutils:pluralize": {
+    "x": 614.0,
+    "y": 39176.0
+  },
+  "boltons.strutils:removeprefix": {
+    "x": 614.0,
+    "y": 41168.0
+  },
+  "boltons.strutils:singularize": {
+    "x": 614.0,
+    "y": 39119.0
+  },
+  "boltons.strutils:slugify": {
+    "x": 614.0,
+    "y": 38834.0
+  },
+  "boltons.strutils:split_punct_ws": {
+    "x": 614.0,
+    "y": 38891.0
+  },
+  "boltons.strutils:strip_ansi": {
+    "x": 614.0,
+    "y": 39404.0
+  },
+  "boltons.strutils:under2camel": {
+    "x": 614.0,
+    "y": 38777.0
+  },
+  "boltons.strutils:unit_len": {
+    "x": 614.0,
+    "y": 38948.0
+  },
+  "boltons.strutils:unwrap_text": {
+    "x": 614.0,
+    "y": 41111.0
+  },
+  "boltons.tableutils": {
+    "x": 609.0,
+    "y": 15313.0
+  },
+  "boltons.tableutils:DictInputType": {
+    "x": 614.0,
+    "y": 14490.5
+  },
+  "boltons.tableutils:DictInputType.check_type": {
+    "x": 614.0,
+    "y": 14421.0
+  },
+  "boltons.tableutils:DictInputType.get_entry": {
+    "x": 614.0,
+    "y": 14535.0
+  },
+  "boltons.tableutils:DictInputType.get_entry_seq": {
+    "x": 614.0,
+    "y": 14592.0
+  },
+  "boltons.tableutils:DictInputType.guess_headers": {
+    "x": 614.0,
+    "y": 14478.0
+  },
+  "boltons.tableutils:InputType": {
+    "x": 614.0,
+    "y": 14263.5
+  },
+  "boltons.tableutils:InputType.__init__": {
+    "x": 614.0,
+    "y": 14251.0
+  },
+  "boltons.tableutils:InputType.get_entry_seq": {
+    "x": 614.0,
+    "y": 14308.0
+  },
+  "boltons.tableutils:ListInputType": {
+    "x": 614.0,
+    "y": 15001.5
+  },
+  "boltons.tableutils:ListInputType.check_type": {
+    "x": 614.0,
+    "y": 14932.0
+  },
+  "boltons.tableutils:ListInputType.get_entry": {
+    "x": 614.0,
+    "y": 15046.0
+  },
+  "boltons.tableutils:ListInputType.get_entry_seq": {
+    "x": 614.0,
+    "y": 15103.0
+  },
+  "boltons.tableutils:ListInputType.guess_headers": {
+    "x": 614.0,
+    "y": 14989.0
+  },
+  "boltons.tableutils:NamedTupleInputType": {
+    "x": 614.0,
+    "y": 15569.5
+  },
+  "boltons.tableutils:NamedTupleInputType.check_type": {
+    "x": 614.0,
+    "y": 15500.0
+  },
+  "boltons.tableutils:NamedTupleInputType.get_entry": {
+    "x": 614.0,
+    "y": 15614.0
+  },
+  "boltons.tableutils:NamedTupleInputType.get_entry_seq": {
+    "x": 614.0,
+    "y": 15671.0
+  },
+  "boltons.tableutils:NamedTupleInputType.guess_headers": {
+    "x": 614.0,
+    "y": 15557.0
+  },
+  "boltons.tableutils:ObjectInputType": {
+    "x": 614.0,
+    "y": 14746.0
+  },
+  "boltons.tableutils:ObjectInputType.check_type": {
+    "x": 614.0,
+    "y": 14705.0
+  },
+  "boltons.tableutils:ObjectInputType.get_entry": {
+    "x": 614.0,
+    "y": 14819.0
+  },
+  "boltons.tableutils:ObjectInputType.guess_headers": {
+    "x": 614.0,
+    "y": 14762.0
+  },
+  "boltons.tableutils:Table": {
+    "x": 614.0,
+    "y": 16195.5
+  },
+  "boltons.tableutils:Table.__getitem__": {
+    "x": 614.0,
+    "y": 16297.0
+  },
+  "boltons.tableutils:Table.__init__": {
+    "x": 614.0,
+    "y": 15784.0
+  },
+  "boltons.tableutils:Table.__len__": {
+    "x": 614.0,
+    "y": 16240.0
+  },
+  "boltons.tableutils:Table.__repr__": {
+    "x": 614.0,
+    "y": 16354.0
+  },
+  "boltons.tableutils:Table._add_horizontal_html_lines": {
+    "x": 614.0,
+    "y": 16525.0
+  },
+  "boltons.tableutils:Table._add_vertical_html_lines": {
+    "x": 614.0,
+    "y": 16582.0
+  },
+  "boltons.tableutils:Table._fill": {
+    "x": 614.0,
+    "y": 15955.0
+  },
+  "boltons.tableutils:Table._set_width": {
+    "x": 614.0,
+    "y": 15898.0
+  },
+  "boltons.tableutils:Table.extend": {
+    "x": 614.0,
+    "y": 15841.0
+  },
+  "boltons.tableutils:Table.from_data": {
+    "x": 614.0,
+    "y": 16183.0
+  },
+  "boltons.tableutils:Table.from_dict": {
+    "x": 614.0,
+    "y": 16012.0
+  },
+  "boltons.tableutils:Table.from_list": {
+    "x": 614.0,
+    "y": 16069.0
+  },
+  "boltons.tableutils:Table.from_object": {
+    "x": 614.0,
+    "y": 16126.0
+  },
+  "boltons.tableutils:Table.get_cell_html": {
+    "x": 614.0,
+    "y": 16468.0
+  },
+  "boltons.tableutils:Table.to_html": {
+    "x": 614.0,
+    "y": 16411.0
+  },
+  "boltons.tableutils:Table.to_text": {
+    "x": 614.0,
+    "y": 16639.0
+  },
+  "boltons.tableutils:TupleInputType": {
+    "x": 614.0,
+    "y": 15285.5
+  },
+  "boltons.tableutils:TupleInputType.check_type": {
+    "x": 614.0,
+    "y": 15216.0
+  },
+  "boltons.tableutils:TupleInputType.get_entry": {
+    "x": 614.0,
+    "y": 15330.0
+  },
+  "boltons.tableutils:TupleInputType.get_entry_seq": {
+    "x": 614.0,
+    "y": 15387.0
+  },
+  "boltons.tableutils:TupleInputType.guess_headers": {
+    "x": 614.0,
+    "y": 15273.0
+  },
+  "boltons.tableutils:UnsupportedData": {
+    "x": 614.0,
+    "y": 14138.0
+  },
+  "boltons.tableutils:escape_html": {
+    "x": 614.0,
+    "y": 14069.0
+  },
+  "boltons.tableutils:to_text": {
+    "x": 614.0,
+    "y": 14012.0
+  },
+  "boltons.tbutils": {
+    "x": 609.0,
+    "y": 47212.5
+  },
+  "boltons.tbutils:Callpoint": {
+    "x": 614.0,
+    "y": 45870.0
+  },
+  "boltons.tbutils:Callpoint.__init__": {
+    "x": 614.0,
+    "y": 45715.0
+  },
+  "boltons.tbutils:Callpoint.__repr__": {
+    "x": 614.0,
+    "y": 46000.0
+  },
+  "boltons.tbutils:Callpoint.from_current": {
+    "x": 614.0,
+    "y": 45829.0
+  },
+  "boltons.tbutils:Callpoint.from_frame": {
+    "x": 614.0,
+    "y": 45886.0
+  },
+  "boltons.tbutils:Callpoint.from_tb": {
+    "x": 614.0,
+    "y": 45943.0
+  },
+  "boltons.tbutils:Callpoint.tb_frame_str": {
+    "x": 614.0,
+    "y": 46057.0
+  },
+  "boltons.tbutils:Callpoint.to_dict": {
+    "x": 614.0,
+    "y": 45772.0
+  },
+  "boltons.tbutils:ContextualCallpoint": {
+    "x": 614.0,
+    "y": 47775.5
+  },
+  "boltons.tbutils:ContextualCallpoint.__init__": {
+    "x": 614.0,
+    "y": 47649.0
+  },
+  "boltons.tbutils:ContextualCallpoint._populate_context_lines": {
+    "x": 614.0,
+    "y": 47820.0
+  },
+  "boltons.tbutils:ContextualCallpoint._populate_local_reprs": {
+    "x": 614.0,
+    "y": 47877.0
+  },
+  "boltons.tbutils:ContextualCallpoint.from_frame": {
+    "x": 614.0,
+    "y": 47706.0
+  },
+  "boltons.tbutils:ContextualCallpoint.from_tb": {
+    "x": 614.0,
+    "y": 47763.0
+  },
+  "boltons.tbutils:ContextualCallpoint.to_dict": {
+    "x": 614.0,
+    "y": 47934.0
+  },
+  "boltons.tbutils:ContextualExceptionInfo": {
+    "x": 614.0,
+    "y": 48096.0
+  },
+  "boltons.tbutils:ContextualTracebackInfo": {
+    "x": 614.0,
+    "y": 48015.0
+  },
+  "boltons.tbutils:ExceptionInfo": {
+    "x": 614.0,
+    "y": 47349.0
+  },
+  "boltons.tbutils:ExceptionInfo.__init__": {
+    "x": 614.0,
+    "y": 47194.0
+  },
+  "boltons.tbutils:ExceptionInfo.__repr__": {
+    "x": 614.0,
+    "y": 47422.0
+  },
+  "boltons.tbutils:ExceptionInfo.from_current": {
+    "x": 614.0,
+    "y": 47308.0
+  },
+  "boltons.tbutils:ExceptionInfo.from_exc_info": {
+    "x": 614.0,
+    "y": 47251.0
+  },
+  "boltons.tbutils:ExceptionInfo.get_formatted": {
+    "x": 614.0,
+    "y": 47479.0
+  },
+  "boltons.tbutils:ExceptionInfo.get_formatted_exception_only": {
+    "x": 614.0,
+    "y": 47536.0
+  },
+  "boltons.tbutils:ExceptionInfo.to_dict": {
+    "x": 614.0,
+    "y": 47365.0
+  },
+  "boltons.tbutils:ParsedException": {
+    "x": 614.0,
+    "y": 48620.5
+  },
+  "boltons.tbutils:ParsedException.__init__": {
+    "x": 614.0,
+    "y": 48494.0
+  },
+  "boltons.tbutils:ParsedException.__repr__": {
+    "x": 614.0,
+    "y": 48665.0
+  },
+  "boltons.tbutils:ParsedException.from_string": {
+    "x": 614.0,
+    "y": 48779.0
+  },
+  "boltons.tbutils:ParsedException.source_file": {
+    "x": 614.0,
+    "y": 48551.0
+  },
+  "boltons.tbutils:ParsedException.to_dict": {
+    "x": 614.0,
+    "y": 48608.0
+  },
+  "boltons.tbutils:ParsedException.to_string": {
+    "x": 614.0,
+    "y": 48722.0
+  },
+  "boltons.tbutils:TracebackInfo": {
+    "x": 614.0,
+    "y": 46808.5
+  },
+  "boltons.tbutils:TracebackInfo.__init__": {
+    "x": 614.0,
+    "y": 46568.0
+  },
+  "boltons.tbutils:TracebackInfo.__iter__": {
+    "x": 614.0,
+    "y": 46910.0
+  },
+  "boltons.tbutils:TracebackInfo.__len__": {
+    "x": 614.0,
+    "y": 46853.0
+  },
+  "boltons.tbutils:TracebackInfo.__repr__": {
+    "x": 614.0,
+    "y": 46967.0
+  },
+  "boltons.tbutils:TracebackInfo.__str__": {
+    "x": 614.0,
+    "y": 47024.0
+  },
+  "boltons.tbutils:TracebackInfo.from_dict": {
+    "x": 614.0,
+    "y": 46739.0
+  },
+  "boltons.tbutils:TracebackInfo.from_frame": {
+    "x": 614.0,
+    "y": 46625.0
+  },
+  "boltons.tbutils:TracebackInfo.from_traceback": {
+    "x": 614.0,
+    "y": 46682.0
+  },
+  "boltons.tbutils:TracebackInfo.get_formatted": {
+    "x": 614.0,
+    "y": 47081.0
+  },
+  "boltons.tbutils:TracebackInfo.to_dict": {
+    "x": 614.0,
+    "y": 46796.0
+  },
+  "boltons.tbutils:_DeferredLine": {
+    "x": 614.0,
+    "y": 46296.5
+  },
+  "boltons.tbutils:_DeferredLine.__eq__": {
+    "x": 614.0,
+    "y": 46227.0
+  },
+  "boltons.tbutils:_DeferredLine.__init__": {
+    "x": 614.0,
+    "y": 46170.0
+  },
+  "boltons.tbutils:_DeferredLine.__len__": {
+    "x": 614.0,
+    "y": 46455.0
+  },
+  "boltons.tbutils:_DeferredLine.__ne__": {
+    "x": 614.0,
+    "y": 46284.0
+  },
+  "boltons.tbutils:_DeferredLine.__repr__": {
+    "x": 614.0,
+    "y": 46398.0
+  },
+  "boltons.tbutils:_DeferredLine.__str__": {
+    "x": 614.0,
+    "y": 46341.0
+  },
+  "boltons.tbutils:_format_final_exc_line": {
+    "x": 614.0,
+    "y": 48279.0
+  },
+  "boltons.tbutils:_some_str": {
+    "x": 614.0,
+    "y": 48222.0
+  },
+  "boltons.tbutils:fix_print_exception": {
+    "x": 614.0,
+    "y": 48393.0
+  },
+  "boltons.tbutils:format_exception_only": {
+    "x": 614.0,
+    "y": 48165.0
+  },
+  "boltons.tbutils:print_exception": {
+    "x": 614.0,
+    "y": 48336.0
+  },
+  "boltons.timeutils": {
+    "x": 609.0,
+    "y": 57439.5
+  },
+  "boltons.timeutils:ConstantTZInfo": {
+    "x": 614.0,
+    "y": 57259.5
+  },
+  "boltons.timeutils:ConstantTZInfo.__init__": {
+    "x": 614.0,
+    "y": 57133.0
+  },
+  "boltons.timeutils:ConstantTZInfo.__repr__": {
+    "x": 614.0,
+    "y": 57418.0
+  },
+  "boltons.timeutils:ConstantTZInfo.dst": {
+    "x": 614.0,
+    "y": 57361.0
+  },
+  "boltons.timeutils:ConstantTZInfo.tzname": {
+    "x": 614.0,
+    "y": 57304.0
+  },
+  "boltons.timeutils:ConstantTZInfo.utcoffset": {
+    "x": 614.0,
+    "y": 57247.0
+  },
+  "boltons.timeutils:ConstantTZInfo.utcoffset_hours": {
+    "x": 614.0,
+    "y": 57190.0
+  },
+  "boltons.timeutils:LocalTZInfo": {
+    "x": 614.0,
+    "y": 57629.0
+  },
+  "boltons.timeutils:LocalTZInfo.__repr__": {
+    "x": 614.0,
+    "y": 57759.0
+  },
+  "boltons.timeutils:LocalTZInfo.dst": {
+    "x": 614.0,
+    "y": 57645.0
+  },
+  "boltons.timeutils:LocalTZInfo.is_dst": {
+    "x": 614.0,
+    "y": 57531.0
+  },
+  "boltons.timeutils:LocalTZInfo.tzname": {
+    "x": 614.0,
+    "y": 57702.0
+  },
+  "boltons.timeutils:LocalTZInfo.utcoffset": {
+    "x": 614.0,
+    "y": 57588.0
+  },
+  "boltons.timeutils:USTimeZone": {
+    "x": 614.0,
+    "y": 58084.0
+  },
+  "boltons.timeutils:USTimeZone.__init__": {
+    "x": 614.0,
+    "y": 57929.0
+  },
+  "boltons.timeutils:USTimeZone.__repr__": {
+    "x": 614.0,
+    "y": 57986.0
+  },
+  "boltons.timeutils:USTimeZone._dst_range": {
+    "x": 614.0,
+    "y": 58157.0
+  },
+  "boltons.timeutils:USTimeZone.dst": {
+    "x": 614.0,
+    "y": 58214.0
+  },
+  "boltons.timeutils:USTimeZone.fromutc": {
+    "x": 614.0,
+    "y": 58271.0
+  },
+  "boltons.timeutils:USTimeZone.tzname": {
+    "x": 614.0,
+    "y": 58043.0
+  },
+  "boltons.timeutils:USTimeZone.utcoffset": {
+    "x": 614.0,
+    "y": 58100.0
+  },
+  "boltons.timeutils:_cardinalize_time_unit": {
+    "x": 614.0,
+    "y": 56804.0
+  },
+  "boltons.timeutils:_first_sunday_on_or_after": {
+    "x": 614.0,
+    "y": 57828.0
+  },
+  "boltons.timeutils:daterange": {
+    "x": 614.0,
+    "y": 57032.0
+  },
+  "boltons.timeutils:decimal_relative_time": {
+    "x": 614.0,
+    "y": 56861.0
+  },
+  "boltons.timeutils:dt_to_timestamp": {
+    "x": 614.0,
+    "y": 56633.0
+  },
+  "boltons.timeutils:isoparse": {
+    "x": 614.0,
+    "y": 56690.0
+  },
+  "boltons.timeutils:parse_timedelta": {
+    "x": 614.0,
+    "y": 56747.0
+  },
+  "boltons.timeutils:relative_time": {
+    "x": 614.0,
+    "y": 56918.0
+  },
+  "boltons.timeutils:strpdate": {
+    "x": 614.0,
+    "y": 56975.0
+  },
+  "boltons.typeutils": {
+    "x": 609.0,
+    "y": 41602.5
+  },
+  "boltons.typeutils:classproperty": {
+    "x": 614.0,
+    "y": 41706.5
+  },
+  "boltons.typeutils:classproperty.__get__": {
+    "x": 614.0,
+    "y": 41751.0
+  },
+  "boltons.typeutils:classproperty.__init__": {
+    "x": 614.0,
+    "y": 41694.0
+  },
+  "boltons.typeutils:get_all_subclasses": {
+    "x": 614.0,
+    "y": 41593.0
+  },
+  "boltons.typeutils:issubclass": {
+    "x": 614.0,
+    "y": 41536.0
+  },
+  "boltons.typeutils:make_sentinel": {
+    "x": 614.0,
+    "y": 41479.0
+  },
+  "boltons.urlutils": {
+    "x": 609.0,
+    "y": 19274.0
+  },
+  "boltons.urlutils:OrderedMultiDict": {
+    "x": 614.0,
+    "y": 20313.5
+  },
+  "boltons.urlutils:OrderedMultiDict.__delitem__": {
+    "x": 614.0,
+    "y": 20130.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__eq__": {
+    "x": 614.0,
+    "y": 20187.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__getitem__": {
+    "x": 614.0,
+    "y": 20073.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__getstate__": {
+    "x": 614.0,
+    "y": 19218.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__init__": {
+    "x": 614.0,
+    "y": 19161.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__ior__": {
+    "x": 614.0,
+    "y": 20301.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__iter__": {
+    "x": 614.0,
+    "y": 21270.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__ne__": {
+    "x": 614.0,
+    "y": 20244.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__new__": {
+    "x": 614.0,
+    "y": 19104.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__repr__": {
+    "x": 614.0,
+    "y": 21384.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__reversed__": {
+    "x": 614.0,
+    "y": 21327.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__setitem__": {
+    "x": 614.0,
+    "y": 20016.0
+  },
+  "boltons.urlutils:OrderedMultiDict.__setstate__": {
+    "x": 614.0,
+    "y": 19275.0
+  },
+  "boltons.urlutils:OrderedMultiDict._clear_ll": {
+    "x": 614.0,
+    "y": 19332.0
+  },
+  "boltons.urlutils:OrderedMultiDict._insert": {
+    "x": 614.0,
+    "y": 19389.0
+  },
+  "boltons.urlutils:OrderedMultiDict._remove": {
+    "x": 614.0,
+    "y": 20529.0
+  },
+  "boltons.urlutils:OrderedMultiDict._remove_all": {
+    "x": 614.0,
+    "y": 20586.0
+  },
+  "boltons.urlutils:OrderedMultiDict.add": {
+    "x": 614.0,
+    "y": 19446.0
+  },
+  "boltons.urlutils:OrderedMultiDict.addlist": {
+    "x": 614.0,
+    "y": 19503.0
+  },
+  "boltons.urlutils:OrderedMultiDict.clear": {
+    "x": 614.0,
+    "y": 19674.0
+  },
+  "boltons.urlutils:OrderedMultiDict.copy": {
+    "x": 614.0,
+    "y": 19788.0
+  },
+  "boltons.urlutils:OrderedMultiDict.counts": {
+    "x": 614.0,
+    "y": 21042.0
+  },
+  "boltons.urlutils:OrderedMultiDict.fromkeys": {
+    "x": 614.0,
+    "y": 19845.0
+  },
+  "boltons.urlutils:OrderedMultiDict.get": {
+    "x": 614.0,
+    "y": 19560.0
+  },
+  "boltons.urlutils:OrderedMultiDict.getlist": {
+    "x": 614.0,
+    "y": 19617.0
+  },
+  "boltons.urlutils:OrderedMultiDict.inverted": {
+    "x": 614.0,
+    "y": 20985.0
+  },
+  "boltons.urlutils:OrderedMultiDict.items": {
+    "x": 614.0,
+    "y": 21213.0
+  },
+  "boltons.urlutils:OrderedMultiDict.iteritems": {
+    "x": 614.0,
+    "y": 20643.0
+  },
+  "boltons.urlutils:OrderedMultiDict.iterkeys": {
+    "x": 614.0,
+    "y": 20700.0
+  },
+  "boltons.urlutils:OrderedMultiDict.itervalues": {
+    "x": 614.0,
+    "y": 20757.0
+  },
+  "boltons.urlutils:OrderedMultiDict.keys": {
+    "x": 614.0,
+    "y": 21099.0
+  },
+  "boltons.urlutils:OrderedMultiDict.pop": {
+    "x": 614.0,
+    "y": 20358.0
+  },
+  "boltons.urlutils:OrderedMultiDict.popall": {
+    "x": 614.0,
+    "y": 20415.0
+  },
+  "boltons.urlutils:OrderedMultiDict.poplast": {
+    "x": 614.0,
+    "y": 20472.0
+  },
+  "boltons.urlutils:OrderedMultiDict.setdefault": {
+    "x": 614.0,
+    "y": 19731.0
+  },
+  "boltons.urlutils:OrderedMultiDict.sorted": {
+    "x": 614.0,
+    "y": 20871.0
+  },
+  "boltons.urlutils:OrderedMultiDict.sortedvalues": {
+    "x": 614.0,
+    "y": 20928.0
+  },
+  "boltons.urlutils:OrderedMultiDict.todict": {
+    "x": 614.0,
+    "y": 20814.0
+  },
+  "boltons.urlutils:OrderedMultiDict.update": {
+    "x": 614.0,
+    "y": 19902.0
+  },
+  "boltons.urlutils:OrderedMultiDict.update_extend": {
+    "x": 614.0,
+    "y": 19959.0
+  },
+  "boltons.urlutils:OrderedMultiDict.values": {
+    "x": 614.0,
+    "y": 21156.0
+  },
+  "boltons.urlutils:OrderedMultiDict.viewitems": {
+    "x": 614.0,
+    "y": 21555.0
+  },
+  "boltons.urlutils:OrderedMultiDict.viewkeys": {
+    "x": 614.0,
+    "y": 21441.0
+  },
+  "boltons.urlutils:OrderedMultiDict.viewvalues": {
+    "x": 614.0,
+    "y": 21498.0
+  },
+  "boltons.urlutils:QueryParamDict": {
+    "x": 614.0,
+    "y": 21680.5
+  },
+  "boltons.urlutils:QueryParamDict.from_text": {
+    "x": 614.0,
+    "y": 21668.0
+  },
+  "boltons.urlutils:QueryParamDict.to_text": {
+    "x": 614.0,
+    "y": 21725.0
+  },
+  "boltons.urlutils:URL": {
+    "x": 614.0,
+    "y": 18238.5
+  },
+  "boltons.urlutils:URL.__eq__": {
+    "x": 614.0,
+    "y": 18625.0
+  },
+  "boltons.urlutils:URL.__init__": {
+    "x": 614.0,
+    "y": 17827.0
+  },
+  "boltons.urlutils:URL.__ne__": {
+    "x": 614.0,
+    "y": 18682.0
+  },
+  "boltons.urlutils:URL.__repr__": {
+    "x": 614.0,
+    "y": 18454.0
+  },
+  "boltons.urlutils:URL.__str__": {
+    "x": 614.0,
+    "y": 18511.0
+  },
+  "boltons.urlutils:URL.__unicode__": {
+    "x": 614.0,
+    "y": 18568.0
+  },
+  "boltons.urlutils:URL.default_port": {
+    "x": 614.0,
+    "y": 18169.0
+  },
+  "boltons.urlutils:URL.from_parts": {
+    "x": 614.0,
+    "y": 17884.0
+  },
+  "boltons.urlutils:URL.get_authority": {
+    "x": 614.0,
+    "y": 18340.0
+  },
+  "boltons.urlutils:URL.navigate": {
+    "x": 614.0,
+    "y": 18283.0
+  },
+  "boltons.urlutils:URL.normalize": {
+    "x": 614.0,
+    "y": 18226.0
+  },
+  "boltons.urlutils:URL.path": {
+    "x": 614.0,
+    "y": 17998.0
+  },
+  "boltons.urlutils:URL.path#2": {
+    "x": 614.0,
+    "y": 18055.0
+  },
+  "boltons.urlutils:URL.query_params": {
+    "x": 614.0,
+    "y": 17941.0
+  },
+  "boltons.urlutils:URL.to_text": {
+    "x": 614.0,
+    "y": 18397.0
+  },
+  "boltons.urlutils:URL.uses_netloc": {
+    "x": 614.0,
+    "y": 18112.0
+  },
+  "boltons.urlutils:URLParseError": {
+    "x": 614.0,
+    "y": 16860.0
+  },
+  "boltons.urlutils:_make_quote_map": {
+    "x": 614.0,
+    "y": 17043.0
+  },
+  "boltons.urlutils:_sockaddr": {
+    "x": 614.0,
+    "y": 18763.0
+  },
+  "boltons.urlutils:cachedproperty": {
+    "x": 614.0,
+    "y": 17641.0
+  },
+  "boltons.urlutils:cachedproperty.__get__": {
+    "x": 614.0,
+    "y": 17657.0
+  },
+  "boltons.urlutils:cachedproperty.__init__": {
+    "x": 614.0,
+    "y": 17600.0
+  },
+  "boltons.urlutils:cachedproperty.__repr__": {
+    "x": 614.0,
+    "y": 17714.0
+  },
+  "boltons.urlutils:find_all_links": {
+    "x": 614.0,
+    "y": 16986.0
+  },
+  "boltons.urlutils:inet_pton": {
+    "x": 614.0,
+    "y": 18832.0
+  },
+  "boltons.urlutils:parse_host": {
+    "x": 614.0,
+    "y": 18889.0
+  },
+  "boltons.urlutils:parse_qsl": {
+    "x": 614.0,
+    "y": 19003.0
+  },
+  "boltons.urlutils:parse_url": {
+    "x": 614.0,
+    "y": 18946.0
+  },
+  "boltons.urlutils:quote_fragment_part": {
+    "x": 614.0,
+    "y": 17214.0
+  },
+  "boltons.urlutils:quote_path_part": {
+    "x": 614.0,
+    "y": 17100.0
+  },
+  "boltons.urlutils:quote_query_part": {
+    "x": 614.0,
+    "y": 17157.0
+  },
+  "boltons.urlutils:quote_userinfo_part": {
+    "x": 614.0,
+    "y": 17271.0
+  },
+  "boltons.urlutils:register_scheme": {
+    "x": 614.0,
+    "y": 17442.0
+  },
+  "boltons.urlutils:resolve_path_parts": {
+    "x": 614.0,
+    "y": 17499.0
+  },
+  "boltons.urlutils:to_unicode": {
+    "x": 614.0,
+    "y": 16929.0
+  },
+  "boltons.urlutils:unquote": {
+    "x": 614.0,
+    "y": 17328.0
+  },
+  "boltons.urlutils:unquote_to_bytes": {
+    "x": 614.0,
+    "y": 17385.0
+  },
+  "docs.conf": {
+    "x": 163.0,
+    "y": 27741.5
+  },
+  "docs.conf:get_mod_stats": {
+    "x": 168.0,
+    "y": 27760.0
+  },
+  "misc.bench_omd": {
+    "x": 163.0,
+    "y": 30099.5
+  },
+  "misc.bench_omd:_do_getitem": {
+    "x": 168.0,
+    "y": 30232.0
+  },
+  "misc.bench_omd:_do_iteritems": {
+    "x": 168.0,
+    "y": 30004.0
+  },
+  "misc.bench_omd:_do_iterkeys": {
+    "x": 168.0,
+    "y": 30061.0
+  },
+  "misc.bench_omd:_do_keyerror": {
+    "x": 168.0,
+    "y": 30289.0
+  },
+  "misc.bench_omd:_do_multi_iteritems": {
+    "x": 168.0,
+    "y": 30118.0
+  },
+  "misc.bench_omd:_do_multi_iterkeys": {
+    "x": 168.0,
+    "y": 30175.0
+  },
+  "misc.bench_omd:_do_pop": {
+    "x": 168.0,
+    "y": 30346.0
+  },
+  "misc.bench_omd:_do_setitem": {
+    "x": 168.0,
+    "y": 29947.0
+  },
+  "misc.bench_omd:bench": {
+    "x": 168.0,
+    "y": 29890.0
+  },
+  "misc.linkify_changelog": {
+    "x": 163.0,
+    "y": 29021.5
+  },
+  "misc.linkify_changelog:main": {
+    "x": 168.0,
+    "y": 29097.0
+  },
+  "misc.linkify_changelog:sub_issue_match": {
+    "x": 168.0,
+    "y": 29040.0
+  },
+  "misc.linkify_changelog:sub_member_match": {
+    "x": 168.0,
+    "y": 28983.0
+  },
+  "misc.table_html_app": {
+    "x": 609.0,
+    "y": 45029.0
+  },
+  "misc.table_html_app:AutoTableRenderer": {
+    "x": 614.0,
+    "y": 44763.0
+  },
+  "misc.table_html_app:AutoTableRenderer.__call__": {
+    "x": 614.0,
+    "y": 44836.0
+  },
+  "misc.table_html_app:AutoTableRenderer.__init__": {
+    "x": 614.0,
+    "y": 44722.0
+  },
+  "misc.table_html_app:AutoTableRenderer._html_format_ep": {
+    "x": 614.0,
+    "y": 44779.0
+  },
+  "misc.table_html_app:BasicRender": {
+    "x": 614.0,
+    "y": 45132.5
+  },
+  "misc.table_html_app:BasicRender.__init__": {
+    "x": 614.0,
+    "y": 44949.0
+  },
+  "misc.table_html_app:BasicRender._guess_json": {
+    "x": 614.0,
+    "y": 45291.0
+  },
+  "misc.table_html_app:BasicRender._mime_format_map": {
+    "x": 614.0,
+    "y": 45120.0
+  },
+  "misc.table_html_app:BasicRender._serialize_to_resp": {
+    "x": 614.0,
+    "y": 45063.0
+  },
+  "misc.table_html_app:BasicRender.factory": {
+    "x": 614.0,
+    "y": 45348.0
+  },
+  "misc.table_html_app:BasicRender.formats": {
+    "x": 614.0,
+    "y": 45177.0
+  },
+  "misc.table_html_app:BasicRender.mimetypes": {
+    "x": 614.0,
+    "y": 45234.0
+  },
+  "misc.table_html_app:BasicRender.render_response": {
+    "x": 614.0,
+    "y": 45006.0
+  },
+  "misc.table_html_app:fetch_json": {
+    "x": 614.0,
+    "y": 44621.0
+  },
+  "misc.table_html_app:ident_ep": {
+    "x": 614.0,
+    "y": 45417.0
+  },
+  "misc.table_html_app:main": {
+    "x": 614.0,
+    "y": 45474.0
+  },
+  "tests": {
+    "x": 163.0,
+    "y": 58518.0
+  },
+  "tests.conftest": {
+    "x": 163.0,
+    "y": 58691.5
+  },
+  "tests.conftest:pytest_ignore_collect": {
+    "x": 168.0,
+    "y": 58710.0
+  },
+  "tests.test_cacheutils": {
+    "x": 163.0,
+    "y": 59856.5
+  },
+  "tests.test_cacheutils:CountingCallable": {
+    "x": 168.0,
+    "y": 58963.5
+  },
+  "tests.test_cacheutils:CountingCallable.__call__": {
+    "x": 168.0,
+    "y": 59008.0
+  },
+  "tests.test_cacheutils:CountingCallable.__init__": {
+    "x": 168.0,
+    "y": 58951.0
+  },
+  "tests.test_cacheutils:_FalseyCallable": {
+    "x": 168.0,
+    "y": 60444.5
+  },
+  "tests.test_cacheutils:_FalseyCallable.__bool__": {
+    "x": 168.0,
+    "y": 60432.0
+  },
+  "tests.test_cacheutils:_FalseyCallable.__call__": {
+    "x": 168.0,
+    "y": 60489.0
+  },
+  "tests.test_cacheutils:_test_linkage": {
+    "x": 168.0,
+    "y": 59533.0
+  },
+  "tests.test_cacheutils:test_cache_copy": {
+    "x": 168.0,
+    "y": 60672.0
+  },
+  "tests.test_cacheutils:test_cache_eq_non_mapping": {
+    "x": 168.0,
+    "y": 60786.0
+  },
+  "tests.test_cacheutils:test_cache_falsey_on_miss": {
+    "x": 168.0,
+    "y": 60558.0
+  },
+  "tests.test_cacheutils:test_cache_ior": {
+    "x": 168.0,
+    "y": 60729.0
+  },
+  "tests.test_cacheutils:test_cache_sizes_on_repeat_insertions": {
+    "x": 168.0,
+    "y": 59248.0
+  },
+  "tests.test_cacheutils:test_cache_update_optional_source": {
+    "x": 168.0,
+    "y": 60331.0
+  },
+  "tests.test_cacheutils:test_cached_dec": {
+    "x": 168.0,
+    "y": 59590.0
+  },
+  "tests.test_cacheutils:test_cachedmethod": {
+    "x": 168.0,
+    "y": 59818.0
+  },
+  "tests.test_cacheutils:test_cachedmethod_bound_unbound_share_key": {
+    "x": 168.0,
+    "y": 60615.0
+  },
+  "tests.test_cacheutils:test_cachedmethod_maintains_func_abstraction": {
+    "x": 168.0,
+    "y": 59875.0
+  },
+  "tests.test_cacheutils:test_cachedproperty": {
+    "x": 168.0,
+    "y": 59932.0
+  },
+  "tests.test_cacheutils:test_cachedproperty_maintains_func_abstraction": {
+    "x": 168.0,
+    "y": 59989.0
+  },
+  "tests.test_cacheutils:test_callable_cached_dec": {
+    "x": 168.0,
+    "y": 59761.0
+  },
+  "tests.test_cacheutils:test_lri": {
+    "x": 168.0,
+    "y": 59134.0
+  },
+  "tests.test_cacheutils:test_lri_cache_eviction": {
+    "x": 168.0,
+    "y": 59191.0
+  },
+  "tests.test_cacheutils:test_lru_add": {
+    "x": 168.0,
+    "y": 59077.0
+  },
+  "tests.test_cacheutils:test_lru_basic": {
+    "x": 168.0,
+    "y": 59305.0
+  },
+  "tests.test_cacheutils:test_lru_dict_replacement": {
+    "x": 168.0,
+    "y": 59362.0
+  },
+  "tests.test_cacheutils:test_lru_with_dupes": {
+    "x": 168.0,
+    "y": 59419.0
+  },
+  "tests.test_cacheutils:test_lru_with_dupes_2": {
+    "x": 168.0,
+    "y": 59476.0
+  },
+  "tests.test_cacheutils:test_min_id_map": {
+    "x": 168.0,
+    "y": 60046.0
+  },
+  "tests.test_cacheutils:test_scoped_cached_dec": {
+    "x": 168.0,
+    "y": 59704.0
+  },
+  "tests.test_cacheutils:test_threshold_counter": {
+    "x": 168.0,
+    "y": 60103.0
+  },
+  "tests.test_cacheutils:test_threshold_counter_non_reciprocal_threshold": {
+    "x": 168.0,
+    "y": 60843.0
+  },
+  "tests.test_cacheutils:test_threshold_counter_update_keyword_counts": {
+    "x": 168.0,
+    "y": 60217.0
+  },
+  "tests.test_cacheutils:test_threshold_counter_update_mapping_compaction": {
+    "x": 168.0,
+    "y": 60274.0
+  },
+  "tests.test_cacheutils:test_threshold_counter_update_mapping_counts": {
+    "x": 168.0,
+    "y": 60160.0
+  },
+  "tests.test_cacheutils:test_unscoped_cached_dec": {
+    "x": 168.0,
+    "y": 59647.0
+  },
+  "tests.test_debugutils_trace": {
+    "x": 163.0,
+    "y": 61192.5
+  },
+  "tests.test_debugutils_trace:test_trace_bytes": {
+    "x": 168.0,
+    "y": 61097.0
+  },
+  "tests.test_debugutils_trace:test_trace_dict": {
+    "x": 168.0,
+    "y": 61040.0
+  },
+  "tests.test_debugutils_trace:test_trace_exc": {
+    "x": 168.0,
+    "y": 61154.0
+  },
+  "tests.test_debugutils_trace:test_trace_namedtuple": {
+    "x": 168.0,
+    "y": 61325.0
+  },
+  "tests.test_debugutils_trace:test_trace_oldstyle": {
+    "x": 168.0,
+    "y": 61382.0
+  },
+  "tests.test_debugutils_trace:test_trace_raise_suppressed": {
+    "x": 168.0,
+    "y": 61211.0
+  },
+  "tests.test_debugutils_trace:test_trace_which": {
+    "x": 168.0,
+    "y": 61268.0
+  },
+  "tests.test_dictutils": {
+    "x": 163.0,
+    "y": 62615.0
+  },
+  "tests.test_dictutils:test_addlist": {
+    "x": 168.0,
+    "y": 62605.0
+  },
+  "tests.test_dictutils:test_addlist_iterator": {
+    "x": 168.0,
+    "y": 62662.0
+  },
+  "tests.test_dictutils:test_clear": {
+    "x": 168.0,
+    "y": 61978.0
+  },
+  "tests.test_dictutils:test_copy": {
+    "x": 168.0,
+    "y": 61807.0
+  },
+  "tests.test_dictutils:test_dict_init": {
+    "x": 168.0,
+    "y": 61579.0
+  },
+  "tests.test_dictutils:test_eq": {
+    "x": 168.0,
+    "y": 61693.0
+  },
+  "tests.test_dictutils:test_eq_none_items": {
+    "x": 168.0,
+    "y": 62947.0
+  },
+  "tests.test_dictutils:test_eq_with_dict": {
+    "x": 168.0,
+    "y": 61750.0
+  },
+  "tests.test_dictutils:test_frozendict": {
+    "x": 168.0,
+    "y": 63574.0
+  },
+  "tests.test_dictutils:test_frozendict_api": {
+    "x": 168.0,
+    "y": 63688.0
+  },
+  "tests.test_dictutils:test_frozendict_ior": {
+    "x": 168.0,
+    "y": 63631.0
+  },
+  "tests.test_dictutils:test_invert": {
+    "x": 168.0,
+    "y": 62434.0
+  },
+  "tests.test_dictutils:test_ior": {
+    "x": 168.0,
+    "y": 62890.0
+  },
+  "tests.test_dictutils:test_kv_consistency": {
+    "x": 168.0,
+    "y": 62149.0
+  },
+  "tests.test_dictutils:test_many_to_many": {
+    "x": 168.0,
+    "y": 63346.0
+  },
+  "tests.test_dictutils:test_many_to_many_add_unhashable": {
+    "x": 168.0,
+    "y": 63403.0
+  },
+  "tests.test_dictutils:test_many_to_many_copy_independent": {
+    "x": 168.0,
+    "y": 63460.0
+  },
+  "tests.test_dictutils:test_many_to_many_replace_existing_key": {
+    "x": 168.0,
+    "y": 63517.0
+  },
+  "tests.test_dictutils:test_multi_correctness": {
+    "x": 168.0,
+    "y": 62092.0
+  },
+  "tests.test_dictutils:test_omd_copy_module": {
+    "x": 168.0,
+    "y": 61921.0
+  },
+  "tests.test_dictutils:test_omd_pickle": {
+    "x": 168.0,
+    "y": 61864.0
+  },
+  "tests.test_dictutils:test_one_to_one": {
+    "x": 168.0,
+    "y": 63175.0
+  },
+  "tests.test_dictutils:test_one_to_one_ior": {
+    "x": 168.0,
+    "y": 63289.0
+  },
+  "tests.test_dictutils:test_one_to_one_update_iterator": {
+    "x": 168.0,
+    "y": 63232.0
+  },
+  "tests.test_dictutils:test_pop": {
+    "x": 168.0,
+    "y": 62548.0
+  },
+  "tests.test_dictutils:test_pop_all": {
+    "x": 168.0,
+    "y": 62719.0
+  },
+  "tests.test_dictutils:test_poplast": {
+    "x": 168.0,
+    "y": 62491.0
+  },
+  "tests.test_dictutils:test_reversed": {
+    "x": 168.0,
+    "y": 62776.0
+  },
+  "tests.test_dictutils:test_setdefault": {
+    "x": 168.0,
+    "y": 62833.0
+  },
+  "tests.test_dictutils:test_subdict": {
+    "x": 168.0,
+    "y": 63061.0
+  },
+  "tests.test_dictutils:test_subdict_keep_type": {
+    "x": 168.0,
+    "y": 63118.0
+  },
+  "tests.test_dictutils:test_todict": {
+    "x": 168.0,
+    "y": 61636.0
+  },
+  "tests.test_dictutils:test_types": {
+    "x": 168.0,
+    "y": 62035.0
+  },
+  "tests.test_dictutils:test_update": {
+    "x": 168.0,
+    "y": 62263.0
+  },
+  "tests.test_dictutils:test_update_basic": {
+    "x": 168.0,
+    "y": 62206.0
+  },
+  "tests.test_dictutils:test_update_extend": {
+    "x": 168.0,
+    "y": 62320.0
+  },
+  "tests.test_dictutils:test_update_extend_self": {
+    "x": 168.0,
+    "y": 62377.0
+  },
+  "tests.test_dictutils:test_update_iterable_repeated_new_key": {
+    "x": 168.0,
+    "y": 63004.0
+  },
+  "tests.test_ecoutils": {
+    "x": 163.0,
+    "y": 63952.0
+  },
+  "tests.test_ecoutils:test_basic": {
+    "x": 168.0,
+    "y": 63885.0
+  },
+  "tests.test_ecoutils:test_scrub": {
+    "x": 168.0,
+    "y": 63942.0
+  },
+  "tests.test_ecoutils:test_scrub_does_not_read_the_cwd": {
+    "x": 168.0,
+    "y": 64056.0
+  },
+  "tests.test_ecoutils:test_scrub_does_not_resolve_the_host": {
+    "x": 168.0,
+    "y": 63999.0
+  },
+  "tests.test_excutils": {
+    "x": 163.0,
+    "y": 64275.0
+  },
+  "tests.test_excutils:MyErr": {
+    "x": 168.0,
+    "y": 64265.0
+  },
+  "tests.test_excutils:test_cause_str_outside_handler": {
+    "x": 168.0,
+    "y": 64334.0
+  },
+  "tests.test_fileutils": {
+    "x": 609.0,
+    "y": 74232.5
+  },
+  "tests.test_fileutils:_FlushFailingFile": {
+    "x": 614.0,
+    "y": 73995.0
+  },
+  "tests.test_fileutils:_FlushFailingFile.__init__": {
+    "x": 614.0,
+    "y": 73897.0
+  },
+  "tests.test_fileutils:_FlushFailingFile.close": {
+    "x": 614.0,
+    "y": 74125.0
+  },
+  "tests.test_fileutils:_FlushFailingFile.fileno": {
+    "x": 614.0,
+    "y": 74011.0
+  },
+  "tests.test_fileutils:_FlushFailingFile.flush": {
+    "x": 614.0,
+    "y": 74068.0
+  },
+  "tests.test_fileutils:_FlushFailingFile.write": {
+    "x": 614.0,
+    "y": 73954.0
+  },
+  "tests.test_fileutils:_FlushFailingSaver": {
+    "x": 614.0,
+    "y": 74222.0
+  },
+  "tests.test_fileutils:_FlushFailingSaver._open_part_file": {
+    "x": 614.0,
+    "y": 74238.0
+  },
+  "tests.test_fileutils:test_atomicsaver_flush_failure_cleans_up": {
+    "x": 614.0,
+    "y": 74307.0
+  },
+  "tests.test_fileutils:test_atomicsaver_pathlike": {
+    "x": 614.0,
+    "y": 74364.0
+  },
+  "tests.test_fileutils:test_fileperms": {
+    "x": 614.0,
+    "y": 73682.0
+  },
+  "tests.test_fileutils:test_fileperms_from_int_leading_zero_groups": {
+    "x": 614.0,
+    "y": 73739.0
+  },
+  "tests.test_fileutils:test_fileperms_revoke": {
+    "x": 614.0,
+    "y": 73796.0
+  },
+  "tests.test_fileutils:test_iter_find_files": {
+    "x": 614.0,
+    "y": 74478.0
+  },
+  "tests.test_fileutils:test_iter_find_files_pathlike": {
+    "x": 614.0,
+    "y": 74421.0
+  },
+  "tests.test_fileutils:test_iter_find_files_trailing_sep": {
+    "x": 614.0,
+    "y": 74535.0
+  },
+  "tests.test_fileutils:test_rotate_file_full_rotation": {
+    "x": 614.0,
+    "y": 74706.0
+  },
+  "tests.test_fileutils:test_rotate_file_full_rotation_no_ext": {
+    "x": 614.0,
+    "y": 74763.0
+  },
+  "tests.test_fileutils:test_rotate_file_keep_one": {
+    "x": 614.0,
+    "y": 74820.0
+  },
+  "tests.test_fileutils:test_rotate_file_no_rotation": {
+    "x": 614.0,
+    "y": 74592.0
+  },
+  "tests.test_fileutils:test_rotate_file_one_rotation": {
+    "x": 614.0,
+    "y": 74649.0
+  },
+  "tests.test_formatutils": {
+    "x": 163.0,
+    "y": 64626.5
+  },
+  "tests.test_formatutils:test_deferredvalue": {
+    "x": 168.0,
+    "y": 64759.0
+  },
+  "tests.test_formatutils:test_get_fstr_args": {
+    "x": 168.0,
+    "y": 64588.0
+  },
+  "tests.test_formatutils:test_pos_infer": {
+    "x": 168.0,
+    "y": 64531.0
+  },
+  "tests.test_formatutils:test_split_fstr": {
+    "x": 168.0,
+    "y": 64645.0
+  },
+  "tests.test_formatutils:test_tokenize_format_str": {
+    "x": 168.0,
+    "y": 64702.0
+  },
+  "tests.test_funcutils": {
+    "x": 163.0,
+    "y": 65291.0
+  },
+  "tests.test_funcutils:Greeter": {
+    "x": 168.0,
+    "y": 65041.0
+  },
+  "tests.test_funcutils:Greeter.__init__": {
+    "x": 168.0,
+    "y": 65000.0
+  },
+  "tests.test_funcutils:Greeter.greet": {
+    "x": 168.0,
+    "y": 65057.0
+  },
+  "tests.test_funcutils:Greeter.native_greet": {
+    "x": 168.0,
+    "y": 65114.0
+  },
+  "tests.test_funcutils:SubGreeter": {
+    "x": 168.0,
+    "y": 65195.0
+  },
+  "tests.test_funcutils:test_copy_function": {
+    "x": 168.0,
+    "y": 65321.0
+  },
+  "tests.test_funcutils:test_format_invocation": {
+    "x": 168.0,
+    "y": 65435.0
+  },
+  "tests.test_funcutils:test_noop": {
+    "x": 168.0,
+    "y": 65492.0
+  },
+  "tests.test_funcutils:test_once_caches_result": {
+    "x": 168.0,
+    "y": 65606.0
+  },
+  "tests.test_funcutils:test_once_executes_only_once": {
+    "x": 168.0,
+    "y": 65549.0
+  },
+  "tests.test_funcutils:test_once_thread_safety": {
+    "x": 168.0,
+    "y": 65663.0
+  },
+  "tests.test_funcutils:test_partials": {
+    "x": 168.0,
+    "y": 65264.0
+  },
+  "tests.test_funcutils:test_total_ordering": {
+    "x": 168.0,
+    "y": 65378.0
+  },
+  "tests.test_funcutils_fb": {
+    "x": 163.0,
+    "y": 66269.0
+  },
+  "tests.test_funcutils_fb:pita_wrap": {
+    "x": 168.0,
+    "y": 65860.0
+  },
+  "tests.test_funcutils_fb:test_FunctionBuilder_add_arg": {
+    "x": 168.0,
+    "y": 66487.0
+  },
+  "tests.test_funcutils_fb:test_FunctionBuilder_invalid_args": {
+    "x": 168.0,
+    "y": 66259.0
+  },
+  "tests.test_funcutils_fb:test_FunctionBuilder_invalid_body": {
+    "x": 168.0,
+    "y": 66316.0
+  },
+  "tests.test_funcutils_fb:test_FunctionBuilder_modify": {
+    "x": 168.0,
+    "y": 66373.0
+  },
+  "tests.test_funcutils_fb:test_defaults_dict": {
+    "x": 168.0,
+    "y": 66601.0
+  },
+  "tests.test_funcutils_fb:test_get_arg_names": {
+    "x": 168.0,
+    "y": 66658.0
+  },
+  "tests.test_funcutils_fb:test_get_invocation_sig_str": {
+    "x": 168.0,
+    "y": 66715.0
+  },
+  "tests.test_funcutils_fb:test_wraps_basic": {
+    "x": 168.0,
+    "y": 66031.0
+  },
+  "tests.test_funcutils_fb:test_wraps_expected": {
+    "x": 168.0,
+    "y": 66544.0
+  },
+  "tests.test_funcutils_fb:test_wraps_injected": {
+    "x": 168.0,
+    "y": 66088.0
+  },
+  "tests.test_funcutils_fb:test_wraps_unknown_args": {
+    "x": 168.0,
+    "y": 66202.0
+  },
+  "tests.test_funcutils_fb:test_wraps_update_dict": {
+    "x": 168.0,
+    "y": 66145.0
+  },
+  "tests.test_funcutils_fb:test_wraps_wrappers": {
+    "x": 168.0,
+    "y": 66430.0
+  },
+  "tests.test_funcutils_fb:wrappable_func": {
+    "x": 168.0,
+    "y": 65917.0
+  },
+  "tests.test_funcutils_fb:wrappable_varkw_func": {
+    "x": 168.0,
+    "y": 65974.0
+  },
+  "tests.test_funcutils_fb_py3": {
+    "x": 163.0,
+    "y": 67577.5
+  },
+  "tests.test_funcutils_fb_py3:pita_wrap": {
+    "x": 168.0,
+    "y": 67026.0
+  },
+  "tests.test_funcutils_fb_py3:test_FunctionBuilder_add_arg_kwonly": {
+    "x": 168.0,
+    "y": 67425.0
+  },
+  "tests.test_funcutils_fb_py3:test_copy_function_kw_defaults_py3": {
+    "x": 168.0,
+    "y": 67140.0
+  },
+  "tests.test_funcutils_fb_py3:test_defaults_dict": {
+    "x": 168.0,
+    "y": 67311.0
+  },
+  "tests.test_funcutils_fb_py3:test_get_arg_names": {
+    "x": 168.0,
+    "y": 67368.0
+  },
+  "tests.test_funcutils_fb_py3:test_get_func_uses_empty_execdict": {
+    "x": 168.0,
+    "y": 67482.0
+  },
+  "tests.test_funcutils_fb_py3:test_get_invocation_sig_str": {
+    "x": 168.0,
+    "y": 67596.0
+  },
+  "tests.test_funcutils_fb_py3:test_remove_arg_posonly": {
+    "x": 168.0,
+    "y": 68052.0
+  },
+  "tests.test_funcutils_fb_py3:test_remove_kwonly_arg": {
+    "x": 168.0,
+    "y": 67254.0
+  },
+  "tests.test_funcutils_fb_py3:test_update_wrapper_partial": {
+    "x": 168.0,
+    "y": 67197.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_async": {
+    "x": 168.0,
+    "y": 67710.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_defaulted_arg_before_varargs": {
+    "x": 168.0,
+    "y": 67881.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_defaulted_arg_keyword_forwarding": {
+    "x": 168.0,
+    "y": 67824.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_expected_kwonly_triple": {
+    "x": 168.0,
+    "y": 67539.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_hide_wrapped": {
+    "x": 168.0,
+    "y": 67767.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_inner_kwarg_only": {
+    "x": 168.0,
+    "y": 67653.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_posonly_defaulted_arg": {
+    "x": 168.0,
+    "y": 67938.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_posonly_marker": {
+    "x": 168.0,
+    "y": 67995.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_py3": {
+    "x": 168.0,
+    "y": 67083.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_target_kwonly_arg": {
+    "x": 168.0,
+    "y": 68109.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_target_kwonly_arg_no_default": {
+    "x": 168.0,
+    "y": 68166.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_target_kwonly_arg_with_varargs": {
+    "x": 168.0,
+    "y": 68223.0
+  },
+  "tests.test_funcutils_fb_py3:test_wraps_uninspectable_target": {
+    "x": 168.0,
+    "y": 68280.0
+  },
+  "tests.test_funcutils_fb_py3:wrappable_func": {
+    "x": 168.0,
+    "y": 66912.0
+  },
+  "tests.test_funcutils_fb_py3:wrappable_varkw_func": {
+    "x": 168.0,
+    "y": 66969.0
+  },
+  "tests.test_gcutils": {
+    "x": 163.0,
+    "y": 68544.0
+  },
+  "tests.test_gcutils:test_get_all": {
+    "x": 168.0,
+    "y": 68477.0
+  },
+  "tests.test_gcutils:test_get_all_subtypes": {
+    "x": 168.0,
+    "y": 68534.0
+  },
+  "tests.test_gcutils:test_toggle_gc_postcollect": {
+    "x": 168.0,
+    "y": 68648.0
+  },
+  "tests.test_gcutils:test_toggle_gc_restores_state": {
+    "x": 168.0,
+    "y": 68591.0
+  },
+  "tests.test_ioutils": {
+    "x": 163.0,
+    "y": 71047.0
+  },
+  "tests.test_ioutils:AssertionsMixin": {
+    "x": 168.0,
+    "y": 68873.0
+  },
+  "tests.test_ioutils:AssertionsMixin.assertIsNone": {
+    "x": 168.0,
+    "y": 68889.0
+  },
+  "tests.test_ioutils:BaseTestMixin": {
+    "x": 168.0,
+    "y": 69670.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_buf_property": {
+    "x": 168.0,
+    "y": 69857.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_closed_file_method_valueerrors": {
+    "x": 168.0,
+    "y": 70370.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_closed_property": {
+    "x": 168.0,
+    "y": 69971.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_compare_different_instances": {
+    "x": 168.0,
+    "y": 69629.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_compare_err": {
+    "x": 168.0,
+    "y": 69173.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_compare_unequal_instances": {
+    "x": 168.0,
+    "y": 69686.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_getvalue_norollover": {
+    "x": 168.0,
+    "y": 69002.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_getvalue_rollover": {
+    "x": 168.0,
+    "y": 69059.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_instance_check": {
+    "x": 168.0,
+    "y": 70313.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_io_error_negative_truncate": {
+    "x": 168.0,
+    "y": 69572.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_isatty": {
+    "x": 168.0,
+    "y": 70199.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_next": {
+    "x": 168.0,
+    "y": 70142.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_pos_property": {
+    "x": 168.0,
+    "y": 69914.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_readline": {
+    "x": 168.0,
+    "y": 70028.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_readlines": {
+    "x": 168.0,
+    "y": 70085.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_rollover_custom_directory": {
+    "x": 168.0,
+    "y": 69116.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_set_softspace_attribute": {
+    "x": 168.0,
+    "y": 69743.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_set_softspace_attribute_rolled": {
+    "x": 168.0,
+    "y": 69800.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_truncate_keeps_position": {
+    "x": 168.0,
+    "y": 69458.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_truncate_noargs_norollover": {
+    "x": 168.0,
+    "y": 69230.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_truncate_noargs_rollover": {
+    "x": 168.0,
+    "y": 69287.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_truncate_with_args_norollover": {
+    "x": 168.0,
+    "y": 69344.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_truncate_with_args_rollover": {
+    "x": 168.0,
+    "y": 69401.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_truthy": {
+    "x": 168.0,
+    "y": 70256.0
+  },
+  "tests.test_ioutils:BaseTestMixin.test_type_error_too_many_args": {
+    "x": 168.0,
+    "y": 69515.0
+  },
+  "tests.test_ioutils:TestMultiFileReader": {
+    "x": 168.0,
+    "y": 73144.0
+  },
+  "tests.test_ioutils:TestMultiFileReader.test_no_mixed_bytes_and_text": {
+    "x": 168.0,
+    "y": 73217.0
+  },
+  "tests.test_ioutils:TestMultiFileReader.test_open": {
+    "x": 168.0,
+    "y": 73274.0
+  },
+  "tests.test_ioutils:TestMultiFileReader.test_read_seek_bytes": {
+    "x": 168.0,
+    "y": 73046.0
+  },
+  "tests.test_ioutils:TestMultiFileReader.test_read_seek_text": {
+    "x": 168.0,
+    "y": 73103.0
+  },
+  "tests.test_ioutils:TestMultiFileReader.test_read_zero_and_negative": {
+    "x": 168.0,
+    "y": 73160.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO": {
+    "x": 168.0,
+    "y": 70894.5
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.setUp": {
+    "x": 168.0,
+    "y": 70483.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_auto_rollover": {
+    "x": 168.0,
+    "y": 70654.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_buffer_write_rollover_uses_byte_count": {
+    "x": 168.0,
+    "y": 71110.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_buffered_writer_flush": {
+    "x": 168.0,
+    "y": 71053.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_compare_not_equal_instances": {
+    "x": 168.0,
+    "y": 70540.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_compare_two_equal_instances": {
+    "x": 168.0,
+    "y": 70597.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_flush_after_rollover": {
+    "x": 168.0,
+    "y": 70939.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_invalid_type": {
+    "x": 168.0,
+    "y": 70882.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_iter": {
+    "x": 168.0,
+    "y": 71224.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_len_no_rollover": {
+    "x": 168.0,
+    "y": 70768.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_len_rollover": {
+    "x": 168.0,
+    "y": 70825.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_readline_zero_length": {
+    "x": 168.0,
+    "y": 71338.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_use_as_context_mgr": {
+    "x": 168.0,
+    "y": 70711.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_write_returns_byte_count": {
+    "x": 168.0,
+    "y": 70996.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_writelines": {
+    "x": 168.0,
+    "y": 71281.0
+  },
+  "tests.test_ioutils:TestSpooledBytesIO.test_zip_compat": {
+    "x": 168.0,
+    "y": 71167.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO": {
+    "x": 168.0,
+    "y": 72176.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.setUp": {
+    "x": 168.0,
+    "y": 71451.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_auto_rollover": {
+    "x": 168.0,
+    "y": 71679.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_codepoints_all_enc": {
+    "x": 168.0,
+    "y": 72363.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_compare_not_equal_instances": {
+    "x": 168.0,
+    "y": 71508.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_compare_two_equal_instances": {
+    "x": 168.0,
+    "y": 71622.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_invalid_type": {
+    "x": 168.0,
+    "y": 71907.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_iter": {
+    "x": 168.0,
+    "y": 72876.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_len_keeps_position": {
+    "x": 168.0,
+    "y": 72135.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_len_no_rollover": {
+    "x": 168.0,
+    "y": 71793.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_len_rollover": {
+    "x": 168.0,
+    "y": 71850.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_negative_destination_rejected_without_moving": {
+    "x": 168.0,
+    "y": 72078.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_readline_zero_length": {
+    "x": 168.0,
+    "y": 71565.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_relative_backwards_seek_uses_character_position": {
+    "x": 168.0,
+    "y": 72021.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_rollover_after_readline_keeps_position": {
+    "x": 168.0,
+    "y": 72249.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_seek_SEEK_END_negative_offset": {
+    "x": 168.0,
+    "y": 72192.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_seek_codepoints_SEEK_CUR": {
+    "x": 168.0,
+    "y": 72648.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_seek_codepoints_SEEK_END": {
+    "x": 168.0,
+    "y": 72420.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_seek_codepoints_SEEK_SET": {
+    "x": 168.0,
+    "y": 72534.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_seek_codepoints_large_SEEK_CUR": {
+    "x": 168.0,
+    "y": 72705.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_seek_codepoints_large_SEEK_END": {
+    "x": 168.0,
+    "y": 72477.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_seek_codepoints_large_SEEK_SET": {
+    "x": 168.0,
+    "y": 72591.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_seek_encoded": {
+    "x": 168.0,
+    "y": 72819.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_tell_codepoints": {
+    "x": 168.0,
+    "y": 72306.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_use_as_context_mgr": {
+    "x": 168.0,
+    "y": 71736.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_write_returns_character_count": {
+    "x": 168.0,
+    "y": 71964.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_writelines": {
+    "x": 168.0,
+    "y": 72933.0
+  },
+  "tests.test_ioutils:TestSpooledStringIO.test_x80_codepoint": {
+    "x": 168.0,
+    "y": 72762.0
+  },
+  "tests.test_iterutils": {
+    "x": 163.0,
+    "y": 75314.5
+  },
+  "tests.test_iterutils:TestFirst": {
+    "x": 168.0,
+    "y": 73738.0
+  },
+  "tests.test_iterutils:TestFirst.test_default_value": {
+    "x": 168.0,
+    "y": 73754.0
+  },
+  "tests.test_iterutils:TestFirst.test_empty_iterables": {
+    "x": 168.0,
+    "y": 73697.0
+  },
+  "tests.test_iterutils:TestFirst.test_selection": {
+    "x": 168.0,
+    "y": 73811.0
+  },
+  "tests.test_iterutils:TestGetPath": {
+    "x": 168.0,
+    "y": 75189.5
+  },
+  "tests.test_iterutils:TestGetPath.test_depth_one": {
+    "x": 168.0,
+    "y": 75177.0
+  },
+  "tests.test_iterutils:TestGetPath.test_depth_two": {
+    "x": 168.0,
+    "y": 75234.0
+  },
+  "tests.test_iterutils:TestRemap": {
+    "x": 168.0,
+    "y": 74478.0
+  },
+  "tests.test_iterutils:TestRemap.test_add_length": {
+    "x": 168.0,
+    "y": 74893.0
+  },
+  "tests.test_iterutils:TestRemap.test_basic_clone": {
+    "x": 168.0,
+    "y": 73924.0
+  },
+  "tests.test_iterutils:TestRemap.test_basic_upper": {
+    "x": 168.0,
+    "y": 74095.0
+  },
+  "tests.test_iterutils:TestRemap.test_collector_pattern": {
+    "x": 168.0,
+    "y": 74836.0
+  },
+  "tests.test_iterutils:TestRemap.test_dict_to_omd": {
+    "x": 168.0,
+    "y": 74722.0
+  },
+  "tests.test_iterutils:TestRemap.test_drop_nones": {
+    "x": 168.0,
+    "y": 74665.0
+  },
+  "tests.test_iterutils:TestRemap.test_duperef": {
+    "x": 168.0,
+    "y": 74380.0
+  },
+  "tests.test_iterutils:TestRemap.test_empty": {
+    "x": 168.0,
+    "y": 73981.0
+  },
+  "tests.test_iterutils:TestRemap.test_item_drop": {
+    "x": 168.0,
+    "y": 74152.0
+  },
+  "tests.test_iterutils:TestRemap.test_namedtuple": {
+    "x": 168.0,
+    "y": 74437.0
+  },
+  "tests.test_iterutils:TestRemap.test_noncallables": {
+    "x": 168.0,
+    "y": 74209.0
+  },
+  "tests.test_iterutils:TestRemap.test_path": {
+    "x": 168.0,
+    "y": 74551.0
+  },
+  "tests.test_iterutils:TestRemap.test_prepop": {
+    "x": 168.0,
+    "y": 74950.0
+  },
+  "tests.test_iterutils:TestRemap.test_remap_file": {
+    "x": 168.0,
+    "y": 75064.0
+  },
+  "tests.test_iterutils:TestRemap.test_remap_set": {
+    "x": 168.0,
+    "y": 75007.0
+  },
+  "tests.test_iterutils:TestRemap.test_reraise_visit": {
+    "x": 168.0,
+    "y": 74608.0
+  },
+  "tests.test_iterutils:TestRemap.test_root_selfref": {
+    "x": 168.0,
+    "y": 74323.0
+  },
+  "tests.test_iterutils:TestRemap.test_sort_all_lists": {
+    "x": 168.0,
+    "y": 74779.0
+  },
+  "tests.test_iterutils:TestRemap.test_sub_selfref": {
+    "x": 168.0,
+    "y": 74266.0
+  },
+  "tests.test_iterutils:TestRemap.test_unconstructible_sequences": {
+    "x": 168.0,
+    "y": 74494.0
+  },
+  "tests.test_iterutils:TestRemap.test_unremappable": {
+    "x": 168.0,
+    "y": 74038.0
+  },
+  "tests.test_iterutils:TestSplit": {
+    "x": 168.0,
+    "y": 73539.5
+  },
+  "tests.test_iterutils:TestSplit.test_maxsplit_zero_returns_unsplit_values": {
+    "x": 168.0,
+    "y": 73527.0
+  },
+  "tests.test_iterutils:TestSplit.test_negative_maxsplit_is_unlimited": {
+    "x": 168.0,
+    "y": 73584.0
+  },
+  "tests.test_iterutils:_FalseyCallable": {
+    "x": 168.0,
+    "y": 76300.0
+  },
+  "tests.test_iterutils:_FalseyCallable.__bool__": {
+    "x": 168.0,
+    "y": 76373.0
+  },
+  "tests.test_iterutils:_FalseyCallable.__call__": {
+    "x": 168.0,
+    "y": 76316.0
+  },
+  "tests.test_iterutils:_FalseyCallable.__init__": {
+    "x": 168.0,
+    "y": 76259.0
+  },
+  "tests.test_iterutils:test_backoff_basic": {
+    "x": 168.0,
+    "y": 75417.0
+  },
+  "tests.test_iterutils:test_backoff_constant_factor": {
+    "x": 168.0,
+    "y": 75702.0
+  },
+  "tests.test_iterutils:test_backoff_jitter": {
+    "x": 168.0,
+    "y": 75759.0
+  },
+  "tests.test_iterutils:test_backoff_repeat": {
+    "x": 168.0,
+    "y": 75474.0
+  },
+  "tests.test_iterutils:test_backoff_validation": {
+    "x": 168.0,
+    "y": 75645.0
+  },
+  "tests.test_iterutils:test_backoff_zero_start": {
+    "x": 168.0,
+    "y": 75531.0
+  },
+  "tests.test_iterutils:test_backoff_zero_start_fractional_stop": {
+    "x": 168.0,
+    "y": 75588.0
+  },
+  "tests.test_iterutils:test_bucketize_iterator_with_key_list": {
+    "x": 168.0,
+    "y": 76158.0
+  },
+  "tests.test_iterutils:test_chunk_ranges": {
+    "x": 168.0,
+    "y": 75987.0
+  },
+  "tests.test_iterutils:test_chunk_ranges_edges": {
+    "x": 168.0,
+    "y": 76044.0
+  },
+  "tests.test_iterutils:test_chunked_bytes": {
+    "x": 168.0,
+    "y": 75930.0
+  },
+  "tests.test_iterutils:test_chunked_filter": {
+    "x": 168.0,
+    "y": 76101.0
+  },
+  "tests.test_iterutils:test_frange_inexact_boundary_counts": {
+    "x": 168.0,
+    "y": 77069.0
+  },
+  "tests.test_iterutils:test_frange_xfrange_zero_step": {
+    "x": 168.0,
+    "y": 77183.0
+  },
+  "tests.test_iterutils:test_guiderator": {
+    "x": 168.0,
+    "y": 75816.0
+  },
+  "tests.test_iterutils:test_lstrip": {
+    "x": 168.0,
+    "y": 76556.0
+  },
+  "tests.test_iterutils:test_pairwise_filled": {
+    "x": 168.0,
+    "y": 76727.0
+  },
+  "tests.test_iterutils:test_partition_default": {
+    "x": 168.0,
+    "y": 76841.0
+  },
+  "tests.test_iterutils:test_partition_multiple": {
+    "x": 168.0,
+    "y": 76898.0
+  },
+  "tests.test_iterutils:test_redundant_falsey_key": {
+    "x": 168.0,
+    "y": 76442.0
+  },
+  "tests.test_iterutils:test_research": {
+    "x": 168.0,
+    "y": 75303.0
+  },
+  "tests.test_iterutils:test_research_custom_enter": {
+    "x": 168.0,
+    "y": 75360.0
+  },
+  "tests.test_iterutils:test_rstrip": {
+    "x": 168.0,
+    "y": 76613.0
+  },
+  "tests.test_iterutils:test_seqguiderator": {
+    "x": 168.0,
+    "y": 75873.0
+  },
+  "tests.test_iterutils:test_strip": {
+    "x": 168.0,
+    "y": 76670.0
+  },
+  "tests.test_iterutils:test_untyped_sorted_key_called_once_per_item": {
+    "x": 168.0,
+    "y": 76499.0
+  },
+  "tests.test_iterutils:test_windowed_filled": {
+    "x": 168.0,
+    "y": 76784.0
+  },
+  "tests.test_iterutils:test_xfrange_descending": {
+    "x": 168.0,
+    "y": 76955.0
+  },
+  "tests.test_iterutils:test_xfrange_matches_frange": {
+    "x": 168.0,
+    "y": 77126.0
+  },
+  "tests.test_iterutils:test_xfrange_wrong_direction": {
+    "x": 168.0,
+    "y": 77012.0
+  },
+  "tests.test_jsonutils": {
+    "x": 609.0,
+    "y": 75511.0
+  },
+  "tests.test_jsonutils:_CappedReadFile": {
+    "x": 614.0,
+    "y": 75358.5
+  },
+  "tests.test_jsonutils:_CappedReadFile.__getattr__": {
+    "x": 614.0,
+    "y": 75460.0
+  },
+  "tests.test_jsonutils:_CappedReadFile.__init__": {
+    "x": 614.0,
+    "y": 75289.0
+  },
+  "tests.test_jsonutils:_CappedReadFile.__iter__": {
+    "x": 614.0,
+    "y": 75403.0
+  },
+  "tests.test_jsonutils:_CappedReadFile.read": {
+    "x": 614.0,
+    "y": 75346.0
+  },
+  "tests.test_jsonutils:_test_reverse_iter_lines": {
+    "x": 614.0,
+    "y": 75017.0
+  },
+  "tests.test_jsonutils:_test_reverse_iter_lines_bytes": {
+    "x": 614.0,
+    "y": 75074.0
+  },
+  "tests.test_jsonutils:test_jsonl_explicit_end_seek": {
+    "x": 614.0,
+    "y": 75643.0
+  },
+  "tests.test_jsonutils:test_jsonl_iterator": {
+    "x": 614.0,
+    "y": 75188.0
+  },
+  "tests.test_jsonutils:test_jsonl_iterator_mid_last_line_seek_terminates": {
+    "x": 614.0,
+    "y": 75529.0
+  },
+  "tests.test_jsonutils:test_jsonl_iterator_rel_seek_negative": {
+    "x": 614.0,
+    "y": 75586.0
+  },
+  "tests.test_jsonutils:test_jsonl_iterator_text_cur_byte_pos": {
+    "x": 614.0,
+    "y": 76042.0
+  },
+  "tests.test_jsonutils:test_jsonl_relative_seek_binary_matches_text": {
+    "x": 614.0,
+    "y": 75700.0
+  },
+  "tests.test_jsonutils:test_reverse_iter_lines": {
+    "x": 614.0,
+    "y": 75131.0
+  },
+  "tests.test_jsonutils:test_reverse_iter_lines_keeps_text_stream_attached": {
+    "x": 614.0,
+    "y": 75871.0
+  },
+  "tests.test_jsonutils:test_reverse_iter_lines_leading_empty_lines": {
+    "x": 614.0,
+    "y": 75928.0
+  },
+  "tests.test_jsonutils:test_reverse_iter_lines_stringio": {
+    "x": 614.0,
+    "y": 75985.0
+  },
+  "tests.test_jsonutils:test_reverse_iter_lines_uses_explicit_binary_encoding": {
+    "x": 614.0,
+    "y": 75814.0
+  },
+  "tests.test_jsonutils:test_reverse_iter_lines_uses_file_encoding": {
+    "x": 614.0,
+    "y": 75757.0
+  },
+  "tests.test_listutils": {
+    "x": 163.0,
+    "y": 78812.5
+  },
+  "tests.test_listutils:_bl_variants": {
+    "x": 168.0,
+    "y": 79173.0
+  },
+  "tests.test_listutils:_multi_sublist_bl": {
+    "x": 168.0,
+    "y": 78660.0
+  },
+  "tests.test_listutils:_small_multi_bl": {
+    "x": 168.0,
+    "y": 79116.0
+  },
+  "tests.test_listutils:test_barrel_list": {
+    "x": 168.0,
+    "y": 78432.0
+  },
+  "tests.test_listutils:test_barrel_list_del_stepped_slice_matches_list": {
+    "x": 168.0,
+    "y": 79287.0
+  },
+  "tests.test_listutils:test_barrel_list_delete_to_end": {
+    "x": 168.0,
+    "y": 79059.0
+  },
+  "tests.test_listutils:test_barrel_list_getitem_past_end": {
+    "x": 168.0,
+    "y": 78717.0
+  },
+  "tests.test_listutils:test_barrel_list_insert_at_end": {
+    "x": 168.0,
+    "y": 78774.0
+  },
+  "tests.test_listutils:test_barrel_list_insert_before_start_matches_list": {
+    "x": 168.0,
+    "y": 78489.0
+  },
+  "tests.test_listutils:test_barrel_list_list_compat_matches_list": {
+    "x": 168.0,
+    "y": 79230.0
+  },
+  "tests.test_listutils:test_barrel_list_matches_list": {
+    "x": 168.0,
+    "y": 78888.0
+  },
+  "tests.test_listutils:test_barrel_list_pop_after_tail_drained": {
+    "x": 168.0,
+    "y": 78831.0
+  },
+  "tests.test_listutils:test_barrellist_delete_across_multiple_barrels": {
+    "x": 168.0,
+    "y": 79002.0
+  },
+  "tests.test_listutils:test_barrellist_slicing_matches_list": {
+    "x": 168.0,
+    "y": 78945.0
+  },
+  "tests.test_listutils:test_sort_barrel_list": {
+    "x": 168.0,
+    "y": 78546.0
+  },
+  "tests.test_listutils:test_splay_list": {
+    "x": 168.0,
+    "y": 78375.0
+  },
+  "tests.test_listutils:tune": {
+    "x": 168.0,
+    "y": 78603.0
+  },
+  "tests.test_mathutils": {
+    "x": 163.0,
+    "y": 79893.0
+  },
+  "tests.test_mathutils:test_bits": {
+    "x": 168.0,
+    "y": 80054.0
+  },
+  "tests.test_mathutils:test_bits_len_bound": {
+    "x": 168.0,
+    "y": 80111.0
+  },
+  "tests.test_mathutils:test_bits_negative_len": {
+    "x": 168.0,
+    "y": 80282.0
+  },
+  "tests.test_mathutils:test_bits_rshift_past_width": {
+    "x": 168.0,
+    "y": 80339.0
+  },
+  "tests.test_mathutils:test_ceil_basic": {
+    "x": 168.0,
+    "y": 79598.0
+  },
+  "tests.test_mathutils:test_ceil_oor_lower": {
+    "x": 168.0,
+    "y": 79712.0
+  },
+  "tests.test_mathutils:test_ceil_oor_upper": {
+    "x": 168.0,
+    "y": 79769.0
+  },
+  "tests.test_mathutils:test_ceil_sorted": {
+    "x": 168.0,
+    "y": 79655.0
+  },
+  "tests.test_mathutils:test_clamp_examples": {
+    "x": 168.0,
+    "y": 79484.0
+  },
+  "tests.test_mathutils:test_clamp_transparent": {
+    "x": 168.0,
+    "y": 79541.0
+  },
+  "tests.test_mathutils:test_empty_bits_conversions": {
+    "x": 168.0,
+    "y": 80168.0
+  },
+  "tests.test_mathutils:test_empty_bits_rejects_non_hex_inputs": {
+    "x": 168.0,
+    "y": 80225.0
+  },
+  "tests.test_mathutils:test_floor_basic": {
+    "x": 168.0,
+    "y": 79826.0
+  },
+  "tests.test_mathutils:test_floor_oor_lower": {
+    "x": 168.0,
+    "y": 79997.0
+  },
+  "tests.test_mathutils:test_floor_oor_upper": {
+    "x": 168.0,
+    "y": 79940.0
+  },
+  "tests.test_mathutils:test_floor_sorted": {
+    "x": 168.0,
+    "y": 79883.0
+  },
+  "tests.test_namedutils": {
+    "x": 163.0,
+    "y": 80688.5
+  },
+  "tests.test_namedutils:test_empty_field_name_raises_value_error": {
+    "x": 168.0,
+    "y": 80707.0
+  },
+  "tests.test_namedutils:test_empty_type_name_raises_value_error": {
+    "x": 168.0,
+    "y": 80764.0
+  },
+  "tests.test_namedutils:test_invalid_character_still_raises_value_error": {
+    "x": 168.0,
+    "y": 80821.0
+  },
+  "tests.test_namedutils:test_namedlist": {
+    "x": 168.0,
+    "y": 80536.0
+  },
+  "tests.test_namedutils:test_namedlist_pickle": {
+    "x": 168.0,
+    "y": 80593.0
+  },
+  "tests.test_namedutils:test_namedtuple_pickle": {
+    "x": 168.0,
+    "y": 80650.0
+  },
+  "tests.test_namedutils:test_non_identifier_alnum_name": {
+    "x": 168.0,
+    "y": 80878.0
+  },
+  "tests.test_pathutils": {
+    "x": 163.0,
+    "y": 81170.5
+  },
+  "tests.test_pathutils:test_augpath": {
+    "x": 168.0,
+    "y": 81075.0
+  },
+  "tests.test_pathutils:test_augpath_multidot": {
+    "x": 168.0,
+    "y": 81132.0
+  },
+  "tests.test_pathutils:test_expandpath": {
+    "x": 168.0,
+    "y": 81303.0
+  },
+  "tests.test_pathutils:test_shrinkuser": {
+    "x": 168.0,
+    "y": 81189.0
+  },
+  "tests.test_pathutils:test_shrinkuser_root_home": {
+    "x": 168.0,
+    "y": 81246.0
+  },
+  "tests.test_queueutils": {
+    "x": 163.0,
+    "y": 81538.5
+  },
+  "tests.test_queueutils:_test_priority_queue": {
+    "x": 168.0,
+    "y": 81500.0
+  },
+  "tests.test_queueutils:test_heap_queue": {
+    "x": 168.0,
+    "y": 81557.0
+  },
+  "tests.test_queueutils:test_sorted_queue": {
+    "x": 168.0,
+    "y": 81614.0
+  },
+  "tests.test_setutils": {
+    "x": 163.0,
+    "y": 82362.5
+  },
+  "tests.test_setutils:_make_cset": {
+    "x": 168.0,
+    "y": 82894.0
+  },
+  "tests.test_setutils:big_popper": {
+    "x": 168.0,
+    "y": 82096.0
+  },
+  "tests.test_setutils:test_bulk_difference_update": {
+    "x": 168.0,
+    "y": 82495.0
+  },
+  "tests.test_setutils:test_bulk_intersection_update": {
+    "x": 168.0,
+    "y": 82552.0
+  },
+  "tests.test_setutils:test_complement_set": {
+    "x": 168.0,
+    "y": 82153.0
+  },
+  "tests.test_setutils:test_complement_set_identities": {
+    "x": 168.0,
+    "y": 82951.0
+  },
+  "tests.test_setutils:test_cull_trims_multiple_tail_intervals": {
+    "x": 168.0,
+    "y": 82666.0
+  },
+  "tests.test_setutils:test_indexed_set_basic": {
+    "x": 168.0,
+    "y": 81811.0
+  },
+  "tests.test_setutils:test_indexed_set_mutate": {
+    "x": 168.0,
+    "y": 82039.0
+  },
+  "tests.test_setutils:test_indexed_set_rsub": {
+    "x": 168.0,
+    "y": 81868.0
+  },
+  "tests.test_setutils:test_indexed_set_update_multiple_iterables": {
+    "x": 168.0,
+    "y": 81925.0
+  },
+  "tests.test_setutils:test_indexed_set_update_multiple_iterables_with_tuple_items": {
+    "x": 168.0,
+    "y": 81982.0
+  },
+  "tests.test_setutils:test_iset_index_method": {
+    "x": 168.0,
+    "y": 82210.0
+  },
+  "tests.test_setutils:test_iset_iterator_operands": {
+    "x": 168.0,
+    "y": 82837.0
+  },
+  "tests.test_setutils:test_iset_multi_arg_updates": {
+    "x": 168.0,
+    "y": 82780.0
+  },
+  "tests.test_setutils:test_iset_pop_requires_int_index": {
+    "x": 168.0,
+    "y": 82723.0
+  },
+  "tests.test_setutils:test_iset_scalar_index_bounds": {
+    "x": 168.0,
+    "y": 82381.0
+  },
+  "tests.test_setutils:test_iset_scalar_index_multiple_dead_intervals": {
+    "x": 168.0,
+    "y": 82438.0
+  },
+  "tests.test_setutils:test_iset_slice_after_removal": {
+    "x": 168.0,
+    "y": 82267.0
+  },
+  "tests.test_setutils:test_iset_slice_agreement": {
+    "x": 168.0,
+    "y": 82324.0
+  },
+  "tests.test_setutils:test_small_difference_update_unchanged": {
+    "x": 168.0,
+    "y": 82609.0
+  },
+  "tests.test_socketutils": {
+    "x": 163.0,
+    "y": 77760.5
+  },
+  "tests.test_socketutils:netstring_server": {
+    "x": 168.0,
+    "y": 77950.0
+  },
+  "tests.test_socketutils:netstring_server_timeout_override": {
+    "x": 168.0,
+    "y": 78064.0
+  },
+  "tests.test_socketutils:test_basic_nonblocking": {
+    "x": 168.0,
+    "y": 77722.0
+  },
+  "tests.test_socketutils:test_buffers": {
+    "x": 168.0,
+    "y": 77551.0
+  },
+  "tests.test_socketutils:test_client_disconnecting": {
+    "x": 168.0,
+    "y": 77608.0
+  },
+  "tests.test_socketutils:test_multibyte_delim": {
+    "x": 168.0,
+    "y": 77437.0
+  },
+  "tests.test_socketutils:test_netstring_read_ns_timeout_covers_payload": {
+    "x": 168.0,
+    "y": 78178.0
+  },
+  "tests.test_socketutils:test_props": {
+    "x": 168.0,
+    "y": 77494.0
+  },
+  "tests.test_socketutils:test_recv_size_zero": {
+    "x": 168.0,
+    "y": 77779.0
+  },
+  "tests.test_socketutils:test_short_lines": {
+    "x": 168.0,
+    "y": 77380.0
+  },
+  "tests.test_socketutils:test_simple_buffered_socket_passthroughs": {
+    "x": 168.0,
+    "y": 77836.0
+  },
+  "tests.test_socketutils:test_socketutils_netstring": {
+    "x": 168.0,
+    "y": 78007.0
+  },
+  "tests.test_socketutils:test_socketutils_netstring_timeout": {
+    "x": 168.0,
+    "y": 78121.0
+  },
+  "tests.test_socketutils:test_split_delim": {
+    "x": 168.0,
+    "y": 77665.0
+  },
+  "tests.test_socketutils:test_timeout_setters_getters": {
+    "x": 168.0,
+    "y": 77893.0
+  },
+  "tests.test_statsutils": {
+    "x": 163.0,
+    "y": 83329.0
+  },
+  "tests.test_statsutils:test_clear_cache_resets_is_sorted": {
+    "x": 168.0,
+    "y": 83490.0
+  },
+  "tests.test_statsutils:test_format_histogram_counts_all_zero": {
+    "x": 168.0,
+    "y": 83547.0
+  },
+  "tests.test_statsutils:test_histogram_zero_interquartile_range": {
+    "x": 168.0,
+    "y": 83376.0
+  },
+  "tests.test_statsutils:test_mode": {
+    "x": 168.0,
+    "y": 83262.0
+  },
+  "tests.test_statsutils:test_pearson_type_covers_kappa_ge_zero": {
+    "x": 168.0,
+    "y": 83205.0
+  },
+  "tests.test_statsutils:test_pearson_type_zero_denominator": {
+    "x": 168.0,
+    "y": 83319.0
+  },
+  "tests.test_statsutils:test_sorted_measures_keep_data_order": {
+    "x": 168.0,
+    "y": 83433.0
+  },
+  "tests.test_statsutils:test_stats_basic": {
+    "x": 168.0,
+    "y": 83148.0
+  },
+  "tests.test_statsutils_histogram": {
+    "x": 163.0,
+    "y": 83782.5
+  },
+  "tests.test_statsutils_histogram:main": {
+    "x": 168.0,
+    "y": 83858.0
+  },
+  "tests.test_statsutils_histogram:test_check_sum": {
+    "x": 168.0,
+    "y": 83744.0
+  },
+  "tests.test_statsutils_histogram:test_norm_regression": {
+    "x": 168.0,
+    "y": 83801.0
+  },
+  "tests.test_strutils": {
+    "x": 163.0,
+    "y": 84948.0
+  },
+  "tests.test_strutils:TestMultiReplace": {
+    "x": 168.0,
+    "y": 84767.0
+  },
+  "tests.test_strutils:TestMultiReplace.test_shortcut_function": {
+    "x": 168.0,
+    "y": 84669.0
+  },
+  "tests.test_strutils:TestMultiReplace.test_simple_substitutions": {
+    "x": 168.0,
+    "y": 84612.0
+  },
+  "tests.test_strutils:TestMultiReplace.test_sub_with_compiled_regex": {
+    "x": 168.0,
+    "y": 84897.0
+  },
+  "tests.test_strutils:TestMultiReplace.test_sub_with_list": {
+    "x": 168.0,
+    "y": 84840.0
+  },
+  "tests.test_strutils:TestMultiReplace.test_sub_with_regex": {
+    "x": 168.0,
+    "y": 84783.0
+  },
+  "tests.test_strutils:TestMultiReplace.test_substitutions_in_word": {
+    "x": 168.0,
+    "y": 84726.0
+  },
+  "tests.test_strutils:TestMultiReplace.test_substitutions_with_regex_chars": {
+    "x": 168.0,
+    "y": 84954.0
+  },
+  "tests.test_strutils:test_args2cmd_sep": {
+    "x": 168.0,
+    "y": 85878.0
+  },
+  "tests.test_strutils:test_args2sh_sep": {
+    "x": 168.0,
+    "y": 85821.0
+  },
+  "tests.test_strutils:test_asciify": {
+    "x": 168.0,
+    "y": 84112.0
+  },
+  "tests.test_strutils:test_bytes2human": {
+    "x": 168.0,
+    "y": 85194.0
+  },
+  "tests.test_strutils:test_ellipsize": {
+    "x": 168.0,
+    "y": 85764.0
+  },
+  "tests.test_strutils:test_format_int_list": {
+    "x": 168.0,
+    "y": 84511.0
+  },
+  "tests.test_strutils:test_gunzip_bytes_multi_member": {
+    "x": 168.0,
+    "y": 85707.0
+  },
+  "tests.test_strutils:test_html2text_trailing_ampersand": {
+    "x": 168.0,
+    "y": 85650.0
+  },
+  "tests.test_strutils:test_human_readable_list": {
+    "x": 168.0,
+    "y": 85023.0
+  },
+  "tests.test_strutils:test_human_readable_list_type_annotations": {
+    "x": 168.0,
+    "y": 85080.0
+  },
+  "tests.test_strutils:test_indent": {
+    "x": 168.0,
+    "y": 84169.0
+  },
+  "tests.test_strutils:test_indent_unicode_line_endings": {
+    "x": 168.0,
+    "y": 84340.0
+  },
+  "tests.test_strutils:test_is_uuid": {
+    "x": 168.0,
+    "y": 84397.0
+  },
+  "tests.test_strutils:test_iter_splitlines_preserves_numbers_after_spaces": {
+    "x": 168.0,
+    "y": 84283.0
+  },
+  "tests.test_strutils:test_iter_splitlines_unicode_line_endings": {
+    "x": 168.0,
+    "y": 84226.0
+  },
+  "tests.test_strutils:test_multi_replace_compiled_flags": {
+    "x": 168.0,
+    "y": 85479.0
+  },
+  "tests.test_strutils:test_multi_replace_empty_mapping": {
+    "x": 168.0,
+    "y": 85422.0
+  },
+  "tests.test_strutils:test_parse_int_list": {
+    "x": 168.0,
+    "y": 84454.0
+  },
+  "tests.test_strutils:test_pluralize_x": {
+    "x": 168.0,
+    "y": 85308.0
+  },
+  "tests.test_strutils:test_pluralize_z": {
+    "x": 168.0,
+    "y": 85365.0
+  },
+  "tests.test_strutils:test_roundzip": {
+    "x": 168.0,
+    "y": 85137.0
+  },
+  "tests.test_strutils:test_singularize_double_s": {
+    "x": 168.0,
+    "y": 85251.0
+  },
+  "tests.test_strutils:test_slugify_backslash": {
+    "x": 168.0,
+    "y": 85536.0
+  },
+  "tests.test_strutils:test_strip_ansi": {
+    "x": 168.0,
+    "y": 84055.0
+  },
+  "tests.test_strutils:test_strip_ansi_non_utf8_bytes": {
+    "x": 168.0,
+    "y": 85593.0
+  },
+  "tests.test_tableutils": {
+    "x": 163.0,
+    "y": 86313.0
+  },
+  "tests.test_tableutils:test_headerless_extend_wider_row": {
+    "x": 168.0,
+    "y": 86531.0
+  },
+  "tests.test_tableutils:test_iterator_headers": {
+    "x": 168.0,
+    "y": 86474.0
+  },
+  "tests.test_tableutils:test_table_dicts": {
+    "x": 168.0,
+    "y": 86132.0
+  },
+  "tests.test_tableutils:test_table_lists": {
+    "x": 168.0,
+    "y": 86075.0
+  },
+  "tests.test_tableutils:test_table_obj": {
+    "x": 168.0,
+    "y": 86189.0
+  },
+  "tests.test_tableutils:test_to_html_bottom_metadata_after_table": {
+    "x": 168.0,
+    "y": 86588.0
+  },
+  "tests.test_tableutils:test_to_text_empty_table": {
+    "x": 168.0,
+    "y": 86246.0
+  },
+  "tests.test_tableutils:test_to_text_no_headers": {
+    "x": 168.0,
+    "y": 86360.0
+  },
+  "tests.test_tableutils:test_to_text_none_headers": {
+    "x": 168.0,
+    "y": 86303.0
+  },
+  "tests.test_tableutils:test_to_text_short_headers_padded": {
+    "x": 168.0,
+    "y": 86417.0
+  },
+  "tests.test_tbutils": {
+    "x": 163.0,
+    "y": 86795.0
+  },
+  "tests.test_tbutils:test_contextual": {
+    "x": 168.0,
+    "y": 86842.0
+  },
+  "tests.test_tbutils:test_exception_info": {
+    "x": 168.0,
+    "y": 86785.0
+  },
+  "tests.test_tbutils_parsed_exc": {
+    "x": 163.0,
+    "y": 87163.0
+  },
+  "tests.test_tbutils_parsed_exc:test_parsed_exc_basic": {
+    "x": 168.0,
+    "y": 87039.0
+  },
+  "tests.test_tbutils_parsed_exc:test_parsed_exc_multiline_source": {
+    "x": 168.0,
+    "y": 87324.0
+  },
+  "tests.test_tbutils_parsed_exc:test_parsed_exc_nosrcline": {
+    "x": 168.0,
+    "y": 87096.0
+  },
+  "tests.test_tbutils_parsed_exc:test_parsed_exc_truncated": {
+    "x": 168.0,
+    "y": 87267.0
+  },
+  "tests.test_tbutils_parsed_exc:test_parsed_exc_with_anchor": {
+    "x": 168.0,
+    "y": 87153.0
+  },
+  "tests.test_tbutils_parsed_exc:test_parsed_exc_with_anchor_indented": {
+    "x": 168.0,
+    "y": 87210.0
+  },
+  "tests.test_timeutils": {
+    "x": 163.0,
+    "y": 87958.5
+  },
+  "tests.test_timeutils:test_daterange_datetime_hourly": {
+    "x": 168.0,
+    "y": 88262.0
+  },
+  "tests.test_timeutils:test_daterange_infinite": {
+    "x": 168.0,
+    "y": 87635.0
+  },
+  "tests.test_timeutils:test_daterange_month_step_clamps_day": {
+    "x": 168.0,
+    "y": 88091.0
+  },
+  "tests.test_timeutils:test_daterange_step_does_not_advance": {
+    "x": 168.0,
+    "y": 88148.0
+  },
+  "tests.test_timeutils:test_daterange_with_same_start_stop": {
+    "x": 168.0,
+    "y": 87692.0
+  },
+  "tests.test_timeutils:test_daterange_wrong_direction": {
+    "x": 168.0,
+    "y": 88205.0
+  },
+  "tests.test_timeutils:test_daterange_years": {
+    "x": 168.0,
+    "y": 87521.0
+  },
+  "tests.test_timeutils:test_daterange_years_step": {
+    "x": 168.0,
+    "y": 87578.0
+  },
+  "tests.test_timeutils:test_dt_to_timestamp_naive_tzinfo": {
+    "x": 168.0,
+    "y": 87977.0
+  },
+  "tests.test_timeutils:test_isoparse_basic": {
+    "x": 168.0,
+    "y": 87749.0
+  },
+  "tests.test_timeutils:test_isoparse_fraction_overprecise": {
+    "x": 168.0,
+    "y": 87863.0
+  },
+  "tests.test_timeutils:test_isoparse_fractional_seconds": {
+    "x": 168.0,
+    "y": 87806.0
+  },
+  "tests.test_timeutils:test_isoparse_timezone_suffix": {
+    "x": 168.0,
+    "y": 87920.0
+  },
+  "tests.test_timeutils:test_parse_timedelta_rejects_garbage": {
+    "x": 168.0,
+    "y": 88034.0
+  },
+  "tests.test_timeutils:test_relative_time_defaults_to_matching_timezone": {
+    "x": 168.0,
+    "y": 88319.0
+  },
+  "tests.test_timeutils:test_us_timezone_dst_fold": {
+    "x": 168.0,
+    "y": 88376.0
+  },
+  "tests.test_timeutils:test_us_timezone_fromutc_sets_fold": {
+    "x": 168.0,
+    "y": 88433.0
+  },
+  "tests.test_typeutils": {
+    "x": 163.0,
+    "y": 88697.0
+  },
+  "tests.test_typeutils:test_get_all_subclasses_metaclass": {
+    "x": 168.0,
+    "y": 88801.0
+  },
+  "tests.test_typeutils:test_sentinel_copy": {
+    "x": 168.0,
+    "y": 88744.0
+  },
+  "tests.test_typeutils:test_sentinel_falsiness": {
+    "x": 168.0,
+    "y": 88630.0
+  },
+  "tests.test_typeutils:test_sentinel_pickle": {
+    "x": 168.0,
+    "y": 88687.0
+  },
+  "tests.test_urlutils": {
+    "x": 163.0,
+    "y": 90062.5
+  },
+  "tests.test_urlutils:_test_bad_utf8": {
+    "x": 168.0,
+    "y": 90081.0
+  },
+  "tests.test_urlutils:test_basic": {
+    "x": 168.0,
+    "y": 89169.0
+  },
+  "tests.test_urlutils:test_chained_navigate": {
+    "x": 168.0,
+    "y": 90708.0
+  },
+  "tests.test_urlutils:test_equal": {
+    "x": 168.0,
+    "y": 89967.0
+  },
+  "tests.test_urlutils:test_find_all_links": {
+    "x": 168.0,
+    "y": 90993.0
+  },
+  "tests.test_urlutils:test_find_all_links_basic": {
+    "x": 168.0,
+    "y": 90936.0
+  },
+  "tests.test_urlutils:test_find_all_links_rejected_without_text": {
+    "x": 168.0,
+    "y": 91050.0
+  },
+  "tests.test_urlutils:test_identical_equal": {
+    "x": 168.0,
+    "y": 89910.0
+  },
+  "tests.test_urlutils:test_idna": {
+    "x": 168.0,
+    "y": 89283.0
+  },
+  "tests.test_urlutils:test_invalid_ipv6": {
+    "x": 168.0,
+    "y": 89739.0
+  },
+  "tests.test_urlutils:test_invalid_port": {
+    "x": 168.0,
+    "y": 89682.0
+  },
+  "tests.test_urlutils:test_iri_path": {
+    "x": 168.0,
+    "y": 89568.0
+  },
+  "tests.test_urlutils:test_iri_query": {
+    "x": 168.0,
+    "y": 89511.0
+  },
+  "tests.test_urlutils:test_mailto": {
+    "x": 168.0,
+    "y": 90309.0
+  },
+  "tests.test_urlutils:test_navigate": {
+    "x": 168.0,
+    "y": 90423.0
+  },
+  "tests.test_urlutils:test_navigate_absolute_normalizes": {
+    "x": 168.0,
+    "y": 90480.0
+  },
+  "tests.test_urlutils:test_navigate_ipv6_keeps_brackets": {
+    "x": 168.0,
+    "y": 90537.0
+  },
+  "tests.test_urlutils:test_netloc_slashes": {
+    "x": 168.0,
+    "y": 90879.0
+  },
+  "tests.test_urlutils:test_normalize_with_case": {
+    "x": 168.0,
+    "y": 90822.0
+  },
+  "tests.test_urlutils:test_not_equal": {
+    "x": 168.0,
+    "y": 90024.0
+  },
+  "tests.test_urlutils:test_parse_equals_in_qp_value": {
+    "x": 168.0,
+    "y": 89853.0
+  },
+  "tests.test_urlutils:test_parse_qsl_encoding": {
+    "x": 168.0,
+    "y": 89397.0
+  },
+  "tests.test_urlutils:test_parse_url": {
+    "x": 168.0,
+    "y": 89796.0
+  },
+  "tests.test_urlutils:test_password_without_username": {
+    "x": 168.0,
+    "y": 90195.0
+  },
+  "tests.test_urlutils:test_port_zero_roundtrips": {
+    "x": 168.0,
+    "y": 90594.0
+  },
+  "tests.test_urlutils:test_query_param_dict_eq_with_dict": {
+    "x": 168.0,
+    "y": 89454.0
+  },
+  "tests.test_urlutils:test_query_params": {
+    "x": 168.0,
+    "y": 89340.0
+  },
+  "tests.test_urlutils:test_quoted_userinfo": {
+    "x": 168.0,
+    "y": 90252.0
+  },
+  "tests.test_urlutils:test_regex": {
+    "x": 168.0,
+    "y": 89055.0
+  },
+  "tests.test_urlutils:test_register_scheme_reclassify": {
+    "x": 168.0,
+    "y": 90651.0
+  },
+  "tests.test_urlutils:test_rel_navigate": {
+    "x": 168.0,
+    "y": 90366.0
+  },
+  "tests.test_urlutils:test_roundtrip": {
+    "x": 168.0,
+    "y": 89112.0
+  },
+  "tests.test_urlutils:test_self_normalize": {
+    "x": 168.0,
+    "y": 90765.0
+  },
+  "tests.test_urlutils:test_str_repr": {
+    "x": 168.0,
+    "y": 91164.0
+  },
+  "tests.test_urlutils:test_unicodey": {
+    "x": 168.0,
+    "y": 91107.0
+  },
+  "tests.test_urlutils:test_url": {
+    "x": 168.0,
+    "y": 88998.0
+  },
+  "tests.test_urlutils:test_url_copy": {
+    "x": 168.0,
+    "y": 89625.0
+  },
+  "tests.test_urlutils:test_userinfo": {
+    "x": 168.0,
+    "y": 90138.0
+  },
+  "tests.test_urlutils:test_utf8_url": {
+    "x": 168.0,
+    "y": 89226.0
+  }
+}
