@@ -74,7 +74,8 @@ def _read_report(path: Path, targets: Sequence[BehaviorTarget]) -> dict[str, Beh
             raise WorkspaceError("incomplete behavior results")
         if any(
             not isinstance(result, dict)
-            or cast(dict[str, Any], result).get("kind") not in ("value", "raised", "timed_out")
+            or cast(dict[str, Any], result).get("kind")
+            not in ("value", "raised", "timed_out", "unrepresentable")
             for result in results
         ):
             raise WorkspaceError("invalid typed behavior result")

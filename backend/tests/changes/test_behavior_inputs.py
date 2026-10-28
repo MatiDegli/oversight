@@ -2,6 +2,8 @@
 
 import ast
 
+import pytest
+
 from oversight.changes import behavior_inputs
 
 
@@ -76,3 +78,62 @@ def test_negative_constants_and_mutable_literal_types():
     assert {-8, -7, -6, 0, -1} <= values
     found = generate("def f(x = {'key': [1, 2]}): return x\n")
     assert ast.literal_eval(found.inputs[0].before) == ((), {"x": {"key": [1, 2]}})
+
+
+@pytest.mark.parametrize("side", ["base", "head"])
+@pytest.mark.parametrize(
+    "imports, body, reason",
+    [
+        ("", "global state; state = x", "global or nonlocal assignment"),
+        ("", "nonlocal state; state = x", "global or nonlocal assignment"),
+        ("", "open('data').read()", "file access"),
+        ("from pathlib import Path as P", "P('data').write_text('x')", "file access"),
+        ("", "print(x)", "print or input"),
+        ("", "input()", "print or input"),
+        ("import random as rng", "rng.random()", "randomness"),
+        ("from random import randint as draw", "draw(0, x)", "randomness"),
+        ("from time import time as clock", "clock()", "time access"),
+        ("import datetime", "datetime.datetime.now()", "time access"),
+        ("import os as system", "system.environ['HOME']", "environment access"),
+        ("from os import getenv as env", "env('HOME')", "environment access"),
+        ("import socket as net", "net.socket()", "network access"),
+        (
+            "from urllib.request import urlopen as fetch",
+            "fetch('https://example.test')",
+            "network access",
+        ),
+    ],
+)
+def test_own_effects_on_either_side_are_not_probed(side, imports, body, reason):
+    pure = "def f(x: int): return x\n"
+    effect = f"{imports}\ndef f(x: int):\n    {body}\n    return x\n"
+    result = generate(effect, pure) if side == "base" else generate(pure, effect)
+    assert result.reason == reason
+    assert result.inputs == ()
+
+
+def test_nested_definition_effects_do_not_belong_to_own_body():
+    result = generate("def f(x: int):\n    def nested(): print(x)\n    return x\n")
+    assert result.reason is None and result.inputs
+
+
+def test_module_integer_boundaries_from_both_versions_and_every_body():
+    before = (
+        "TIERS = ((50, 20), (10, 10))\nFLAG = True\n"
+        "def other(): return -7\n"
+        "class C:\n    def method(self): return 30\n"
+        "def f(x: int, y: int, z: int = 0): return x + y + z\n"
+    )
+    after = before.replace("50, 20", "60, 20")
+    result = generate(before, after, "from pkg.mod import f\nf(500, 600)\n")
+    assert result == generate(before, after, "from pkg.mod import f\nf(500, 600)\n")
+    arguments = [ast.literal_eval(item.before)[1] for item in result.inputs]
+    # All parameters get the first module tier before the shared input cap is hit.
+    for param in ("x", "y", "z"):
+        assert {49, 50, 51} <= {kwargs.get(param) for kwargs in arguments}
+    single = generate(
+        before.replace(", y: int, z: int = 0", ""), after.replace(", y: int, z: int = 0", "")
+    )
+    values = {ast.literal_eval(item.before)[1]["x"] for item in single.inputs}
+    assert {59, 60, 61, 19, 20, 21, 9, 10, 11, -8, -7, -6, 29, 30, 31} <= values
+    assert all(type(value) is int for value in values)

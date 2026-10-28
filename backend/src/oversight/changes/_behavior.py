@@ -157,13 +157,18 @@ async def _compare(
             found[position] = replace(result, reason=problem)
             completed.add(node_id)
             continue
-        # Count every measured difference; retained rows alone are bounded at eight.
-        differing = [
-            index
+        measured = [
+            (index, old, new)
             for index, (old, new) in enumerate(zip(before.results, after.results, strict=True))
-            if old != new
+            if old["kind"] != "unrepresentable" and new["kind"] != "unrepresentable"
         ]
-        result = replace(result, compared=len(before.results), differing=len(differing))
+        if not measured:
+            found[position] = replace(result, reason="unrepresentable input")
+            completed.add(node_id)
+            continue
+        # Count every measured difference; retained rows alone are bounded at eight.
+        differing = [index for index, old, new in measured if old != new]
+        result = replace(result, compared=len(measured), differing=len(differing))
         found[position] = result
         rows: list[BehaviorRow] = []
         for index in differing:

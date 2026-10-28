@@ -97,6 +97,24 @@ async def test_import_failure_is_not_a_function_exception(tmp_path):
     assert not result["results"]
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("literal", ["not a literal", "((), {})"])
+async def test_literal_and_binding_setup_errors_are_unrepresentable(tmp_path, literal):
+    result = await invoke(tmp_path, "def f(x): return x\n", [literal])
+    assert result["results"][0]["kind"] == "unrepresentable"
+
+
+@pytest.mark.anyio
+async def test_deepcopy_setup_error_is_not_a_function_exception(tmp_path):
+    body = (
+        "class Uncopyable:\n"
+        "    def __deepcopy__(self, memo): raise ValueError('setup')\n"
+        "def f(x=Uncopyable()): raise ValueError('body')\n"
+    )
+    result = await invoke(tmp_path, body, ["((), {})"])
+    assert result["results"][0]["kind"] == "unrepresentable"
+
+
 def test_worker_is_stdlib_only():
     tree = ast.parse(WORKER.read_text())
     for node in ast.walk(tree):

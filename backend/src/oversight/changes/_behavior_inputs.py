@@ -4,6 +4,7 @@ import ast
 import inspect
 import time
 from dataclasses import dataclass
+from itertools import zip_longest
 from pathlib import PurePosixPath
 from typing import Any, cast
 
@@ -179,17 +180,92 @@ def _calls(files: dict[str, str], module: str, name: str, deadline: float):
 
 
 def _definition(files: dict[str, str], module: str, name: str):
-    found: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    found: list[tuple[Source, ast.FunctionDef | ast.AsyncFunctionDef]] = []
     for path, text in files.items():
         if path.endswith(".py") and module_name(path) == module:
+            source = Source(text)
             found.extend(
-                n
-                for n in ast.parse(text).body
+                (source, n)
+                for n in source.tree.body
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name
             )
     if len(found) != 1:
         raise ValueError("ambiguous definition")
     return found[0]
+
+
+def _effect_reason(source: Source, node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    """Conservative own-body syntax check, including imported aliases, without imports.
+
+    This is not interprocedural analysis: effects hidden in helpers remain unobserved.
+    Nested definitions' bodies belong to those definitions, not this function.
+    """
+    file_calls = {
+        "open",
+        "read",
+        "write",
+        "read_text",
+        "write_text",
+        "read_bytes",
+        "write_bytes",
+        "readline",
+        "readlines",
+        "writelines",
+        "unlink",
+        "rename",
+        "replace",
+        "mkdir",
+        "rmdir",
+        "touch",
+        "remove",
+        "listdir",
+        "scandir",
+        "walk",
+        "stat",
+        "lstat",
+        "exists",
+        "is_file",
+        "is_dir",
+        "glob",
+        "rglob",
+    }
+    for child in walk_local(node):
+        if isinstance(child, (ast.Global, ast.Nonlocal)):
+            return "global or nonlocal assignment"
+        if not isinstance(child, (ast.Name, ast.Attribute, ast.Call)):
+            continue
+        name = source.resolve(child.func if isinstance(child, ast.Call) else child) or ""
+        root, leaf = name.split(".")[0], name.rsplit(".", 1)[-1]
+        if name in {
+            "os.environ",
+            "os.environb",
+            "os.getenv",
+            "os.getenvb",
+            "os.putenv",
+            "os.unsetenv",
+        }:
+            return "environment access"
+        if root in {"random", "secrets"} or name == "os.urandom":
+            return "randomness"
+        if root in {"time", "datetime"}:
+            return "time access"
+        if root in {
+            "socket",
+            "requests",
+            "urllib",
+            "http",
+            "httpx",
+            "aiohttp",
+            "ftplib",
+            "smtplib",
+        }:
+            return "network access"
+        if isinstance(child, ast.Call):
+            if name in {"print", "input", "builtins.print", "builtins.input"}:
+                return "print or input"
+            if leaf in file_calls or root in {"pathlib", "io", "shutil", "tempfile"}:
+                return "file access"
+    return None
 
 
 def behavior_inputs(
@@ -201,17 +277,27 @@ def behavior_inputs(
     deadline: float = float("inf"),
 ) -> BehaviorInputs:
     try:
-        nodes = [_definition(files, module, name) for files in (base, head)]
+        definitions = [_definition(files, module, name) for files in (base, head)]
+        nodes = [node for _, node in definitions]
         if any(
             isinstance(n, ast.AsyncFunctionDef)
             or any(isinstance(c, (ast.Yield, ast.YieldFrom)) for c in walk_local(n))
             for n in nodes
         ):
             return BehaviorInputs(reason="async or generator")
+        for source, node in definitions:
+            if reason := _effect_reason(source, node):
+                return BehaviorInputs(reason=reason)
         signatures = [_signature(node) for node in nodes]
+        integers = [
+            value
+            for source, _ in definitions
+            for value in _literals(source.tree)
+            if type(value) is int
+        ]
     except (ValueError, TypeError, SyntaxError, RecursionError):
         return BehaviorInputs(reason="unsupported signature")
-    return _generate(module, name, base, head, nodes, signatures, deadline)
+    return _generate(module, name, base, head, nodes, signatures, integers, deadline)
 
 
 def _generate(
@@ -221,6 +307,7 @@ def _generate(
     head: dict[str, str],
     nodes: list[ast.FunctionDef | ast.AsyncFunctionDef],
     signatures: list[inspect.Signature],
+    integers: list[int],
     deadline: float,
 ) -> BehaviorInputs:
     inputs: list[BehaviorInput] = []
@@ -267,13 +354,16 @@ def _generate(
             for param, value in bound.arguments.items():
                 pools[param].append(value)
             add(dict(bound.arguments))
-    pools = _pools(pools, nodes, signatures)
+    pools = _pools(pools, nodes, signatures, integers)
     seed = (
         dict(seeds[0]) if seeds else {param: values[0] for param, values in pools.items() if values}
     )
     add(seed)
-    for param, values in pools.items():
-        for value in values:
+    # Share the cap across parameters so the first parameter cannot starve later ones.
+    for row in zip_longest(*pools.values(), fillvalue=inspect.Parameter.empty):
+        for param, value in zip(pools, row, strict=True):
+            if value is inspect.Parameter.empty:
+                continue
             add({**seed, param: value})
     return BehaviorInputs(tuple(inputs), skipped, None if inputs else "unsupported signature")
 
@@ -282,6 +372,7 @@ def _pools(
     pools: dict[str, list[Any]],
     nodes: list[ast.FunctionDef | ast.AsyncFunctionDef],
     signatures: list[inspect.Signature],
+    integers: list[int],
 ) -> dict[str, list[Any]]:
     for param in pools:
         parameters = [sig.parameters[param] for sig in signatures if param in sig.parameters]
@@ -290,25 +381,27 @@ def _pools(
         kinds = {p.annotation for p in parameters}
         is_int = "int" in kinds or (not kinds - {None} and any(type(v) is int for v in observed))
         is_str = "str" in kinds or (not kinds - {None} and any(type(v) is str for v in observed))
-        for node in nodes:
-            for value in _body_literals(node):
-                if is_int and type(value) is int:
-                    pools[param].extend((value - 1, value, value + 1))
-                elif is_str and type(value) is str:
-                    pools[param].append(value)
+        if is_int:
+            for value in integers:
+                pools[param].extend((value - 1, value, value + 1))
+        if is_str:
+            for node in nodes:
+                pools[param].extend(value for value in _literals(node) if type(value) is str)
         pools[param].extend(([0, -1] if is_int else []) + defaults)
         unique = {literal_text(v): v for v in pools[param] if not (is_int and type(v) is bool)}
         pools[param] = list(unique.values())[:MAX_INPUTS]
     return pools
 
 
-def _body_literals(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[Any]:
+def _literals(node: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef) -> list[Any]:
     """Signed numeric literals belong to the unary expression, not its positive operand."""
     stack: list[ast.AST] = list(reversed(node.body))
     literals: list[ast.expr] = []
     while stack:
         child = stack.pop()
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+        if not isinstance(node, ast.Module) and isinstance(
+            child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+        ):
             continue
         if (
             isinstance(child, ast.UnaryOp)

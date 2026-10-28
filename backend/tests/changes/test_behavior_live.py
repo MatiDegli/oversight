@@ -114,7 +114,9 @@ async def test_missing_isolation_refuses_workers(tmp_path, monkeypatch):
         assert_clean(s.live.workspace)
 
 
-async def test_hidden_state_marks_differing_rows_unstable(tmp_path):
+async def test_global_assignment_is_not_probed(tmp_path, monkeypatch):
+    worker = AsyncMock(side_effect=AssertionError("effectful function must not run"))
+    monkeypatch.setattr("oversight.workspace.core.run_behavior_worker", worker)
     edit = (
         PRICING,
         "base = unit_price * quantity",
@@ -127,7 +129,41 @@ async def test_hidden_state_marks_differing_rows_unstable(tmp_path):
     ):
         rec = await run(s)
         [result] = rec.behavior_diffs[1].functions
+        assert result.reason == "global or nonlocal assignment"
+        assert result.compared == result.differing == 0
+        worker.assert_not_awaited()
+        assert_clean(s.live.workspace)
+
+
+async def test_hidden_mutable_default_marks_differing_rows_unstable(tmp_path):
+    edits = [
+        (PRICING, "extra_percent: int = 0)", "extra_percent: int = 0, _calls: list[int] = [])"),
+        (
+            PRICING,
+            "base = unit_price * quantity",
+            "_calls = compute_price.__defaults__[-1]\n    _calls.append(1)\n"
+            "    base = unit_price * quantity + len(_calls)",
+        ),
+    ]
+    async with (
+        asyncio.timeout(60),
+        live_server(live_settings(tmp_path, behavior_diff=True), Scripts([script(edits)])) as s,
+    ):
+        rec = await run(s)
+        [result] = rec.behavior_diffs[1].functions
         assert result.differing > 0 and any(row.unstable for row in result.rows), result
+        assert_clean(s.live.workspace)
+
+
+async def test_module_tier_boundary_is_probed(tmp_path):
+    edit = (PRICING, "if quantity >= minimum:", "if quantity >= minimum + 1:")
+    async with (
+        asyncio.timeout(60),
+        live_server(live_settings(tmp_path, behavior_diff=True), Scripts([script([edit])])) as s,
+    ):
+        rec = await run(s)
+        [result] = rec.behavior_diffs[1].functions
+        assert any("quantity=50" in row.call for row in result.rows), result
         assert_clean(s.live.workspace)
 
 

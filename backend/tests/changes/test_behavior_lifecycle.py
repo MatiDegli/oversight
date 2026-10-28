@@ -9,6 +9,7 @@ import pytest
 from changes_helpers import EDIT, Harness, start_harness
 from decision_helpers import observed_target
 
+from oversight.changes import BehaviorDiff
 from oversight_contracts.review import ChangeFacts
 
 pytestmark = pytest.mark.anyio
@@ -71,6 +72,7 @@ async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(h: Har
         1,
         "shop/mod.py",
         "    return 1",
+        "    return _block()\n\ndef _block():\n"
         "    import signal, time, os\n    from pathlib import Path\n"
         "    signal.signal(signal.SIGALRM, signal.SIG_IGN)\n"
         "    (Path(os.environ['HOME']).parent / 'worker-pid').write_text(str(os.getpid()))\n"
@@ -104,7 +106,7 @@ async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(h: Har
             h.manager.run_ended("agent-1", None)
         else:
             assert await task
-    [result] = rec.behavior_diffs[1].functions
+    result = next(r for r in rec.behavior_diffs[1].functions if r.node_id == "shop.mod:value")
     assert result.reason == ("interrupted" if cancel else "budget exhausted")
     assert all(0 < seconds <= 2 for seconds in timeouts)
     assert timeouts == sorted(timeouts, reverse=True)
@@ -117,7 +119,8 @@ async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(h: Har
 
 
 async def test_off_events_are_byte_identical_with_no_worker(tmp_path, monkeypatch):
-    probe = AsyncMock(side_effect=AssertionError("disabled probe called"))
+    measured = BehaviorDiff(revision=1, functions=())
+    probe = AsyncMock(return_value=measured)
     worker = AsyncMock(side_effect=AssertionError("disabled worker called"))
     monkeypatch.setattr("oversight.changes._proposal.probe_behavior", probe)
     monkeypatch.setattr("oversight.workspace.core.run_behavior_worker", worker)
@@ -127,8 +130,7 @@ async def test_off_events_are_byte_identical_with_no_worker(tmp_path, monkeypatc
         path.mkdir()
         harness = await start_harness(path)
         try:
-            if number:
-                harness.manager._ctx.behavior_diff = False
+            harness.manager._ctx.behavior_diff = number == 0
             original = harness.workspace.run_tests
 
             async def fixed_duration(
@@ -142,9 +144,35 @@ async def test_off_events_are_byte_identical_with_no_worker(tmp_path, monkeypatc
             monkeypatch.setattr(harness.workspace, "run_tests", fixed_duration)
             await harness.run_agent(1, EDIT)
             logs.append([event.envelope for event in harness.log])
-            assert not harness.manager._agents["agent-1"].behavior_diffs
+            retained = harness.manager._agents["agent-1"].behavior_diffs
+            assert retained == ({1: measured} if number == 0 else {})
+            assert probe.await_count == 1
         finally:
             await harness.close()
     assert logs[0] == logs[1]
-    probe.assert_not_awaited()
+    probe.assert_awaited_once()
     worker.assert_not_awaited()
+
+
+async def test_setup_errors_are_excluded_from_measured_differences(h: Harness):
+    h.manager._ctx.behavior_diff = True
+    await h.open(1)
+    assert await h.edit(
+        1,
+        "shop/mod.py",
+        "def value() -> int:\n    return 1",
+        "class Uncopyable:\n"
+        "    def __deepcopy__(self, memo): raise ValueError('setup')\n\n"
+        "def value(x=None) -> int:\n    return 3\n\n"
+        "value.__defaults__ = (Uncopyable(),)",
+    )
+    # The AST default is supported; import-time setup replaces it with an uncopyable object.
+    assert await h.finish(1)
+    result = next(
+        r
+        for r in h.manager._agents["agent-1"].behavior_diffs[1].functions
+        if r.node_id == "shop.mod:value"
+    )
+    assert result.compared == result.differing == 0
+    assert result.rows == ()
+    assert result.reason == "unrepresentable input"

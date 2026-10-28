@@ -131,7 +131,7 @@ def call(function: Callable[..., Any], literal: str, timeout_s: float) -> dict[s
     except CallTimeout:
         return {"kind": "timed_out"}
     except BaseException as error:
-        result = {"kind": "raised", "class": class_name(error), "message": "<unavailable>"}
+        result = {"kind": "unrepresentable", "class": class_name(error)}
     if len(canonical(result).encode()) > MAX_RESULT:
         return {"kind": "value", "value": ["cut", "encoded result size"]}
     return result
