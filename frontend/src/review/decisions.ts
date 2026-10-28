@@ -80,9 +80,13 @@ export function decisionView(
   const attempt = last?.revision === revisionOf(change) ? last : undefined;
   let failure = attempt?.phase === "failed" ? attempt.message : null;
   if (attempt?.phase === "pending" && resolution === attempt.resolution) {
-    const named = errors
-      .slice(attempt.errorCount)
-      .find((error) => error.change_id === change.change_id);
+    const named = errors.slice(attempt.errorCount).find((error) => {
+      if (error.change_id !== change.change_id) return false;
+      // Needs you terminates an automatic rules wait, never this person's command.
+      // A ledger receipt after human admission belongs to the cancelled review generation,
+      // even when revision and head are unchanged.
+      return !error.message.startsWith("Needs you");
+    });
     if (!named) return { kind: "pending", action: attempt.action };
     failure = named.message;
   }

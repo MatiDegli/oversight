@@ -91,19 +91,24 @@ describe("live transport", () => {
     await transport.ready;
     for (const event of log) source().emit(event);
     const before = store.getState().state;
-    // Review facts and test executions are now wired; only the remaining reserved events
+    // Cross-review, review facts and test executions are wired; only reserved events
     // must leave product state untouched. The next test covers the full mixed stream.
     const unwired = [
       ...reserved,
       ...reservedA.filter(
-        (e) => !["change.resolved", "tests.executed", "change.facts_recorded"].includes(e.type),
+        (e) =>
+          ![
+            "change.resolved",
+            "tests.executed",
+            "change.facts_recorded",
+            "change.reviewed",
+          ].includes(e.type),
       ),
     ];
     expect(unwired.map((event) => event.type)).toEqual([
       "change.assessed",
       "merge_mode.changed",
       "plan.updated",
-      "change.reviewed",
       "revert.resolved",
       "queue.updated",
       "lead.status",
@@ -114,7 +119,7 @@ describe("live transport", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
-      lastSeq: before.lastSeq + reserved.length + reservedA.length - 3,
+      lastSeq: before.lastSeq + unwired.length,
       clock: reservedA.at(-1)?.ts,
     });
   });
@@ -131,12 +136,22 @@ describe("live transport", () => {
     for (const event of delivered) source().emit(event);
     const suite = delivered.find((event) => event.type === "tests.executed");
     const facts = delivered.find((event) => event.type === "change.facts_recorded");
+    const review = delivered.find((event) => event.type === "change.reviewed");
+    const prior = before.changes["change-1"];
+    if (!review || !prior) throw new Error("Missing review example or change");
     if (!suite || !facts) throw new Error("Missing suite and facts examples");
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
       lastSeq: before.lastSeq + reserved.length + reservedA.length - 1,
       clock: reservedA.at(-1)?.ts,
+      changes: {
+        ...before.changes,
+        "change-1": {
+          ...prior,
+          reviews: [{ seq: review.seq, review: review.payload }],
+        },
+      },
       testExecutions: { [suite.seq]: suite.payload },
       changeFacts: { [facts.payload.change_id]: [facts.payload] },
     });

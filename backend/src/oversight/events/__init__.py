@@ -9,8 +9,11 @@ from oversight.events.clock import Clock, format_ts, parse_ts, system_clock
 from oversight.events.jsonl import LogError, export_run, read_jsonl, write_jsonl
 from oversight.events.needs_you import (
     NEEDS_YOU_CODES,
+    NEEDS_YOU_TEMPLATE,
     NeedsYou,
+    NeedsYouWait,
     format_needs_you,
+    needs_you_golden,
     parse_needs_you,
 )
 from oversight.events.paths import absolute_paths
@@ -36,12 +39,14 @@ __all__ = [
     "EVENT_TYPES",
     "MAX_GAP_S",
     "NEEDS_YOU_CODES",
+    "NEEDS_YOU_TEMPLATE",
     "Clock",
     "EventPayload",
     "EventRejected",
     "EventStore",
     "LogError",
     "NeedsYou",
+    "NeedsYouWait",
     "Sleep",
     "StoreClosedError",
     "StoredEvent",
@@ -49,6 +54,7 @@ __all__ = [
     "export_run",
     "format_needs_you",
     "format_ts",
+    "needs_you_golden",
     "parse_needs_you",
     "parse_ts",
     "play",
