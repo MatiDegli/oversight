@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { selectAgentCard } from "../agents";
+import { DataWords, selectAgentCard } from "../agents";
 import { liveImpact } from "../graph";
 import { costText } from "../state";
 import type { State } from "../state";
@@ -22,11 +22,6 @@ import { impactSummary } from "./ImpactCone";
 const chip =
   "inline-flex min-h-(--chip-height) min-w-0 items-center gap-1.5 rounded-control border border-page-border bg-page-raised px-2.5 py-1 text-(length:--data-size)";
 const icon = "size-4 shrink-0 text-muted";
-
-/** A compact numeric reading, using the shared data typeface. */
-function DataWords({ text }: { text: string }) {
-  return <span className="font-mono">{text}</span>;
-}
 
 function Fact({
   label,
@@ -115,9 +110,13 @@ export function ChangeFactsRow({
         symbol={<GitCommitHorizontal aria-hidden="true" className={icon} />}
       >
         Base{" "}
-        <code title={base ?? undefined} className="font-mono">
-          {base ? base.slice(0, 7) : "Unknown"}
-        </code>
+        {base ? (
+          <code title={base} className="font-mono">
+            {base.slice(0, 7)}
+          </code>
+        ) : (
+          "Unknown"
+        )}
       </Fact>
       <Fact label="Worktree" symbol={<GitBranch aria-hidden="true" className={icon} />}>
         Worktree{" "}
@@ -136,8 +135,7 @@ export function ChangeFactsRow({
         {cone ? <DataWords text={impactSummary(cone)} /> : "Possibly affected: unknown"}
       </Fact>
       <Fact label="Model and cost" symbol={<Coins aria-hidden="true" className={icon} />}>
-        {card?.modelLabel ?? "Model unknown"} ·{" "}
-        <span className="font-mono">{costText(card?.cost)}</span>
+        {card?.modelLabel ?? "Model unknown"} · <DataWords text={costText(card?.cost)} />
       </Fact>
       {cone && cone.omitted_by_depth > 0 && (
         <Fact label="Cone depth bound" symbol={<CircleHelp aria-hidden="true" className={icon} />}>

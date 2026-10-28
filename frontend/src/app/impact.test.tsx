@@ -43,7 +43,7 @@ it("passes the recorded cone to the same graph, with a card and a panel summary 
   if (!view || !proposal) throw new Error("Missing recorded review");
   const html = render(view);
   expect(html).toContain('aria-label="Possibly affected"');
-  expect(html).toContain("9 functions possibly affected, up to distance 2");
+  expect(html.replace(/<[^>]*>/g, "")).toContain("9 functions possibly affected, up to distance 2");
   // The notice stays on the graph, under the cone card that takes the heading's place.
   expect(html.indexOf("Real recorded run")).toBeGreaterThan(
     html.indexOf('aria-label="Possibly affected"'),
@@ -93,6 +93,6 @@ it("keeps live cone lights and dimming separate from the review card and camera 
 it("clears the graph cone after a decision while keeping the recorded panel summary", () => {
   const html = render({ ...initialView, review: "change-1" }, 21);
   expect(html).not.toContain('aria-label="Possibly affected"');
-  expect(html).toContain("9 functions possibly affected, up to distance 2");
+  expect(html.replace(/<[^>]*>/g, "")).toContain("9 functions possibly affected, up to distance 2");
   expect(graph.render).toHaveBeenCalledWith(expect.objectContaining({ cone: null, litIds: null }));
 });

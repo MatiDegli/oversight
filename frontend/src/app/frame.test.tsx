@@ -170,12 +170,12 @@ describe("review mode over the level 1 fixture", () => {
     const markup = reviewing(20);
     expect(tag(markup, "Review panel")).toContain("w-[min(var(--review-panel-width),46vw)]");
     expect(tag(markup, "Review panel")).toContain("bg-page");
+    expect(markup.replace(/<[^>]*>/g, "")).toContain("28 passed");
     for (const text of [
       "Cap the combined discount at 30% in compute_price",
       'aria-label="Agent A"',
       "Ready for review",
       'aria-label="Close review"',
-      "28 passed",
       "+2",
       "compute_price now caps",
       'aria-label="Diff of shop/pricing.py"',
