@@ -64,8 +64,14 @@ def refuse_orphans(runtime: Path, *, proc: Path = Path("/proc")) -> None:
             continue
         if not argv or not Path(argv[0]).is_absolute() or Path(argv[0]).name != "unshare":
             continue
-        prefix = signature(runtime, argv[0])
-        if argv[: len(prefix)] == prefix and marker in argv[len(prefix) :]:
+        prefix = [argv[0], *FLAGS]
+        helper = ["-I", "-S", "-c", HELPER]
+        offset = len(prefix) + 1  # Skip the interpreter path, which may differ across builds.
+        if (
+            argv[: len(prefix)] == prefix
+            and argv[offset : offset + len(helper)] == helper
+            and marker in argv[offset + len(helper) :]
+        ):
             raise WorkspaceBusy(
                 f"orphan isolated runner PID {entry.name}; stop this PID before restarting: "
                 + shlex.join(argv)

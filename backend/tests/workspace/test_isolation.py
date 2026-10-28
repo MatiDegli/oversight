@@ -5,6 +5,7 @@ import json
 import os
 import signal
 import sys
+import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -199,6 +200,43 @@ async def test_orphan_guard_runs_after_lock_before_reset(
     await workspace.acquire_runtime()
     await workspace.reset()
     assert not sentinel.exists()
+
+
+def test_orphan_from_another_interpreter_is_refused(tmp_path: Path) -> None:
+    runtime = tmp_path / ".runtime"
+    proc = tmp_path / "proc"
+    entry = proc / "12345"
+    entry.mkdir(parents=True)
+    argv = [
+        "/usr/bin/unshare",
+        *FLAGS,
+        "/opt/other-python/bin/python3.12",
+        "-I",
+        "-S",
+        "-c",
+        HELPER,
+        MARKER + str(runtime.resolve()),
+    ]
+    (entry / "cmdline").write_bytes(("\0".join(argv) + "\0").encode())
+    with pytest.raises(WorkspaceBusy, match="PID 12345"):
+        iso.refuse_orphans(runtime, proc=proc)
+
+
+async def test_orphan_scan_runs_outside_event_loop_thread(
+    make_workspace: Callable[..., Workspace], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = make_workspace()
+    event_loop_thread = threading.get_ident()
+    scanned: list[Path] = []
+
+    def scan(root: Path) -> None:
+        assert threading.get_ident() != event_loop_thread
+        assert (root / "server.lock").exists()
+        scanned.append(root)
+
+    monkeypatch.setattr("oversight.workspace.core.refuse_orphans", scan)
+    await workspace.acquire_runtime()
+    assert scanned == [workspace.runtime_root]
 
 
 @pytest.mark.parametrize("code", [0, 1])

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import uvicorn
 
-from oversight.app import ReplayConfig, create_app, ledger_command
+from oversight.app import ReplayConfig, create_app, ledger_command, pytest_pin
 from oversight.settings import REPO_ROOT, Settings
 from oversight.workspace import print_isolation_probe
 
@@ -42,7 +42,7 @@ def main() -> None:
     settings = Settings.load()
 
     if args.command == "isolation-probe":
-        print_isolation_probe(args.runtime, REPO_ROOT / "demo-repo")
+        print_isolation_probe(args.runtime, REPO_ROOT / "demo-repo", pytest_pin=pytest_pin())
     elif args.command == "serve":
         uvicorn.run(
             "oversight.app:create_app",

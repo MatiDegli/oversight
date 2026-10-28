@@ -339,7 +339,7 @@ class Workspace:
         if self._lock_fd is None:
             await offload(self._acquire_sync)
             try:
-                refuse_orphans(self._root)
+                await offload(partial(refuse_orphans, self._root))
             except BaseException:
                 self.release_runtime()
                 raise

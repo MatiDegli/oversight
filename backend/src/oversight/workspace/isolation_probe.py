@@ -10,7 +10,7 @@ from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable
 from oversight.workspace.suite import SuiteUnavailable
 
 
-async def isolation_probe(runtime: Path, template: Path) -> dict[str, object]:
+async def isolation_probe(runtime: Path, template: Path, *, pytest_pin: str) -> dict[str, object]:
     """Use a dedicated runtime, with no model calls and no fallback to an open test runner."""
     result: dict[str, object] = {"kernel": platform.release(), "status": "unavailable"}
     try:
@@ -18,7 +18,7 @@ async def isolation_probe(runtime: Path, template: Path) -> dict[str, object]:
     except OSError as error:
         result["reason"] = str(error)
         return result
-    workspace = Workspace(runtime, template, pytest_pin="9.1.1")
+    workspace = Workspace(runtime, template, pytest_pin=pytest_pin)
     accepted = asyncio.Event()
 
     async def connected(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -57,5 +57,7 @@ async def isolation_probe(runtime: Path, template: Path) -> dict[str, object]:
     return result
 
 
-def print_isolation_probe(runtime: Path, template: Path) -> None:
-    print(json.dumps(asyncio.run(isolation_probe(runtime, template)), indent=2))
+def print_isolation_probe(runtime: Path, template: Path, *, pytest_pin: str) -> None:
+    print(
+        json.dumps(asyncio.run(isolation_probe(runtime, template, pytest_pin=pytest_pin)), indent=2)
+    )
