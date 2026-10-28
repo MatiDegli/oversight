@@ -14,6 +14,10 @@ const money = new Intl.NumberFormat("en-US", {
 export const formatUsd = (amount: number) =>
   money.format(amount).replace("USD", "US$").replace(/\s/g, "");
 
+/** Keep unreported costs unknown and positive costs below half a cent visible. */
+export const costText = (cost: number | null | undefined): string =>
+  cost == null ? "Unknown" : cost > 0 && cost < 0.005 ? "<US$0.01" : formatUsd(cost);
+
 /**
  * The budget as the sketches write it: `US$150` when it is a round number of dollars, `US$150.50`
  * otherwise. A spent total always shows its cents (`formatUsd`): it is a reading, not a limit.

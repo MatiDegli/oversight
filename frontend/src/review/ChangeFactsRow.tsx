@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 
 import { selectAgentCard } from "../agents";
 import { liveImpact } from "../graph";
-import { formatUsd } from "../state";
+import { costText } from "../state";
 import type { State } from "../state";
 import { impactSummary } from "./ImpactCone";
 
@@ -96,9 +96,6 @@ export function ChangeFactsRow({
       execution.agent_id === change.agent_id &&
       execution.phase === "agent",
   );
-  const cost = card?.cost;
-  const costText =
-    cost == null ? "Unknown" : cost > 0 && cost < 0.005 ? "<US$0.01" : formatUsd(cost);
   return (
     <ul aria-label="Facts" className="flex flex-wrap items-center gap-2 text-text">
       <Fact label="Files" symbol={<FileCode aria-hidden="true" className={icon} />}>
@@ -123,7 +120,10 @@ export function ChangeFactsRow({
         </code>
       </Fact>
       <Fact label="Worktree" symbol={<GitBranch aria-hidden="true" className={icon} />}>
-        Worktree unknown
+        Worktree{" "}
+        <code title={`.runtime/worktrees/${change.agent_id}`} className="font-mono">
+          {change.agent_id}
+        </code>
       </Fact>
       <Fact label="Steps" symbol={<ListChecks aria-hidden="true" className={icon} />}>
         {card ? (
@@ -136,7 +136,8 @@ export function ChangeFactsRow({
         {cone ? <DataWords text={impactSummary(cone)} /> : "Possibly affected: unknown"}
       </Fact>
       <Fact label="Model and cost" symbol={<Coins aria-hidden="true" className={icon} />}>
-        {card?.modelLabel ?? "Model unknown"} · <span className="font-mono">{costText}</span>
+        {card?.modelLabel ?? "Model unknown"} ·{" "}
+        <span className="font-mono">{costText(card?.cost)}</span>
       </Fact>
       {cone && cone.omitted_by_depth > 0 && (
         <Fact label="Cone depth bound" symbol={<CircleHelp aria-hidden="true" className={icon} />}>

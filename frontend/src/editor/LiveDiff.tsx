@@ -4,6 +4,7 @@ import type { editor } from "monaco-editor";
 
 import { useStore } from "zustand";
 
+import { selectAgentCard, StepHistory } from "../agents";
 import { ChangeFactsRow } from "../review";
 import { stateStore } from "../state";
 import type { LiveDiffData } from "../state";
@@ -252,6 +253,7 @@ export function EditorDiff({
 
 export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
   const state = useStore(stateStore, (store) => store.state);
+  const card = data ? selectAgentCard(state, data.agentId) : undefined;
   return (
     <section
       aria-label="Live diff"
@@ -259,6 +261,12 @@ export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
     >
       <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-page-border bg-page p-4">
         <h2 className="min-w-0 break-all text-base font-bold">{data?.path ?? "Live diff"}</h2>
+        {data && (
+          <span aria-label="File lines" className="font-mono text-sm">
+            <span className="text-added">+{data.linesAdded}</span>{" "}
+            <span className="text-removed">−{data.linesRemoved}</span>
+          </span>
+        )}
         <span className="ml-auto inline-flex items-center gap-2 text-sm text-muted">
           <LockKeyhole aria-hidden="true" className="size-4" /> Read-only · Inline diff
         </span>
@@ -276,6 +284,12 @@ export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
       <div className="min-h-0 flex-1" hidden={!data}>
         <EditorDiff data={data} palette={palette} onMount={onMount} follow />
       </div>
+      {card && (
+        <footer className="flex max-h-48 min-h-0 shrink-0 flex-col border-t border-page-border px-4 py-2.5">
+          <h3 className="shrink-0 text-sm text-muted">Last steps</h3>
+          <StepHistory data={card} />
+        </footer>
+      )}
     </section>
   );
 }

@@ -87,3 +87,54 @@ it("keeps live diff facts updated without switching to review or taking focus", 
     expect(chipStyle.font).toBe(chipStyle.expectedFont);
   });
 });
+
+it("keeps last steps visible below Monaco with bounded scrolling and stable focus", async () => {
+  await withPage(async (page) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.route("**/events?*", () => {});
+    const entry = state.steps["agent-1"]?.[0];
+    if (!entry) throw new Error("Missing fixture step");
+    const value = {
+      ...state,
+      steps: {
+        ...state.steps,
+        "agent-1": Array.from({ length: 30 }, (_, i) => ({
+          ...entry,
+          step: i + 1,
+          summary: `Completed tool ${String(i + 1)}`,
+        })),
+      },
+    };
+    await page.evaluate((input) => {
+      window.panelTest.renderApp(input);
+    }, value);
+    await page.getByRole("button", { name: "Live diff", exact: true }).click();
+    const live = page.locator(panel);
+    const rows = live.getByRole("list", { name: "Agent A steps, newest first" });
+    await browserExpect(live.getByRole("heading", { name: "Last steps" })).toBeVisible();
+    await browserExpect(rows.getByRole("listitem")).toHaveCount(30);
+    await browserExpect(rows.getByRole("listitem").first()).toContainText("Completed tool 30");
+    await browserExpect(live.locator(".monaco-diff-editor")).toBeVisible();
+    const editorBox = await live.locator(".monaco-diff-editor").boundingBox();
+    const rowsBox = await rows.boundingBox();
+    expect(editorBox?.height).toBeGreaterThan(100);
+    expect(rowsBox?.y).toBeGreaterThanOrEqual((editorBox?.y ?? 0) + (editorBox?.height ?? 0));
+    expect((rowsBox?.y ?? 0) + (rowsBox?.height ?? 0)).toBeLessThanOrEqual(1080);
+    expect(await rows.evaluate((list) => list.scrollHeight > list.clientHeight)).toBe(true);
+    await rows.focus();
+    await page.evaluate(
+      (input) => {
+        window.panelTest.setState(input);
+      },
+      {
+        ...value,
+        steps: {
+          ...value.steps,
+          "agent-1": [...value.steps["agent-1"], { ...entry, step: 31, summary: "Latest edit" }],
+        },
+      },
+    );
+    await browserExpect(rows).toBeFocused();
+    await browserExpect(rows.getByRole("listitem").first()).toContainText("Latest edit");
+  });
+});

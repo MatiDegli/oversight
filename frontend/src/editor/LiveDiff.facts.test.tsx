@@ -28,13 +28,13 @@ const proposal = state.changes["change-1"]?.proposal;
 if (!proposal) throw new Error("Missing proposal");
 
 /** Rendering both actual parents catches a row accidentally disconnected from either surface. */
-function render(surface: string, value = state) {
+function render(surface: string, value = state, path = "shop/pricing.py") {
   stateStore.setState({ state: value });
   return renderToStaticMarkup(
     surface === "review" ? (
       <ReviewPanel state={value} changeId="change-1" onClose={() => {}} />
     ) : (
-      <LiveDiff data={selectLiveDiff(value, "change-1", "shop/pricing.py")} />
+      <LiveDiff data={selectLiveDiff(value, "change-1", path)} />
     ),
   );
 }
@@ -68,8 +68,13 @@ for (const surface of ["review", "live diff"])
       expect(row).toContain(`title="${proposal.base_commit}"`);
       expect(row).toContain(`font-mono">${proposal.base_commit.slice(0, 7)}`);
     });
-    it("shows missing worktree metadata honestly", () => {
-      expect(fact(render(surface), "Worktree")).toContain("Worktree unknown");
+    it("derives the worktree name from the change author even without an agent card", () => {
+      for (const agents of [state.agents, {}]) {
+        const row = fact(render(surface, { ...state, agents }), "Worktree");
+        expect(row).toContain('font-mono">agent-1');
+        expect(row).toContain('title=".runtime/worktrees/agent-1"');
+        expect(row).not.toContain("unknown");
+      }
     });
     it("keeps neutral step counts from the agent and run limit", () => {
       const row = fact(render(surface), "Steps");
@@ -229,4 +234,65 @@ it("uses the current edit's cone and counts while revising, rather than the earl
   expect(fact(html, "Lines")).toContain("+17");
   expect(fact(html, "Lines")).toContain("−4");
   expect(fact(html, "Tests")).toContain("Tests unknown");
+});
+
+it("shows the open file's counts beside its path, separately from multi-file totals", () => {
+  const change = state.changes["change-1"];
+  const entry = change?.files["shop/pricing.py"];
+  if (!change || !entry) throw new Error("Missing file fixture");
+  const path = "shop/other.py";
+  const value: State = {
+    ...state,
+    changes: {
+      ...state.changes,
+      "change-1": {
+        ...change,
+        files_changed: 2,
+        lines_added: 19,
+        lines_removed: 7,
+        files: {
+          ...change.files,
+          [path]: {
+            ...entry,
+            file: { ...entry.file, path, lines_added: 17, lines_removed: 7 },
+          },
+        },
+      },
+    },
+  };
+  for (const [selected, added, removed] of [
+    ["shop/pricing.py", 2, 0],
+    [path, 17, 7],
+  ] as const) {
+    const html = render("live diff", value, selected);
+    const header = /<header[^>]*>.*?<\/header>/.exec(html)?.[0] ?? "";
+    expect(header).toContain(selected);
+    expect(header).toContain(`text-added">+${String(added)}`);
+    expect(header).toContain(`text-removed">−${String(removed)}`);
+    expect(fact(html, "Lines")).toContain("+19");
+  }
+});
+it("shows only the open diff agent's steps beneath the editor, newest first", () => {
+  const value = through(12);
+  const ownSteps = value.steps["agent-1"] ?? [];
+  const html = render("live diff", {
+    ...value,
+    steps: {
+      ...value.steps,
+      "agent-other": ownSteps.map((step) => ({ ...step, summary: "Other agent" })),
+    },
+  });
+  const rows = /<ol aria-label="Agent A steps, newest first".*?<\/ol>/.exec(html)?.[0];
+  expect(rows).toBeDefined();
+  expect(html.indexOf("Last steps")).toBeGreaterThan(html.indexOf("Loading editor fonts"));
+  expect(rows).not.toContain("Other agent");
+  for (const step of ownSteps) {
+    expect(rows).toContain(step.summary);
+    expect(rows).toContain(`${String(step.duration_ms)} ms`);
+  }
+  expect(rows?.indexOf("Step 2")).toBeLessThan(rows?.indexOf("Step 1") ?? 0);
+});
+it("keeps an empty step history honest and hides it without an open diff", () => {
+  expect(render("live diff", { ...through(12), steps: {} })).toContain("No steps yet.");
+  expect(render("live diff", createInitialState())).not.toContain("Last steps");
 });

@@ -3,7 +3,7 @@ import { Check, CircleCheck, CircleX, Eye, FileDiff, X } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
-import { formatUsd } from "../state";
+import { costText } from "../state";
 import type { AgentCardDetail } from "./selectors";
 import "./agentCard.css";
 import { ageWords } from "./age";
@@ -55,11 +55,6 @@ function testsLine(tests: SuiteResult): { passed: boolean; text: string } {
     case "timeout":
       return { passed: false, text: "Timed out" };
   }
-}
-
-/** A cost under half a cent would read as zero at two places, and zero is not what it is. */
-function costText(cost: number): string {
-  return cost > 0 && cost < 0.005 ? "<US$0.01" : formatUsd(cost);
 }
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
@@ -201,7 +196,7 @@ function RunningBody({ data }: { data: AgentCardDetail }) {
   );
 }
 
-function StepHistory({ data }: { data: AgentCardDetail }) {
+export function StepHistory({ data }: { data: AgentCardDetail }) {
   const { agent, steps, stepTimes, now } = data;
   return (
     <ol
