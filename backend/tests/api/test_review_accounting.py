@@ -54,6 +54,7 @@ async def production(
         agent_model_b=reviewer_profile.id,
         baseten_api_key="test-key",
         cross_review=True,
+        review_model=reviewer_profile.id,
     )
     model = OpenAIClient(
         reviewer_profile,
@@ -95,6 +96,7 @@ async def test_production_fake_scripts_use_the_accounted_helper(tmp_path: Path) 
             tmp_path,
             agent_model_b="fake-b",
             cross_review=True,
+            review_model="fake-b",
             reviewer_fake_b_script=script,
         ),
         lambda p, slot: ScriptedModel(
