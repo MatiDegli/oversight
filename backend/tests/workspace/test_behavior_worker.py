@@ -122,3 +122,54 @@ def test_worker_is_stdlib_only():
             assert all(alias.name.split(".")[0] in sys.stdlib_module_names for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
             assert node.module and node.module.split(".")[0] in sys.stdlib_module_names
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "'a' * 1000 + str(x)",
+        "list(range(40)) + [x]",
+        "{i: i for i in range(40)} | {'tail': x}",
+        "[[[[[[[[x]]]]]]]]",
+        "object()",
+    ],
+)
+async def test_full_fingerprint_or_refusal_prevents_display_collisions(tmp_path, expression):
+    body = "def f(x): return " + expression + "\n"
+    result = await invoke(tmp_path, body, ["((0,), {})", "((1,), {})"])
+    before, after = result["results"]
+    if expression == "object()":
+        assert before["kind"] == after["kind"] == "unrepresentable"
+    else:
+        assert before != after
+        assert before["fingerprint"] != after["fingerprint"]
+
+
+@pytest.mark.anyio
+async def test_exception_full_message_fingerprint_survives_clipping(tmp_path):
+    result = await invoke(
+        tmp_path, "def f(x): raise ValueError('a' * 1000 + str(x))\n", ["((0,), {})", "((1,), {})"]
+    )
+    before, after = result["results"]
+    assert before["message"] == after["message"]
+    assert before != after
+
+
+@pytest.mark.anyio
+async def test_fingerprint_timeout_excludes_uncertain_result(tmp_path):
+    body = "def f(): return list(range(1000000))\n"
+    result = await invoke(tmp_path, body, ["((), {})"], timeout_s=0.001)
+    assert result["results"][0]["kind"] in ("timed_out", "unrepresentable")
+
+
+@pytest.mark.anyio
+async def test_object_state_outside_dictionary_is_not_a_complete_identity(tmp_path):
+    body = (
+        "class Box:\n"
+        "    __slots__ = ('hidden', '__dict__')\n"
+        "    def __init__(self, x): self.hidden = x\n"
+        "def f(x): return Box(x)\n"
+    )
+    result = await invoke(tmp_path, body, ["((0,), {})", "((1,), {})"])
+    assert all(row["kind"] == "unrepresentable" for row in result["results"])

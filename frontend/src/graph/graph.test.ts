@@ -47,6 +47,7 @@ const agent = (slot: "A" | "B"): AgentStatus => ({
   queued_task_id: null,
   base_commit: null,
   examples: null,
+  answering: null,
   agent_id: `agent-${slot}`,
   change_id: `change-${slot}`,
   slot,

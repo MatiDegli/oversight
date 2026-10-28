@@ -4,6 +4,7 @@ from dataclasses import replace
 from oversight.agents import AgentTask, RunEnd
 from oversight.changes import _delivery as delivery
 from oversight.changes._behavior import probe_behavior, unavailable_behavior
+from oversight.changes._behavior_publish import capture_behavior
 from oversight.changes._diff import count_lines_async, file_status, parse_name_status
 from oversight.changes._facts import FactsEvidence, build_change_facts, capture_facts
 from oversight.changes._measured import measure_cone, unavailable_measured
@@ -332,6 +333,9 @@ async def record_probe_facts(
             )
     evidence = replace(
         evidence,
+        behavior_evidence=capture_behavior(rec.behavior_diffs.get(revision))
+        if ctx.behavior_diff
+        else None,
         measured=rec.measured_cones.get(revision),
         impact=proposal.impact.model_copy(deep=True),
         added_tests=probes,

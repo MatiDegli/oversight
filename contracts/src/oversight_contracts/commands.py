@@ -21,6 +21,7 @@ from oversight_contracts.common import (
 from oversight_contracts.common import (
     NonEmptyText as NonEmptyText,
 )
+from oversight_contracts.decisions import DecisionRef
 from oversight_contracts.events import ChangeProposed, ChangeResolved, FileDiff, ServerEvent
 from oversight_contracts.examples import TaskExample
 from oversight_contracts.graph import GraphSnapshot
@@ -44,6 +45,10 @@ class StartAgent(ContractModel):
     """Examples submitted with the task before code is changed."""
     examples_only: bool | None = None
     """True requests one model call without edit/test tools; null or false uses normal execution."""
+    answering: DecisionRef | None = None
+    """The originating inbox entry, copied unchanged into every status for this task; null when
+    unlinked or absent from older recordings. Producer-side validation verifies the reference.
+    """
 
 
 class AgentCreated(ContractModel):

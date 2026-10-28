@@ -36,7 +36,14 @@ from oversight.workspace.junit import Outcome as JUnitOutcome
 from oversight.workspace.junit import TestRun as JUnitRun
 from oversight.workspace.measured_report import CallReport, CallTarget, Invocation
 from oversight.workspace.probes import base_probe_checkout
-from oversight.workspace.runner import ProcessResult, run_process
+from oversight.workspace.runner import ProcessResult, Spawn, run_process
+from oversight.workspace.source import (
+    BOLTONS,
+    SOURCE_GIT_ENV,
+    SourceProfile,
+    select_source,
+    validate_source,
+)
 from oversight.workspace.suite import (
     SuiteInterrupted,
     SuiteRun,
@@ -47,10 +54,12 @@ from oversight.workspace.suite_guard import configure_suite
 from oversight.workspace.tree import TREE_TIMEOUT_S, list_tree
 
 __all__ = [
+    "BOLTONS",
     "MAX_TESTS",
     "MAX_XML_BYTES",
     "OPEN_NOTICE",
     "PER_CALL_TIMEOUT_S",
+    "SOURCE_GIT_ENV",
     "TREE_TIMEOUT_S",
     "Author",
     "BehaviorObservation",
@@ -72,6 +81,8 @@ __all__ = [
     "MergeGuard",
     "ProcessResult",
     "RunProblem",
+    "SourceProfile",
+    "Spawn",
     "StaleFile",
     "SuiteInterrupted",
     "SuiteRun",
@@ -91,7 +102,9 @@ __all__ = [
     "prepare_merge_guard",
     "print_isolation_probe",
     "run_process",
+    "select_source",
     "valid_agent_id",
+    "validate_source",
     "validate_suite_execution",
     "verify_merge_abort",
     "verify_merge_guard",

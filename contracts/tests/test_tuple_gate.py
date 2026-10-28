@@ -10,6 +10,7 @@ from oversight.workspace import run_process
 ROOT = Path(__file__).resolve().parents[2]
 BASE = ROOT / "contracts/baselines/1.3.0.schema.json"
 BASE_1_4 = ROOT / "contracts/baselines/1.4.0.schema.json"
+BASE_1_5 = ROOT / "contracts/baselines/1.5.0.schema.json"
 
 
 def test_baseline_is_the_approved_1_3_bytes() -> None:
@@ -24,8 +25,14 @@ def test_baseline_is_the_approved_1_4_bytes() -> None:
     )
 
 
+def test_baseline_is_the_approved_1_5_bytes() -> None:
+    assert hashlib.sha256(BASE_1_5.read_bytes()).hexdigest() == (
+        "fe12474bd8c2fe213ebde5cda6568da032c4916d81e2256767e64a027f636529"
+    )
+
+
 @pytest.mark.anyio
-@pytest.mark.parametrize("baseline", [BASE, BASE_1_4], ids=["1.3", "1.4"])
+@pytest.mark.parametrize("baseline", [BASE, BASE_1_4, BASE_1_5], ids=["1.3", "1.4", "1.5"])
 @pytest.mark.parametrize(
     "fixture,fields",
     [

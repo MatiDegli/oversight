@@ -629,7 +629,7 @@ the single error format.
   guarded by the agent's recorded base rather than current main. Historical events still load
   without provenance; live resolutions explicitly name their principal and head. Requests and
   TypeScript consumers must migrate together. 1.4.0 keeps `SaveFile.base_hash` a required string.
-  The separately delivered 1.6.0 makes it required and nullable only together with safe creation,
+  The separately delivered 1.7.0 makes it required and nullable only together with safe creation,
   zones and inventory. No alternate schema may reuse either version string. These approved
   changes are exceptions to the ordinary minor-version rule, not a general relaxation.
 - **To propose a change:**

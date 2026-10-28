@@ -225,6 +225,7 @@ class Workspace:
         *,
         pytest_pin: str,
         demo_python: Path | None = None,
+        pytest_targets: tuple[str, ...] = (),
     ) -> None:
         validate_runtime_root(runtime_root)
         if not shutil.rmtree.avoids_symlink_attacks:
@@ -232,6 +233,7 @@ class Workspace:
         self._root = runtime_root
         self._template = template
         self._pytest_pin = pytest_pin
+        self._pytest_targets = pytest_targets
         self._demo_python = demo_python or runtime_root / "demo-venv" / "bin" / "python"
         self._demo_python_given = demo_python is not None
         self._locks = Locks()
@@ -621,7 +623,7 @@ class Workspace:
         isolation: IsolationPolicy = "best_effort",
         measured_targets: tuple[CallTarget, ...] | None = None,
     ) -> SuiteRun:
-        """Run the demo repo's tests in `tree`, under its lock, in the demo venv."""
+        """Run the source's fixed tests in `tree`, under its lock, in the demo venv."""
         async with (
             self.locks(main=True, agent_id=tree.agent_id),
             tree.section(locked=False),
@@ -644,6 +646,7 @@ class Workspace:
                     git_env=self._git_env(tree, None, None),
                     timeout_s=timeout_s,
                     case_ids=case_ids,
+                    pytest_targets=self._pytest_targets,
                     spawn=runner,
                     measured_targets=measured_targets,
                 )

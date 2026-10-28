@@ -1,4 +1,4 @@
-import type { TreeResponse } from "@contracts";
+import type { Slot, TreeResponse } from "@contracts";
 import type { State } from "../state";
 import { recordedRevision } from "./recordedFiles";
 
@@ -83,7 +83,7 @@ export function visibleTree(
 }
 
 export interface FileMark {
-  slot: "A" | "B";
+  slot: Slot;
   mode: "read" | "edit" | "pending";
 }
 

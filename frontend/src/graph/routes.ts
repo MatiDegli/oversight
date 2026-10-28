@@ -146,22 +146,54 @@ export function routeEdges(
     const exit = { x: source.x2 + tuning.laneGap, y: start.y };
     const trunk = { x: lane, y: end.y };
     const entry = { x: lane, y: start.y };
-    if (tops.some((box) => crosses(entry, trunk, box))) continue;
-    const path = orthogonalPath(exit, entry, tops, tuning.laneGap);
-    if (!path) continue;
-    const points = simplify([start, ...path, trunk, end]);
-    const blocked = points.slice(1).some((b, i) => {
-      const a = points[i];
-      if (!a) return true;
-      return tops.some((box) => {
-        if (i === 0 && box.id === from.top) return false;
-        if (i === points.length - 2 && box.id === to.top) return false;
-        return crosses(a, b, box);
-      });
-    });
-    if (!blocked) routes.set(edge.id, encode(points, from, to));
+    const path = tops.some((box) => crosses(entry, trunk, box))
+      ? null
+      : orthogonalPath(exit, entry, tops, tuning.laneGap);
+    const preferred = path && simplify([start, ...path, trunk, end]);
+    if (preferred && clearRoute(preferred, from, to, tops)) {
+      routes.set(edge.id, encode(preferred, from, to));
+      continue;
+    }
+    // Crowded target trunks can spill into the preceding column. Try clear local ingress lanes
+    // and let the visibility search detour before reaching them, rather than demanding a single
+    // vertical span from the source's height. Keep the incumbent route whenever it is clear.
+    const target = byId.get(to.top);
+    if (!target) continue;
+    const candidates = [
+      ...new Set([
+        target.x1 - tuning.laneGap,
+        lane,
+        ...tops.flatMap((box) => [box.x1 - tuning.laneGap, box.x2 + tuning.laneGap]),
+      ]),
+    ].filter((x) => x < to.x1);
+    for (const x of candidates) {
+      const ingress = { x, y: end.y };
+      if (tops.some((box) => box.id !== to.top && crosses(ingress, end, box))) continue;
+      if (tops.some((box) => box.id !== from.top && crosses(start, exit, box))) break;
+      const alternate = orthogonalPath(exit, ingress, tops, tuning.laneGap);
+      if (!alternate) continue;
+      const points = simplify([start, ...alternate, end]);
+      if (!clearRoute(points, from, to, tops)) continue;
+      routes.set(edge.id, encode(points, from, to));
+      break;
+    }
   }
   return routes;
+}
+
+/** Endpoint taps may traverse their own frame, but never any foreign frame. */
+function clearRoute(points: XY[], from: RouteBox, to: RouteBox, tops: RouteBox[]): boolean {
+  return points.slice(1).every((b, i) => {
+    const a = points[i];
+    return (
+      a !== undefined &&
+      tops.every((box) => {
+        if (i === 0 && box.id === from.top) return true;
+        if (i === points.length - 2 && box.id === to.top) return true;
+        return !crosses(a, b, box);
+      })
+    );
+  });
 }
 
 /** The theme tokens the router and its adapter read. */
@@ -204,6 +236,16 @@ function writeRoutes(cy: Core, edges: EdgeCollection, routes: ReadonlyMap<string
       writeData(edge, { route });
     }
   });
+  const container = cy.container();
+  if (container && typeof CustomEvent !== "undefined")
+    container.dispatchEvent(
+      new CustomEvent("routingomissions", { detail: routingOmissions(edges) }),
+    );
+}
+
+/** Every call still marked unroutable is disclosed, including calls within an open module. */
+export function routingOmissions(edges: EdgeCollection): number {
+  return edges.filter(".calls.unroutable").length;
 }
 
 /** A module drag is a rigid translation: reuse measured boxes, never remeasure SVG labels. */

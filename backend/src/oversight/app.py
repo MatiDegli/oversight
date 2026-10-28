@@ -77,7 +77,9 @@ from oversight.workspace import (
     WorkspaceError,
     configure_suite,
     list_tree,
+    select_source,
     valid_agent_id,
+    validate_source,
 )
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import (
@@ -232,11 +234,13 @@ class LiveRun:
                 settings.baseten_input_usd_per_m,
             )
         self.layout = read_layout(settings.layout)
+        self._source = select_source(settings.workspace_source)
         self.workspace = Workspace(
             settings.runtime_dir,
-            TEMPLATE,
+            self._source.checkout(settings.runtime_dir) if self._source else TEMPLATE,
             pytest_pin=pytest_pin(),
             demo_python=settings.demo_python,
+            pytest_targets=self._source.pytest_targets if self._source else (),
         )
         configure_suite(self.workspace, harness_pack=settings.harness_pack)
         self.run_id = new_run_id(settings.runtime_dir, datetime.now(UTC))
@@ -300,6 +304,8 @@ class LiveRun:
 
     async def startup(self) -> None:
         settings = self._settings
+        if self._source is not None:
+            await validate_source(self._source, settings.runtime_dir)
         await self.workspace.acquire_runtime()  # a second server fails here with WorkspaceBusy
         capability = await self.workspace.check_isolation()
         if not capability.available:
@@ -326,7 +332,7 @@ class LiveRun:
                 run_id=self.run_id,
                 contract_version=CONTRACT_VERSION,
                 prompt_version=prompt_version(settings.harness_pack),
-                workspace=TEMPLATE.name,
+                workspace=self._source.provenance if self._source else TEMPLATE.name,
                 base_commit=base,
                 models=list({profile.id: profile for profile in profiles}.values()),
                 slots=[

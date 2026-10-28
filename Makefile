@@ -12,7 +12,14 @@ PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install frontend-deps setup dev check check-ci check-fast check-python lint-python check-frontend \
 	lint-frontend contracts check-contracts check-contract-tuples check-secrets demo-repo-check replay shots smoke layout \
-	test-browser demo demo-setup-check demo-check e2e record record-level2 manifest notices check-notices audit
+	test-browser demo demo-setup-check demo-check e2e record record-level2 manifest notices check-notices audit \
+	workspace-fetch-boltons workspace-graph-boltons
+
+workspace-fetch-boltons: ## explicitly fetch the pinned Boltons checkout (network); never run by check
+	$(UV) python tools/workspace_source.py fetch-boltons
+
+workspace-graph-boltons: ## export the pinned Boltons bare graph snapshot offline; no layout or server
+	$(UV) python tools/workspace_source.py graph-boltons
 
 help: ## list the targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -205,7 +212,7 @@ contracts: ## regenerate contracts/generated: JSON Schema and TypeScript from th
 	$(UV) python contracts/generate.py
 
 check-contract-tuples: frontend-deps
-	node contracts/check_tuples.cjs --base contracts/baselines/1.4.0.schema.json --schema contracts/generated/oversight.schema.json --types contracts/generated/contracts.ts --node-modules frontend/node_modules
+	node contracts/check_tuples.cjs --base contracts/baselines/1.5.0.schema.json --schema contracts/generated/oversight.schema.json --types contracts/generated/contracts.ts --node-modules frontend/node_modules
 
 check-contracts: check-contract-tuples
 	$(UV) python contracts/generate.py --check

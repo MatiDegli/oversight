@@ -95,6 +95,7 @@ const agent: AgentStatus = {
   queued_task_id: null,
   base_commit: null,
   examples: null,
+  answering: null,
   agent_id: "agent-1",
   change_id: "change-1",
   slot: "A",

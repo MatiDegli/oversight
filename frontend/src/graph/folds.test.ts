@@ -229,10 +229,10 @@ it("aggregates only cross-file calls by directed module pair with either end fol
       allOpen,
       new Set([...modules].filter((id) => id !== "shop.pricing")),
     );
-    for (const id of modules)
-      if (id !== "shop.pricing")
-        expect(after.elements.find((e) => e.data.id === id)?.position).toEqual(
-          before.elements.find((e) => e.data.id === id)?.position,
-        );
+    // Opening a module now gives its following siblings the expanded height it needs.
+    expect(after.elements.find((e) => e.data.id === "shop.pricing")?.classes).not.toContain(
+      "folded",
+    );
+    expect(foldElements(full, allOpen, modules)).toEqual(before);
   }
 });

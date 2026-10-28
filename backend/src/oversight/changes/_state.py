@@ -124,7 +124,7 @@ class ChangeRecord:
     summary_usage: dict[int, RoleUsage] = field(default_factory=dict[int, RoleUsage])
     suite_runs: dict[int, SuiteRun] = field(default_factory=dict[int, SuiteRun])
     behavior_diffs: dict[int, BehaviorDiff] = field(default_factory=dict[int, BehaviorDiff])
-    """Private per-revision computation; deliberately absent from event facts."""
+    """Private per-revision computation; public facts capture an independent explicit projection."""
     measured_cones: dict[int, MeasuredEvidence] = field(
         default_factory=lambda: dict[int, "MeasuredEvidence"]()
     )

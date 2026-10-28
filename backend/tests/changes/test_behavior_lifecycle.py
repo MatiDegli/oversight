@@ -10,6 +10,7 @@ from changes_helpers import EDIT, TEMPLATE, Harness, start_harness
 from decision_helpers import observed_target
 
 from oversight.changes import BehaviorDiff
+from oversight.changes._behavior import FunctionBehavior
 from oversight_contracts.review import ChangeFacts
 
 pytestmark = pytest.mark.anyio
@@ -62,9 +63,10 @@ async def test_base_and_proposed_workers_have_distinct_pids(tmp_path, monkeypatc
             if r.node_id == "shop.mod:value"
         )
         assert result.compared == result.differing == 1
-        assert [side for side, _ in workers] == ["base", "proposed"] * 3
+        assert [side for side, _ in workers] == ["base", "proposed"] * 2
         pids = [pid for _, pid in workers]
         assert all(pid != os.getpid() for pid in pids)
+        assert len(set(pids)) == len(pids)
         assert all(base != proposed for base, proposed in zip(pids[::2], pids[1::2], strict=True))
     finally:
         await h.close()
@@ -83,6 +85,10 @@ async def test_revisions_keep_independent_results(h: Harness):
     assert rec.behavior_diffs[1] is first
     assert first.revision == 1 and second.revision == 2
     assert second.functions[0].compared == 1 and second.functions[0].differing == 0
+    before, after = h.payloads(ChangeFacts)
+    assert before.behavior_diff is not None and after.behavior_diff is not None
+    assert before.behavior_diff[0].differing_count == 1
+    assert after.behavior_diff[0].differing_count == 0
 
 
 async def test_removed_async_generator_and_import_side_reasons(h: Harness):
@@ -116,6 +122,10 @@ async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(h: Har
     h.manager._ctx.behavior_diff = True
     await h.open(1)
     rec = h.manager._agents["agent-1"]
+    rec.behavior_diffs[0] = BehaviorDiff(
+        revision=0,
+        functions=(FunctionBehavior("STALE_BEHAVIOR_SENTINEL", compared=1, differing=1),),
+    )
     rec.task = replace(rec.task, limits=rec.task.limits.model_copy(update={"test_timeout_s": 1}))
     pid_file = h.workspace.tmp_dir / "worker-pid"
     assert await h.edit(
@@ -165,7 +175,33 @@ async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(h: Har
     assert not list(h.workspace.tmp_dir.glob("base-probe-*"))
     assert not list(h.workspace.tmp_dir.glob("behavior-*"))
     assert "base-probe-" not in (await h.main_git("worktree", "list", "--porcelain")).stdout
-    assert h.payloads(ChangeFacts)[-1].revision == 1
+    assert_unavailable_candidate_facts(h, rec, pid_file)
+
+
+def assert_unavailable_candidate_facts(h: Harness, rec, pid_file):
+    [facts] = h.payloads(ChangeFacts)
+    execution = next(e for e in rec.executions.values() if e.phase == "proposal")
+    assert (facts.change_id, facts.revision, facts.base_commit, facts.head_commit) == (
+        rec.change_id,
+        1,
+        rec.base_commit,
+        rec.head_commit,
+    )
+    assert facts.main_commit == rec.base_commit
+    assert facts.candidate_tree == execution.tested_tree
+    assert facts.head_commit == execution.tested_commit
+    assert facts.behavior_diff is not None
+    by_id = {item.node_id: item for item in facts.behavior_diff}
+    assert set(by_id) == {item.node_id for item in rec.behavior_diffs[1].functions}
+    public = by_id["shop.mod:value"]
+    # The proposed side blocked before completing its first observation in this fixture.
+    # Neither cancellation nor deadline exhaustion has a complete differing comparison.
+    assert public.compared_count == public.differing_count == 0
+    assert public.rows == [] and public.not_probed == "probe unavailable"
+    assert all(item.differing_count == 0 for item in facts.behavior_diff)
+    serialized = facts.model_dump_json()
+    for private in ("STALE_BEHAVIOR_SENTINEL", "interrupted", "budget exhausted", str(pid_file)):
+        assert private not in serialized
 
 
 async def test_off_events_are_byte_identical_with_no_worker(tmp_path, monkeypatch):
@@ -175,7 +211,7 @@ async def test_off_events_are_byte_identical_with_no_worker(tmp_path, monkeypatc
     monkeypatch.setattr("oversight.changes._proposal.probe_behavior", probe)
     monkeypatch.setattr("oversight.workspace.core.run_behavior_worker", worker)
     logs = []
-    for number in range(2):
+    for number in range(3):
         path = tmp_path / str(number)
         path.mkdir()
         harness = await start_harness(path)
@@ -194,12 +230,14 @@ async def test_off_events_are_byte_identical_with_no_worker(tmp_path, monkeypatc
             monkeypatch.setattr(harness.workspace, "run_tests", fixed_duration)
             await harness.run_agent(1, EDIT)
             logs.append([event.envelope for event in harness.log])
+            [facts] = harness.payloads(ChangeFacts)
+            assert facts.behavior_diff == ([] if number == 0 else None)
             retained = harness.manager._agents["agent-1"].behavior_diffs
             assert retained == ({1: measured} if number == 0 else {})
             assert probe.await_count == 1
         finally:
             await harness.close()
-    assert logs[0] == logs[1]
+    assert logs[1] == logs[2]
     probe.assert_awaited_once()
     worker.assert_not_awaited()
 

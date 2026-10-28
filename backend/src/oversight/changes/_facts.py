@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import PurePosixPath
 
+from oversight.changes._behavior_publish import BehaviorEvidence, project_behavior
 from oversight.changes._measured import MeasuredEvidence, project_measured, validate_measured
 from oversight.changes._probes import added_cases, comparison
 from oversight.changes._shortcut_detector import (
@@ -130,6 +131,7 @@ class FactsEvidence:
     added_tests: tuple[AddedTestProbe, ...] = ()
     integrity_status: IntegrityStatus | None = None
     summary_evidence: SummaryEvidence = field(default_factory=SummaryEvidence)
+    behavior_evidence: BehaviorEvidence | None = None
     measured: MeasuredEvidence | None = None
     impact: ImpactCone | None = None
 
@@ -176,6 +178,8 @@ def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
         evidence.summary_evidence, evidence.executions, revision=facts.revision
     ):
         raise ValueError("facts summary differs from captured evidence")
+    if facts.behavior_diff != project_behavior(evidence.behavior_evidence, revision=facts.revision):
+        raise ValueError("facts behavior differs from captured evidence")
     validate_measured(facts, evidence.measured, evidence.executions, evidence.runs, evidence.impact)
     if facts.integrity != list(evidence.integrity):
         raise ValueError("facts integrity differs from captured source observations")
@@ -385,6 +389,9 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
         **evidence.target.model_dump(),
         summary=build_summary(
             evidence.summary_evidence, evidence.executions, revision=evidence.target.revision
+        ),
+        behavior_diff=project_behavior(
+            evidence.behavior_evidence, revision=evidence.target.revision
         ),
         declared=evidence.declared,
         edited_paths=list(evidence.edited_paths),
