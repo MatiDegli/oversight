@@ -1,13 +1,5 @@
-import type { ChangeResolved, Slot, SuiteResult } from "@contracts";
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  FileCode,
-  GitMerge,
-  MessageSquare,
-  X,
-} from "lucide-react";
+import type { ChangeResolved, Slot } from "@contracts";
+import { Check, ChevronDown, ChevronRight, GitMerge, MessageSquare, X } from "lucide-react";
 import { useState } from "react";
 
 import { EditorDiff, fileKey, ReviewEditor } from "../editor";
@@ -17,7 +9,7 @@ import type { ChangeState, State } from "../state";
 import { CrossReviewNote } from "./CrossReviewNote";
 import { decisionView } from "./decisions";
 import type { DecisionAction, DecisionAttempt, DecisionView } from "./decisions";
-import { impactSummary } from "./ImpactCone";
+import { ChangeFactsRow } from "./ChangeFactsRow";
 import { factsForRevision, ReviewFacts } from "./ReviewFacts";
 
 const statusWords: Record<ChangeState["status"], string> = {
@@ -36,9 +28,6 @@ const agentLook: Record<Slot, { swatch: string; pill: string }> = {
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
-const chip =
-  "inline-flex h-(--chip-height) items-center gap-1.5 rounded-control border border-page-border bg-page-raised px-2.5 text-(length:--data-size)";
-
 export interface ReviewPanelProps {
   state: State;
   files?: FileAccess;
@@ -50,36 +39,6 @@ export interface ReviewPanelProps {
   /** What a replay plays, such as "hand-written demo fixture"; absent in a live run. */
   replayOf?: string;
   onClose: () => void;
-}
-
-function testsLine(tests: SuiteResult): { passed: boolean; text: string } {
-  switch (tests.outcome) {
-    case "passed":
-      return { passed: true, text: `${String(tests.passed)} passed` };
-    case "failed":
-      return {
-        passed: false,
-        text: `${String(tests.failed)} failed, ${String(tests.passed)} passed`,
-      };
-    case "error":
-      return { passed: false, text: "Tests could not run" };
-    case "timeout":
-      return { passed: false, text: "Tests timed out" };
-  }
-}
-
-function TestsChip({ tests }: { tests: SuiteResult }) {
-  const { passed, text } = testsLine(tests);
-  return (
-    <li className={chip}>
-      {passed ? (
-        <Check aria-hidden="true" className="size-4 text-passed" />
-      ) : (
-        <X aria-hidden="true" className="size-4 text-failed-text" />
-      )}
-      {text}
-    </li>
-  );
 }
 
 /** The recorded or returned decision, in words, with an icon so color is never alone. */
@@ -366,24 +325,10 @@ export function ReviewPanel({
             <X aria-hidden="true" className="size-4" />
           </button>
         </div>
-        {proposal && (
-          <ul aria-label="Facts" className="flex flex-wrap items-center gap-2">
-            <li className={chip}>
-              <FileCode aria-hidden="true" className="size-4 text-muted" />
-              <span className="font-mono">{proposal.files.length}</span>
-              {proposal.files.length === 1 ? "file" : "files"}
-            </li>
-            <li className={`${chip} font-mono`}>
-              <span className="text-added">+{proposal.lines_added}</span>
-              <span className="text-removed">−{proposal.lines_removed}</span>
-            </li>
-            <TestsChip tests={proposal.tests} />
-          </ul>
-        )}
-        {proposal && (
+        {change && <ChangeFactsRow state={state} changeId={changeId} />}
+        {proposal && !hasFacts && (
           <p className="text-(length:--data-size) text-muted">
-            {impactSummary(proposal.impact)}
-            {!hasFacts && <ReviewFacts state={state} proposal={proposal} />}
+            <ReviewFacts state={state} proposal={proposal} />
           </p>
         )}
       </header>
