@@ -635,3 +635,14 @@ No paid probe was run for this change. Length, empty or invalid output stays dia
 without a recovery call or a silent budget reduction. `run.started.limits.max_output_tokens`
 continues to describe the author's 4,096-token budget; the review budget has no event field in the
 frozen 1.4.0 contracts.
+
+## 2026-10-27 — Union merges for the decision log
+
+Use Git's built-in union merge driver for `DECISIONS.md`, declared as
+`DECISIONS.md merge=union` in `.gitattributes`. Parallel fronts append decisions at the same
+end of the file; union keeps both entries without the repeated merge conflicts. Offline tooling
+tests exercise both `git merge` and `git merge-tree --write-tree` in temporary repositories.
+
+Union also keeps both sides when two branches edit the same existing line, reporting no
+conflict even when the decisions disagree. Reviewers must check edits to old entries for
+duplicates or contradictions; a clean merge does not establish agreement.
