@@ -305,6 +305,7 @@ async def test_proven_veto_exits_immediately(h: Harness, clock, ready, veto):
 
 
 async def test_permanent_configuration_and_closed_admission_are_visible(h: Harness, clock, ready):
+    h.manager._ctx.ports.rules_admission = _assessment.closed_admission
     available(h)
     await select(h, "merge_when_safe", 0)
     full_evidence(h, ready)
