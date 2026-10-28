@@ -41,7 +41,7 @@ export interface GraphProbe {
     visible: boolean;
     points: { x: number; y: number }[];
   }[];
-  cost(): { syncs: number; routes: number; dragMs: number[] };
+  cost(): { dragMs: number[] };
   draggable(): string[];
   zoom(): number;
   pan(): { x: number; y: number };
@@ -89,8 +89,6 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
         .filter((n) => n.grabbable())
         .map((n) => n.id()),
     cost: () => ({
-      syncs: Number(cy.scratch("syncCount") ?? 0),
-      routes: Number(cy.scratch("routeCount") ?? 0),
       dragMs: [...((cy.scratch("dragCosts") as number[] | undefined) ?? [])],
     }),
     routes: () =>

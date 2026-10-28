@@ -148,6 +148,21 @@ function rerender(props: GraphViewProps) {
   mocks.effects.slice(0, -1).forEach((effect) => effect());
 }
 
+it("synchronizes each store update immediately, including transport-only updates", async () => {
+  setLabel("Initial");
+  const { settle } = mount();
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Graph was not created");
+  setLabel("First");
+  expect(cy.getElementById("billing:fee").data("label")).toBe("First");
+  setLabel("Second");
+  expect(cy.getElementById("billing:fee").data("label")).toBe("Second");
+  const batch = vi.spyOn(cy, "batch");
+  stateStore.setState(({ state }) => ({ state: { ...state, lastSeq: state.lastSeq + 1 } }));
+  expect(batch).toHaveBeenCalled();
+});
+
 it.each(["resolved", "rejected"] as const)(
   "creates exactly one graph after the font load is %s, syncs current state and disposes synchronously",
   async (result) => {

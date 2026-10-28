@@ -219,7 +219,6 @@ export function dragRoutes(cy: Core, moduleId: string, dx: number, dy: number, t
     }
   const routes = routeEdges(context.boxes, context.calls, tuningFrom(theme));
   writeRoutes(cy, context.edges, routes);
-  cy.scratch("routeCount", Number(cy.scratch("routeCount") ?? 0) + 1);
 }
 
 /**
@@ -227,7 +226,6 @@ export function dragRoutes(cy: Core, moduleId: string, dx: number, dy: number, t
  * it. Run after the nodes are placed and again whenever one moves; it moves nothing itself.
  */
 export function applyRoutes(cy: Core, theme: RouteTheme): void {
-  cy.scratch("routeCount", Number(cy.scratch("routeCount") ?? 0) + 1);
   const px = Number.parseFloat;
   const boxes: RouteBox[] = cy.nodes().map((node) => {
     const box = node.boundingBox({ includeLabels: false, includeOverlays: false });

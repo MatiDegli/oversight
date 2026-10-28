@@ -38,7 +38,7 @@ export function reduceFolds(state: FoldState, action: FoldAction): FoldState {
   return { ...state, expanded, seen };
 }
 
-/** Observe actual changed contents, never read focus, step events, or the review mode. */
+/** Modules open on fresh read/edit focus; classes reopen only for changed contents. */
 export function observeEdits(folds: FoldState, state: State): FoldState {
   const nodes = new Map(state.graph?.nodes.map((node) => [node.id, node]));
   const pending = selectPendingChanges(state);

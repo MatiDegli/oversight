@@ -68,45 +68,6 @@ export const structureTest = {
       },
     });
   },
-  burst(relevant: boolean) {
-    for (let i = 0; i < 40; i++) {
-      const state = stateStore.getState().state;
-      stateStore.setState({
-        state: {
-          ...state,
-          lastSeq: i + 1,
-          ...(relevant
-            ? {
-                focus: {
-                  A: {
-                    agent_id: "A",
-                    node_ids: ["shop.pricing:compute_price"],
-                    mode: "read",
-                    ranges: [],
-                  },
-                },
-              }
-            : {
-                usage: {
-                  agent_id: "A",
-                  input_tokens: i,
-                  output_tokens: i,
-                  cost_usd: i / 100,
-                  spent_usd: i / 100,
-                  budget_usd: 150,
-                  model: "fake",
-                  cached_tokens: 0,
-                  brake: "ok",
-                  role: "agent",
-                  change_id: null,
-                  plan_id: null,
-                },
-              }),
-        },
-      });
-    }
-    return stateStore.getState().state.lastSeq;
-  },
 };
 declare global {
   interface Window {

@@ -162,6 +162,12 @@ it(
   async () =>
     withPage(async (page) => {
       const r = await read(page);
+      await browserExpect(
+        page.getByRole("button", { name: "Modules", exact: true }),
+      ).toHaveAttribute("aria-pressed", "true");
+      await browserExpect(
+        page.getByRole("button", { name: "Functions", exact: true }),
+      ).toHaveAttribute("aria-pressed", "false");
       expect(r.leaves).toHaveLength(6);
       expect(r.modules).toHaveLength(6);
       expect(r.zoom).toBe(1);
@@ -278,27 +284,6 @@ it(
         `Graph drag: ${String(during.cost.dragMs.length)} frames, max ${Math.max(...during.cost.dragMs).toFixed(2)} ms`,
       );
       await page.mouse.up();
-    }),
-  30_000,
-);
-it(
-  "skips usage bursts and coalesces focus without delaying reducer state",
-  async () =>
-    withPage(async (page) => {
-      const before = await read(page);
-      expect(await page.evaluate(() => window.structureTest.burst(false))).toBe(40);
-      await frame(page);
-      expect((await read(page)).cost).toEqual(before.cost);
-      expect(await page.evaluate(() => window.structureTest.burst(true))).toBe(40);
-      await frame(page);
-      const after = await read(page);
-      expect(after.cost.syncs - before.cost.syncs).toBe(1);
-      expect(after.leaves.length).toBeGreaterThan(before.leaves.length);
-      await page.evaluate(() => {
-        window.structureTest.focus(["shop.pricing:add_tax"]);
-      });
-      await frame(page);
-      expect((await read(page)).cost.routes).toBe(after.cost.routes);
     }),
   30_000,
 );

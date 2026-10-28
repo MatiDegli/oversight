@@ -39,7 +39,6 @@ export function foldController(cy: Core) {
       return true;
     },
     render(state: State, full: GraphElement[]): boolean {
-      cy.scratch("syncCount", Number(cy.scratch("syncCount") ?? 0) + 1);
       const run = state.run?.run_id;
       if (run !== runId) {
         folds = initialFolds();

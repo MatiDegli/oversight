@@ -28,18 +28,6 @@ export function updateGraph(
   theme: GeometryTheme = getActiveTheme(),
 ): void {
   const initial = cy.nodes().empty();
-  const geometryKey = JSON.stringify(
-    elements.map((e) => [
-      e.data.id,
-      e.data.parent,
-      e.data.source,
-      e.data.target,
-      e.data.w,
-      e.data.h,
-    ]),
-  );
-  const geometryChanged = cy.scratch("geometryKey") !== geometryKey;
-  cy.scratch("geometryKey", geometryKey);
   const byId = new Map(elements.map((element) => [element.data.id, element]));
   const remembered = leafPositions.get(cy) ?? new Map<string, Position>();
   leafPositions.set(cy, remembered);
@@ -97,12 +85,9 @@ export function updateGraph(
       ) {
         element.move({ source: definition.data.source, target: definition.data.target });
       }
-      for (const key of OPTIONAL_DATA)
-        if (!(key in definition.data) && element.data(key) !== undefined) element.removeData(key);
-      for (const [key, value] of Object.entries(definition.data)) {
-        if (JSON.stringify(element.data(key)) !== JSON.stringify(value)) element.data(key, value);
-      }
-      if (element.classes().join(" ") !== definition.classes) element.classes(definition.classes);
+      for (const key of OPTIONAL_DATA) if (!(key in definition.data)) element.removeData(key);
+      element.data(definition.data);
+      element.classes(definition.classes);
     }
   });
   if (initial && cy.nodes().nonempty()) {
@@ -116,7 +101,7 @@ export function updateGraph(
       cy.layout(fallback).run();
     }
   }
-  if (geometryChanged) settle(cy, theme);
+  settle(cy, theme);
   // Header bands change frame bounds: choose the start camera only after they are final.
   if (initial && elements.some((element) => element.position !== undefined)) startCamera(cy);
 }

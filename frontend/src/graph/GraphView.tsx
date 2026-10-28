@@ -104,7 +104,6 @@ export function GraphView({
   const boxes = useRef(createBoxSource());
   const graph = useRef<Core | undefined>(undefined);
   const latest = useRef<GraphViewProps>({});
-  const syncNow = useRef<(() => void) | undefined>(undefined);
   const resync = useRef<(() => void) | undefined>(undefined);
   const framedFor = useRef(panelOpen);
   const framedKey = useRef(frameKey);
@@ -157,7 +156,6 @@ export function GraphView({
     framedFor.current = panelOpen;
     framedKey.current = frameKey;
     if (graph.current) {
-      syncNow.current?.();
       if (!wasOpen && panelOpen)
         watchCamera.current = { zoom: graph.current.zoom(), pan: { ...graph.current.pan() } };
       const { frameIds: framed, selectedId: selected } = latest.current;
@@ -337,20 +335,7 @@ export function GraphView({
           }
         }
       };
-      let syncFrame: number | undefined;
-      const scheduleSync = () => {
-        if (syncFrame !== undefined) return;
-        syncFrame = requestAnimationFrame(() => {
-          syncFrame = undefined;
-          sync();
-        });
-      };
-      resync.current = scheduleSync;
-      syncNow.current = () => {
-        if (syncFrame !== undefined) cancelAnimationFrame(syncFrame);
-        syncFrame = undefined;
-        sync();
-      };
+      resync.current = sync;
       cy.on("tap", "node", (event) => {
         const node = event.target as NodeSingular;
         const id = node.id();
@@ -394,18 +379,7 @@ export function GraphView({
       }
       const unexpose = exposeProbe(host, cy);
       source.attach(cy);
-      const unsubscribe = stateStore.subscribe((next, previous) => {
-        const a = next.state;
-        const b = previous.state;
-        if (
-          a.graph !== b.graph ||
-          a.agents !== b.agents ||
-          a.focus !== b.focus ||
-          a.changes !== b.changes ||
-          a.run !== b.run
-        )
-          scheduleSync();
-      });
+      const unsubscribe = stateStore.subscribe(sync);
       sync();
       if (latest.current.panelOpen && startFrame === undefined) frameInitialPanel();
       const resize = new ResizeObserver(() => {
@@ -432,12 +406,10 @@ export function GraphView({
         // Card observation must leave the initial overlay-aware camera scheduled until unmount.
         if (startFrame !== undefined) cancelAnimationFrame(startFrame);
         resync.current = undefined;
-        syncNow.current = undefined;
         observeCard.current = undefined;
         graph.current = undefined;
         reportViewport.current = undefined;
         if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame);
-        if (syncFrame !== undefined) cancelAnimationFrame(syncFrame);
         if (dragFrame !== undefined) cancelAnimationFrame(dragFrame);
         cy.destroy();
       };
