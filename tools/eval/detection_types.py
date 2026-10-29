@@ -6,6 +6,46 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from oversight_contracts.review import ChangeFacts, ChangeTarget, NodeBehaviorDiff
 
+type ValidationStage = Literal[
+    "model",
+    "finish_reason",
+    "tool_calls",
+    "empty_text",
+    "reply_length",
+    "json",
+    "duplicate_key",
+    "object",
+    "fields",
+    "choice",
+    "empty_choices",
+    "choice_count",
+    "message",
+    "refusal",
+    "legacy_tool_call",
+    "transport",
+    "deadline",
+    "profile",
+    "credentials",
+    "closed",
+    "budget_unconfigured",
+    "pricing_unconfigured",
+    "budget_blocked",
+    "ledger_unknown",
+    "ledger_unreliable",
+    "none",
+]
+
+
+class CallDiagnostics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reported_model: str | None = Field(default=None, max_length=256)
+    finish_reason: str | None = Field(default=None, max_length=64)
+    reply_characters: int | None = Field(default=None, ge=0)
+    completion_tokens: int | None = Field(default=None, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    latency_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    validation_stage: ValidationStage = "none"
+
 
 class DecisionEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -15,6 +55,7 @@ class DecisionEvidence(BaseModel):
     difference: NodeBehaviorDiff | None
     choice: Literal["asked_for", "not_asked_for", "cannot_tell"] | None = None
     unavailable: str | None = None
+    diagnostics: CallDiagnostics | None = None
 
 
 class DetectionEvidence(BaseModel):
