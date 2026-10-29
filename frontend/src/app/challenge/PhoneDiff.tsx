@@ -1,4 +1,4 @@
-import { CornerDownRight, ChevronRight } from "lucide-react";
+import { CornerDownRight, ChevronRight, ChevronDown } from "lucide-react";
 import "./phoneDiff.css";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -10,18 +10,28 @@ export function Disclosure({
   label,
   children,
   count,
+  variant,
+  preview,
 }: {
   label: string;
   children: ReactNode;
   count?: ReactNode;
+  variant?: "decision";
+  preview?: string;
 }) {
   return (
-    <details className="pp-disclosure">
+    <details className={`pp-disclosure${variant === "decision" ? " pp-decision-row" : ""}`}>
       <summary>
-        <span>{label}</span>
+        {variant === "decision" ? (
+          <span className="pp-row-text">
+            <span className="pp-row-label">{label}</span> · {preview}
+          </span>
+        ) : (
+          <span>{label}</span>
+        )}
         <span className="pp-disclosure-end">
           {count}
-          <ChevronRight size={14} />
+          {variant === "decision" ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </span>
       </summary>
       {children}

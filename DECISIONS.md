@@ -1618,3 +1618,12 @@ returned event when an eligible successor exists within the horizon, so no event
 If the first eligible envelope cannot fit intact, the response is the existing typed `too_large`
 413; payloads are never truncated. Unexpected disk or validation failures use the existing
 `internal` error path. No index or schema migration is introduced.
+
+## 2026-10-29 — Phone decision disclosures read as list rows
+
+The maintainer wants full-width touch rows that read as a list, rather than empty buttons
+competing with Approve and Reject. Recorded task and Possibly affected share divider hairlines,
+verbatim task and shared graph-count previews, and down chevrons; their content expands in place.
+The diff's disclosures keep their existing boxes. Consolidating the rows and tightening the
+summary-to-list gap keeps the collapsed last row above the dock on first view at both phone sizes,
+without a guessed dock-height padding. Desktop composition and typography remain unchanged.

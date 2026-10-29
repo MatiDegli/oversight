@@ -676,7 +676,10 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   aria-expanded. The changed file, Tests added and Called helper start hidden behind it.
 - Code uses 15px Mono at 21px leading, lossless soft wraps, hanging indents and continuation
   gutter marks without repeated numbers. Prefer Python boundaries; never orphan closing punctuation.
-- Recorded task is an independent disclosure with the full verbatim recorded text.
+- Recorded task and Possibly affected form one list: no box, hairlines in divider, 44px touch rows.
+  Each has a one-line ellipsized preview in muted text and a down chevron that turns when open.
+  They expand in place; Recorded task retains the full verbatim text inside.
+- Keep the collapsed list above the dock on first view at 390×844 and 430×932; only evidence scrolls.
 - Approve and Reject share neutral, equal 48px containers; neither requires opening the diff.
   Approve has no keyboard shortcut. Next and Show findings appear only after an answer.
 - Short titles are validated manifest curator fields. Prose numerals use Next; Mono is for code,

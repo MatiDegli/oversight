@@ -1,6 +1,8 @@
 import type { Practice } from "./manifest";
 
 export type PracticeCase = Practice["cases"][number];
+export const countAt = (entry: PracticeCase, distance: number) =>
+  entry.proposal.impact.entries.filter((node) => node.distance === distance).length;
 export type SourceRow = {
   kind: "context" | "added" | "removed" | "fold";
   line: number;

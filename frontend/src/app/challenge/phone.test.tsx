@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { PhonePractice } from "./PhonePractice";
+import { PhoneDiff } from "./PhoneDiff";
 import { AgentLine, PhoneGraph } from "./PhoneGraph";
 import { freshAttempt } from "./PracticePanel";
 import { manifest, validateManifest } from "./manifest";
 import { recording } from "./recording.fixture";
-import { calledHelper, diffRows, wrapSource } from "./phoneEvidence";
+import { calledHelper, countAt, diffRows, wrapSource } from "./phoneEvidence";
 const practice = validateManifest(manifest, recording);
 const actions = {
   onStart: vi.fn(),
@@ -110,6 +111,50 @@ it("derives cone folds and the new exact callee from the recording", () => {
   if (!first) throw new Error("Missing case");
   expect(calledHelper(practice, first)?.name).toBe("_check_quantity");
   expect(practice.cases[0]?.proposal.impact.entries).toEqual([]);
+});
+it.each([1, 2])("derives decision previews and graph counts with only distance %i", (distance) => {
+  const changed = structuredClone(practice);
+  const entry = changed.cases[1];
+  if (!entry) throw new Error("Missing case");
+  entry.proposal.task = "Read this verbatim task, including its final words.";
+  entry.proposal.impact.entries = entry.proposal.impact.entries
+    .filter((node) => node.distance === distance)
+    .slice(0, 2);
+  const count = countAt(entry, distance);
+  const preview = `${String(count)} ${distance === 1 ? "direct callers" : "at distance 2"}`;
+  const html = renderToStaticMarkup(
+    <PhonePractice
+      {...actions}
+      practice={changed}
+      attempt={{ ...freshAttempt(), started: true, index: 1 }}
+    />,
+  );
+  expect(html).toContain(`Recorded task</span> · ${entry.proposal.task}`);
+  expect(html).toContain(`Possibly affected</span> · ${preview}`);
+  const graph = renderToStaticMarkup(
+    <PhoneGraph practice={changed} entry={entry} merged={false} />,
+  );
+  expect(graph).toContain(preview);
+  expect(html).not.toMatch(/Possibly affected<\/span> · (?:0 |[^<]*, 0 )/);
+});
+it("keeps the zero-cone row absent and the diff disclosures boxed with right chevrons", () => {
+  const entry = practice.cases[0];
+  if (!entry) throw new Error("Missing case");
+  const html = renderToStaticMarkup(
+    <PhonePractice
+      {...actions}
+      practice={practice}
+      attempt={{ ...freshAttempt(), started: true }}
+    />,
+  );
+  expect(html).not.toContain("Possibly affected</span>");
+  expect(html).toContain("pp-decision-row");
+  expect(html).toContain("lucide-chevron-down");
+  expect(html).not.toContain("lucide-chevron-right");
+  const diff = renderToStaticMarkup(<PhoneDiff practice={practice} entry={entry} />);
+  expect(diff).toContain('class="pp-disclosure"');
+  expect(diff).toContain("lucide-chevron-right");
+  expect(diff).not.toContain("pp-decision-row");
 });
 it("reveals both solid merged pieces only with recorded decisions", () => {
   const html = renderToStaticMarkup(
