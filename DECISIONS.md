@@ -1292,16 +1292,6 @@ raised is not used by the UI and gives D 4.42:1 / E 4.44:1 with the approved val
 The rendered card/rail/review regression from 0612105 remains. Exact-value tests pin the
 three newly approved text tokens and guard the restored translucent tints and original node fills.
 
-## 2026-10-29 — Small cones require no unobserved possible callers
-
-The maintainer decided that `small_cone` is unknown when a seed or cone entry has callers
-linked only by possible calls, or when that count is unavailable. Unknown never passes rules
-approval; the change waits for the person. The cone follows exact calls only, so an empty cone
-means "not seen", not "safe". A proven failure of the existing exact limits stays fail.
-The count is the same N the review shows as "N possible callers, not followed": distinct
-non-test sources outside the seeds and entries, with a possible call to a target and no exact
-call to any target. Both proposal assessment and the prepared merge candidate measure it.
-
 ## 2026-10-29 — Item 9 questions are only for unasked or untied differences
 
 The maintainer decided on 2026-10-29, as follow-up 3 to item 9 and the decisions inbox. This entry records the

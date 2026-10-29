@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { chromium, expect as browserExpect } from "@playwright/test";
@@ -9,6 +9,12 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 
 import type {} from "./dotField.browser.fixture";
 import type { GraphProbeHost } from "../graph";
+
+// Local review artifacts are opt-in; CI still runs every visual assertion below.
+const captureShots = process.env.LIFE_SHOTS === "1";
+const referenceFile = fileURLToPath(
+  new URL("../../../.shots/life-look/reference/life.html", import.meta.url),
+);
 
 let server: ViteDevServer | undefined;
 let browser: Browser | undefined;
@@ -952,9 +958,11 @@ it("measures a frame at 1920 by 1080", async () => {
         cells: Math.ceil(field.clientWidth / 7) * Math.ceil(field.clientHeight / 7),
       };
     });
-    const dir = fileURLToPath(new URL("../../../.shots/", import.meta.url));
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(`${dir}dot-field-frame-cost.json`, JSON.stringify(cost, null, 2));
+    if (captureShots) {
+      const dir = fileURLToPath(new URL("../../../.shots/", import.meta.url));
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(`${dir}dot-field-frame-cost.json`, JSON.stringify(cost, null, 2));
+    }
     expect(cost.cells).toBeGreaterThan(30_000);
     expect(Number.isFinite(cost.browserFrameMs)).toBe(true);
   });
@@ -1054,9 +1062,11 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
     );
     report.travelFrameCallback = summary(times);
   });
-  const dir = fileURLToPath(new URL("../../../.shots/life-look/r4/", import.meta.url));
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(`${dir}frame-cost.json`, JSON.stringify(report, null, 2));
+  if (captureShots) {
+    const dir = fileURLToPath(new URL("../../../.shots/life-look/r4/", import.meta.url));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(`${dir}frame-cost.json`, JSON.stringify(report, null, 2));
+  }
   for (const key of [
     "restWholeFrame",
     "travelWholeFrame",
@@ -1130,10 +1140,7 @@ async function referenceShot(state: "rest" | "watch", theme: "dark" | "day", out
   if (!browser) throw new Error("Browser was not started");
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   try {
-    const file = fileURLToPath(
-      new URL("../../../.shots/life-look/reference/life.html", import.meta.url),
-    );
-    await page.goto(`file://${file}?theme=${theme}&freeze=1#${state}`);
+    await page.goto(`file://${referenceFile}?theme=${theme}&freeze=1#${state}`);
     await page.waitForFunction(
       () => typeof (window as unknown as { __ft?: number }).__ft === "number",
     );
@@ -1143,40 +1150,51 @@ async function referenceShot(state: "rest" | "watch", theme: "dark" | "day", out
   }
 }
 
-it("captures rest and busy at 1920 by 1080, dark and day, beside their sketches", async () => {
-  const viewport = { width: 1920, height: 1080 };
-  const shots = fileURLToPath(new URL("../../../.shots/life-look/r4/", import.meta.url));
-  const sketches = fileURLToPath(new URL("../../../docs/sketches/life/", import.meta.url));
-  mkdirSync(shots, { recursive: true });
-  const shoot = async (page: Page, name: string) => {
-    await settledGraph(page);
-    writeFileSync(`${shots}${name}.png`, await page.screenshot());
-  };
-  await withPage({ scene: "rest", viewport }, (page) => shoot(page, "rest-dark"));
-  await withPage({ scene: "rest", viewport, theme: "day" }, (page) => shoot(page, "rest-day"));
+const viewport = { width: 1920, height: 1080 };
+const shots = fileURLToPath(new URL("../../../.shots/life-look/r4/", import.meta.url));
+const sketches = fileURLToPath(new URL("../../../docs/sketches/life/", import.meta.url));
+
+function busyScene(
+  scene: "watch" | "both",
+  theme: "dark" | "day",
+  test: (page: Page) => Promise<void>,
+) {
+  return withPage(
+    { scene, viewport, reducedMotion: "reduce", ...(theme === "day" ? { theme } : {}) },
+    async (page) => {
+      // At Functions level, both agents' touched rows are visible, including folded classes.
+      if (scene === "both")
+        await page.getByRole("button", { name: "Functions", exact: true }).click();
+      await settledGraph(page);
+      await test(page);
+    },
+  );
+}
+
+it("checks busy lamp histograms in both themes at 1920 by 1080", async () => {
   const histograms: Record<string, number[]> = {};
-  const busy = (name: string, scene: "watch" | "both", theme?: "day") =>
-    withPage(
-      { scene, viewport, reducedMotion: "reduce", ...(theme ? { theme } : {}) },
-      async (page) => {
-        // The functions level opens the modules, so the rows A and B touch are visible; a method of
-        // a folded class is lit through the class's own box.
-        if (scene === "both")
-          await page.getByRole("button", { name: "Functions", exact: true }).click();
-        await shoot(page, name);
-        histograms[name] = await lampHistogram(page);
-      },
-    );
-  await busy("busy-dark", "watch");
-  await busy("busy-day", "watch", "day");
-  await busy("busy-both-dark", "both");
-  await busy("busy-both-day", "both", "day");
+  for (const scene of ["watch", "both"] as const)
+    for (const theme of ["dark", "day"] as const)
+      await busyScene(scene, theme, async (page) => {
+        const counts = await lampHistogram(page);
+        histograms[`${scene}-${theme}`] = counts;
+        expect(counts).toHaveLength(4);
+        expect(counts[0]).toBeGreaterThan(0);
+        for (const lit of counts.slice(1)) expect(lit).toBeGreaterThan(0);
+      });
+  if (captureShots) {
+    mkdirSync(shots, { recursive: true });
+    writeFileSync(`${shots}histograms.json`, JSON.stringify(histograms));
+  }
+}, 120_000);
+
+it("checks the fade curve at 1920 by 1080", async () => {
   await withPage({ scene: "waiting", viewport, clock: true }, async (page) => {
     await page.evaluate(() => {
       window.fieldTest.advance(21);
     });
     await page.clock.runFor(250 + 725);
-    await shoot(page, "merge-mid");
+    await settledGraph(page);
     // The decided fade, from the light's arrival on: how much light is left every five seconds.
     await page.clock.fastForward(725 + 350 + 1500);
     const fade: { t: number; mass: number; warm: number }[] = [];
@@ -1184,51 +1202,73 @@ it("captures rest and busy at 1920 by 1080, dark and day, beside their sketches"
       fade.push({ t, mass: await lightMass(page), warm: (await fieldPixels(page)).warm });
       await page.clock.fastForward(5_000);
     }
-    writeFileSync(`${shots}fade.json`, JSON.stringify(fade));
+    if (captureShots) {
+      mkdirSync(shots, { recursive: true });
+      writeFileSync(`${shots}fade.json`, JSON.stringify(fade));
+    }
     expect(fade.at(-1)?.warm).toBeLessThan(STRAY);
   });
-  writeFileSync(`${shots}histograms.json`, JSON.stringify(histograms));
-  await referenceShot("rest", "dark", `${shots}reference-rest-dark.png`);
-  await referenceShot("rest", "day", `${shots}reference-rest-day.png`);
-  await referenceShot("watch", "dark", `${shots}reference-busy-dark.png`);
-  await referenceShot("watch", "day", `${shots}reference-busy-day.png`);
-  const pair = (
-    sketch: string,
-    sketchAt: [number, number],
-    shot: string,
-    shotAt: [number, number],
-    name: string,
-  ) =>
-    beside(
-      { path: sketch, x: sketchAt[0], y: sketchAt[1] },
-      { path: `${shots}${shot}.png`, x: shotAt[0], y: shotAt[1] },
-      `${shots}compare-${name}.png`,
-    );
-  await pair(`${sketches}rest-contour.png`, [60, 200], "rest-dark", [560, 400], "rest-dark");
-  await pair(`${sketches}rest-day.png`, [60, 200], "rest-day", [560, 400], "rest-day");
-  await pair(
-    `${shots}reference-busy-dark.png`,
-    BUSY_AT.sketch,
-    "busy-dark",
-    BUSY_AT.shot,
-    "busy-dark",
+}, 120_000);
+
+const pair = (
+  sketch: string,
+  sketchAt: [number, number],
+  shot: string,
+  shotAt: [number, number],
+  name: string,
+) =>
+  beside(
+    { path: sketch, x: sketchAt[0], y: sketchAt[1] },
+    { path: `${shots}${shot}.png`, x: shotAt[0], y: shotAt[1] },
+    `${shots}compare-${name}.png`,
   );
-  await pair(
-    `${shots}reference-busy-day.png`,
-    BUSY_AT.sketch,
-    "busy-day",
-    BUSY_AT.shot,
-    "busy-day",
-  );
-  // Both agents at once: the sketch window holds A and B side by side; the product's two lights sit
-  // further apart, so each gets its own window.
-  for (const theme of ["dark", "day"]) {
-    const sketch = `${shots}reference-busy-${theme}.png`;
-    await pair(sketch, BUSY_AT.sketch, `busy-both-${theme}`, [60, 300], `busy-both-${theme}-b`);
-    await pair(sketch, BUSY_AT.sketch, `busy-both-${theme}`, [940, 430], `busy-both-${theme}-a`);
-  }
-  await pair(`${sketches}merge-mid.png`, [480, 200], "merge-mid", [560, 200], "merge-mid");
-}, 240_000);
+
+it.runIf(captureShots)(
+  "captures rest and busy at 1920 by 1080, dark and day, beside their sketches",
+  async () => {
+    mkdirSync(shots, { recursive: true });
+    const shoot = async (page: Page, name: string) => {
+      await settledGraph(page);
+      writeFileSync(`${shots}${name}.png`, await page.screenshot());
+    };
+    await withPage({ scene: "rest", viewport }, (page) => shoot(page, "rest-dark"));
+    await withPage({ scene: "rest", viewport, theme: "day" }, (page) => shoot(page, "rest-day"));
+    for (const scene of ["watch", "both"] as const)
+      for (const theme of ["dark", "day"] as const)
+        await busyScene(scene, theme, (page) =>
+          shoot(page, `busy-${scene === "both" ? "both-" : ""}${theme}`),
+        );
+    await withPage({ scene: "waiting", viewport, clock: true }, async (page) => {
+      await page.evaluate(() => {
+        window.fieldTest.advance(21);
+      });
+      await page.clock.runFor(250 + 725);
+      await shoot(page, "merge-mid");
+    });
+    await pair(`${sketches}rest-contour.png`, [60, 200], "rest-dark", [560, 400], "rest-dark");
+    await pair(`${sketches}rest-day.png`, [60, 200], "rest-day", [560, 400], "rest-day");
+    await pair(`${sketches}merge-mid.png`, [480, 200], "merge-mid", [560, 200], "merge-mid");
+  },
+  240_000,
+);
+
+it.runIf(captureShots && existsSync(referenceFile))(
+  "pairs busy captures with the optional interactive reference",
+  async () => {
+    await referenceShot("rest", "dark", `${shots}reference-rest-dark.png`);
+    await referenceShot("rest", "day", `${shots}reference-rest-day.png`);
+    await referenceShot("watch", "dark", `${shots}reference-busy-dark.png`);
+    await referenceShot("watch", "day", `${shots}reference-busy-day.png`);
+    for (const theme of ["dark", "day"]) {
+      const sketch = `${shots}reference-busy-${theme}.png`;
+      await pair(sketch, BUSY_AT.sketch, `busy-${theme}`, BUSY_AT.shot, `busy-${theme}`);
+      // Both agents: each gets its own window because the product's lights sit further apart.
+      await pair(sketch, BUSY_AT.sketch, `busy-both-${theme}`, [60, 300], `busy-both-${theme}-b`);
+      await pair(sketch, BUSY_AT.sketch, `busy-both-${theme}`, [940, 430], `busy-both-${theme}-a`);
+    }
+  },
+  120_000,
+);
 
 /** Where each busy capture's lit node sits: the corner of the area compared, in px. */
 const BUSY_AT = { sketch: [480, 200] as [number, number], shot: [560, 200] as [number, number] };
