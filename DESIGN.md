@@ -993,6 +993,50 @@ motion they jump. Mode changes move the camera alone.
 Only module frames drag. Function rows stay in their frame's column. The frame's edges re-route
 on every animation frame during the drag, never only on drop.
 
+### Scale and depth
+
+This definition sits beside graph structure and folding because depth controls how much unfolds,
+while scale controls how it is drawn. It refines [Layout](#layout)'s **Opening a change** readability
+floor, **The preset's arrangement** and fit behavior, together with the folding rules above.
+The depth control is built (`bfe7a18`). The map and folder groups are not built.
+
+1. **Two axes.** Depth is the Modules / Functions / Details control: how much unfolds. Scale is
+   the zoom: how it is drawn. Apply the floor in Layout's **Opening a change** rule to module
+   titles, measuring the `frame-title-size` token (17px) times the zoom. The graph enters the map
+   automatically below that floor: below 64.7% (11/17). It leaves above a slightly larger title
+   size, fixed by the sketch, so it does not flicker at the edge. The fit button lands on cards
+   when the fitted zoom stays at or above the leave threshold, otherwise on the map. The zoom
+   readout shows "Map" beside the percentage. There is no fourth button.
+2. **Nothing moves.** Each module becomes a circle at the center of its block, using the space
+   already reserved by Layout's **The preset's arrangement**. The circle's area is proportional
+   to its function count. Changing level is a crossfade; under reduced motion, a cut.
+3. **Folder groups, on the map only.** A group is the first folder level that splits the
+   repository into at least two groups; tests are their own group. A group with fewer than two
+   modules draws no frame; a flat repository draws no frames. Never computed clusters. Cards
+   stay as today. A continuous frame needs each folder's modules placed together: that changes
+   the preset layout and also moves card positions. The sketch shows this, and it is part of
+   the build decision.
+4. **Group summary.** Name and module count; a ring in the color of each team working inside
+   (color means a team, `reports/team-colors`); pending decisions, neutral; how much of the cone
+   reaches it, for example "3 of 9 in billing".
+5. **Lines.** The `exact-edges` rules: exact links at today's weight; possible links that survive
+   the built-in name filter as faint lines. Nothing invented. With few lines, the LED field and
+   the contours carry the texture.
+6. **Names.** Constant size on screen. Group names always shown; module names where they fit,
+   first those an agent touches, the cone reaches or the selection holds, then by size; the rest
+   on hover.
+7. **Interaction.** Clicking a group zooms to frame it, and the cards come back. Clicking a circle
+   brings that module to 100%.
+8. **Scope.** This stays in [Undecided candidates](docs/additions.md#undecided-candidates).
+   Now: this definition, then a sketch with real data from Boltons and the demo, and the proof 2
+   repository if it changes. Whether to build is decided with the sketch in view, never before
+   the Saturday checkpoint. The proof 2 repository, Boltons `d31d821`, has 66 modules by top
+   folder in [its preset](fixtures/layouts/boltons-d31d821.json): boltons 30, tests 32, misc 3,
+   docs 1. Under the folder rule it shows one large library group, tests and misc; docs, with one
+   module, draws no frame. Its fit lands right at the threshold: 65% without tests, lower with
+   them. The sketch shows Boltons fitted with and without tests and says which level each lands
+   on.
+
 ### Motion
 
 Nothing moves without a cause. Event-driven transitions take 160 to 320ms with
