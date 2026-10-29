@@ -1306,3 +1306,20 @@ with no new contract field: "asked for" only from the classification, which neve
 the person" from a card answered Yes by the person. The summary and proof 3's counts keep them apart. A card's
 kind is read from its server-authored question, one of two fixed texts. When pinned examples exist (item 13), a
 Yes on a could-not-tell question is the one offered as "keep as example".
+## 2026-10-29 — Aggregate counts on demand and measured frame titles
+
+The maintainer approved both fixes on October 28 at 23:52 ART (October 29 UTC).
+The route-cost audit of the dark Boltons preset at 1920×1080 found 101 aggregate labels touching
+another label or header at the start camera (180 label pairs, 47 label/header pairs), and 211
+at 0.2 zoom (448 and 119 pairs). Functions at 0.2 also put `NamedTupleInpu…` against `4 methods`.
+
+Replace always-visible aggregate counts with immediate labels on the hovered aggregate and the
+selected node's aggregates. Keep the directed edges, arrows, counts, routes and camera unchanged;
+edges remain unselectable and this interaction takes no focus. DESIGN.md records this departure.
+
+Replace average-glyph title and count estimates with cached canvas widths from the loaded
+Atkinson title and count faces. Reserve the count's actual width, the existing gap and the folded
+chevron inset before ellipsizing; preserve fonts, frame sizes, header layers and clipping.
+Graph creation waits for these faces; a recovered font load rebuilds early fallback layers once.
+Without font/canvas measurement, tests retain the estimate. Row state-word clearance uses the
+same measurer because it needs only the existing word face and size.

@@ -85,11 +85,14 @@ export function updateGraph(
         element.source().id() !== definition.data.source ||
         element.target().id() !== definition.data.target
       ) {
+        element.removeClass("count-hover");
         element.move({ source: definition.data.source, target: definition.data.target });
       }
       writeData(element, definition.data, OPTIONAL_DATA);
-      // Selection and routing own these classes; resetting either causes redundant restyles.
-      const owned = ["touching", "unroutable"].filter((name) => element.hasClass(name));
+      // Keep selection and routing state; hover survives while its geometry stays put.
+      const owned = ["touching", "count-hover", "unroutable"].filter((name) =>
+        element.hasClass(name),
+      );
       element.classes([...definition.classes.split(/\s+/).filter(Boolean), ...owned]);
     }
   });
