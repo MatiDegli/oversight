@@ -20,7 +20,7 @@ it("consumes grant events without changing product state", () => {
         change_id: "change-1",
         revision: 1,
         head_commit: "abc",
-        run_id: state.run!.run_id,
+        run_id: "run-20261029-140000",
         session_id: null,
         granted_by: "person",
       },
