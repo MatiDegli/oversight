@@ -2,14 +2,17 @@
 
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
+from tools.eval.detection.product_limits import completion_limit
 from tools.eval.grade import Tariff
 from tools.eval.tasks import BenchError, digest
 
 from oversight.agents import D6_RESPONSE_FORMAT, D6_SYSTEM_PROMPT, MUSE_SPARK, MUSE_SPARK_OPEN
+from oversight.changes import ReviewCardLimits
 
 VERSION = "detection-d6-v1"
 NO_BEHAVIOR = "No behavior evidence was collected. This is not a measurement of equivalence."
@@ -27,7 +30,13 @@ def system_prompt() -> str:
 class Arm:
     id: str
     profile: str
-    behavior: bool
+    role: Literal["tests-only", "task/diff", "behavior-Spark", "behavior-Spark-Open"]
+    max_output_tokens: int | None = None
+    limits: ReviewCardLimits = field(default_factory=ReviewCardLimits)
+
+    @property
+    def behavior(self) -> bool:
+        return self.role in {"behavior-Spark", "behavior-Spark-Open"}
 
     def configuration(self, fake: bool, rates: dict[str, Tariff]) -> dict:
         model = {"meta": MUSE_SPARK, "baseten": MUSE_SPARK_OPEN}.get(self.profile)
@@ -40,27 +49,27 @@ class Arm:
             if model
             else None,
         }
-        return {
-            "version": VERSION,
+        config = {
+            "version": "detection-d6-v2" if model else VERSION,
             "arm_id": self.id,
             "fake": fake,
             "profile": self.profile,
             "model": model.model if model else "none",
             "reasoning": "low" if model else None,
             "behavior": self.behavior,
-            "prompt_version": VERSION,
+            "prompt_version": "detection-d6-v2" if model else VERSION,
             "prompt_sha256": fingerprint(template),
             "system_prompt_sha256": digest(prompt),
             "response_format_sha256": fingerprint(D6_RESPONSE_FORMAT) if model else None,
             "input_fields": ["target", "task", "diff", "behavior_evidence"]
-            if self.id == "detect-2"
+            if self.role == "task/diff"
             else (["target", "task", "difference", "confirmed_examples"] if model else []),
-            "no_behavior": NO_BEHAVIOR if self.id == "detect-2" else None,
-            "max_output_tokens": 512,
+            "no_behavior": NO_BEHAVIOR if self.role == "task/diff" else None,
+            "max_output_tokens": self.max_output_tokens if model else 512,
             "retry_attempts": 5,
-            "call_s": 30,
-            "total_s": 120,
-            "classifications": 8,
+            "call_s": self.limits.call_s if model else 30,
+            "total_s": self.limits.total_s if model else 120,
+            "classifications": self.limits.classifications if model else 8,
             "test_timeout_s": 30,
             "measured_cone": False,
             "cross_review": False,
@@ -68,13 +77,35 @@ class Arm:
             "protocol": PROTOCOL,
         }
 
+        if model:
+            if self.max_output_tokens is None or self.max_output_tokens <= 0:
+                raise BenchError("model arm needs a positive completion allowance")
+            config.update(
+                role=self.role,
+                deadline_source="oversight.changes.ReviewCardLimits defaults",
+                completion_limit_source="oversight.decision_config.configured_decision",
+                diagnostics_source_sha256=digest(
+                    Path(__file__).with_name("diagnostics.py").read_text()
+                ),
+            )
+        return config
+
 
 ARMS = (
-    Arm("detect-1", "none", False),
-    Arm("detect-2", "meta", False),
-    Arm("detect-3", "meta", True),
-    Arm("detect-4", "baseten", True),
+    Arm("detect-1", "none", "tests-only"),
+    Arm("detect-2-v2", "meta", "task/diff", completion_limit()),
+    Arm("detect-3-v2", "meta", "behavior-Spark", completion_limit()),
+    Arm("detect-4-v2", "baseten", "behavior-Spark-Open", completion_limit()),
 )
+
+
+SUPERSEDED_ARMS = {"detect-2", "detect-3", "detect-4"}
+PILOT_PATCHES = {
+    "tests-only": "d01",
+    "task/diff": "d02",
+    "behavior-Spark": "d01",
+    "behavior-Spark-Open": "d02",
+}
 
 
 class Assumptions(BaseModel):
@@ -109,6 +140,7 @@ def projection(
     *,
     spent: float,
     cap: float,
+    pilot_costs: dict[str, float] | None = None,
 ) -> dict:
     if repetitions < 1 or not math.isfinite(cap) or not 0 < cap <= 20:
         raise BenchError("invalid repetitions or shared cap")
@@ -123,7 +155,20 @@ def projection(
         else 0
         for a in ARMS
     }
-    total = spent + sum(costs.values()) * (1 + 20 * repetitions)
+    worst = {
+        arm.id: worst_case_per_job(
+            arm.configuration(False, rates)
+            | {
+                "assumptions": assumptions.model_dump(),
+            }
+        )
+        for arm in ARMS
+    }
+    pilots = {arm.id: (pilot_costs or {}).get(arm.id) for arm in ARMS}
+    admitted = {
+        arm.id: max((pilot_costs or {}).get(arm.id, costs[arm.id]), worst[arm.id]) for arm in ARMS
+    }
+    total = spent + sum(admitted.values()) * (1 + 20 * repetitions)
     if total > cap:
         raise BenchError(f"projection ${total:.6f} exceeds cap; reduce repetitions before arms")
     return {
@@ -131,7 +176,10 @@ def projection(
         "assumptions": assumptions.model_dump(),
         "spent_usd": spent,
         "estimated_total_usd": total,
-        "per_attempt_usd": costs,
+        "per_attempt_usd": admitted,
+        "declared_per_job_usd": costs,
+        "pilot_per_job_usd": pilots,
+        "worst_case_per_job_usd": worst,
         "attempts": 4 + 20 * (1 + 3 * repetitions),
         "cap_usd": cap,
     }
@@ -139,3 +187,18 @@ def projection(
 
 def fingerprint(configuration: dict) -> str:
     return digest(json.dumps(configuration, sort_keys=True, separators=(",", ":")))
+
+
+def worst_case_per_job(config: dict) -> float:
+    if config["tariff"] is None:
+        return 0.0
+    assumptions = config["assumptions"]
+    tariff = config["tariff"]
+    return (
+        assumptions["calls"]
+        * (
+            assumptions["input_tokens"] * tariff["input"]
+            + config["max_output_tokens"] * tariff["output"]
+        )
+        / 1e6
+    )

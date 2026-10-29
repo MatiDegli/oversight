@@ -1618,3 +1618,26 @@ returned event when an eligible successor exists within the horizon, so no event
 If the first eligible envelope cannot fit intact, the response is the existing typed `too_large`
 413; payloads are never truncated. Unexpected disk or validation failures use the existing
 `internal` error path. No index or schema migration is introduced.
+
+
+## 2026-10-29 — Detection model arms v2 preserve tests-only identity
+
+The detection pilots at 19:52 ART used a 512-token completion allowance: detect-2 consumed
+all 512 tokens with no usable classification, consistent with reasoning truncation documented
+by the API probe. Detect-3/4 targeted methods unsupported by D9, made no call and proved
+nothing about classification. Model arms therefore get new IDs detect-2-v2, detect-3-v2 and
+detect-4-v2, with explicit task/diff, behavior-Spark and behavior-Spark-Open roles. Their pilots
+use top-level development targets d02, d01 and d02. A model pilot without a sent call and
+bounded diagnostics refuses. Diagnostics record validation stages and metadata, never reply text.
+
+Each model arm hashes and sends the product D6 completion allowance (currently 4096), retaining
+the strict 512-character response validator. Since the product factory exports no allowance
+constant, evaluation imports it and extracts its single positive literal through AST inspection,
+without executing it or loading credentials. Imported ReviewCardLimits defaults supply the
+same per-call and total deadlines to configuration and runtime (30 and 120 seconds). Admission
+uses the greater of observed pilot cost and the declared calls/input-token worst case at the
+configured completion allowance. Old pilots are listed as superseded and keep counting toward
+cumulative spend. Detect-1 retains its byte-identical v1 configuration, fingerprint and finished
+pilot. Frozen patches and labels do not change: b09 Inventory.reserve, b14 Customer.email
+setter, b17 Cart.add and b19 Product.label remain unprobed questions by D9, in both denominators.
+No paid run or provider probe is part of this change.

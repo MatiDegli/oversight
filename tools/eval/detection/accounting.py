@@ -1,7 +1,8 @@
 """Detection uses the existing locked ledger and its immutable reservation identities."""
 
 from tools.eval.behavior.catalog import Patch
-from tools.eval.detection.config import Arm, fingerprint
+from tools.eval.detection.config import Arm, fingerprint, worst_case_per_job
+from tools.eval.detection_types import DetectionEvidence
 from tools.eval.grade import Tariff, Usage
 from tools.eval.ledger import Ledger, Record
 from tools.eval.tasks import BenchError, Task
@@ -88,6 +89,8 @@ class Budget:
 def pilot_projection(ledger: Ledger, jobs: list[tuple[Patch, Arm, dict, int]]) -> dict:
     ledger.ready()
     estimates = {}
+    worst = {}
+    admitted = {}
     for _, arm, config, _ in jobs:
         if arm.id in estimates:
             continue
@@ -107,16 +110,28 @@ def pilot_projection(ledger: Ledger, jobs: list[tuple[Patch, Arm, dict, int]]) -
             or pilot.result.cost_usd == "unknown"
         ):
             raise BenchError("pilot configuration, prompt hash, or accounting differs")
+        require_model_call(arm, pilot.result.detection, pilot.result.steps)
         estimates[arm.id] = max(pilot.charged_usd, pilot.result.cost_usd)
+        worst[arm.id] = worst_case_per_job(config)
+        admitted[arm.id] = max(estimates[arm.id], worst[arm.id])
     pending = [j for j in jobs if not completed(ledger, *j)]
-    remaining = sum(estimates[arm.id] for _, arm, _, _ in pending)
+    remaining = sum(admitted[arm.id] for _, arm, _, _ in pending)
     if ledger.spent + remaining > ledger.state.cap_usd:
         raise BenchError("pilot projection exceeds cap; reduce repetitions before dropping arms")
     return {
         "spent_usd": ledger.spent,
         "remaining_usd": remaining,
         "projected_total_usd": ledger.spent + remaining,
-        "per_arm_usd": estimates,
+        "per_arm_usd": admitted,
+        "pilot_per_job_usd": estimates,
+        "worst_case_per_job_usd": worst,
         "remaining_attempts": len(pending),
-        "method": "observed pilot cost; estimate, not a billing ceiling",
+        "method": "max(observed pilot cost, configured worst case); not a billing ceiling",
     }
+
+
+def require_model_call(arm: Arm, evidence: DetectionEvidence, sends: int) -> None:
+    if arm.role != "tests-only" and (
+        sends == 0 or not any(d.diagnostics is not None for d in evidence.decisions)
+    ):
+        raise BenchError(f"{arm.id}: pilot recorded no model call (no diagnostics)")

@@ -7,9 +7,23 @@ from pathlib import Path
 from uuid import uuid4
 
 from tools.eval.behavior.catalog import check_baseline, load_patches
-from tools.eval.detection.accounting import Budget, completed, pilot_projection, task_for
+from tools.eval.detection.accounting import (
+    Budget,
+    completed,
+    pilot_projection,
+    require_model_call,
+    task_for,
+)
 from tools.eval.detection.adapters import Adapter
-from tools.eval.detection.config import ARMS, Assumptions, fingerprint, paid_gate
+from tools.eval.detection.config import (
+    ARMS,
+    PILOT_PATCHES,
+    Arm,
+    Assumptions,
+    fingerprint,
+    paid_gate,
+    worst_case_per_job,
+)
 from tools.eval.detection.runtime import measure
 from tools.eval.grade import Result, Tariff, Tests, Tokens
 from tools.eval.ledger import Ledger
@@ -34,9 +48,11 @@ def jobs_for(
     patches = load_patches()
     selected = [p for p in patches if p.set == ("dev" if pilot else "bench")]
     jobs = []
-    for i, arm in enumerate(ARMS):
+    for arm in ARMS:
         config = arm.configuration(fake_choice is not None, rates) | {"fake_choice": fake_choice}
-        for patch in [selected[i]] if pilot else selected:
+        for patch in (
+            [p for p in selected if p.id == PILOT_PATCHES[arm.role]] if pilot else selected
+        ):
             for rep in range(1, 1 + (1 if arm.profile == "none" else repetitions)):
                 jobs.append((patch, arm, config, rep))
     return jobs
@@ -103,7 +119,7 @@ async def run_attempt(
     fake_choice: str | None,
     pilot: bool,
     labels_hash: str | None,
-    factory: Callable[[str], DecisionClient] | None,
+    factory: Callable[[Arm], DecisionClient] | None,
 ) -> None:
     patch, arm, config, rep = job
     fake = fake_choice is not None
@@ -112,7 +128,7 @@ async def run_attempt(
     )
     per_send = max(
         1e-9,
-        (assumptions.input_tokens * tariff.input + assumptions.output_tokens * tariff.output) / 1e6,
+        worst_case_per_job(config) / assumptions.calls,
     )
     record = ledger.reserve(
         task_for(patch),
@@ -132,7 +148,7 @@ async def run_attempt(
         if not fake and arm.profile != "none":
             if factory is None:
                 raise BenchError(f"{arm.id}: unavailable provider adapter")
-            client = factory(arm.profile)
+            client = factory(arm)
         adapter = Adapter(
             arm, budget, client=client, fake_choice=fake_choice if arm.profile != "none" else None
         )
@@ -172,6 +188,8 @@ async def run_attempt(
     )
     ledger.finish(record, result, cleaned=True)
     ledger.ready()
+    if pilot:
+        require_model_call(arm, measured, result.steps)
     if any("budget_blocked" in reason for reason in measured.unavailable):
         raise BenchError("attempt allowance exhausted; stopping")
 
@@ -188,7 +206,7 @@ async def run_plan(
     paid: bool = False,
     repetitions: int = 1,
     seed: int = 42,
-    factory: Callable[[str], DecisionClient] | None = None,
+    factory: Callable[[Arm], DecisionClient] | None = None,
 ) -> dict:
     if fake_choice is None:
         paid_gate(
@@ -214,19 +232,8 @@ async def run_plan(
             if old and not completed(ledger, patch, arm, config, rep):
                 raise BenchError("pilot identity changed; never retry a pilot")
         allowances = 0.0
-        for _, arm, _, _ in (j for j in jobs if not completed(ledger, *j)):
-            tariff = rates.get(arm.profile, Tariff(input=0, output=0))
-            allowances += (
-                max(
-                    1e-9,
-                    (
-                        assumptions.input_tokens * tariff.input
-                        + assumptions.output_tokens * tariff.output
-                    )
-                    / 1e6,
-                )
-                * assumptions.calls
-            )
+        for _, _arm, config, _ in (j for j in jobs if not completed(ledger, *j)):
+            allowances += max(1e-9 * assumptions.calls, worst_case_per_job(config))
         if ledger.spent + allowances > ledger.state.cap_usd:
             raise BenchError("projection cannot reserve all four pilot allowances")
     plan_id = save_plan(ledger, jobs, seed, assumptions, labels_hash, pilot)

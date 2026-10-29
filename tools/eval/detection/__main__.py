@@ -10,6 +10,7 @@ from tools.eval.behavior.catalog import check_baseline, load_patches
 from tools.eval.detection.config import (
     ARMS,
     PROTOCOL,
+    Arm,
     Assumptions,
     paid_gate,
     projection,
@@ -17,7 +18,7 @@ from tools.eval.detection.config import (
 )
 from tools.eval.detection.engine import CANONICAL_OUTPUT, run_plan
 from tools.eval.detection.labels import load_labels
-from tools.eval.detection.reporting import summarize
+from tools.eval.detection.reporting import summarize, superseded_pilots
 from tools.eval.grade import Tariff
 from tools.eval.ledger import Ledger, State
 from tools.eval.paths import output_path
@@ -51,16 +52,22 @@ def provider_factory(env_file: Path):
 
     credentials = read_env_file(env_file)
 
-    def create(provider: str) -> DecisionClient:
+    from tools.eval.detection.diagnostics import DetectionClient
+
+    def create(arm: Arm) -> DecisionClient:
         profile, url, key = (
             (MUSE_SPARK, META_BASE_URL, "META_API_KEY")
-            if provider == "meta"
+            if arm.profile == "meta"
             else (MUSE_SPARK_OPEN, BASETEN_BASE_URL, "BASETEN_API_KEY")
         )
         if not credentials.get(key):
-            raise BenchError(f"{provider}: unavailable credentials in explicit env file")
-        return DecisionClient(
-            profile, base_url=url, api_key=credentials[key], max_output_tokens=512
+            raise BenchError(f"{arm.profile}: unavailable credentials in explicit env file")
+        assert arm.max_output_tokens is not None
+        return DetectionClient(
+            profile,
+            base_url=url,
+            api_key=credentials[key],
+            max_output_tokens=arm.max_output_tokens,
         )
 
     return create
@@ -140,8 +147,8 @@ def execute(args, labels, rates, assumptions):
         raise BenchError("paid product probes need the demo repository's own virtual environment")
 
     # The closure defers credential reads and SDK construction until a reserved attempt.
-    def create(profile):
-        return provider_factory(args.env_file)(profile)
+    def create(arm):
+        return provider_factory(args.env_file)(arm)
 
     ledger = Ledger(args.out, args.cap_usd, None, multi_tariff=True)
     try:
@@ -205,7 +212,15 @@ def main(argv: list[str] | None = None) -> int:
                     args.repetitions,
                     spent=sum(r.charged_usd for r in state.records) if state else 0,
                     cap=args.cap_usd,
+                    pilot_costs={
+                        r.arm_id: max(r.charged_usd, r.result.cost_usd)
+                        for r in state.records
+                        if r.pilot and r.result and r.result.cost_usd != "unknown"
+                    }
+                    if state
+                    else None,
                 )
+                result["superseded_pilots"] = superseded_pilots(state.records if state else [])
                 result["protocol"] = PROTOCOL
                 result["configurations"] = [a.configuration(False, rates) for a in ARMS]
                 result["ledger"] = str(args.out.parent / "ledger.json")

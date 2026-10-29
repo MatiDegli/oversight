@@ -1,6 +1,6 @@
 """Predeclared 10/10 criteria; detection is reported separately from intent classification."""
 
-from tools.eval.detection.config import ARMS, PROTOCOL
+from tools.eval.detection.config import ARMS, PROTOCOL, SUPERSEDED_ARMS
 from tools.eval.ledger import Record
 from tools.eval.report import metrics
 from tools.eval.tasks import BenchError
@@ -116,6 +116,7 @@ def summarize(
         "protocol": PROTOCOL,
         "calibration": "not available",
         "arms": arms,
+        "superseded_pilots": superseded_pilots(records),
         "complete": all(r["complete"] for r in all_results),
         "criteria_passed": all(r["criteria_passed"] for r in all_results),
         "shared_accounting_including_history": metrics(records),
@@ -132,3 +133,17 @@ def summarize(
             if r.status != "finished"
         ],
     }
+
+
+def superseded_pilots(records: list[Record]) -> list[dict]:
+    return [
+        {
+            "arm_id": r.arm_id,
+            "attempt_id": r.attempt_id,
+            "status": "superseded",
+            "charged_usd": r.charged_usd,
+            "cost_usd": r.result.cost_usd if r.result else "unknown",
+        }
+        for r in records
+        if r.pilot and r.arm_id in SUPERSEDED_ARMS
+    ]

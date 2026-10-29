@@ -4,6 +4,7 @@ import asyncio
 import json
 from typing import cast
 
+import openai
 from tools.eval.detection.accounting import Budget
 from tools.eval.detection.config import NO_BEHAVIOR, Arm, system_prompt
 from tools.eval.detection.diagnostics import CURRENT_TRACE, Trace
@@ -117,7 +118,9 @@ class Adapter:
         deadline: float,
         input: DecisionInput | None = None,
     ) -> tuple[DecisionOutcome, CallDiagnostics]:
-        trace = Trace(MUSE_SPARK_OPEN.model if self.arm.profile == "baseten" else MUSE_SPARK.model)
+        trace = Trace(
+            MUSE_SPARK_OPEN.model if self.arm.role == "behavior-Spark-Open" else MUSE_SPARK.model
+        )
         token = CURRENT_TRACE.set(trace)
         started = asyncio.get_running_loop().time()
         try:
@@ -139,7 +142,7 @@ class Adapter:
     ) -> DecisionOutcome:
         if self.fake_choice is not None:
             return await self._fake(target, node)
-        if self.arm.profile == "baseten":
+        if self.arm.role == "behavior-Spark-Open":
             assert input is not None
             return await classify_difference(
                 self.observed_client(),
@@ -160,11 +163,23 @@ class Adapter:
             async def complete(self, messages, tools):
                 try:
                     reply = await client.complete(messages, tools)
-                except EmptyChoicesError as error:
-                    trace = CURRENT_TRACE.get()
-                    assert trace is not None
-                    trace.reply(error.reply)
-                    trace.diagnostic.validation_stage = "empty_choices"
+                except ModelAPIError as error:
+                    scope = CALL_SCOPE.get()
+                    if (
+                        isinstance(error.__cause__, openai.APITimeoutError)
+                        or (
+                            scope is not None
+                            and scope.deadline is not None
+                            and asyncio.get_running_loop().time() >= scope.deadline
+                        )
+                        or "exceeds the task deadline" in str(error)
+                    ):
+                        raise TimeoutError from error
+                    if isinstance(error, EmptyChoicesError):
+                        trace = CURRENT_TRACE.get()
+                        assert trace is not None
+                        trace.reply(error.reply)
+                        trace.diagnostic.validation_stage = "empty_choices"
                     raise
                 trace = CURRENT_TRACE.get()
                 assert trace is not None
@@ -178,7 +193,7 @@ class Adapter:
             messages(task, diff=diff, target=target),
             target,
             "task-and-diff",
-            asyncio.get_running_loop().time() + 30,
+            asyncio.get_running_loop().time() + self.arm.limits.call_s,
         )
         self.evidence.append(
             DecisionEvidence(

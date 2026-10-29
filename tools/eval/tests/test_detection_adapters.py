@@ -192,7 +192,7 @@ async def test_deadline_sends_nothing(budget):
 @pytest.mark.parametrize("choice", ["asked_for", "not_asked_for", "cannot_tell", "unavailable"])
 async def test_all_model_adapters_accept_explicit_fake_outcomes(budget, arm, choice):
     adapter = Adapter(arm, budget, fake_choice=choice)
-    if arm.id == "detect-2":
+    if arm.role == "task/diff":
         await adapter.task_diff(INPUT.task, "frozen diff", INPUT.target)
     else:
         await adapter.classify_difference(INPUT, deadline=asyncio.get_running_loop().time() + 10)

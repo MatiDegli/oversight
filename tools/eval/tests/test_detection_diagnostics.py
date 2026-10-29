@@ -145,7 +145,8 @@ async def test_transport_deadline_and_unknown_counts(budget, failure):
     try:
         adapter = Adapter(ARMS[3], budget, client=sdk)
         result = await adapter.classify_difference(
-            INPUT, deadline=asyncio.get_running_loop().time() + 0.05
+            INPUT,
+            deadline=asyncio.get_running_loop().time() + (0.1 if failure == "deadline" else 10),
         )
         d = adapter.evidence[0].diagnostics
         assert d is not None
@@ -155,5 +156,46 @@ async def test_transport_deadline_and_unknown_counts(budget, failure):
             assert result.unavailable == "deadline" and d.latency_s >= 0.04
         if failure != "unknown_usage":
             assert d.reply_characters is None and d.reported_model is None
+    finally:
+        await sdk.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "code",
+    [
+        "profile",
+        "credentials",
+        "closed",
+        "budget_unconfigured",
+        "pricing_unconfigured",
+        "budget_blocked",
+        "ledger_unknown",
+        "ledger_unreliable",
+    ],
+)
+async def test_product_unavailability_stage_is_retained(budget, code):
+    from unittest.mock import AsyncMock
+
+    from oversight.agents import DecisionUnavailable
+
+    sdk = DetectionClient(
+        MUSE_SPARK_OPEN,
+        base_url="https://decision.test/v1",
+        api_key="test",
+        max_output_tokens=512,
+        http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(FakeApi().handle)),
+    )
+    sdk.complete = AsyncMock(side_effect=DecisionUnavailable(code))
+    try:
+        adapter = Adapter(ARMS[3], budget, client=sdk)
+        result = await adapter.classify_difference(
+            INPUT, deadline=asyncio.get_running_loop().time() + 10
+        )
+        d = adapter.evidence[0].diagnostics
+        assert result.unavailable == code
+        assert d is not None and d.validation_stage == code
+        assert d.reported_model is None and d.reply_characters is None
+        assert d.completion_tokens is None and d.reasoning_tokens is None
     finally:
         await sdk.aclose()
