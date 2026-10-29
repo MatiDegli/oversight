@@ -31,8 +31,9 @@ export interface FieldLight {
 
 /**
  * A change that was decided: merged (a pulse runs to its node) or rejected (none does). Either way
- * its light stays at the waiting level and then fades out. Says where it starts, where it
- * arrives, and how long ago it happened.
+ * its light starts from the light the change had at the decision (working or waiting), holds it
+ * while the pulse travels, and then fades out. Says where it starts, where it arrives, and how
+ * long ago it happened.
  */
 export interface FieldMerge {
   /** One merge, stable across renders: the change and the event that resolved it. */

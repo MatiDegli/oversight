@@ -46,7 +46,8 @@ export interface FieldTheme extends MotionTheme, ProfileTheme, Record<LightSourc
   "dot-cell-size": string;
   "lamp-cut-low": number;
   "lamp-cut-high": number;
-  "lamp-gamma": number;
+  "dot-level-count": number;
+  "dot-dither-size": number;
   "lamp-ramp-deep": number;
   "lamp-ramp-mid": number;
   "lamp-ramp-hot": number;
@@ -61,8 +62,9 @@ export interface FieldConfig {
   /** The intensity under which a lamp is off, and the one at which it is whole. */
   cutLow: number;
   cutHigh: number;
-  /** The power the intensity is raised to: under 1 it lifts the middle, so the core stays hot. */
-  gamma: number;
+  /** The levels a lamp can show, off included, and the side of the ordered dither that picks them. */
+  levels: number;
+  ditherSize: number;
   /** How a lamp's color follows its brightness: see the lamp-ramp tokens. */
   ramp: { deep: number; mid: number; hot: number };
   /** The shares of a light's intensity that decay over the near and the far length. */
@@ -108,7 +110,8 @@ export function fieldConfig(theme: FieldTheme, mode: FieldMode): FieldConfig {
     cell: px(theme["dot-cell-size"]),
     cutLow: theme["lamp-cut-low"],
     cutHigh: theme["lamp-cut-high"],
-    gamma: theme["lamp-gamma"],
+    levels: theme["dot-level-count"],
+    ditherSize: theme["dot-dither-size"],
     ramp: {
       deep: theme["lamp-ramp-deep"],
       mid: theme["lamp-ramp-mid"],
@@ -154,6 +157,35 @@ export function placeLights(
   return [...placed.values()];
 }
 
+const matrices = new Map<number, Uint8Array>();
+
+/**
+ * The ordered-dither matrix of a power-of-two size: each of 0 to size² - 1 once, built by the
+ * recursive rule that doubles a matrix into four quarters offset by 0, 2, 3 and 1. At size 8 it is
+ * the sketch's `bayer8`, cell for cell.
+ */
+export function bayerMatrix(size: number): Uint8Array {
+  const known = matrices.get(size);
+  if (known) return known;
+  let matrix = [0];
+  for (let side = 1; side < size; side *= 2) {
+    const next = new Array<number>(4 * side * side).fill(0);
+    for (let y = 0; y < side; y += 1) {
+      for (let x = 0; x < side; x += 1) {
+        const base = 4 * (matrix[y * side + x] ?? 0);
+        next[y * 2 * side + x] = base;
+        next[y * 2 * side + x + side] = base + 2;
+        next[(y + side) * 2 * side + x] = base + 3;
+        next[(y + side) * 2 * side + x + side] = base + 1;
+      }
+    }
+    matrix = next;
+  }
+  const result = Uint8Array.from(matrix);
+  matrices.set(size, result);
+  return result;
+}
+
 /** Distance from a point to a box: 0 inside it. The light is shaped like the box. */
 export function boxDistance(box: Box, x: number, y: number): number {
   const dx = Math.max(box.x1 - x, 0, x - box.x2);
@@ -174,7 +206,10 @@ export function falloff(config: FieldConfig, distance: number): number {
   );
 }
 
-/** The lowest intensity that lights a lamp: anything under the cut's low edge is off. */
+/**
+ * The lowest intensity one light can add: anything under the cut's low edge adds nothing, so a
+ * cell is off whatever the dither.
+ */
 function lowestLit(config: FieldConfig): number {
   return config.cutLow;
 }
@@ -297,8 +332,11 @@ function addLight(
       let intensity = 0;
       if (distanceSquared <= glowBound) {
         const distance = Math.sqrt(distanceSquared);
-        if (distance <= glow)
+        if (distance <= glow) {
           intensity = amplitude * cachedFalloff(config, distance, row * cols + col, work.decay);
+          // Each light is held back by its own cut, as the sketch does, before the lights add up.
+          intensity *= smooth(config.cutLow, config.cutHigh, intensity);
+        }
       }
       if (ringRow) {
         const rx = ringX[col] ?? 0;
@@ -411,9 +449,11 @@ function lampColor(
 }
 
 /**
- * Turns each cell's intensity into one lamp's brightness, the intensity raised to the gamma and held
- * back by a smooth cut between its low edge and its high one, and the brightness into a color. Dim lamps lean to the deep end of the light's
- * color, a lamp at `mid` shows it as it is, and the hot core moves `hot` of the way to the ink (the
+ * Turns each cell's intensity into one of the lamp levels with the ordered dither, and the level
+ * into a color. The level is `floor(min(1, total) * (levels - 1) + threshold)`, the threshold the
+ * matrix cell over its size squared: near the core every lamp is whole, further out the dither
+ * leaves a regular pattern of single lamps. Dim levels lean to the deep end of the light's color,
+ * a level at `mid` shows it as it is, and the whole level moves `hot` of the way to the ink (the
  * extreme away from lamp-off). The colors of overlapping lights mix by intensity; their
  * intensities add, up to the full light.
  */
@@ -428,29 +468,38 @@ export function shadeLamps(
   const { deep, mid, hot } = config.ramp;
   const [or, og, ob] = config.lampOff;
   const ink = or + og + ob > 381 ? 0 : 255;
-  for (let k = 0; k < cols * rows; k += 1) {
-    const total = light.sum[k] ?? 0;
-    glow[k] = Math.min(1, total) * 255;
-    const intensity = Math.min(1, total);
-    const share = intensity ** config.gamma * smooth(config.cutLow, config.cutHigh, intensity);
-    const o = k * 4;
-    if (share <= 0) {
-      out[o] = or;
-      out[o + 1] = og;
-      out[o + 2] = ob;
-      out[o + 3] = 0;
-      continue;
+  const top = config.levels - 1;
+  const size = config.ditherSize;
+  const matrix = bayerMatrix(size);
+  const steps = size * size;
+  for (let row = 0; row < rows; row += 1) {
+    const rowOffset = (row % size) * size;
+    for (let col = 0; col < cols; col += 1) {
+      const k = row * cols + col;
+      const total = light.sum[k] ?? 0;
+      glow[k] = Math.min(1, total) * 255;
+      const threshold = (matrix[rowOffset + (col % size)] ?? 0) / steps;
+      const level = Math.min(top, Math.floor(Math.min(1, total) * top + threshold));
+      const o = k * 4;
+      if (level <= 0) {
+        out[o] = or;
+        out[o + 1] = og;
+        out[o + 2] = ob;
+        out[o + 3] = 0;
+        continue;
+      }
+      const share = level / top;
+      const red = (light.red[k] ?? 0) / total;
+      const green = (light.green[k] ?? 0) / total;
+      const blue = (light.blue[k] ?? 0) / total;
+      const peak = Math.max(red, green, blue);
+      const weaker = deep + (1 - deep) * Math.min(1, share / mid);
+      const toInk = share > mid ? ((share - mid) / (1 - mid)) * hot : 0;
+      out[o] = lampColor(red, peak, weaker, ink, toInk, or, share);
+      out[o + 1] = lampColor(green, peak, weaker, ink, toInk, og, share);
+      out[o + 2] = lampColor(blue, peak, weaker, ink, toInk, ob, share);
+      out[o + 3] = 255 * share;
     }
-    const red = (light.red[k] ?? 0) / total;
-    const green = (light.green[k] ?? 0) / total;
-    const blue = (light.blue[k] ?? 0) / total;
-    const peak = Math.max(red, green, blue);
-    const weaker = deep + (1 - deep) * Math.min(1, share / mid);
-    const toInk = share > mid ? ((share - mid) / (1 - mid)) * hot : 0;
-    out[o] = lampColor(red, peak, weaker, ink, toInk, or, share);
-    out[o + 1] = lampColor(green, peak, weaker, ink, toInk, og, share);
-    out[o + 2] = lampColor(blue, peak, weaker, ink, toInk, ob, share);
-    out[o + 3] = 255 * share;
   }
 }
 

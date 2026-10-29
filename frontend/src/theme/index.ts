@@ -205,13 +205,16 @@ const baseThemes = {
     "matte-grain": 0.02,
     "dot-cell-size": "7px",
     "dot-lamp-coverage": 0.72,
-    // A lamp's brightness is continuous. Light under the low edge is off and the high edge is
-    // where it is whole, so the glow hugs its card and ends on a lamp, not on dust. Dim lamps lean
-    // to the deep end of their color (the weaker channels scaled by `deep`), a lamp whole at `mid`
-    // shows the agent's own color, and above it the hot core moves `hot` of the way to the ink.
+    // A lamp shows one of four levels, picked by an 8 by 8 ordered dither: near the core every lamp
+    // is whole, further out single lamps stand in a regular pattern (the LED character). Each
+    // light is held back by its own cut, off under the low edge and whole at the high one, so a
+    // glow ends on a lamp, not on dust. Dim levels lean to the deep end of their color (the
+    // weaker channels scaled by `deep`), a level whole at `mid` shows the agent's own color, and
+    // the full level moves `hot` of the way to the ink.
+    "dot-level-count": 4,
+    "dot-dither-size": 8,
     "lamp-cut-low": 0.08,
     "lamp-cut-high": 0.22,
-    "lamp-gamma": 0.6,
     "lamp-ramp-deep": 0.45,
     "lamp-ramp-mid": 0.7,
     "lamp-ramp-hot": 0.2,

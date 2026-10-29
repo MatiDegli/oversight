@@ -285,9 +285,10 @@
   --matte-grain: 0.02;
   --dot-cell-size: 7px;
   --dot-lamp-coverage: 0.72;
+  --dot-level-count: 4;
+  --dot-dither-size: 8;
   --lamp-cut-low: 0.08;
   --lamp-cut-high: 0.22;
-  --lamp-gamma: 0.6;
   --lamp-ramp-deep: 0.45;
   --lamp-ramp-mid: 0.7;
   --lamp-ramp-hot: 0.2;

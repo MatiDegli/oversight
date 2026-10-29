@@ -7,6 +7,15 @@ import { createLampField, falloff, fieldConfig, shadeLamps } from "./model";
 import type { Box, FieldConfig, LampGrid, PlacedLight } from "./model";
 import { breathing, ringIntensity, ringRadiusAt } from "./motion";
 
+/** Each light's own smooth cut, the sketch's `smoothstep(0.08, 0.22, I)`, in the frozen reference. */
+function cut(config: FieldConfig, intensity: number): number {
+  const t = Math.min(
+    1,
+    Math.max(0, (intensity - config.cutLow) / (config.cutHigh - config.cutLow)),
+  );
+  return t * t * (3 - 2 * t);
+}
+
 function lowestLit(config: FieldConfig): number {
   return config.cutLow;
 }
@@ -105,6 +114,7 @@ function addLight(
       const dx = colX[col] ?? 0;
       const distance = Math.sqrt(dx * dx + dy * dy);
       let intensity = distance <= glow ? amplitude * falloff(config, distance) : 0;
+      intensity *= cut(config, intensity);
       if (ring) {
         const rx = ringX[col] ?? 0;
         intensity +=
