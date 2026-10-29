@@ -161,3 +161,54 @@ def test_projection_keeps_private_fields_and_diagnostics_out_of_public_samples()
     before["value"] = [private]
     after["message"] = private
     assert project_behavior(captured, revision=1) == projected
+
+
+@pytest.mark.anyio
+async def test_direct_and_caller_publications_capture_and_validate_separate_evidence(
+    h, monkeypatch
+):
+    from oversight.changes import _proposal
+    from oversight.changes._behavior_publish import capture_behavior, project_behavior
+    from oversight.changes._facts import build_change_facts, validate_change_facts
+    from oversight.changes._measured import project_measured
+
+    captured = []
+    publish = _proposal.publish_facts
+
+    async def capture(ctx, evidence):
+        captured.append(evidence)
+        await publish(ctx, evidence)
+
+    monkeypatch.setattr(_proposal, "publish_facts", capture)
+    h.manager._ctx.behavior_diff = h.manager._ctx.measured_cone = True
+    await h.open(1)
+    assert await h.edit(
+        1, "tests/test_mod.py", "from shop.mod import value", "from shop.mod import value, twice"
+    )
+    assert await h.edit(1, "tests/test_mod.py", "assert value() > 0", "assert twice() > 0")
+    assert await h.edit(1, *EDIT)
+    assert await h.finish(1)
+    [facts], [evidence] = h.payloads(ChangeFacts), captured
+    rec = h.manager._agents["agent-1"]
+    assert facts.behavior_diff == project_behavior(
+        capture_behavior(rec.behavior_diffs[1]), revision=1
+    )
+    assert facts.measured_cone == project_measured(rec.measured_cones[1], evidence.target)
+    assert facts.behavior_diff is not None and facts.measured_cone is not None
+    direct = {row.node_id: row for row in facts.behavior_diff}
+    assert direct["shop.mod:value"].differing_count == 1
+    assert "shop.mod:twice" not in direct
+    assert [(row.node_id, row.differing_count) for row in facts.measured_cone] == [
+        ("shop.mod:twice", 1)
+    ]
+    rec.behavior_diffs[1].functions[0].rows[0].before["value"] = ["private mutation"]
+    rec.behavior_diffs.clear()
+    rec.measured_cones.clear()
+    assert build_change_facts(evidence) == facts
+    assert (
+        build_change_facts(replace(evidence, behavior_evidence=None, measured=None)).summary
+        == facts.summary
+    )
+    for field, message in (("behavior_diff", "behavior"), ("measured_cone", "caller")):
+        with pytest.raises(ValueError, match=message):
+            validate_change_facts(facts.model_copy(update={field: None}), evidence)

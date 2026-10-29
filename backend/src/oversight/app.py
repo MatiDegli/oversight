@@ -364,6 +364,7 @@ class LiveRun:
             git_timeout_s=GIT_TIMEOUT_S,
             review=self,
             behavior_diff=self._settings.behavior_diff,
+            measured_cone=self._settings.measured_cone,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
 

@@ -58,6 +58,7 @@ from oversight.workspace.integrity import (
 )
 from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable, refuse_orphans
 from oversight.workspace.locks import Locks, offload
+from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.ranges import FileRange, read_range
 from oversight.workspace.runner import ProcessResult, Spawn, run_process
 from oversight.workspace.snapshot import IntegrityState
@@ -620,6 +621,7 @@ class Workspace:
         case_ids: tuple[str, ...] = (),
         spawn: Spawn | None = None,
         isolation: IsolationPolicy = "best_effort",
+        measured_targets: tuple[CallTarget, ...] | None = None,
     ) -> SuiteRun:
         """Run the source's fixed tests in `tree`, under its lock, in the demo venv."""
         async with (
@@ -628,6 +630,11 @@ class Workspace:
             self.git_lease(),
         ):
             await offload(lambda: self.tmp_dir.mkdir(mode=DIR_MODE, parents=True, exist_ok=True))
+            if measured_targets is not None:
+                if isolation != "required":
+                    raise ValueError("caller recording requires isolation=required")
+                for target in measured_targets:
+                    tree.resolve(target.path)
             runner = self._isolation.select(isolation, spawn, run_process)
             try:
                 return await guarded_suite(
@@ -641,6 +648,7 @@ class Workspace:
                     case_ids=case_ids,
                     pytest_targets=self._pytest_targets,
                     spawn=runner,
+                    measured_targets=measured_targets,
                 )
             except SuiteUnavailable as error:
                 if isinstance(error.cause, IsolationUnavailable):

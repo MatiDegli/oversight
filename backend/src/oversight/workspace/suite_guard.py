@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.isolation import IsolatedRunner
 from oversight.workspace.locks import offload
+from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.runner import Spawn
 from oversight.workspace.snapshot import finish_snapshot, take_snapshot
 from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
@@ -36,6 +37,7 @@ async def guarded_suite(
     case_ids: tuple[str, ...],
     spawn: Spawn,
     pytest_targets: tuple[str, ...] = (),
+    measured_targets: tuple[CallTarget, ...] | None = None,
 ) -> SuiteRun:
     """Caller retains main/worktree/lease through capture, namespace death and restoration."""
     state = workspace.integrity
@@ -62,6 +64,7 @@ async def guarded_suite(
                 case_ids=case_ids,
                 pytest_targets=pytest_targets,
                 harness_pack=workspace.harness_pack,
+                measured_targets=measured_targets,
             )
         except (SuiteInterrupted, SuiteUnavailable) as error:
             problems = await offload(partial(file_problems, tree.root, before))
