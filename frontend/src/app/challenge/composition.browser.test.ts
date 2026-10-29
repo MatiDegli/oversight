@@ -185,7 +185,7 @@ async function checkDecisionRows(page: Page) {
   }
   const task = page.locator(".pp-task");
   await check(rows.first().locator("summary")).toHaveText(
-    `Recorded task · ${await task.textContent()}`,
+    `Recorded task · ${(await task.textContent()) ?? ""}`,
   );
   const folds = await page.locator(".pp-fold > span:first-child").allTextContents();
   if ((await rows.count()) === 2) {
@@ -221,7 +221,7 @@ async function checkRowExpansion(page: Page) {
     expect(await page.locator(".pp-graph").boundingBox()).toEqual(graph);
     expect(await page.locator(".pp-dock").boundingBox()).toEqual(dock);
     expect(
-      await list?.evaluate((element) => element === document.querySelector(".pp-decision-rows")),
+      await list.evaluate((element) => element === document.querySelector(".pp-decision-rows")),
     ).toBe(true);
     await page.locator(".pp-main").evaluate((element) => {
       element.scrollTop = element.scrollHeight;
