@@ -342,6 +342,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Long name on a touched row | not drawn | the name is cut with an ellipsis where it would meet the state word | a row is fixed at 282px; the state word and badges keep their place |
 | Title weight of a frame | light, Mono | 600, Next | AGENTS.md: graph labels use Next; at 17px a light weight does not keep 4.5:1 |
 | Import edges | not drawn | in the data, not drawn | the sketch draws calls; imports say which files, not which functions |
+| Aggregate call counts | counts at rest | count on the hovered edge and the selected node's aggregates only | the maintainer approved removing resting label collisions on 2026-10-29; arrows and count data stay |
 | Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed border or line means a pending change in the agent's color, and color is an agent only on its own change |
 | Skip-column edges | routed around the frames | visibility-grid routes outside frames, sharing one trunk per target | only short endpoint taps traverse their own containing frame; back calls use an outside detour |
 | First view | the whole demo in view | 100% on the module of the hub, more beyond the edges | the graph is a canvas to pan and zoom; the demo has 36 functions, not the sketch's 19 |
@@ -445,7 +446,7 @@ The neutral roles:
 - **Page** (page): the focus panel: review, live diff, file view and settings; Monaco's background.
 - **Card** (card, card-bottom): cards run from card at the top to card-bottom below; graph nodes
   at rest use card at 94%. Agent and model-slot cards carry a 2px top line in their agent token.
-- **Raised** (raised): hover on a control or row; a pressed rail button; the queue counter.
+- **Raised** (raised): hover on a control or row; a pressed rail button; the decisions chip.
 - **Page raised** (page-raised): chips, facts and file rows inside the left panel.
 - **Text** (text): primary text everywhere; a slightly warm white, because pure white glares on
   video against black. **Text hover** (text-hover): the primary button's fill on hover.
@@ -599,7 +600,7 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 
 | Zone | Size at 1920x1080 | Contents |
 | --- | --- | --- |
-| Top bar | 52px high | product, repository, branch, hash; Ctrl K search; review queue, spend, history, settings |
+| Top bar | 52px high | product, repository, branch, hash; Ctrl K search; decisions chip, spend, history, settings |
 | Left rail | 56px wide | Graph, Files, Changes, Agents; terminal toggle and shortcuts at the bottom |
 | Sidebar | 280px wide, collapsible | Files tree or Changes: queue first, then decision history |
 | Focus panel | 880px wide | tabs for file view, live diff, review, conversation, plan and settings |
@@ -635,7 +636,7 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   left in review, legend bottom left, zoom controls bottom right. With the left panel open and no
   cone (live diff, file view) the top left is empty, as in the live sketch: the graph beside the
   panel is framed on its own nodes, and a heading there would sit on top of them.
-- **Sizes:** buttons 40px tall, small buttons 34px; search box and queue counter 34px; chips 30px;
+- **Sizes:** buttons 40px tall, small buttons 34px; search box and decisions chip 34px; chips 30px;
   letter avatar 36px; status lamp 10px; distance badge 20px; node letter badge 26px.
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
@@ -787,12 +788,17 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 
 ### Navigation
 
-- **Top bar** (shell): product name, repository, branch and short commit hash (Mono), the review
-  queue counter and the spend total (level 2, the budget in whole dollars when it is round:
+- **Top bar** (shell): product name, repository, branch and short commit hash (Mono), the
+  decisions chip and the spend total (level 2, the budget in whole dollars when it is round:
   "US$150"). The search box, the history icon and the settings icon join the bar when each feature
   is built, not before.
-- **Review queue counter:** "1 change ready for review" with a lamp, on raised. It counts across
-  agents, so it is neutral, never an agent's color.
+- **Decisions chip:** always visible in the same top-bar position and at the queue-counter height.
+  At zero it reads "Nothing needs you" in muted gray, with no lamp or badge. Otherwise it reads
+  "Decisions · N", neutral across agents, with N in Mono and tabular figures. One pending change
+  counts once, with its questions and other decisions inside; answers and delegations do not
+  consume it. Only its completed Approve, Request changes or Reject removes it. Standalone
+  decisions, such as a lead plan, each count once. Its accessible name includes the count.
+  Until the inbox view exists, clicking it opens the existing review queue.
 - **Left rail** (shell): icon buttons; the current view's button on raised.
 - **Agents rail** (whenever the focus panel is open): one letter avatar per agent: a 36px square
   with card radius,
@@ -899,12 +905,23 @@ everything else steps back.
 - The cone card on the graph lists the possibly affected functions by distance, with counts, and
   says what the bounds cut, for example "+12 omitted by depth". It is "possibly affected", never a
   complete list. The review panel keeps a one-line summary.
+- The cone follows exact calls only. On main's graph with the change's nodes and edges applied,
+  count distinct non-test callers outside seeds and cone entries that have a possible call into
+  either and no exact call into either. Count every possible call, without a built-in name filter;
+  this is one hop only, with no further traversal, for live edits and proposals alike.
+- Empty cone with N > 0: "No exact callers · N possible callers, not followed" (singular:
+  "1 possible caller"). With N = 0 keep "No functions possibly affected within the cone bounds"
+  in the summary and "No functions in this cone within its bounds." in the cone card.
+  Non-empty cone: keep the summary and add "+N possible callers, not followed" beside depth
+  and node-limit omissions in the facts row and cone card. Use the same neutral pattern and
+  existing omission icon in the facts row; no warning color or style. With no graph, show no
+  possible-callers text.
 - In level 1, before the cone exists, review dims everything except the change's nodes.
 - The cone changes node and edge emphasis; it adds no light source to the LED field.
 
 ### Review panel with the matte header (signature component)
 
-Opened only by the person: from "Review change" on a card, the queue counter, or a node whose
+Opened only by the person: from "Review change" on a card, the decisions chip, or a node whose
 change is proposed.
 
 - **Header:** the change's title, the agent, its status pill, a close button, and the facts row.
@@ -1042,7 +1059,9 @@ Classes and modules fold. At start, every module is one folded card, such as
 "pricing.py · 6 functions". A module opens when an agent reads or edits inside it. Clicking a
 module's header toggles it open or folded, including after an agent opened it.
 Cross-file calls aggregate whenever either endpoint module is folded: one edge per directed
-module pair, labeled with its count. The count includes only calls in that direction;
+module pair. Its count appears on the hovered edge and on the selected node's aggregate edges,
+never at rest. Labels appear and disappear immediately, without motion, delay, focus or camera
+changes. The count includes only calls in that direction;
 A → B and B → A keep separate arrows and counts. The aggregate attaches to each module's card
 or open frame, so this also applies when only one module is folded.
 
@@ -1068,8 +1087,9 @@ including module and class opening. Each motion says what changed:
 - **Agent starts:** its card slides and fades in from the right.
 - **agent.step / usage.tick:** a new step row slides in at the top, older rows move down; the
   step bar and spend number ease to the reported value.
-- **agent.status / change.proposed:** the status pill crossfades; the top bar's ready-for-review
-  pill slides in once. These events never open a panel or move keyboard focus.
+- **agent.status / change.proposed:** the agent card's status pill crossfades; the permanently
+  mounted decisions chip updates its label and count. These events never open a panel or move
+  keyboard focus.
 - **agent.focus:** the lettered marker in the agent's color glides between nodes, following the
   edge route when present, with its light following it. A working agent's status lamp may pulse
   (the existing 1.6s period) and its graph ring expands only while work continues.
@@ -1209,11 +1229,11 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 
 - **Do** keep every agent color next to its letter, and every state color next to a word, a sign
   or an icon.
-- **Do** keep the review queue counter and any count across agents neutral.
+- **Do** keep the decisions chip and any count across agents neutral.
 - **Do** show a pending change with a dashed 1.5px border in its agent's color, changed and new
   alike.
-- **Do** keep the current view when an agent finishes: only its card, its pill and the queue
-  counter report readiness.
+- **Do** keep the current view when an agent finishes: only its card, its pill and the decisions
+  chip report readiness.
 - **Do** take every color from a token under `data-theme`, Cytoscape, Monaco and the dot field
   included: hovers, highlights, gradient ends and the grid's lamps and dots too, never a raw hex or
   `white` in a component.
@@ -1242,7 +1262,7 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 
 | Level | Design elements |
 | --- | --- |
-| 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the queue counter; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
+| 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the decisions chip; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
 | 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
 | Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker, the rest contours and merge travel; plain black ground whenever WebGL2 is missing |

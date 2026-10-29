@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { GraphView } from "../../graph";
+import { GraphView, possibleCallers } from "../../graph";
 import type { Framing, GraphApi } from "../../graph";
 import { ImpactConeCard } from "../../review";
 import type { State } from "../../state";
@@ -100,6 +100,7 @@ export function PracticeGraphStage({
               >
                 <ImpactConeCard
                   cone={cone}
+                  possible={shownChange ? (possibleCallers(state, shownChange, cone) ?? 0) : 0}
                   routingOmissions={routingOmissions}
                   outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
                   onReveal={(id) => graphApi.current?.reveal(id)}

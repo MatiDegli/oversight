@@ -627,7 +627,7 @@ class LiveRun:
         if name not in offered:
             raise ApiError("invalid_request", f"this server runs agents on {', '.join(offered)}")
         if offered[name].provider == "fake":
-            raise ApiError("invalid_request", f"slot {slot} has no fake script")
+            raise ApiError("invalid_request", f"slot {slot} has no script for {name}")
         return offered[name]
 
     def _check_spending(self, slot: Slot, profile: ModelProfile) -> None:
@@ -863,14 +863,22 @@ class LiveRun:
         if self._manager.main_suspect:
             raise ApiError("wrong_state", MAIN_SUSPECT)
         self._manager.approve(
-            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+            change_id,
+            request.comment,
+            revision=request.revision,
+            head_commit=request.head_commit,
+            answers=request.answers,
         )
 
     def reject(self, change_id: str, request: RejectChange) -> None:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
         self._manager.reject(
-            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+            change_id,
+            request.comment,
+            revision=request.revision,
+            head_commit=request.head_commit,
+            answers=request.answers,
         )
 
     def request_changes(self, change_id: str, request: RequestChanges) -> None:

@@ -9,7 +9,16 @@ export interface RevertInboxRef {
   merge_commit: string;
 }
 
-export type InboxIdentity = DecisionRef | RevertInboxRef;
+/** Local projection identity for the final action, never sent as a DecisionRef. */
+export interface ChangeInboxRef {
+  kind: "change";
+  change_id: string;
+  revision: number;
+  head_commit: string;
+  evidence_seq: number;
+}
+
+export type InboxIdentity = DecisionRef | RevertInboxRef | ChangeInboxRef;
 export type InboxExample =
   | { source: "review_card"; value: BehaviorDiffRow }
   | { source: "task"; value: TaskExample }
@@ -18,13 +27,13 @@ export type InboxExample =
 export interface DelegationAttempt {
   agentId: string;
   slot: Slot;
-  endState: "halted" | "stopped" | "done";
+  endState: "halted" | "stopped" | "done" | null;
   reason: string | null;
   echoSeq: number;
-  endSeq: number;
+  endSeq: number | null;
 }
 
-export interface DecisionInboxEntry {
+export interface DecisionInboxDecision {
   id: string;
   kind: InboxIdentity["kind"];
   identity: InboxIdentity;
@@ -37,6 +46,17 @@ export interface DecisionInboxEntry {
   firstSeq: number;
   ts: string;
   age: string;
+  attempts: DelegationAttempt[];
+}
+
+/** One latest candidate per change, with its recorded decisions inside. */
+export interface DecisionInboxEntry {
+  id: string;
+  changeId: string | null;
+  firstSeq: number;
+  ts: string;
+  age: string;
+  decisions: DecisionInboxDecision[];
   attempts: DelegationAttempt[];
 }
 

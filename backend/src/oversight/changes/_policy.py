@@ -56,6 +56,7 @@ class PolicyInputs:
     cone: ImpactCone | None = None
     parse_errors: int | None = None
     unresolved_removed: int | None = None
+    possible_callers: int | None = None
     files: tuple[str, ...] | None = None
     lines_added: int | None = None
     lines_removed: int | None = None
@@ -142,6 +143,8 @@ def _small_cone(inputs: PolicyInputs) -> RuleAssessment:
             and inputs.parse_errors == 0
             and inputs.unresolved_removed == 0
         )
+        if passes and inputs.possible_callers != 0:
+            passes = None
     return _record(
         inputs,
         "small_cone",

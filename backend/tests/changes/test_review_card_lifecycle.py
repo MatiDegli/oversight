@@ -76,7 +76,7 @@ async def test_choices_use_prior_confirmed_seq_and_never_decide(h, monkeypatch, 
     first, final = h.payloads(ChangeFacts)
     assert "pending" in first.problems[-1] and "finished" in final.problems[-1]
     assert first.behavior_diff == final.behavior_diff
-    assert first.summary == final.summary and first.test_runs == final.test_runs
+    assert first.summary[:2] == final.summary[:2] and first.test_runs == final.test_runs
     assert first.complete is final.complete is False
     assert h.manager._agents["agent-1"].state == "ready"
     assert len(client.calls) == 1 and client.calls[0][0].confirmed_examples == ()
@@ -86,10 +86,17 @@ async def test_choices_use_prior_confirmed_seq_and_never_decide(h, monkeypatch, 
         assert card.question == question and card.answer is card.answered_by is None
         [evidence] = [e for e in h.events() if e.seq == card.evidence_seq]
         assert evidence.payload == first and evidence.seq < h.events()[-1].seq
+        assert final.summary[2] == "Other results: 1 question; cost unknown"
     else:
         assert final.review_cards == []
+    if choice == "asked_for":
+        assert final.summary[2] == (
+            f"Other results: asked for: {VALUE} (1 of 1 inputs differ); 0 questions; cost unknown"
+        )
     if choice == "missing":
         assert any("invalid_response" in problem for problem in final.problems)
+        assert first.summary == final.summary
+        assert next(iter(cards.jobs.values())).asked_for == []
 
 
 async def test_republication_preserves_calls_and_latest_other_producer_data(h, monkeypatch):
@@ -110,7 +117,24 @@ async def test_republication_preserves_calls_and_latest_other_producer_data(h, m
     await cards._finish(job)
     latest = job.facts
     assert latest is not None and latest.review_cards is not None
-    await cards.publish(h.payloads(ChangeFacts)[0])
+    first = h.payloads(ChangeFacts)[0]
+    with pytest.raises(ValueError, match="measurements"):
+        await cards.publish(first)
+    receipt = job.latest
+    events = len(h.log)
+    assert (
+        await cards.publish(
+            latest.model_copy(
+                update={
+                    "review_cards": [],
+                    "problems": ["Another producer's diagnostics"],
+                    "summary": first.summary,
+                }
+            )
+        )
+        == receipt
+    )
+    assert len(h.log) == events
     assert len(client.calls) == 1
     assert latest.shape_complete and latest.review_cards[0].answer == "yes"
     assert job.facts == latest
@@ -153,6 +177,41 @@ async def test_no_confirmed_measurement_no_classification(h, monkeypatch):
     assert not await h.finish(1)
     await settled(cards)
     assert client.calls == [] and h.payloads(ChangeFacts) == []
+    await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+    [job] = cards.jobs.values()
+    assert job.status == "failed" and not job.preparing and job.task is None
+    assert await h.main_head() != h.base_commit
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"test_runs": [999]},
+        {"edited_paths": ["shop/other.py"]},
+        {"behavior_diff": None},
+        {"measured_cone": []},
+        {"shape": []},
+        {"shape_complete": True},
+        {"complete": True, "problems": []},
+    ],
+)
+@pytest.mark.parametrize("failed", [False, True])
+async def test_changed_republication_fails_before_emitting(h, monkeypatch, updates, failed):
+    cards, client = enable(h, monkeypatch)
+    await h.run_agent(1, EDIT)
+    await settled(cards)
+    [job] = cards.jobs.values()
+    facts, receipt = job.facts, job.latest
+    assert facts is not None
+    if failed:
+        job.status = "failed"
+    status = job.status
+    events = len(h.log)
+    changed = ChangeFacts.model_validate(facts.model_dump() | updates)
+    with pytest.raises(ValueError, match="measurements"):
+        await cards.publish(changed)
+    assert len(h.log) == events and len(client.calls) == 1
+    assert job.facts == facts and job.latest == receipt and job.status == status
 
 
 async def test_result_target_and_node_are_checked(h, monkeypatch):
@@ -168,6 +227,8 @@ async def test_result_target_and_node_are_checked(h, monkeypatch):
     await settled(cards)
     assert h.payloads(ChangeFacts)[-1].review_cards == []
     assert "identity mismatch" in h.payloads(ChangeFacts)[-1].problems[-2]
+    assert next(iter(cards.jobs.values())).asked_for == []
+    assert h.payloads(ChangeFacts)[0].summary == h.payloads(ChangeFacts)[-1].summary
 
 
 async def test_deadline_includes_provider_wait_and_late_returns(h, monkeypatch):
@@ -180,6 +241,7 @@ async def test_deadline_includes_provider_wait_and_late_returns(h, monkeypatch):
     assert final.review_cards == [] and any("deadline" in p for p in final.problems)
     [job] = cards.jobs.values()
     assert job.consumed == 1
+    assert job.asked_for == [] and h.payloads(ChangeFacts)[0].summary == final.summary
     assert client.calls[0][1] <= job.deadline
 
 
@@ -306,8 +368,11 @@ async def test_same_revision_cannot_reset_budget_under_different_main_context(h,
     assert len(client.calls) == 1
 
 
-async def test_failed_final_publication_can_be_republished_without_new_calls(h, monkeypatch):
-    cards, client = enable(h, monkeypatch, FakeDecisions(hold=True))
+@pytest.mark.parametrize("choice", ["not_asked_for", "asked_for"])
+async def test_failed_final_publication_can_be_republished_without_new_calls(
+    h, monkeypatch, choice
+):
+    cards, client = enable(h, monkeypatch, FakeDecisions(choice, hold=True))
     await h.run_agent(1, EDIT)
     async with asyncio.timeout(5):
         await client.entered.wait()
@@ -320,7 +385,10 @@ async def test_failed_final_publication_can_be_republished_without_new_calls(h, 
     await cards.publish(first)
     await cards.publish(first)
     assert len(client.calls) == 1 and len(h.payloads(ChangeFacts)) == 2
-    assert h.payloads(ChangeFacts)[-1].review_cards
+    if choice == "asked_for":
+        assert job.asked_for and "asked for:" in h.payloads(ChangeFacts)[-1].summary[2]
+    else:
+        assert h.payloads(ChangeFacts)[-1].review_cards
 
 
 async def test_serialized_final_publication_precedes_the_invalidating_edit(h, monkeypatch):

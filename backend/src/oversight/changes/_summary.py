@@ -8,6 +8,13 @@ from oversight_contracts.events import SuiteExecution
 from oversight_contracts.review import RoleUsage
 
 
+@dataclass(frozen=True)
+class AskedFor:
+    node_id: str
+    differing_count: int
+    compared_count: int
+
+
 @dataclass(frozen=True, kw_only=True)
 class SummaryEvidence:
     task: str | None = None
@@ -15,6 +22,8 @@ class SummaryEvidence:
     changed_nodes: tuple[str, ...] | None = None
     added_test_ids: tuple[str, ...] | None = None
     usage: tuple[RoleUsage, ...] | None = None
+    asked_for: tuple[AskedFor, ...] = ()
+    questions: int | None = None
 
 
 def _line(text: str) -> str:
@@ -43,13 +52,36 @@ def _cost(usage: tuple[RoleUsage, ...] | None) -> str:
     return f"cost ${total:.6g}" if isfinite(total) else "cost unknown"
 
 
+def _other_results(evidence: SummaryEvidence) -> str:
+    cost = _cost(evidence.usage)
+    if evidence.questions is None:
+        return _line(f"Other results: not compared; {cost}")
+    questions = "question" if evidence.questions == 1 else "questions"
+    suffix = f"{evidence.questions} {questions}; {cost}"
+    if not evidence.asked_for:
+        return _line(f"Other results: {suffix}")
+    entries = [
+        f"{' '.join(node.node_id.split())} "
+        f"({node.differing_count} of {node.compared_count} inputs differ)"
+        for node in evidence.asked_for
+    ]
+    for shown in range(len(entries), -1, -1):
+        selected = entries[:shown]
+        if omitted := len(entries) - shown:
+            selected.append(f"+{omitted} more")
+        line = f"Other results: asked for: {', '.join(selected)}; {suffix}"
+        if len(line) <= 240:
+            return line
+    raise ValueError("asked-for summary counts exceed the line limit")
+
+
 def build_summary(
     evidence: SummaryEvidence, executions: Mapping[int, SuiteExecution], *, revision: int
 ) -> list[str]:
     """Use the last proposal suite for this revision, not prior or probe outcomes.
 
-    Other-result comparisons have no public producer yet. Even private behavior
-    measurements must never become summary claims through this path.
+    Only classified differences already shown by published facts may become
+    other-result claims; private behavior measurements alone never suffice.
     """
     current = [
         (seq, execution.suite)
@@ -70,5 +102,5 @@ def build_summary(
             f"{_count(evidence.changed_nodes)} nodes; "
             f"tests added: {_count(evidence.added_test_ids)}; {tests}"
         ),
-        _line(f"Other results: not compared; {_cost(evidence.usage)}"),
+        _other_results(evidence),
     ]

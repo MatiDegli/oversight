@@ -5,6 +5,7 @@ from typing import Literal
 
 from oversight_contracts.events import AgentStatus
 from oversight_contracts.policy import ChangeAssessment
+from oversight_contracts.review import ReviewCard
 
 
 @dataclass(frozen=True)
@@ -25,3 +26,4 @@ class WriteEvidence:
     assessment: ChangeAssessment | None = None
     reasons: tuple[str, ...] = ()
     registered_leads: frozenset[str] = frozenset()
+    answers: tuple[ReviewCard, ...] | None = None

@@ -45,6 +45,7 @@ def inputs() -> PolicyInputs:
         ),
         parse_errors=0,
         unresolved_removed=0,
+        possible_callers=0,
         files=("shop.py",),
         lines_added=30,
         lines_removed=30,
@@ -137,6 +138,35 @@ def test_cone_counts_entries_only(inputs: PolicyInputs, count: int, expected: st
     result = rule(replace(inputs, cone=cone), "small_cone")
     assert result.result == expected
     assert result.observed is not None and result.observed["nodes"] == count
+
+
+@pytest.mark.parametrize("callers", [None, 0, 1, 2])
+@pytest.mark.parametrize(
+    "failure",
+    [None, "nodes", "omitted_by_depth", "omitted_by_limit", "parse_errors", "unresolved_removed"],
+)
+def test_possible_callers_never_hide_a_proven_cone_failure(inputs, callers, failure):
+    cone = inputs.cone
+    updates = {"possible_callers": callers}
+    if failure == "nodes":
+        cone = cone.model_copy(
+            update={"entries": [ImpactEntry(node_id=f"shop:f{i}", distance=1) for i in range(6)]}
+        )
+    elif failure in {"omitted_by_depth", "omitted_by_limit"}:
+        cone = cone.model_copy(update={failure: 1})
+    elif failure:
+        updates[failure] = 1
+    assessment = rule(replace(inputs, cone=cone, **updates), "small_cone")
+    assert assessment.result == ("fail" if failure else "pass" if callers == 0 else "unknown")
+    assert assessment.observed is not None
+    assert set(assessment.observed) == {
+        "nodes",
+        "omitted_by_depth",
+        "omitted_by_limit",
+        "parse_errors",
+        "unresolved_removed",
+    }
+    assert RuleAssessment.model_validate_json(assessment.model_dump_json()) == assessment
 
 
 @pytest.mark.parametrize("counter", ["omitted_by_depth", "omitted_by_limit"])

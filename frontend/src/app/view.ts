@@ -174,13 +174,6 @@ export function closesPanel(
   return event.key === "Escape" && !event.defaultPrevented && !event.isComposing;
 }
 
-/** Changes waiting on the person, across agents: the top bar's neutral counter. */
-export function readyCount(state: State): number {
-  return selectPendingChanges(state).filter(
-    (change) => change.status === "ready_for_review" || change.status === "conflict",
-  ).length;
-}
-
 /** Tab state is owned by navigation, never by the event reducer. */
 export interface FocusTab {
   id: string;

@@ -1348,3 +1348,74 @@ tests scan, rolling numbers, top-edge light, focus glow and button press are par
 
 Reason: light that is on at rest stops telling who is working; a ground that carries the repository's
 shape gives the idle screen something true to show without competing with the graph.
+## 2026-10-29 — Small cones require no unobserved possible callers
+
+The maintainer decided that `small_cone` is unknown when a seed or cone entry has callers
+linked only by possible calls, or when that count is unavailable. Unknown never passes rules
+approval; the change waits for the person. The cone follows exact calls only, so an empty cone
+means "not seen", not "safe". A proven failure of the existing exact limits stays fail.
+The count is the same N the review shows as "N possible callers, not followed": distinct
+non-test sources outside the seeds and entries, with a possible call to a target and no exact
+call to any target. Both proposal assessment and the prepared merge candidate measure it.
+
+## 2026-10-29 — Item 9 questions are only for unasked or untied differences
+
+The maintainer decided on 2026-10-29, as follow-up 3 to item 9 and the decisions inbox. This entry records the
+parts that touch item 9's producers and events; line B records the card, the inbox and the header.
+
+Questions are only for differences the task did not ask for, or that Oversight could not tie to the task: the
+decision model's `not_asked_for` and `cannot_tell`. A difference classified `asked_for` never becomes a review
+card. It goes into the server-written summary of what changed, so it is reported, never dropped.
+
+Yes means the same on every question, including "Oversight could not tell whether this was asked for". A Yes
+records that the person accepted the difference, never that the task asked for it. Both come from existing data,
+with no new contract field: "asked for" only from the classification, which never has a card, and "accepted by
+the person" from a card answered Yes by the person. The summary and proof 3's counts keep them apart. A card's
+kind is read from its server-authored question, one of two fixed texts. When pinned examples exist (item 13), a
+Yes on a could-not-tell question is the one offered as "keep as example".
+## 2026-10-29 — Aggregate counts on demand and measured frame titles
+
+The maintainer approved both fixes on October 28 at 23:52 ART (October 29 UTC).
+The route-cost audit of the dark Boltons preset at 1920×1080 found 101 aggregate labels touching
+another label or header at the start camera (180 label pairs, 47 label/header pairs), and 211
+at 0.2 zoom (448 and 119 pairs). Functions at 0.2 also put `NamedTupleInpu…` against `4 methods`.
+
+Replace always-visible aggregate counts with immediate labels on the hovered aggregate and the
+selected node's aggregates. Keep the directed edges, arrows, counts, routes and camera unchanged;
+edges remain unselectable and this interaction takes no focus. DESIGN.md records this departure.
+
+Replace average-glyph title and count estimates with cached canvas widths from the loaded
+Atkinson title and count faces. Reserve the count's actual width, the existing gap and the folded
+chevron inset before ellipsizing; preserve fonts, frame sizes, header layers and clipping.
+Graph creation waits for these faces; a recovered font load rebuilds early fallback layers once.
+Without font/canvas measurement, tests retain the estimate. Row state-word clearance uses the
+same measurer because it needs only the existing word face and size.
+## 2026-10-29 — Count final decisions per change and keep their entry point visible
+
+The maintainer approved one inbox entry for the latest pending revision of each change, containing
+its questions and other decisions. Answers, card answers, answering echoes and delegations keep
+that entry pending; delegation attempts remain history. A completed Approve, Request changes or
+Reject removes it at change.resolved; a merge conflict still needs action. A new revision after
+Request changes is pending again. Decisions without a change, such as a lead plan, remain single
+entries. This replaces the earlier answer-or-echo closure rule and rule 3's hide/reopen behavior,
+while retaining its delegation history, original ordering, event-clock age and run reset.
+
+The header is the inbox entry point, always in the same place and at the same height: "Nothing
+needs you" at zero, in muted gray without a lamp or badge; "Decisions · N" otherwise, with a neutral
+count in tabular Mono. Its accessible name includes N. Until the inbox view exists it opens the
+current review queue. The agent card's "Ready for review" pill stays unchanged.
+
+
+## 2026-10-29 — Show possible callers the exact cone does not follow
+
+The maintainer approved this wording on 2026-10-29 at 09:39 ART, before proof 2 starts.
+An empty exact cone cannot establish that a change affects nothing. Review and live diff now
+state the one-hop possible callers outside the seeds and bounded cone, excluding tests and
+nodes with an exact call into either. The count uses the change overlay for live and proposed
+changes. DESIGN.md records the approved empty/non-empty texts and neutral presentation.
+
+On Boltons d31d821, 726 of 925 library functions and methods have an empty exact cone;
+356 of those have possible callers. A measured built-in method name filter was rejected:
+it hides every possible caller of 310 methods (OrderedMultiDict 42, IndexedSet 25,
+BarrelList 24), leaving 278 of them apparently without callers at all. Count every possible
+call here, regardless of name; do not follow these calls or imply the cone is complete.

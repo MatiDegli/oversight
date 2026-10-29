@@ -3,8 +3,13 @@ import { expect, it } from "vitest";
 
 import kinds from "../../../fixtures/events/handwritten-inbox-kinds.jsonl?raw";
 import { parseEvent } from "../transport";
-import { applyEvent, createInitialState, selectDecisionInbox } from "./index";
+import { applyEvent, createInitialState, selectDecisionInbox as groupedInbox } from "./index";
 import type { State } from "./types";
+
+const selectDecisionInbox = (state: State) =>
+  groupedInbox(state)
+    .flatMap((entry) => entry.decisions)
+    .filter((decision) => decision.kind !== "change");
 
 const log = kinds.trim().split("\n").map(parseEvent);
 const replay = () => log.reduce(applyEvent, createInitialState());
@@ -39,12 +44,12 @@ const refKinds = [
 ] as const;
 
 it.each(refKinds)(
-  "closes only the matching %s on an echo and reopens it after a failed delegation",
+  "keeps the matching %s on an answering echo and records its failed delegation without closing",
   (kind) => {
     const state = replay();
     const before = selectDecisionInbox(state);
     const entry = before.find((e) => e.identity.kind === kind);
-    if (!entry || entry.identity.kind === "revert_needs_you")
+    if (!entry || entry.identity.kind === "revert_needs_you" || entry.identity.kind === "change")
       throw new Error("Missing fixture entry");
     const ref = entry.identity;
     const stale = delegation(state, { ...ref, evidence_seq: ref.evidence_seq + 1 });
@@ -52,9 +57,7 @@ it.each(refKinds)(
     const wrongRevision = delegation(state, { ...ref, revision: ref.revision + 1 });
     expect(selectDecisionInbox(wrongRevision).map((e) => e.id)).toEqual(before.map((e) => e.id));
     const after = delegation(state, ref);
-    expect(selectDecisionInbox(after).map((e) => e.id)).toEqual(
-      before.filter((e) => e.id !== entry.id).map((e) => e.id),
-    );
+    expect(selectDecisionInbox(after).map((e) => e.id)).toEqual(before.map((e) => e.id));
     const agent = after.agents["agent-6"];
     if (!agent) throw new Error("Missing delegation agent");
     const stopped = append(after, {
@@ -169,7 +172,7 @@ it("keeps Revert separate from change resolutions and closes only its recorded i
   expect(selectDecisionInbox(closed)).toHaveLength(selectDecisionInbox(state).length - 1);
 });
 
-it("closes confirmed examples and selects the smallest recorded proposal example", () => {
+it("retains confirmed examples and selects the smallest recorded proposal example", () => {
   const state = replay();
   const status = state.agents["agent-2"];
   const proposal = log.find((e) => e.type === "change.proposed");
@@ -186,7 +189,7 @@ it("closes confirmed examples and selects the smallest recorded proposal example
       })),
     },
   });
-  expect(selectDecisionInbox(confirmed).some((e) => e.kind === "examples_before_code")).toBe(false);
+  expect(selectDecisionInbox(confirmed).some((e) => e.kind === "examples_before_code")).toBe(true);
   const proposed = append(state, {
     ...proposal,
     payload: {
@@ -218,7 +221,7 @@ it("closes confirmed examples and selects the smallest recorded proposal example
   ).toMatchObject({ source: "task", value: { example_id: "small" } });
 });
 
-it("closes all entries of a resolved candidate while preserving explicitly Unsure cards", () => {
+it("closes the whole resolved candidate even with explicitly Unsure cards", () => {
   const state = replay();
   const conflict = log.find((e) => e.type === "change.resolved" && e.payload.merge === "conflict");
   const fact = log.find((e) => e.type === "change.facts_recorded");
@@ -247,5 +250,5 @@ it("closes all entries of a resolved candidate while preserving explicitly Unsur
         })) ?? null,
     },
   });
-  expect(selectDecisionInbox(unsure).filter((e) => e.changeId === "change-1")).toHaveLength(2);
+  expect(selectDecisionInbox(unsure).filter((e) => e.changeId === "change-1")).toHaveLength(0);
 });
