@@ -1348,3 +1348,18 @@ The header is the inbox entry point, always in the same place and at the same he
 needs you" at zero, in muted gray without a lamp or badge; "Decisions · N" otherwise, with a neutral
 count in tabular Mono. Its accessible name includes N. Until the inbox view exists it opens the
 current review queue. The agent card's "Ready for review" pill stays unchanged.
+
+
+## 2026-10-29 — Show possible callers the exact cone does not follow
+
+The maintainer approved this wording on 2026-10-29 at 09:39 ART, before proof 2 starts.
+An empty exact cone cannot establish that a change affects nothing. Review and live diff now
+state the one-hop possible callers outside the seeds and bounded cone, excluding tests and
+nodes with an exact call into either. The count uses the change overlay for live and proposed
+changes. DESIGN.md records the approved empty/non-empty texts and neutral presentation.
+
+On Boltons d31d821, 726 of 925 library functions and methods have an empty exact cone;
+356 of those have possible callers. A measured built-in method name filter was rejected:
+it hides every possible caller of 310 methods (OrderedMultiDict 42, IndexedSet 25,
+BarrelList 24), leaving 278 of them apparently without callers at all. Count every possible
+call here, regardless of name; do not follow these calls or imply the cone is complete.

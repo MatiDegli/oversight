@@ -39,9 +39,9 @@ function distances(
   return distance;
 }
 
-/** The same run limits as the backend; this pure preview makes no request. */
-export function liveImpact(state: State, change: ChangeState): ImpactCone | null {
-  if (!state.graph || !state.run) return null;
+/** Main with this change applied, shared by both impact calculations. */
+function impactGraph(state: State, change: ChangeState) {
+  if (!state.graph) return null;
   const removed = new Set(change.graph.nodes_removed);
   const nodes = new Map(
     [...state.graph.nodes, ...change.graph.nodes_added]
@@ -51,6 +51,42 @@ export function liveImpact(state: State, change: ChangeState): ImpactCone | null
   const edges = new Map(state.graph.edges.map((edge) => [edge.id, edge]));
   for (const id of change.graph.edges_removed) edges.delete(id);
   for (const edge of change.graph.edges_added) edges.set(edge.id, edge);
+  return { nodes, edges };
+}
+
+/** Distinct one-hop possible callers outside the exact cone; null means unknown. */
+export function possibleCallers(
+  state: State,
+  change: ChangeState,
+  cone: ImpactCone,
+): number | null {
+  const graph = impactGraph(state, change);
+  if (!graph) return null;
+  const { nodes, edges } = graph;
+  const targets = new Set([...cone.seeds, ...cone.entries.map((entry) => entry.node_id)]);
+  const possible = new Set<string>();
+  const exact = new Set<string>();
+  for (const edge of edges.values()) {
+    const source = nodes.get(edge.src);
+    if (
+      edge.kind !== "calls" ||
+      !nodes.has(edge.dst) ||
+      !targets.has(edge.dst) ||
+      !source ||
+      source.is_test ||
+      targets.has(edge.src)
+    )
+      continue;
+    (edge.confidence === "exact" ? exact : possible).add(edge.src);
+  }
+  return [...possible].filter((id) => !exact.has(id)).length;
+}
+
+/** The same run limits as the backend; this pure preview makes no request. */
+export function liveImpact(state: State, change: ChangeState): ImpactCone | null {
+  const graph = impactGraph(state, change);
+  if (!graph || !state.run) return null;
+  const { nodes, edges } = graph;
   const calls = [...edges.values()].filter(
     (edge) =>
       edge.kind === "calls" &&

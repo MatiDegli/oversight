@@ -888,6 +888,17 @@ everything else steps back.
 - The cone card on the graph lists the possibly affected functions by distance, with counts, and
   says what the bounds cut, for example "+12 omitted by depth". It is "possibly affected", never a
   complete list. The review panel keeps a one-line summary.
+- The cone follows exact calls only. On main's graph with the change's nodes and edges applied,
+  count distinct non-test callers outside seeds and cone entries that have a possible call into
+  either and no exact call into either. Count every possible call, without a built-in name filter;
+  this is one hop only, with no further traversal, for live edits and proposals alike.
+- Empty cone with N > 0: "No exact callers · N possible callers, not followed" (singular:
+  "1 possible caller"). With N = 0 keep "No functions possibly affected within the cone bounds"
+  in the summary and "No functions in this cone within its bounds." in the cone card.
+  Non-empty cone: keep the summary and add "+N possible callers, not followed" beside depth
+  and node-limit omissions in the facts row and cone card. Use the same neutral pattern and
+  existing omission icon in the facts row; no warning color or style. With no graph, show no
+  possible-callers text.
 - In level 1, before the cone exists, review dims everything except the change's nodes.
 - The cone changes node and edge emphasis; it adds no light source to the LED field.
 

@@ -5,8 +5,13 @@ import { routingOmissionText } from "../graph";
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
-export function impactSummary(cone: ImpactCone): string {
+export function possibleCallersText(count: number): string {
+  return `${String(count)} possible ${count === 1 ? "caller" : "callers"}, not followed`;
+}
+
+export function impactSummary(cone: ImpactCone, possible = 0): string {
   const count = cone.entries.length;
+  if (count === 0 && possible > 0) return `No exact callers · ${possibleCallersText(possible)}`;
   if (count === 0) return "No functions possibly affected within the cone bounds";
   const distance = Math.max(...cone.entries.map((entry) => entry.distance));
   return `${String(count)} ${count === 1 ? "function" : "functions"} possibly affected, up to distance ${String(distance)}`;
@@ -30,6 +35,7 @@ export function ImpactConeCard({
   outOfView,
   onReveal,
   routingOmissions = 0,
+  possible = 0,
 }: {
   cone: ImpactCone;
   nodes: readonly GraphNode[];
@@ -37,6 +43,7 @@ export function ImpactConeCard({
   /** A click on a row that says "Out of view" asks the camera to pan there; nothing else does. */
   onReveal?: (nodeId: string) => void;
   routingOmissions?: number;
+  possible?: number;
 }) {
   const names = new Map(nodes.map((node) => [node.id, node.qualname]));
   const groups = new Map<number, ImpactCone["entries"]>();
@@ -54,7 +61,9 @@ export function ImpactConeCard({
       <div className="min-h-0 overflow-auto">
         {cone.entries.length === 0 && (
           <p className="mt-(--spacing-sm) text-muted">
-            No functions in this cone within its bounds.
+            {possible > 0
+              ? impactSummary(cone, possible)
+              : "No functions in this cone within its bounds."}
           </p>
         )}
         {[...groups].map(([distance, entries]) => (
@@ -113,8 +122,13 @@ export function ImpactConeCard({
           </section>
         ))}
       </div>
-      {(cone.omitted_by_depth > 0 || cone.omitted_by_limit > 0) && (
+      {(cone.omitted_by_depth > 0 ||
+        cone.omitted_by_limit > 0 ||
+        (cone.entries.length > 0 && possible > 0)) && (
         <div className="shrink-0">
+          {cone.entries.length > 0 && possible > 0 && (
+            <p className="mt-(--spacing-sm) text-muted">+{possibleCallersText(possible)}</p>
+          )}
           {cone.omitted_by_depth > 0 && (
             <p className="mt-(--spacing-sm) text-muted">
               +{cone.omitted_by_depth} omitted by depth
