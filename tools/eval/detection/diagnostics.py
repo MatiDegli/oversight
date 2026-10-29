@@ -4,6 +4,7 @@ import json
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
+import openai
 from openai.types.chat import ChatCompletion
 from tools.eval.detection_types import CallDiagnostics, ValidationStage
 
@@ -66,7 +67,11 @@ class DetectionClient(DecisionClient):
     """Retain only bounded metadata before SDK envelope checks; no response persistence."""
 
     async def _completion(self, params: dict[str, object]) -> ChatCompletion:
-        completion = await super()._completion(params)
+        try:
+            completion = await super()._completion(params)
+        except openai.APITimeoutError as error:
+            # The receipt remains unknown. Do not mask this timeout with a later retry denial.
+            raise TimeoutError from error
         trace = CURRENT_TRACE.get()
         if trace is not None:
             trace.raw(completion)

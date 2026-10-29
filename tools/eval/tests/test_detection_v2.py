@@ -260,7 +260,8 @@ def test_dry_projection_prints_both_bounds_and_uses_larger():
 
 
 @pytest.mark.anyio
-async def test_sdk_timeout_is_deadline(budget):
+@pytest.mark.parametrize("attempts", [1, 5])
+async def test_sdk_timeout_is_deadline(budget, attempts):
     request = httpx.Request("POST", "https://decision.test/v1/chat/completions")
     api = FakeApi(openai.APITimeoutError(request=request))
     sdk = DetectionClient(
@@ -268,7 +269,7 @@ async def test_sdk_timeout_is_deadline(budget):
         base_url="https://decision.test/v1",
         api_key="test",
         max_output_tokens=completion_limit(),
-        retry=RetryPolicy(max_attempts=1),
+        retry=RetryPolicy(max_attempts=attempts, base_s=0),
         http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(api.handle)),
     )
     try:
@@ -277,6 +278,8 @@ async def test_sdk_timeout_is_deadline(budget):
             INPUT, deadline=asyncio.get_running_loop().time() + 10
         )
         assert result.unavailable == "deadline"
+        assert len(api.bodies) == budget.receipts == budget.sends == 1
+        assert budget.record.unknown
         diagnostic = adapter.evidence[0].diagnostics
         assert diagnostic is not None and diagnostic.validation_stage == "deadline"
     finally:
