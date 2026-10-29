@@ -21,11 +21,7 @@ from fastapi import FastAPI
 from oversight import runtime_answering, runtime_review
 from oversight.agents import (
     BASETEN_BASE_URL,
-    FAKE_MODEL,
-    FAKE_MODEL_B,
     META_BASE_URL,
-    MUSE_SPARK,
-    MUSE_SPARK_OPEN,
     UNVERIFIED_PROFILES,
     AgentRun,
     AgentTask,
@@ -71,6 +67,8 @@ from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings
 from oversight.setup import missing_settings, offered_profiles
+from oversight.slots import PROFILES as PROFILES
+from oversight.slots import SlotDefault, resolve_slots
 from oversight.workspace import (
     OPEN_NOTICE,
     Tree,
@@ -125,10 +123,6 @@ LIMITS = Limits(
 GIT_TIMEOUT_S = 30
 WARN_AT = (0.5, 0.8)
 BLOCK_AT = 0.9
-OFFERED_SLOTS: tuple[Slot, ...] = ("A", "B")
-"""The slots this server offers, in the order a start with no slot tries them. A fake B with no
-script of its own is left out (`LiveRun._offer`)."""
-PROFILES = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL, FAKE_MODEL_B)}
 PROVIDER_URLS = {"meta": META_BASE_URL, "baseten": BASETEN_BASE_URL}
 """The Chat Completions endpoint of each provider that has one; the key is `{provider}_api_key`."""
 MAIN_SUSPECT = "main's state is unknown: reject the change and restart the server"
@@ -212,11 +206,11 @@ class LiveRun:
         self._review_pending: dict[str, tuple[ReviewCapture, ChangeProposed]] = {}
         self._author_models: dict[str, set[str | None]] = {}
         self._slot_profiles: dict[Slot, ModelProfile] = {}
-        """The default profile of each slot this server offers, in `OFFERED_SLOTS` order."""
+        """The default profile of each slot this server offers, in letter order."""
         self._scripts: dict[Slot, Script] = {}
         """The script of each slot that runs the fake model."""
-        for slot in OFFERED_SLOTS:
-            self._offer(slot)
+        for slot, default in resolve_slots(settings).items():
+            self._offer(slot, default)
         self._client_factory = TaskClients(client_factory or self._default_client)
         self._pricing: Pricing | None = None
         if settings.input_usd_per_m is not None and settings.output_usd_per_m is not None:
@@ -278,30 +272,13 @@ class LiveRun:
         rejected or merged."""
         self._count = 0
 
-    def _offer(self, slot: Slot) -> None:
-        """Resolve the slot's default model. A fake B with no script of its own is not offered:
-        reusing A's would propose the same edit twice, and the second approval would conflict."""
-        settings = self._settings
-        if slot == "A":
-            variable, name, script = (
-                "OVERSIGHT_AGENT_MODEL",
-                settings.agent_model,
-                settings.fake_script,
-            )
-        else:
-            variable = "OVERSIGHT_AGENT_MODEL_B"
-            name = settings.agent_model_b or settings.agent_model
-            script = settings.fake_script_b
-        profile = PROFILES.get(name)
-        if profile is None:
-            raise ValueError(f"{variable} must be one of {', '.join(PROFILES)}, not {name!r}")
-        if profile.provider == "fake":
-            if script is None:
-                if slot == "A":
-                    raise ValueError("the fake model needs OVERSIGHT_FAKE_SCRIPT")
-                return
-            self._scripts[slot] = load_script(script, profile)
-        self._slot_profiles[slot] = profile
+    def _offer(self, slot: Slot, default: SlotDefault) -> None:
+        """Load only this slot's own fake script; defaults come from the shared resolver."""
+        if default.profile.provider == "fake":
+            if default.script is None:
+                raise ValueError("the fake model needs OVERSIGHT_FAKE_SCRIPT")
+            self._scripts[slot] = load_script(default.script, default.profile)
+        self._slot_profiles[slot] = default.profile
 
     # --- Startup and shutdown -----------------------------------------------------------------
 
@@ -675,11 +652,12 @@ class LiveRun:
         holders = [str(holder) for holder in self._slots.values()]
         if len(holders) == 1:
             return f"slot {next(iter(self._slots))} is taken ({holders[0]})"
-        return f"both slots are taken ({', '.join(holders)})"
+        capacity = "both slots" if len(holders) == 2 else f"all {len(holders)} slots"
+        return f"{capacity} are taken ({', '.join(holders)})"
 
     def _check(self, request: StartAgent, manager: ChangeManager) -> tuple[Slot, ModelProfile]:
         """The side-effect-free checks; `ApiError` for the first that fails. A named slot is
-        checked as it is and must be free. Without one, the first free slot, A before B, whose
+        checked as it is and must be free. Without one, the first free slot in letter order whose
         start checks pass is taken; if none passes, the first free slot's error is raised."""
         if request.slot is not None:
             slot = request.slot

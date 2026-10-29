@@ -5,8 +5,9 @@ import math
 from collections.abc import Mapping
 from pathlib import Path
 
-from oversight.agents import FAKE_MODEL, FAKE_MODEL_B, MUSE_SPARK, MUSE_SPARK_OPEN
 from oversight.settings import REPO_ROOT, Settings
+from oversight.slots import resolve_profile as resolve_profile
+from oversight.slots import resolve_slots
 from oversight_contracts.commands import MissingSetting, SettingName
 from oversight_contracts.common import Slot
 from oversight_contracts.events import ModelProfile
@@ -67,27 +68,9 @@ def missing_settings(
     return result
 
 
-def resolve_profile(name: str) -> ModelProfile:
-    """Resolve author and reviewer names from the same provider profiles, without I/O."""
-    profiles = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL, FAKE_MODEL_B)}
-    if name not in profiles:
-        raise ValueError("unknown model profile")
-    return profiles[name]
-
-
 def offered_profiles(settings: Settings) -> dict[Slot, ModelProfile]:
-    """The same defaults as LiveRun._offer, without loading scripts or creating a runtime."""
-    offered: dict[Slot, ModelProfile] = {}
-    names: dict[Slot, str] = {
-        "A": settings.agent_model,
-        "B": settings.agent_model_b or settings.agent_model,
-    }
-    for slot, name in names.items():
-        profile = resolve_profile(name)
-        if slot == "B" and profile.provider == "fake" and settings.fake_script_b is None:
-            continue
-        offered[slot] = profile
-    return offered
+    """Runtime defaults from the shared resolver, without script loading or runtime creation."""
+    return {slot: default.profile for slot, default in resolve_slots(settings).items()}
 
 
 def main() -> int:

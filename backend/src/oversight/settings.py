@@ -47,6 +47,8 @@ class Settings:
     # The provider keys. repr=False keeps them out of any log line or traceback that shows Settings.
     meta_api_key: str | None = field(default=None, repr=False)
     baseten_api_key: str | None = field(default=None, repr=False)
+    max_agents: int = 4
+    """OVERSIGHT_MAX_AGENTS: offer the first N letters from A, from 1 through 6."""
     agent_model: str = "muse-spark"
     """The profile agents run on: `muse-spark` (Meta) or `fake` (the scripted model, which needs
     `fake_script`). OVERSIGHT_AGENT_MODEL."""
@@ -59,6 +61,22 @@ class Settings:
     fake_script_b: Path | None = None
     """Agent B's own script when it runs `fake`: reusing A's would propose the same edit twice, so a
     fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
+    agent_model_c: str | None = None
+    """OVERSIGHT_AGENT_MODEL_C: unset means A's model, as for B."""
+    fake_script_c: Path | None = None
+    """OVERSIGHT_FAKE_SCRIPT_C: own script required to offer a fake C, as for B."""
+    agent_model_d: str | None = None
+    """OVERSIGHT_AGENT_MODEL_D: unset means A's model, as for B."""
+    fake_script_d: Path | None = None
+    """OVERSIGHT_FAKE_SCRIPT_D: own script required to offer a fake D, as for B."""
+    agent_model_e: str | None = None
+    """OVERSIGHT_AGENT_MODEL_E: unset means A's model, as for B."""
+    fake_script_e: Path | None = None
+    """OVERSIGHT_FAKE_SCRIPT_E: own script required to offer a fake E, as for B."""
+    agent_model_f: str | None = None
+    """OVERSIGHT_AGENT_MODEL_F: unset means A's model, as for B."""
+    fake_script_f: Path | None = None
+    """OVERSIGHT_FAKE_SCRIPT_F: own script required to offer a fake F, as for B."""
     cross_review: bool = False
     """Opt-in only. Runtime review additionally requires an injected call transport."""
     review_model: str = "muse-spark-open"
@@ -107,6 +125,8 @@ class Settings:
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        if type(self.max_agents) is not int or not 1 <= self.max_agents <= 6:
+            raise ValueError("OVERSIGHT_MAX_AGENTS must be an integer from 1 to 6")
         if (
             type(self.review_card_classifications) is not int
             or self.review_card_classifications < 0
@@ -132,10 +152,19 @@ class Settings:
             # An empty value, as in .env.example, means the key is not set.
             meta_api_key=merged.get("META_API_KEY") or None,
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,
+            max_agents=resolve_max_agents(merged),
             agent_model=merged.get("OVERSIGHT_AGENT_MODEL") or cls.agent_model,
             fake_script=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT")),
             agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
             fake_script_b=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_B")),
+            agent_model_c=merged.get("OVERSIGHT_AGENT_MODEL_C") or None,
+            fake_script_c=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_C")),
+            agent_model_d=merged.get("OVERSIGHT_AGENT_MODEL_D") or None,
+            fake_script_d=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_D")),
+            agent_model_e=merged.get("OVERSIGHT_AGENT_MODEL_E") or None,
+            fake_script_e=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_E")),
+            agent_model_f=merged.get("OVERSIGHT_AGENT_MODEL_F") or None,
+            fake_script_f=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_F")),
             cross_review=merged.get("OVERSIGHT_CROSS_REVIEW", "false").lower() == "true",
             review_model=merged.get("OVERSIGHT_REVIEW_MODEL") or cls.review_model,
             # Difference decisions have no default allowance and never share Meta's balance.
@@ -210,3 +239,12 @@ def resolve_ports(
     vite_port = parse("OVERSIGHT_VITE_PORT", raw_vite) if raw_vite is not None else None
     validate_ports(port, vite_port)
     return port, vite_port
+
+
+def resolve_max_agents(values: Mapping[str, str]) -> int:
+    """An absent capacity defaults to four; an explicitly empty value is invalid."""
+    raw = values.get("OVERSIGHT_MAX_AGENTS", "4").lstrip("0")
+    # Check the bounded value before int(): oversized input must name this variable too.
+    if raw not in ("1", "2", "3", "4", "5", "6"):
+        raise ValueError("OVERSIGHT_MAX_AGENTS must be an integer from 1 to 6")
+    return int(raw)

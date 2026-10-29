@@ -65,6 +65,7 @@ def meta_settings(tmp_path: Path, **overrides: Any) -> Settings:
     """The Meta profile with a fake key and the documented budget and prices. Tests pair it with a
     scripted client factory: nothing reaches Meta (and the root conftest blocks it anyway)."""
     values: dict[str, Any] = {
+        "max_agents": 2,  # Legacy A/B scenarios explicitly keep their two-slot capacity.
         "agent_model": "muse-spark",
         "meta_api_key": "test-key",
         "budget_usd": 150.0,
