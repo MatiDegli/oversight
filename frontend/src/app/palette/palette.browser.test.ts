@@ -190,6 +190,7 @@ it("leaves Ctrl K as Monaco's chord prefix in an editable editor", async () => {
 it("Ctrl K opens from read-only Monaco; Escape restores its exact focus without closing the tab", async () => {
   await withPage(async (page) => {
     await page.getByRole("button", { name: /^Decisions:/ }).click();
+    await page.getByRole("button", { name: /^Review change/ }).click();
     const original = page
       .locator('.monaco-editor [role="textbox"][aria-autocomplete="none"]')
       .first();
@@ -216,6 +217,7 @@ it("Escape returns to the review comment with text intact and no decision comman
       if (request.method() === "POST") posts.push(request.url());
     });
     await page.getByRole("button", { name: /^Decisions:/ }).click();
+    await page.getByRole("button", { name: /^Review change/ }).click();
     const comment = page.getByRole("textbox", {
       name: "Comment (required for Request changes)",
       exact: true,

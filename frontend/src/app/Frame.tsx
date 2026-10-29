@@ -4,7 +4,7 @@ import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import type { State } from "../state";
 import type { View, ViewAction, FocusTab } from "./view";
-import { panelOpen } from "./view";
+import { panelOpen, surfaceTab } from "./view";
 import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
@@ -85,6 +85,11 @@ export function Frame(props: FrameProps) {
         state={state}
         onOpenQueue={props.onOpenQueue}
         onOpenPalette={shell.openPalette}
+        onOpenSettings={
+          props.onTabAction
+            ? () => props.onTabAction?.({ type: "open", tab: surfaceTab(view, "settings") })
+            : undefined
+        }
         practice={props.practice}
       />
       <div className="shell-workspace">

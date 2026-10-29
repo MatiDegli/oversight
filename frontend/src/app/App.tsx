@@ -22,7 +22,7 @@ import {
   tabbedView,
   navigateView,
   viewReducer,
-  nextReview,
+  surfaceTab,
   openChange,
   openReview,
   panelOpen,
@@ -120,13 +120,7 @@ export function App() {
     );
   }, []);
   const onOpenQueue = useCallback(() => {
-    const state = stateStore.getState().state;
-    setView((current) => {
-      const changeId = nextReview(state, current.review);
-      return changeId === null
-        ? current
-        : navigateView(current, openReview(state, current, changeId) ?? current, state);
-    });
+    setView((current) => viewReducer(current, { type: "open", tab: surfaceTab(current, "inbox") }));
   }, []);
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {

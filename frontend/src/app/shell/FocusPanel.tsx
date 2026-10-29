@@ -1,8 +1,8 @@
 import { agentSlotStyle } from "../../theme";
 import { Maximize2, Minimize2, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
-import { ReviewPanel } from "../../review";
+import { ReviewPanel, DecisionInbox, GrantSettings } from "../../review";
 import type { FrameProps } from "../Frame";
 import { LivePanel } from "./LivePanel";
 import { focusRing } from "./shared";
@@ -17,6 +17,12 @@ export function FocusPanel(
 ) {
   const { view, state, onClosePanel, onTabAction } = props;
   const tabs = view.tabs ?? [];
+  const tablist = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    tablist.current
+      ?.querySelector('[aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [view.activeTab]);
   if (props.practiceOnly)
     return (
       <section className="focus-panel" aria-label="Focus panel">
@@ -28,6 +34,7 @@ export function FocusPanel(
     <section className="focus-panel" aria-label="Focus panel">
       <div className="focus-tabs">
         <div
+          ref={tablist}
           role="tablist"
           aria-label="Open files and changes"
           className="flex min-w-0 flex-1 overflow-x-auto"
@@ -37,13 +44,17 @@ export function FocusPanel(
             const change = changeId ? state.changes[changeId] : undefined;
             const slot = change ? state.agents[change.agent_id]?.slot : undefined;
             const title =
-              tab.id === "practice"
-                ? "Two-change practice"
-                : tab.review
-                  ? `Review · ${tab.review}`
-                  : tab.diff
-                    ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
-                    : (tab.file?.path.split("/").at(-1) ?? "File");
+              tab.id === "inbox"
+                ? "Decisions"
+                : tab.id === "settings"
+                  ? "Settings"
+                  : tab.id === "practice"
+                    ? "Two-change practice"
+                    : tab.review
+                      ? `Review · ${tab.review}`
+                      : tab.diff
+                        ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
+                        : (tab.file?.path.split("/").at(-1) ?? "File");
             return (
               <div
                 key={tab.id}
@@ -90,7 +101,11 @@ export function FocusPanel(
         </button>
       </div>
       <div id="focus-content" role="tabpanel" className="focus-body">
-        {view.activeTab === "practice" && props.practice?.active ? (
+        {view.activeTab === "inbox" ? (
+          <DecisionInbox state={state} onReview={props.onReview} />
+        ) : view.activeTab === "settings" ? (
+          <GrantSettings state={state} />
+        ) : view.activeTab === "practice" && props.practice?.active ? (
           props.practice.content
         ) : view.review !== null ? (
           <ReviewPanel

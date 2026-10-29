@@ -1,4 +1,4 @@
-import { Folder, GitBranch, Search } from "lucide-react";
+import { Folder, GitBranch, Search, Settings } from "lucide-react";
 
 import { selectDecisionInboxCount } from "../state";
 import type { State } from "../state";
@@ -17,12 +17,14 @@ export function TopBar({
   state,
   onOpenQueue,
   onOpenPalette,
+  onOpenSettings,
   practice,
 }: {
   practice?: { active: boolean; open: () => void };
   state: State;
   onOpenQueue?: () => void;
   onOpenPalette?: () => void;
+  onOpenSettings?: () => void;
 }) {
   const ready = selectDecisionInboxCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
@@ -82,8 +84,8 @@ export function TopBar({
           type="button"
           disabled={onOpenQueue === undefined}
           onClick={onOpenQueue}
-          title="Open the review queue"
-          aria-label={`Decisions: ${String(ready)} pending. Open review queue`}
+          title="Open decisions inbox"
+          aria-label={`Decisions: ${String(ready)} pending. Open decisions inbox`}
           className={`inline-flex h-(--queue-counter-height) items-center gap-2.5 rounded-control border border-border bg-raised px-3.5 text-(length:--label-size) font-semibold ${ready > 0 ? "text-text" : "text-muted"} enabled:hover:bg-page-raised ${focusRing}`}
         >
           {ready === 0 ? (
@@ -96,6 +98,17 @@ export function TopBar({
         </button>
       </div>
       <SpendMeter state={state} showBrake={false} />
+      {onOpenSettings && (
+        <button
+          type="button"
+          aria-label="Open Settings"
+          title="Settings"
+          onClick={onOpenSettings}
+          className={`rail-button ${focusRing}`}
+        >
+          <Settings aria-hidden="true" size={18} />
+        </button>
+      )}
     </header>
   );
 }
