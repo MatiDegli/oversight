@@ -952,10 +952,13 @@ WebGL2, a failed draw or a lost context leaves plain ground behind the graph: no
 lines (the fallback that existed before the contours).
 
 - **LEDs:** a canvas of 7px square LEDs under transparent Cytoscape, with off and three lit levels
-  chosen by ordered dithering. A lamp is drawn only where light reaches its cell: its square in
-  lamp-off, or lit, with a faint guide dot every 28px. At rest no light reaches anything, so no
-  lamp is drawn (this replaces "lamp-off and guide-dot make a faint 28px grid at rest"). The canvas
-  reads rendered boxes; it does not draw graph nodes or edges.
+  chosen by ordered dithering. Only a lit lamp is drawn: its square, in the light's color. An off
+  lamp is not drawn, so the ground and its contour lines show between the lit ones, and a faint
+  guide dot every 28px stays. At rest no light reaches anything, so no lamp is drawn (this replaces
+  "lamp-off and guide-dot make a faint 28px grid at rest"; a field told no modules, so with no
+  contours, still draws its off lamps in `lamp-off`). The contour lines
+  fade out under a light by its smooth glow, not by its lamps, so no edge of the light's pool cuts
+  them in blocks. The canvas reads rendered boxes; it does not draw graph nodes or edges.
 - **Shape and spread:** light follows the outline of the current row or folded card, never its
   whole module frame. The near and far spreads are about 26px and 72px at 100% zoom, measured
   outward from that box, and scale with graph zoom. This preserves the box-shaped pool of light.

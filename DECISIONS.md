@@ -1328,6 +1328,12 @@ tests scan, rolling numbers, top-edge light, focus glow and button press are par
    layer. DESIGN.md records which earlier lines each decision replaces (Dot field and rings,
    Motion, Reduced motion, the departures table). Where the build differs from a sketch, the
    departures table says so: no "merged" chips on nodes yet, and the contour mask is cell-wide.
+7. **Build departures:** with contours on, an off lamp is not drawn (a day-mode change: the paper
+   no longer shows a dotted grid at rest), because the lines need the ground bare. The lines fade
+   under a light by its smooth glow (a second grid beside the lamps, which the golden lamp test
+   leaves untouched), so the light's pool never cuts them in blocks. One slow timer (every 500ms)
+   repaints the drift and the light's fade; animation frames run only while a pulse travels, a
+   ring plays or a transition runs.
 
 Reason: light that is on at rest stops telling who is working; a ground that carries the repository's
 shape gives the idle screen something true to show without competing with the graph.
