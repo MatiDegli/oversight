@@ -7,6 +7,8 @@ import type { BoxSource } from "./boxSource";
 import type { Contours } from "./terrain";
 import { createLampRenderer } from "./renderer";
 import { createLampField } from "./model";
+import { MarkerLayer } from "./markerLayer";
+import { TravelLayer } from "./travel";
 
 vi.mock("./renderer", () => ({ createLampRenderer: vi.fn() }));
 vi.mock("./model", async (original) => ({
@@ -688,6 +690,26 @@ describe("frame headers", () => {
     // The lamp under a header is dark; the lamp in the frame's body is the grid's.
     expect(canvas.oversightField?.lamp(10, 40)?.level).toBe(0);
     expect(canvas.oversightField?.lamp(10, 10)?.level).toBe(3);
+    controller.dispose();
+  });
+
+  it("hide the lamps and lines only: a marker or a pulse over a header or a folded card is not clipped", () => {
+    const header = { x1: 0, y1: 0, x2: 70, y2: 20 };
+    const framed = { ...source, headers: () => [header] } as unknown as BoxSource;
+    const marker = vi.spyOn(MarkerLayer.prototype, "draw");
+    const travel = vi.spyOn(TravelLayer.prototype, "draw");
+    const controller = createFieldController(canvas, framed);
+    controller.update({
+      mode: "watch",
+      lights: [{ id: "a", source: "agent-a", marker: "agent-1", weight: 1, pulses: false }],
+    });
+    // The lamps are hidden under the header...
+    expect(renderer.draw.mock.calls.at(-1)?.[2]).toContainEqual(header);
+    // ...but the letter above the graph and the pulse on its way keep only the overlays' masks.
+    expect(marker).toHaveBeenCalled();
+    expect(travel).toHaveBeenCalled();
+    expect(marker.mock.calls.at(-1)?.[2]).not.toContainEqual(header);
+    expect(travel.mock.calls.at(-1)?.[2]).not.toContainEqual(header);
     controller.dispose();
   });
 

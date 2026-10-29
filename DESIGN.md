@@ -1005,8 +1005,11 @@ lines (the fallback that existed before the contours).
 - **Mask:** the title, legend, zoom controls and every overlay mask the field, including the
   contour lines. Neither the LEDs, the lines nor a travelling light may show through those areas.
   So do the text bands: the header of every open module (its first 54px) or class (44px), padded by
-  6px (`header-mask-pad`), and the exact box of a folded card. Rows are 94% opaque and a folded card
-  hides its own lamps, so lines are not seen through them either.
+  6px (`header-mask-pad`), and the exact box of a folded card; these hide lamps and lines only. An
+  agent's marker and a merge's travelling light are clipped by the overlays alone, as the sketch's
+  DOM marker (life.html:80) and its pulse canvas (life.html:219, z-index 40) lie above everything,
+  so a marker sits whole on a folded card. Rows are 94% opaque and a folded card hides its own
+  lamps, so lines are not seen through them either.
 - **Module frames are translucent:** an open module or class takes the panel color at
   `module-opacity`, 0.62 in dark and 0.5 in day, so the lamps around a lit row show through the
   frame's body, as the sketch's frame does. Only its header is masked; the body between rows,

@@ -118,7 +118,7 @@ class FieldRuntime implements FieldController {
   private readonly markers = new MarkerMotion();
   private readonly markerLayer: MarkerLayer;
   private masks: Box[] = [];
-  /** The overlay masks and the frame headers at the last draw: what hides the lamps. */
+  /** The overlay masks and the frame headers at the last draw: what hides lamps and lines only. */
   private drawnMasks: Box[] = [];
   private masksDirty = true;
   private maskSize = "";
@@ -279,7 +279,9 @@ class FieldRuntime implements FieldController {
       );
       const contours = this.contours(this.grid, width, height, time);
       this.renderer.draw(this.grid, this.look, masks, contours);
-      this.markerLayer.draw(lights, boxes, masks, width, height);
+      // A marker is a letter above the graph, as the sketch's DOM marker is: only the overlays clip it,
+      // never a frame header or a folded card it sits on.
+      this.markerLayer.draw(lights, boxes, this.masks, width, height);
       this.drawPulses(now, width, height);
       this.paintedAt = now;
       this.draws += 1;
@@ -367,7 +369,7 @@ class FieldRuntime implements FieldController {
         );
       }
     }
-    this.travelLayer.draw(pulses, paths, this.drawnMasks, width, height, this.afterlight);
+    this.travelLayer.draw(pulses, paths, this.masks, width, height, this.afterlight);
   }
 
   private slowInterval() {

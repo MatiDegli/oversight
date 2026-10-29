@@ -1628,7 +1628,11 @@ Each is built from tokens; DESIGN.md says which earlier lines each replaces.
    row, 54px and 44px, padded by `header-mask-pad`, 6px) and the exact box of a folded card,
    read at every draw so they follow the camera. A lit row's name and state word stay at 4.5:1 or
    more over the brightest lamp beneath them, a test over both themes, both agents and the
-   frame label were it unmasked: the lowest is 4.93:1 (day, agent B's frame label).
+   frame label were it unmasked: the lowest is 4.93:1 (day, agent B's frame label). The header and
+   folded-card masks apply to lamps and lines only: the first cut agent B's marker in half on the
+   folded Inventory card, and markers and travel keep the overlay masks they had (the sketch's
+   marker is a DOM element, life.html:80, and its pulse canvas sits above everything, life.html:219;
+   neither is masked by a frame header, life.html:644 masks only the lamps).
 6. **The editing row is tinted with its agent's color.** It already wore the sketch's wash (dark
    `#1e0c04` and `#060c1e` at 95%) from the `agent-a-node` and `agent-b-node` tokens; the capture
    shows it for A (a row) and for B (a folded class card, since a method of a folded class is lit
