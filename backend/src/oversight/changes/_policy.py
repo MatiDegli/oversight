@@ -22,6 +22,11 @@ from oversight_contracts.policy import (
 from oversight_contracts.review import AddedTestProbe, CrossReview, IntegrityFact
 
 type Result = Literal["pass", "fail", "unknown"]
+_REVIEW_VERDICTS: dict[Literal["clean", "changes_requested", "unknown"], bool] = {
+    "clean": True,
+    "changes_requested": True,
+    "unknown": False,
+}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -260,7 +265,7 @@ def _cross_review(inputs: PolicyInputs) -> RuleAssessment:
         and author is not None
         and review.complete
         and not review.problems
-        and review.verdict != "unknown"
+        and _REVIEW_VERDICTS.get(review.verdict, False)
         and review.author_model == author.model
         and review.reviewer_model != author.model
         and (review.change_id, review.revision, review.base_commit, review.head_commit)

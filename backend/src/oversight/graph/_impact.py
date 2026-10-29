@@ -12,9 +12,19 @@ functions that reach a seed instead.
 from collections import defaultdict
 from collections.abc import Iterable
 
-from oversight_contracts.graph import ChangeGraph, GraphNode, GraphSnapshot, ImpactCone, ImpactEntry
+from oversight_contracts.graph import (
+    ChangeGraph,
+    Confidence,
+    EdgeKind,
+    GraphNode,
+    GraphSnapshot,
+    ImpactCone,
+    ImpactEntry,
+)
 
 _CONSTRUCTORS = frozenset({"__init__", "__new__", "__post_init__"})
+_CALL_KINDS: dict[EdgeKind, bool] = {"imports": False, "calls": True, "inherits": False}
+_EXACT_CONFIDENCE: dict[Confidence, bool] = {"exact": True, "possible": False}
 
 
 class NodeNotFoundError(LookupError):
@@ -29,7 +39,7 @@ class _Calls:
         self.callers: defaultdict[str, set[str]] = defaultdict(set)
         self.callees: defaultdict[str, set[str]] = defaultdict(set)
         for edge in graph.edges:
-            if edge.kind == "calls" and edge.confidence == "exact":
+            if _CALL_KINDS.get(edge.kind) is True and _EXACT_CONFIDENCE.get(edge.confidence, False):
                 self.callers[edge.dst].add(edge.src)
                 self.callees[edge.src].add(edge.dst)
 
@@ -136,15 +146,18 @@ def possible_callers(graph: GraphSnapshot, cone: ImpactCone) -> list[str]:
     possible: set[str] = set()
     exact: set[str] = set()
     for edge in graph.edges:
-        if edge.kind != "calls" or edge.dst not in targets or edge.dst not in nodes:
+        if _CALL_KINDS.get(edge.kind) is False and edge.confidence in _EXACT_CONFIDENCE:
+            continue
+        if edge.dst not in targets or edge.dst not in nodes:
             continue
         source = nodes.get(edge.src)
         if source is None or source.is_test or edge.src in targets:
             continue
-        if edge.confidence == "possible":
-            possible.add(edge.src)
-        else:
+        if _CALL_KINDS.get(edge.kind) is True and _EXACT_CONFIDENCE.get(edge.confidence, False):
             exact.add(edge.src)
+        else:
+            # Unknown kinds and confidence are uncertain calls, never evidence of absence.
+            possible.add(edge.src)
     return sorted(possible - exact)
 
 
