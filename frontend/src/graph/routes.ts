@@ -255,7 +255,11 @@ function writeRoutes(cy: Core, edges: EdgeCollection, routes: ReadonlyMap<string
       const route = routes.get(edge.id());
       const unroutable = !route && !edge.hasClass("imports");
       if (edge.hasClass("unroutable") !== unroutable) edge.toggleClass("unroutable", unroutable);
-      if (!sameRoute(edge.data("route") as Route | undefined, route)) edge.data({ route });
+      if (!sameRoute(edge.data("route") as Route | undefined, route)) {
+        // A rerouted edge may have left a stationary pointer; wait for a fresh pointer entry.
+        edge.removeClass("count-hover");
+        edge.data({ route });
+      }
     }
   });
   const container = cy.container();
