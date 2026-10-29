@@ -127,6 +127,18 @@ describe("the lamps", () => {
     expect(grid.data[3]).toBe(0);
   });
 
+  it("carry a smooth glow beside the dithered levels: none without light, falling gently outward", () => {
+    expect(lamps(config, 600, 400, [], null).glow?.every((value) => value === 0)).toBe(true);
+    const grid = lamps(config, 1920, 400, [light(BOX)], null);
+    const row = 25;
+    const glow = Array.from({ length: 120 }, (_, i) => grid.glow?.[row * grid.cols + 40 + i] ?? 0);
+    expect(glow[0]).toBeGreaterThan(200);
+    expect(glow).toEqual([...glow].sort((a, b) => b - a));
+    // A level is a step of 85; the glow falls by less than that from one cell to the next.
+    expect(Math.max(...glow.slice(1).map((value, i) => (glow[i] ?? 0) - value))).toBeLessThan(85);
+    expect(glow.at(-1)).toBeLessThan(40);
+  });
+
   it("show one of four levels by an 8 by 8 dither: 0.92 gives 49 lamps of 64 at the top", () => {
     const grid = lamps(config, 600, 400, [light(BOX)], null);
     // Cells 20..27 by 20..27 lie inside the box, where the light is 1 x 0.92 everywhere.

@@ -73,6 +73,11 @@ export interface LampGrid {
   rows: number;
   /** A lamp's color, and as alpha its level: 0 off, 255 the full light. Reused by the next call. */
   data: Uint8ClampedArray;
+  /**
+   * How much light reaches each cell before it is cut into levels, 0 to 255: smooth where `data`
+   * is dithered, so what must fade with the light (the rest contours) fades without blocks.
+   */
+  glow?: Uint8ClampedArray;
 }
 
 const px = Number.parseFloat;
@@ -240,6 +245,7 @@ function extent(config: FieldConfig, light: PlacedLight, glow: number, ring: boo
 /** The arrays a frame is accumulated in, kept between frames. */
 interface Work extends Accumulated {
   data: Uint8ClampedArray;
+  glow: Uint8ClampedArray;
   /** Per column, for the light being added: the distance to its box, and the offset from its center. */
   colX: Float32Array;
   ringX: Float32Array;
@@ -356,6 +362,7 @@ export function createLampField() {
       work.green = new Float32Array(cells);
       work.blue = new Float32Array(cells);
       work.data = new Uint8ClampedArray(cells * 4);
+      work.glow = new Uint8ClampedArray(cells);
     } else {
       work.sum.fill(0);
       work.red.fill(0);
@@ -383,8 +390,8 @@ export function createLampField() {
       addLight(config, cols, rows, one, time, work);
     }
     decays = retained;
-    quantize(config, cols, rows, work, work.data);
-    return { cols, rows, data: work.data };
+    quantize(config, cols, rows, work, work.data, work.glow);
+    return { cols, rows, data: work.data, glow: work.glow };
   };
 }
 
@@ -417,6 +424,7 @@ function quantize(
   rows: number,
   light: Accumulated,
   out: Uint8ClampedArray,
+  glow: Uint8ClampedArray,
 ) {
   const top = config.levels - 1;
   const matrix = ditherOf(config.ditherSize);
@@ -427,6 +435,7 @@ function quantize(
     for (let col = 0; col < cols; col += 1) {
       const k = row * cols + col;
       const total = light.sum[k] ?? 0;
+      glow[k] = Math.min(1, total) * 255;
       let level = 0;
       if (total > 0) {
         const threshold = ((matrix[rowOffset + (col % config.ditherSize)] ?? 0) + 0.5) / steps;
@@ -483,6 +492,7 @@ function emptyWork(): Work {
     green: empty(),
     blue: empty(),
     data: new Uint8ClampedArray(0),
+    glow: new Uint8ClampedArray(0),
     colX: empty(),
     ringX: empty(),
     decay: new Float64Array(0),
