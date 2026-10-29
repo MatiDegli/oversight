@@ -1,7 +1,5 @@
 """Committed arm definitions and provider-free projections; never load settings or secrets."""
 
-import ast
-import inspect
 import json
 import math
 from dataclasses import dataclass
@@ -11,7 +9,7 @@ from pydantic import BaseModel, Field
 from tools.eval.grade import Tariff
 from tools.eval.tasks import BenchError, digest
 
-from oversight.agents import MUSE_SPARK, MUSE_SPARK_OPEN, DecisionClient, classify_difference
+from oversight.agents import D6_RESPONSE_FORMAT, D6_SYSTEM_PROMPT, MUSE_SPARK, MUSE_SPARK_OPEN
 
 VERSION = "detection-d6-v1"
 NO_BEHAVIOR = "No behavior evidence was collected. This is not a measurement of equivalence."
@@ -21,33 +19,8 @@ PROTOCOL = (
 
 
 def system_prompt() -> str:
-    """Import the literal from the actual public function; fail closed on backend restructuring.
-
-    The backend exposes no prompt constant. Extract its system content from its AST rather than
-    maintaining a second copy. No provider object, settings, code execution, or network is needed.
-    A parity test also captures the real function's outgoing request.
-    """
-    tree = ast.parse(inspect.getsource(classify_difference))
-    found = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Dict):
-            continue
-        fields = {
-            k.value: v
-            for k, v in zip(node.keys, node.values, strict=False)
-            if isinstance(k, ast.Constant)
-        }
-        role, content = fields.get("role"), fields.get("content")
-        if (
-            isinstance(role, ast.Constant)
-            and role.value == "system"
-            and isinstance(content, ast.Constant)
-            and isinstance(content.value, str)
-        ):
-            found.append(content.value)
-    if len(found) != 1:
-        raise BenchError("D6 system prompt unavailable; backend public export required")
-    return found[0]
+    """Use the public product prompt without constructing clients or loading settings."""
+    return D6_SYSTEM_PROMPT
 
 
 @dataclass(frozen=True)
@@ -62,7 +35,7 @@ class Arm:
         template = {
             "system": prompt,
             "arm_id": self.id,
-            "d6_source": inspect.getsource(classify_difference) if model else None,
+            "response_format": D6_RESPONSE_FORMAT if model else None,
             "adapter_source_sha256": digest(Path(__file__).with_name("adapters.py").read_text())
             if model
             else None,
@@ -78,9 +51,7 @@ class Arm:
             "prompt_version": VERSION,
             "prompt_sha256": fingerprint(template),
             "system_prompt_sha256": digest(prompt),
-            "schema_source_sha256": digest(inspect.getsource(DecisionClient.params))
-            if model
-            else None,
+            "response_format_sha256": fingerprint(D6_RESPONSE_FORMAT) if model else None,
             "input_fields": ["target", "task", "diff", "behavior_evidence"]
             if self.id == "detect-2"
             else (["target", "task", "difference", "confirmed_examples"] if model else []),

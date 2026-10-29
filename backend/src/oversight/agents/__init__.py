@@ -36,6 +36,8 @@ from oversight.agents.client import (
     Usage,
 )
 from oversight.agents.decision import (
+    D6_RESPONSE_FORMAT,
+    D6_SYSTEM_PROMPT,
     DecisionChoice,
     DecisionClient,
     DecisionInput,
@@ -72,6 +74,8 @@ from oversight.agents.usage import (
 __all__ = [
     "BASETEN_BASE_URL",
     "CHECKS_UNAVAILABLE_CODES",
+    "D6_RESPONSE_FORMAT",
+    "D6_SYSTEM_PROMPT",
     "FAKE_MODEL",
     "FAKE_MODEL_B",
     "META_BASE_URL",

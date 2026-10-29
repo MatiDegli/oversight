@@ -1,10 +1,12 @@
 """Pilots, histories, cleanup and immutable resumptions fail closed before execution."""
 
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
 from tools.eval.behavior.catalog import load_patches
+from tools.eval.detection import config as detection_config
 from tools.eval.detection.accounting import pilot_projection, task_for
 from tools.eval.detection.config import Assumptions
 from tools.eval.detection.engine import jobs_for, run_plan
@@ -165,7 +167,9 @@ async def test_cleanup_failure_retains_reservation_and_blocks_resume(tmp_path, m
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("obstacle", ["charges", "unknown", "reservation", "prompt"])
+@pytest.mark.parametrize(
+    "obstacle", ["charges", "unknown", "reservation", "prompt", "prompt_text", "response_format"]
+)
 async def test_history_and_pilot_drift_block_projection(tmp_path, monkeypatch, obstacle):
     monkeypatch.setattr("tools.eval.detection.engine.measure", simulated_measure)
     ledger = Ledger(tmp_path / "results.jsonl", 20, None, multi_tariff=True)
@@ -183,6 +187,12 @@ async def test_history_and_pilot_drift_block_projection(tmp_path, monkeypatch, o
         elif obstacle == "reservation":
             patch = next(p for p in load_patches() if p.id == "d04")
             ledger.reserve(task_for(patch), "other", "other-run", 0.1)
+        elif obstacle == "prompt_text":
+            monkeypatch.setattr(detection_config, "D6_SYSTEM_PROMPT", "changed prompt text")
+        elif obstacle == "response_format":
+            response_format = deepcopy(detection_config.D6_RESPONSE_FORMAT)
+            response_format["json_schema"] = {"name": "changed_schema"}
+            monkeypatch.setattr(detection_config, "D6_RESPONSE_FORMAT", response_format)
         jobs = jobs_for(RATES, "asked_for", False, 1, "synthetic")
         for _, _, config, _ in jobs:
             config["assumptions"] = ASSUMPTIONS.model_dump()
