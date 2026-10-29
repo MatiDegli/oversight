@@ -1,6 +1,6 @@
 """Pure profile evaluation. Callers collect evidence; this module never executes a merge."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from math import isfinite
 from typing import Literal
@@ -10,6 +10,7 @@ from pydantic import JsonValue, ValidationError
 from oversight.changes._facts import AddedTestsInventory, IntegrityStatus
 from oversight_contracts.common import MergeMode, RuleId
 from oversight_contracts.events import ModelProfile, SuiteResult
+from oversight_contracts.grants import GrantUse, rules_satisfied
 from oversight_contracts.graph import ImpactCone
 from oversight_contracts.policy import (
     POLICY_RULES,
@@ -355,12 +356,12 @@ def assess(inputs: PolicyInputs, profile: str = "safe-merge-v1") -> ChangeAssess
     )
 
 
-def merges_alone(assessment: ChangeAssessment) -> bool:
+def merges_alone(assessment: ChangeAssessment, grants: Sequence[GrantUse] = ()) -> bool:
     """Require the exact eight-rule probes profile, mode and unanimous passing evidence."""
     return (
         assessment.policy_version == "safe-merge-probes-v1"
         and assessment.mode == "merge_when_safe"
         and len(assessment.rules) == 8
         and {rule.rule for rule in assessment.rules} == set(POLICY_RULES["safe-merge-probes-v1"])
-        and all(rule.result == "pass" for rule in assessment.rules)
+        and rules_satisfied(assessment, grants)
     )

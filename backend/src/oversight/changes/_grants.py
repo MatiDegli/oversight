@@ -138,6 +138,7 @@ class GrantRegistry:
             or ctx.mode.snapshot().mode != "merge_when_safe"
             or assessment is None
             or wait is None
+            or wait.grant_measurement is None
             or wait.mode != ctx.mode.snapshot()
             or (assessment.revision, assessment.head_commit, assessment.main_commit)
             != (rec.revision, rec.head_commit, ctx.state.snapshot.commit)
@@ -145,7 +146,11 @@ class GrantRegistry:
         ):
             raise InvalidGrant("A grant requires a current possible-callers wait in rules mode")
         measured = proposed_measurement(rec)
-        if measured.caller_count <= 0 or not measured.covers(request.scope, self.run_id):
+        if (
+            measured.caller_count <= 0
+            or wait.possible_callers != measured.caller_count
+            or not measured.covers(request.scope, self.run_id)
+        ):
             raise InvalidGrant("Grant scope does not cover this change's measured possible callers")
         return GrantCreated(
             grant_id=f"grant-{self.counter + 1}",

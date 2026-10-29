@@ -39,11 +39,12 @@ async def prepare(h, monkeypatch):
     await select(h, "merge_when_safe", 0)
 
     def measured(inputs):
-        proposal = wait(h).proposal
+        current = h.manager._ctx.assessment.waits[inputs.change_id]
+        proposal = current.proposal
         return replace(
             inputs,
             cone=proposal.impact,
-            possible_callers=len(possible_callers(rec(h).head.graph, proposal.impact)),
+            possible_callers=len(possible_callers(current.rec.head.graph, proposal.impact)),
         )
 
     full_evidence(h, policy_inputs(), measured)
@@ -106,6 +107,16 @@ async def test_other_cone_gaps_are_refused(h, possible, gap):
             "change-1", None, grant=request(), **observed_target(h.manager, "change-1")
         )
     assert h.log == before and rec(h).state == "ready" and not rec(h).person_acted
+
+
+async def test_unmeasured_callers_are_not_a_waivable_wait(h, possible):
+    wait(h).possible_callers = None
+    before = list(h.log)
+    with pytest.raises(InvalidGrant):
+        h.manager.approve(
+            "change-1", None, grant=request(), **observed_target(h.manager, "change-1")
+        )
+    assert h.log == before and rec(h).state == "ready"
 
 
 async def test_failed_creation_does_not_merge_and_expired_grant_cannot_be_revoked(h, possible):

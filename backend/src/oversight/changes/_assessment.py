@@ -10,13 +10,14 @@ from pydantic import TypeAdapter
 
 from oversight.agents import FAKE_MODEL, FAKE_MODEL_B, MUSE_SPARK, MUSE_SPARK_OPEN
 from oversight.changes._facts import AddedTestsInventory, FactsEvidence, added_tests_inventory
+from oversight.changes._grants import Measurement, measure
 from oversight.changes._policy import PolicyInputs, assess
 from oversight.changes._shortcuts_common import is_test_file
 from oversight.changes._state import ChangeRecord
 from oversight.events import NeedsYouWait, StoredEvent, format_needs_you
-from oversight.graph import possible_callers
 from oversight_contracts.common import RuleId
 from oversight_contracts.events import ChangeProposed, ErrorReport, ServerEvent
+from oversight_contracts.grants import covered_rule
 from oversight_contracts.policy import ChangeAssessment, EvidenceRef, MergeModeState
 
 if TYPE_CHECKING:
@@ -60,6 +61,7 @@ class AssessmentWait:
     parse_errors: int | None = None
     unresolved_removed: int | None = None
     possible_callers: int | None = None
+    grant_measurement: Measurement | None = None
     latest: ChangeAssessment | None = None
     terminal_seq: int | None = None
 
@@ -175,7 +177,14 @@ class RulesScheduler:
             wait.facts, wait.facts_seq = evidence, seq
             wait.inventory = added_tests_inventory(rec, rec.revision)
             wait.parse_errors = len(rec.head.graph.parse_errors)
-            wait.possible_callers = len(possible_callers(rec.head.graph, wait.proposal.impact))
+            wait.grant_measurement = measure(
+                rec.base.graph,
+                rec.head.graph,
+                rec.graph,
+                [f.path for f in wait.proposal.files],
+                wait.proposal.impact,
+            )
+            wait.possible_callers = wait.grant_measurement.caller_count
             wait.unresolved_removed = 0 if not wait.proposal.graph.nodes_removed else None
             self.wake(rec)
 
@@ -386,6 +395,11 @@ class RulesScheduler:
             ):
                 inputs = replace(inputs, added_tests=None)
             assessment = assess(inputs, PROFILE)
+            grants = (
+                self.ctx.grants.uses(self.ctx, assessment, wait.grant_measurement)
+                if wait.grant_measurement is not None
+                else ()
+            )
             if not self.valid(wait):
                 return
             await self.ctx.publish(assessment)
@@ -404,7 +418,9 @@ class RulesScheduler:
             elif supplied.unavailable:
                 await self.terminal(wait, supplied.unavailable)
             elif all(
-                rule.result == "pass" for rule in assessment.rules if rule.rule != "combined_tests"
+                rule.result == "pass" or covered_rule(assessment, rule, grants)
+                for rule in assessment.rules
+                if rule.rule != "combined_tests"
             ):
                 failure = (self.ctx.ports.rules_admission or closed_admission)(wait.rec, assessment)
                 if failure:

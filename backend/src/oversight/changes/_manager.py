@@ -552,7 +552,10 @@ class ChangeManager:
         events, then send one `error` per change naming each event still unsent. If the store
         refuses that `error` too, one log line per change names what was lost. Cleanup is left
         to the next start's `reset`."""
-        async with self._ctx.mode.held():
+        if self._ctx.grants.entries:
+            async with self._ctx.mode.held():
+                self._ctx.grants.run_id = ""
+        else:
             self._ctx.grants.run_id = ""
         await self.close_review_cards()
         return await delivery.aclose(self._ctx)
