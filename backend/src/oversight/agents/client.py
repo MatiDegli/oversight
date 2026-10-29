@@ -20,7 +20,7 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import openai
-from openai.types.chat import ChatCompletion
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
 from oversight.agents._trace_http import exchange_span, request_ready
 from oversight.telemetry import CURRENT, annotate, response_fields, span
@@ -128,6 +128,10 @@ class CallScope:
     deadline: float | None
     record: Callable[[ModelReply], Awaitable[None]]
     role: Literal["agent", "review"] = "agent"
+    admission: Callable[[], Awaitable[None]] | None = None
+    """Decision-only admission, immediately before every send, after retry waits."""
+    all_attempts: bool = False
+    """Decision scopes own every receipt; ordinary author/reviewer accounting stays unchanged."""
 
 
 CALL_SCOPE: ContextVar[CallScope | None] = ContextVar("agent_model_call", default=None)
@@ -236,6 +240,21 @@ def reply_of(completion: ChatCompletion) -> ModelReply:
     )
 
 
+def _decision_usage(completion: ChatCompletion) -> Usage:
+    """The SDK constructs response models without full validation; invalid counts stay unknown."""
+    usage = usage_of(completion)
+
+    def count(value: int | None) -> int | None:
+        return value if type(value) is int and value >= 0 else None
+
+    return Usage(
+        count(usage.input_tokens),
+        count(usage.output_tokens),
+        count(usage.cached_tokens),
+        count(usage.reasoning_tokens),
+    )
+
+
 class OpenAIClient:
     """Chat Completions through the official SDK, for Meta or Baseten. The SDK's own retries are
     off: this class retries, so every attempt and delay is under its control and tested."""
@@ -317,11 +336,18 @@ class OpenAIClient:
             params = self.params(messages, tools)
         attempt = 0
         while True:
+            scope = CALL_SCOPE.get()
             try:
                 annotate(http_attempt=attempt + 1)
-                completion = await self._completion(params)
+                completion = (
+                    await self._decision_attempt(params, scope)
+                    if scope is not None and scope.all_attempts
+                    else await self._completion(params)
+                )
             except openai.APIError as error:
-                if isinstance(error, openai.APIConnectionError):
+                if isinstance(error, openai.APIConnectionError) and not (
+                    scope is not None and scope.all_attempts
+                ):
                     await self._unanswered()
                 attempt += 1
                 if not _retryable(error) or attempt >= self._retry.max_attempts:
@@ -339,14 +365,46 @@ class OpenAIClient:
                 continue
             except asyncio.CancelledError:
                 # A sent request may have been billed even when Stop or the task deadline wins.
-                await self._unanswered()
+                if scope is None or not scope.all_attempts:
+                    await self._unanswered()
                 raise
-            if not completion.choices:
+            if not completion.choices and not (scope is not None and scope.all_attempts):
                 scope = CALL_SCOPE.get()
                 if scope is not None:
                     await scope.record(ModelReply(None, [], usage_of(completion), completion.model))
             with span("reply_decoding"):
                 return reply_of(completion)
+
+    async def _decision_attempt(
+        self, params: dict[str, object], scope: CallScope
+    ) -> ChatCompletion:
+        if scope.admission is None:
+            raise ModelAPIError("decision attempt requires admission")
+        await scope.admission()
+        # No await between these guards and entering the transport. Admission cancellation or
+        # expiry is outside the receipt block: nothing was sent, so nothing is charged.
+        task = asyncio.current_task()
+        if task is not None and task.cancelling():
+            raise asyncio.CancelledError
+        if scope.deadline is not None and asyncio.get_running_loop().time() >= scope.deadline:
+            raise TimeoutError
+        try:
+            completion = await self._completion(params)
+            receipt = ModelReply(None, [], _decision_usage(completion), completion.model)
+        except BaseException:
+            await scope.record(ModelReply(None, [], model=self.profile.model))
+            raise
+        # Before content validation, so empty/truncated/invalid replies still have one receipt.
+        # Outside the try: cancellation during a durable receipt cannot record it a second time.
+        await scope.record(receipt)
+        if completion.choices:
+            if len(completion.choices) != 1:
+                raise ValueError("decision requires exactly one choice")
+            # SDK construction may retain null despite the declared non-null response type.
+            message = cast(ChatCompletionMessage | None, completion.choices[0].message)
+            if message is None or message.refusal or message.function_call is not None:
+                raise ValueError("decision cannot contain a refusal or legacy tool call")
+        return completion
 
     async def _completion(self, params: dict[str, object]) -> ChatCompletion:
         if CURRENT.get() is None:
