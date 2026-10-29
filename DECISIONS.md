@@ -1451,6 +1451,8 @@ in the coordinator's session, as recorded above under "Standing grants approved 
 Approve, person-created and revoked grant events, and immutable grant-use receipts on rules
 resolutions. Existing 1.6.0 recordings and commands remain valid with absent new fields.
 The revoke command is POST /grants/{grant_id}/revoke, with no body.
+Contracts 1.7.0 deliberately omit the plan's `grant.expired` event: run expiry ends a grant
+with its run. Adding that event later requires another minor version.
 
 The first backend supports possible_callers, exact module or run scope, and run expiry only.
 Unsupported reasons, scopes and expiry are refused rather than silently broadened. A grant
