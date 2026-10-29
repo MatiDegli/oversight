@@ -1510,8 +1510,10 @@ splits the repository into at least two groups, with tests separate; never compu
 Groups with fewer than two modules and flat repositories draw no frames. Cards stay as today,
 but continuous folder frames require a preset rearrangement that also moves card positions;
 the sketch must show this for the build decision. Group summaries use team-colored rings,
-neutral pending-decision counts and cone reach. Links keep the `exact-edges` rules, with exact
-links at today's weight and possible links surviving the built-in name filter drawn faintly.
+neutral pending-decision counts and cone reach. Links keep the call-visibility rules
+([DESIGN.md "Call visibility"](DESIGN.md#graph-nodes-and-their-states-signature-component)): exact
+links at today's weight; possible links drawn as faint lines only where `frontend/exact-edges`
+defines them.
 
 The [Boltons `d31d821` preset](fixtures/layouts/boltons-d31d821.json), the proof 2 repository,
 contains 66 modules by top folder: boltons 30, tests 32, misc 3, docs 1. That gives a large library

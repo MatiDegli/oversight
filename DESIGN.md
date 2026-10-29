@@ -1017,11 +1017,14 @@ The depth control is built (`bfe7a18`). The map and folder groups are not built.
    the preset layout and also moves card positions. The sketch shows this, and it is part of
    the build decision.
 4. **Group summary.** Name and module count; a ring in the color of each team working inside
-   (color means a team, `reports/team-colors`); pending decisions, neutral; how much of the cone
-   reaches it, for example "3 of 9 in billing".
-5. **Lines.** The `exact-edges` rules: exact links at today's weight; possible links that survive
-   the built-in name filter as faint lines. Nothing invented. With few lines, the LED field and
-   the contours carry the texture.
+   (color means a team: the maintainer's team-color decision of 2026-10-29, recorded by its own
+   front); pending decisions, neutral; how much of the cone reaches it, for example "3 of 9 in
+   billing".
+5. **Lines.** The call-visibility rules
+   ([DESIGN.md "Call visibility"](#graph-nodes-and-their-states-signature-component)): exact links
+   at today's weight; possible links drawn as faint lines only where `frontend/exact-edges`
+   defines them. Nothing invented. With few lines, the LED field and the contours carry the
+   texture.
 6. **Names.** Constant size on screen. Group names always shown; module names where they fit,
    first those an agent touches, the cone reaches or the selection holds, then by size; the rest
    on hover.
