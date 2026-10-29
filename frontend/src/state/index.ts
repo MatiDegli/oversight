@@ -22,6 +22,7 @@ export { parseNeedsYou, matchesNeedsYou } from "./needsYou";
 export { selectDecisionInbox, selectDecisionInboxCount } from "./decisionInbox";
 export { decisionIdentityKey, matchesDecision } from "./decisionIdentity";
 export type {
+  DelegationAttempt,
   DecisionInboxEntry,
   InboxExample,
   InboxIdentity,

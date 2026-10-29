@@ -15,6 +15,15 @@ export type InboxExample =
   | { source: "task"; value: TaskExample }
   | { source: "none"; message: "No recorded example" };
 
+export interface DelegationAttempt {
+  agentId: string;
+  slot: Slot;
+  endState: "halted" | "stopped" | "done";
+  reason: string | null;
+  echoSeq: number;
+  endSeq: number;
+}
+
 export interface DecisionInboxEntry {
   id: string;
   kind: InboxIdentity["kind"];
@@ -28,6 +37,7 @@ export interface DecisionInboxEntry {
   firstSeq: number;
   ts: string;
   age: string;
+  attempts: DelegationAttempt[];
 }
 
 /** Evidence guards a reference, but does not split repeated observations of the same entry. */
