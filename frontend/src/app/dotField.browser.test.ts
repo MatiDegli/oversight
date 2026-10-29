@@ -47,6 +47,8 @@ interface Options {
   /** The page's clock is the test's: time moves when the test says so. */
   clock?: boolean;
   viewport?: { width: number; height: number };
+  /** The theme the page is mounted in; the graph reads it when it is made. */
+  theme?: "day";
 }
 
 async function withPage(options: Options, test: (page: Page) => Promise<void>) {
@@ -93,6 +95,11 @@ async function withPage(options: Options, test: (page: Page) => Promise<void>) {
     await page.goto(url);
     await page.waitForFunction(() => "fieldTest" in window);
     const scene = options.scene ?? "watch";
+    if (options.theme) {
+      await page.evaluate((name) => {
+        document.documentElement.dataset.theme = name;
+      }, options.theme);
+    }
     await page.evaluate((name) => {
       window.fieldTest.mount(name);
     }, scene);
@@ -959,9 +966,13 @@ async function referenceShot(state: "rest" | "watch", theme: "dark" | "day", out
   if (!browser) throw new Error("Browser was not started");
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   try {
-    const file = fileURLToPath(new URL("../../../.shots/life-look/reference/life.html", import.meta.url));
+    const file = fileURLToPath(
+      new URL("../../../.shots/life-look/reference/life.html", import.meta.url),
+    );
     await page.goto(`file://${file}?theme=${theme}&freeze=1#${state}`);
-    await page.waitForFunction(() => typeof (window as unknown as { __ft?: number }).__ft === "number");
+    await page.waitForFunction(
+      () => typeof (window as unknown as { __ft?: number }).__ft === "number",
+    );
     writeFileSync(out, await page.screenshot());
   } finally {
     await page.close();
@@ -977,30 +988,14 @@ it("captures rest and busy at 1920 by 1080, dark and day, beside their sketches"
     await settledGraph(page);
     writeFileSync(`${shots}${name}.png`, await page.screenshot());
   };
-  const inDay = async (page: Page) => {
-    const draws = () =>
-      page.evaluate(() => window.fieldTest.elements().field.oversightField?.draws() ?? 0);
-    const before = await draws();
-    await page.evaluate(() => {
-      document.documentElement.dataset.theme = "day";
-    });
-    await page.waitForFunction(
-      (count) => (window.fieldTest.elements().field.oversightField?.draws() ?? 0) > count + 1,
-      before,
-    );
-  };
   await withPage({ scene: "rest", viewport }, (page) => shoot(page, "rest-dark"));
-  await withPage({ scene: "rest", viewport }, async (page) => {
-    await inDay(page);
-    await shoot(page, "rest-day");
-  });
+  await withPage({ scene: "rest", viewport, theme: "day" }, (page) => shoot(page, "rest-day"));
   await withPage({ scene: "watch", viewport, reducedMotion: "reduce" }, (page) =>
     shoot(page, "busy-dark"),
   );
-  await withPage({ scene: "watch", viewport, reducedMotion: "reduce" }, async (page) => {
-    await inDay(page);
-    await shoot(page, "busy-day");
-  });
+  await withPage({ scene: "watch", viewport, reducedMotion: "reduce", theme: "day" }, (page) =>
+    shoot(page, "busy-day"),
+  );
   await withPage({ scene: "waiting", viewport, clock: true }, async (page) => {
     await page.evaluate(() => {
       window.fieldTest.advance(21);
@@ -1026,8 +1021,20 @@ it("captures rest and busy at 1920 by 1080, dark and day, beside their sketches"
     );
   await pair(`${sketches}rest-contour.png`, [60, 200], "rest-dark", [560, 400], "rest-dark");
   await pair(`${sketches}rest-day.png`, [60, 200], "rest-day", [560, 400], "rest-day");
-  await pair(`${shots}reference-busy-dark.png`, BUSY_AT.sketch, "busy-dark", BUSY_AT.shot, "busy-dark");
-  await pair(`${shots}reference-busy-day.png`, BUSY_AT.sketch, "busy-day", BUSY_AT.shot, "busy-day");
+  await pair(
+    `${shots}reference-busy-dark.png`,
+    BUSY_AT.sketch,
+    "busy-dark",
+    BUSY_AT.shot,
+    "busy-dark",
+  );
+  await pair(
+    `${shots}reference-busy-day.png`,
+    BUSY_AT.sketch,
+    "busy-day",
+    BUSY_AT.shot,
+    "busy-day",
+  );
   await pair(`${sketches}merge-mid.png`, [480, 200], "merge-mid", [560, 200], "merge-mid");
 }, 240_000);
 

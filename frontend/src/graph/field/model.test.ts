@@ -96,7 +96,6 @@ describe("the light's shape", () => {
       previous = falloff(config, d);
     }
   });
-
 });
 
 describe("the lamps", () => {
