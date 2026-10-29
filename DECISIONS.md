@@ -1543,3 +1543,26 @@ This adds a callable evaluator, not live enforcement: the scheduler still select
 `safe-merge-probes-v1`, both merge predicates reject the paths profile, protected-path grants stay
 refused, and startup capability remains closed. Source capture/loading, settings, profile
 migration, activation and any future waivable-hit semantics require separate work.
+## 2026-10-29 — Internal object-only preflight for a rules merge's inverse
+
+`changes._revert_preflight.preflight` accepts a server-supplied resolution event (or its stored
+envelope), a `RevertChange` and the target change ID. Store lookup and HTTP remain separate work;
+Revert stays reserved. It revalidates provenance and the recorded assessment, including pass
+observations and grant coverage, and refuses unknown or inconsistent evidence.
+
+Classification holds main's lock and the shared Git lease, with one finite deadline covering lock
+waits and guarded asynchronous Git. It captures main's commit H, requires the caller's observed
+main and attached HEAD to agree, and refuses dirty, hidden-index or in-progress checkout state.
+The recorded merge M must exist in H's ancestry, have the assessed main P and proposal as its
+exact ordered parents, and match the assessed tree and rules commit identity/message.
+
+The inverse is `git merge-tree --write-tree --merge-base=M H P`. A successful single tree OID,
+its object type, strict object verification and a final unchanged-main observation are all
+required for `clean`. Unsupported plumbing, conflict, timeout, truncated/malformed output,
+missing objects or other uncertainty becomes `conflict`; cancellation propagates after process
+cleanup while locks remain held. Strict Git object verification may inspect other stored objects
+and shares the same deadline, so unrelated corruption or an oversized repository can also refuse.
+No refs, real index, checkout files, operation markers or worktree registrations are changed;
+only unreachable Git objects may be created. There is no mutating fallback. A clean result proves
+textual applicability against captured H, not semantic correctness or authorization for a later
+effect. A later Revert transaction must establish its own current evidence and authorization.
