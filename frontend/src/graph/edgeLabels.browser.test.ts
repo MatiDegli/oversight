@@ -167,8 +167,12 @@ it("reserves the real title/count gap including the folded chevron", async () =>
     const results = await page.evaluate(async () => {
       const { themes, headerLayers } = window.edgeLabels;
       const theme = themes.dark;
-      await document.fonts.load(`600 17px ${theme["text-font"]}`);
-      await document.fonts.load(`400 16px ${theme["text-font"]}`);
+      await document.fonts.load(
+        `${String(theme["frame-title-weight"])} ${theme["frame-title-size"]} ${theme["text-font"]}`,
+      );
+      await document.fonts.load(
+        `${String(theme["caption-weight"])} ${theme["frame-count-size"]} ${theme["text-font"]}`,
+      );
       return [false, true].map((folded) => {
         const size = { width: 281, height: 44 };
         const layers = headerLayers(

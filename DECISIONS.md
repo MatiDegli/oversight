@@ -1,23 +1,5 @@
 # Decisions
 
-## 2026-10-29 — Aggregate counts on demand and measured frame titles
-
-The maintainer approved both fixes on October 28 at 23:52 ART (October 29 UTC).
-The route-cost audit of the dark Boltons preset at 1920×1080 found 101 aggregate labels touching
-another label or header at the start camera (180 label pairs, 47 label/header pairs), and 211
-at 0.2 zoom (448 and 119 pairs). Functions at 0.2 also put `NamedTupleInpu…` against `4 methods`.
-
-Replace always-visible aggregate counts with immediate labels on the hovered aggregate and the
-selected node's aggregates. Keep the directed edges, arrows, counts, routes and camera unchanged;
-edges remain unselectable and this interaction takes no focus. DESIGN.md records this departure.
-
-Replace average-glyph title and count estimates with cached canvas widths from the loaded
-Atkinson title and count faces. Reserve the count's actual width, the existing gap and the folded
-chevron inset before ellipsizing; preserve fonts, frame sizes, header layers and clipping.
-Graph creation waits for these faces; a recovered font load rebuilds early fallback layers once.
-Without font/canvas measurement, tests retain the estimate. Row state-word clearance uses the
-same measurer because it needs only the existing word face and size.
-
 Each decision with its reason. The design approved before the build is in
 [docs/proposal.md](docs/proposal.md); this file adds what is decided while building.
 
@@ -1259,3 +1241,21 @@ code, keeping the first phone view focused while preserving inspection on demand
 summary omits author declarations deliberately; these attributed recorded words must not be
 presented as Oversight’s findings. No backend command runs and no recorded decision is exposed
 before both answers. DESIGN.md’s Phone width section records this exception.
+
+## 2026-10-29 — Aggregate counts on demand and measured frame titles
+
+The maintainer approved both fixes on October 28 at 23:52 ART (October 29 UTC).
+The route-cost audit of the dark Boltons preset at 1920×1080 found 101 aggregate labels touching
+another label or header at the start camera (180 label pairs, 47 label/header pairs), and 211
+at 0.2 zoom (448 and 119 pairs). Functions at 0.2 also put `NamedTupleInpu…` against `4 methods`.
+
+Replace always-visible aggregate counts with immediate labels on the hovered aggregate and the
+selected node's aggregates. Keep the directed edges, arrows, counts, routes and camera unchanged;
+edges remain unselectable and this interaction takes no focus. DESIGN.md records this departure.
+
+Replace average-glyph title and count estimates with cached canvas widths from the loaded
+Atkinson title and count faces. Reserve the count's actual width, the existing gap and the folded
+chevron inset before ellipsizing; preserve fonts, frame sizes, header layers and clipping.
+Graph creation waits for these faces; a recovered font load rebuilds early fallback layers once.
+Without font/canvas measurement, tests retain the estimate. Row state-word clearance uses the
+same measurer because it needs only the existing word face and size.
