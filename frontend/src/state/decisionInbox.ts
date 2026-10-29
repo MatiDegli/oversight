@@ -1,6 +1,7 @@
 import { ageWords } from "../age";
 import { checkReason, recordChangeEntries } from "./decisionCandidates";
 import type { Entries } from "./decisionCandidates";
+import { decisionDelegations } from "./decisionDelegations";
 import type { DecisionInboxEntry } from "./decisionIdentity";
 import { isClosed, isCurrent, recordOtherEntries, recordPlanEntries } from "./decisionLifecycle";
 import type { State } from "./types";
@@ -12,12 +13,19 @@ export function selectDecisionInbox(state: State): DecisionInboxEntry[] {
   recordOtherEntries(entries, state);
   recordPlanEntries(entries, state);
   return [...entries.values()]
-    .filter((entry) => isCurrent(entry, state) && !isClosed(entry, state))
-    .map((entry) => ({
-      ...entry,
-      reason: checkReason(entry, state),
-      age: ageWords(entry.ts, state.clock),
-    }))
+    .flatMap((entry) => {
+      if (!isCurrent(entry, state) || isClosed(entry, state)) return [];
+      const delegation = decisionDelegations(entry, state);
+      if (delegation.closed) return [];
+      return [
+        {
+          ...entry,
+          reason: checkReason(entry, state),
+          age: ageWords(entry.ts, state.clock),
+          attempts: delegation.attempts,
+        },
+      ];
+    })
     .sort((a, b) => a.firstSeq - b.firstSeq || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 

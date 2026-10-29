@@ -39,7 +39,7 @@ const refKinds = [
 ] as const;
 
 it.each(refKinds)(
-  "closes only the matching %s on an answering echo, across every later status",
+  "closes only the matching %s on an echo and reopens it after a failed delegation",
   (kind) => {
     const state = replay();
     const before = selectDecisionInbox(state);
@@ -63,9 +63,12 @@ it.each(refKinds)(
       type: "agent.status",
       payload: { ...agent, state: "stopped", answering: null },
     });
-    expect(selectDecisionInbox(stopped).map((e) => e.id)).toEqual(
-      selectDecisionInbox(after).map((e) => e.id),
-    );
+    expect(selectDecisionInbox(stopped).map((e) => e.id)).toEqual(before.map((e) => e.id));
+    expect(selectDecisionInbox(stopped).find((e) => e.id === entry.id)).toMatchObject({
+      identity: entry.identity,
+      firstSeq: entry.firstSeq,
+      attempts: [{ agentId: "agent-6", slot: "B", endState: "stopped" }],
+    });
   },
 );
 

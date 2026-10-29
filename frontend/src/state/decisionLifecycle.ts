@@ -1,6 +1,6 @@
 import type { DecisionRef, ReviewCard, TaskExample } from "@contracts";
 
-import { decisionIdentityKey, matchesDecision, noRecordedExample } from "./decisionIdentity";
+import { decisionIdentityKey, noRecordedExample } from "./decisionIdentity";
 import type { InboxIdentity } from "./decisionIdentity";
 import { recordEntry, recordExamples } from "./decisionCandidates";
 import type { Candidate, Entries, PendingEntry } from "./decisionCandidates";
@@ -52,9 +52,6 @@ export function isClosed(entry: PendingEntry, state: State): boolean {
   const identity = entry.identity;
   return state.decisionEvents.some((event) => {
     if (event.seq < entry.firstSeq) return false;
-    if (event.type === "agent.status" && event.payload.answering) {
-      return matchesDecision(event.payload.answering, identity);
-    }
     if (identity.kind === "lead_plan" || identity.kind === "revert_needs_you") return false;
     if (event.type === "change.facts_recorded" && sameCandidate(event.payload, identity)) {
       return event.payload.review_cards?.some((card) => answered(card, identity)) ?? false;

@@ -2,6 +2,7 @@ import type { DecisionRef, ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
 
 import answers from "../../../fixtures/events/handwritten-inbox-answers.jsonl?raw";
+import delegation from "../../../fixtures/events/handwritten-inbox-delegation.jsonl?raw";
 import empty from "../../../fixtures/events/handwritten-inbox-empty.jsonl?raw";
 import kinds from "../../../fixtures/events/handwritten-inbox-kinds.jsonl?raw";
 import revisions from "../../../fixtures/events/handwritten-inbox-revisions.jsonl?raw";
@@ -17,7 +18,7 @@ import {
 } from "./index";
 import type { State } from "./types";
 
-const fixtures = { answers, empty, kinds, revisions };
+const fixtures = { answers, delegation, empty, kinds, revisions };
 const events = (text: string): ServerEvent[] => text.trim().split("\n").map(parseEvent);
 const replay = (text: string, end?: number): State =>
   events(text).slice(0, end).reduce(applyEvent, createInitialState());

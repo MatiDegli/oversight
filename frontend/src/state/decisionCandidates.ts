@@ -8,7 +8,7 @@ import type { State } from "./types";
 
 type ChangeRef = Exclude<DecisionRef, { kind: "lead_plan" }>;
 export type Candidate = Pick<ChangeRef, "change_id" | "revision" | "head_commit">;
-export type PendingEntry = Omit<DecisionInboxEntry, "age">;
+export type PendingEntry = Omit<DecisionInboxEntry, "age" | "attempts">;
 export type Entries = Map<string, PendingEntry>;
 
 export function recordEntry(

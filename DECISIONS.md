@@ -1199,3 +1199,28 @@ SaveFile stays unchanged. Delivery A decisions 11–12 remain unchanged as the a
 The exact 1.5.0 schema bytes are frozen before regeneration as the new tuple-check baseline,
 with a hash assertion and both older baselines and independent negative controls retained.
 Generated files still come only from make contracts and keep byte-for-byte drift checking.
+
+## 2026-10-28 — Inbox answers, returns to authors and failed delegations
+
+The maintainer approved these three rules at 19:27 ART:
+
+1. A Yes is prepared, never saved alone. Approve and merge remains a separate, explicit
+   action, so answering a question cannot accidentally merge code.
+2. A No on a lead plan, or on examples without a proposal yet, returns to the author without
+   rejecting. The author needs to revise the plan or examples before code or a reviewable
+   proposal exists. This requires a command and plan or lead revision correlation: it belongs
+   to line A and is not built yet.
+3. A failed delegation reopens its originating entry, retaining its link and earlier attempts,
+   because accepting a delegated task is not proof that the task delivered an answer. The
+   first matching answering status is the echo; a later halted or stopped status reopens the
+   entry unless that agent proposed after the echo. Done, a proposal, another active or
+   successful delegation, a recorded answer or a resolution closes it as before. Repeated
+   statuses retain one attempt per task. A run reset clears the history.
+
+Rule 3 is a pure frontend projection in
+[decisionDelegations.ts](frontend/src/state/decisionDelegations.ts), composed by
+[decisionInbox.ts](frontend/src/state/decisionInbox.ts). Reopening retains the original identity,
+evidence, first sequence and timestamp, so age and ordering do not restart. Completed attempts
+retain the agent id, slot, end state, recorded reason and echo/end sequences in echo order.
+Events never open a panel or move focus. The replay fixture is
+[handwritten-inbox-delegation.jsonl](fixtures/events/handwritten-inbox-delegation.jsonl).
