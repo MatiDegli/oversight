@@ -28,6 +28,7 @@ API_PATHS = frozenset(
         "events",
         "files",
         "graph",
+        "grants",
         "health",
         "impact",
         "merge-mode",

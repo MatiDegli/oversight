@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 
 from oversight.changes import _approval, _candidate, _delivery, _merge, _recovery, _rules
 from oversight.changes._evidence import WriteEvidence
+from oversight.changes._grants import Measurement
 from oversight.changes._policy import merges_alone
 from oversight.changes._resolution_validation import (
     validate_resolution_evidence,
@@ -25,6 +26,7 @@ from oversight.workspace import (
     verify_merge_guard,
 )
 from oversight_contracts.events import ChangeResolved
+from oversight_contracts.grants import GrantUse, covered_rule
 from oversight_contracts.policy import ChangeAssessment, EvidenceRef, RuleAssessment
 
 
@@ -43,18 +45,51 @@ class Transaction:
     definitive: WriteEvidence | None = None
     measured: tuple[RuleAssessment, ...] = ()
     tested_tree: str | None = None
+    grant_measurement: Measurement | None = None
 
     async def measure(self, guard: MergeGuard) -> None:
         pending = self.reservation.evidence.assessment
         assert pending is not None
-        self.measured = await _candidate.measure(
+        measured = await _candidate.measure(
             self.ctx, guard, pending, self.reservation.wait.rec.task.limits
+        )
+        self.measured, self.grant_measurement = measured.rules, measured.grants
+
+    def grants_for(self, assessment: ChangeAssessment) -> tuple[GrantUse, ...]:
+        if self.grant_measurement is None:
+            return ()
+        return self.ctx.grants.uses(
+            self.ctx, assessment, self.grant_measurement, only=self.reservation.evidence.grants
         )
 
     def revalidate(self) -> None:
         failure = _rules.revalidate(self.ctx, self.reservation)
         if not _rules.current(self.ctx, self.reservation) or failure:
             raise RulesFailure(*(failure or ("target_changed", "Rules reservation expired.")))
+        if self.reservation.evidence.grants and self.measured:
+            pending = self.reservation.evidence.assessment
+            assert pending is not None
+            current = (
+                self.definitive.assessment
+                if self.definitive is not None
+                else pending.model_copy(
+                    update={
+                        "rules": [
+                            {r.rule: r for r in self.measured}.get(r.rule, r) for r in pending.rules
+                        ]
+                    }
+                )
+            )
+            assert current is not None
+            grants = self.grants_for(current)
+            cone = next(r for r in current.rules if r.rule == "small_cone")
+            if cone.result != "pass" and not covered_rule(current, cone, grants):
+                raise RulesFailure(
+                    "policy_invalid",
+                    "The candidate wait is no longer covered by the reserved grant.",
+                )
+            if self.definitive is not None:
+                self.definitive = replace(self.definitive, grants=grants)
 
     async def metadata(self) -> None:
         """Reuse C's monotonic latch for a metadata discrepancy outside the suite too."""
@@ -106,6 +141,7 @@ class Transaction:
                 for ref in rule.evidence
             ):
                 raise RulesFailure("policy_invalid", "Definitive evidence is no longer available.")
+            validate_resolution_intent(self.definitive)
             rec.evidence = self.definitive
             yield
 
@@ -145,7 +181,8 @@ class Transaction:
         receipt = await ctx.publish(final)
         if not isinstance(receipt, StoredEvent):
             raise RulesFailure("delivery_failed", "Definitive assessment receipt is unconfirmed.")
-        if not merges_alone(final):
+        grants = self.grants_for(final)
+        if not merges_alone(final, grants):
             refusal = RulesFailure if not passed else CandidateVeto
             raise refusal(
                 "suite_failed" if not passed else "policy_invalid",
@@ -154,7 +191,10 @@ class Transaction:
         self.definitive = replace(
             self.reservation.evidence,
             assessment=final,
-            reasons=("All rules passed on the tested combination.",),
+            reasons=("Tested rules satisfied; standing grants recorded.",)
+            if grants
+            else ("All rules passed on the tested combination.",),
+            grants=grants,
         )
 
     async def record(self, post: str) -> None:
@@ -175,6 +215,7 @@ class Transaction:
             conflict=None,
             assessment=evidence.assessment,
             reasons=list(evidence.reasons),
+            grants=list(evidence.grants) if evidence.grants else None,
         )
         validate_resolution_evidence(resolution, evidence)
         await _delivery.project_merge(ctx, rec, post)

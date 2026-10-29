@@ -63,6 +63,28 @@ def validate_references(event: ServerEvent, prior: Mapping[int, ServerEvent]) ->
                 walk(item)
 
     walk(event.payload.model_dump(mode="json"))
+    if event.type == "change.resolved":
+        for use in event.payload.grants or ():
+            auth = use.authorization
+            source = referenced(auth.creation_seq, "grant.created")
+            assert source.type == "grant.created"
+            created = source.payload
+            if (
+                use.grant_id,
+                auth.reason,
+                auth.scope,
+                auth.run_id,
+                auth.session_id,
+                auth.creation_ts,
+            ) != (
+                created.grant_id,
+                created.reason,
+                created.scope,
+                created.run_id,
+                created.session_id,
+                source.ts,
+            ):
+                raise ValueError("grant authorization differs from its creation receipt")
     validate_cross_review_limit(event, prior)
     if event.type == "change.resolved" and event.payload.review_seq is not None:
         source = referenced(event.payload.review_seq, "change.reviewed")

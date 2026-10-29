@@ -26,6 +26,7 @@ from oversight_contracts.common import (
 )
 from oversight_contracts.decisions import DecisionRef
 from oversight_contracts.examples import TaskExample
+from oversight_contracts.grants import GrantCreated, GrantRevoked, GrantUse, rules_satisfied
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot, ImpactCone
 from oversight_contracts.plans import Plan, PlanZone
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
@@ -301,6 +302,8 @@ class ChangeResolved(ContractModel):
     """The immutable assessment used for this decision, when available."""
     answers: list[ReviewCard] | None = Field(default=None, max_length=8)
     """The accepted human answers, copied by the server from a decision command."""
+    grants: list[GrantUse] | None = Field(default=None, exclude_if=lambda value: value is None)
+    """Immutable authorization and measured callers waived by a rules approval."""
 
     @model_validator(mode="after")
     def _authority(self, info: ValidationInfo) -> Self:
@@ -337,6 +340,8 @@ class ChangeResolved(ContractModel):
 
     @model_validator(mode="after")
     def _rules_decision(self) -> Self:
+        if self.grants is not None and self.decided_by != "rules":
+            raise ValueError("grant uses belong only to rules approvals")
         if self.decided_by != "rules":
             return self
         assessment = self.assessment
@@ -344,9 +349,10 @@ class ChangeResolved(ContractModel):
             self.decision != "approved"
             or assessment is None
             or assessment.mode != "merge_when_safe"
-            or any(rule.result != "pass" for rule in assessment.rules)
+            or not rules_satisfied(assessment, self.grants or ())
             or (self.change_id, self.agent_id, self.revision)
             != (assessment.change_id, assessment.agent_id, assessment.revision)
+            or (self.grants and self.head_commit != assessment.head_commit)
             or not self.reasons
             or any(not reason.strip() for reason in self.reasons)
         ):
@@ -487,6 +493,16 @@ class EventBase(ContractModel):
     seq: int = Field(ge=1)
     """From 1, +1 per event within a run, no gaps; assigned by the single writer."""
     ts: Timestamp
+
+
+class GrantCreatedEvent(EventBase):
+    type: Literal["grant.created"]
+    payload: GrantCreated
+
+
+class GrantRevokedEvent(EventBase):
+    type: Literal["grant.revoked"]
+    payload: GrantRevoked
 
 
 class RunStartedEvent(EventBase):
@@ -639,7 +655,9 @@ type ServerEvent = Annotated[
     | TestsExecutedEvent
     | RevertResolvedEvent
     | QueueUpdatedEvent
-    | LeadStatusEvent,
+    | LeadStatusEvent
+    | GrantCreatedEvent
+    | GrantRevokedEvent,
     Field(discriminator="type"),
 ]
 """Every event the server sends; validate one with `TypeAdapter(ServerEvent)`."""

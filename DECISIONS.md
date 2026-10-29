@@ -1493,3 +1493,20 @@ failing run, a new cross-review verdict, and a new call-edge kind (`EdgeKind`) o
 (`Confidence`). No existing value passes this way; the maintainer decided to make those four paths
 fail closed in a separate change after standing grants land. He approved the first amendment's
 request and its final change in the coordinator's session, not through another line.
+## 2026-10-29 — Contracts 1.7.0 — approved by the maintainer
+
+The maintainer approved `docs/plans/standing-grants.md` and its contract change on 2026-10-29,
+in the coordinator's session, as recorded above under "Standing grants approved as contracts
+1.7.0; the creation bundle moves to 1.8.0". This version adds the structured grant request on
+Approve, person-created and revoked grant events, and immutable grant-use receipts on rules
+resolutions. Existing 1.6.0 recordings and commands remain valid with absent new fields.
+The revoke command is POST /grants/{grant_id}/revoke, with no body.
+Contracts 1.7.0 deliberately omit the plan's `grant.expired` event: run expiry ends a grant
+with its run. Adding that event later requires another minor version.
+
+The first backend supports possible_callers, exact module or run scope, and run expiry only.
+Unsupported reasons, scopes and expiry are refused rather than silently broadened. A grant
+removes only the measured possible-callers unknown; it never changes the recorded assessment
+or waives tests, a failed rule, missing measurements, or another unknown. Server authorization
+is rechecked at every rules barrier and serialized with revoke at the Git effect boundary.
+The creation bundle remains reserved for 1.8.0.
