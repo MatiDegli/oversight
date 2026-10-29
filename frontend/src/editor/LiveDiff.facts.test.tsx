@@ -297,3 +297,38 @@ it("keeps an empty step history honest and hides it without an open diff", () =>
   expect(render("live diff", { ...through(12), steps: {} })).toContain("No steps yet.");
   expect(render("live diff", createInitialState())).not.toContain("Last steps");
 });
+
+it.each(["review", "live diff"])("keeps possible callers explicit in %s", (surface) => {
+  for (const [seed, size, possible] of [
+    ["shop.inventory:Inventory.reserve", 0, 1],
+    ["shop.pricing:compute_price", 9, 2],
+    ["shop.cart:Cart.add", 0, 0],
+  ] as const) {
+    const value = structuredClone(state);
+    const change = value.changes["change-1"];
+    if (!change) throw new Error("Missing change");
+    change.graph.nodes_modified = [seed];
+    if (!change.proposal) throw new Error("Missing proposal");
+    change.proposal.impact = {
+      ...change.proposal.impact,
+      seeds: [seed],
+      entries: size ? change.proposal.impact.entries : [],
+    };
+    const html = render(surface, value);
+    const summary = words(fact(html, "Impact cone"));
+    if (size) {
+      expect(summary).toContain("9 functions possibly affected");
+      const extra = fact(html, "Possible callers");
+      expect(words(extra)).toContain("+2 possible callers, not followed");
+      expect(extra).toContain("lucide-circle-help");
+    } else {
+      expect(summary).toContain(
+        possible
+          ? "No exact callers · 1 possible caller, not followed"
+          : "No functions possibly affected within the cone bounds",
+      );
+      expect(html).not.toContain('aria-label="Possible callers"');
+    }
+    expect(render(surface, { ...value, graph: null })).not.toContain("not followed");
+  }
+});

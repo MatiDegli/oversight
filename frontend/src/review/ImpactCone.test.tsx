@@ -152,3 +152,17 @@ describe("the recorded impact cone", () => {
     );
   });
 });
+
+it.each([1, 2])("states %i possible callers without warning styling", (possible) => {
+  const text = `${String(possible)} possible ${possible === 1 ? "caller" : "callers"}, not followed`;
+  const empty = { ...cone, entries: [] };
+  expect(impactSummary(empty, possible)).toBe(`No exact callers · ${text}`);
+  expect(impactSummary(cone, possible)).toBe(impactSummary(cone));
+  for (const value of [empty, cone]) {
+    const html = renderToStaticMarkup(
+      <ImpactConeCard cone={value} nodes={nodes} possible={possible} />,
+    );
+    expect(html).toContain(value.entries.length ? `+${text}` : `No exact callers · ${text}`);
+    expect(html).not.toMatch(/warning|text-failed|text-passed|agent-[ab]/);
+  }
+});

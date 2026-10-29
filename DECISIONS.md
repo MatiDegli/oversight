@@ -1306,3 +1306,18 @@ with no new contract field: "asked for" only from the classification, which neve
 the person" from a card answered Yes by the person. The summary and proof 3's counts keep them apart. A card's
 kind is read from its server-authored question, one of two fixed texts. When pinned examples exist (item 13), a
 Yes on a could-not-tell question is the one offered as "keep as example".
+
+
+## 2026-10-29 — Show possible callers the exact cone does not follow
+
+The maintainer approved this wording on 2026-10-29 at 09:39 ART, before proof 2 starts.
+An empty exact cone cannot establish that a change affects nothing. Review and live diff now
+state the one-hop possible callers outside the seeds and bounded cone, excluding tests and
+nodes with an exact call into either. The count uses the change overlay for live and proposed
+changes. DESIGN.md records the approved empty/non-empty texts and neutral presentation.
+
+On Boltons d31d821, 726 of 925 library functions and methods have an empty exact cone;
+356 of those have possible callers. A measured built-in method name filter was rejected:
+it hides every possible caller of 310 methods (OrderedMultiDict 42, IndexedSet 25,
+BarrelList 24), leaving 278 of them apparently without callers at all. Count every possible
+call here, regardless of name; do not follow these calls or imply the cone is complete.
