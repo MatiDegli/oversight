@@ -69,6 +69,7 @@ from oversight.workspace import (
 )
 from oversight_contracts.commands import FileContent, FileSaved, SetMergeMode
 from oversight_contracts.common import AgentId, ChangeId
+from oversight_contracts.grants import GrantCreated, GrantRequest
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
 from oversight_contracts.review import ChangeTarget, FinishDeclaration, ReviewCard
@@ -128,6 +129,7 @@ class ChangeManager:
             monotonic,
             sleep_until or (lambda deadline: asyncio.sleep(max(0, deadline - monotonic()))),
         )
+        self._ctx.grants.run_id = run_id
         if difference_decisions is not None:
             if not run_id:
                 raise ValueError("review cards require the current run id")
@@ -380,12 +382,14 @@ class ChangeManager:
         revision: int,
         head_commit: str,
         answers: list[ReviewCard] | None = None,
+        grant: GrantRequest | None = None,
     ) -> asyncio.Task[None]:
         current = self._ctx.state.changes.get(change_id)
         if current is None:
             raise ChangeNotFound(change_id)
         validate_decision_target(current, revision, head_commit, APPROVABLE)
         accepted = self._decision_answers(current, answers, approve=True)
+        created = self._ctx.grants.validate(self._ctx, current, grant) if grant else None
         evidence = WriteEvidence(
             change_id,
             current.agent_id,
@@ -401,7 +405,19 @@ class ChangeManager:
         rec = self._take(change_id, APPROVABLE, "approve")
         rec.evidence = evidence
         rec.taken = rec.revision
-        return self._decide(rec, approval.approve(self._ctx, rec, comment))
+        if created is not None:
+            self._ctx.grants.counter += 1
+        return self._decide(rec, self._approve_person(rec, comment, created))
+
+    async def _approve_person(
+        self, rec: ChangeRecord, comment: str | None, created: GrantCreated | None
+    ) -> None:
+        if created is not None:
+            await self._ctx.whole(self._ctx.grants.create(self._ctx, created))
+        await approval.approve(self._ctx, rec, comment)
+
+    async def revoke_grant(self, grant_id: str) -> None:
+        await self._ctx.whole(self._ctx.grants.revoke(self._ctx, grant_id))
 
     def _admit_rules(
         self, rec: ChangeRecord, assessment: ChangeAssessment
@@ -536,6 +552,8 @@ class ChangeManager:
         events, then send one `error` per change naming each event still unsent. If the store
         refuses that `error` too, one log line per change names what was lost. Cleanup is left
         to the next start's `reset`."""
+        async with self._ctx.mode.held():
+            self._ctx.grants.run_id = ""
         await self.close_review_cards()
         return await delivery.aclose(self._ctx)
 
