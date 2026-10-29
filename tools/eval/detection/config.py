@@ -5,6 +5,7 @@ import inspect
 import json
 import math
 from dataclasses import dataclass
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 from tools.eval.grade import Tariff
@@ -57,6 +58,15 @@ class Arm:
 
     def configuration(self, fake: bool, rates: dict[str, Tariff]) -> dict:
         model = {"meta": MUSE_SPARK, "baseten": MUSE_SPARK_OPEN}.get(self.profile)
+        prompt = system_prompt() if model else "tests only"
+        template = {
+            "system": prompt,
+            "arm_id": self.id,
+            "d6_source": inspect.getsource(classify_difference) if model else None,
+            "adapter_source_sha256": digest(Path(__file__).with_name("adapters.py").read_text())
+            if model
+            else None,
+        }
         return {
             "version": VERSION,
             "arm_id": self.id,
@@ -66,7 +76,8 @@ class Arm:
             "reasoning": "low" if model else None,
             "behavior": self.behavior,
             "prompt_version": VERSION,
-            "prompt_sha256": digest(system_prompt()) if model else digest("tests only"),
+            "prompt_sha256": fingerprint(template),
+            "system_prompt_sha256": digest(prompt),
             "schema_source_sha256": digest(inspect.getsource(DecisionClient.params))
             if model
             else None,

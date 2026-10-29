@@ -39,6 +39,7 @@ def evidence(
     facts: list[ChangeFacts],
     adapter: Adapter,
     passed: bool,
+    isolation_reason: str | None = None,
 ) -> DetectionEvidence:
     decisions = adapter.evidence
     latest = facts[-1] if facts else None
@@ -47,6 +48,8 @@ def evidence(
     problems = list(latest.problems) if latest is not None else ["facts publication unavailable"]
     unavailable = [f"{d.node_id}: {d.unavailable}" for d in decisions if d.unavailable]
     if arm.behavior:
+        if isolation_reason is not None:
+            unavailable.append("isolation unavailable: " + isolation_reason)
         unavailable.extend(unprobed)
         unavailable.extend(
             p
@@ -97,6 +100,35 @@ async def apply(workspace: Workspace, tree, patch: Patch, patch_file: Path) -> l
     return changed
 
 
+class Publication:
+    def __init__(self, store: EventStore) -> None:
+        self.store = store
+        self.facts: list[ChangeFacts] = []
+        self.settled = asyncio.Event()
+
+    async def publish(self, payload):
+        receipt = await self.store.publish(payload)
+        event = EVENT.validate_json(receipt.envelope)
+        if event.type == "change.facts_recorded":
+            self.facts.append(event.payload)
+            if any(
+                p.startswith(
+                    (
+                        "review cards: finished;",
+                        "review cards: truncated;",
+                        "review cards: failed;",
+                    )
+                )
+                for p in event.payload.problems
+            ):
+                self.settled.set()
+        return receipt
+
+
+def target_for(facts: ChangeFacts) -> ChangeTarget:
+    return ChangeTarget.model_validate(facts.model_dump(include=set(ChangeTarget.model_fields)))
+
+
 async def measure(
     patch: Patch,
     arm: Arm,
@@ -105,6 +137,7 @@ async def measure(
     directory: Path,
     demo_python: Path,
     labels_hash: str | None,
+    run_id: str | None = None,
 ) -> DetectionEvidence:
     check_baseline()
     await asyncio.to_thread(directory.mkdir, parents=True, exist_ok=False)
@@ -112,32 +145,15 @@ async def measure(
         workspace = Workspace(
             Path(name) / ".runtime", TEMPLATE, pytest_pin="9.1.1", demo_python=demo_python
         )
-        store = EventStore(directory / "events.sqlite", "detection-" + directory.name)
+        store = EventStore(directory / "events.sqlite", run_id or "detection-" + directory.name)
         manager = None
-        facts: list[ChangeFacts] = []
-        settled = asyncio.Event()
-
-        async def publish(payload):
-            receipt = await store.publish(payload)
-            event = EVENT.validate_json(receipt.envelope)
-            if event.type == "change.facts_recorded":
-                facts.append(event.payload)
-                if any(
-                    p.startswith(
-                        (
-                            "review cards: finished;",
-                            "review cards: truncated;",
-                            "review cards: failed;",
-                        )
-                    )
-                    for p in event.payload.problems
-                ):
-                    settled.set()
-            return receipt
+        capture = Publication(store)
+        facts, settled, publish = capture.facts, capture.settled, capture.publish
 
         try:
             await workspace.acquire_runtime()
             base = await workspace.reset()
+            await asyncio.to_thread(check_baseline, workspace.main.root)
             await workspace.check_isolation()  # Real authority, including unavailable C.
             await store.start()
             graph = WorkspaceGraph(workspace.main.root)
@@ -170,11 +186,17 @@ async def measure(
             if not facts:
                 raise BenchError("missing validated product facts")
             if arm.id == "detect-2":
-                target = ChangeTarget.model_validate(
-                    facts[-1].model_dump(include=set(ChangeTarget.model_fields))
-                )
-                await adapter.task_diff(patch.task, patch.diff, target)
-            return evidence(patch, arm, config, labels_hash, facts, adapter, passed)
+                await adapter.task_diff(patch.task, patch.diff, target_for(facts[-1]))
+            return evidence(
+                patch,
+                arm,
+                config,
+                labels_hash,
+                facts,
+                adapter,
+                passed,
+                workspace.isolation.reason if not workspace.isolation.available else None,
+            )
         finally:
             try:
                 if manager is not None:

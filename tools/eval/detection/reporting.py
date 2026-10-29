@@ -39,14 +39,35 @@ def repetition(records: list[Record], answers: dict[str, str]) -> dict:
             f"unavailable questions {needless['unavailable_questions']}/10",
         ],
         "detection": {
-            "groups": groups,
+            "groups": {
+                name: {
+                    k: v
+                    for k, v in group.items()
+                    if k
+                    in {
+                        "denominator",
+                        "executed",
+                        "observed_difference",
+                        "unprobed",
+                        "not_collected",
+                    }
+                }
+                for name, group in groups.items()
+            },
             "meaning": (
                 "Any observed difference; this does not establish detection of the labeled "
                 "unasked difference."
             ),
         },
         "classification": {
-            "groups": groups,
+            "groups": {
+                name: {
+                    k: v
+                    for k, v in group.items()
+                    if k not in {"observed_difference", "not_collected"}
+                }
+                for name, group in groups.items()
+            },
             "choices": {
                 choice: sum(d.choice == choice for r in rows for d in r.decisions)
                 for choice in ("asked_for", "not_asked_for", "cannot_tell")
@@ -99,4 +120,15 @@ def summarize(
         "criteria_passed": all(r["criteria_passed"] for r in all_results),
         "shared_accounting_including_history": metrics(records),
         "known_charges_usd": sum(r.charged_usd for r in records),
+        "shared_unknown_costs": [r.attempt_id for r in records if r.unknown],
+        "shared_reservations": [
+            {
+                "attempt_id": r.attempt_id,
+                "arm_id": r.arm_id,
+                "allowance_usd": r.allowance_usd,
+                "charged_usd": r.charged_usd,
+            }
+            for r in records
+            if r.status != "finished"
+        ],
     }

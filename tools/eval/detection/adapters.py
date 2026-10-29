@@ -5,7 +5,7 @@ import json
 
 from tools.eval.detection.accounting import Budget
 from tools.eval.detection.config import NO_BEHAVIOR, Arm, system_prompt
-from tools.eval.detection.labels import unique
+from tools.eval.detection.jsonio import unique
 from tools.eval.detection_types import DecisionEvidence
 from tools.eval.tasks import BenchError
 

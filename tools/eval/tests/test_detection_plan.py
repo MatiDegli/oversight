@@ -45,7 +45,9 @@ RATES = {p: Tariff(input=0, output=0) for p in ("meta", "baseten")}
 ASSUMPTIONS = Assumptions(input_tokens=1000, output_tokens=512, calls=40)
 
 
-async def simulated_measure(patch, arm, config, adapter, directory, demo_python, labels_hash):
+async def simulated_measure(
+    patch, arm, config, adapter, directory, demo_python, labels_hash, run_id=None
+):
     return DetectionEvidence(
         patch_id=patch.id,
         patch_sha256=patch.sha256,

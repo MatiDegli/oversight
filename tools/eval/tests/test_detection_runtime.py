@@ -15,7 +15,17 @@ from tools.eval.ledger import Ledger
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.id)
-async def test_dev_patch_product_facts_and_disposable_cleanup(arm, tmp_path):
+async def test_dev_patch_product_facts_and_disposable_cleanup(arm, tmp_path, monkeypatch):
+    from oversight.workspace import Workspace
+
+    runtime_roots = []
+    real_acquire = Workspace.acquire_runtime
+
+    async def acquire(workspace):
+        runtime_roots.append(workspace.runtime_root)
+        await real_acquire(workspace)
+
+    monkeypatch.setattr(Workspace, "acquire_runtime", acquire)
     patch = next(p for p in load_patches() if p.id == ("d04" if arm.behavior else "d01"))
     rates = {p: Tariff(input=0, output=0) for p in ("meta", "baseten")}
     config = arm.configuration(True, rates)
@@ -30,6 +40,7 @@ async def test_dev_patch_product_facts_and_disposable_cleanup(arm, tmp_path):
             patch, arm, config, adapter, tmp_path / "attempt", Path(sys.executable), None
         )
         assert result.tests_passed and result.facts
+        assert runtime_roots and all(not root.exists() for root in runtime_roots)
         assert (tmp_path / "attempt/events.sqlite").exists()
         if arm.behavior:
             assert result.facts[-1].behavior_diff is not None

@@ -7,16 +7,8 @@ from pathlib import Path
 
 from tools.eval.behavior.catalog import FROZEN_MANIFEST_SHA256, load_patches, sha256
 from tools.eval.behavior.sheet import ANSWERS, markdown
+from tools.eval.detection.jsonio import unique
 from tools.eval.tasks import BenchError
-
-
-def unique(pairs: list[tuple[str, object]]) -> dict:
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise BenchError("duplicate JSON field")
-        result[key] = value
-    return result
 
 
 @dataclass(frozen=True)

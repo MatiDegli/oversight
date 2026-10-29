@@ -185,3 +185,58 @@ async def test_deadline_sends_nothing(budget):
         assert not api.bodies and budget.sends == 0
     finally:
         await sdk.aclose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("arm", ARMS[1:], ids=lambda a: a.id)
+@pytest.mark.parametrize("choice", ["asked_for", "not_asked_for", "cannot_tell", "unavailable"])
+async def test_all_model_adapters_accept_explicit_fake_outcomes(budget, arm, choice):
+    adapter = Adapter(arm, budget, fake_choice=choice)
+    if arm.id == "detect-2":
+        await adapter.task_diff(INPUT.task, "frozen diff", INPUT.target)
+    else:
+        await adapter.classify_difference(INPUT, deadline=asyncio.get_running_loop().time() + 10)
+    assert len(adapter.evidence) == 1
+    result = adapter.evidence[0]
+    assert result.choice == choice or result.unavailable == "transport"
+    assert budget.receipts == budget.sends == 1
+
+
+@pytest.mark.anyio
+async def test_retry_rechecks_admission_and_has_one_receipt_per_send(budget):
+    budget.fake = True  # Explicit simulated zero cost, including the HTTP error receipt.
+    api = FakeApi(status(500), ok(body()))
+    sdk = client(api, retry=RetryPolicy(base_s=0))
+    try:
+        result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
+            INPUT, deadline=asyncio.get_running_loop().time() + 10
+        )
+        assert result.choice == "asked_for"
+        assert budget.sends == budget.receipts == len(api.bodies) == 2
+        assert budget.usage.tokens.input == "unknown"
+        assert budget.record.charged_usd == 0
+    finally:
+        await sdk.aclose()
+
+
+@pytest.mark.anyio
+async def test_inflight_timeout_retains_unknown_receipt(budget):
+    async def handle(request: httpx.Request) -> httpx.Response:
+        await asyncio.Event().wait()
+        raise AssertionError("timed out transport resumed")
+
+    sdk = DecisionClient(
+        client_profile(),
+        base_url="https://decision.test/v1",
+        api_key="test",
+        max_output_tokens=512,
+        http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(handle)),
+    )
+    try:
+        result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
+            INPUT, deadline=asyncio.get_running_loop().time() + 0.1
+        )
+        assert result.unavailable == "deadline"
+        assert budget.receipts == 1 and budget.record.unknown
+    finally:
+        await sdk.aclose()

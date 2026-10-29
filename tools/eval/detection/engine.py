@@ -13,11 +13,11 @@ from tools.eval.detection.config import ARMS, Assumptions, fingerprint, paid_gat
 from tools.eval.detection.runtime import measure
 from tools.eval.grade import Result, Tariff, Tests, Tokens
 from tools.eval.ledger import Ledger
-from tools.eval.tasks import REPO, BenchError
+from tools.eval.paths import PAID_OUTPUT as CANONICAL_OUTPUT
+from tools.eval.paths import output_path
+from tools.eval.tasks import BenchError
 
 from oversight.agents import DecisionClient
-
-CANONICAL_OUTPUT = REPO / ".eval-output" / "bench" / "results.jsonl"
 
 
 def jobs_for(
@@ -55,6 +55,7 @@ def save_plan(
         "pilot": pilot,
         "labels_sha256": labels_hash,
         "assumptions": assumptions.model_dump(),
+        "configurations": {arm.id: config for _, arm, config, _ in jobs},
         "jobs": [
             {
                 "patch": p.id,
@@ -143,6 +144,7 @@ async def run_attempt(
             ledger.out.parent / "detection" / record.attempt_id,
             demo_python,
             labels_hash,
+            record.run_id,
         )
     finally:
         if client is not None:
@@ -195,8 +197,6 @@ async def run_plan(
             (rates["meta"].input, rates["meta"].output),
             (rates["baseten"].input, rates["baseten"].output),
         )
-        from tools.eval.arms import output_path
-
         output_path(ledger.out, paid=True)
     elif paid or ledger.out.resolve().parent == CANONICAL_OUTPUT.resolve().parent:
         raise BenchError("explicit fake runs must use a separate nonpaid output")
