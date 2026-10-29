@@ -54,7 +54,7 @@ colors:
   agent-e-node: "rgba(19, 24, 30, 0.95)"
   agent-e-node-new: "rgba(13, 16, 20, 0.95)"
   agent-f: "#ab6e9e"
-  agent-f-text: "#ab6e9e"
+  agent-f-text: "#b27ba7"
   agent-f-tint: "rgba(171, 110, 158, 0.14)"
   agent-f-node: "rgba(30, 19, 28, 0.95)"
   agent-f-node-new: "rgba(20, 13, 18, 0.95)"
@@ -118,15 +118,15 @@ colors:
   day-agent-c-node: "#e7e3eb"
   day-agent-c-node-new: "#f0edf0"
   day-agent-d: "#a2568a"
-  day-agent-d-text: "#9c5084"
-  day-agent-d-tint: "#f6eff0"
-  day-agent-d-node: "#f6eff0"
-  day-agent-d-node-new: "#f8f4f4"
+  day-agent-d-text: "#894674"
+  day-agent-d-tint: "rgba(162, 86, 138, 0.12)"
+  day-agent-d-node: "#f1e7eb"
+  day-agent-d-node-new: "#f6eff0"
   day-agent-e: "#3475c4"
-  day-agent-e-text: "#2b6cba"
-  day-agent-e-tint: "#eef2f4"
-  day-agent-e-node: "#eef2f4"
-  day-agent-e-node-new: "#f4f6f6"
+  day-agent-e-text: "#255ea1"
+  day-agent-e-tint: "rgba(52, 117, 196, 0.12)"
+  day-agent-e-node: "#e4ebf2"
+  day-agent-e-node-new: "#eef2f4"
   day-agent-f: "#623659"
   day-agent-f-text: "#623659"
   day-agent-f-tint: "rgba(98, 54, 89, 0.12)"
@@ -379,11 +379,16 @@ remain unchanged); dark node RGB scales the graphic channels so the maximum chan
 and new-node RGB scales to 20, rounded to the nearest integer, both at 95% alpha. Day tints
 use graphic RGB at 12% alpha; day node and new-node fills mix 12% and 7% graphic RGB over
 `day-card` in sRGB, rounded to the nearest integer. Existing A/B day fills stay unchanged.
-Day D/E need lighter backing: tint and node fills use an opaque 7% graphic mix over
-`day-card`, and new-node fills use 4%. The opaque tint keeps their exact approved text
-readable even over `day-shell`; a 12% translucent graphic tint and the 12% node mix fail
-4.5:1. D text reaches 4.76:1 on tint/node and 4.94:1 on new-node; E reaches 4.71:1 and
-4.89:1 respectively.
+The maintainer approved distinct text values on 2026-10-28 at 22:30 ART: dark F text
+`#b27ba7` keeps graphic `#ab6e9e`; day D text `#894674` keeps graphic `#a2568a`;
+day E text `#255ea1` keeps graphic `#3475c4`. These text variants meet 4.5:1 on
+raised surfaces and on the agent tints used by cards, rail avatars and review pills.
+F text reaches 5.14:1 on dark raised and 4.65:1 on its tint over card. Day D/E reach
+5.08:1 / 5.07:1 on raised and 4.63:1 / 4.65:1 on their tints over shell.
+All slots retain the same translucent tint recipe and original node fills. Tints are
+used over shell, card, card-end and matte-top; tint over raised is not an intended pair
+(D 4.42:1 and E 4.44:1). Approval changes text only, including on the existing node fills;
+graphics and filled-badge letters retain their values.
 
 ### Secondary
 
@@ -502,12 +507,12 @@ Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1
 | day-on-agent (white) | day-agent-a / day-agent-b | 5.9 / 6.9 |
 | day-agent-c / day-agent-c-text | page / card / field / ground / panel (graphic; text) | 9.18; 9.18 / 9.51; 9.51 / 9.43; 9.43 / 8.87; 8.87 / 8.40; 8.40 |
 | day-on-agent | day-agent-c | 9.85 |
-| day-agent-d / day-agent-d-text | page / card / field / ground / panel (graphic; text) | 4.63; 5.03 / 4.79; 5.21 / 4.75; 5.17 / 4.47; 4.86 / 4.23; 4.60 |
+| day-agent-d / day-agent-d-text | page / card / field / ground / panel (graphic; text) | 4.63; 6.14 / 4.79; 6.36 / 4.75; 6.30 / 4.47; 5.93 / 4.23; 5.61 |
 | day-on-agent | day-agent-d | 4.96 |
-| day-agent-d-text | opaque tint / node / new-node | 4.76 / 4.76 / 4.94 |
-| day-agent-e / day-agent-e-text | page / card / field / ground / panel (graphic; text) | 4.37; 4.95 / 4.52; 5.13 / 4.48; 5.08 / 4.21; 4.78 / 3.99; 4.53 |
+| day-agent-d-text | tint over shell / node / new-node | 4.63 / 5.44 / 5.80 |
+| day-agent-e / day-agent-e-text | page / card / field / ground / panel (graphic; text) | 4.37; 6.13 / 4.52; 6.35 / 4.48; 6.30 / 4.21; 5.92 / 3.99; 5.61 |
 | day-on-agent | day-agent-e | 4.68 |
-| day-agent-e-text | opaque tint / node / new-node | 4.71 / 4.71 / 4.89 |
+| day-agent-e-text | tint over shell / node / new-node | 4.65 / 5.47 / 5.84 |
 | day-agent-f / day-agent-f-text | page / card / field / ground / panel (graphic; text) | 8.94; 8.94 / 9.26; 9.26 / 9.18; 9.18 / 8.63; 8.63 / 8.18; 8.18 |
 | day-on-agent | day-agent-f | 9.58 |
 | day-passed | day-page / day-shell | 5.8 / 5.1 |
@@ -1017,7 +1022,7 @@ text foreground, even where its use is restricted. **Bold** ratios fall below th
 | agent-c-text | 7.24 | 7.06 | 6.91 | 6.63 | 6.86 | 6.25 | 7.24 |
 | agent-d-text | 9.63 | 9.39 | 9.19 | 8.81 | 9.12 | 8.30 | 9.62 |
 | agent-e-text | 11.41 | 11.13 | 10.90 | 10.45 | 10.81 | 9.84 | 11.41 |
-| agent-f-text | 5.17 | 5.04 | 4.94 | 4.73 | 4.90 | **4.46** | 5.17 |
+| agent-f-text | 5.96 | 5.81 | 5.69 | 5.45 | 5.64 | 5.14 | 5.95 |
 | on-agent | **1.06** | **1.04** | **1.01** | **1.03** | **1.01** | **1.09** | **1.06** |
 | passed | 10.49 | 10.23 | 10.01 | 9.60 | 9.94 | 9.05 | 10.48 |
 | failed | 6.88 | 6.71 | 6.57 | 6.30 | 6.52 | 5.93 | 6.88 |
@@ -1080,6 +1085,8 @@ before use. Decorative divider and border do not meet 3:1 and must not identify 
 | --- | --- |
 | agent-a-text on its tint over shell / panel / page / card / card-bottom / raised / inset | 6.69 / 6.45 / 6.27 / 5.95 / 6.20 / 5.57 / 6.68 |
 | agent-b-text on its tint over shell / panel / page / card / card-bottom / raised / inset | 7.03 / 6.77 / 6.57 / 6.23 / 6.50 / 5.82 / 7.02 |
+| agent-f-text on its tint over shell / card / card-bottom / matte-top | 5.22 / 4.65 / 4.83 / 4.67 |
+| agent-f-text on its node / new-node fill | 5.44 / 5.77 |
 | page inverse label on text / text-hover fill | 16.20 / 19.01 |
 | text / muted / faint on matte-top (lighter header end) | 15.57 / 7.21 / 4.92 |
 

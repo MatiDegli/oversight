@@ -56,7 +56,7 @@ const baseThemes = {
     "agent-e-node": { color: "#13181e", alpha: 0.95 },
     "agent-e-node-new": { color: "#0d1014", alpha: 0.95 },
     "agent-f": "#ab6e9e",
-    "agent-f-text": "#ab6e9e",
+    "agent-f-text": "#b27ba7",
     "agent-f-tint": { color: "#ab6e9e", alpha: 0.14 },
     "agent-f-node": { color: "#1e131c", alpha: 0.95 },
     "agent-f-node-new": { color: "#140d12", alpha: 0.95 },

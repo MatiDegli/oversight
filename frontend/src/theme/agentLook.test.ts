@@ -72,9 +72,9 @@ it("preserves every approved A/B family value", () => {
 
 it.each([
   ["C", "#a392d6", "#a392d6", "#4f3189", "#4f3189"],
-  ["D", "#dba4c8", "#dba4c8", "#a2568a", "#9c5084"],
-  ["E", "#a1c7f8", "#a1c7f8", "#3475c4", "#2b6cba"],
-  ["F", "#ab6e9e", "#ab6e9e", "#623659", "#623659"],
+  ["D", "#dba4c8", "#dba4c8", "#a2568a", "#894674"],
+  ["E", "#a1c7f8", "#a1c7f8", "#3475c4", "#255ea1"],
+  ["F", "#ab6e9e", "#b27ba7", "#623659", "#623659"],
 ] as const)(
   "keeps %s's approved graphic and text exactly",
   (slot, dark, darkText, day, dayText) => {
@@ -85,5 +85,18 @@ it.each([
       day,
       dayText,
     ]);
+  },
+);
+
+it.each([
+  ["D", "#a2568a", "#f1e7eb", "#f6eff0"],
+  ["E", "#3475c4", "#e4ebf2", "#eef2f4"],
+] as const)(
+  "preserves %s's translucent tint and original node fills",
+  (slot, graphic, node, newNode) => {
+    const family = agentLook[slot].family;
+    expect(themes.day[`${family}-tint`]).toEqual({ color: graphic, alpha: 0.12 });
+    expect(themes.day[`${family}-node`]).toEqual({ color: node, alpha: 1 });
+    expect(themes.day[`${family}-node-new`]).toEqual({ color: newNode, alpha: 1 });
   },
 );

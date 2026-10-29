@@ -1203,10 +1203,11 @@ Generated files still come only from make contracts and keep byte-for-byte drift
 
 ## 2026-10-28 — Agent C–F identity and one slot look map
 
-The maintainer approved C violet, D pink, E sky and F plum on 2026-10-28. Exact graphic/text
-pairs, dark then day: C #a392d6/#a392d6, #4f3189/#4f3189; D #dba4c8/#dba4c8,
-#a2568a/#9c5084; E #a1c7f8/#a1c7f8, #3475c4/#2b6cba; F #ab6e9e/#ab6e9e,
-#623659/#623659. A/B are unchanged. DESIGN.md records the tint and node-fill recipe.
+The maintainer approved C violet, D pink, E sky and F plum on 2026-10-28. Final graphic/text
+pairs, including the text approval on 2026-10-28 at 22:30 ART (2026-10-29 UTC):
+C #a392d6/#a392d6, #4f3189/#4f3189; D #dba4c8/#dba4c8, #a2568a/#894674;
+E #a1c7f8/#a1c7f8, #3475c4/#255ea1; F #ab6e9e/#b27ba7, #623659/#623659.
+A/B are unchanged. DESIGN.md records the tint and node-fill recipe.
 The contract Slot keys one exhaustive typed look map; components, graph layers/styles and field
 emitters read it. Missing slot families fail typecheck. Admission remains two agents until the
 backend's separate front. Overlaps, badges and folds for N agents remain a later graph front.
@@ -1229,14 +1230,21 @@ theme switcher and does not claim the later full day-mode front is complete. A/B
 remain the visual baseline. Impeccable audit/polish preserves this approved identity; the pinned
 palette and existing signal effects take precedence over generic craft-floor recommendations.
 
-Audit note: the supplied flat-background measurements do not cover composited tints. Applying
-the unmodified A/B tint recipe gives dark F text/card tint 4.04:1, day D text/shell tint 3.80:1
-and day E text/shell tint 3.76:1. Dark F plain text on raised is 4.46:1 (raised is outside the
-supplied dark surface set). The 4.5:1 floor remains unchanged.
+The supplied flat-background measurements did not cover composited tints or raised surfaces.
+The original text values gave F/card tint 4.04:1 and F/raised 4.46:1 in dark, and day D/shell
+tint 3.80:1 and E/shell tint 3.76:1. On 2026-10-28 at 22:30 ART the maintainer approved the
+three text variants above so labels meet 4.5:1 on raised and on the agent tints. Graphics,
+tints, node fills, filled-badge letters and A/B remain at their approved values.
 
-Day D/E keep their approved graphic/text pairs. Their tint and node backings use an opaque
-7% graphic mix over day-card; new-node backings use 4%. Opacity prevents darker shell
-surfaces from reducing contrast: D tint/node 4.76:1 and new-node 4.94:1; E tint/node 4.71:1
-and new-node 4.89:1. The 12% node mixes also failed (D 4.46:1, E 4.41:1). Regression tests
-cover tinted text across every shell surface and both node fills. F text treatment remains
-pending maintainer clarification.
+This replaces the opaque D/E backing treatment in 0612105. Day D/E tints again use their
+graphic RGB at 12% alpha; node and new-node fills mix 12% and 7% graphic RGB over day-card
+in sRGB with rounded channels. Dark F keeps its 14% graphic tint and near-black node fills.
+Dark F text now reaches 5.14:1 on raised, 4.65:1 on its tint over card and 5.44:1 / 5.77:1 on
+node / new-node fills. Day D reaches 5.08:1 on raised, 4.63:1 on tint over shell and 5.44:1 /
+5.80:1 on node / new-node; day E reaches 5.07:1, 4.65:1 and 5.47:1 / 5.84:1 respectively.
+
+The original contrast tests keep every surface and threshold. The additional 0612105 regression
+for opaque backings across every shell surface is retired with that treatment: tint over
+raised is not used by the UI and gives D 4.42:1 / E 4.44:1 with the approved values.
+The rendered card/rail/review regression from 0612105 remains. Exact-value tests pin the
+three newly approved text tokens and guard the restored translucent tints and original node fills.
