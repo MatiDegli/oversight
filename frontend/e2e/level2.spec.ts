@@ -168,9 +168,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     expect((await appearance(page, "node.pending-A"))[0]?.borderColor).not.toBe(
       (await appearance(page, "node.pending-B"))[0]?.borderColor,
     );
-    await expect(page.getByRole("status", { name: "Review queue" })).toContainText(
-      "2 changes ready",
-    );
+    await expect(page.getByRole("status", { name: "Review queue" })).toContainText("Decisions · 2");
     await expect(review).toHaveCount(0);
     await cardA.getByRole("button", { name: "Review change" }).click();
     await expect(review).toBeVisible();

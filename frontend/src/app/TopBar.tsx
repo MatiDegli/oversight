@@ -1,8 +1,8 @@
 import { Folder, GitBranch, Search } from "lucide-react";
 
+import { selectDecisionInboxCount } from "../state";
 import type { State } from "../state";
 import { SpendMeter } from "./SpendMeter";
-import { readyCount } from "./view";
 import "./palette/palette.css";
 
 const focusRing =
@@ -24,7 +24,7 @@ export function TopBar({
   onOpenQueue?: () => void;
   onOpenPalette?: () => void;
 }) {
-  const ready = readyCount(state);
+  const ready = selectDecisionInboxCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
   return (
     <header className="flex h-(--top-bar-height) shrink-0 items-center gap-3.5 border-b border-divider bg-shell px-4.5">
@@ -78,18 +78,22 @@ export function TopBar({
         aria-label="Review queue"
         className="ml-auto flex shrink-0 items-center whitespace-nowrap"
       >
-        {ready > 0 && (
-          <button
-            type="button"
-            disabled={onOpenQueue === undefined}
-            onClick={onOpenQueue}
-            title="Open the next change in review"
-            className={`inline-flex h-(--queue-counter-height) items-center gap-2.5 rounded-control border border-border bg-raised px-3.5 text-(length:--label-size) font-semibold text-text enabled:hover:bg-page-raised ${focusRing}`}
-          >
-            <span aria-hidden="true" className="size-(--status-lamp-size) rounded-full bg-text" />
-            {`${String(ready)} ${ready === 1 ? "change" : "changes"} ready for review`}
-          </button>
-        )}
+        <button
+          type="button"
+          disabled={onOpenQueue === undefined}
+          onClick={onOpenQueue}
+          title="Open the review queue"
+          aria-label={`Decisions: ${String(ready)} pending. Open review queue`}
+          className={`inline-flex h-(--queue-counter-height) items-center gap-2.5 rounded-control border border-border bg-raised px-3.5 text-(length:--label-size) font-semibold ${ready > 0 ? "text-text" : "text-muted"} enabled:hover:bg-page-raised ${focusRing}`}
+        >
+          {ready === 0 ? (
+            <span>Nothing needs you</span>
+          ) : (
+            <span>
+              Decisions · <span className="font-mono tabular-nums">{ready}</span>
+            </span>
+          )}
+        </button>
       </div>
       <SpendMeter state={state} showBrake={false} />
     </header>

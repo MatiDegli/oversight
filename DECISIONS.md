@@ -1323,3 +1323,17 @@ chevron inset before ellipsizing; preserve fonts, frame sizes, header layers and
 Graph creation waits for these faces; a recovered font load rebuilds early fallback layers once.
 Without font/canvas measurement, tests retain the estimate. Row state-word clearance uses the
 same measurer because it needs only the existing word face and size.
+## 2026-10-29 — Count final decisions per change and keep their entry point visible
+
+The maintainer approved one inbox entry for the latest pending revision of each change, containing
+its questions and other decisions. Answers, card answers, answering echoes and delegations keep
+that entry pending; delegation attempts remain history. A completed Approve, Request changes or
+Reject removes it at change.resolved; a merge conflict still needs action. A new revision after
+Request changes is pending again. Decisions without a change, such as a lead plan, remain single
+entries. This replaces the earlier answer-or-echo closure rule and rule 3's hide/reopen behavior,
+while retaining its delegation history, original ordering, event-clock age and run reset.
+
+The header is the inbox entry point, always in the same place and at the same height: "Nothing
+needs you" at zero, in muted gray without a lamp or badge; "Decisions · N" otherwise, with a neutral
+count in tabular Mono. Its accessible name includes N. Until the inbox view exists it opens the
+current review queue. The agent card's "Ready for review" pill stays unchanged.
