@@ -14,6 +14,7 @@ export interface AfterlightTheme {
   "merge-trail-bright": string;
   "merge-trail-faint": string;
   "merge-trail-fade": string;
+  "merge-pulse-width": string;
   "transition-duration": string;
 }
 
@@ -31,6 +32,8 @@ export interface Afterlight {
   bright: number;
   faint: number;
   trailFade: number;
+  /** The pulse's line width in px. */
+  width: number;
   /** Milliseconds the light takes to come up when the pulse arrives. */
   rise: number;
 }
@@ -47,6 +50,7 @@ export function afterlightOf(theme: AfterlightTheme): Afterlight {
     bright: ms(theme["merge-trail-bright"]),
     faint: ms(theme["merge-trail-faint"]),
     trailFade: ms(theme["merge-trail-fade"]),
+    width: ms(theme["merge-pulse-width"]),
     rise: ms(theme["transition-duration"]),
   };
 }
