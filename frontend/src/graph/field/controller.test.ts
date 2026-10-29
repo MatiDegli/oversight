@@ -4,6 +4,7 @@ import { themes } from "../../theme";
 import { createFieldController } from "./controller";
 import type { FieldHost, FieldInput } from "./controller";
 import type { BoxSource } from "./boxSource";
+import type { Contours } from "./terrain";
 import { createLampRenderer } from "./renderer";
 import { createLampField } from "./model";
 
@@ -87,6 +88,10 @@ function advance(ms: number) {
   const callbacks = [...frames.values()];
   frames.clear();
   for (const callback of callbacks) callback(now);
+}
+/** Runs the frames the field asked for until it asks for no more, within a bound. */
+function settle() {
+  for (let i = 0; i < 5 && frames.size > 0; i++) advance(now + 300);
 }
 const last = () =>
   compute.mock.calls.at(-1) as unknown as Parameters<ReturnType<typeof createLampField>>;
@@ -334,3 +339,237 @@ it.each(["width", "height"])(
     controller.dispose();
   },
 );
+
+describe("the rest ground", () => {
+  const frames = new Map([
+    ["shop.cart", { x1: 100, y1: 300, x2: 360, y2: 480 }],
+    ["shop.pricing", { x1: 700, y1: 150, x2: 960, y2: 330 }],
+  ]);
+  const withFrames = {
+    ...source,
+    frames: (ids: readonly string[]) =>
+      new Map(ids.flatMap((id) => (frames.has(id) ? [[id, frames.get(id)] as const] : []))),
+  } as unknown as BoxSource;
+  const modules = [
+    { id: "shop.cart", callers: 1 },
+    { id: "shop.pricing", callers: 9 },
+  ];
+  const ground: FieldInput = { mode: "watch", lights: [], modules };
+  const contoursOf = (): Contours | undefined =>
+    renderer.draw.mock.calls.at(-1)?.[3] as Contours | undefined;
+  const big = () => Object.assign(canvas, { clientWidth: 1200, clientHeight: 700 });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+
+  it("is drawn only for a field told its modules, over their frames, with the line's look", () => {
+    big();
+    const controller = createFieldController(canvas, withFrames);
+    controller.update({ mode: "watch", lights: [] });
+    expect(contoursOf()).toBeUndefined();
+    expect(canvas.oversightField?.life().contours).toBe(false);
+    controller.update(ground);
+    const contours = contoursOf();
+    expect(contours?.look).toMatchObject({ step: 0.15, levels: 8, fade: 0.45, width: 1 });
+    expect(contours?.look.color).toEqual([237, 237, 234]);
+    // 12 by 7 cells of 100px, plus an edge: the height peaks over a module's frame.
+    expect(contours?.heights.cell).toBe(16);
+    const at = (x: number, y: number) =>
+      contours?.heights.data[
+        (Math.round(y / 16) * contours.heights.cols + Math.round(x / 16)) * 2
+      ] ?? 0;
+    expect(at(830, 240)).toBeGreaterThan(0.5);
+    expect(at(230, 390)).toBeGreaterThan(0.45);
+    expect(at(830, 240)).toBeGreaterThan(at(230, 390));
+    expect(canvas.oversightField?.life().contours).toBe(true);
+    controller.dispose();
+  });
+
+  it("keeps its heights for the slow interval, then drifts to new ones, and repaints on a timer", () => {
+    big();
+    const controller = createFieldController(canvas, withFrames);
+    controller.update(ground);
+    settle();
+    expect(canvas.oversightField?.animating()).toBe(false);
+    const first = contoursOf()?.heights.data.slice();
+    const draws = canvas.oversightField?.draws() ?? 0;
+    now += 50;
+    controller.redraw();
+    expect(contoursOf()?.heights.data).toEqual(first);
+    // The slow timer, with no frame running, repaints at the interval: heights move on.
+    now = 120_000;
+    vi.advanceTimersByTime(500);
+    expect(canvas.oversightField?.draws()).toBe(draws + 2);
+    expect(contoursOf()?.heights.data).not.toEqual(first);
+    controller.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("stands still under reduced motion: no clock, no timer, the same ground at any time", () => {
+    media.matches = true;
+    big();
+    const controller = createFieldController(canvas, withFrames);
+    controller.update(ground);
+    const first = contoursOf()?.heights.data.slice();
+    expect(first?.some((value) => value > 0.3)).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    now = 300_000;
+    controller.redraw();
+    expect(contoursOf()?.heights.data).toEqual(first);
+    expect(vi.getTimerCount()).toBe(0);
+    controller.dispose();
+  });
+
+  it("follows the frames: moving a module moves its hill", () => {
+    big();
+    const controller = createFieldController(canvas, withFrames);
+    controller.update(ground);
+    const before = contoursOf()?.heights.data.slice();
+    frames.set("shop.pricing", { x1: 300, y1: 450, x2: 560, y2: 630 });
+    controller.redraw();
+    expect(contoursOf()?.heights.data).not.toEqual(before);
+    frames.set("shop.pricing", { x1: 700, y1: 150, x2: 960, y2: 330 });
+    controller.dispose();
+  });
+
+  it("covers the contours where the lamps' glow is, and leaves them alone elsewhere", () => {
+    big();
+    compute.mockReturnValue({
+      cols: 172,
+      rows: 100,
+      data: new Uint8ClampedArray(172 * 100 * 4),
+      glow: new Uint8ClampedArray(172 * 100).fill(255),
+    } as never);
+    const controller = createFieldController(canvas, withFrames);
+    controller.update(ground);
+    const cover = (): number[] =>
+      Array.from(contoursOf()?.heights.data ?? []).filter((_, i) => i % 2 === 1);
+    expect(cover().every((value) => value === 1)).toBe(true);
+    compute.mockReturnValue({ cols: 1, rows: 1, data: new Uint8ClampedArray(4) });
+    controller.redraw();
+    expect(cover().every((value) => value === 0)).toBe(true);
+    controller.dispose();
+  });
+});
+
+describe("a merge's pulse and light", () => {
+  const merge = {
+    key: "change-1:21",
+    slot: "A" as const,
+    source: "agent-a" as const,
+    id: "a",
+    age: 0,
+  };
+  const live: FieldInput = { mode: "watch", lights: [], merges: [merge] };
+  const look = {
+    delay: Number.parseFloat(themes.dark["merge-travel-delay"]),
+    travel: Number.parseFloat(themes.dark["merge-travel-duration"]),
+    fade: Number.parseFloat(themes.dark["afterlight-duration"]),
+  };
+  const arrival = look.delay + look.travel;
+  const burning = () => {
+    const placed = last()[3];
+    return placed.find((item) => item.steady === true && !item.pulses);
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    Object.assign(canvas, { getBoundingClientRect: () => ({ left: 0, top: 0 }) });
+    Object.assign(document, { querySelector: () => null });
+  });
+
+  it("treats the merges the field mounts on as history: no pulse, no light, no timer", () => {
+    const controller = createFieldController(canvas, source);
+    controller.update(live);
+    settle();
+    expect(canvas.oversightField?.life()).toMatchObject({ pulses: 0, lights: 0 });
+    expect(canvas.oversightField?.animating()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    controller.dispose();
+  });
+
+  it("sends a pulse for a merge that arrives later, then lights the node and fades it", () => {
+    const controller = createFieldController(canvas, source);
+    controller.update({ mode: "watch", lights: [], merges: [] });
+    now = 1000;
+    controller.update(live);
+    expect(canvas.oversightField?.life().pulses).toBe(0);
+    now = 1000 + look.delay + look.travel / 2;
+    controller.redraw();
+    expect(canvas.oversightField?.life().pulses).toBe(1);
+    expect(canvas.oversightField?.animating()).toBe(true);
+    expect(burning()).toBeUndefined();
+    now = 1000 + arrival + look.fade / 2;
+    controller.redraw();
+    settle();
+    const half = burning();
+    expect(half?.weight).toBeGreaterThan(0);
+    expect(half?.weight).toBeLessThan(0.4);
+    expect(canvas.oversightField?.life()).toMatchObject({ pulses: 0, lights: 1 });
+    expect(canvas.oversightField?.animating()).toBe(false);
+    expect(vi.getTimerCount()).toBe(1);
+    now = 1000 + arrival + look.fade;
+    vi.advanceTimersByTime(500);
+    expect(canvas.oversightField?.life().lights).toBe(0);
+    expect(burning()).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+    controller.dispose();
+  });
+
+  it("fades the light on the slow timer, with no animation frame, and weaker each time", () => {
+    const controller = createFieldController(canvas, source);
+    controller.update({ mode: "watch", lights: [], merges: [] });
+    controller.update(live);
+    const weights: number[] = [];
+    for (const share of [0.1, 0.3, 0.6, 0.9]) {
+      now = arrival + look.fade * share;
+      vi.advanceTimersByTime(500);
+      settle();
+      weights.push(burning()?.weight ?? 0);
+    }
+    expect(weights.every((weight) => weight > 0)).toBe(true);
+    expect(weights).toEqual([...weights].sort((a, b) => b - a));
+    expect(canvas.oversightField?.animating()).toBe(false);
+    controller.dispose();
+  });
+
+  it("has no pulse under reduced motion: the light is whole at once and fades as long", () => {
+    media.matches = true;
+    const controller = createFieldController(canvas, source);
+    controller.update({ mode: "watch", lights: [], merges: [] });
+    now = 5;
+    controller.update(live);
+    expect(canvas.oversightField?.life()).toMatchObject({ pulses: 0, lights: 1 });
+    expect(canvas.oversightField?.animating()).toBe(false);
+    const whole = burning()?.weight ?? 0;
+    expect(whole).toBeGreaterThan(0.8);
+    now = 5 + look.fade / 2;
+    vi.advanceTimersByTime(500);
+    expect(burning()?.weight).toBeLessThan(whole / 2);
+    now = 5 + look.fade;
+    vi.advanceTimersByTime(500);
+    expect(burning()).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+    controller.dispose();
+  });
+
+  it("does not start a merge it has seen again, and starts it again after it leaves the state", () => {
+    const controller = createFieldController(canvas, source);
+    controller.update({ mode: "watch", lights: [], merges: [] });
+    controller.update(live);
+    now = look.delay + 100;
+    controller.update({ ...live, merges: [{ ...merge, age: 5000 }] });
+    expect(canvas.oversightField?.life().pulses).toBe(1);
+    now = arrival + look.fade + 1;
+    vi.advanceTimersByTime(500);
+    expect(canvas.oversightField?.life().lights).toBe(0);
+    controller.update({ mode: "watch", lights: [], merges: [] });
+    controller.update(live);
+    expect(canvas.oversightField?.life().pulses).toBe(0);
+    now += look.delay + 100;
+    controller.redraw();
+    expect(canvas.oversightField?.life().pulses).toBe(1);
+    controller.dispose();
+  });
+});

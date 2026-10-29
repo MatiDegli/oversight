@@ -1,9 +1,13 @@
 // The dot field's life on the page: it listens to Cytoscape through the box source, draws when the
-// graph or the lights change, and runs animation frames only while something breathes or a ring
-// spreads, the tab is visible and motion is allowed. Where WebGL is missing it draws nothing, and
-// the graph's background stays plain ground.
+// graph or the lights change, and runs animation frames only while something breathes, a ring
+// spreads or a merge's pulse travels, the tab is visible and motion is allowed. What changes too
+// slowly for frames, the rest contours' drift and a merge's fading light, repaints on a slow timer.
+// Where WebGL is missing it draws nothing, and the graph's background stays plain ground.
 import { getActiveTheme } from "../../theme";
+import type { XY } from "../orthogonal";
 
+import { afterlightOf, MergeLife } from "./afterlight";
+import type { Afterlight } from "./afterlight";
 import type { BoxSource } from "./boxSource";
 import { createLampField, fieldConfig, parseHex, placeLights, signalConfig } from "./model";
 import { overlayBoxes, contains } from "./mask";
@@ -13,15 +17,44 @@ import type { Box, LampGrid } from "./model";
 import { fieldClock, shouldAnimate } from "./motion";
 import { createLampRenderer } from "./renderer";
 import type { LampLook, LampRenderer } from "./renderer";
+import {
+  contourLook,
+  coverHeights,
+  createHeightField,
+  hillsOf,
+  moundsOf,
+  terrainConfig,
+} from "./terrain";
+import type { Contours, Heights, Hill, TerrainConfig, TerrainModule } from "./terrain";
+import { approachPath, TravelLayer } from "./travel";
 import { FieldTransition } from "./transition";
 import { sameLights } from "./lights";
-import type { FieldLight, FieldMode } from "./lights";
+import type { FieldLight, FieldMerge, FieldMode, FieldModule } from "./lights";
 
-/** What the field is told: the mode's light profile and the lights to draw. */
+/**
+ * What the field is told: the mode's light profile and the lights to draw; the merges, whose pulse
+ * and fading light it runs from the time it learns of them; and the modules the rest contours
+ * rise over. Without `modules` there are no contours, without `merges` no merge travel.
+ */
 export interface FieldInput {
   mode: FieldMode;
   lights: readonly FieldLight[];
+  merges?: readonly FieldMerge[];
+  modules?: readonly FieldModule[];
 }
+
+const sameMerges = (a: readonly FieldMerge[] = [], b: readonly FieldMerge[] = []) =>
+  a.length === b.length &&
+  a.every((merge, i) => merge.key === b.at(i)?.key && merge.id === b.at(i)?.id);
+
+const sameModules = (a?: readonly FieldModule[], b?: readonly FieldModule[]) =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.length === b.length &&
+    a.every((module, i) => module.id === b.at(i)?.id && module.callers === b.at(i)?.callers));
+
+const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
 /** The look of the lamps, from the theme. */
 export interface LookTheme {
@@ -56,6 +89,8 @@ export interface FieldProbe {
   animating(): boolean;
   /** How many times the field has drawn. */
   draws(): number;
+  /** The merges' pulses on the page and node lights burning now, and whether contours are drawn. */
+  life(): { pulses: number; lights: number; contours: boolean };
   /** The lamp of the cell at a point, in CSS px from the graph's top left, as last computed. */
   lamp(x: number, y: number): { level: number; color: [number, number, number] } | null;
   /** The pixel the GPU draws at a point, read back after drawing again; null without WebGL. */
@@ -89,6 +124,7 @@ class FieldRuntime implements FieldController {
   private readonly query =
     typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
   private renderer: LampRenderer | null;
+  private readonly travelLayer: TravelLayer;
   private readonly checkContext: LampRenderer["check"] | undefined;
   private input: FieldInput = { mode: "watch", lights: [] };
   private reducedMotion = this.query?.matches ?? false;
@@ -99,6 +135,17 @@ class FieldRuntime implements FieldController {
   private paintedAt = 0;
   private theme = getActiveTheme();
   private look = lampLook(this.theme);
+  private afterlight: Afterlight = afterlightOf(this.theme);
+  private readonly life = new MergeLife(this.afterlight);
+  private primed = false;
+  private terrain: TerrainConfig = terrainConfig(this.theme);
+  private readonly heightField = createHeightField();
+  private hills: Hill[] = [];
+  private hillsKey = "";
+  private heights: Heights | null = null;
+  private heightsBucket = Number.NaN;
+  private contoursShown = false;
+  private slowTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly transition = new FieldTransition({
     lights: [],
     config: fieldConfig(this.theme, "watch"),
@@ -111,6 +158,7 @@ class FieldRuntime implements FieldController {
     private readonly source: BoxSource,
   ) {
     this.markerLayer = new MarkerLayer(canvas);
+    this.travelLayer = new TravelLayer(canvas);
     const stage =
       typeof canvas.closest === "function" ? canvas.closest('[aria-label="Graph stage"]') : null;
     if (stage) {
@@ -158,6 +206,7 @@ class FieldRuntime implements FieldController {
       !this.reducedMotion &&
       // A draw can cross the deadline: keep a frame until the final scene has been painted.
       (this.transition.active(this.paintedAt) ||
+        this.life.travelling(performance.now()) ||
         shouldAnimate({
           reducedMotion: false,
           hidden: false,
@@ -179,6 +228,7 @@ class FieldRuntime implements FieldController {
     // Hide even a preserved/partially drawn buffer: the graph must show plain ground.
     this.canvas.hidden = true;
     this.markerLayer.dispose();
+    this.travelLayer.dispose();
     this.schedule();
   }
 
@@ -192,7 +242,10 @@ class FieldRuntime implements FieldController {
       return;
     }
     try {
-      const { lights, config } = this.transition.sample(now);
+      const sampled = this.transition.sample(now);
+      const { config } = sampled;
+      const burning = this.life.lights(now);
+      const lights = burning.length > 0 ? [...sampled.lights, ...burning] : sampled.lights;
       this.renderer.resize(width, height, Math.min(window.devicePixelRatio || 1, 1));
       const boxes = this.markers.boxes(lights, this.source, now);
       const placed = placeLights(this.theme, lights, boxes);
@@ -202,15 +255,18 @@ class FieldRuntime implements FieldController {
         this.masksDirty = false;
         this.maskSize = maskSize;
       }
+      const time = this.reducedMotion ? null : (this.frozen ?? now / 1000);
       this.grid = this.lamps(
         this.source.zoom ? signalConfig(config, this.source.zoom()) : config,
         width,
         height,
         placed,
-        this.reducedMotion ? null : (this.frozen ?? now / 1000),
+        time,
       );
-      this.renderer.draw(this.grid, this.look, this.masks);
+      const contours = this.contours(this.grid, width, height, time);
+      this.renderer.draw(this.grid, this.look, this.masks, contours);
       this.markerLayer.draw(lights, boxes, this.masks, width, height);
+      this.drawPulses(now, width, height);
       this.paintedAt = now;
       this.draws += 1;
     } catch (error) {
@@ -219,6 +275,117 @@ class FieldRuntime implements FieldController {
     }
   }
 
+  /**
+   * The rest ground for this draw: hills where the modules' frames are and mounds in the empty
+   * areas, their heights recomputed when the layout changes or the slow clock moves on, and the
+   * light's cover set every time. Undefined without modules in the input, and without a clock the
+   * ground stands still.
+   */
+  private contours(
+    grid: LampGrid,
+    width: number,
+    height: number,
+    time: number | null,
+  ): Contours | undefined {
+    const modules = this.input.modules;
+    this.contoursShown = modules !== undefined;
+    if (!modules) return undefined;
+    const frames =
+      this.source.frames?.(modules.map((module) => module.id)) ?? new Map<string, Box>();
+    const placed = modules.flatMap((module): TerrainModule[] => {
+      const frame = frames.get(module.id);
+      return frame ? [{ ...module, frame }] : [];
+    });
+    const key = [
+      width,
+      height,
+      this.terrain.cell,
+      ...placed.map(({ id, callers, frame }) =>
+        [id, callers, ...[frame.x1, frame.y1, frame.x2, frame.y2].map(Math.round)].join(":"),
+      ),
+    ].join("|");
+    if (key !== this.hillsKey) {
+      this.hillsKey = key;
+      this.hills = [
+        ...hillsOf(this.terrain, placed),
+        ...moundsOf(
+          this.terrain,
+          placed.map((module) => module.frame),
+          width,
+          height,
+        ),
+      ];
+      this.heights = null;
+    }
+    const bucket = time === null ? 0 : Math.floor((time * 1000) / this.slowInterval());
+    if (!this.heights || bucket !== this.heightsBucket) {
+      this.heights = this.heightField(this.terrain, this.hills, width, height, time);
+      this.heightsBucket = bucket;
+    }
+    coverHeights(this.heights, grid, this.look.cell);
+    return { heights: this.heights, look: contourLook(this.terrain) };
+  }
+
+  /** Draws each pulse on its way from the agent's card to its node, never under reduced motion. */
+  private drawPulses(now: number, width: number, height: number) {
+    const pulses = this.reducedMotion ? [] : this.life.pulses(now);
+    const paths = new Map<string, XY[]>();
+    if (pulses.length > 0) {
+      const origin = this.canvas.getBoundingClientRect();
+      const targets = this.source.boxes(pulses.map((pulse) => pulse.merge.id));
+      for (const pulse of pulses) {
+        const target = targets.get(pulse.merge.id);
+        if (!target) continue;
+        const card = document.querySelector<HTMLElement>(
+          `[aria-label="Agent ${pulse.merge.slot}"][data-slot="${pulse.merge.slot}"]`,
+        );
+        const rect = card?.getBoundingClientRect();
+        const start =
+          rect && rect.width > 0
+            ? {
+                x: clamp(rect.left - origin.left, 0, width),
+                y: clamp(rect.top + rect.height / 2 - origin.top, 0, height),
+              }
+            : { x: width, y: (target.y1 + target.y2) / 2 };
+        paths.set(
+          pulse.key,
+          approachPath(start, target, this.source.edgesAt?.(pulse.merge.id) ?? []),
+        );
+      }
+    }
+    this.travelLayer.draw(pulses, paths, this.masks, width, height, this.afterlight);
+  }
+
+  private slowInterval() {
+    return Number.parseFloat(this.theme["field-slow-interval"]);
+  }
+
+  /** The slow timer runs while the contours drift or a merge's light fades, and only then. */
+  private slowWanted() {
+    return (
+      this.renderer !== null &&
+      !document.hidden &&
+      ((this.input.modules !== undefined && !this.reducedMotion) ||
+        this.life.active(performance.now()))
+    );
+  }
+
+  private scheduleSlow() {
+    if (this.slowWanted()) {
+      this.slowTimer ??= setTimeout(this.slowTick, this.slowInterval());
+    } else if (this.slowTimer !== undefined) {
+      clearTimeout(this.slowTimer);
+      this.slowTimer = undefined;
+    }
+  }
+
+  private slowTick = () => {
+    this.slowTimer = undefined;
+    // Frames, while they run, draw everything; the timer only fills the quiet between events.
+    if (this.frame === 0) this.draw(performance.now());
+    this.scheduleSlow();
+  };
+
   private schedule() {
     if (this.animating()) {
       if (this.frame === 0) this.frame = requestAnimationFrame(this.tick);
@@ -226,6 +393,7 @@ class FieldRuntime implements FieldController {
       cancelAnimationFrame(this.frame);
       this.frame = 0;
     }
+    this.scheduleSlow();
   }
 
   private tick = (now: number) => {
@@ -259,6 +427,10 @@ class FieldRuntime implements FieldController {
   private onTheme = () => {
     this.theme = getActiveTheme();
     this.look = lampLook(this.theme);
+    this.afterlight = afterlightOf(this.theme);
+    this.life.setLook(this.afterlight);
+    this.terrain = terrainConfig(this.theme);
+    this.hillsKey = "";
     this.setTarget();
     this.redraw();
     this.schedule();
@@ -287,7 +459,17 @@ class FieldRuntime implements FieldController {
   }
 
   update(next: FieldInput) {
-    if (next.mode === this.input.mode && sameLights(next.lights, this.input.lights)) return;
+    // The first input is the state the field mounts on: its merges happened before.
+    const history = !this.primed;
+    this.primed = true;
+    if (
+      next.mode === this.input.mode &&
+      sameLights(next.lights, this.input.lights) &&
+      sameMerges(next.merges, this.input.merges) &&
+      sameModules(next.modules, this.input.modules)
+    )
+      return;
+    if (next.merges) this.life.update(next.merges, performance.now(), this.reducedMotion, history);
     this.input = next;
     this.setTarget();
     this.redraw();
@@ -313,6 +495,11 @@ class FieldRuntime implements FieldController {
       state: () => (this.renderer && !this.renderer.lost() ? "webgl" : "plain"),
       animating: () => this.frame !== 0,
       draws: () => this.draws,
+      life: () => ({
+        pulses: this.reducedMotion ? 0 : this.life.pulses(performance.now()).length,
+        lights: this.life.lights(performance.now()).length,
+        contours: this.renderer !== null && this.contoursShown,
+      }),
       lamp: (x, y) => this.lamp(x, y),
       pixel: (x, y) => {
         this.redraw();
@@ -324,10 +511,13 @@ class FieldRuntime implements FieldController {
   dispose() {
     if (this.frame !== 0) cancelAnimationFrame(this.frame);
     this.frame = 0;
+    if (this.slowTimer !== undefined) clearTimeout(this.slowTimer);
+    this.slowTimer = undefined;
     this.unsubscribe();
     this.observer.disconnect();
     this.overlayObserver?.disconnect();
     this.markerLayer.dispose();
+    this.travelLayer.dispose();
     this.query?.removeEventListener("change", this.onMotion);
     document.removeEventListener("visibilitychange", this.onVisibility);
     window.removeEventListener("resize", this.redraw);
