@@ -1510,3 +1510,43 @@ removes only the measured possible-callers unknown; it never changes the recorde
 or waives tests, a failed rule, missing measurements, or another unknown. Server authorization
 is rechecked at every rules barrier and serialized with revoke at the Git effect boundary.
 The creation bundle remains reserved for 1.8.0.
+
+## 2026-10-29 — Item 9's card and inbox: answers, content, shots and where grants are listed
+
+The maintainer decided on 2026-10-29, as follow-up 3 to item 9 and the decisions inbox. Earlier
+entries record the inbox itself ("A decisions inbox is the form of Needs you": No is Request
+changes, Unsure stays in the inbox), the header count, and what becomes a question ("Item 9
+questions are only for unasked or untied differences"). This entry records the rest: how the
+card's answers gate its actions, what the card and the inbox show, the shots gate, and where
+standing grants are listed.
+
+Approve on a card with questions opens only when every answer is Yes, and the reason sits beside
+the locked button: "Approve opens only when every answer is Yes". With any No, Request changes
+becomes the primary action, prefilled with that question's example as the comment. With any
+Unsure, the card waits. Reject is always available. In Ask me, every change still waits for
+Approve.
+
+The card says "N choices need you" and gives one line, from events, with what was asked and what
+was done. Each question shows its smallest example as large before -> after cells, the after cell
+in the agent's color, with Yes keep it, No send it back and Unsure decide later; an answered
+question collapses to one line with its answer. "Everything else is the same" counts the functions
+and inputs compared, as one row of function squares per module, beside the changed module with its
+changed functions numbered to their questions, and their callers. A footer reads "k of N answered"
+next to the locked Approve. The inbox shows the large count; one line computed from events, such
+as how many agents took how many steps in how long and how many of those decisions needed a
+person; when each decision arrived; and rows with their before -> after, never a row whose before
+equals its after. The earlier prep mockups give content and hierarchy only. The screens use the
+product's own components at the quality of the v4 shell sketches, with data from a real recorded
+run (the demo, or Boltons) that names only files that exist.
+
+Before any card or inbox front merges, the maintainer sees shots of the card's three states and of
+the inbox, in dark and day. Once he approves them, they go into docs/sketches/ beside the v4
+sketches.
+
+Standing grants get no Settings tab for grants alone. The grants list sits next to the inbox, as a
+second view of the same panel or a section under the decisions, with its own count. The inbox
+answers front shows that placement in its first shots; a reason it does not work comes back with
+them.
+
+This keeps every decision the person makes, and every answer they gave once for good, in one
+place, and Approve, which merges into main, never opens while an answer still says No or Unsure.
