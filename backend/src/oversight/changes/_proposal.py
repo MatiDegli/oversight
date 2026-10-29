@@ -382,7 +382,8 @@ async def record_probe_facts(
 async def publish_facts(ctx: ChangeContext, evidence: FactsEvidence) -> None:
     if ctx.cards is not None and (ctx.behavior_diff or ctx.measured_cone):
         ctx.cards.prepare(ctx.state.changes[evidence.target.change_id], evidence)
-    await ctx.publish(build_change_facts(evidence))
+    facts = await asyncio.to_thread(build_change_facts, evidence)
+    await ctx.publish(facts)
     ctx.assessment.facts_ready(ctx.state.changes[evidence.target.change_id], evidence)
 
 
