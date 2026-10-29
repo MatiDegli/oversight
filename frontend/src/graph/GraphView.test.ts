@@ -116,7 +116,9 @@ function mount(props?: GraphViewProps) {
   const load = vi.fn(() => pending);
   const observer = { observe: vi.fn(), disconnect: vi.fn() };
   let onResize: (() => void) | undefined;
-  vi.stubGlobal("document", { fonts: { load } });
+  vi.stubGlobal("document", {
+    fonts: { load, check: () => false, addEventListener: vi.fn(), removeEventListener: vi.fn() },
+  });
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -169,7 +171,11 @@ it.each(["resolved", "rejected"] as const)(
   async (result) => {
     setLabel("Before loading");
     const { load, observer, settle } = mount();
-    expect(load).toHaveBeenCalledExactlyOnceWith(`${theme["body-size"]} ${theme["text-font"]}`);
+    expect(load.mock.calls).toEqual([
+      [`${theme["body-size"]} ${theme["text-font"]}`],
+      [`${String(theme["frame-title-weight"])} ${theme["frame-title-size"]} ${theme["text-font"]}`],
+      [`${String(theme["caption-weight"])} ${theme["frame-count-size"]} ${theme["text-font"]}`],
+    ]);
     await Promise.resolve();
     expect(mocks.instances).toHaveLength(0);
     expect(observer.observe).not.toHaveBeenCalled();
@@ -696,4 +702,29 @@ it("limits the zoom to the buttons' range, and routes a call again when a node i
   paint();
   expect(scratch.mock.calls.filter((call: unknown[]) => call.length === 2)).toEqual([]);
   expect(cy.scratch("dragCosts")).toEqual([expect.any(Number)]);
+});
+
+it("rebuilds fallback header layers once after fonts recover, without moving the graph", async () => {
+  setLabel("Fallback");
+  const { settle } = mount();
+  const check = vi.fn(() => false);
+  const listen = vi.fn();
+  const remove = vi.fn();
+  Object.assign(document.fonts, { check, addEventListener: listen, removeEventListener: remove });
+  await settle("rejected");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Missing graph");
+  const cameraBefore = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+  const positions = cy.nodes().map((n) => ({ ...n.position() }));
+  const oldStyle = cy.style();
+  const refresh = listen.mock.calls[0]?.[1] as () => void;
+  refresh();
+  expect(cy.style()).toBe(oldStyle);
+  check.mockReturnValue(true);
+  refresh();
+  expect(cy.style()).not.toBe(oldStyle);
+  expect(remove).toHaveBeenCalledWith("loadingdone", refresh);
+  expect({ zoom: cy.zoom(), pan: cy.pan() }).toEqual(cameraBefore);
+  expect(cy.nodes().map((n) => ({ ...n.position() }))).toEqual(positions);
+  expect(mocks.instances).toHaveLength(1);
 });

@@ -34,17 +34,53 @@ it("settles routes again when positions change without a topology change", () =>
     })),
     {
       group: "edges",
-      data: { id: "ab", source: "a", target: "b", kind: "calls" },
-      classes: "calls exact",
+      data: { id: "ab", source: "a", target: "b", kind: "calls", callCount: 3 },
+      classes: "calls exact aggregate",
     },
   ];
   try {
     updateGraph(cy, elements, themes.dark);
     const edge = cy.getElementById("ab");
     const original: unknown = structuredClone(edge.data("route"));
+    edge.addClass("count-hover");
+    updateGraph(cy, elements, themes.dark);
+    expect(edge.hasClass("count-hover")).toBe(true);
     cy.getElementById("b").position({ x: 600, y: 200 });
     updateGraph(cy, elements, themes.dark);
     expect(edge.data("route")).not.toEqual(original);
+    expect(edge.hasClass("count-hover")).toBe(false);
+  } finally {
+    cy.destroy();
+  }
+});
+
+it.each(["source", "target"] as const)("clears hover when the %s changes", (endpoint) => {
+  const cy = cytoscape({ headless: true });
+  const elements: GraphElement[] = [
+    ...["a", "b", "c"].map((id, i): GraphElement => ({
+      group: "nodes",
+      data: { id, kind: "module" },
+      classes: "module",
+      position: { x: i * 600, y: 0 },
+    })),
+    {
+      group: "edges",
+      data: { id: "ab", source: "a", target: "b", kind: "calls" },
+      classes: "calls aggregate",
+    },
+  ];
+  try {
+    updateGraph(cy, elements);
+    const edge = cy.getElementById("ab");
+    edge.addClass("count-hover");
+    updateGraph(
+      cy,
+      elements.map((e) =>
+        e.group === "edges" ? { ...e, data: { ...e.data, [endpoint]: "c" } } : e,
+      ),
+    );
+    expect(edge[endpoint]().id()).toBe("c");
+    expect(edge.hasClass("count-hover")).toBe(false);
   } finally {
     cy.destroy();
   }

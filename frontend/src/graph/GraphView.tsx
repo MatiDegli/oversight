@@ -1,5 +1,5 @@
 import cytoscape from "cytoscape";
-import type { Core, NodeSingular } from "cytoscape";
+import type { Core, EdgeSingular, NodeSingular } from "cytoscape";
 import type { ImpactCone } from "@contracts";
 import fcose from "cytoscape-fcose";
 import { useEffect, useRef } from "react";
@@ -181,6 +181,11 @@ export function GraphView({
     if (!host) return;
     const source = boxes.current;
     const theme = getActiveTheme();
+    const fonts = [
+      `${theme["body-size"]} ${theme["text-font"]}`,
+      `${String(theme["frame-title-weight"])} ${theme["frame-title-size"]} ${theme["text-font"]}`,
+      `${String(theme["caption-weight"])} ${theme["frame-count-size"]} ${theme["text-font"]}`,
+    ];
     let cancelled = false;
     let dispose: (() => void) | undefined;
     const create = () => {
@@ -192,14 +197,18 @@ export function GraphView({
         minZoom: ZOOM_RANGE.min,
         maxZoom: ZOOM_RANGE.max,
       });
-      cy.style(
-        graphStyles(
-          theme,
-          edgeShape(
-            import.meta.env.DEV ? (typeof location === "undefined" ? "" : location.search) : "",
-          ),
-        ),
+      const shape = edgeShape(
+        import.meta.env.DEV ? (typeof location === "undefined" ? "" : location.search) : "",
       );
+      cy.style(graphStyles(theme, shape));
+      // A failed initial load may recover later. Replace the layer caches once the faces load.
+      const refreshFonts = () => {
+        if (!fonts.every((font) => document.fonts.check(font))) return;
+        cy.style(graphStyles(theme, shape));
+        document.fonts.removeEventListener("loadingdone", refreshFonts);
+      };
+      if (!fonts.every((font) => document.fonts.check(font)))
+        document.fonts.addEventListener("loadingdone", refreshFonts);
       // Pan, zoom and animated camera moves can emit several viewport events per frame.
       // Read the actual camera once, never change it while reporting cone visibility.
       let viewportFrame: number | undefined;
@@ -219,6 +228,11 @@ export function GraphView({
       };
       reportViewport.current = reportSoon;
       cy.on("viewport", reportSoon);
+      cy.on("mouseover mouseout", "edge.aggregate", (event) => {
+        cy.batch(() => {
+          (event.target as EdgeSingular).toggleClass("count-hover", event.type === "mouseover");
+        });
+      });
       let interacting = false;
       let quietUntil = 0;
       const arriving = new Set<string>();
@@ -394,6 +408,7 @@ export function GraphView({
       };
       observeCard.current();
       dispose = () => {
+        document.fonts.removeEventListener("loadingdone", refreshFonts);
         if (apiRef) apiRef.current = null;
         source.detach();
         unsubscribe();
@@ -412,8 +427,8 @@ export function GraphView({
     };
     // Create labels only after the font settles: reapplying identical styles
     // cannot invalidate Cytoscape's cached label measurements and textures.
-    void document.fonts
-      .load(`${theme["body-size"]} ${theme["text-font"]}`)
+    // Header layers are built only after the title and count faces have settled too.
+    void Promise.all(fonts.map((font) => document.fonts.load(font)))
       .catch(() => undefined)
       .then(() => {
         if (!cancelled) create();
