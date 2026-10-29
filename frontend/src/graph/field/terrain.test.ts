@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { themes } from "../../theme";
-import type { Box } from "./model";
-import { createHeightField, hillsOf, moundsOf, terrainConfig, unit } from "./terrain";
+import type { Box, LampGrid } from "./model";
+import { coverHeights, createHeightField, hillsOf, moundsOf, terrainConfig, unit } from "./terrain";
 import type { Heights, TerrainModule } from "./terrain";
 
 const config = terrainConfig(themes.dark);
@@ -21,7 +21,7 @@ const W = 1600;
 const H = 900;
 const heights = createHeightField();
 const at = (grid: Heights, x: number, y: number) =>
-  grid.data[Math.round(y / grid.cell) * grid.cols + Math.round(x / grid.cell)] ?? 0;
+  grid.data[(Math.round(y / grid.cell) * grid.cols + Math.round(x / grid.cell)) * 2] ?? 0;
 const centerOf = (box: Box) => [(box.x1 + box.x2) / 2, (box.y1 + box.y2) / 2] as const;
 const peak = (id: string, time: number | null = null) => {
   const found = modules.find((module) => module.id === id);
@@ -124,12 +124,11 @@ describe("the drift", () => {
 });
 
 describe("the grid", () => {
-  it("covers the screen plus an edge, stamps each grid, and reuses its array", () => {
+  it("covers the screen plus an edge and reuses its array", () => {
     const first = heights(config, [], W, H, null);
     expect(first.cols * config.cell).toBeGreaterThanOrEqual(W);
     expect(first.rows * config.cell).toBeGreaterThanOrEqual(H);
     const second = heights(config, [], W, H, null);
-    expect(second.stamp).toBe(first.stamp + 1);
     expect(second.data).toBe(first.data);
     expect(second.data.every((value) => value === 0)).toBe(true);
   });
@@ -150,5 +149,26 @@ describe("the grid", () => {
     expect(unit("shop.cart", 3)).not.toBe(unit("shop.cart", 4));
     expect(unit("x")).toBeGreaterThanOrEqual(0);
     expect(unit("x")).toBeLessThan(1);
+  });
+});
+
+describe("the cover of light", () => {
+  it("follows the lamps' smooth glow, and covers nothing without one", () => {
+    const grid = heights(config, [], 200, 100, null);
+    const cols = 30;
+    const glow = new Uint8ClampedArray(cols * 15);
+    glow[2 * cols + 4] = 255;
+    glow[2 * cols + 6] = 51;
+    const lamps: LampGrid = { cols, rows: 15, data: new Uint8ClampedArray(cols * 15 * 4), glow };
+    coverHeights(grid, lamps, 7);
+    const cover = (x: number, y: number) =>
+      grid.data[(Math.round(y / grid.cell) * grid.cols + Math.round(x / grid.cell)) * 2 + 1];
+    // The node at 32px, 16px lies over lamp cell 4, 2 (full) and the one at 48px over cell 6, 2.
+    expect(cover(32, 16)).toBe(1);
+    expect(cover(48, 16)).toBeCloseTo(51 / 255, 5);
+    expect(cover(0, 0)).toBe(0);
+    expect(cover(192, 96)).toBe(0);
+    coverHeights(grid, { cols, rows: 15, data: lamps.data }, 7);
+    expect(grid.data.filter((_, i) => i % 2 === 1).every((value) => value === 0)).toBe(true);
   });
 });

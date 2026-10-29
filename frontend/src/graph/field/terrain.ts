@@ -4,7 +4,7 @@
 // screen and the GPU samples them smoothly, so the cost does not grow with the graph. Time moves
 // the hills and bends the ground a little, in a cycle of minutes: the change is continuous, and
 // without a clock (reduced motion) the same ground stands still. Every number comes from a token.
-import type { Box, Rgb } from "./model";
+import type { Box, LampGrid, Rgb } from "./model";
 import { parseHex } from "./model";
 
 /** The theme values the terrain reads; the full theme satisfies it. */
@@ -56,6 +56,38 @@ export function terrainConfig(theme: TerrainTheme): TerrainConfig {
   };
 }
 
+/** What the shader needs to draw the lines from the heights. */
+export interface ContourLook {
+  color: Rgb;
+  /** The line's alpha before the fade and the cover of any light. */
+  alpha: number;
+  step: number;
+  levels: number;
+  fade: number;
+  /** The tallest height a hill can reach alone: the line at it keeps the whole alpha. */
+  top: number;
+  /** In CSS px. */
+  width: number;
+}
+
+/** The ground the renderer draws under the lamps: its heights, and how to draw them. */
+export interface Contours {
+  heights: Heights;
+  look: ContourLook;
+}
+
+export function contourLook(config: TerrainConfig): ContourLook {
+  return {
+    color: config.line.color,
+    alpha: config.line.alpha,
+    step: config.step,
+    levels: config.levels,
+    fade: config.fade,
+    top: config.base + config.range,
+    width: config.width,
+  };
+}
+
 /** A module's rendered frame, and how many calls from other modules reach into it. */
 export interface TerrainModule {
   id: string;
@@ -75,14 +107,15 @@ export interface Hill {
   seed: number;
 }
 
-/** The ground on a grid: `cols` by `rows` heights, row by row, sampled at multiples of `cell`. */
+/**
+ * The ground on a grid, `cols` by `rows` nodes at multiples of `cell`, row by row. Each node holds
+ * two numbers: the height, and how much light covers it (0 to 1), which hides the lines there.
+ */
 export interface Heights {
   cols: number;
   rows: number;
   cell: number;
   data: Float32Array;
-  /** Counts the grids made, so the renderer uploads only a new one. */
-  stamp: number;
 }
 
 /** The pixels around a frame that a hill spreads past it, before the spread share. */
@@ -192,7 +225,6 @@ function driftOf(config: TerrainConfig, hill: Hill, time: number) {
 export function createHeightField() {
   let data = new Float32Array(0);
   let warped = new Float32Array(0);
-  let stamp = 0;
   /**
    * The heights of a `width` by `height` screen at `time` seconds, or still when `time` is null.
    * Overlapping hills add up, so two near modules rise into one larger hill.
@@ -207,8 +239,8 @@ export function createHeightField() {
     const { cell } = config;
     const cols = Math.ceil(width / cell) + 2;
     const rows = Math.ceil(height / cell) + 2;
-    if (data.length !== cols * rows) {
-      data = new Float32Array(cols * rows);
+    if (data.length !== cols * rows * 2) {
+      data = new Float32Array(cols * rows * 2);
       warped = new Float32Array(cols * rows * 2);
     } else data.fill(0);
     const t = time ?? 0;
@@ -237,10 +269,25 @@ export function createHeightField() {
           const dx = (warped[k * 2] ?? 0) - here.x;
           const dy = (warped[k * 2 + 1] ?? 0) - here.y;
           const q = dx * dx * kx + dy * dy * ky;
-          if (q < CUTOFF / 2) data[k] = (data[k] ?? 0) + here.height * Math.exp(-q);
+          if (q < CUTOFF / 2) data[k * 2] = (data[k * 2] ?? 0) + here.height * Math.exp(-q);
         }
     }
-    stamp += 1;
-    return { cols, rows, cell, data, stamp };
+    return { cols, rows, cell, data };
   };
+}
+
+/**
+ * Sets how much light covers each node, from the lamps' smooth glow, so the lines fade out where an
+ * agent's light shines and come back as it fades. A grid without a glow covers nothing.
+ */
+export function coverHeights(heights: Heights, grid: LampGrid, lampCell: number) {
+  const { cols, rows, cell, data } = heights;
+  const { glow } = grid;
+  for (let row = 0; row < rows; row++) {
+    const lampRow = Math.min(grid.rows - 1, Math.floor((row * cell) / lampCell));
+    for (let col = 0; col < cols; col++) {
+      const lampCol = Math.min(grid.cols - 1, Math.floor((col * cell) / lampCell));
+      data[(row * cols + col) * 2 + 1] = (glow?.[lampRow * grid.cols + lampCol] ?? 0) / 255;
+    }
+  }
 }
