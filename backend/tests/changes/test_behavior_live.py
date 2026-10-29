@@ -15,6 +15,15 @@ pytestmark = pytest.mark.anyio
 PRICING = "shop/pricing.py"
 
 
+@pytest.fixture(autouse=True)
+def semantic_worker_budget(monkeypatch):
+    # These assertions concern values, not execution speed. Each fresh worker imports the
+    # whole shop package (including dataclasses). Allow 5x the production call/import budget
+    # under CPU contention; retain all 48 inputs, both repeats and the outer 60 s deadline.
+    # Worker timeout behavior is covered separately in the workspace tests.
+    monkeypatch.setattr("oversight.workspace.behavior_run.PER_CALL_TIMEOUT_S", 1.0)
+
+
 def script(edits: list[tuple[str, str, str]]) -> str:
     turns = []
     for path, old, new in edits:
@@ -43,7 +52,18 @@ async def run(s):
     response = await s.client.post("/agents", json={"task": "Make a small edit."})
     assert response.status_code == 201, response.text
     agent_id = response.json()["agent_id"]
-    await s.until(is_type("agent.status", agent_id=agent_id, state="ready_for_review"))
+    try:
+        # The initial 4-core/8-worker runs took <16 s for the slowest case here. This leaves
+        # nearly 3x that time for the real signal, then 15 s within the outer bound to close.
+        async with asyncio.timeout(45):
+            await s.until(is_type("agent.status", agent_id=agent_id, state="ready_for_review"))
+    except TimeoutError:
+        states = [
+            (e.payload.state, e.payload.detail)
+            for e in s.events()
+            if e.type == "agent.status" and e.payload.agent_id == agent_id
+        ]
+        pytest.fail(f"{agent_id} did not publish ready_for_review within 45 s; statuses={states}")
     return s.live._manager._agents[agent_id]
 
 
@@ -74,7 +94,8 @@ async def test_boundary_change_has_named_differing_rows_and_private_reasons(tmp_
         assert isinstance(measured, BehaviorDiff)
         by_id = {item.node_id: item for item in measured.functions}
         price = by_id["shop.pricing:compute_price"]
-        assert price.compared > 0 and price.differing > 0, measured
+        assert price.reason is None, price
+        assert price.compared > 0 and price.differing > 0, price
         assert any("quantity=10" in row.call for row in price.rows)
         assert all(not row.unstable for row in price.rows)
         assert len(price.rows) <= 8

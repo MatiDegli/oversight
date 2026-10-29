@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,7 @@ from answering_helpers import origin, resolution
 from live_helpers import (
     DEADLINE_S,
     GatedModel,
+    LiveServer,
     Scripts,
     error_code,
     is_type,
@@ -20,10 +23,45 @@ from revise_helpers import ready, request, revisable
 
 from oversight.api import ApiError
 from oversight.events import EventPayload, StoredEvent
-from oversight_contracts.commands import StartAgent
+from oversight_contracts.commands import AgentCreated, StartAgent
 from oversight_contracts.events import AgentStatus, ChangeResolved
 
 pytestmark = pytest.mark.anyio
+
+
+def observe_admission(s: LiveServer, monkeypatch: pytest.MonkeyPatch) -> asyncio.Event:
+    admitted = asyncio.Event()
+    check = s.live._check  # pyright: ignore[reportPrivateUsage]
+
+    def observed(*args, **kwargs):
+        result = check(*args, **kwargs)
+        admitted.set()
+        return result
+
+    # No suspension between this check, reserving the slot and awaiting the held venv.
+    monkeypatch.setattr(s.live, "_check", observed)
+    return admitted
+
+
+async def wait_for_signal(signal: asyncio.Event, description: str) -> None:
+    try:
+        async with asyncio.timeout(30):
+            await signal.wait()
+    except TimeoutError:
+        pytest.fail(f"Timed out after 30 s waiting for {description}")
+
+
+@asynccontextmanager
+async def pending_start(
+    s: LiveServer, request: StartAgent
+) -> AsyncIterator[asyncio.Task[AgentCreated]]:
+    pending = asyncio.create_task(s.live.start(request))
+    try:
+        yield pending
+    finally:
+        # Also join after a failed handshake/assertion, before releasing test-owned gates.
+        pending.cancel()
+        await asyncio.gather(pending, return_exceptions=True)
 
 
 @pytest.mark.parametrize(
@@ -31,7 +69,7 @@ pytestmark = pytest.mark.anyio
 )
 async def test_missing_producers_fail_before_client_or_worktree(tmp_path: Path, kind: str) -> None:
     clients = Scripts()
-    async with live_server(live_settings(tmp_path), clients) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path), clients) as s:
         ref = (await origin(s.store)).model_dump()
         ref["kind"] = kind
         if kind == "review_card":
@@ -129,17 +167,19 @@ async def test_race_after_admission_wait_rejects_without_effects(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     clients = Scripts()
-    async with live_server(live_settings(tmp_path), clients) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path), clients) as s:
         ref = await origin(s.store)
-        gate = asyncio.get_running_loop().create_future()
-        monkeypatch.setattr(s.live, "_venv", gate)
-        pending = asyncio.create_task(s.live.start(StartAgent(task="t", answering=ref)))
-        await asyncio.sleep(0)
-        await s.store.publish(ChangeResolved.model_validate(resolution()))
-        gate.set_result(None)
-
-        with pytest.raises(ApiError) as caught:
-            await pending
+        with monkeypatch.context() as held:
+            gate = asyncio.get_running_loop().create_future()
+            held.setattr(s.live, "_venv", gate)
+            admitted = observe_admission(s, held)
+            async with pending_start(s, StartAgent(task="t", answering=ref)) as pending:
+                await wait_for_signal(admitted, "admission before the venv wait")
+                assert s.live._slots["A"] == "starting"  # pyright: ignore[reportPrivateUsage]
+                await s.store.publish(ChangeResolved.model_validate(resolution()))
+                gate.set_result(None)
+                with pytest.raises(ApiError) as caught:
+                    await pending
         assert caught.value.code == "wrong_state"
         assert clients.calls == 0
         assert list((tmp_path / ".runtime" / "worktrees").glob("*")) == []
@@ -183,44 +223,67 @@ async def test_failed_start_does_not_consume_origin_or_admission(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
 ) -> None:
     clients = Scripts()
-    async with live_server(live_settings(tmp_path), clients) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path), clients) as s:
         ref = await origin(s.store)
         if failure == "cancel":
-            gate = asyncio.get_running_loop().create_future()
-            monkeypatch.setattr(s.live, "_venv", gate)
-            pending = asyncio.create_task(s.live.start(StartAgent(task="t", answering=ref)))
-            await asyncio.sleep(0)
-            pending.cancel()
-            with pytest.raises(asyncio.CancelledError):
-                await pending
-            assert not gate.cancelled()
-            gate.set_result(None)
+            with monkeypatch.context() as held:
+                gate = asyncio.get_running_loop().create_future()
+                held.setattr(s.live, "_venv", gate)
+                admitted = observe_admission(s, held)
+                async with pending_start(s, StartAgent(task="t", answering=ref)) as pending:
+                    await wait_for_signal(admitted, "admission before cancelling the start")
+                    assert s.live._slots["A"] == "starting"  # pyright: ignore[reportPrivateUsage]
+                    pending.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await pending
+                    assert not gate.cancelled()
+                    gate.set_result(None)
         else:
 
             def broken(*_: object) -> None:
                 raise RuntimeError("client unavailable")
 
-            monkeypatch.setattr(s.live, "_client_factory", broken)
-            with pytest.raises(ApiError) as caught:
-                await s.live.start(StartAgent(task="t", answering=ref))
+            # Restore the TaskClients owner before retry and shutdown: Scripts has no aclose.
+            with monkeypatch.context() as failed:
+                failed.setattr(s.live, "_client_factory", broken)
+                with pytest.raises(ApiError) as caught:
+                    await s.live.start(StartAgent(task="t", answering=ref))
             assert caught.value.code == "internal"
-            monkeypatch.setattr(s.live, "_client_factory", clients)
         assert list((tmp_path / ".runtime" / "worktrees").glob("*")) == []
         assert (
             await s.client.post("/agents", json=dict(task="t", answering=ref.model_dump()))
         ).status_code == 201
+        assert clients.calls == 1
+    assert s.live._runs == {}, "server shutdown left an agent task running"
+    writer = s.store._writer  # pyright: ignore[reportPrivateUsage]
+    assert writer is not None and writer.done(), "server shutdown left the event writer running"
 
 
-async def test_lock_wait_is_revalidated_before_client_creation(tmp_path: Path) -> None:
+async def test_lock_wait_is_revalidated_before_client_creation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     clients = Scripts()
-    async with live_server(live_settings(tmp_path), clients) as s:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path), clients) as s:
         ref = await origin(s.store)
-        async with s.live.workspace.locks(main=True):
-            pending = asyncio.create_task(s.live.start(StartAgent(task="t", answering=ref)))
-            await asyncio.sleep(0)
-            await s.store.publish(ChangeResolved.model_validate(resolution()))
-        with pytest.raises(ApiError) as caught:
-            await pending
+        requested = asyncio.Event()
+        locks = s.live.workspace.locks
+
+        @asynccontextmanager
+        async def observed_locks(**kwargs):
+            if kwargs.get("main"):
+                requested.set()
+            async with locks(**kwargs):
+                yield
+
+        monkeypatch.setattr(s.live.workspace, "locks", observed_locks)
+        async with pending_start(s, StartAgent(task="t", answering=ref)) as pending:
+            # Acquiring this free lock does not yield: it is held before the start runs.
+            async with locks(main=True):
+                await wait_for_signal(requested, "the admitted start to request main's lock")
+                assert not pending.done() and clients.calls == 0
+                await s.store.publish(ChangeResolved.model_validate(resolution()))
+            with pytest.raises(ApiError) as caught:
+                await pending
         assert caught.value.code == "wrong_state"
         assert clients.calls == 0
         assert list((tmp_path / ".runtime" / "worktrees").glob("*")) == []
