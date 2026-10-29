@@ -8,6 +8,11 @@ from typing import Literal
 from pydantic import JsonValue, ValidationError
 
 from oversight.changes._facts import AddedTestsInventory, IntegrityStatus
+from oversight.changes._protected_paths import (
+    ChangedFileInventory,
+    ProtectedPathSnapshot,
+    check_protected_paths,
+)
 from oversight_contracts.common import MergeMode, RuleId
 from oversight_contracts.events import ModelProfile, SuiteResult
 from oversight_contracts.grants import GrantUse, rules_satisfied
@@ -75,6 +80,8 @@ class PolicyInputs:
     integrity_status: IntegrityStatus | None = None
     added_tests: tuple[AddedTestProbe, ...] | None = None
     added_tests_inventory: AddedTestsInventory | None = None
+    protected_paths: ProtectedPathSnapshot | None = field(default_factory=ProtectedPathSnapshot)
+    changed_files: ChangedFileInventory | None = None
     evidence: Mapping[RuleId, tuple[EvidenceRef, ...]] = field(
         default_factory=dict[RuleId, tuple[EvidenceRef, ...]]
     )
@@ -329,6 +336,15 @@ def _added_tests_fail_before(inputs: PolicyInputs) -> RuleAssessment:
     return _check(inputs, "added_tests_fail_before", checks)
 
 
+def _protected_paths(inputs: PolicyInputs) -> RuleAssessment:
+    captured = check_protected_paths(inputs.protected_paths, inputs.changed_files)
+    checks = None
+    if captured is not None:
+        checks = CheckInputs(violations=len({hit.path for hit in captured.matches}), complete=True)
+        inputs = replace(inputs, evidence={**inputs.evidence, "protected_paths": captured.evidence})
+    return _check(inputs, "protected_paths", checks)
+
+
 def assess(inputs: PolicyInputs, profile: str = "safe-merge-v1") -> ChangeAssessment:
     """Evaluate exactly the named profile; unknown names have no fallback authority."""
     if profile not in POLICY_RULES:
@@ -342,6 +358,7 @@ def assess(inputs: PolicyInputs, profile: str = "safe-merge-v1") -> ChangeAssess
         "cross_review": _cross_review,
         "test_integrity": _test_integrity,
         "added_tests_fail_before": _added_tests_fail_before,
+        "protected_paths": _protected_paths,
     }
     return ChangeAssessment(
         change_id=inputs.change_id,

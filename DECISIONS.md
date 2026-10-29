@@ -1516,3 +1516,30 @@ removes only the measured possible-callers unknown; it never changes the recorde
 or waives tests, a failed rule, missing measurements, or another unknown. Server authorization
 is rechecked at every rules barrier and serialized with revoke at the Git effect boundary.
 The creation bundle remains reserved for 1.8.0.
+
+## 2026-10-29 — Evidence-backed protected-path evaluator; activation stays closed
+
+The coordinator approved a built-in category table for the reserved `protected_paths` rule,
+based on the four categories in `docs/additions.md:270`. The maintainer may change its patterns.
+`changes/_protected_paths.py` records manifests/lockfiles (`pyproject.toml`, `setup.py`, `setup.cfg`,
+`requirements*.txt`, `uv.lock`, `poetry.lock`, `Pipfile`, `Pipfile.lock`) and test configuration
+(`pytest.ini`, `tox.ini`, `noxfile.py`, `.coveragerc`, `conftest.py`) by basename at any depth.
+CI (`.github/**`, `.gitlab-ci.yml`) and security (`.env`, `.env.*`, `.gitignore`,
+`.pre-commit-config.yaml`, `.gitleaks.toml`) match workspace-relative paths from the root.
+Matching uses case-sensitive Python fnmatch semantics; there is no filesystem or directory
+expansion. Explicit list snapshots instead use exact membership, including literal glob characters.
+
+The pure evaluator requires complete snapshots and separate evidence identifying the table/list
+version and the changed-file source, retaining added/modified/deleted statuses. Missing or
+unreadable sources, missing receipts, incomplete inventories, malformed paths or unknown statuses
+produce unknown before counting, even beside a known hit. Captured empty lists and inventories
+are distinct from unavailable sources. Each distinct matched file counts once; a complete,
+evidenced hit fails and zero hits pass under the existing fixed CheckInputs threshold.
+Private results retain every hit's category and pattern. Contract assessments retain only counts,
+completeness and references to both sources, qualified by each hit's path; those snapshots allow
+the private diagnostic to be reproduced without adding fields to the wire format.
+
+This adds a callable evaluator, not live enforcement: the scheduler still selects exactly
+`safe-merge-probes-v1`, both merge predicates reject the paths profile, protected-path grants stay
+refused, and startup capability remains closed. Source capture/loading, settings, profile
+migration, activation and any future waivable-hit semantics require separate work.
