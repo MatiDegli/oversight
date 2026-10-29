@@ -114,6 +114,9 @@ it.each([
   async (width, height) => {
     await withPage(width, height, async (page) => {
       expect((await box(page, ".shell-frame > header")).height).toBe(52);
+      const chip = page.getByRole("button", { name: /^Decisions: 0 pending/ });
+      await check(chip).toHaveText("Nothing needs you");
+      const chipBefore = await chip.boundingBox();
       expect((await box(page, ".left-rail")).width).toBe(56);
       expect((await box(page, '[aria-label="Status line"]')).height).toBe(24);
       expect((await box(page, '[aria-label="Agents"]')).width).toBe(400);
@@ -146,6 +149,12 @@ it.each([
       const tabs = page.getByRole("tablist", { name: "Open files and changes" }).getByRole("tab");
       await check(tabs).toHaveCount(3);
       await check(tabs.last()).toContainText("ready for review");
+      await check(page.getByRole("button", { name: /^Decisions: 1 pending/ })).toHaveText(
+        "Decisions · 1",
+      );
+      const chipAfter = await page.getByRole("button", { name: /^Decisions:/ }).boundingBox();
+      expect(chipAfter?.height).toBe(chipBefore?.height);
+      expect(chipAfter?.y).toBe(chipBefore?.y);
       await tabs.first().click();
       await framed(page, "shop.pricing:compute_price");
       await check(tabs.first()).toHaveAttribute("aria-selected", "true");

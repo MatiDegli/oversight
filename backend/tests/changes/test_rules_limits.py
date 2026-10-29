@@ -24,6 +24,12 @@ def reserved(h, monkeypatch):
         full_evidence(h, policy_inputs())  # Deliberately small, passing proposal observations.
         root = h.workspace.main.root
         tree = await h.open(1)
+        if case == "possible":
+            # Main gains a rebound name after the agent opened its exact-only version.
+            with (root / EDIT[0]).open("a") as stream:
+                stream.write("\nvalue = staticmethod(value)\n")
+            await h.workspace.main.commit_all("Rebind main helper", h.workspace.user_author())
+            await h.manager.rescan()
         if case.startswith("cone"):
             count = int(case[-1]) - 1  # twice is already a caller.
             with (root / EDIT[0]).open("a") as stream:
@@ -78,6 +84,7 @@ def reserved(h, monkeypatch):
         "depth",
         "limit",
         "parse",
+        "possible",
     ],
 )
 @bounded
@@ -100,7 +107,9 @@ async def test_actual_combination_limits(h, reserved, case):
         assert not h.payloads(ChangeResolved) and rec(h).state == "ready"
         assert await h.main_head() == pre
         rule = "small_change" if case in {"files4", "lines61"} else "small_cone"
-        assert next(r for r in definitive.rules if r.rule == rule).result == "fail"
+        assert next(r for r in definitive.rules if r.rule == rule).result == (
+            "unknown" if case == "possible" else "fail"
+        )
     assert not terminals(h)
     await assert_main_clean(h)
 

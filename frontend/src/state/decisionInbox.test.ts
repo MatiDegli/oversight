@@ -2,6 +2,7 @@ import type { DecisionRef, ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
 
 import answers from "../../../fixtures/events/handwritten-inbox-answers.jsonl?raw";
+import count from "../../../fixtures/events/handwritten-inbox-count.jsonl?raw";
 import delegation from "../../../fixtures/events/handwritten-inbox-delegation.jsonl?raw";
 import empty from "../../../fixtures/events/handwritten-inbox-empty.jsonl?raw";
 import kinds from "../../../fixtures/events/handwritten-inbox-kinds.jsonl?raw";
@@ -13,12 +14,17 @@ import {
   createStateStore,
   decisionIdentityKey,
   matchesDecision,
-  selectDecisionInbox,
+  selectDecisionInbox as groupedInbox,
   selectDecisionInboxCount,
 } from "./index";
 import type { State } from "./types";
 
-const fixtures = { answers, delegation, empty, kinds, revisions };
+const selectDecisionInbox = (state: State) =>
+  groupedInbox(state)
+    .flatMap((entry) => entry.decisions)
+    .filter((decision) => decision.kind !== "change");
+
+const fixtures = { count, answers, delegation, empty, kinds, revisions };
 const events = (text: string): ServerEvent[] => text.trim().split("\n").map(parseEvent);
 const replay = (text: string, end?: number): State =>
   events(text).slice(0, end).reduce(applyEvent, createInitialState());
@@ -42,18 +48,16 @@ it.each(Object.entries(fixtures))(
       state = applyEvent(state, event);
       expect(state.gap).toBe(false);
       store.getState().applyEvents([event]);
-      expect(selectDecisionInbox(store.getState().state)).toEqual(selectDecisionInbox(state));
+      expect(groupedInbox(store.getState().state)).toEqual(groupedInbox(state));
     }
     const rebuilt = log.reduce(applyEvent, createInitialState());
     expect(rebuilt).toEqual(state);
-    expect(selectDecisionInbox(rebuilt)).toEqual(selectDecisionInbox(state));
-    expect(selectDecisionInboxCount(state)).toBe(selectDecisionInbox(state).length);
-    expect(new Set(selectDecisionInbox(state).map((entry) => entry.id)).size).toBe(
+    expect(groupedInbox(rebuilt)).toEqual(groupedInbox(state));
+    expect(selectDecisionInboxCount(state)).toBe(groupedInbox(state).length);
+    expect(new Set(groupedInbox(state).map((entry) => entry.id)).size).toBe(
       selectDecisionInboxCount(state),
     );
-    expect(selectDecisionInbox(JSON.parse(JSON.stringify(state)) as State)).toEqual(
-      selectDecisionInbox(state),
-    );
+    expect(groupedInbox(JSON.parse(JSON.stringify(state)) as State)).toEqual(groupedInbox(state));
   },
 );
 
@@ -127,7 +131,7 @@ it("projects seven kinds, keeps every card, groups checks and preserves the D6 e
   });
   expect(entries.find((e) => e.kind === "lead_plan")?.planId).toBe("plan-1");
   expect(checks[0]?.example).toEqual({ source: "none", message: "No recorded example" });
-  expect(selectDecisionInboxCount(replay(kinds))).toBe(8);
+  expect(selectDecisionInboxCount(replay(kinds))).toBe(5);
 });
 
 it("waits for terminal check evidence, and does not turn command errors into decisions", () => {
@@ -177,21 +181,14 @@ it("breaks same-seq ties by code units for case- and accent-differing questions"
   expect(ids).toEqual([...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
 });
 
-it("closes Yes and No alone, retains Unsure and the approve conflict, and requires persisted delegation", () => {
-  expect(inbox(answers, 5).filter((e) => e.kind === "review_card")).toHaveLength(4);
-  const before = inbox(answers, 7);
-  expect(before.map((e) => e.reason)).toEqual([
-    "Delegate this?",
-    "Keep unsure?",
-    "Merge conflict while following main: shop/pricing.py",
-  ]);
-  const after = inbox(answers);
-  expect(after.map((e) => e.reason)).toEqual([
-    "Keep unsure?",
-    "Merge conflict while following main: shop/pricing.py",
-  ]);
-  expect(after[0]?.firstSeq).toBe(5);
-  expect(replay(answers).agents["agent-2"]?.answering).toBeNull();
+it("keeps every question after answers, conflict, answering echoes and repeated facts", () => {
+  for (const end of [5, 6, 7, 8, 9, 10, 11]) {
+    const entries = inbox(answers, end);
+    expect(entries.filter((e) => e.kind === "review_card")).toHaveLength(4);
+    expect(selectDecisionInboxCount(replay(answers, end))).toBe(1);
+    expect(groupedInbox(replay(answers, end))[0]?.firstSeq).toBe(4);
+  }
+  expect(inbox(answers).filter((e) => e.kind === "follow_main")).toHaveLength(1);
 });
 
 it("never inherits old answers or delegation across revisions or heads, nor treats personActed as an answer", () => {
@@ -251,4 +248,67 @@ it("returns no decisions for an empty run and resets all projection history on a
   });
   expect(reset.decisionEvents).toEqual([]);
   expect(selectDecisionInbox(reset)).toEqual([]);
+});
+
+it("counts changes through partial/all answers, final actions and new revisions", () => {
+  const expected = [0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0];
+  for (const [index, value] of expected.entries())
+    expect(selectDecisionInboxCount(replay(count, index + 1)), `seq ${String(index + 1)}`).toBe(
+      value,
+    );
+  const before = groupedInbox(replay(count, 5));
+  const answered = groupedInbox(replay(count, 7));
+  expect(answered.map((e) => [e.id, e.firstSeq, e.ts])).toEqual(
+    before.map((e) => [e.id, e.firstSeq, e.ts]),
+  );
+  expect(answered[0]?.decisions.filter((d) => d.kind === "review_card")).toHaveLength(4);
+  expect(groupedInbox(replay(count, 9))[0]?.attempts).toMatchObject([
+    { agentId: "agent-2", endState: "halted" },
+  ]);
+  expect(groupedInbox(replay(count, 13))[0]).toMatchObject({ firstSeq: 12, attempts: [] });
+  const grouped = groupedInbox(replay(kinds));
+  expect(grouped.map((e) => e.firstSeq)).toEqual([4, 10, 12, 14, 18]);
+  expect(grouped[0]?.decisions.map((d) => d.kind)).toEqual([
+    "change",
+    "review_card",
+    "review_card",
+    "checks_unavailable",
+    "risky_area",
+  ]);
+});
+
+it("keeps separate attempts when one agent answers different cards of a change", () => {
+  const echo = events(count)[7];
+  if (echo?.type !== "agent.status" || echo.payload.answering?.kind !== "review_card")
+    throw new Error("Missing answering fixture");
+  let state = replay(count, 5);
+  const statuses = [
+    { ...echo.payload, state: "working" as const },
+    { ...echo.payload, state: "done" as const },
+    {
+      ...echo.payload,
+      state: "working" as const,
+      answering: { ...echo.payload.answering, question: "Keep yes?" },
+    },
+  ];
+  for (const payload of statuses)
+    state = applyEvent(state, { ...echo, seq: state.lastSeq + 1, payload });
+  const entry = groupedInbox(state)[0];
+  expect(entry?.decisions.flatMap((decision) => decision.attempts)).toHaveLength(2);
+  expect(entry?.attempts).toEqual([
+    { agentId: "agent-2", slot: "B", echoSeq: 6, endState: "done", endSeq: 7, reason: null },
+    { agentId: "agent-2", slot: "B", echoSeq: 8, endState: null, endSeq: null, reason: null },
+  ]);
+  // A repeated status for the same task must not duplicate either attempt.
+  state = applyEvent(state, {
+    ...echo,
+    seq: 9,
+    payload: {
+      ...echo.payload,
+      state: "working",
+      answering: { ...echo.payload.answering, question: "Keep yes?" },
+    },
+  });
+  expect(groupedInbox(state)[0]?.attempts).toEqual(entry?.attempts);
+  expect(selectDecisionInboxCount(state)).toBe(1);
 });

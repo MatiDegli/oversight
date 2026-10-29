@@ -81,7 +81,7 @@ it.each([
           },
         });
       }, recorded);
-      await page.getByRole("button", { name: /changes? ready for review/ }).click();
+      await page.getByRole("button", { name: /^Decisions:/ }).click();
       const panel = page.getByRole("complementary", { name: "Review panel" });
       await panel.locator(".line-insert").first().waitFor();
       const geometry = () =>

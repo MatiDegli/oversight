@@ -286,7 +286,7 @@ export const scenes: readonly Scene[] = [
       await openFileView(page);
       if (!resume) throw new Error("Focus scene needs the rest of the proposal stream");
       await resume();
-      await page.getByRole("button", { name: /changes? ready for review/ }).click();
+      await page.getByRole("button", { name: /^Decisions:/ }).click();
       await page.getByRole("complementary", { name: "Review panel", exact: true }).waitFor();
       await page.getByRole("tab", { name: /Live diff ·/ }).click();
       await page.getByRole("button", { name: "Files", exact: true }).click();

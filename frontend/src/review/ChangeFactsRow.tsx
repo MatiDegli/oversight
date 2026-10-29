@@ -14,10 +14,10 @@ import {
 import type { ReactNode } from "react";
 
 import { DataWords, selectAgentCard } from "../agents";
-import { liveImpact } from "../graph";
+import { liveImpact, possibleCallers } from "../graph";
 import { costText } from "../state";
 import type { State } from "../state";
-import { impactSummary } from "./ImpactCone";
+import { impactSummary, possibleCallersText } from "./ImpactCone";
 
 const chip =
   "inline-flex min-h-(--chip-height) min-w-0 items-center gap-1.5 rounded-control border border-page-border bg-page-raised px-2.5 py-1 text-(length:--data-size)";
@@ -82,6 +82,7 @@ export function ChangeFactsRow({
   if (!change) return null;
   const proposal = live && ["editing", "revising"].includes(change.status) ? null : change.proposal;
   const cone = live ? liveImpact(state, change) : proposal?.impact;
+  const possible = cone ? (possibleCallers(state, change, cone) ?? 0) : 0;
   const fileCount = live ? change.files_changed : (proposal?.files.length ?? change.files_changed);
   const card = selectAgentCard(state, change.agent_id);
   const base = proposal?.base_commit || card?.agent.base_commit;
@@ -118,6 +119,12 @@ export function ChangeFactsRow({
           "Unknown"
         )}
       </Fact>
+      <Fact label="Impact cone" symbol={<ScanEye aria-hidden="true" className={icon} />}>
+        {cone ? <DataWords text={impactSummary(cone, possible)} /> : "Possibly affected: unknown"}
+      </Fact>
+      <Fact label="Model and cost" symbol={<Coins aria-hidden="true" className={icon} />}>
+        {card?.modelLabel ?? "Model unknown"} · <DataWords text={costText(card?.cost)} />
+      </Fact>
       <Fact label="Worktree" symbol={<GitBranch aria-hidden="true" className={icon} />}>
         Worktree{" "}
         <code title={`.runtime/worktrees/${change.agent_id}`} className="font-mono">
@@ -131,12 +138,11 @@ export function ChangeFactsRow({
           "Steps unknown"
         )}
       </Fact>
-      <Fact label="Impact cone" symbol={<ScanEye aria-hidden="true" className={icon} />}>
-        {cone ? <DataWords text={impactSummary(cone)} /> : "Possibly affected: unknown"}
-      </Fact>
-      <Fact label="Model and cost" symbol={<Coins aria-hidden="true" className={icon} />}>
-        {card?.modelLabel ?? "Model unknown"} · <DataWords text={costText(card?.cost)} />
-      </Fact>
+      {cone && cone.entries.length > 0 && possible > 0 && (
+        <Fact label="Possible callers" symbol={<CircleHelp aria-hidden="true" className={icon} />}>
+          <DataWords text={`+${possibleCallersText(possible)}`} />
+        </Fact>
+      )}
       {cone && cone.omitted_by_depth > 0 && (
         <Fact label="Cone depth bound" symbol={<CircleHelp aria-hidden="true" className={icon} />}>
           <DataWords text={`+${String(cone.omitted_by_depth)} omitted by depth`} />

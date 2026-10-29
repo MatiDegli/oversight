@@ -89,7 +89,7 @@ it("the queue counter reframes each proposal while review stays open and keeps k
   await withPage(false, async (page) => {
     const target = await page.evaluate(() => window.reviewTest.addSecondProposal());
     const positions = (await probe(page, ":childless")).positions;
-    const queue = page.getByRole("button", { name: /changes ready for review/ });
+    const queue = page.getByRole("button", { name: /^Decisions:/ });
     await queue.click();
     await panel(page).locator(".line-insert").first().waitFor();
     const firstId = await page.evaluate(() => window.reviewTest.changed);
@@ -221,7 +221,7 @@ it("never approves from the keyboard in the comment box; the click waits for cha
       await loading;
       await route.continue();
     });
-    await page.getByRole("button", { name: /change ready for review/ }).click();
+    await page.getByRole("button", { name: /^Decisions:/ }).click();
     const approve = panel(page).getByRole("button", { name: "Approve and merge" });
     const reject = panel(page).getByRole("button", { name: "Reject" });
     try {
@@ -278,7 +278,7 @@ it("never approves from the keyboard in the comment box; the click waits for cha
 
 it("approves only on a pointer click: Tab then Enter or Space says so and sends nothing", async () => {
   await withPage(false, async (page) => {
-    await page.getByRole("button", { name: /change ready for review/ }).click();
+    await page.getByRole("button", { name: /^Decisions:/ }).click();
     const approve = panel(page).getByRole("button", { name: "Approve and merge" });
     const comment = panel(page).getByRole("textbox", {
       name: "Comment (required for Request changes)",
@@ -318,7 +318,7 @@ it("approves only on a pointer click: Tab then Enter or Space says so and sends 
 
 it("keeps Reject keyboard-operable", async () => {
   await withPage(false, async (page) => {
-    await page.getByRole("button", { name: /change ready for review/ }).click();
+    await page.getByRole("button", { name: /^Decisions:/ }).click();
     const reject = panel(page).getByRole("button", { name: "Reject" });
     await browserExpect(
       panel(page).getByRole("button", { name: "Approve and merge" }),
@@ -338,7 +338,7 @@ it("keeps Reject keyboard-operable", async () => {
 
 it("Escape in the comment box only leaves it; Escape elsewhere closes review", async () => {
   await withPage(false, async (page) => {
-    await page.getByRole("button", { name: /change ready for review/ }).click();
+    await page.getByRole("button", { name: /^Decisions:/ }).click();
     const comment = panel(page).getByRole("textbox", {
       name: "Comment (required for Request changes)",
     });
@@ -355,7 +355,7 @@ it("Escape in the comment box only leaves it; Escape elsewhere closes review", a
 
 it("in a recorded run offers no decision and shows the recorded one when it arrives", async () => {
   await withPage(true, async (page) => {
-    await page.getByRole("button", { name: /change ready for review/ }).click();
+    await page.getByRole("button", { name: /^Decisions:/ }).click();
     await browserExpect(
       panel(page).getByText(/Replay of a hand-written demo fixture: nothing here sends/),
     ).toBeVisible();

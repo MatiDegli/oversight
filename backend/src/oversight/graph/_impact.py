@@ -125,6 +125,29 @@ def change_cone(
     return impact_cone(graph, seeds, max_depth=max_depth, max_nodes=max_nodes)
 
 
+def possible_callers(graph: GraphSnapshot, cone: ImpactCone) -> list[str]:
+    """Distinct non-test callers linked only by possible calls to the seeds or entries.
+
+    A caller already in the cone, or with an exact call to any target, is already accounted
+    for. Ignore dangling edges and return stable ids in the same order as other graph helpers.
+    """
+    nodes = {node.id: node for node in graph.nodes}
+    targets = set(cone.seeds) | {entry.node_id for entry in cone.entries}
+    possible: set[str] = set()
+    exact: set[str] = set()
+    for edge in graph.edges:
+        if edge.kind != "calls" or edge.dst not in targets or edge.dst not in nodes:
+            continue
+        source = nodes.get(edge.src)
+        if source is None or source.is_test or edge.src in targets:
+            continue
+        if edge.confidence == "possible":
+            possible.add(edge.src)
+        else:
+            exact.add(edge.src)
+    return sorted(possible - exact)
+
+
 def node_cone(graph: GraphSnapshot, node_id: str, *, max_depth: int, max_nodes: int) -> ImpactCone:
     """The cone of one node, as `GET /impact?node=&depth=` answers it."""
     return impact_cone(graph, [node_id], max_depth=max_depth, max_nodes=max_nodes)

@@ -101,15 +101,15 @@ describe("the frame over the level 1 fixture", () => {
   it("shows the ready pill in the top bar and on the card while nothing else changes", () => {
     const before = render(18);
     const ready = render(20);
-    expect(queue(before)).toBe("");
-    expect(queue(ready)).toContain("change ready for review");
+    expect(queue(before)).toContain("Nothing needs you");
+    expect(queue(ready)).toContain("Decisions ·");
     expect(ready).toContain('role="status" class="ml-auto rounded-full');
     expect(ready).toContain("Ready for review");
     // The layout and the graph are the same markup: only the counter and the card changed.
     for (const label of ["Views", "Agents", "Repository graph"])
       expect(tag(ready, label)).toBe(tag(before, label));
     expect(ready).not.toContain("Live diff panel");
-    expect(queue(render(21))).toBe("");
+    expect(queue(render(21))).toContain("Nothing needs you");
   });
 
   it("opens the live diff on the left and folds the agents panel into the rail", () => {
@@ -158,7 +158,7 @@ describe("review mode over the level 1 fixture", () => {
     const ready = render(20, initialView, { canReview, onReview: vi.fn(), onOpenQueue: vi.fn() });
     expect(ready).toContain("Review change</button>");
     expect(ready).not.toContain("Live diff</button>");
-    expect(button(ready, "change ready for review")).not.toContain('disabled=""');
+    expect(button(ready, "Decisions ·")).not.toContain('disabled=""');
     const working = render(14, initialView, { canReview: () => false, onReview: vi.fn() });
     expect(working).toContain("Live diff</button>");
     expect(working).not.toContain("Review change");

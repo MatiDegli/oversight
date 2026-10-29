@@ -10,7 +10,7 @@ const events = readFileSync(
   .trim()
   .split("\n")
   .map((line) => JSON.parse(line) as ServerEvent);
-import { liveImpact } from "./impact";
+import { liveImpact, possibleCallers } from "./impact";
 
 const node = (id: string, extra: Partial<GraphNode> = {}): GraphNode => ({
   id,
@@ -109,5 +109,66 @@ describe("the live impact preview", () => {
     ];
     state.graph.edges = [call("caller", "Class")];
     expect(liveImpact(state, change)?.entries).toEqual([{ node_id: "caller", distance: 1 }]);
+  });
+});
+
+describe("possible callers outside the exact cone", () => {
+  it.each([
+    ["shop.inventory:Inventory.reserve", 0, 1],
+    ["shop.pricing:compute_price", 9, 2],
+    ["shop.cart:Cart.add", 0, 0],
+  ] as const)("counts the recorded demo for %s", (seed, size, possible) => {
+    const recorded = readFileSync(
+      new URL("../../../fixtures/events/recorded-demo.jsonl", import.meta.url),
+      "utf8",
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as ServerEvent);
+    const state = recorded
+      .filter((event) => event.type === "run.started" || event.type === "graph.snapshot")
+      .reduce(applyEvent, createInitialState());
+    const { change } = fixture();
+    change.graph.nodes_modified = [seed];
+    const cone = liveImpact(state, change);
+    expect(cone?.entries).toHaveLength(size);
+    if (!cone) throw new Error("Missing cone");
+    expect(possibleCallers(state, change, cone)).toBe(possible);
+    const proposed = recorded
+      .filter((event) => event.seq <= 63)
+      .reduce(applyEvent, createInitialState());
+    const actual = Object.values(proposed.changes).find((item) =>
+      item.proposal?.impact.seeds.includes(seed),
+    );
+    if (actual?.proposal) {
+      expect(actual.proposal.impact.entries).toHaveLength(size);
+      expect(possibleCallers(proposed, actual, actual.proposal.impact)).toBe(possible);
+    }
+  });
+
+  it("deduplicates one hop, excludes tests, seeds, entries and any exact caller, and applies the overlay", () => {
+    const { state, change } = fixture();
+    if (!state.graph) throw new Error("Missing graph");
+    state.graph.nodes.push(node("next"), node("removed"));
+    state.graph.edges.push(
+      call("possible", "a", { confidence: "possible" }),
+      call("b", "seed", { confidence: "possible" }),
+      call("test", "seed", { confidence: "possible" }),
+      call("seed", "a", { confidence: "possible" }),
+      call("removed", "a", { confidence: "possible" }),
+      call("next", "possible", { confidence: "possible" }),
+      call("next", "a", { confidence: "possible", kind: "imports" }),
+      call("missing", "a", { confidence: "possible" }),
+    );
+    change.graph.nodes_removed = ["removed"];
+    const live = liveImpact(state, change);
+    if (!live) throw new Error("Missing cone");
+    const cone = { ...live, entries: [{ node_id: "a", distance: 1 }] };
+    expect(possibleCallers(state, change, cone)).toBe(1);
+    change.graph.edges_added = [call("possible", "a")];
+    expect(possibleCallers(state, change, cone)).toBe(0);
+    change.graph.edges_removed = ["b-a", "possible-seed"];
+    expect(possibleCallers(state, change, cone)).toBe(1);
+    expect(possibleCallers({ ...state, graph: null }, change, cone)).toBeNull();
   });
 });

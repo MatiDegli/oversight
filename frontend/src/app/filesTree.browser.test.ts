@@ -153,7 +153,7 @@ it("a file opens in a background tab while the review comment keeps focus and te
     await browserExpect(
       tree(page).getByRole("treeitem", { name: "cart.py", exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: /change ready for review/ }).click();
+    await page.getByRole("button", { name: /^Decisions:/ }).click();
     const review = page.getByRole("complementary", { name: "Review panel", exact: true });
     const comment = review.getByRole("textbox", { name: "Comment (required for Request changes)" });
     await comment.fill("Keep this comment and its focus.");

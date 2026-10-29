@@ -6,7 +6,13 @@ is synchronous and runs no process: callers run the slow ones in a thread.
 
 from oversight.graph._change import change_graph
 from oversight.graph._delta import DeltaCause, graph_delta
-from oversight.graph._impact import NodeNotFoundError, change_cone, impact_cone, node_cone
+from oversight.graph._impact import (
+    NodeNotFoundError,
+    change_cone,
+    impact_cone,
+    node_cone,
+    possible_callers,
+)
 from oversight.graph._layout import read_layout
 from oversight.graph._version import CodeVersion, parse_version
 from oversight.graph._workspace import WorkspaceGraph
@@ -22,5 +28,6 @@ __all__ = [
     "impact_cone",
     "node_cone",
     "parse_version",
+    "possible_callers",
     "read_layout",
 ]
