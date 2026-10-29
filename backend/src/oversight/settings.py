@@ -63,8 +63,15 @@ class Settings:
     """Opt-in only. Runtime review additionally requires an injected call transport."""
     review_model: str = "muse-spark-open"
     """Independent reviewer profile, distinct from the author. OVERSIGHT_REVIEW_MODEL."""
+    # Difference decisions: independent profile and Baseten balance; no Meta credits.
+    decision_model: str = "muse-spark-open"
+    """OVERSIGHT_DECISION_MODEL: only Spark Open; fake transports are injected in tests."""
+    baseten_budget_usd: float | None = None
+    """OVERSIGHT_BASETEN_BUDGET_USD: decision-call budget only, set by the maintainer."""
     behavior_diff: bool = False
     """OVERSIGHT_BEHAVIOR_DIFF: opt-in finite measurements and bounded public samples."""
+    measured_cone: bool = False
+    """OVERSIGHT_MEASURED_CONE: opt-in pytest caller evidence, independent of direct probes."""
     harness_pack: bool = False
     """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
     reviewer_fake_script: Path | None = None
@@ -119,7 +126,11 @@ class Settings:
             fake_script_b=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_B")),
             cross_review=merged.get("OVERSIGHT_CROSS_REVIEW", "false").lower() == "true",
             review_model=merged.get("OVERSIGHT_REVIEW_MODEL") or cls.review_model,
+            # Difference decisions have no default allowance and never share Meta's balance.
+            decision_model=merged.get("OVERSIGHT_DECISION_MODEL") or cls.decision_model,
+            baseten_budget_usd=positive_amount(merged.get("OVERSIGHT_BASETEN_BUDGET_USD")),
             behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
+            measured_cone=merged.get("OVERSIGHT_MEASURED_CONE", "false").lower() == "true",
             harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "false").lower() == "true",
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),

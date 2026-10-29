@@ -10,6 +10,7 @@ import pytest
 
 from oversight import limits
 from oversight.workspace.core import PLUGIN_DIR
+from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.runner import DEFAULT_OUTPUT_CAP, ProcessResult, run_process
 from oversight.workspace.suite import _take_report, parse_report, run_suite
 
@@ -66,8 +67,12 @@ def test_report_reads_only_bounded_lines(tmp_path: Path, monkeypatch: pytest.Mon
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("kind", ["total", "line"])
-async def test_report_excess_is_explicit_without_partial_counts(tmp_path: Path, kind: str) -> None:
+@pytest.mark.parametrize("measured", [False, True])
+async def test_report_excess_is_explicit_without_partial_counts(
+    tmp_path: Path, kind: str, measured: bool
+) -> None:
     report: Path | None = None
+    (tmp_path / "tmp").mkdir()
     cap = limits.MAX_REPORT_BYTES if kind == "total" else limits.MAX_REPORT_LINE_BYTES
 
     def write_report(path: Path) -> None:
@@ -81,6 +86,14 @@ async def test_report_excess_is_explicit_without_partial_counts(tmp_path: Path, 
                 # Valid individual records; only the accumulated bytes exceed the ceiling.
                 for _ in range(cap // len(first)):
                     handle.write(first)
+        if measured:
+            path.with_suffix(".calls").write_text(
+                '{"kind":"start","version":1}\n{"kind":"end","problems":[]}\n'
+            )
+            path.with_suffix(".xml").write_text(
+                '<testsuite><testcase file="tests/test_long.py" classname="tests.test_long" '
+                'name="test_parameter"/></testsuite>'
+            )
 
     async def spawn(
         argv: Sequence[str],
@@ -104,6 +117,7 @@ async def test_report_excess_is_explicit_without_partial_counts(tmp_path: Path, 
         timeout_s=60,
         redact=lambda text: text,
         spawn=spawn,
+        measured_targets=() if measured else None,
     )
     assert report is not None
     reason = f"{report.name} exceeds the {cap}-byte size limit"
@@ -112,6 +126,11 @@ async def test_report_excess_is_explicit_without_partial_counts(tmp_path: Path, 
     assert run.result.failed_tests == [reason]
     assert run.output.endswith(reason)
     assert not await asyncio.to_thread(report.exists)
+    if measured:
+        assert not run.problems
+        assert run.measured is not None and not run.measured.complete
+        assert "suite incomplete" in run.measured.problems
+        assert not list((tmp_path / "tmp").glob("*.calls*"))
 
 
 def test_exact_byte_boundaries_and_cut_final_record(
@@ -179,3 +198,52 @@ async def test_real_large_parametrized_suite(tmp_path: Path, demo_python: Path) 
     assert run.result.outcome == "passed", run.output
     assert (run.result.passed, run.result.failed, run.result.skipped) == (3000, 0, 0)
     assert not list((tmp_path / "tmp").glob("*.jsonl"))
+
+
+@pytest.mark.anyio
+async def test_call_report_keeps_its_independent_reader_and_bounds(
+    tmp_path: Path, demo_python: Path
+) -> None:
+    (tmp_path / "tmp").mkdir()
+    (tmp_path / "app.py").write_text("def caller(text):\n    return text\n")
+    (tmp_path / "test_app.py").write_text(
+        "from app import caller\ndef test_unicode():\n    assert caller('é' * 512) == 'é' * 512\n"
+    )
+    (tmp_path / "pytest.ini").write_text("[pytest]\npythonpath = .\n")
+    sizes: list[int] = []
+
+    async def spawn(
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: Mapping[str, str] | None = None,
+        output_cap: int = DEFAULT_OUTPUT_CAP,
+    ) -> ProcessResult:
+        result = await run_process(
+            argv, cwd=cwd, timeout_s=timeout_s, env=env, output_cap=output_cap
+        )
+        assert env is not None
+
+        def measure() -> int:
+            with Path(env["OVERSIGHT_CALL_REPORT"]).open("rb") as handle:
+                return max(len(row) for row in handle)
+
+        sizes.append(await asyncio.to_thread(measure))
+        return result
+
+    run = await run_suite(
+        python=demo_python,
+        plugin_dir=PLUGIN_DIR,
+        runtime_root=tmp_path,
+        tree_root=tmp_path,
+        timeout_s=10,
+        redact=lambda text: text,
+        spawn=spawn,
+        measured_targets=(CallTarget("app:caller", "app.py", "caller", 1, 2),),
+    )
+    assert sizes[0] > limits.MAX_REPORT_LINE_BYTES
+    assert run.result.outcome == "passed", run.output
+    assert run.measured is not None and run.measured.complete
+    assert len(run.measured.calls) == 1
+    assert not list((tmp_path / "tmp").iterdir())

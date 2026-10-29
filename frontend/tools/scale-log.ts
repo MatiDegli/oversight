@@ -16,7 +16,7 @@ export function scaleLog(snapshot: GraphSnapshot, positions?: GraphSnapshot["pos
       ts,
       type: "run.started",
       payload: {
-        run_id: "run-20261028-120000",
+        run_id: `run-${ts.slice(0, 10).replaceAll("-", "")}-${ts.slice(11, 19).replaceAll(":", "")}`,
         contract_version: "1.5.0",
         prompt_version: "hand-written-scale-fixture",
         workspace: "hand-written scale fixture",

@@ -70,6 +70,21 @@ it("writes two typed, schema-valid hand-written events with and without a preset
   }
 });
 
+it("derives the run id from the event timestamp in UTC", () => {
+  const [started] = scaleLog(snapshot)
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as ServerEvent);
+  expect(started?.type).toBe("run.started");
+  if (started?.type !== "run.started") throw new Error("Missing run.started");
+  expect(started.payload.run_id).toBe("run-20261028-150000");
+  const [, date, time] = started.payload.run_id.split("-");
+  if (!date || !time) throw new Error("Invalid run id");
+  expect(
+    `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6)}T${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4)}.000Z`,
+  ).toBe(started.ts);
+});
+
 it("refuses incomplete presets rather than silently selecting the wrong camera", () => {
   expect(() => scaleLog(snapshot, { other: { x: 0, y: 0 } })).toThrow(
     "Missing preset position: tiny",

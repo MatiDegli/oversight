@@ -171,3 +171,34 @@ async def test_an_oversized_report_names_the_report_and_is_removed(tmp_path: Pat
     assert run.result.failed_tests == [reason]
     assert run.output.endswith(reason)
     assert not await asyncio.to_thread(report.exists)
+
+
+@pytest.mark.anyio
+async def test_cancel_during_recording_request_preparation_removes_private_files(
+    tmp_path, monkeypatch
+):
+    from oversight.workspace.measured_report import CallTarget
+    from oversight.workspace.suite import SuiteInterrupted
+
+    (tmp_path / "tmp").mkdir()
+    original = Path.write_text
+
+    def interrupted(path, data, *args, **kwargs):
+        result = original(path, data, *args, **kwargs)
+        if path.suffix == ".calls-input":
+            raise asyncio.CancelledError
+        return result
+
+    monkeypatch.setattr(Path, "write_text", interrupted)
+    with pytest.raises((SuiteInterrupted, asyncio.CancelledError)):
+        await run_suite(
+            python=tmp_path / "python",
+            plugin_dir=tmp_path,
+            runtime_root=tmp_path,
+            tree_root=tmp_path,
+            timeout_s=5,
+            redact=lambda s: s,
+            spawn=run_process,
+            measured_targets=(CallTarget("app:caller", "app.py", "caller", 1, 2),),
+        )
+    assert not list((tmp_path / "tmp").glob("*.calls*"))

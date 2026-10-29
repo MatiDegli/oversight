@@ -34,6 +34,7 @@ from oversight.workspace.isolation_probe import print_isolation_probe
 from oversight.workspace.junit import MAX_TESTS, MAX_XML_BYTES, RunProblem, parse_junit
 from oversight.workspace.junit import Outcome as JUnitOutcome
 from oversight.workspace.junit import TestRun as JUnitRun
+from oversight.workspace.measured_report import CallReport, CallTarget, Invocation
 from oversight.workspace.probes import base_probe_checkout
 from oversight.workspace.runner import ProcessResult, Spawn, run_process
 from oversight.workspace.source import (
@@ -63,10 +64,13 @@ __all__ = [
     "Author",
     "BehaviorObservation",
     "BehaviorTarget",
+    "CallReport",
+    "CallTarget",
     "FileRead",
     "FileTooLarge",
     "IntegrityError",
     "InvalidPath",
+    "Invocation",
     "IsolatedRunner",
     "IsolationCapability",
     "IsolationPolicy",
