@@ -1357,6 +1357,44 @@ applied separately. Building waits for his approval of the plan in `docs/plans/s
 Using his past answers as
 examples for the open model is later, with its own bench arm.
 
+## 2026-10-29 — Standing grants approved as contracts 1.7.0; the creation bundle moves to 1.8.0
+
+The maintainer approved the plan in `docs/plans/standing-grants.md` and its contract change on
+2026-10-29, in the coordinator's session. Review then found that 1.7.0 was already reserved for
+safe creation, nullable SaveFile.base_hash, zones and inventory (the 2026-10-28 contracts 1.6.0
+entry and `docs/proposal.md` section 4.9). He decided that grants take 1.7.0 and ship first, and
+that safe creation, nullable SaveFile.base_hash, zones and inventory move to 1.8.0. The reason is
+the one from 2026-10-28: they are not designed yet and must not hold an approved addition. No
+schema has shipped under 1.7.0, so no version string names two schemas. The earlier entries stay
+as the approval history.
+
+## 2026-10-29 — Proof 2 measures correctness with hidden checks and a paired arm
+
+Proof 2's counts said how many changes were accepted, not how many were correct, and nothing
+compared Oversight with agents that merge on passing tests alone. The maintainer approved adding
+both on 2026-10-29, in the coordinator's session. Each proof 2 task gets hidden checks, written and
+frozen before the run without seeing any agent output, and kept outside the product workspace as
+`tools/eval` already does. The same run then yields two arms judged by those checks: without
+Oversight, each agent's first proposal with passing tests, merged as it is; with Oversight, what
+reached main after rules, questions and revisions. Model, tasks and generation are identical, so
+only the gate differs, at no extra model cost. Each arm reports correct changes on main,
+regressions that got through, questions per accepted change, questions the checks show were not
+needed, and cost and wall time per correct change; questions and grants applied stay separate.
+The reporting rule is fixed before measuring. The arm without Oversight does not model an agent
+that never receives Request changes, and the report says so. Line B owns `tools/eval` and builds
+it after the maintainer approves the proof 2 tasks.
+
+## 2026-10-29 — Keys typed into a packaged app wait for after the hackathon
+
+Oversight runs locally from the repository with its own `.env`, and judges open the static build,
+which has no backend and no keys. A packaged app would take keys in Settings instead: write-only,
+kept by the local backend in the system keychain or a user-only file, never returned to the
+browser, events or recordings, with `.env` kept for developers. That needs the secrets rule in
+AGENTS.md changed by the maintainer, a contract change, and an independently reviewed security
+plan, since a server on 127.0.0.1 must refuse requests from other sites open in the same browser.
+On 2026-10-29 the maintainer placed it after the hackathon: it serves none of the three proofs,
+and no judge types a key.
+
 ## 2026-10-29 — Aggregate counts on demand and measured frame titles
 
 The maintainer approved both fixes on October 28 at 23:52 ART (October 29 UTC).

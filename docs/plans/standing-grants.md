@@ -1,8 +1,9 @@
 # Standing grants: plan
 
-Proposed on 2026-10-29 for the maintainer's approval. Nothing here is built, and no contract has
-changed. The decision itself is in DECISIONS.md ("Standing grants: Oversight remembers what the
-person let go"), and the queue entry is in [additions.md](../additions.md#standing-grants).
+Proposed on 2026-10-29 and approved by the maintainer the same day, with its contract change as
+contracts 1.7.0. Nothing here is built yet, and no contract has changed. The decision is in
+DECISIONS.md ("Standing grants: Oversight remembers what the person let go", then its approval
+and version), and the queue entry is in [additions.md](../additions.md#standing-grants).
 
 ## Why now
 
@@ -72,6 +73,10 @@ missing measurements or unresolved removals.
 - **Counted:** proof 2 reports questions asked and grants applied separately.
 
 ## Contract change (proposed contracts 1.7.0)
+
+1.7.0 had been reserved for safe creation, nullable `SaveFile.base_hash`, zones and inventory. On
+2026-10-29 the maintainer moved that bundle to 1.8.0, so grants ship first as 1.7.0 and no
+version string names two schemas.
 
 - `GrantReason = Literal["possible_callers", "protected_path"]`; `GrantScope`: `kind`
   (`module`, `path`, `agent`, `run`), `value`, `expires` (`run`, `session`).

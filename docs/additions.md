@@ -13,7 +13,11 @@ The freeze is organized around three proofs. Judge each front by the proof it se
    merged by rules, questions asked and differences tests missed, plus cost per accepted change.
    Paid calls for this run have a US$25 Meta-budget cap, separate from the bench's US$20.
    End on the decisions inbox: this many agents for this many hours, and these were the only
-   decisions the person had to make.
+   decisions the person had to make. Each task gets hidden checks, frozen before the run without
+   seeing agent output. The same run reports two arms judged by them: each agent's first proposal
+   with passing tests, merged as it is (without Oversight), and what reached main (with
+   Oversight). Each arm reports correct changes on main, regressions that got through, questions
+   per accepted change, questions that were not needed, and cost and wall time per correct change.
 3. **Unrequested behavior among green patches.** From that same run, measure the share of patches
    with passing tests whose behavior diff reveals a difference the task did not request. Fix the
    reporting rule before measuring: if the share is low or the sample too small, tell the scale
@@ -60,7 +64,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 13 | Pinned examples and graph lenses | Queued — no pins or lens control on main `535e6f6` | Yes |
 | 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
 | 18 | Remaining packages 11–14 | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
-| — | [Standing grants](#standing-grants) | Plan proposed 2026-10-29 in [standing-grants.md](plans/standing-grants.md); position awaits the maintainer | Separate 1.7.0 proposal (2026-10-29), not in the Oct 28 set — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route |
+| — | [Standing grants](#standing-grants) | Plan approved 2026-10-29 in [standing-grants.md](plans/standing-grants.md); backend front next, ahead of item 9's decision-veto wiring | Contracts 1.7.0, approved 2026-10-29; the creation bundle moved to 1.8.0 — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route |
 
 ### Only if time remains
 
@@ -115,6 +119,8 @@ These retain useful ideas from the old inventory without approving a front or ch
 - Mask older tool results on long runs; measure dollars and correctness before adoption.
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
+- After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
+  local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 
 ## No
 
