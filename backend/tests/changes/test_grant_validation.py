@@ -230,8 +230,12 @@ def test_test_files_do_not_break_module_match_and_caller_list_is_bounded():
         ("creation_ts", "2026-10-28T14:00:00.000Z"),
     ],
 )
-def test_use_provenance_must_match_the_creation_receipt(field, value):
+@pytest.mark.parametrize("checked_at", [TS, "2026-10-29T14:00:01.000Z"])
+def test_use_provenance_matches_receipt_despite_clock_rollback(field, value, checked_at):
     assessment, use = fixture()
+    use = use.model_copy(
+        update={"authorization": use.authorization.model_copy(update={"checked_at": checked_at})}
+    )
     auth = use.authorization
     created = GrantCreated(
         grant_id=use.grant_id,

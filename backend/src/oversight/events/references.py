@@ -83,8 +83,8 @@ def validate_references(event: ServerEvent, prior: Mapping[int, ServerEvent]) ->
                 created.run_id,
                 created.session_id,
                 source.ts,
-            ) or auth.checked_at > event.ts:
-                raise ValueError("grant authorization differs from its creation receipt or clock")
+            ):
+                raise ValueError("grant authorization differs from its creation receipt")
     validate_cross_review_limit(event, prior)
     if event.type == "change.resolved" and event.payload.review_seq is not None:
         source = referenced(event.payload.review_seq, "change.reviewed")
