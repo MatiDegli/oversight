@@ -8,12 +8,18 @@ from itertools import zip_longest
 from pathlib import PurePosixPath
 from typing import Any, cast
 
+from oversight.changes._behavior_aliases import module_aliases, shadowed
 from oversight.changes._review_identity import bound_inputs
 from oversight.changes._shortcuts_common import Source, walk_local
 
 MAX_INPUTS = 48
 MAX_LITERAL = 4096
 MAX_AST_NODES = 128
+_OPAQUE_DEFAULT = object()
+
+
+class _LiteralLimit(ValueError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -63,8 +69,18 @@ def literal_text(value: Any) -> str:
 def _literal(node: ast.expr) -> Any:
     nodes = list(ast.walk(node))
     if len(nodes) > MAX_AST_NODES or len(ast.unparse(node)) > MAX_LITERAL:
-        raise ValueError("literal size cap")
+        raise _LiteralLimit("literal size cap")
     return ast.literal_eval(node)
+
+
+def _default(node: ast.expr) -> Any:
+    try:
+        return _literal(node)
+    except _LiteralLimit:
+        raise
+    except (ValueError, TypeError):
+        # This marker never enters pools, rendered calls or effective arguments.
+        return _OPAQUE_DEFAULT
 
 
 def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signature:
@@ -73,7 +89,7 @@ def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signatur
     positional = [*node.args.posonlyargs, *node.args.args]
     missing = inspect.Parameter.empty
     defaults = [missing] * (len(positional) - len(node.args.defaults))
-    defaults += [_literal(value) for value in node.args.defaults]
+    defaults += [_default(value) for value in node.args.defaults]
     params: list[inspect.Parameter] = []
     for index, (arg, default) in enumerate(zip(positional, defaults, strict=True)):
         kind = (
@@ -89,7 +105,7 @@ def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signatur
             inspect.Parameter(
                 arg.arg,
                 inspect.Parameter.KEYWORD_ONLY,
-                default=missing if default is None else _literal(default),
+                default=missing if default is None else _default(default),
                 annotation=_annotation(arg),
             )
         )
@@ -112,6 +128,8 @@ def _arguments(
     if named.keys() - sig.parameters.keys():
         raise TypeError("unknown parameter")
     for name, param in sig.parameters.items():
+        if param.default is _OPAQUE_DEFAULT and name not in named:
+            raise TypeError("opaque default requires an explicit argument")
         if param.kind == inspect.Parameter.POSITIONAL_ONLY:
             if name in named:
                 args.append(named[name])
@@ -125,8 +143,16 @@ def _arguments(
     return tuple(args), kwargs
 
 
-def _resolved(source: Source, call: ast.Call, path: str, module: str, name: str) -> bool:
+def _resolved(
+    source: Source, call: ast.Call, path: str, module: str, name: str, aliases: dict[str, str]
+) -> bool:
     resolved = source.resolve(call.func)
+    if (
+        isinstance(call.func, ast.Name)
+        and call.func.id in aliases
+        and not shadowed(source, call, call.func.id)
+    ):
+        resolved = aliases[call.func.id]
     current = module_name(path)
     if resolved and resolved.startswith("."):
         level = len(resolved) - len(resolved.lstrip("."))
@@ -136,20 +162,7 @@ def _resolved(source: Source, call: ast.Call, path: str, module: str, name: str)
         return True
     if current != module or not isinstance(call.func, ast.Name) or call.func.id != name:
         return False
-    # A local binding or comprehension target shadows a module definition.
-    for definition, bindings in source.definition_bindings.items():
-        if (
-            definition.lineno <= call.lineno <= (definition.end_lineno or definition.lineno)
-            and name in bindings
-        ):
-            return False
-    return not any(
-        any(isinstance(target, ast.Name) and target.id == name for target in ast.walk(node.target))
-        and call in ast.walk(parent)
-        for parent in ast.walk(source.tree)
-        if isinstance(parent, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
-        for node in parent.generators
-    )
+    return not shadowed(source, call, name)
 
 
 def _calls(files: dict[str, str], module: str, name: str, deadline: float):
@@ -160,6 +173,7 @@ def _calls(files: dict[str, str], module: str, name: str, deadline: float):
             continue
         try:
             source = Source(text, deadline)
+            aliases = module_aliases(source)
         except (SyntaxError, ValueError, RecursionError):
             continue
         calls = sorted(
@@ -167,7 +181,7 @@ def _calls(files: dict[str, str], module: str, name: str, deadline: float):
             key=lambda n: (n.lineno, n.col_offset),
         )
         for call in calls:
-            if not _resolved(source, call, path, module, name):
+            if not _resolved(source, call, path, module, name, aliases):
                 continue
             try:
                 if any(kw.arg is None for kw in call.keywords):
@@ -388,7 +402,11 @@ def _pools(
 ) -> dict[str, list[Any]]:
     for param in pools:
         parameters = [sig.parameters[param] for sig in signatures if param in sig.parameters]
-        defaults = [p.default for p in parameters if p.default is not inspect.Parameter.empty]
+        defaults = [
+            p.default
+            for p in parameters
+            if p.default is not inspect.Parameter.empty and p.default is not _OPAQUE_DEFAULT
+        ]
         observed = pools[param] + defaults
         kinds = {p.annotation for p in parameters}
         is_int = "int" in kinds or (not kinds - {None} and any(type(v) is int for v in observed))

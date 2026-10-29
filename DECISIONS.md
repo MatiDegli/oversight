@@ -1618,3 +1618,26 @@ returned event when an eligible successor exists within the horizon, so no event
 If the first eligible envelope cannot fit intact, the response is the existing typed `too_large`
 413; payloads are never truncated. Unexpected disk or validation failures use the existing
 `internal` error path. No index or schema migration is introduced.
+
+## 2026-10-29 — Behavior inputs follow unique module aliases and require opaque arguments
+
+Behavior seed discovery accepts a direct module-level `name = module.function` or
+`name = imported_function` after its import, including annotated assignments. Both the alias
+and its imported root must have exactly one module binding. Rebinding, deletion, conflicting
+imports, star imports, global declarations and call-site shadowing keep the alias unresolved.
+The detector's binding visitor and lexical shadow checks are reused; alias chains, conditional
+alias definitions and aliases inside functions remain outside this rule. This recovers literal
+seeds without importing or executing the project.
+
+A nonliteral parameter default is an internal opaque marker, never a generated value. Every
+compared input must provide that parameter explicitly on both sides, using only the existing
+literal calls and value pools; otherwise the candidate is discarded. No sentinel value is guessed
+or evaluated. Literal defaults still participate in pools and effective-argument identities,
+including unequal defaults on the two sides. Literal size limits still reject oversized defaults.
+Input/row caps, deadlines, isolation, fresh repetitions, fingerprints and unsupported function
+kinds/effects are unchanged; the public `probe unavailable` projection remains unchanged.
+
+Temporary tests reproduce only the short `windowed`, `windowed_iter` and `ellipsize` signatures
+and the alias spelling from Boltons d31d821, with bodies written here. At that pin the actual
+`ellipsize = strutils.ellipsize` line is local to `test_ellipsize` (line 398), so the module-level
+fixture exercises the requested rule without claiming to resolve that local upstream alias.
