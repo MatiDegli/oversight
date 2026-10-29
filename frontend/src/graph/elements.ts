@@ -240,9 +240,9 @@ export function graphElements(
         ...(lit === null
           ? []
           : lit.has(edge.src) && lit.has(edge.dst)
-            ? edge.confidence === "exact"
-              ? ["lit"]
-              : []
+            ? ({ exact: ["lit"], possible: [] } satisfies Record<typeof edge.confidence, string[]>)[
+                edge.confidence
+              ]
             : ["dimmed"]),
       ].join(" "),
     });

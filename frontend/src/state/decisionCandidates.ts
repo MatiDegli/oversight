@@ -1,4 +1,10 @@
-import type { ChangeFacts, ChangeProposed, DecisionRef, ReviewCard } from "@contracts";
+import type {
+  ChangeFacts,
+  ChangeProposed,
+  DecisionRef,
+  ReviewCard,
+  RuleAssessment,
+} from "@contracts";
 
 import { decisionIdentityKey, noRecordedExample } from "./decisionIdentity";
 import type { DecisionInboxDecision, InboxExample, InboxIdentity } from "./decisionIdentity";
@@ -10,6 +16,20 @@ type ChangeRef = Exclude<DecisionRef, { kind: "lead_plan" }>;
 export type Candidate = Pick<ChangeRef, "change_id" | "revision" | "head_commit">;
 export type PendingEntry = Omit<DecisionInboxDecision, "age" | "attempts">;
 export type Entries = Map<string, PendingEntry>;
+const checkLabels: Record<RuleAssessment["rule"], string> = {
+  combined_tests: "combined_tests",
+  small_cone: "small_cone",
+  small_change: "small_change",
+  known_spend: "known_spend",
+  existing_tests_untouched: "existing_tests_untouched",
+  cross_review: "cross_review",
+  test_integrity: "test_integrity",
+  added_tests_fail_before: "added_tests_fail_before",
+  run_test_integrity: "run_test_integrity",
+  tests_reach_changes: "tests_reach_changes",
+  within_zone: "within_zone",
+  protected_paths: "protected_paths",
+};
 
 export function recordEntry(
   entries: Entries,
@@ -206,7 +226,7 @@ export function checkReason(entry: PendingEntry, state: State): string {
     if (event.type === "change.assessed")
       return event.payload.rules
         .filter((rule) => rule.result === "unknown")
-        .map((rule) => `Unavailable check: ${rule.rule}`);
+        .map((rule) => `Unavailable check: ${checkLabels[rule.rule]}`);
     return [];
   });
   return [...new Set([entry.reason, ...diagnostics])].join("; ");

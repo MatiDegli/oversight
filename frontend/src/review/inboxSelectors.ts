@@ -1,0 +1,84 @@
+import { selectDecisionInbox } from "../state";
+import type { ChangeState, State } from "../state";
+import type { ChangeFacts } from "@contracts";
+import { possibleCallerNodes } from "../graph";
+import { factsForRevision } from "./ReviewFacts";
+
+export function selectPossibleCallersWait(state: State, changeId: string) {
+  const change = state.changes[changeId];
+  const p = change?.proposal;
+  if (!p || change.resolution?.merge === "merged" || change.status === "rejected") return null;
+  const event = state.decisionEvents.findLast(
+    (e) =>
+      e.type === "change.assessed" &&
+      e.payload.change_id === changeId &&
+      e.payload.revision === p.revision &&
+      e.payload.head_commit === p.head_commit,
+  );
+  const assessment = event?.type === "change.assessed" ? event.payload : null;
+  const rule = assessment?.rules.find((r) => r.rule === "small_cone");
+  const o = rule?.observed;
+  if (
+    rule?.result !== "unknown" ||
+    !rule.evidence.length ||
+    !o ||
+    typeof o.nodes !== "number" ||
+    !Number.isInteger(o.nodes) ||
+    o.nodes < 0 ||
+    o.nodes > 5 ||
+    !["omitted_by_depth", "omitted_by_limit", "parse_errors", "unresolved_removed"].every(
+      (k) => o[k] === 0,
+    )
+  )
+    return null;
+  const callers = possibleCallerNodes(state, change, p.impact);
+  return callers?.length
+    ? { callers, module: p.files.length === 1 ? p.files[0]?.path : undefined }
+    : null;
+}
+
+export type ChangeCardState = {
+  kind: "merged" | "choice" | "unavailable";
+  change: ChangeState;
+  facts: ChangeFacts | undefined;
+};
+/** Only current-candidate evidence defines a card. Local answers never alter this projection. */
+export function selectChangeCard(state: State, changeId: string): ChangeCardState | null {
+  const change = state.changes[changeId];
+  if (!change?.proposal) return null;
+  const facts = factsForRevision(state, change.proposal);
+  if (change.resolution?.decided_by === "rules" && change.resolution.merge === "merged")
+    return { kind: "merged", change, facts };
+  if (change.status !== "ready_for_review" && change.status !== "conflict") return null;
+  if (facts?.review_cards?.length) return { kind: "choice", change, facts };
+  if (
+    facts &&
+    selectDecisionInbox(state).some(
+      (entry) =>
+        entry.changeId === changeId &&
+        entry.decisions.some((decision) => decision.kind === "checks_unavailable"),
+    ) &&
+    !selectPossibleCallersWait(state, changeId)
+  )
+    return { kind: "unavailable", change, facts };
+  return null;
+}
+
+export function selectUnchanged(facts: ChangeFacts | undefined) {
+  const compared = facts?.behavior_diff?.reduce((n, b) => n + b.compared_count, 0) ?? 0;
+  const differing = facts?.behavior_diff?.reduce((n, b) => n + b.differing_count, 0) ?? 0;
+  const incomplete =
+    !facts?.behavior_diff?.length ||
+    facts.behavior_diff.some((b) => b.not_probed || b.rows.some((r) => r.unstable));
+  return { compared, unchanged: compared - differing, incomplete };
+}
+
+export function selectInboxSummary(state: State) {
+  const agents = Object.keys(state.agents).length;
+  const steps = Object.values(state.steps).reduce((n, s) => n + s.length, 0);
+  const minutes =
+    state.clock && state.runStartedAt
+      ? Math.max(0, Math.round((Date.parse(state.clock) - Date.parse(state.runStartedAt)) / 60000))
+      : null;
+  return { agents, steps, minutes };
+}
