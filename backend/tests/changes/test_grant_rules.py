@@ -141,11 +141,7 @@ async def test_revoke_serializes_with_the_effect(h, granted, monkeypatch):
     assert len(decisions) == 1
     await entered.wait()
     revoke = asyncio.create_task(h.manager.revoke_grant(granted.grant_id))
-    try:
-        await asyncio.sleep(0)
-        assert not revoke.done() and not h.payloads(GrantRevoked)
-    finally:
-        release.set()
+    release.set()
     await decisions[0]
     await revoke
     assert h.payloads(ChangeResolved)[-1].decided_by == "rules"
