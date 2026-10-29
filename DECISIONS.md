@@ -1596,15 +1596,24 @@ Each is built from tokens; DESIGN.md says which earlier lines each replaces.
    (`contour-hill-spread` 1, from 0.78), so rings show outside big cards. 5 to 7 rings per lone
    hill, gray only, masks unchanged. This replaces "white at 10% in dark" in DESIGN.md's rest
    background.
-3. **The busy light is an LED panel.** Each lamp has a continuous brightness: the light's intensity
-   raised to `lamp-gamma` 0.6 and held back by a smooth cut (`lamp-cut-low` 0.08, `lamp-cut-high`
-   0.22), so no dither and no scattered dust, and the glow hugs its card. The far tail of the
-   falloff is the sketch's (1 over one plus the square of the distance). The color follows the
-   brightness: dim lamps lean to the deep end of the agent's color, mid is the agent's own, the hot
-   core is lighter, all from `lamp-ramp-deep`, `lamp-ramp-mid` and `lamp-ramp-hot`, so agent B
-   gets the same in its blue. This replaces the four levels chosen by ordered dithering
-   (`dot-level-count`, `dot-dither-size`, removed). Cost: a light now ends sooner as it fades, so
-   its halo outside a module card is gone about 35 to 55 seconds into the 90, not at 90; the node's
+3. **The busy light is four dithered levels again, in a color ramp.** Round 2 made each lamp's
+   brightness continuous (the intensity raised to a gamma). That read round, symmetric and flat, and
+   its premise was wrong: it took the sketch for a smooth glow, when `life.html` quantizes the
+   light to four levels with an 8 by 8 ordered dither (`floor(clamp(tot, 0, 1) * 3 + bayer8)` over
+   3). Near the core every lamp is whole; further out the dither leaves a regular pattern of single
+   lamps, and that pattern is the LED character. The levels and the matrix return exactly as the
+   sketch computes them (`dot-level-count` 4, `dot-dither-size` 8, no half-step offset), and
+   `lamp-gamma` is removed. Each light keeps its own smooth cut before the lights add up (the
+   sketch's `smoothstep(0.08, 0.22, I)`: `lamp-cut-low`, `lamp-cut-high`). The color ramp stays and
+   now applies per level: the first level leans to the deep end of the agent's color, the second is
+   close to its own, the whole level is lighter (`lamp-ramp-deep`, `lamp-ramp-mid`,
+   `lamp-ramp-hot`), so agent B gets the same in blue. The far tail of the falloff is the sketch's.
+   The lights follow the rows the agents touch, as the sketch's: each agent's current row at full
+   weight and its last read at 0.4, each its own box (a method of a folded class is lit through the
+   class's box), with lamps hidden under cards. On the sketch's own busy scene the product counts
+   lamps at the four levels within a tenth of the sketch's (a test). Cost: the dither's cut is
+   slightly higher than the continuous one (a lamp needs about 0.10 of one light, not 0.08), so the
+   decided fade's halo outside a module card is gone about 35 to 40 seconds into the 90; the node's
    marker and the rail still tell the rest.
 4. **The merge trail is short.** The orange right-angled line the maintainer saw on the right edge
    was the merge trail: 200px behind the head. It is now about 100px (28px bright, then 72px that

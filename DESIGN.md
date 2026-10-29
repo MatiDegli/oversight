@@ -970,26 +970,29 @@ WebGL2, a failed draw or a lost context leaves plain ground behind the graph: no
 lines (the fallback that existed before the contours).
 
 - **LEDs:** a canvas of 7px cells under transparent Cytoscape, each a 5px square lamp with a 2px
-  gap. A lamp's brightness is continuous (no ordered dither, no levels): the light's intensity,
-  raised to `lamp-gamma` and held back by a smooth cut (off under `lamp-cut-low`, free from
-  `lamp-cut-high`), so the glow hugs its card and ends on a lamp, not on scattered dust. Its color
-  follows its brightness, all from tokens: dim lamps lean to the deep end of the agent's color (the
-  weaker channels scaled by `lamp-ramp-deep`, orange toward deep red, blue toward deep blue), a lamp
-  at `lamp-ramp-mid` shows the agent's own color, and the hot core, above it, moves `lamp-ramp-hot`
-  of the way to the ink (lighter orange or blue on the dark ground, darker on paper). It replaces
-  the earlier four levels chosen by ordered dithering and the one color mixed between lamp-off and
-  the light. Only a lit lamp is drawn: its square, in the light's color. An off
+  gap. A lamp shows one of four levels (off, a third, two thirds, whole), picked by an 8 by 8
+  ordered dither as the sketch does: the level is the floor of the cell's intensity (the lights
+  added, up to 1) times three plus the matrix cell over 64. Near the core every lamp is whole;
+  further out the dither leaves a regular pattern of single lamps, which is the LED character.
+  Each light is first held back by its own smooth cut (off under `lamp-cut-low`, free from
+  `lamp-cut-high`), so a glow ends on a lamp, not on scattered dust. The color follows the level, all
+  from tokens: the first level leans to the deep end of the agent's color (the weaker channels
+  scaled by `lamp-ramp-deep`, orange toward deep red, blue toward deep blue), the second is close
+  to the agent's own, and the whole level moves `lamp-ramp-hot` of the way to the ink (lighter
+  orange or blue on the dark ground, darker on paper). Only a lit lamp is drawn: its square, in the
+  light's color. An off
   lamp is not drawn, so the ground and its contour lines show between the lit ones, and a faint
   guide dot every 28px stays. At rest no light reaches anything, so no lamp is drawn (this replaces
   "lamp-off and guide-dot make a faint 28px grid at rest"; a field told no modules, so with no
   contours, still draws its off lamps in `lamp-off`). The contour lines
   fade out under a light by its smooth glow, not by its lamps, so no edge of the light's pool cuts
   them in blocks. The canvas reads rendered boxes; it does not draw graph nodes or edges.
-- **Shape and spread:** light follows the outline of the current row or folded card, never its
-  whole module frame. The near and far spreads are about 26px and 72px at 100% zoom, measured
+- **Shape and spread:** light follows the outline of each row an agent touches (its current row
+  and its last read), or of the folded card that holds it, never the whole module frame: the shape
+  follows the work, row by row, and lamps under cards stay hidden. The near and far spreads are about 26px and 72px at 100% zoom, measured
   outward from that box, and scale with graph zoom; the near term decays as an exponential and the
   far one has the long tail 1 over one plus the square of its distance (the sketch's), so the
-  halo thins over several rings. This preserves the box-shaped pool of light.
+  halo thins over several rings.
   A light always falls off softly on every side, however faint it has become.
 - **Sources:** only each agent's current node at full strength and its last read node at about
   0.4 emit light, in that agent's token, and only while that agent is acting (see Agent light).
