@@ -60,11 +60,24 @@ class _AliasBindings(_Bindings):
 
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         super().visit_FunctionDef(node)
-        for expression in [*node.decorator_list, *node.args.defaults, *node.args.kw_defaults]:
+        args = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+        args.extend(arg for arg in (node.args.vararg, node.args.kwarg) if arg is not None)
+        for expression in [
+            *node.decorator_list,
+            *node.args.defaults,
+            *node.args.kw_defaults,
+            *[arg.annotation for arg in args],
+            node.returns,
+        ]:
             if expression is not None:
                 self.visit(expression)
 
     visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        super().visit_ClassDef(node)
+        for expression in [*node.bases, *node.decorator_list, *[kw.value for kw in node.keywords]]:
+            self.visit(expression)
 
 
 def module_aliases(source: Source) -> dict[str, str]:

@@ -59,6 +59,8 @@ def test_relative_import_alias_seeds_target(path):
         "call = mod.f\n[(call := other) for _ in values]",
         "call = mod.f\ndef test_it(value=(call := other)): pass",
         "call = mod.f\nother = lambda value=(call := other): value",
+        "call = mod.f\nclass C((call := other)): pass",
+        "call = mod.f\ndef other(value: (call := other)): pass",
         "call = mod.f\nfrom elsewhere import *",
         "call = mod.f\nmod = other",
         "call = mod.f\nimport pkg.mod as mod",
