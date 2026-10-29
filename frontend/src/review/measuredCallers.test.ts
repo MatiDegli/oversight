@@ -21,6 +21,7 @@ describe("measured callers projection", () => {
     const state = withMeasuredFacts(facts);
     const before = JSON.stringify(state);
     const view = select(state);
+    expect(view).toMatchObject({ maxDepth: 3, maxNodes: 40 });
     expect(view?.rows.map((row) => row.nodeId)).toEqual(
       state.changes["change-1"]?.proposal?.impact.entries.map((entry) => entry.node_id),
     );

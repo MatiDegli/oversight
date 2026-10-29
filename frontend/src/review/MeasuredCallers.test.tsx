@@ -56,6 +56,7 @@ describe("measured caller presentation", () => {
     );
     const text = html.replace(/<[^>]*>/g, "");
     expect(text).toContain("12 invocations compared · 3 differing");
+    expect(text).toContain("Static cone bounds: depth 3 · 40 nodes");
     expect(text).toContain("Unmatched before: 0 · Unmatched after: 0");
     for (const label of ["Inputs", "Before", "After", "Unstable observation"])
       expect(html).toContain(label);

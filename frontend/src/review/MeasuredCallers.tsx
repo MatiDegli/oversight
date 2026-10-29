@@ -67,6 +67,10 @@ export function MeasuredCallers({ state, changeId }: { state: State; changeId: s
       <h3 className="text-(length:--title-size) font-bold text-text">
         Measured callers · Possibly affected
       </h3>
+      <p>
+        Static cone bounds: depth <span className="font-mono">{view.maxDepth}</span> ·{" "}
+        <span className="font-mono">{view.maxNodes}</span> nodes
+      </p>
       {view.recording === "absent" && <p>Caller measurements not recorded for this revision</p>}
       {view.recording === "empty" && <p>No caller measurements in this cone</p>}
       {view.recording === "recorded" && (

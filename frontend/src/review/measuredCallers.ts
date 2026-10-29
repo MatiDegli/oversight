@@ -42,5 +42,10 @@ export function selectMeasuredCallers(state: State, changeId: string) {
       evidence: caller ?? null,
     };
   });
-  return { recording, rows };
+  return {
+    recording,
+    rows,
+    maxDepth: proposal.impact.max_depth,
+    maxNodes: proposal.impact.max_nodes,
+  };
 }
