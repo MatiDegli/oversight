@@ -30,6 +30,13 @@ from oversight.events.store import (
     StoredEvent,
     read_store,
 )
+from oversight.events.usage_fold import (
+    ChangeAccounting,
+    RunUsage,
+    UnassignedUsage,
+    UsageFold,
+    fold_usage,
+)
 
 
 def run_store_path(runtime_dir: Path, run_id: str) -> Path:
@@ -42,6 +49,7 @@ __all__ = [
     "MAX_GAP_S",
     "NEEDS_YOU_CODES",
     "NEEDS_YOU_TEMPLATE",
+    "ChangeAccounting",
     "Clock",
     "EventPayload",
     "EventRejected",
@@ -49,13 +57,17 @@ __all__ = [
     "LogError",
     "NeedsYou",
     "NeedsYouWait",
+    "RunUsage",
     "Sleep",
     "StoreClosedError",
     "StoredEvent",
     "TerminalClaim",
     "TerminalClaims",
+    "UnassignedUsage",
+    "UsageFold",
     "absolute_paths",
     "export_run",
+    "fold_usage",
     "format_needs_you",
     "format_ts",
     "needs_you_golden",
