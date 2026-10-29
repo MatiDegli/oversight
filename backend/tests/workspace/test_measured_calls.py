@@ -114,17 +114,20 @@ def test_many():
         tmp_path,
         demo_python,
         "def caller(x):\n    return x\n",
-        """import time
+        """import threading
 from app import caller
 def test_cut():
     caller(1)
-    time.sleep(20)
+    threading.Event().wait()
 """,
-        timeout_s=1,
+        # The budget includes interpreter startup, plugin loading and collection.
+        # Leave room for slow CI; the event blocks indefinitely once the call is recorded.
+        timeout_s=8,
     )
     assert run.result.outcome == "timeout"
     assert run.measured is not None
-    assert run.measured.calls and not run.measured.complete
+    assert run.measured.calls, run.measured.problems
+    assert not run.measured.complete
     assert not list((tmp_path / "tmp").glob("*.calls*"))
 
 
