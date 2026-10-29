@@ -319,6 +319,9 @@
   --contour-mound-count: 10;
   --contour-drift-speed: 1;
   --contour-cell-size: 16px;
+  --contour-levels: 8;
+  --contour-fade: 0.45;
+  --contour-line-width: 1px;
   --field-slow-interval: 500ms;
   --afterlight-weight: 0.9;
   --afterlight-duration: 90000ms;

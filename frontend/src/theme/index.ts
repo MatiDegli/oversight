@@ -243,6 +243,11 @@ const baseThemes = {
     "contour-mound-count": 10,
     "contour-drift-speed": 1,
     "contour-cell-size": "16px",
+    // The most levels drawn above the ground, how much of its alpha the outermost line keeps, and
+    // the line's width.
+    "contour-levels": 8,
+    "contour-fade": 0.45,
+    "contour-line-width": "1px",
     // How often the field repaints for what changes slowly: the contour drift and the afterlight.
     "field-slow-interval": "500ms",
     // A merge: the light of its node starts at the weight and fades over the duration along
