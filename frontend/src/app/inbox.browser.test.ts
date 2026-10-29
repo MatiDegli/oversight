@@ -71,6 +71,10 @@ it.each(["dark", "day"])(
       await expect(page.getByRole("region", { name: "Decisions inbox" })).toBeVisible();
       await expect(page.locator(".graph-stage")).toBeVisible();
       await expect(page.locator(".inbox-row")).toHaveCount(3);
+      await expect(page.getByRole("button", { name: "Open Settings" })).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: "Standing grants 1", exact: true }),
+      ).toBeVisible();
       await capture("01-inbox");
       await page.getByText("Don't ask again", { exact: false }).first().click();
       await expect(page.getByRole("radio")).toHaveCount(2);
@@ -100,6 +104,17 @@ it.each(["dark", "day"])(
       const card = page.getByRole("complementary", { name: "Change card" });
       await card.getByRole("button", { name: "Yes, keep it" }).first().click();
       await expect(card.getByText("1 of 2 answered")).toBeVisible();
+      await expect(card.getByRole("button", { name: "Change answer" })).toBeFocused();
+      await expect(
+        card.getByText("Approve opens only when every answer is Yes", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        card.getByRole("region", { name: "Compared functions and callers" }),
+      ).toBeVisible();
+      await expect(card.getByLabel(/Inventory.reserve: changed/)).toHaveAttribute(
+        "aria-label",
+        /questions 1, 2/,
+      );
       await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
       await capture("04-choice");
       await card.getByRole("button", { name: "No, send it back" }).click();
@@ -110,6 +125,7 @@ it.each(["dark", "day"])(
       await card.getByRole("button", { name: "Change answer" }).last().click();
       await card.getByRole("button", { name: "Unsure, decide later" }).click();
       await expect(card.getByText(/Unsure waits here/)).toBeVisible();
+      await expect(card.getByText("2 of 2 answered")).toBeVisible();
       await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
       await card.getByRole("button", { name: "Change answer" }).last().click();
       await card.getByRole("button", { name: "Yes, keep it" }).click();
@@ -128,7 +144,8 @@ it.each(["dark", "day"])(
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Reject", exact: true })).toBeEnabled();
       await capture("05-unavailable");
-      await page.getByRole("button", { name: "Open Settings" }).click();
+      await page.getByRole("button", { name: /^Decisions:/ }).click();
+      await page.getByRole("button", { name: /^Standing grants / }).click();
       await expect(page.getByRole("heading", { name: "Standing grants" })).toBeVisible();
       await expect(page.locator(".grant-row")).toHaveCount(1);
       await expect(page.locator(".grant-row")).toContainText("1 change let through");
@@ -136,12 +153,14 @@ it.each(["dark", "day"])(
       await page.getByRole("button", { name: "Revoke", exact: true }).dispatchEvent("click");
       await expect(page.locator(".grant-row")).toHaveCount(1);
       await mount(14);
-      await page.getByRole("button", { name: "Open Settings" }).click();
+      await page.getByRole("button", { name: /^Decisions:/ }).click();
+      await page.getByRole("button", { name: /^Standing grants / }).click();
       await expect(page.getByRole("heading", { name: "No active grants" })).toBeVisible();
       await capture("07-grants-empty");
       await page
         .getByRole("button", { name: "Decisions: 0 pending. Open decisions inbox" })
         .click();
+      await page.getByRole("button", { name: "Decisions 0", exact: true }).click();
       await expect(page.getByRole("heading", { name: "No decisions waiting" })).toBeVisible();
       await expect(
         page.getByRole("button", { name: "Decisions: 0 pending. Open decisions inbox" }),

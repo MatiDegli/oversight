@@ -25,14 +25,14 @@
 }
 .decisions-inbox h3,
 .decision-card h3,
-.grant-settings h3 {
+.grants-content h3 {
   font-weight: 600;
 }
 .inbox-heading {
   display: flex;
   align-items: center;
   gap: var(--spacing-overlay);
-  padding: var(--spacing-overlay);
+  padding: var(--spacing-lg) var(--spacing-overlay);
   border-bottom: 1px solid var(--divider);
 }
 .inbox-count {
@@ -168,7 +168,7 @@ button.decision-reject {
   display: flex;
   justify-content: space-between;
   gap: var(--spacing-overlay);
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-sm);
 }
 .possible-wait li {
   display: flex;
@@ -266,14 +266,14 @@ button.decision-reject {
   padding: 0 var(--spacing-overlay);
 }
 .choice-question {
-  padding: var(--spacing-overlay) 0;
+  padding: var(--spacing-lg) 0;
   border-bottom: 1px solid var(--divider);
 }
 .choice-question .choice-example {
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-md);
 }
 .choice-question .decision-actions {
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-md);
 }
 .answer-reset {
   font-size: var(--caption-size);
@@ -281,17 +281,13 @@ button.decision-reject {
   text-decoration: underline;
   flex-shrink: 0;
 }
-.answered-line {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
-  font-size: var(--caption-size);
-}
-.answered-line code {
+.collapsed-example {
   color: var(--muted);
-  overflow-wrap: anywhere;
+  font-size: var(--caption-size);
+  font-weight: 400;
+}
+.question-number {
+  font-family: var(--code-font);
 }
 .unchanged-facts,
 .unavailable-check,
@@ -334,28 +330,6 @@ button.decision-reject {
   color: var(--text);
   margin: var(--spacing-xs) 0 var(--spacing-lg);
 }
-.grant-settings {
-  display: flex;
-  width: 100%;
-  min-height: 0;
-}
-.grant-settings nav {
-  flex: 0 0 208px;
-  padding: var(--spacing-overlay) var(--spacing-md);
-  border-right: 1px solid var(--divider);
-}
-.grant-settings nav > p {
-  padding: var(--spacing-sm);
-}
-.grant-settings nav a {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--raised);
-  border-radius: var(--radius-control);
-  margin-block: var(--spacing-md);
-}
 .grants-content {
   padding: var(--spacing-overlay);
   flex: 1;
@@ -392,9 +366,6 @@ button.decision-reject {
   }
   .local-decisions > .decision-heading {
     flex-wrap: wrap;
-  }
-  .grant-settings nav {
-    flex-basis: 170px;
   }
 }
 /* Inbox rows keep evidence compact; questions expand to the full card on request. */
@@ -437,23 +408,54 @@ button.decision-reject {
   gap: var(--spacing-sm);
   padding-top: var(--spacing-overlay);
 }
-:is(.decisions-inbox, .decision-card, .grant-settings)
+:is(.decisions-inbox, .decision-card, .grants-content)
   :is(button, summary, input, textarea, a):focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
-:is(.decisions-inbox, .decision-card, .grant-settings) {
+:is(.decisions-inbox, .decision-card, .grants-content) {
   scrollbar-color: var(--control-edge) var(--page);
 }
 .local-decisions textarea {
   caret-color: var(--text);
 }
 .inbox-row {
-  padding-block: var(--spacing-lg);
+  padding-block: var(--spacing-md);
 }
 .inbox-row .example-pair > div > code {
   font-size: var(--data-size);
 }
 .possible-wait li {
   line-height: var(--caption-line-height);
+}
+
+.inbox-views {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-overlay);
+  border-bottom: 1px solid var(--divider);
+}
+.inbox-views button {
+  padding-block: var(--spacing-sm);
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+}
+.inbox-views button[aria-pressed="true"] {
+  border-color: var(--text);
+  color: var(--text);
+}
+.inbox-views button:hover {
+  color: var(--text-hover);
+}
+.inbox-views span {
+  font-family: var(--code-font);
+  font-variant-numeric: tabular-nums;
+  margin-left: var(--spacing-sm);
+}
+
+.choice-question:has(.answer-reset) .decision-heading h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

@@ -1,13 +1,14 @@
-import { useState } from "react";
-import { Check, GitMerge, LockKeyhole, X } from "lucide-react";
+import { useId, useState } from "react";
+import { GitMerge, LockKeyhole, X } from "lucide-react";
 import { ChangeFactsRow } from "./ChangeFactsRow";
 import { EditorDiff } from "../editor";
 import { grantReasons, grantScopeWords, selectLiveDiff } from "../state";
 import type { State } from "../state";
 import { agentSlotStyle } from "../theme";
-import { AnswerChoices, cardKey } from "./AnswerChoices";
+import { AnswerChoices, cardAnswer, cardKey } from "./AnswerChoices";
 import type { Answers } from "./AnswerChoices";
-import { selectChangeCard, selectUnchanged } from "./inboxSelectors";
+import { selectChangeCard } from "./inboxSelectors";
+import { ComparisonMap } from "./ComparisonMap";
 import "./inbox.css";
 
 export const eventTime = (ts: string) =>
@@ -22,20 +23,23 @@ export const eventTime = (ts: string) =>
 function LocalDecisions({
   cards,
   answers,
+  candidate,
 }: {
   cards: Parameters<typeof AnswerChoices>[0]["cards"];
   answers: Answers;
+  candidate: string;
 }) {
-  const values = cards.map((card) => answers[cardKey(card)] ?? card.answer);
+  const values = cards.map((card) => cardAnswer(card, answers));
+  const approvalReason = useId();
   const no = cards.find((_card, i) => values[i] === "no");
   const prefill = no?.example
     ? `${no.question}\n${no.example.inputs}: ${no.example.before} → ${no.example.after}`
     : no?.question;
-  const commentKey = no ? cardKey(no) : "general";
+  const commentKey = candidate + (no ? cardKey(no) : "general");
   const [comments, setComments] = useState<Record<string, string>>({});
   const comment = comments[commentKey] ?? prefill ?? "";
   const [notice, setNotice] = useState("");
-  const answered = values.filter((v) => v === "yes" || v === "no").length;
+  const answered = values.filter((v) => v !== null).length;
   const allYes = values.every((v) => v === "yes");
   return (
     <footer className="local-decisions">
@@ -51,7 +55,7 @@ function LocalDecisions({
         />
       </label>
       <div className="decision-heading">
-        <p>
+        <p id={approvalReason} aria-live="polite" aria-atomic="true">
           <strong>
             {cards.length
               ? `${String(answered)} of ${String(cards.length)} answered`
@@ -60,7 +64,7 @@ function LocalDecisions({
           <br />
           <span className="decision-muted">
             {cards.length
-              ? `${values.includes("unsure") ? "Unsure waits here. " : ""}Approve opens when every answer is Yes.`
+              ? `${values.includes("unsure") ? "Unsure waits here. " : ""}Approve opens only when every answer is Yes`
               : "You decide whether to continue without it."}
           </span>
         </p>
@@ -78,6 +82,7 @@ function LocalDecisions({
             <button
               className="decision-primary"
               disabled={!allYes}
+              aria-describedby={approvalReason}
               onClick={() => {
                 setNotice("Approve prepared locally. No command sent.");
               }}
@@ -127,7 +132,6 @@ export function ChangeCard({ state, changeId }: { state: State; changeId: string
   const { change, facts, kind } = card;
   const slot = state.agents[change.agent_id]?.slot;
   const questions = facts?.review_cards ?? [];
-  const unchanged = selectUnchanged(facts);
   const grantUses = change.resolution?.grants ?? [];
   return (
     <aside aria-label="Change card" className="decision-card" style={agentSlotStyle(slot)}>
@@ -149,8 +153,9 @@ export function ChangeCard({ state, changeId }: { state: State; changeId: string
                 ? `${String(questions.length)} choices need you`
                 : "Needs you for a choice"}
         </h2>
-        <p>Asked: {change.proposal?.task}</p>
-        <p>Done: {change.proposal?.summary}</p>
+        <p>
+          Asked: {change.proposal?.task} · Done: {change.proposal?.summary}
+        </p>
         <ChangeFactsRow state={state} changeId={changeId} />
       </header>
       <div className="decision-card-body">
@@ -192,19 +197,7 @@ export function ChangeCard({ state, changeId }: { state: State; changeId: string
             </p>
           </div>
         )}
-        {kind !== "unavailable" && (
-          <section className="unchanged-facts">
-            <h3>
-              <Check size={16} aria-hidden="true" />
-              {unchanged.incomplete ? "What was compared" : "Everything else compared is the same"}
-            </h3>
-            <p className="decision-muted">
-              {unchanged.unchanged} of {unchanged.compared} compared inputs returned the same
-              result.{unchanged.incomplete && " Comparison coverage is incomplete."} This says
-              nothing about inputs that were not compared.
-            </p>
-          </section>
-        )}
+        {kind !== "unavailable" && <ComparisonMap state={state} change={change} facts={facts} />}
         {Object.keys(change.files).map((path) => {
           const data = selectLiveDiff(state, changeId, path);
           return (
@@ -221,7 +214,9 @@ export function ChangeCard({ state, changeId }: { state: State; changeId: string
           );
         })}
       </div>
-      {kind !== "merged" && <LocalDecisions cards={questions} answers={answers} />}
+      {kind !== "merged" && (
+        <LocalDecisions candidate={candidate} cards={questions} answers={answers} />
+      )}
     </aside>
   );
 }

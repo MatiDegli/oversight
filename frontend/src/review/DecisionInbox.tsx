@@ -1,8 +1,9 @@
 import { useId, useState } from "react";
 import { Check, ChevronDown, Inbox } from "lucide-react";
 import type { DecisionInboxEntry, State } from "../state";
-import { selectDecisionInbox } from "../state";
+import { selectDecisionInbox, selectActiveGrants } from "../state";
 import { ChangeCard, eventTime } from "./ChangeCard";
+import { StandingGrants } from "./StandingGrants";
 import { Example } from "./AnswerChoices";
 import { selectInboxSummary, selectPossibleCallersWait } from "./inboxSelectors";
 import "./inbox.css";
@@ -23,7 +24,10 @@ function GrantChoice({ module }: { module?: string }) {
       </button>
       <details
         onToggle={(event) => {
-          if (!event.currentTarget.open) setScope(null);
+          if (!event.currentTarget.open) {
+            setScope(null);
+            setNotice("");
+          }
         }}
       >
         <summary>
@@ -39,6 +43,7 @@ function GrantChoice({ module }: { module?: string }) {
               disabled={!module}
               onChange={() => {
                 setScope("module");
+                setNotice("");
               }}
             />
             This module <code>{module ?? "Multiple files; module scope unavailable"}</code>
@@ -50,6 +55,7 @@ function GrantChoice({ module }: { module?: string }) {
               checked={scope === "run"}
               onChange={() => {
                 setScope("run");
+                setNotice("");
               }}
             />
             This run
@@ -99,7 +105,7 @@ function InboxRow({
         {wait
           ? "Possible callers need your decision"
           : question
-            ? "Choices outside the task"
+            ? "Choices need you"
             : (entry.decisions.find((d) => d.kind !== "change")?.reason ??
               change?.proposal?.task ??
               "Decision needs you")}
@@ -121,7 +127,12 @@ function InboxRow({
               ))}
             </ul>
           </div>
-          {!question && <GrantChoice module={wait.module} />}
+          {!question && (
+            <GrantChoice
+              key={`${state.run?.run_id ?? ""}:${String(change?.proposal?.revision ?? "")}:${change?.proposal?.head_commit ?? ""}`}
+              module={wait.module}
+            />
+          )}
           {question && (
             <details className="inbox-answer">
               <summary>Answer this change before approving</summary>
@@ -173,43 +184,71 @@ export function DecisionInbox({
   state: State;
   onReview?: (id: string) => void;
 }) {
+  const [view, setView] = useState<"decisions" | "grants">("decisions");
   const entries = selectDecisionInbox(state);
+  const grants = selectActiveGrants(state);
   const { agents, steps, minutes } = selectInboxSummary(state);
   return (
     <section aria-label="Decisions inbox" className="decisions-inbox">
-      <header className="inbox-heading">
-        <span className="inbox-count">{entries.length}</span>
-        <div>
-          <h2>{entries.length ? "Decisions waiting for you" : "No decisions waiting"}</h2>
-          <p className="decision-muted">
-            {agents} agents took {steps} steps{minutes === null ? "" : ` in ${String(minutes)} min`}
-            .{" "}
-            {entries.length
-              ? `These ${String(entries.length)} need a person.`
-              : "Nothing needs your decision now."}
-          </p>
-        </div>
-      </header>
-      <div className="inbox-entries">
-        {entries.length ? (
-          entries.map((entry) => (
-            <InboxRow key={entry.id} state={state} entry={entry} onReview={onReview} />
-          ))
-        ) : (
-          <div className="inbox-empty">
-            <Inbox aria-hidden="true" size={28} />
-            <h3>You can keep watching</h3>
-            <p className="decision-muted">
-              Questions and unavailable checks appear here when they need you. The graph and agent
-              cards keep showing the run.
-            </p>
+      <nav aria-label="Inbox views" className="inbox-views">
+        <button
+          type="button"
+          aria-pressed={view === "decisions"}
+          onClick={() => {
+            setView("decisions");
+          }}
+        >
+          Decisions <span>{entries.length}</span>
+        </button>
+        <button
+          type="button"
+          aria-pressed={view === "grants"}
+          onClick={() => {
+            setView("grants");
+          }}
+        >
+          Standing grants <span>{grants.length}</span>
+        </button>
+      </nav>
+      {view === "grants" ? (
+        <StandingGrants state={state} />
+      ) : (
+        <>
+          <header className="inbox-heading">
+            <span className="inbox-count">{entries.length}</span>
+            <div>
+              <h2>{entries.length ? "Decisions waiting for you" : "No decisions waiting"}</h2>
+              <p className="decision-muted">
+                {agents} agents took {steps} steps
+                {minutes === null ? "" : ` in ${String(minutes)} min`}.{" "}
+                {entries.length
+                  ? `These ${String(entries.length)} need a person.`
+                  : "Nothing needs your decision now."}
+              </p>
+            </div>
+          </header>
+          <div className="inbox-entries">
+            {entries.length ? (
+              entries.map((entry) => (
+                <InboxRow key={entry.id} state={state} entry={entry} onReview={onReview} />
+              ))
+            ) : (
+              <div className="inbox-empty">
+                <Inbox aria-hidden="true" size={28} />
+                <h3>You can keep watching</h3>
+                <p className="decision-muted">
+                  Questions and unavailable checks appear here when they need you. The graph and
+                  agent cards keep showing the run.
+                </p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      <footer className="inbox-footnote">
-        <Check size={16} aria-hidden="true" /> A Yes is prepared, never saved alone. Approve remains
-        a separate decision.
-      </footer>
+          <footer className="inbox-footnote">
+            <Check size={16} aria-hidden="true" /> A Yes is prepared, never saved alone. Approve
+            remains a separate decision.
+          </footer>
+        </>
+      )}
     </section>
   );
 }

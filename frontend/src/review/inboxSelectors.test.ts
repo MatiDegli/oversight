@@ -10,8 +10,10 @@ import {
   selectGrantUses,
 } from "../state";
 import type { State } from "../state";
+import { cardAnswer, cardKey } from "./AnswerChoices";
 import { possibleCallers } from "../graph";
 import {
+  selectFunctionComparisons,
   selectChangeCard,
   selectInboxSummary,
   selectPossibleCallersWait,
@@ -184,4 +186,67 @@ it("does not turn a follow-main conflict into an unavailable check", () => {
     ),
   };
   expect(selectChangeCard(next, "change-4")).toBeNull();
+});
+
+it("maps questions to changed functions while leaving unmeasured modules unverified", () => {
+  const change = state.changes["change-3"];
+  if (!change) throw new Error("Missing change");
+  const facts = selectChangeCard(state, "change-3")?.facts;
+  const map = selectFunctionComparisons(state, change, facts);
+  expect(map.comparedFunctions).toBe(1);
+  expect(map.unchangedFunctions).toBe(0);
+  expect(map.modules[0]).toMatchObject({ path: "shop/inventory.py", changed: true });
+  const reserve = map.modules[0]?.functions.find((f) => f.node.id.endsWith(":Inventory.reserve"));
+  expect(reserve).toMatchObject({
+    changed: true,
+    compared: 24,
+    unchanged: false,
+    questions: [1, 2],
+  });
+  expect(map.modules.every((m) => m.functions.every((f) => !f.node.is_test))).toBe(true);
+  const unmeasured = selectFunctionComparisons(state, change);
+  expect(unmeasured.comparedFunctions).toBe(0);
+  expect(unmeasured.unchangedFunctions).toBe(0);
+  const pricing = state.changes["change-2"];
+  if (!pricing) throw new Error("Missing pricing");
+  const callers = selectFunctionComparisons(state, pricing).callers;
+  expect(callers.filter((c) => !c.followed).map((c) => c.node.id)).toEqual(
+    selectPossibleCallersWait(state, "change-2")?.callers.map((c) => c.id),
+  );
+});
+
+it("marks a function unchanged only with complete, stable, nonzero comparison evidence", () => {
+  const change = state.changes["change-3"];
+  const facts = selectChangeCard(state, "change-3")?.facts;
+  const b = facts?.behavior_diff?.[0];
+  if (!change || !facts || !b) throw new Error("Missing comparison");
+  for (const [compared_count, not_probed, unstable, expected] of [
+    [24, null, false, 1],
+    [0, null, false, 0],
+    [24, "timed out", false, 0],
+    [24, null, true, 0],
+  ] as const) {
+    expect(
+      selectFunctionComparisons(state, change, {
+        ...facts,
+        behavior_diff: [
+          {
+            ...b,
+            compared_count,
+            differing_count: 0,
+            not_probed,
+            rows: unstable ? b.rows.slice(0, 1).map((row) => ({ ...row, unstable })) : [],
+          },
+        ],
+      }).unchangedFunctions,
+    ).toBe(expected);
+  }
+});
+
+it("lets the person reopen an answer recorded in events without inheriting it again", () => {
+  const question = selectChangeCard(state, "change-3")?.facts?.review_cards?.[0];
+  if (!question) throw new Error("Missing question");
+  const answered = { ...question, answer: "yes" as const, answered_by: "person" as const };
+  expect(cardAnswer(answered, {})).toBe("yes");
+  expect(cardAnswer(answered, { [cardKey(answered)]: null })).toBeNull();
 });

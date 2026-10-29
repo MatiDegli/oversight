@@ -82,3 +82,59 @@ export function selectInboxSummary(state: State) {
       : null;
   return { agents, steps, minutes };
 }
+
+/** A square represents a graph function; only captured comparisons can mark it unchanged. */
+export function selectFunctionComparisons(state: State, change: ChangeState, facts?: ChangeFacts) {
+  const observations = new Map(
+    [...(facts?.behavior_diff ?? []), ...(facts?.measured_cone ?? [])].map((b) => [b.node_id, b]),
+  );
+  const changed = new Set([
+    ...change.graph.nodes_modified,
+    ...change.graph.nodes_added.map((node) => node.id),
+    ...change.graph.nodes_removed,
+  ]);
+  const nodes = new Map(
+    [...(state.graph?.nodes ?? []), ...change.graph.nodes_added].map((node) => [node.id, node]),
+  );
+  const functions = [...nodes.values()]
+    .filter((node) => !node.is_test && (node.kind === "function" || node.kind === "method"))
+    .map((node) => {
+      const b = observations.get(node.id);
+      const complete =
+        !!b &&
+        !b.not_probed &&
+        !b.rows.some((row) => row.unstable) &&
+        (!("complete" in b) || b.complete);
+      return {
+        node,
+        changed: changed.has(node.id),
+        compared: b?.compared_count ?? 0,
+        unchanged: !!b?.compared_count && !b.differing_count && complete,
+        questions: (facts?.review_cards ?? []).flatMap((q, i) =>
+          q.node_id === node.id ? [i + 1] : [],
+        ),
+      };
+    });
+  const modules = [...new Set(functions.map((f) => f.node.path))]
+    .map((path) => ({
+      path,
+      changed: functions.some((f) => f.node.path === path && f.changed),
+      functions: functions.filter((f) => f.node.path === path),
+    }))
+    .sort((a, b) => Number(b.changed) - Number(a.changed) || a.path.localeCompare(b.path));
+  const cone = change.proposal?.impact;
+  const possible = cone ? (possibleCallerNodes(state, change, cone) ?? []) : [];
+  const callers = [
+    ...(cone?.entries.flatMap((entry) => {
+      const node = nodes.get(entry.node_id);
+      return node ? [{ node, followed: true }] : [];
+    }) ?? []),
+    ...possible.map((node) => ({ node, followed: false })),
+  ];
+  return {
+    modules,
+    callers,
+    comparedFunctions: functions.filter((f) => f.compared > 0).length,
+    unchangedFunctions: functions.filter((f) => f.unchanged).length,
+  };
+}

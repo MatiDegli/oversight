@@ -2,7 +2,7 @@ import { agentSlotStyle } from "../../theme";
 import { Maximize2, Minimize2, X } from "lucide-react";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
-import { ReviewPanel, DecisionInbox, GrantSettings } from "../../review";
+import { ReviewPanel, DecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
 import { LivePanel } from "./LivePanel";
 import { focusRing } from "./shared";
@@ -46,15 +46,13 @@ export function FocusPanel(
             const title =
               tab.id === "inbox"
                 ? "Decisions"
-                : tab.id === "settings"
-                  ? "Settings"
-                  : tab.id === "practice"
-                    ? "Two-change practice"
-                    : tab.review
-                      ? `Review · ${tab.review}`
-                      : tab.diff
-                        ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
-                        : (tab.file?.path.split("/").at(-1) ?? "File");
+                : tab.id === "practice"
+                  ? "Two-change practice"
+                  : tab.review
+                    ? `Review · ${tab.review}`
+                    : tab.diff
+                      ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
+                      : (tab.file?.path.split("/").at(-1) ?? "File");
             return (
               <div
                 key={tab.id}
@@ -103,8 +101,6 @@ export function FocusPanel(
       <div id="focus-content" role="tabpanel" className="focus-body">
         {view.activeTab === "inbox" ? (
           <DecisionInbox state={state} onReview={props.onReview} />
-        ) : view.activeTab === "settings" ? (
-          <GrantSettings state={state} />
         ) : view.activeTab === "practice" && props.practice?.active ? (
           props.practice.content
         ) : view.review !== null ? (

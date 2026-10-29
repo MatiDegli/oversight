@@ -6,4 +6,3 @@ export type { DecisionAction, DecisionAttempt, DecisionClient, DecisionView } fr
 export { ChangeFactsRow } from "./ChangeFactsRow";
 
 export { DecisionInbox } from "./DecisionInbox";
-export { GrantSettings } from "./GrantSettings";
