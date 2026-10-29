@@ -118,6 +118,9 @@ it.each(cases)(
         expect(await panel.textContent()).toContain(
           "Behavior evidence was not recorded for this revision.",
         );
+        await panel
+          .getByText("Behavior evidence was not recorded for this revision.", { exact: true })
+          .scrollIntoViewIfNeeded();
       } else {
         expect(await behavior.textContent()).toContain(
           "These bounded inputs do not establish equivalence.",
@@ -159,6 +162,7 @@ it.each(cases)(
           );
         expect(lossless).toBe(true);
         if (process.env.BEHAVIOR_SHOTS === "1" && summary && width === 1920) {
+          await behavior.locator("dl").first().scrollIntoViewIfNeeded();
           await page.screenshot({ path: join(shots, `review-${kind}-${theme}-1920-samples.png`) });
         }
       }
