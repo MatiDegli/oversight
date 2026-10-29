@@ -1306,6 +1306,46 @@ with no new contract field: "asked for" only from the classification, which neve
 the person" from a card answered Yes by the person. The summary and proof 3's counts keep them apart. A card's
 kind is read from its server-authored question, one of two fixed texts. When pinned examples exist (item 13), a
 Yes on a could-not-tell question is the one offered as "keep as example".
+## 2026-10-29 — The inbox header count lands on the maintainer's approval of its captures
+
+The card and inbox shots gate holds every card or inbox front until the maintainer approves its
+captures. For `frontend/inbox-count` he approved its four header captures and confirmed it to the
+coordinator directly on October 29. An approval relayed by another coordinator session does not
+count: it must come from him in the session that lands.
+
+## 2026-10-29 — small_cone does not pass what it cannot see
+
+The impact cone follows exact calls only, so an empty or small cone can mean "nothing calls this"
+or "the graph could not tell who calls this". On Boltons most functions have no exact callers, and
+many of them have callers the graph marks as possible. `small_cone` used to pass both cases.
+
+The maintainer decided that the rule answers `unknown` when a changed node or a node in its cone
+has a caller linked only by possible calls, counted exactly as the review's "N possible callers,
+not followed" counts them. `unknown` never counts as passing, so in rules mode the change waits
+for the person, and the inbox entry lists those callers. His Yes is recorded as accepted by him,
+never as asked for, as with D6. A cone that already fails the exact limits stays `fail`. The
+contracts do not change: the recorded observation keeps its five counts. On Boltons d31d821 this
+sends about half of single-function changes to the person (446 of 898), and 5 of the 16 drafted
+proof 2 tasks; the tasks are not changed to avoid it, and the run reports whatever share results.
+
+## 2026-10-29 — Standing grants: Oversight remembers what the person let go
+
+With the `small_cone` fix, proof 2 would ask the maintainer about most Boltons changes, often the
+same question about the same module. He decided that Oversight remembers what he authorized.
+Three layers decide whether a change waits, each in one direction: rules pass or wait with
+evidence; Muse Spark Open's decision can only add a wait; the person's grants can only remove a
+wait the person could accept themselves.
+
+A grant comes only from the person's own answer to an inbox entry (Yes plus "don't ask again",
+with a scope they pick), never from an agent, a lead plan or a message relayed by another session.
+It can waive possible callers not followed or a protected path, never failing tests, conflicts,
+test integrity, cross-review or a decision question. It applies by exact scope match, never by a
+model's judgment; its scope is narrow (one reason kind, for one module, path, agent or run) and it
+ends with the run or the session. Grants are listed with Revoke, every use is recorded on the
+change it merged, and proof 2 counts questions asked and grants applied separately. Building
+waits for his approval of the plan in `docs/plans/standing-grants.md`. Using his past answers as
+examples for the open model is later, with its own bench arm.
+
 ## 2026-10-29 — Aggregate counts on demand and measured frame titles
 
 The maintainer approved both fixes on October 28 at 23:52 ART (October 29 UTC).

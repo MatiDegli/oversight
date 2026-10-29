@@ -60,6 +60,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 13 | Pinned examples and graph lenses | Queued — no pins or lens control on main `535e6f6` | Yes |
 | 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
 | 18 | Remaining packages 11–14 | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
+| — | [Standing grants](#standing-grants) | Plan proposed 2026-10-29 in [standing-grants.md](plans/standing-grants.md); position awaits the maintainer | Yes — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route |
 
 ### Only if time remains
 
@@ -458,6 +459,19 @@ Package 14 is person-to-agent messages, pause/resume and replay timeline. Messag
 reserved and still 501 (`backend/src/oversight/api/commands.py:51`); playback already consumes ordered
 events. Reuse those interfaces/local controls without claiming messaging or seeking already works.
 Earlier-today history belongs to item 8; usage views belong to item 10.
+
+### Standing grants
+
+Added by the maintainer on 2026-10-29. Oversight remembers what the person authorized, so it does
+not ask again for the same thing. Rules pass or wait with evidence, Muse Spark Open's decision can
+only add a wait, and the person's grants can only remove a wait the person could accept. A grant
+is made only from the person's answer to an inbox entry, with a narrow scope that expires with the
+run; it waives possible callers not followed or a protected path, never tests, conflicts, test
+integrity, cross-review or a decision question. Grants are listed with Revoke, recorded on every
+change they merge, and counted apart from questions in proof 2. Plan, contract proposal and order:
+[standing-grants.md](plans/standing-grants.md). Proposed pitch line, for PRODUCT.md and the video
+once approved: "Rules check. The open model can only stop. Only you can let go, and Oversight
+remembers what you let go."
 
 ### Shipped editor language highlighting
 
