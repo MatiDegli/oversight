@@ -29,12 +29,21 @@ from oversight_contracts.events import AgentStatus, ChangeResolved
 pytestmark = pytest.mark.anyio
 
 
-def observe_admission(s: LiveServer, monkeypatch: pytest.MonkeyPatch) -> asyncio.Event:
-    admitted = asyncio.Event()
+class AdmissionSignal(asyncio.Event):
+    error: Exception | None = None
+
+
+def observe_admission(s: LiveServer, monkeypatch: pytest.MonkeyPatch) -> AdmissionSignal:
+    admitted = AdmissionSignal()
     check = s.live._check  # pyright: ignore[reportPrivateUsage]
 
     def observed(*args, **kwargs):
-        result = check(*args, **kwargs)
+        try:
+            result = check(*args, **kwargs)
+        except Exception as error:
+            admitted.error = error
+            admitted.set()
+            raise
         admitted.set()
         return result
 
@@ -49,6 +58,8 @@ async def wait_for_signal(signal: asyncio.Event, description: str) -> None:
             await signal.wait()
     except TimeoutError:
         pytest.fail(f"Timed out after 30 s waiting for {description}")
+    if isinstance(signal, AdmissionSignal) and signal.error is not None:
+        raise signal.error
 
 
 @asynccontextmanager
@@ -62,6 +73,23 @@ async def pending_start(
         # Also join after a failed handshake/assertion, before releasing test-owned gates.
         pending.cancel()
         await asyncio.gather(pending, return_exceptions=True)
+
+
+async def test_admission_failure_surfaces_its_original_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        failure = ApiError("wrong_state", "admission failed before reserving the slot")
+
+        def broken(*args, **kwargs):
+            raise failure
+
+        monkeypatch.setattr(s.live, "_check", broken)
+        admitted = observe_admission(s, monkeypatch)
+        with pytest.raises(ApiError, match="admission failed before reserving the slot") as caught:
+            async with pending_start(s, StartAgent(task="t")), asyncio.timeout(1):
+                await wait_for_signal(admitted, "admission")
+        assert caught.value is failure
 
 
 @pytest.mark.parametrize(

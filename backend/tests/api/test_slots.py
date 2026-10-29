@@ -354,7 +354,7 @@ async def test_an_omitted_slot_with_both_braked_is_refused_with_the_brake(tmp_pa
             {"agent_model_b": "fake", "fake_script_b": FAKE_SCRIPT_B},
             {"slot": "A", "model": "fake"},
             422,
-            "slot A has no fake script",
+            "slot A has no script for fake",
             [],
         ),
         (
@@ -471,3 +471,12 @@ async def test_fake_a_alone_has_no_slot_b(tmp_path: Path) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         assert error_code(await start(s, slot="B")) == (422, "invalid_request")
         assert (await start(s)).json()["slot"] == "A"
+
+
+async def test_fake_refusal_names_the_requested_profile(tmp_path: Path) -> None:
+    settings = live_settings(tmp_path, agent_model_c="fake-b", fake_script_c=FAKE_SCRIPT_B)
+    async with asyncio.timeout(DEADLINE_S), live_server(settings) as s:
+        refused = await start(s, slot="A", model="fake-b")
+        assert error_code(refused) == (422, "invalid_request")
+        assert refused.json()["error"]["message"] == "slot A has no script for fake-b"
+        assert (await start(s, slot="A", model="fake")).status_code == 201

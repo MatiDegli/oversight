@@ -229,7 +229,12 @@ class ReviewCards:
                 raise ValueError("review card candidate is no longer current")
             # Re-publishing measurements must not reset selection, calls or later producer data.
             if job.latest is not None:
-                if job.status == "failed" and job.facts is not None:
+                excluded = {"review_cards", "problems", "summary"}
+                if job.facts is None or payload.model_dump(
+                    exclude=excluded
+                ) != job.facts.model_dump(exclude=excluded):
+                    raise ValueError("republished measurements differ from committed facts")
+                if job.status == "failed":
                     job.status = (
                         "finished"
                         if job.consumed == len(job.capture.selected.samples)
@@ -241,6 +246,7 @@ class ReviewCards:
                         job.status = "failed"
                         raise
                 return job.latest
+            job.status = "pending"
             facts = payload.model_copy(
                 deep=True,
                 update={
@@ -248,7 +254,11 @@ class ReviewCards:
                     "problems": [*payload.problems, *self.diagnostics(job)],
                 },
             )
-            receipt = await self._emit(job, facts)
+            try:
+                receipt = await self._emit(job, facts)
+            except BaseException:
+                job.status = "failed"
+                raise
             job.evidence = receipt
             job.deadline = asyncio.get_running_loop().time() + self.limits.total_s
             job.task = asyncio.create_task(
