@@ -40,6 +40,7 @@ from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._mode import ModeController
 from oversight.changes._resolution_validation import validate_resolution_intent
+from oversight.changes._review_cards import DifferenceDecisions, ReviewCardLimits, ReviewCards
 from oversight.changes._review_port import ReviewCapture, ReviewPort
 from oversight.changes._state import (
     APPROVABLE,
@@ -69,7 +70,7 @@ from oversight_contracts.commands import FileContent, FileSaved, SetMergeMode
 from oversight_contracts.common import AgentId, ChangeId
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
-from oversight_contracts.review import FinishDeclaration
+from oversight_contracts.review import ChangeTarget, FinishDeclaration
 
 
 class ChangeManager:
@@ -87,14 +88,21 @@ class ChangeManager:
         review: ReviewPort | None = None,
         behavior_diff: bool = False,
         measured_cone: bool = False,
+        difference_decisions: DifferenceDecisions | None = None,
+        review_card_limits: ReviewCardLimits | None = None,
+        run_id: str = "",
         monotonic: Callable[[], float] = time.monotonic,
         sleep_until: Callable[[float], Awaitable[None]] | None = None,
     ) -> None:
-        async def confirmed(payload: EventPayload) -> object:
+        async def committed(payload: EventPayload) -> object:
             receipt = await publish(payload)
             if isinstance(receipt, StoredEvent):
                 self.rules_received(receipt)
             return receipt
+
+        async def confirmed(payload: EventPayload) -> object:
+            cards = self._ctx.cards
+            return await cards.publish(payload) if cards is not None else await committed(payload)
 
         self._ctx = ChangeContext(
             workspace,
@@ -119,6 +127,16 @@ class ChangeManager:
             monotonic,
             sleep_until or (lambda deadline: asyncio.sleep(max(0, deadline - monotonic()))),
         )
+        if difference_decisions is not None:
+            if not run_id:
+                raise ValueError("review cards require the current run id")
+            self._ctx.cards = ReviewCards(
+                self._ctx,
+                run_id,
+                difference_decisions,
+                review_card_limits or ReviewCardLimits(),
+                committed,
+            )
 
     def rules_received(self, receipt: StoredEvent, *, generation: int | None = None) -> None:
         """Port for committed external facts, reviews and combined suite receipts."""
@@ -264,6 +282,7 @@ class ChangeManager:
                 f"{change_id} is {rec.state}; {verb} needs {' or '.join(sorted(allowed))}"
             )
         self._ctx.assessment.invalidate(rec)
+        rec.invalidate_cards()
         if person:
             rec.person_intervened()
         rec.fallback, rec.state = rec.state, "deciding"
@@ -465,7 +484,18 @@ class ChangeManager:
         events, then send one `error` per change naming each event still unsent. If the store
         refuses that `error` too, one log line per change names what was lost. Cleanup is left
         to the next start's `reset`."""
+        await self.close_review_cards()
         return await delivery.aclose(self._ctx)
+
+    async def close_review_cards(self) -> None:
+        if self._ctx.cards is not None:
+            await self._ctx.cards.close()
+
+    async def update_facts(self, target: ChangeTarget, updates: dict[str, object]) -> StoredEvent:
+        """Compose producer updates onto the latest captured facts without losing other fields."""
+        if self._ctx.cards is None:
+            raise WrongState("Review card facts composition is unavailable")
+        return await self._ctx.cards.update(target, updates)
 
     async def _request_changes(self, rec: ChangeRecord, comment: str) -> Revision | None:
         return await revision.request_changes(self._ctx, rec, comment)

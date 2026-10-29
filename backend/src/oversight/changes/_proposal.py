@@ -112,6 +112,7 @@ async def file_edited(ctx: ChangeContext, agent_id: AgentId, path: str) -> bool:
     try:
         if rec is None or rec.state != "working":
             raise WrongState(f"{agent_id} has no change in progress")
+        rec.invalidate_cards()
         async with ctx.workspace.locks(agent_id=agent_id):
             for earlier in sorted(rec.unpublished - {path}):
                 try:
@@ -361,6 +362,8 @@ async def record_probe_facts(
 
 
 async def publish_facts(ctx: ChangeContext, evidence: FactsEvidence) -> None:
+    if ctx.cards is not None and (ctx.behavior_diff or ctx.measured_cone):
+        ctx.cards.prepare(ctx.state.changes[evidence.target.change_id], evidence)
     await ctx.publish(build_change_facts(evidence))
     ctx.assessment.facts_ready(ctx.state.changes[evidence.target.change_id], evidence)
 
@@ -370,6 +373,7 @@ async def record_proposal(ctx: ChangeContext, rec: ChangeRecord, proposal: Chang
     mode = ctx.mode.snapshot()
     armed = not ctx.mode.authority_suspended()
     ctx.assessment.invalidate(rec)
+    rec.invalidate_cards()
     await ctx.publish(proposal)
     rec.revision, rec.head_commit = proposal.revision, proposal.head_commit
     rec.proposed_now, rec.summary = True, proposal.summary

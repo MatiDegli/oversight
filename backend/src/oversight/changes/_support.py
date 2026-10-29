@@ -29,6 +29,7 @@ from oversight_contracts.policy import ChangeAssessment
 if TYPE_CHECKING:
     from oversight.changes._assessment import RulesEvidence, RulesScheduler
     from oversight.changes._policy import PolicyInputs
+    from oversight.changes._review_cards import ReviewCards
 
 _log = logging.getLogger("oversight.changes._manager")
 
@@ -74,6 +75,7 @@ class ChangeContext:
     mode: ModeController
     behavior_diff: bool = False
     measured_cone: bool = False
+    cards: "ReviewCards | None" = None
     assessment: "RulesScheduler" = field(init=False)
 
     def date(self) -> str:

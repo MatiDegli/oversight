@@ -154,6 +154,8 @@ class ChangeRecord:
     review_ready: bool = False
     """The author run ended ready_for_review; a request clears it before resumption."""
     review_task: asyncio.Task[Any] | None = None
+    card_generation: int = 0
+    card_task: asyncio.Task[None] | None = None
     review_capture: ReviewCapture | None = None
     review_reserved: bool = False
     review_consumed: bool = False
@@ -165,8 +167,14 @@ class ChangeRecord:
     def person_intervened(self) -> None:
         """Admission is synchronous; an identical or subsequently failed save still counts."""
         self.person_acted = True
+        self.invalidate_cards()
         if self.review_task is not None:
             self.review_task.cancel()
+
+    def invalidate_cards(self) -> None:
+        self.card_generation += 1
+        if self.card_task is not None:
+            self.card_task.cancel()
 
     @property
     def agent_id(self) -> AgentId:

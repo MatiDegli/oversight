@@ -9,6 +9,7 @@ from oversight.changes._behavior_inputs import BehaviorInput, BehaviorInputs, be
 from oversight.changes._manager import ChangeManager
 from oversight.changes._mode import ModeController
 from oversight.changes._policy import PolicyInputs, SpendSnapshot
+from oversight.changes._review_cards import ReviewCardLimits
 from oversight.changes._review_port import ReviewCapture, ReviewPort
 from oversight.changes._shortcut_detector import (
     DetectionResult,
@@ -31,6 +32,7 @@ __all__ = [
     "ModeController",
     "PolicyInputs",
     "ReviewCapture",
+    "ReviewCardLimits",
     "ReviewPort",
     "Revision",
     "RulesEvidence",
