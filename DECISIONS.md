@@ -1453,3 +1453,24 @@ payload and fixture still validates and every TypeScript consumer of the enum is
 the compiler forces the UI to handle it, as with a new event type. Strict models are unchanged,
 and removing or renaming a value stays 2.0. Earlier notes that call this request pending are
 superseded by this entry.
+## 2026-10-29 — Repository memory is a candidate: only what search cannot find
+
+The maintainer proposed what Oversight should remember about a repository, recorded as a candidate
+and not queued; nothing is built before the freeze (docs/additions.md, "Repository memory"). Search
+finds what code says, never the decisions, invariants and reasons that are not written down, and it
+neither enforces a rule nor notices a stale one. So the memory holds only that, each kind in the
+mechanism that fits it: executable pins, text pins anchored to nodes, the repository's own AGENTS.md
+and skills, and standing grants. Facts from running something wait for a later version, with command
+output as evidence. Text pins load deterministically; Muse Spark Open can only stop or flag; only
+the person creates or confirms a pin. Text pins are built only if a measured Boltons trial after
+the freeze shows fewer rule contradictions at equal or lower cost.
+
+## 2026-10-29 — Item 13's pin record carries a kind and a node anchor
+
+Checking the reserved shape showed that `ExamplePin` is a confirmation stamp inside a task example,
+so it cannot hold a text rule without faking an example's inputs and expected result. The
+maintainer decided that item 13's pin record is born with `kind`, only `example` for now, and a node
+anchor, so that a later text rule is one new kind rather than a second pin family; `ExamplePin`
+stays as it is. Because a node anchor breaks on a rename, a pin whose anchor no longer exists shows
+as orphaned, in the Pinned lens and as an inbox entry, and never vanishes silently. A new enum value
+is not a minor change under proposal section 4.9 today; the request to make it one is his to decide.
