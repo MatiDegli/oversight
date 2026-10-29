@@ -24,6 +24,7 @@ const apiPaths = [
   "/changes",
   "/events",
   "/files",
+  "/grants",
   "/graph",
   "/health",
   "/impact",
