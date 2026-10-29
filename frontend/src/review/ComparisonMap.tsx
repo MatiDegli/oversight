@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import type { ChangeFacts } from "@contracts";
 import type { ChangeState, State } from "../state";
-import { selectFunctionComparisons, selectUnchanged } from "./inboxSelectors";
+import { selectFunctionComparisons, selectComparisonSummary } from "./inboxSelectors";
 import "./comparison.css";
 
 export function ComparisonMap({
@@ -13,19 +13,21 @@ export function ComparisonMap({
   change: ChangeState;
   facts?: ChangeFacts;
 }) {
-  const inputs = selectUnchanged(facts);
+  const summary = selectComparisonSummary(change, facts);
   const map = selectFunctionComparisons(state, change, facts);
   return (
     <section className="unchanged-facts" aria-label="Compared functions and callers">
       <h3>
-        <Check size={16} aria-hidden="true" />
-        Everything else is the same
+        {summary.noOtherDifference
+          ? "No other difference in what was compared"
+          : "What was compared"}
+        {" · "}
+        {summary.functionCount} {summary.functionCount === 1 ? "function" : "functions"},{" "}
+        {summary.inputCount} {summary.inputCount === 1 ? "input" : "inputs"}
       </h3>
       <p className="decision-muted">
-        In the captured comparison: {inputs.unchanged} of {inputs.compared} inputs returned the same
-        result. {map.comparedFunctions} {map.comparedFunctions === 1 ? "function" : "functions"}{" "}
-        compared; {map.unchangedFunctions} unchanged across all compared inputs.
-        {inputs.incomplete && " Comparison coverage is incomplete."}
+        The squares distinguish changed, unchanged and unverified functions.
+        {summary.incomplete && " Comparison coverage is incomplete."}
       </p>
       <div className="comparison-modules">
         {map.modules.map((module) => (
@@ -38,15 +40,25 @@ export function ComparisonMap({
               {module.functions.map((f) => (
                 <span
                   key={f.node.id}
-                  className={f.changed ? "function-changed" : f.unchanged ? "function-same" : ""}
+                  className={
+                    !f.compared
+                      ? ""
+                      : f.changed
+                        ? "function-changed"
+                        : f.unchanged
+                          ? "function-same"
+                          : ""
+                  }
                   title={`${f.node.qualname} · ${f.compared ? `${String(f.compared)} inputs compared` : "not compared"}`}
                   aria-label={`${f.node.qualname}: ${f.changed ? "changed; " : ""}${f.unchanged ? "unchanged" : `${String(f.compared)} inputs compared`}${f.questions.length ? `; questions ${f.questions.join(", ")}` : ""}`}
                 >
-                  {f.questions.length ? (
+                  {!f.compared ? (
+                    "?"
+                  ) : f.questions.length ? (
                     f.questions.join(",")
                   ) : f.unchanged ? (
                     <Check size={12} aria-hidden="true" />
-                  ) : f.changed ? (
+                  ) : f.changed || f.differing ? (
                     "Δ"
                   ) : (
                     "?"

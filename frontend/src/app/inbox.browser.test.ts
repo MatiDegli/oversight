@@ -94,6 +94,12 @@ it.each(["dark", "day"])(
       });
       await expect(page.getByRole("heading", { name: "Merged by rules" })).toBeVisible();
       await expect(page.getByText(/Under grant/)).toContainText("grant-pricing");
+      await expect(
+        page.getByRole("heading", {
+          name: "What was compared · 1 function, 24 inputs",
+          exact: true,
+        }),
+      ).toBeVisible();
       await capture("03-merged-grant");
       await page.getByRole("button", { name: /Decisions: 3/ }).click();
       await page
@@ -111,6 +117,42 @@ it.each(["dark", "day"])(
       await expect(
         card.getByRole("region", { name: "Compared functions and callers" }),
       ).toBeVisible();
+      const comparison = card.getByRole("region", { name: "Compared functions and callers" });
+      await expect(
+        comparison.getByRole("heading", {
+          name: "No other difference in what was compared · 1 function, 24 inputs",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(comparison.locator("h3 svg")).toHaveCount(0);
+      const unmeasured = comparison
+        .locator(".function-squares > span")
+        .filter({ hasText: /^\?$/ })
+        .first();
+      await expect(unmeasured).toHaveAttribute("class", "");
+      const colors = await unmeasured.evaluate((element) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--muted)";
+        probe.style.borderColor = "var(--control-edge)";
+        element.parentElement?.append(probe);
+        const actual = getComputedStyle(element),
+          expected = getComputedStyle(probe);
+        const square = {
+          actual: [actual.color, actual.borderTopColor],
+          expected: [expected.color, expected.borderTopColor],
+        };
+        probe.style.color = "var(--text)";
+        const heading = element.closest("section")?.querySelector("h3");
+        const result = {
+          square,
+          heading: heading ? getComputedStyle(heading).color : null,
+          text: getComputedStyle(probe).color,
+        };
+        probe.remove();
+        return result;
+      });
+      expect(colors.square.actual).toEqual(colors.square.expected);
+      expect(colors.heading).toBe(colors.text);
       await expect(card.getByLabel(/Inventory.reserve: changed/)).toHaveAttribute(
         "aria-label",
         /questions 1, 2/,

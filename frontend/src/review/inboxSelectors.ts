@@ -109,6 +109,7 @@ export function selectFunctionComparisons(state: State, change: ChangeState, fac
         node,
         changed: changed.has(node.id),
         compared: b?.compared_count ?? 0,
+        differing: b?.differing_count ?? 0,
         unchanged: !!b?.compared_count && !b.differing_count && complete,
         questions: (facts?.review_cards ?? []).flatMap((q, i) =>
           q.node_id === node.id ? [i + 1] : [],
@@ -136,5 +137,41 @@ export function selectFunctionComparisons(state: State, change: ChangeState, fac
     callers,
     comparedFunctions: functions.filter((f) => f.compared > 0).length,
     unchangedFunctions: functions.filter((f) => f.unchanged).length,
+  };
+}
+
+/** A bounded claim: every captured difference must belong to a changed, questioned function. */
+export function selectComparisonSummary(change: ChangeState, facts?: ChangeFacts) {
+  const observations = [
+    ...new Map(
+      [...(facts?.behavior_diff ?? []), ...(facts?.measured_cone ?? [])].map((b) => [b.node_id, b]),
+    ).values(),
+  ];
+  const compared = observations.filter((b) => b.compared_count > 0);
+  const changed = new Set([
+    ...change.graph.nodes_modified,
+    ...change.graph.nodes_added.map((node) => node.id),
+    ...change.graph.nodes_removed,
+  ]);
+  const questioned = new Set(facts?.review_cards?.map((q) => q.node_id));
+  const incomplete =
+    !facts?.complete ||
+    !compared.length ||
+    observations.some(
+      (b) =>
+        !b.compared_count ||
+        b.not_probed ||
+        b.rows.some((row) => row.unstable) ||
+        ("complete" in b && !b.complete),
+    );
+  return {
+    functionCount: compared.length,
+    inputCount: compared.reduce((n, b) => n + b.compared_count, 0),
+    incomplete,
+    noOtherDifference:
+      !incomplete &&
+      observations.every(
+        (b) => !b.differing_count || (changed.has(b.node_id) && questioned.has(b.node_id)),
+      ),
   };
 }
