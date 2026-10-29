@@ -15,6 +15,7 @@ import type {
   UsageTick,
 } from "@contracts";
 
+import type { DecisionEvent } from "./decisionProjection";
 import type { NeedsYou } from "./needsYou";
 
 /** Retained envelope order; older in-memory fixtures can omit the timestamp. */
@@ -80,6 +81,8 @@ export interface State {
   errorEvents: EventPosition[];
   testExecutions: Record<number, SuiteExecution>;
   changeFacts: Record<string, ChangeFacts[]>;
+  /** Run-local inbox evidence; retained even when the current proposal is replaced. */
+  decisionEvents: DecisionEvent[];
 }
 
 export function createInitialState(): State {
@@ -103,6 +106,7 @@ export function createInitialState(): State {
     errorEvents: [],
     testExecutions: {},
     changeFacts: {},
+    decisionEvents: [],
   };
 }
 

@@ -86,13 +86,13 @@ describe("live transport", () => {
     source().open();
     expect(onOpen).toHaveBeenCalledOnce();
   });
-  it("consumes reserved events in live streams without changing product state", async () => {
+  it("retains reserved inbox evidence in live streams without enabling commands", async () => {
     const { transport, store, source, onError } = setup();
     await transport.ready;
     for (const event of log) source().emit(event);
     const before = store.getState().state;
-    // Cross-review, review facts and test executions are wired; only reserved events
-    // must leave product state untouched. The next test covers the full mixed stream.
+    // Reserved inbox evidence keeps its envelope without enabling commands.
+    // The next test covers the full mixed stream.
     const unwired = [
       ...reserved,
       ...reservedA.filter(
@@ -121,6 +121,16 @@ describe("live transport", () => {
       ...before,
       lastSeq: before.lastSeq + unwired.length,
       clock: reservedA.at(-1)?.ts,
+      decisionEvents: [
+        ...before.decisionEvents,
+        ...unwired.flatMap((example, index) =>
+          ["change.assessed", "plan.updated", "revert.resolved", "lead.status"].includes(
+            example.type,
+          )
+            ? [{ ...example, seq: before.lastSeq + index + 1 }]
+            : [],
+        ),
+      ],
     });
   });
 
@@ -154,6 +164,18 @@ describe("live transport", () => {
       },
       testExecutions: { [suite.seq]: suite.payload },
       changeFacts: { [facts.payload.change_id]: [facts.payload] },
+      decisionEvents: [
+        ...before.decisionEvents,
+        ...delivered.filter((event) =>
+          [
+            "change.assessed",
+            "plan.updated",
+            "revert.resolved",
+            "lead.status",
+            "change.facts_recorded",
+          ].includes(event.type),
+        ),
+      ],
     });
   });
 
