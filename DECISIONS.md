@@ -1224,3 +1224,20 @@ evidence, first sequence and timestamp, so age and ordering do not restart. Comp
 retain the agent id, slot, end state, recorded reason and echo/end sequences in echo order.
 Events never open a panel or move focus. The replay fixture is
 [handwritten-inbox-delegation.jsonl](fixtures/events/handwritten-inbox-delegation.jsonl).
+
+## Phone practice composition and collapsed evidence (2026-10-28)
+
+The maintainer approved the phone sketch for the submission practice and then requested a
+collapsed diff. Below 1280px this bounded, browser-only exercise departs from the IDE’s
+widen-window notice and 560px graph minimum: a folded graph stays above scrolling evidence,
+with equal neutral Approve/Reject choices below. The full IDE and desktop practice stay unchanged.
+Next carries prose numerals, and compact graph labels retain the approved 14–16px scale.
+This approved brief takes precedence over Impeccable’s generic typography and composition rules.
+
+Start each decision with the exact change.proposed summary attributed to its agent: it is the
+agent’s claim, not a server verdict. The lines chip opens all source evidence, including tests
+and the called helper; Recorded task stays independent. The visitor can decide without opening
+code, keeping the first phone view focused while preserving inspection on demand. The server’s
+summary omits author declarations deliberately; these attributed recorded words must not be
+presented as Oversight’s findings. No backend command runs and no recorded decision is exposed
+before both answers. DESIGN.md’s Phone width section records this exception.

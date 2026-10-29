@@ -159,7 +159,7 @@ test("actual static two-change practice: local decisions, frozen shell and hones
 });
 
 test.describe("phone practice", () => {
-  test.use({ hasTouch: true, isMobile: true });
+  test.use({ hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   for (const [width, height] of [
     [390, 844],
     [430, 932],
@@ -167,6 +167,8 @@ test.describe("phone practice", () => {
     test(`completes the real practice at ${String(width)}x${String(height)}`, async ({ page }) => {
       await page.setViewportSize({ width, height });
       const requests: string[] = [];
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
       page.on("request", (request) => {
         if (/\/(agents|changes|events|files|graph|impact|tree)(\/|\?|$)/.test(request.url()))
           requests.push(request.url());
@@ -179,40 +181,10 @@ test.describe("phone practice", () => {
       const graph = page.locator('[aria-label="Repository graph"]');
       const instance = await graph.evaluateHandle((host: GraphProbeHost) => host.oversightGraph);
       await page.getByRole("button", { name: "Try two-change practice", exact: true }).tap();
-      await expect(page.locator(".narrow-notice")).toBeHidden();
       await phoneStage(page);
-      if (width === 390) await phoneCapture(page, "introduction-390");
-      await practice(page).getByRole("button", { name: "Start practice" }).tap();
-      await phoneStage(page);
-      const approve = practice(page).getByRole("button", { name: "Approve", exact: true });
-      await approve.focus();
-      for (const key of ["Control+Enter", "Enter", "Space"]) await page.keyboard.press(key);
-      await expect(practice(page).getByText(/Practice answer saved/)).toHaveCount(0);
-      await phoneFrame(page, "shop.inventory:Inventory.reserve");
-      if (width === 390) await phoneCapture(page, "decision-390");
-      await approve.tap();
-      await practice(page).getByRole("button", { name: "Next", exact: true }).tap();
-      await phoneStage(page);
-      await phoneFrame(page, "shop.pricing:compute_price");
-      await practice(page).getByRole("button", { name: "Reject", exact: true }).tap();
-      await practice(page).getByRole("button", { name: "Show findings" }).tap();
-      await expect(practice(page)).toContainText("Matches with recorded decisions: 1/2.");
-      await phoneStage(page);
-      const cone = page.getByRole("region", { name: "Possibly affected", exact: true });
-      await cone.scrollIntoViewIfNeeded();
-      await expect(cone).toBeVisible();
-      await expect(cone).toContainText("Distance 1 · 7 functions");
-      await provenance(page);
-      expect(
-        await instance.evaluate(
-          (original) =>
-            original ===
-            document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-              ?.oversightGraph,
-        ),
-      ).toBe(true);
-      await expect(graph).toHaveCount(1);
-      if (width === 390) await phoneCapture(page, "reveal-390");
+      await phoneCapture(page, width, "introduction");
+      await firstPhoneDecision(page, width);
+      await finishPhoneDecisions(page, width);
       await page.setViewportSize({ width: 1920, height: 1080 });
       await expect(page.locator(".focus-panel")).toHaveCSS("width", "880px");
       expect(
@@ -223,81 +195,180 @@ test.describe("phone practice", () => {
               ?.oversightGraph,
         ),
       ).toBe(true);
-      await expect(page.locator(".narrow-notice")).toBeHidden();
+      await expect(graph).toBeVisible();
       await provenance(page);
-      if (width === 390) await phoneCapture(page, "reveal-1920");
       await page.setViewportSize({ width, height });
-      await practice(page).getByRole("button", { name: "Return to ordinary replay" }).tap();
+      await expect(page.locator(".phone-practice")).toBeVisible();
+      await practice(page).getByRole("button", { name: "Try again" }).tap();
+      await expect(practice(page).getByRole("button", { name: "Start practice" })).toBeVisible();
+      await practice(page).getByRole("button", { name: "Leave practice" }).tap();
       await expect(page.locator(".narrow-notice")).toBeVisible();
       expect(requests).toEqual([]);
+      expect(errors).toEqual([]);
     });
   }
 });
 
 async function phoneStage(page: Page) {
-  await provenance(page);
-  await expect(page.getByLabel("Status line")).toBeInViewport({ ratio: 1 });
-  expect(
-    await page.evaluate(() => [
-      document.documentElement.scrollWidth,
-      document.documentElement.clientWidth,
-    ]),
-  ).toEqual([page.viewportSize()?.width, page.viewportSize()?.width]);
-  const targets = await page.getByRole("button").evaluateAll((buttons) =>
-    buttons.map((button) => ({
-      label: button.getAttribute("aria-label") || button.textContent,
-      width: button.getBoundingClientRect().width,
-      height: button.getBoundingClientRect().height,
-    })),
+  await expect(page.locator(".pp-status")).toHaveText(
+    "Replay of a real recorded run · Oct 27, 2026",
   );
-  for (const target of targets) {
-    expect(target.height, target.label || "Touch target").toBeGreaterThanOrEqual(44);
-    expect(target.width, target.label || "Touch target").toBeGreaterThanOrEqual(44);
-  }
+  await expect(page.locator(".pp-status")).toBeInViewport({ ratio: 1 });
+  await expect(page.locator(".narrow-notice")).toBeHidden();
   await expect(page.getByRole("tab")).toHaveCount(0);
-  await expect(practice(page)).toContainText("Read-only inspection tabs are omitted");
-  expect((await practice(page).boundingBox())?.x).toBe(0);
-  expect(await practice(page).evaluate((panel) => getComputedStyle(panel).paddingLeft)).toBe(
-    "16px",
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    page.viewportSize()?.width,
   );
+  expect((await page.locator(".pp-graph").boundingBox())?.height).toBeLessThanOrEqual(201);
+  await expect(page.locator(".pp-graph")).toBeInViewport({ ratio: 1 });
+  const sizes = await practice(page)
+    .getByRole("button")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => ({
+        text: button.textContent,
+        width: button.getBoundingClientRect().width,
+        height: button.getBoundingClientRect().height,
+      })),
+    );
+  for (const size of sizes) {
+    expect(size.height, size.text).toBeGreaterThanOrEqual(44);
+    expect(size.width, size.text).toBeGreaterThanOrEqual(44);
+  }
 }
-async function phoneFrame(page: Page, seed: string) {
+async function phoneDecision(page: Page, index: number, summary: string) {
+  await phoneStage(page);
+  await expect(practice(page)).toContainText(`Decision ${String(index)} of 2`);
+  await expect(practice(page).getByRole("region", { name: summary })).toBeVisible();
+  await expect(practice(page).getByRole("button", { name: /Show diff/ })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await expect(practice(page).locator(".pp-code")).toHaveCount(0);
+  await expect(practice(page).getByRole("button", { name: "Next", exact: true })).toHaveCount(0);
+  await expect(practice(page).getByRole("button", { name: "Show findings" })).toHaveCount(0);
+  const pair = practice(page).locator(".pp-choice");
+  const styles = await pair.evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const s = getComputedStyle(button);
+      return [
+        s.backgroundColor,
+        s.color,
+        s.borderColor,
+        s.font,
+        button.getBoundingClientRect().width,
+        button.getBoundingClientRect().height,
+      ];
+    }),
+  );
+  expect(styles[0]).toEqual(styles[1]);
+}
+async function checkDiff(page: Page, width: number, state: string) {
+  const panel = practice(page);
+  await expect(panel.getByText("Tests added", { exact: true })).toHaveCount(0);
+  await panel.getByRole("button", { name: /Show diff/ }).tap();
+  await expect(panel.getByRole("button", { name: /Hide diff/ })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(panel.locator(".pp-file").first()).toBeVisible();
+  await phoneCapture(page, width, `${state}-diff-open`);
+  await panel.locator("summary").filter({ hasText: "Tests added" }).tap();
+  const helper = panel.locator("summary").filter({ hasText: "Called helper" });
+  if (await helper.count()) await helper.tap();
   await expect
-    .poll(() =>
-      page.locator('[aria-label="Repository graph"]').evaluate((host: GraphProbeHost, id) => {
-        const graph = host.oversightGraph;
-        const node = graph
-          ?.nodeCenters()
-          .find((candidate) => candidate.id === graph.representative(id));
-        return (
-          !!node &&
-          !graph?.animating() &&
-          node.x > 0 &&
-          node.x < host.clientWidth &&
-          node.y > 0 &&
-          node.y < host.clientHeight
-        );
-      }, seed),
-    )
-    .toBe(true);
-  const panel = await practice(page).boundingBox();
-  const graph = await page.locator('[aria-label="Repository graph"]').boundingBox();
-  expect(graph?.height).toBe(360);
-  expect(graph?.y).toBeGreaterThanOrEqual((panel?.y ?? 0) + (panel?.height ?? 0));
+    .poll(() => panel.locator(".pp-code-line[data-continuation]").count())
+    .toBeGreaterThan(0);
+  expect(
+    await panel
+      .locator(".pp-source")
+      .evaluateAll((rows) =>
+        rows.every(
+          (row) =>
+            [...row.querySelectorAll("code")]
+              .map((code) =>
+                code.textContent === " " && row.getAttribute("data-source") === ""
+                  ? ""
+                  : code.textContent,
+              )
+              .join("") === row.getAttribute("data-source"),
+        ),
+      ),
+  ).toBe(true);
+  expect(
+    await panel
+      .locator(".pp-code-line code")
+      .evaluateAll((codes) =>
+        codes.every(
+          (code) =>
+            getComputedStyle(code).fontSize === "15px" && code.scrollWidth <= code.clientWidth,
+        ),
+      ),
+  ).toBe(true);
+  await expect(page.locator(".pp-graph")).toBeInViewport({ ratio: 1 });
+  await panel.getByRole("button", { name: /Hide diff/ }).tap();
+  await expect(panel.locator(".pp-code")).toHaveCount(0);
 }
-async function phoneCapture(page: Page, name: string) {
-  if (name === "decision-390")
-    await practice(page)
-      .getByRole("button", { name: "Approve", exact: true })
-      .scrollIntoViewIfNeeded();
-  else
-    await page.evaluate(() => {
-      window.scrollTo(0, 0);
+async function phoneCapture(page: Page, width: number, state: string) {
+  if (width !== 390) return;
+  await page.locator(".pp-main").evaluate((main) => {
+    main.scrollTop = 0;
+  });
+  if (state.endsWith("diff-open"))
+    await page.locator(".pp-main").evaluate((main) => {
+      const file = main.querySelector<HTMLElement>(".pp-file");
+      if (file)
+        main.scrollTop += file.getBoundingClientRect().top - main.getBoundingClientRect().top;
     });
-  await page.screenshot({ path: `../.shots/challenge/phone/${name}.png` });
-  if (name === "reveal-390")
-    await page.screenshot({
-      path: "../.shots/challenge/phone/reveal-390-full.png",
-      fullPage: true,
-    });
+  await page.evaluate(() => document.fonts.ready);
+  await page.screenshot({ path: `../.shots/phone-practice/build/${state}-390.png` });
+}
+
+async function firstPhoneDecision(page: Page, width: number) {
+  await practice(page).getByRole("button", { name: "Start practice" }).tap();
+  await phoneDecision(page, 1, "Agent B's summary");
+  await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
+    "New exact call",
+  );
+  await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
+    "0 possibly affected",
+  );
+  await phoneCapture(page, width, "decision-1");
+  await checkDiff(page, width, "decision-1");
+  const approve = practice(page).getByRole("button", { name: "Approve", exact: true });
+  await approve.focus();
+  for (const key of ["Control+Enter", "Enter", "Space"]) await page.keyboard.press(key);
+  await approve.dispatchEvent("click", { detail: 0 });
+  await expect(practice(page).getByRole("button", { name: "Next", exact: true })).toHaveCount(0);
+  await approve.tap();
+  await expect(practice(page).locator(".pp-saved")).toContainText("Approve");
+  await phoneCapture(page, width, "decision-1-answered");
+}
+
+async function finishPhoneDecisions(page: Page, width: number) {
+  await practice(page).getByRole("button", { name: "Next", exact: true }).tap();
+  await phoneDecision(page, 2, "Agent A's summary");
+  await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
+    "7 direct callers",
+  );
+  await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
+    "2 at distance 2",
+  );
+  await phoneCapture(page, width, "decision-2");
+  await checkDiff(page, width, "decision-2");
+  await practice(page).getByRole("button", { name: "Reject", exact: true }).tap();
+  await expect(practice(page).locator(".pp-saved")).toContainText("Reject");
+  await phoneCapture(page, width, "decision-2-answered");
+  await practice(page).getByRole("button", { name: "Show findings" }).tap();
+  await expect(practice(page).getByRole("heading", { name: "Recorded decisions" })).toBeVisible();
+  await expect(practice(page)).toContainText("Same decision");
+  await expect(practice(page)).toContainText("Different decision");
+  await expect(page.getByLabel("Recorded graph after both merges")).toContainText("Both merged");
+  await expect(page.locator(".pp-taxi.is-pending")).toHaveCount(0);
+  await phoneStage(page);
+  await phoneCapture(page, width, "reveal");
+  await practice(page).getByRole("button", { name: "See your result" }).tap();
+  await expect(practice(page)).toContainText("1 of 2 decisions matched");
+  await expect(practice(page)).toContainText("Agreement is not proof");
+  await phoneStage(page);
+  await phoneCapture(page, width, "finish");
 }

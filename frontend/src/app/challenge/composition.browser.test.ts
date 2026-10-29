@@ -91,7 +91,10 @@ it("keeps the same graph and positions through practice entry, resizing and exit
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
     await page.getByRole("button", { name: "Start practice", exact: true }).click();
     await sameGraph();
-    await check(page.locator(".graph-cone")).toBeVisible();
+    await check(page.getByLabel("Decision-time graph", { exact: true })).toBeVisible();
+    await check(graph).toBeHidden();
+    await page.setViewportSize({ width: 1279, height: 844 });
+    await check(page.locator(".phone-practice")).toHaveCSS("width", "430px");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await check(page.locator(".practice-phone")).toHaveCount(0);
     await sameGraph();
@@ -104,3 +107,45 @@ it("keeps the same graph and positions through practice entry, resizing and exit
     await sameGraph();
   });
 }, 30_000);
+
+it("opens source on demand and accepts a closed-diff phone decision", async () => {
+  await visit(0, "/", async (page) => {
+    await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    await page.getByRole("button", { name: "Start practice", exact: true }).click();
+    const toggle = page.getByRole("button", { name: /Show diff/ });
+    await check(toggle).toHaveAttribute("aria-expanded", "false");
+    await check(page.locator(".pp-code")).toHaveCount(0);
+    await page.locator("summary").filter({ hasText: "Recorded task" }).click();
+    await check(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.click();
+    await check(page.getByRole("button", { name: /Hide diff/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await check(page.locator(".pp-code").first()).toBeVisible();
+    await page.getByRole("button", { name: /Hide diff/ }).click();
+    await page.getByRole("button", { name: "Reject", exact: true }).click();
+    await check(page.locator(".pp-saved")).toHaveText("Your choiceReject");
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await check(page.getByRole("button", { name: /Show diff/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await check(page.locator(".pp-code")).toHaveCount(0);
+  });
+});
+
+it.each(["Approve", "Reject"])("accepts %s without ever opening source", async (answer) => {
+  await visit(0, "/", async (page) => {
+    await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    await page.getByRole("button", { name: "Start practice", exact: true }).click();
+    await check(page.getByRole("button", { name: /Show diff/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await check(page.locator(".pp-code")).toHaveCount(0);
+    await page.getByRole("button", { name: answer, exact: true }).click();
+    await check(page.locator(".pp-saved")).toContainText(answer);
+    await check(page.locator(".pp-code")).toHaveCount(0);
+  });
+});

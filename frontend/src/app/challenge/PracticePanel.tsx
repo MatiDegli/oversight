@@ -1,10 +1,13 @@
 import type { Practice } from "./manifest";
+import { usePhonePractice } from "./usePhonePractice";
+import { PhonePractice } from "./PhonePractice";
 
 export type Answer = "Approve" | "Reject";
 export type Attempt = {
   index: number;
   started: boolean;
   revealed: boolean;
+  finished?: boolean;
   answers: Partial<Record<string, Answer>>;
 };
 export const freshAttempt = (): Attempt => ({
@@ -25,7 +28,7 @@ export const score = (practice: Practice, attempt: Attempt) =>
 const control =
   "rounded-control border border-control-edge px-4 py-2 text-sm enabled:hover:bg-raised disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
-interface PanelProps {
+export interface PanelProps {
   practice: Practice;
   attempt: Attempt;
   onAnswer: (answer: Answer) => void;
@@ -33,6 +36,7 @@ interface PanelProps {
   onNext: () => void;
   onReveal: () => void;
   onRestart: () => void;
+  onFinish?: () => void;
   onExit: () => void;
 }
 
@@ -149,6 +153,8 @@ function Decision({ practice, attempt, onAnswer, onNext, onReveal }: PanelProps)
 }
 
 export function PracticePanel(props: PanelProps) {
+  const phone = usePhonePractice(true);
+  if (phone) return <PhonePractice {...props} />;
   const { attempt, onStart, onExit } = props;
   return (
     <section

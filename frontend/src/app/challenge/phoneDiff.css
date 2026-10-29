@@ -1,0 +1,80 @@
+@media (width < 1280px) {
+  .pp-file {
+    margin-top: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    overflow: hidden;
+    background: var(--inset);
+  }
+  .pp-file-heading {
+    min-height: 40px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--divider);
+    font-size: 12px;
+  }
+  .pp-file-heading code {
+    font-family: var(--code-font);
+    overflow-wrap: anywhere;
+  }
+  .pp-file-heading > span {
+    white-space: nowrap;
+  }
+  .pp-disclosure .pp-file {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+  .pp-code {
+    padding-block: 6px;
+    background: var(--inset);
+  }
+  .pp-code-line {
+    display: grid;
+    grid-template-columns: 29px 16px minmax(0, 1fr);
+    min-height: 21px;
+    padding: 0 8px 0 2px;
+    font: 400 15px/21px var(--code-font);
+  }
+  .pp-code-line code {
+    white-space: pre;
+    font: inherit;
+    min-width: 0;
+  }
+  .pp-line-number {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 4px;
+    color: var(--faint);
+    font-size: 12px;
+    user-select: none;
+  }
+  .pp-sign {
+    text-align: center;
+    color: var(--muted);
+  }
+  .pp-code-line.added {
+    background: var(--added-tint);
+  }
+  .pp-code-line.added .pp-sign {
+    color: var(--passed);
+  }
+  .pp-code-line.removed {
+    background: var(--removed-tint);
+  }
+  .pp-code-line.removed .pp-sign {
+    color: var(--failed-text);
+  }
+  .pp-unchanged {
+    padding: 4px;
+    border-block: 1px solid var(--divider);
+    color: var(--faint);
+    text-align: center;
+    font-size: 12px;
+  }
+}

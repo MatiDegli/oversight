@@ -33,11 +33,19 @@ describe("practice manifest", () => {
     "resolution",
     "three",
     "gap",
+    "title",
+    "multiline title",
+    "long title",
+    "padded title",
   ])("rejects %s mismatch", (fault) => {
     const candidate = structuredClone(manifest);
     const source = structuredClone(recording);
     const first = candidate.cases[0];
     if (!first) throw new Error("Missing first case");
+    if (fault === "title") first.title = "";
+    if (fault === "multiline title") first.title = "Invalid\ntitle";
+    if (fault === "long title") first.title = "a".repeat(81);
+    if (fault === "padded title") first.title = " Title ";
     if (fault === "run") source.provenance.run_id = "run-other";
     if (fault === "digest") source.provenance.sha256 = "0".repeat(64);
     if (fault === "duplicate") candidate.cases[1] = first;

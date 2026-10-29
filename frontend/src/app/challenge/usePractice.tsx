@@ -73,6 +73,9 @@ export function usePractice(
         onReveal={() => {
           if (complete(bound, attempt)) setAttempt((current) => ({ ...current, revealed: true }));
         }}
+        onFinish={() => {
+          setAttempt((current) => ({ ...current, finished: true }));
+        }}
         onRestart={() => {
           setAttempt(freshAttempt());
           show(0);
