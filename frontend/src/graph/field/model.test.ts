@@ -200,14 +200,15 @@ describe("the lamps", () => {
     expect(off).toEqual([7, 7, 7, 0]);
     // Dim: the weaker channels fall faster than the strong one, so the lamp leans to deep red.
     const dimRatio = ((dim?.[1] ?? 0) - 7) / ((dim?.[0] ?? 1) - 7);
-    expect(dimRatio).toBeLessThan(92 / 255);
+    // Without the ramp this ratio is (92 - 7) / (255 - 7) = 0.34; with it, well under a quarter.
+    expect(dimRatio).toBeLessThan(0.25);
     expect(dim?.[0]).toBeLessThan(mid?.[0] ?? 0);
     // Whole: brighter and lighter than the agent's color, a fifth of the way to white.
     expect(whole).toEqual([255, 125, 76, 255]);
     // The same ramp in the agent's blue: its strong channel stays, the hot core is lighter.
     const [, blueDim, , blueWhole] = shades(BLUE, [0.05, 0.12, 0.17, 1]);
     expect(blueWhole).toEqual([114, 151, 255, 255]);
-    expect(((blueDim?.[0] ?? 0) - 7) / ((blueDim?.[2] ?? 1) - 7)).toBeLessThan(79 / 255);
+    expect(((blueDim?.[0] ?? 0) - 7) / ((blueDim?.[2] ?? 1) - 7)).toBeLessThan(0.2);
     // On the day ground the hot core goes the other way, toward ink.
     const dayConfig = fieldConfig(themes.day, "watch");
     expect(shades([178, 60, 10], [1], dayConfig)[0]).toEqual([142, 48, 8, 255]);

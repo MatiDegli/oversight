@@ -621,6 +621,45 @@ it("draws the rest ground: gray lines, no colored light, and nothing under an ov
   });
 }, 60_000);
 
+it("draws the lines at the approved sketch's level on the #070707 ground", async () => {
+  await withPage(
+    { scene: "rest", reducedMotion: "reduce", viewport: { width: 1920, height: 1080 } },
+    async (page) => {
+      await settledGraph(page);
+      const png = await page.screenshot({ clip: { x: 60, y: 520, width: 940, height: 420 } });
+      const seen = await page.evaluate(async (base64) => {
+        const bitmap = await createImageBitmap(
+          new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))]),
+        );
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("No 2d context");
+        context.drawImage(bitmap, 0, 0);
+        const data = context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+        const values: number[] = [];
+        for (let at = 0; at < data.length; at += 4)
+          values.push(Math.max(data[at] ?? 0, data[at + 1] ?? 0, data[at + 2] ?? 0));
+        values.sort((a, b) => a - b);
+        const lines = values.filter((value) => value > 12);
+        return {
+          ground: values[Math.floor(values.length / 4)],
+          brightest: values[Math.floor(values.length * 0.99)],
+          median: lines[Math.floor(lines.length / 2)],
+          coverage: lines.length / values.length,
+        };
+      }, png.toString("base64"));
+      // The ground is #070707; the sketch's brightest lines are 25 to 28 on it, its median line about
+      // 23, and its lines cover 6 to 7% of a clear area (it was 11, 9 and 2.7% on black).
+      expect(seen.ground).toBe(7);
+      expect(seen.brightest).toBeGreaterThanOrEqual(22);
+      expect(seen.brightest).toBeLessThanOrEqual(32);
+      expect(seen.median).toBeGreaterThanOrEqual(18);
+      expect(seen.coverage).toBeGreaterThan(0.035);
+      expect(seen.coverage).toBeLessThan(0.09);
+    },
+  );
+}, 60_000);
+
 it("still draws the lines in the day theme, as ink on paper", async () => {
   await withPage({ scene: "rest", reducedMotion: "reduce" }, async (page) => {
     await page.evaluate(() => {
