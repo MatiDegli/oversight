@@ -1292,16 +1292,6 @@ raised is not used by the UI and gives D 4.42:1 / E 4.44:1 with the approved val
 The rendered card/rail/review regression from 0612105 remains. Exact-value tests pin the
 three newly approved text tokens and guard the restored translucent tints and original node fills.
 
-## 2026-10-29 — Small cones require no unobserved possible callers
-
-The maintainer decided that `small_cone` is unknown when a seed or cone entry has callers
-linked only by possible calls, or when that count is unavailable. Unknown never passes rules
-approval; the change waits for the person. The cone follows exact calls only, so an empty cone
-means "not seen", not "safe". A proven failure of the existing exact limits stays fail.
-The count is the same N the review shows as "N possible callers, not followed": distinct
-non-test sources outside the seeds and entries, with a possible call to a target and no exact
-call to any target. Both proposal assessment and the prepared merge candidate measure it.
-
 ## 2026-10-29 — Item 9 questions are only for unasked or untied differences
 
 The maintainer decided on 2026-10-29, as follow-up 3 to item 9 and the decisions inbox. This entry records the
@@ -1330,16 +1320,18 @@ The impact cone follows exact calls only, so an empty or small cone can mean "no
 or "the graph could not tell who calls this". On Boltons most functions have no exact callers, and
 many of them have callers the graph marks as possible. `small_cone` used to pass both cases.
 
-The maintainer decided that the rule answers `unknown` when a changed node or a node in its cone
-has a caller linked only by possible calls, counted exactly as the review's "N possible callers,
-not followed" counts them. `unknown` never counts as passing, so in rules mode the change waits
-for the person, and the inbox entry lists those callers. His Yes is recorded as accepted by him,
-never as asked for, as with D6. A cone that already fails the exact limits stays `fail`. The
-contracts do not change: the recorded observation keeps its five counts. For Boltons d31d821,
-446 of 898 single-function changes and 5 of the 16 drafted proof 2 tasks are planning estimates,
-not reproducible from this repository: the corpus measurement and draft task list are not checked
-in, and the 16 are not `tools/eval/tasks.json`. The tasks are not changed to avoid it, and the run
-reports whatever share results.
+The maintainer decided that the rule answers `unknown` when a changed node or a node in its cone has
+a caller linked only by possible calls, or when that count was not measured. The count is exactly
+the review's "N possible callers, not followed": distinct non-test callers outside the changed nodes
+and the cone, with a possible call into them and no exact one. The proposal assessment and the
+merge-time re-measure both measure it. `unknown` never counts as passing, so in rules mode the
+change waits for the person, and the inbox entry lists those callers. His Yes is recorded as
+accepted by him, never as asked for, as with D6. A cone that already fails the exact limits stays
+`fail`. The contracts do not change: the recorded observation keeps its five counts. Planning
+estimates for Boltons d31d821, not reproducible from this repository (the corpus measurement and the
+drafted task list are not checked in), put 446 of 898 single-function changes and 5 of the 16
+drafted proof 2 tasks in this case. The tasks are not changed to avoid it, and the run reports
+whatever share results.
 
 ## 2026-10-29 — Standing grants: Oversight remembers what the person let go
 
