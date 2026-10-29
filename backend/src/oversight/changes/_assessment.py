@@ -14,6 +14,7 @@ from oversight.changes._policy import PolicyInputs, assess
 from oversight.changes._shortcuts_common import is_test_file
 from oversight.changes._state import ChangeRecord
 from oversight.events import NeedsYouWait, StoredEvent, format_needs_you
+from oversight.graph import possible_callers
 from oversight_contracts.common import RuleId
 from oversight_contracts.events import ChangeProposed, ErrorReport, ServerEvent
 from oversight_contracts.policy import ChangeAssessment, EvidenceRef, MergeModeState
@@ -58,6 +59,7 @@ class AssessmentWait:
     inventory: AddedTestsInventory | None = None
     parse_errors: int | None = None
     unresolved_removed: int | None = None
+    possible_callers: int | None = None
     latest: ChangeAssessment | None = None
     terminal_seq: int | None = None
 
@@ -173,6 +175,7 @@ class RulesScheduler:
             wait.facts, wait.facts_seq = evidence, seq
             wait.inventory = added_tests_inventory(rec, rec.revision)
             wait.parse_errors = len(rec.head.graph.parse_errors)
+            wait.possible_callers = len(possible_callers(rec.head.graph, wait.proposal.impact))
             wait.unresolved_removed = 0 if not wait.proposal.graph.nodes_removed else None
             self.wake(rec)
 
@@ -289,6 +292,7 @@ class RulesScheduler:
                 added_tests=facts.added_tests,
                 added_tests_inventory=wait.inventory,
                 parse_errors=wait.parse_errors,
+                possible_callers=wait.possible_callers,
                 unresolved_removed=wait.unresolved_removed,
                 evidence={
                     **inputs.evidence,

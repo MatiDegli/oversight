@@ -3,7 +3,7 @@
 from oversight.changes._policy import PolicyInputs, assess
 from oversight.changes._support import ChangeContext, RulesFailure
 from oversight.changes._versions import parse
-from oversight.graph import change_cone, change_graph
+from oversight.graph import change_cone, change_graph, possible_callers
 from oversight.workspace import MergeGuard
 from oversight_contracts.events import Limits
 from oversight_contracts.policy import ChangeAssessment, RuleAssessment
@@ -73,6 +73,7 @@ async def measure(
             lines_added=added,
             lines_removed=removed,
             cone=cone,
+            possible_callers=len(possible_callers(candidate.graph, cone)),
             parse_errors=len(base.graph.parse_errors) + len(candidate.graph.parse_errors),
             unresolved_removed=len(delta.nodes_removed),
             evidence={r.rule: tuple(r.evidence) for r in pending.rules},

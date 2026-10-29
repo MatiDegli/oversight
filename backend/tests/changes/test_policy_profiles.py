@@ -77,6 +77,7 @@ def policy_inputs() -> PolicyInputs:
         ),
         parse_errors=0,
         unresolved_removed=0,
+        possible_callers=0,
         files=("shop.py",),
         lines_added=1,
         lines_removed=0,
