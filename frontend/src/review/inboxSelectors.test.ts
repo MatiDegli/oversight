@@ -25,6 +25,24 @@ export const inboxState = (end = inboxEvents.length) =>
   inboxEvents.slice(0, end).reduce(applyEvent, createInitialState());
 const state = inboxState();
 
+it("records unavailable evidence objects and grant sessions explicitly for contract round trips", () => {
+  for (const event of inboxEvents) {
+    const assessment =
+      event.type === "change.assessed"
+        ? event.payload
+        : event.type === "change.resolved"
+          ? event.payload.assessment
+          : null;
+    for (const rule of assessment?.rules ?? [])
+      for (const evidence of rule.evidence) expect(evidence).toHaveProperty("git_object", null);
+
+    if (event.type === "grant.created") expect(event.payload).toHaveProperty("session_id", null);
+    if (event.type === "change.resolved")
+      for (const use of event.payload.grants ?? [])
+        expect(use.authorization).toHaveProperty("session_id", null);
+  }
+});
+
 it("rebuilds identical run-local evidence in live batches and serialized replay without mutation", () => {
   let live = createInitialState();
   for (const event of inboxEvents) {
