@@ -2,12 +2,14 @@
 
 import asyncio
 from dataclasses import replace
+from pathlib import PurePosixPath
 from typing import Literal
 
-from oversight.changes._shortcuts_common import Source
+from oversight.changes._run_findings import SuiteReceipt, receipt
+from oversight.changes._shortcuts_common import Source, is_test_file
 from oversight.changes._state import ChangeRecord
 from oversight.changes._support import ChangeContext
-from oversight.workspace import SuiteRun, validate_suite_execution
+from oversight.workspace import SuiteRun, WorkspaceError, validate_suite_execution
 from oversight_contracts.events import CaseResult, SuiteExecution
 
 
@@ -75,8 +77,36 @@ async def publish_suite(
     phase: Literal["agent", "proposal", "combined", "base_probe", "head_probe"],
     revision: int | None,
 ) -> SuiteExecution:
-    # Keep the caller's locks and record the run even if cancellation arrives during parsing.
-    return await ctx.whole(_publish_suite(ctx, rec, run, phase=phase, revision=revision))
+    # Git reads must run in the task owning the tree lock. An interrupted source
+    # capture loses temporal authority, but must still publish the captured suite.
+    sources: list[tuple[str, str]] = []
+    interrupted = False
+    try:
+        if phase in {"agent", "proposal"}:
+            paths = sorted({c.test_id.split("::", 1)[0] for c in run.cases})[:200]
+            for path in paths:
+                parts = PurePosixPath(path)
+                if (
+                    not is_test_file(path)
+                    or parts.is_absolute()
+                    or ".." in parts.parts
+                    or any(p == ".env" or p.startswith(".env.") for p in parts.parts)
+                ):
+                    continue
+                result = await ctx.run(rec.tree, "show", f"{run.tested_tree}:{path}")
+                if result.returncode == 0 and not result.truncated and not result.timed_out:
+                    sources.append((path, result.stdout))
+    except asyncio.CancelledError:
+        sources.clear()
+        interrupted = True
+    except (OSError, WorkspaceError):
+        sources.clear()  # The suite receipt survives unavailable source observations.
+    execution = await ctx.whole(
+        _publish_suite(ctx, rec, run, phase=phase, revision=revision, sources=tuple(sources))
+    )
+    if interrupted:
+        raise asyncio.CancelledError
+    return execution
 
 
 async def _publish_suite(
@@ -84,6 +114,7 @@ async def _publish_suite(
     rec: ChangeRecord,
     run: SuiteRun,
     *,
+    sources: tuple[tuple[str, str], ...],
     phase: Literal["agent", "proposal", "combined", "base_probe", "head_probe"],
     revision: int | None,
 ) -> SuiteExecution:
@@ -114,7 +145,7 @@ async def _publish_suite(
         revision=revision,
         phase=phase,
     )
-    await _record(ctx, rec, execution, run)
+    await _record(ctx, rec, execution, run, sources)
     return execution
 
 
@@ -123,10 +154,14 @@ async def _record(
     rec: ChangeRecord,
     execution: SuiteExecution,
     run: SuiteRun,
+    sources: tuple[tuple[str, str], ...],
 ) -> None:
     event = await ctx.publish(execution)
     seq = getattr(event, "seq", None)
     if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
         raise ValueError("suite publisher did not return its stored seq")
+    stored = receipt(event, execution)
+    if stored is not None:
+        rec.run_suites.append(SuiteReceipt(stored, rec.revision + 1, tuple(sources)))
     rec.executions[seq] = execution
     rec.suite_runs[seq] = replace(run)

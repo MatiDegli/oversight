@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import PurePosixPath
@@ -9,6 +10,7 @@ from pathlib import PurePosixPath
 from oversight.changes._behavior_publish import BehaviorEvidence, project_behavior
 from oversight.changes._measured import MeasuredEvidence, project_measured, validate_measured
 from oversight.changes._probes import added_cases, comparison
+from oversight.changes._run_findings import RunEvidence, project_run_findings
 from oversight.changes._shortcut_detector import (
     DetectionResult,
     Finding,
@@ -35,7 +37,6 @@ from oversight_contracts.review import (
 )
 
 MISSING_PRODUCERS = (
-    "run_findings producer unavailable (package 5)",
     "zone producer unavailable",
     "reach producer unavailable",
 )
@@ -134,12 +135,13 @@ class FactsEvidence:
     behavior_evidence: BehaviorEvidence | None = None
     measured: MeasuredEvidence | None = None
     impact: ImpactCone | None = None
+    run_evidence: RunEvidence | None = None
 
 
 def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
     """Check the exact captured candidate and its individual execution/source evidence.
 
-    Package 5, zones and reach have no producer here: their empty values cannot
+    Zones and reach have no producer here: their empty values cannot
     certify completeness. A list of execution seqs alone establishes no success.
     """
     if (
@@ -181,7 +183,18 @@ def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
     if facts.behavior_diff != project_behavior(evidence.behavior_evidence, revision=facts.revision):
         raise ValueError("facts behavior differs from captured evidence")
     validate_measured(facts, evidence.measured, evidence.executions, evidence.runs, evidence.impact)
-    if facts.integrity != list(evidence.integrity):
+    integrity, findings, diagnostics = project_run_findings(
+        evidence.run_evidence,
+        evidence.integrity,
+        evidence.executions,
+        evidence.target,
+        evidence.agent_id,
+    )
+    if facts.run_findings != findings:
+        raise ValueError("facts run findings differ from captured witnesses")
+    if not set(diagnostics).issubset(facts.problems):
+        raise ValueError("facts omit run rule uncertainty")
+    if facts.integrity != integrity:
         raise ValueError("facts integrity differs from captured source observations")
     if facts.added_tests != list(evidence.added_tests):
         raise ValueError("facts probes differ from captured evidence")
@@ -203,7 +216,7 @@ def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
             raise ValueError("probe execution differs from candidate")
         if comparison((probe.test_id,), before, after)[0][1] != probe.result:
             raise ValueError("probe result differs from captured evidence")
-    if facts.run_findings or facts.zone is not None or facts.reach is not None:
+    if facts.zone is not None or facts.reach is not None:
         raise ValueError("unbuilt producers cannot supply facts")
     if facts.complete or facts.problems != list(evidence.problems):
         raise ValueError("facts completeness differs from captured evidence")
@@ -345,7 +358,14 @@ async def capture_facts(
         candidate_tree=tree,
     )
     integrity, diagnostics, status = await ctx.whole(_source_facts(ctx, rec, base_tree, tree))
-    problems = list(MISSING_PRODUCERS) + list(diagnostics)
+    run_evidence = RunEvidence(tuple(rec.run_edits), tuple(rec.run_suites))
+    executions, runs = deepcopy(rec.executions), deepcopy(rec.suite_runs)
+    _, _, run_problems = await ctx.whole(
+        asyncio.to_thread(
+            project_run_findings, run_evidence, integrity, executions, target, rec.agent_id
+        )
+    )
+    problems = list(MISSING_PRODUCERS) + list(diagnostics) + list(run_problems)
     for seq, execution in sorted(rec.executions.items()):
         run = rec.suite_runs[seq]
         problems.extend(f"suite {seq}: {problem}" for problem in run.problems)
@@ -374,8 +394,9 @@ async def capture_facts(
         edited,
         integrity,
         tuple(problems),
-        dict(rec.executions),
-        dict(rec.suite_runs),
+        executions,
+        runs,
+        run_evidence=run_evidence,
         integrity_status=status,
         summary_evidence=capture_summary(
             rec, added_test_ids=inventory.test_ids if inventory.complete else None
@@ -385,6 +406,13 @@ async def capture_facts(
 
 def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
     """Construct and validate after change.proposed, with no I/O or mutable reads."""
+    integrity, findings, _ = project_run_findings(
+        evidence.run_evidence,
+        evidence.integrity,
+        evidence.executions,
+        evidence.target,
+        evidence.agent_id,
+    )
     facts = ChangeFacts(
         **evidence.target.model_dump(),
         summary=build_summary(
@@ -396,9 +424,9 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
         declared=evidence.declared,
         edited_paths=list(evidence.edited_paths),
         test_runs=sorted(evidence.executions),
-        integrity=list(evidence.integrity),
+        integrity=integrity,
         added_tests=list(evidence.added_tests),
-        run_findings=[],
+        run_findings=findings,
         zone=None,
         reach=None,
         complete=False,
