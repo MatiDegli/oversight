@@ -1,1 +1,1329 @@
-{"$defs": {"AddedTestProbe": {"additionalProperties": false, "description": "Observed before and after behavior of one added test.", "properties": {"after_seq": {"description": "The head-probe execution event.", "exclusiveMinimum": 0, "title": "After Seq", "type": "integer"}, "before_seq": {"description": "The base-probe execution event.", "exclusiveMinimum": 0, "title": "Before Seq", "type": "integer"}, "result": {"description": "The core's exact evidence-backed fact kind.", "enum": ["fails_before_passes_after", "passes_before_and_after", "fails_after", "not_collected_after", "skipped", "unknown"], "title": "Result", "type": "string"}, "test_id": {"$ref": "#/$defs/NonEmptyText", "description": "The added pytest case."}}, "required": ["test_id", "before_seq", "after_seq", "result"], "title": "AddedTestProbe", "type": "object"}, "BehaviorDiffRow": {"additionalProperties": false, "description": "One bounded display sample; rendered text is never executable input.", "properties": {"after": {"$ref": "#/$defs/NonEmptyText", "description": "Rendered type-tagged proposed value or exception."}, "before": {"$ref": "#/$defs/NonEmptyText", "description": "Rendered type-tagged base value or exception."}, "inputs": {"$ref": "#/$defs/NonEmptyText", "description": "Rendered arguments, including argument names where applicable."}, "unstable": {"default": false, "description": "Repeated fresh-process executions disagreed; never stable change evidence.", "title": "Unstable", "type": "boolean"}}, "required": ["inputs", "before", "after"], "title": "BehaviorDiffRow", "type": "object"}, "ChangeFacts": {"additionalProperties": false, "description": "Neutral facts about an exact candidate.", "properties": {"added_tests": {"description": "Added-test probe results.", "items": {"$ref": "#/$defs/AddedTestProbe"}, "title": "Added Tests", "type": "array"}, "base_commit": {"$ref": "#/$defs/NonEmptyText", "description": "The change's base commit."}, "behavior_diff": {"anyOf": [{"items": {"$ref": "#/$defs/NodeBehaviorDiff"}, "type": "array"}, {"type": "null"}], "default": null, "description": "Per-node comparisons; null means no behavior-probe evidence was recorded.", "title": "Behavior Diff"}, "candidate_tree": {"$ref": "#/$defs/NonEmptyText", "description": "The exact candidate Git tree."}, "change_id": {"$ref": "#/$defs/ChangeId", "description": "The change identifier."}, "complete": {"description": "Whether the required observations are complete.", "title": "Complete", "type": "boolean"}, "declared": {"anyOf": [{"$ref": "#/$defs/FinishDeclaration"}, {"type": "null"}], "description": "The finish declaration, when available."}, "edited_paths": {"description": "Every observed edited path, including restored edits.", "items": {"$ref": "#/$defs/WorkspacePath"}, "title": "Edited Paths", "type": "array"}, "head_commit": {"$ref": "#/$defs/NonEmptyText", "description": "The proposed head, or the agent base at revision zero."}, "integrity": {"description": "Neutral detector observations, kept separate per affected test.", "items": {"$ref": "#/$defs/IntegrityFact"}, "title": "Integrity", "type": "array"}, "main_commit": {"$ref": "#/$defs/NonEmptyText", "description": "Main used to prepare the candidate."}, "measured_cone": {"anyOf": [{"items": {"$ref": "#/$defs/MeasuredCaller"}, "type": "array"}, {"type": "null"}], "default": null, "description": "Per-caller measurements; inherited counts count invocations, not cone nodes.", "title": "Measured Cone"}, "problems": {"description": "Missing evidence and analysis incompleteness diagnostics.", "items": {"$ref": "#/$defs/NonEmptyText"}, "title": "Problems", "type": "array"}, "reach": {"anyOf": [{"$ref": "#/$defs/ReachFacts"}, {"type": "null"}], "description": "Test-reach evidence, or unknown."}, "review_cards": {"anyOf": [{"items": {"$ref": "#/$defs/ReviewCard"}, "maxItems": 8, "type": "array"}, {"type": "null"}], "default": null, "description": "The current candidate's questions and supporting evidence, one per unrequested choice.", "title": "Review Cards"}, "revision": {"description": "Zero before any proposal; otherwise the exact proposed revision.", "minimum": 0, "title": "Revision", "type": "integer"}, "run_findings": {"description": "Evidence-backed temporal findings.", "items": {"$ref": "#/$defs/RunRuleFinding"}, "title": "Run Findings", "type": "array"}, "shape": {"anyOf": [{"items": {"$ref": "#/$defs/ShapeFact"}, "type": "array"}, {"type": "null"}], "default": null, "description": "Structural findings; null means no shape analysis was recorded.", "title": "Shape"}, "shape_complete": {"anyOf": [{"type": "boolean"}, {"type": "null"}], "default": null, "description": "Whether the bounded structural checks completed; null means unavailable.", "title": "Shape Complete"}, "summary": {"anyOf": [{"items": {"$ref": "#/$defs/FactsSummaryLine"}, "maxItems": 3, "minItems": 1, "type": "array"}, {"type": "null"}], "default": null, "description": "Server-written deterministic summary: task; changed files/nodes and tests;\nobserved behavior and cost. At most three lines, at most 720 characters total.\nUnknown measurements remain explicit. Never copied from the author's report.", "title": "Summary"}, "test_runs": {"description": "Execution event seqs in chronological order.", "items": {"exclusiveMinimum": 0, "type": "integer"}, "title": "Test Runs", "type": "array"}, "zone": {"anyOf": [{"$ref": "#/$defs/ZoneFacts"}, {"type": "null"}], "description": "Zone evidence, or unknown."}}, "required": ["change_id", "revision", "base_commit", "head_commit", "main_commit", "candidate_tree", "declared", "edited_paths", "test_runs", "integrity", "added_tests", "run_findings", "zone", "reach", "complete", "problems"], "title": "ChangeFacts", "type": "object"}, "ChangeId": {"pattern": "^change-[1-9]\\d*$", "type": "string"}, "ChangeTarget": {"additionalProperties": false, "description": "The exact candidate identified by the server.", "properties": {"base_commit": {"$ref": "#/$defs/NonEmptyText", "description": "The change's base commit."}, "candidate_tree": {"$ref": "#/$defs/NonEmptyText", "description": "The exact candidate Git tree."}, "change_id": {"$ref": "#/$defs/ChangeId", "description": "The change identifier."}, "head_commit": {"$ref": "#/$defs/NonEmptyText", "description": "The proposed head, or the agent base at revision zero."}, "main_commit": {"$ref": "#/$defs/NonEmptyText", "description": "Main used to prepare the candidate."}, "revision": {"description": "Zero before any proposal; otherwise the exact proposed revision.", "minimum": 0, "title": "Revision", "type": "integer"}}, "required": ["change_id", "revision", "base_commit", "head_commit", "main_commit", "candidate_tree"], "title": "ChangeTarget", "type": "object"}, "DecisionEvidence": {"additionalProperties": false, "properties": {"choice": {"anyOf": [{"enum": ["asked_for", "not_asked_for", "cannot_tell"], "type": "string"}, {"type": "null"}], "default": null, "title": "Choice"}, "difference": {"anyOf": [{"$ref": "#/$defs/NodeBehaviorDiff"}, {"type": "null"}]}, "node_id": {"title": "Node Id", "type": "string"}, "target": {"$ref": "#/$defs/ChangeTarget"}, "task": {"title": "Task", "type": "string"}, "unavailable": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null, "title": "Unavailable"}}, "required": ["target", "node_id", "task", "difference"], "title": "DecisionEvidence", "type": "object"}, "DetectionEvidence": {"additionalProperties": false, "properties": {"calibration": {"const": "not available", "default": "not available", "title": "Calibration", "type": "string"}, "configuration": {"additionalProperties": true, "title": "Configuration", "type": "object"}, "decisions": {"items": {"$ref": "#/$defs/DecisionEvidence"}, "title": "Decisions", "type": "array"}, "detected": {"anyOf": [{"type": "boolean"}, {"type": "null"}], "title": "Detected"}, "facts": {"items": {"$ref": "#/$defs/ChangeFacts"}, "title": "Facts", "type": "array"}, "labels_sha256": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Labels Sha256"}, "let_through": {"title": "Let Through", "type": "boolean"}, "patch_id": {"pattern": "^[bd]\\d{2}$", "title": "Patch Id", "type": "string"}, "patch_sha256": {"title": "Patch Sha256", "type": "string"}, "prompt_sha256": {"title": "Prompt Sha256", "type": "string"}, "prompt_version": {"title": "Prompt Version", "type": "string"}, "protocol": {"default": "Arms 2 and 3 use D6 on Muse Spark, not product cross-review.", "title": "Protocol", "type": "string"}, "question": {"title": "Question", "type": "boolean"}, "tests_passed": {"title": "Tests Passed", "type": "boolean"}, "unavailable": {"items": {"type": "string"}, "title": "Unavailable", "type": "array"}, "unprobed": {"items": {"type": "string"}, "title": "Unprobed", "type": "array"}, "version": {"const": 1, "default": 1, "title": "Version", "type": "integer"}}, "required": ["patch_id", "patch_sha256", "labels_sha256", "configuration", "prompt_version", "prompt_sha256", "tests_passed", "detected", "let_through", "question"], "title": "DetectionEvidence", "type": "object"}, "EvidenceRef": {"additionalProperties": false, "description": "An event or Git object in this run, optionally narrowed to a workspace path.", "properties": {"event_seq": {"anyOf": [{"exclusiveMinimum": 0, "type": "integer"}, {"type": "null"}], "default": null, "title": "Event Seq"}, "git_object": {"anyOf": [{"$ref": "#/$defs/NonEmptyText"}, {"type": "null"}], "default": null}, "path": {"anyOf": [{"$ref": "#/$defs/WorkspacePath"}, {"type": "null"}], "default": null}}, "title": "EvidenceRef", "type": "object"}, "FactsSummaryLine": {"maxLength": 240, "minLength": 1, "pattern": "^[^\\r\\n]+$", "type": "string"}, "FinishDeclaration": {"additionalProperties": false, "description": "Claims made by the agent at finish, never server evidence.", "properties": {"files": {"anyOf": [{"items": {"$ref": "#/$defs/WorkspacePath"}, "type": "array"}, {"type": "null"}], "default": null, "description": "Files declared by the agent.", "title": "Files"}, "tests": {"anyOf": [{"items": {"$ref": "#/$defs/NonEmptyText"}, "type": "array"}, {"type": "null"}], "default": null, "description": "Pytest ids declared by the agent.", "title": "Tests"}, "tests_run": {"anyOf": [{"type": "boolean"}, {"type": "null"}], "default": null, "description": "Whether the agent declares running tests.", "title": "Tests Run"}}, "title": "FinishDeclaration", "type": "object"}, "IntegrityFact": {"additionalProperties": false, "description": "A neutral source observation retained per affected test.", "properties": {"evidence": {"description": "Source events or Git objects.", "items": {"$ref": "#/$defs/EvidenceRef"}, "title": "Evidence", "type": "array"}, "kind": {"description": "The detector's exact neutral fact kind.", "enum": ["test_removed", "assertion_loosened", "skip_added", "expected_value_changed", "literal_branch", "stub_left", "parse_error"], "title": "Kind", "type": "string"}, "line": {"description": "The observed one-based line.", "exclusiveMinimum": 0, "title": "Line", "type": "integer"}, "node_id": {"anyOf": [{"$ref": "#/$defs/NodeId"}, {"type": "null"}], "default": null, "description": "The resolved graph node, when known."}, "path": {"$ref": "#/$defs/WorkspacePath", "description": "The observed file."}, "test_id": {"anyOf": [{"$ref": "#/$defs/NonEmptyText"}, {"type": "null"}], "default": null, "description": "The individual affected pytest id, when resolved."}, "text": {"$ref": "#/$defs/NonEmptyText", "description": "The detector's neutral observation."}}, "required": ["kind", "path", "line", "text", "evidence"], "title": "IntegrityFact", "type": "object"}, "MeasuredCaller": {"additionalProperties": false, "description": "Measured caller observations, never a replacement for the static cone.", "properties": {"compared_count": {"default": 0, "description": "Inputs compared on both sides with equal typed inputs.", "minimum": 0, "title": "Compared Count", "type": "integer"}, "complete": {"default": false, "description": "All observed invocations of this caller were admitted and compared.", "title": "Complete", "type": "boolean"}, "differing_count": {"default": 0, "description": "Compared inputs with reproducible differing results; excludes unstable rows.", "minimum": 0, "title": "Differing Count", "type": "integer"}, "node_id": {"$ref": "#/$defs/NodeId", "description": "The stable graph identity, including removed or unsupported nodes."}, "not_compared": {"description": "Reasons for unmatched or excluded calls, including unequal inputs.", "items": {"$ref": "#/$defs/NonEmptyText"}, "title": "Not Compared", "type": "array"}, "not_probed": {"anyOf": [{"$ref": "#/$defs/NonEmptyText"}, {"type": "null"}], "default": null, "description": "Why all or part of probing was unavailable, unsupported or budget-limited."}, "outcome": {"default": "not_compared", "description": "Changed requires stable differences; unchanged requires complete comparison.", "enum": ["changed", "unchanged", "not_compared"], "title": "Outcome", "type": "string"}, "problems": {"description": "Recording, matching, instability and retention-limit diagnostics.", "items": {"$ref": "#/$defs/NonEmptyText"}, "title": "Problems", "type": "array"}, "rows": {"description": "At most eight samples of differing or unstable inputs; equal results count only in\ncompared_count. Counts cover all admitted comparisons.", "items": {"$ref": "#/$defs/BehaviorDiffRow"}, "maxItems": 8, "title": "Rows", "type": "array"}, "unmatched_after": {"default": 0, "description": "Proposed invocations without an admitted matching base invocation.", "minimum": 0, "title": "Unmatched After", "type": "integer"}, "unmatched_before": {"default": 0, "description": "Base invocations without an admitted matching proposed invocation.", "minimum": 0, "title": "Unmatched Before", "type": "integer"}}, "required": ["node_id"], "title": "MeasuredCaller", "type": "object"}, "NodeBehaviorDiff": {"additionalProperties": false, "description": "Server-observed comparisons for one changed node.", "properties": {"compared_count": {"default": 0, "description": "Inputs compared on both sides with equal typed inputs.", "minimum": 0, "title": "Compared Count", "type": "integer"}, "differing_count": {"default": 0, "description": "Compared inputs with reproducible differing results; excludes unstable rows.", "minimum": 0, "title": "Differing Count", "type": "integer"}, "node_id": {"$ref": "#/$defs/NodeId", "description": "The stable graph identity, including removed or unsupported nodes."}, "not_probed": {"anyOf": [{"$ref": "#/$defs/NonEmptyText"}, {"type": "null"}], "default": null, "description": "Why all or part of probing was unavailable, unsupported or budget-limited."}, "rows": {"description": "At most eight samples of differing or unstable inputs; equal results count only in\ncompared_count. Counts cover all admitted comparisons.", "items": {"$ref": "#/$defs/BehaviorDiffRow"}, "maxItems": 8, "title": "Rows", "type": "array"}}, "required": ["node_id"], "title": "NodeBehaviorDiff", "type": "object"}, "NodeId": {"type": "string"}, "NonEmptyText": {"minLength": 1, "type": "string"}, "ReachFacts": {"additionalProperties": false, "description": "Evidence of test reachability.", "properties": {"basis": {"description": "The basis of test reachability.", "enum": ["call_graph", "coverage"], "title": "Basis", "type": "string"}, "complete": {"description": "Whether all changed functions were classified.", "title": "Complete", "type": "boolean"}, "edges_followed": {"anyOf": [{"const": "exact", "type": "string"}, {"type": "null"}], "description": "Exact call edges, or null for coverage.", "title": "Edges Followed"}, "evidence": {"description": "The graph or coverage evidence.", "items": {"$ref": "#/$defs/EvidenceRef"}, "title": "Evidence", "type": "array"}, "unreached_nodes": {"description": "Changed functions without demonstrated test reach.", "items": {"$ref": "#/$defs/NodeId"}, "title": "Unreached Nodes", "type": "array"}}, "required": ["basis", "edges_followed", "unreached_nodes", "complete", "evidence"], "title": "ReachFacts", "type": "object"}, "ReviewCard": {"additionalProperties": false, "description": "One server-authored question about an exact change target.", "properties": {"answer": {"anyOf": [{"enum": ["yes", "no", "unsure"], "type": "string"}, {"type": "null"}], "default": null, "description": "The person's answer; null means unanswered.", "title": "Answer"}, "answered_by": {"anyOf": [{"const": "person", "type": "string"}, {"type": "null"}], "default": null, "description": "The existing single-user human principal, never inferred from the model.", "title": "Answered By"}, "evidence_seq": {"description": "The supporting event's id in this run; the server verifies target and existence.", "exclusiveMinimum": 0, "title": "Evidence Seq", "type": "integer"}, "example": {"anyOf": [{"$ref": "#/$defs/BehaviorDiffRow"}, {"type": "null"}], "default": null, "description": "The smallest before/after example supporting this question, when available."}, "node_id": {"$ref": "#/$defs/NodeId", "description": "The node affected by a choice the task did not ask for."}, "question": {"$ref": "#/$defs/NonEmptyText", "description": "The single question shown for this candidate."}}, "required": ["node_id", "question", "evidence_seq"], "title": "ReviewCard", "type": "object"}, "RunRuleFinding": {"additionalProperties": false, "description": "One temporal finding supported by an integrity fact.", "properties": {"edited_seq": {"description": "The edit weakening its assertion.", "exclusiveMinimum": 0, "title": "Edited Seq", "type": "integer"}, "fact_index": {"description": "The supporting integrity fact in this payload.", "minimum": 0, "title": "Fact Index", "type": "integer"}, "failed_seq": {"description": "The execution where it failed.", "exclusiveMinimum": 0, "title": "Failed Seq", "type": "integer"}, "kind": {"default": "loosened", "description": "The weakening witnessed between failure and later execution; non-loosened\nkinds establish absence of failure, not proof that the case executed or passed.", "enum": ["loosened", "removed", "skipped", "deleted"], "title": "Kind", "type": "string"}, "passed_seq": {"description": "The execution where it passed; for non-loosened kinds, a later complete execution\nshowing absence of failure, not proof that the case executed or passed.", "exclusiveMinimum": 0, "title": "Passed Seq", "type": "integer"}, "test_id": {"$ref": "#/$defs/NonEmptyText", "description": "The same pytest case throughout."}}, "required": ["test_id", "failed_seq", "edited_seq", "passed_seq", "fact_index"], "title": "RunRuleFinding", "type": "object"}, "ShapeFact": {"additionalProperties": false, "description": "One neutral structural observation, never an automatic size gate.", "properties": {"evidence": {"description": "Captured source or graph evidence supporting the observation.", "items": {"$ref": "#/$defs/EvidenceRef"}, "title": "Evidence", "type": "array"}, "kind": {"description": "The analyzer's structural finding kind.", "enum": ["duplicate_logic", "import_cycle", "import_added", "function_length"], "title": "Kind", "type": "string"}, "message": {"$ref": "#/$defs/NonEmptyText", "description": "The neutral before/after observation."}, "node_id": {"anyOf": [{"$ref": "#/$defs/NodeId"}, {"type": "null"}], "default": null, "description": "The affected node, or null for a file-level observation."}, "path": {"$ref": "#/$defs/WorkspacePath", "description": "The affected workspace file."}}, "required": ["kind", "path", "message", "evidence"], "title": "ShapeFact", "type": "object"}, "Tests": {"additionalProperties": false, "properties": {"baseline": {"enum": ["passed", "failed", "not_run"], "title": "Baseline", "type": "string"}, "hidden": {"enum": ["passed", "failed", "not_run"], "title": "Hidden", "type": "string"}, "policy": {"enum": ["passed", "failed", "not_run"], "title": "Policy", "type": "string"}}, "required": ["baseline", "hidden", "policy"], "title": "Tests", "type": "object"}, "Tokens": {"additionalProperties": false, "properties": {"input": {"anyOf": [{"minimum": 0, "type": "integer"}, {"const": "unknown", "type": "string"}], "title": "Input"}, "output": {"anyOf": [{"minimum": 0, "type": "integer"}, {"const": "unknown", "type": "string"}], "title": "Output"}}, "required": ["input", "output"], "title": "Tokens", "type": "object"}, "WorkspacePath": {"type": "string"}, "ZoneFacts": {"additionalProperties": false, "description": "Observed zone classification.", "properties": {"complete": {"description": "Whether every edit was classified.", "title": "Complete", "type": "boolean"}, "outside": {"description": "Observed edits outside the assigned zone.", "items": {"$ref": "#/$defs/EvidenceRef"}, "title": "Outside", "type": "array"}}, "required": ["outside", "complete"], "title": "ZoneFacts", "type": "object"}}, "additionalProperties": false, "properties": {"agent_model": {"title": "Agent Model", "type": "string"}, "arm_id": {"default": "legacy", "minLength": 1, "title": "Arm Id", "type": "string"}, "attempt_id": {"default": "legacy", "minLength": 1, "title": "Attempt Id", "type": "string"}, "config_hash": {"default": "legacy", "minLength": 1, "title": "Config Hash", "type": "string"}, "cost_usd": {"anyOf": [{"minimum": 0, "type": "number"}, {"const": "unknown", "type": "string"}], "title": "Cost Usd"}, "detection": {"anyOf": [{"$ref": "#/$defs/DetectionEvidence"}, {"type": "null"}], "default": null}, "duration_s": {"minimum": 0, "title": "Duration S", "type": "number"}, "outcome": {"enum": ["solved", "failed", "stopped"], "title": "Outcome", "type": "string"}, "profile": {"default": "legacy", "title": "Profile", "type": "string"}, "repetition": {"default": 1, "minimum": 1, "title": "Repetition", "type": "integer"}, "steps": {"minimum": 0, "title": "Steps", "type": "integer"}, "task_id": {"title": "Task Id", "type": "string"}, "test_result": {"$ref": "#/$defs/Tests"}, "tokens": {"$ref": "#/$defs/Tokens"}, "turns": {"anyOf": [{"minimum": 0, "type": "integer"}, {"const": "unknown", "type": "string"}], "default": "unknown", "title": "Turns"}}, "required": ["task_id", "agent_model", "outcome", "steps", "duration_s", "tokens", "cost_usd", "test_result"], "title": "Result", "type": "object"}
+{
+  "$defs": {
+    "AddedTestProbe": {
+      "additionalProperties": false,
+      "description": "Observed before and after behavior of one added test.",
+      "properties": {
+        "test_id": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The added pytest case."
+        },
+        "before_seq": {
+          "description": "The base-probe execution event.",
+          "exclusiveMinimum": 0,
+          "title": "Before Seq",
+          "type": "integer"
+        },
+        "after_seq": {
+          "description": "The head-probe execution event.",
+          "exclusiveMinimum": 0,
+          "title": "After Seq",
+          "type": "integer"
+        },
+        "result": {
+          "description": "The core's exact evidence-backed fact kind.",
+          "enum": [
+            "fails_before_passes_after",
+            "passes_before_and_after",
+            "fails_after",
+            "not_collected_after",
+            "skipped",
+            "unknown"
+          ],
+          "title": "Result",
+          "type": "string"
+        }
+      },
+      "required": [
+        "test_id",
+        "before_seq",
+        "after_seq",
+        "result"
+      ],
+      "title": "AddedTestProbe",
+      "type": "object"
+    },
+    "BehaviorDiffRow": {
+      "additionalProperties": false,
+      "description": "One bounded display sample; rendered text is never executable input.",
+      "properties": {
+        "inputs": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "Rendered arguments, including argument names where applicable."
+        },
+        "before": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "Rendered type-tagged base value or exception."
+        },
+        "after": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "Rendered type-tagged proposed value or exception."
+        },
+        "unstable": {
+          "default": false,
+          "description": "Repeated fresh-process executions disagreed; never stable change evidence.",
+          "title": "Unstable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "inputs",
+        "before",
+        "after"
+      ],
+      "title": "BehaviorDiffRow",
+      "type": "object"
+    },
+    "ChangeFacts": {
+      "additionalProperties": false,
+      "description": "Neutral facts about an exact candidate.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId",
+          "description": "The change identifier."
+        },
+        "revision": {
+          "description": "Zero before any proposal; otherwise the exact proposed revision.",
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "base_commit": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The change's base commit."
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The proposed head, or the agent base at revision zero."
+        },
+        "main_commit": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "Main used to prepare the candidate."
+        },
+        "candidate_tree": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The exact candidate Git tree."
+        },
+        "declared": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FinishDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The finish declaration, when available."
+        },
+        "edited_paths": {
+          "description": "Every observed edited path, including restored edits.",
+          "items": {
+            "$ref": "#/$defs/WorkspacePath"
+          },
+          "title": "Edited Paths",
+          "type": "array"
+        },
+        "test_runs": {
+          "description": "Execution event seqs in chronological order.",
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "title": "Test Runs",
+          "type": "array"
+        },
+        "integrity": {
+          "description": "Neutral detector observations, kept separate per affected test.",
+          "items": {
+            "$ref": "#/$defs/IntegrityFact"
+          },
+          "title": "Integrity",
+          "type": "array"
+        },
+        "added_tests": {
+          "description": "Added-test probe results.",
+          "items": {
+            "$ref": "#/$defs/AddedTestProbe"
+          },
+          "title": "Added Tests",
+          "type": "array"
+        },
+        "run_findings": {
+          "description": "Evidence-backed temporal findings.",
+          "items": {
+            "$ref": "#/$defs/RunRuleFinding"
+          },
+          "title": "Run Findings",
+          "type": "array"
+        },
+        "zone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ZoneFacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Zone evidence, or unknown."
+        },
+        "reach": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReachFacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Test-reach evidence, or unknown."
+        },
+        "complete": {
+          "description": "Whether the required observations are complete.",
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "problems": {
+          "description": "Missing evidence and analysis incompleteness diagnostics.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "title": "Problems",
+          "type": "array"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FactsSummaryLine"
+              },
+              "maxItems": 3,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Server-written deterministic summary: task; changed files/nodes and tests;\nobserved behavior and cost. At most three lines, at most 720 characters total.\nUnknown measurements remain explicit. Never copied from the author's report.",
+          "title": "Summary"
+        },
+        "behavior_diff": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/NodeBehaviorDiff"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-node comparisons; null means no behavior-probe evidence was recorded.",
+          "title": "Behavior Diff"
+        },
+        "measured_cone": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/MeasuredCaller"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-caller measurements; inherited counts count invocations, not cone nodes.",
+          "title": "Measured Cone"
+        },
+        "review_cards": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ReviewCard"
+              },
+              "maxItems": 8,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The current candidate's questions and supporting evidence, one per unrequested choice.",
+          "title": "Review Cards"
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ShapeFact"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Structural findings; null means no shape analysis was recorded.",
+          "title": "Shape"
+        },
+        "shape_complete": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the bounded structural checks completed; null means unavailable.",
+          "title": "Shape Complete"
+        }
+      },
+      "required": [
+        "change_id",
+        "revision",
+        "base_commit",
+        "head_commit",
+        "main_commit",
+        "candidate_tree",
+        "declared",
+        "edited_paths",
+        "test_runs",
+        "integrity",
+        "added_tests",
+        "run_findings",
+        "zone",
+        "reach",
+        "complete",
+        "problems"
+      ],
+      "title": "ChangeFacts",
+      "type": "object"
+    },
+    "ChangeId": {
+      "pattern": "^change-[1-9]\\d*$",
+      "type": "string"
+    },
+    "ChangeTarget": {
+      "additionalProperties": false,
+      "description": "The exact candidate identified by the server.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId",
+          "description": "The change identifier."
+        },
+        "revision": {
+          "description": "Zero before any proposal; otherwise the exact proposed revision.",
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "base_commit": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The change's base commit."
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The proposed head, or the agent base at revision zero."
+        },
+        "main_commit": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "Main used to prepare the candidate."
+        },
+        "candidate_tree": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The exact candidate Git tree."
+        }
+      },
+      "required": [
+        "change_id",
+        "revision",
+        "base_commit",
+        "head_commit",
+        "main_commit",
+        "candidate_tree"
+      ],
+      "title": "ChangeTarget",
+      "type": "object"
+    },
+    "DecisionEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/ChangeTarget"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        },
+        "task": {
+          "title": "Task",
+          "type": "string"
+        },
+        "difference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeBehaviorDiff"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "choice": {
+          "anyOf": [
+            {
+              "enum": [
+                "asked_for",
+                "not_asked_for",
+                "cannot_tell"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Choice"
+        },
+        "unavailable": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unavailable"
+        }
+      },
+      "required": [
+        "target",
+        "node_id",
+        "task",
+        "difference"
+      ],
+      "title": "DecisionEvidence",
+      "type": "object"
+    },
+    "DetectionEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "patch_id": {
+          "pattern": "^[bd]\\d{2}$",
+          "title": "Patch Id",
+          "type": "string"
+        },
+        "patch_sha256": {
+          "title": "Patch Sha256",
+          "type": "string"
+        },
+        "labels_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Labels Sha256"
+        },
+        "configuration": {
+          "additionalProperties": true,
+          "title": "Configuration",
+          "type": "object"
+        },
+        "prompt_version": {
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "prompt_sha256": {
+          "title": "Prompt Sha256",
+          "type": "string"
+        },
+        "protocol": {
+          "default": "Arms 2 and 3 use D6 on Muse Spark, not product cross-review.",
+          "title": "Protocol",
+          "type": "string"
+        },
+        "facts": {
+          "items": {
+            "$ref": "#/$defs/ChangeFacts"
+          },
+          "title": "Facts",
+          "type": "array"
+        },
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/DecisionEvidence"
+          },
+          "title": "Decisions",
+          "type": "array"
+        },
+        "tests_passed": {
+          "title": "Tests Passed",
+          "type": "boolean"
+        },
+        "detected": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Detected"
+        },
+        "unprobed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unprobed",
+          "type": "array"
+        },
+        "unavailable": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unavailable",
+          "type": "array"
+        },
+        "let_through": {
+          "title": "Let Through",
+          "type": "boolean"
+        },
+        "question": {
+          "title": "Question",
+          "type": "boolean"
+        },
+        "calibration": {
+          "const": "not available",
+          "default": "not available",
+          "title": "Calibration",
+          "type": "string"
+        }
+      },
+      "required": [
+        "patch_id",
+        "patch_sha256",
+        "labels_sha256",
+        "configuration",
+        "prompt_version",
+        "prompt_sha256",
+        "tests_passed",
+        "detected",
+        "let_through",
+        "question"
+      ],
+      "title": "DetectionEvidence",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "An event or Git object in this run, optionally narrowed to a workspace path.",
+      "properties": {
+        "event_seq": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event Seq"
+        },
+        "git_object": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "path": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspacePath"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "FactsSummaryLine": {
+      "maxLength": 240,
+      "minLength": 1,
+      "pattern": "^[^\\r\\n]+$",
+      "type": "string"
+    },
+    "FinishDeclaration": {
+      "additionalProperties": false,
+      "description": "Claims made by the agent at finish, never server evidence.",
+      "properties": {
+        "files": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/WorkspacePath"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Files declared by the agent.",
+          "title": "Files"
+        },
+        "tests_run": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the agent declares running tests.",
+          "title": "Tests Run"
+        },
+        "tests": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/NonEmptyText"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pytest ids declared by the agent.",
+          "title": "Tests"
+        }
+      },
+      "title": "FinishDeclaration",
+      "type": "object"
+    },
+    "IntegrityFact": {
+      "additionalProperties": false,
+      "description": "A neutral source observation retained per affected test.",
+      "properties": {
+        "kind": {
+          "description": "The detector's exact neutral fact kind.",
+          "enum": [
+            "test_removed",
+            "assertion_loosened",
+            "skip_added",
+            "expected_value_changed",
+            "literal_branch",
+            "stub_left",
+            "parse_error"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/$defs/WorkspacePath",
+          "description": "The observed file."
+        },
+        "line": {
+          "description": "The observed one-based line.",
+          "exclusiveMinimum": 0,
+          "title": "Line",
+          "type": "integer"
+        },
+        "text": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The detector's neutral observation."
+        },
+        "evidence": {
+          "description": "Source events or Git objects.",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "test_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The individual affected pytest id, when resolved."
+        },
+        "node_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The resolved graph node, when known."
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "line",
+        "text",
+        "evidence"
+      ],
+      "title": "IntegrityFact",
+      "type": "object"
+    },
+    "MeasuredCaller": {
+      "additionalProperties": false,
+      "description": "Measured caller observations, never a replacement for the static cone.",
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId",
+          "description": "The stable graph identity, including removed or unsupported nodes."
+        },
+        "compared_count": {
+          "default": 0,
+          "description": "Inputs compared on both sides with equal typed inputs.",
+          "minimum": 0,
+          "title": "Compared Count",
+          "type": "integer"
+        },
+        "differing_count": {
+          "default": 0,
+          "description": "Compared inputs with reproducible differing results; excludes unstable rows.",
+          "minimum": 0,
+          "title": "Differing Count",
+          "type": "integer"
+        },
+        "rows": {
+          "description": "At most eight samples of differing or unstable inputs; equal results count only in\ncompared_count. Counts cover all admitted comparisons.",
+          "items": {
+            "$ref": "#/$defs/BehaviorDiffRow"
+          },
+          "maxItems": 8,
+          "title": "Rows",
+          "type": "array"
+        },
+        "not_probed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why all or part of probing was unavailable, unsupported or budget-limited."
+        },
+        "outcome": {
+          "default": "not_compared",
+          "description": "Changed requires stable differences; unchanged requires complete comparison.",
+          "enum": [
+            "changed",
+            "unchanged",
+            "not_compared"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "unmatched_before": {
+          "default": 0,
+          "description": "Base invocations without an admitted matching proposed invocation.",
+          "minimum": 0,
+          "title": "Unmatched Before",
+          "type": "integer"
+        },
+        "unmatched_after": {
+          "default": 0,
+          "description": "Proposed invocations without an admitted matching base invocation.",
+          "minimum": 0,
+          "title": "Unmatched After",
+          "type": "integer"
+        },
+        "not_compared": {
+          "description": "Reasons for unmatched or excluded calls, including unequal inputs.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "title": "Not Compared",
+          "type": "array"
+        },
+        "complete": {
+          "default": false,
+          "description": "All observed invocations of this caller were admitted and compared.",
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "problems": {
+          "description": "Recording, matching, instability and retention-limit diagnostics.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "title": "Problems",
+          "type": "array"
+        }
+      },
+      "required": [
+        "node_id"
+      ],
+      "title": "MeasuredCaller",
+      "type": "object"
+    },
+    "NodeBehaviorDiff": {
+      "additionalProperties": false,
+      "description": "Server-observed comparisons for one changed node.",
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId",
+          "description": "The stable graph identity, including removed or unsupported nodes."
+        },
+        "compared_count": {
+          "default": 0,
+          "description": "Inputs compared on both sides with equal typed inputs.",
+          "minimum": 0,
+          "title": "Compared Count",
+          "type": "integer"
+        },
+        "differing_count": {
+          "default": 0,
+          "description": "Compared inputs with reproducible differing results; excludes unstable rows.",
+          "minimum": 0,
+          "title": "Differing Count",
+          "type": "integer"
+        },
+        "rows": {
+          "description": "At most eight samples of differing or unstable inputs; equal results count only in\ncompared_count. Counts cover all admitted comparisons.",
+          "items": {
+            "$ref": "#/$defs/BehaviorDiffRow"
+          },
+          "maxItems": 8,
+          "title": "Rows",
+          "type": "array"
+        },
+        "not_probed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why all or part of probing was unavailable, unsupported or budget-limited."
+        }
+      },
+      "required": [
+        "node_id"
+      ],
+      "title": "NodeBehaviorDiff",
+      "type": "object"
+    },
+    "NodeId": {
+      "type": "string"
+    },
+    "NonEmptyText": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "ReachFacts": {
+      "additionalProperties": false,
+      "description": "Evidence of test reachability.",
+      "properties": {
+        "basis": {
+          "description": "The basis of test reachability.",
+          "enum": [
+            "call_graph",
+            "coverage"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "edges_followed": {
+          "anyOf": [
+            {
+              "const": "exact",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact call edges, or null for coverage.",
+          "title": "Edges Followed"
+        },
+        "unreached_nodes": {
+          "description": "Changed functions without demonstrated test reach.",
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "title": "Unreached Nodes",
+          "type": "array"
+        },
+        "complete": {
+          "description": "Whether all changed functions were classified.",
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "evidence": {
+          "description": "The graph or coverage evidence.",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "edges_followed",
+        "unreached_nodes",
+        "complete",
+        "evidence"
+      ],
+      "title": "ReachFacts",
+      "type": "object"
+    },
+    "ReviewCard": {
+      "additionalProperties": false,
+      "description": "One server-authored question about an exact change target.",
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId",
+          "description": "The node affected by a choice the task did not ask for."
+        },
+        "question": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The single question shown for this candidate."
+        },
+        "evidence_seq": {
+          "description": "The supporting event's id in this run; the server verifies target and existence.",
+          "exclusiveMinimum": 0,
+          "title": "Evidence Seq",
+          "type": "integer"
+        },
+        "example": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BehaviorDiffRow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The smallest before/after example supporting this question, when available."
+        },
+        "answer": {
+          "anyOf": [
+            {
+              "enum": [
+                "yes",
+                "no",
+                "unsure"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The person's answer; null means unanswered.",
+          "title": "Answer"
+        },
+        "answered_by": {
+          "anyOf": [
+            {
+              "const": "person",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The existing single-user human principal, never inferred from the model.",
+          "title": "Answered By"
+        }
+      },
+      "required": [
+        "node_id",
+        "question",
+        "evidence_seq"
+      ],
+      "title": "ReviewCard",
+      "type": "object"
+    },
+    "RunRuleFinding": {
+      "additionalProperties": false,
+      "description": "One temporal finding supported by an integrity fact.",
+      "properties": {
+        "kind": {
+          "default": "loosened",
+          "description": "The weakening witnessed between failure and later execution; non-loosened\nkinds establish absence of failure, not proof that the case executed or passed.",
+          "enum": [
+            "loosened",
+            "removed",
+            "skipped",
+            "deleted"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "test_id": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The same pytest case throughout."
+        },
+        "failed_seq": {
+          "description": "The execution where it failed.",
+          "exclusiveMinimum": 0,
+          "title": "Failed Seq",
+          "type": "integer"
+        },
+        "edited_seq": {
+          "description": "The edit weakening its assertion.",
+          "exclusiveMinimum": 0,
+          "title": "Edited Seq",
+          "type": "integer"
+        },
+        "passed_seq": {
+          "description": "The execution where it passed; for non-loosened kinds, a later complete execution\nshowing absence of failure, not proof that the case executed or passed.",
+          "exclusiveMinimum": 0,
+          "title": "Passed Seq",
+          "type": "integer"
+        },
+        "fact_index": {
+          "description": "The supporting integrity fact in this payload.",
+          "minimum": 0,
+          "title": "Fact Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "test_id",
+        "failed_seq",
+        "edited_seq",
+        "passed_seq",
+        "fact_index"
+      ],
+      "title": "RunRuleFinding",
+      "type": "object"
+    },
+    "ShapeFact": {
+      "additionalProperties": false,
+      "description": "One neutral structural observation, never an automatic size gate.",
+      "properties": {
+        "kind": {
+          "description": "The analyzer's structural finding kind.",
+          "enum": [
+            "duplicate_logic",
+            "import_cycle",
+            "import_added",
+            "function_length"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/$defs/WorkspacePath",
+          "description": "The affected workspace file."
+        },
+        "node_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The affected node, or null for a file-level observation."
+        },
+        "message": {
+          "$ref": "#/$defs/NonEmptyText",
+          "description": "The neutral before/after observation."
+        },
+        "evidence": {
+          "description": "Captured source or graph evidence supporting the observation.",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "message",
+        "evidence"
+      ],
+      "title": "ShapeFact",
+      "type": "object"
+    },
+    "Tests": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ],
+          "title": "Baseline",
+          "type": "string"
+        },
+        "hidden": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ],
+          "title": "Hidden",
+          "type": "string"
+        },
+        "policy": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ],
+          "title": "Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "baseline",
+        "hidden",
+        "policy"
+      ],
+      "title": "Tests",
+      "type": "object"
+    },
+    "Tokens": {
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "const": "unknown",
+              "type": "string"
+            }
+          ],
+          "title": "Input"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "const": "unknown",
+              "type": "string"
+            }
+          ],
+          "title": "Output"
+        }
+      },
+      "required": [
+        "input",
+        "output"
+      ],
+      "title": "Tokens",
+      "type": "object"
+    },
+    "WorkspacePath": {
+      "type": "string"
+    },
+    "ZoneFacts": {
+      "additionalProperties": false,
+      "description": "Observed zone classification.",
+      "properties": {
+        "outside": {
+          "description": "Observed edits outside the assigned zone.",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Outside",
+          "type": "array"
+        },
+        "complete": {
+          "description": "Whether every edit was classified.",
+          "title": "Complete",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "outside",
+        "complete"
+      ],
+      "title": "ZoneFacts",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "arm_id": {
+      "default": "legacy",
+      "minLength": 1,
+      "title": "Arm Id",
+      "type": "string"
+    },
+    "repetition": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Repetition",
+      "type": "integer"
+    },
+    "config_hash": {
+      "default": "legacy",
+      "minLength": 1,
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "attempt_id": {
+      "default": "legacy",
+      "minLength": 1,
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "profile": {
+      "default": "legacy",
+      "title": "Profile",
+      "type": "string"
+    },
+    "task_id": {
+      "title": "Task Id",
+      "type": "string"
+    },
+    "agent_model": {
+      "title": "Agent Model",
+      "type": "string"
+    },
+    "outcome": {
+      "enum": [
+        "solved",
+        "failed",
+        "stopped"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "turns": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "const": "unknown",
+          "type": "string"
+        }
+      ],
+      "default": "unknown",
+      "title": "Turns"
+    },
+    "steps": {
+      "minimum": 0,
+      "title": "Steps",
+      "type": "integer"
+    },
+    "duration_s": {
+      "minimum": 0,
+      "title": "Duration S",
+      "type": "number"
+    },
+    "tokens": {
+      "$ref": "#/$defs/Tokens"
+    },
+    "cost_usd": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "const": "unknown",
+          "type": "string"
+        }
+      ],
+      "title": "Cost Usd"
+    },
+    "test_result": {
+      "$ref": "#/$defs/Tests"
+    },
+    "detection": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DetectionEvidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "task_id",
+    "agent_model",
+    "outcome",
+    "steps",
+    "duration_s",
+    "tokens",
+    "cost_usd",
+    "test_result"
+  ],
+  "title": "Result",
+  "type": "object"
+}

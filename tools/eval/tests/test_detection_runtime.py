@@ -2,14 +2,17 @@
 
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from tools.eval.behavior.catalog import check_baseline, load_patches
 from tools.eval.detection.accounting import Budget, task_for
 from tools.eval.detection.adapters import Adapter
-from tools.eval.detection.config import ARMS, fingerprint
+from tools.eval.detection.config import ARMS, Assumptions, fingerprint
+from tools.eval.detection.engine import run_attempt
+from tools.eval.detection.reporting import repetition
 from tools.eval.detection.runtime import measure
-from tools.eval.grade import Tariff
+from tools.eval.grade import Result, Tariff
 from tools.eval.ledger import Ledger
 
 
@@ -80,5 +83,58 @@ async def test_dev_actual_bounded_probe_or_real_isolation_unavailability(tmp_pat
             assert decision.difference.differing_count == 1
             assert len(decision.difference.rows) == 1
             assert not decision.difference.rows[0].unstable
+    finally:
+        ledger.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("arm", ARMS[2:], ids=lambda a: a.id)
+async def test_forced_isolation_unavailable_is_recorded_and_counted(arm, tmp_path, monkeypatch):
+    from oversight.workspace import IsolationUnavailable, Workspace
+
+    reason = "forced test isolation refusal"
+    effect = AsyncMock(side_effect=IsolationUnavailable(reason))
+    monkeypatch.setattr("oversight.workspace.capability.check_effect", effect)
+    check_isolation = Workspace.check_isolation
+
+    async def check_unavailable(workspace):
+        capability = await check_isolation(workspace)
+        assert workspace.isolation.available is False
+        return capability
+
+    monkeypatch.setattr(Workspace, "check_isolation", check_unavailable)
+    patch = next(p for p in load_patches() if p.id == "d01")
+    rates = {p: Tariff(input=0, output=0) for p in ("meta", "baseten")}
+    config = arm.configuration(True, rates)
+    out = tmp_path / "results.jsonl"
+    ledger = Ledger(out, 20, None, multi_tariff=True)
+    try:
+        await run_attempt(
+            ledger,
+            (patch, arm, config, 1),
+            Assumptions(input_tokens=1000, output_tokens=512, calls=40),
+            Path(sys.executable),
+            fake_choice="asked_for",
+            pilot=False,
+            labels_hash=None,
+            factory=None,
+        )
+        effect.assert_awaited_once()
+        stored = Result.model_validate_json(out.read_text())
+        result = stored.detection
+        assert result is not None and result.tests_passed
+        assert "isolation unavailable: " + reason in result.unavailable
+        assert result.question and not result.let_through
+        assert result.unprobed and not result.decisions
+        assert ledger.state.records[0].status == "finished"
+        # Synthetic labels exercise both denominators without consulting the labels sheet.
+        for answer in ("unasked_difference", "only_asked"):
+            report = repetition(ledger.state.records, {patch.id: answer})
+            group = report["classification"]["groups"][answer]
+            assert group["denominator"] == 10 and group["executed"] == 1
+            assert group["questions"] == group["unavailable_questions"] == group["unprobed"] == 1
+            assert group["let_through"] == 0
+            assert "unavailable questions 1/10" in " ".join(report["criteria"])
+            assert report["attempts"][0]["result"]["detection"] == result.model_dump(mode="json")
     finally:
         ledger.close()
