@@ -8,44 +8,43 @@ export interface Transport {
   stop: () => void;
 }
 
-const eventTypes: Record<ServerEvent["type"], true> = {
-  "run.started": true,
-  "graph.snapshot": true,
-  "graph.delta": true,
-  "agent.status": true,
-  "agent.step": true,
-  "agent.focus": true,
-  "change.updated": true,
-  "change.proposed": true,
-  "change.resolved": true,
-  "change.assessed": true,
-  "merge_mode.changed": true,
-  "grant.created": true,
-  "grant.revoked": true,
-  "plan.updated": true,
-  "change.reviewed": true,
-  "change.facts_recorded": true,
-  "tests.executed": true,
-  "revert.resolved": true,
-  "queue.updated": true,
-  "lead.status": true,
-  "usage.tick": true,
-  error: true,
-};
-
 /** The server and fixture checks validate payload schemas; reject broken wire envelopes here. */
 export function parseEvent(text: string): ServerEvent {
   const value: unknown = JSON.parse(text);
   if (typeof value !== "object" || value === null) throw new Error("Invalid event envelope");
   const event = value as Record<string, unknown>;
+  const types: readonly unknown[] = [
+    "run.started",
+    "graph.snapshot",
+    "graph.delta",
+    "agent.status",
+    "agent.step",
+    "agent.focus",
+    "change.updated",
+    "change.proposed",
+    "change.resolved",
+    "change.assessed",
+    "merge_mode.changed",
+    "grant.created",
+    "grant.revoked",
+    "plan.updated",
+    "change.reviewed",
+    "change.facts_recorded",
+    "tests.executed",
+    "revert.resolved",
+    "queue.updated",
+    "lead.status",
+
+    "usage.tick",
+    "error",
+  ];
   if (
     !Number.isSafeInteger(event.seq) ||
     typeof event.seq !== "number" ||
     event.seq < 1 ||
     typeof event.ts !== "string" ||
     !Number.isFinite(Date.parse(event.ts)) ||
-    typeof event.type !== "string" ||
-    !Object.hasOwn(eventTypes, event.type) ||
+    !types.includes(event.type) ||
     typeof event.payload !== "object" ||
     event.payload === null
   )

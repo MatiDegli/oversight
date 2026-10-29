@@ -247,8 +247,7 @@ Every envelope has `seq`, `ts`, `type` and `payload`.
 
 Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
 `POST /changes/{change_id}/approve`, `POST /changes/{change_id}/reject`,
-`POST /changes/{change_id}/request-changes`, `POST /grants/{grant_id}/revoke`, `GET /files`,
-`PUT /files` and `POST /graph/rescan`.
+`POST /changes/{change_id}/request-changes`, `GET /files`, `PUT /files` and `POST /graph/rescan`.
 `GET /graph`, `GET /health` and `GET /events` provide graph, readiness and events.
 
 `GET /impact`, agent message/pause/resume, merge-mode and plan routes still return 501.
