@@ -10,6 +10,12 @@ from oversight.agents._lifecycle import TaskClients
 from oversight.agents._prompts import prompt_version, system_prompt
 from oversight.agents._review_call import run_review_call
 from oversight.agents._status import validate_agent_status
+from oversight.agents.answering import (
+    CHECKS_UNAVAILABLE_CODES,
+    UNAVAILABLE_PRODUCERS,
+    AnsweringError,
+    validate_answering,
+)
 from oversight.agents.client import (
     BASETEN_BASE_URL,
     FAKE_MODEL,
@@ -65,6 +71,7 @@ from oversight.agents.usage import (
 
 __all__ = [
     "BASETEN_BASE_URL",
+    "CHECKS_UNAVAILABLE_CODES",
     "FAKE_MODEL",
     "FAKE_MODEL_B",
     "META_BASE_URL",
@@ -76,9 +83,11 @@ __all__ = [
     "SYSTEM_PROMPT",
     "TOOL_NAMES",
     "TOOL_SCHEMAS",
+    "UNAVAILABLE_PRODUCERS",
     "UNVERIFIED_PROFILES",
     "AgentRun",
     "AgentTask",
+    "AnsweringError",
     "Brake",
     "ChangeSink",
     "ConeEntry",
@@ -121,5 +130,6 @@ __all__ = [
     "run_review_call",
     "system_prompt",
     "validate_agent_status",
+    "validate_answering",
     "validate_usage_tick",
 ]

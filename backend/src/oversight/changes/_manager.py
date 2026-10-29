@@ -176,9 +176,11 @@ class ChangeManager:
         restarts and the next start's `reset` rebuilds main. Rejecting that change keeps it true."""
         return self._ctx.state.suspect or self._ctx.workspace.integrity.main_suspect
 
-    async def open(self, task: AgentTask, model_id: str) -> Tree:
+    async def open(
+        self, task: AgentTask, model_id: str, *, before_create: Callable[[], None] | None = None
+    ) -> Tree:
         """Create the agent's worktree from main's HEAD and record its base files and graph."""
-        return await proposal.open(self._ctx, task, model_id)
+        return await proposal.open(self._ctx, task, model_id, before_create=before_create)
 
     async def file_edited(self, agent_id: AgentId, path: str) -> bool:
         """Send `change.updated` for an edit on disk; `False` after sending an `error` instead."""

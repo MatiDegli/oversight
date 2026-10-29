@@ -38,6 +38,7 @@ from oversight.events import EventPayload
 from oversight.telemetry import CURRENT, annotate, span
 from oversight.workspace import SuiteInterrupted, Tree, Workspace, WorkspaceError
 from oversight_contracts.common import AgentId, ChangeId, Slot
+from oversight_contracts.decisions import DecisionRef
 from oversight_contracts.events import (
     AgentFocus,
     AgentState,
@@ -66,6 +67,11 @@ class AgentTask:
     slot: Slot
     task: str
     limits: Limits
+    answering: DecisionRef | None = None
+
+    def __post_init__(self) -> None:
+        if self.answering is not None:
+            object.__setattr__(self, "answering", self.answering.model_copy(deep=True))
 
 
 @dataclass(frozen=True)
@@ -190,6 +196,7 @@ class AgentRun:
                 step=self._step,
                 max_steps=self._max_steps,
                 detail=detail,
+                answering=task.answering,
             )
         )
 

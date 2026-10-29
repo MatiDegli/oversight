@@ -320,6 +320,10 @@ class EventStore:
     def last_seq(self) -> int:
         return len(self._events)
 
+    def committed_events(self) -> tuple[ServerEvent, ...]:
+        """Independent envelopes from this run, after SQL commit only; no disk IO."""
+        return tuple(event.model_copy(deep=True) for event in self._reference_events.values())
+
     def graph(self) -> tuple[int, GraphSnapshot | None]:
         """Main's graph and the last committed `seq`, read together; None before a snapshot."""
         return len(self._events), self._graph

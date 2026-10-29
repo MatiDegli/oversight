@@ -124,11 +124,11 @@ async def test_a_cancelled_start_in_b_frees_only_b(
     entered = asyncio.Event()
     real_open = ChangeManager.open
 
-    async def held_open(self: ChangeManager, task: Any, model_id: str) -> Any:
+    async def held_open(self: ChangeManager, task: Any, model_id: str, **kwargs: Any) -> Any:
         if task.slot == "B":
             entered.set()
             await asyncio.Event().wait()  # never set: only a cancel ends it
-        return await real_open(self, task, model_id)
+        return await real_open(self, task, model_id, **kwargs)
 
     _, _, clients = gated_clients()
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), clients) as s:

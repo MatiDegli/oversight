@@ -18,7 +18,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI
 
-from oversight import runtime_review
+from oversight import runtime_answering, runtime_review
 from oversight.agents import (
     BASETEN_BASE_URL,
     FAKE_MODEL,
@@ -493,7 +493,11 @@ class LiveRun:
         if isinstance(payload, AgentStatus):
             base = self._manager.agent_base(payload.agent_id) if self._manager else None
             payload = payload.model_copy(update={"base_commit": base})
-            validate_agent_status(payload, base_commit=base)
+            # Answering is historical provenance from the retained server task.
+            agent = self._agents.get(payload.agent_id)
+            validate_agent_status(
+                payload, base_commit=base, answering=agent.task.answering if agent else None
+            )
         stored = await self.store.publish(payload)
         if (
             self._settings.cross_review
@@ -693,6 +697,9 @@ class LiveRun:
         manager = self._manager
         if manager is None:
             raise ApiError("wrong_state", "the run has not started")
+        # Answering admission has no effects; snapshot the request before the first wait.
+        request = request.model_copy(deep=True)
+        runtime_answering.admit(request.answering, self.store)
         slot, profile = self._check(request, manager)
         self._slots[slot] = "starting"  # no await since the check: two starts cannot both pass it
         try:
@@ -706,9 +713,20 @@ class LiveRun:
                 slot=slot,
                 task=request.task,
                 limits=LIMITS,
+                answering=request.answering,
             )
-            client = self._client_factory(profile, slot)
-            tree = await manager.open(task, profile.id)
+            client: ModelClient | None = None
+
+            def before_create() -> None:
+                nonlocal client
+                runtime_answering.admit(task.answering, self.store)
+                client = self._client_factory(profile, slot)
+
+            tree = await manager.open(task, profile.id, before_create=before_create)
+            assert client is not None
+        except ApiError:
+            self._slots[slot] = None
+            raise
         except WrongState as error:
             self._slots[slot] = None  # main turned suspect after the check: nothing was started
             raise ApiError("wrong_state", str(error)) from None
@@ -842,6 +860,7 @@ class LiveRun:
             step=steps,
             max_steps=max_steps,
             detail="The ledger could not record a model call: the run was stopped.",
+            answering=task.answering,
         )
         try:
             await self._finish(self._publish(status))
