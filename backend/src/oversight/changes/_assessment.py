@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import TypeAdapter
 
@@ -15,7 +15,7 @@ from oversight.changes._policy import PolicyInputs, assess
 from oversight.changes._shortcuts_common import is_test_file
 from oversight.changes._state import ChangeRecord
 from oversight.events import NeedsYouWait, StoredEvent, format_needs_you
-from oversight_contracts.common import RuleId
+from oversight_contracts.common import FileStatus, RuleId
 from oversight_contracts.events import ChangeProposed, ErrorReport, ServerEvent
 from oversight_contracts.grants import covered_rule
 from oversight_contracts.policy import ChangeAssessment, EvidenceRef, MergeModeState
@@ -29,6 +29,11 @@ MAX_EVIDENCE_EVENTS = 1024
 EXPIRED = "Required rules evidence was not confirmed within {seconds:g} seconds."
 _log = logging.getLogger(__name__)
 _EVENT = TypeAdapter(ServerEvent)
+_EXISTING_TEST_STATUS: dict[FileStatus, Literal["modified", "deleted"] | None] = {
+    "added": None,
+    "modified": "modified",
+    "deleted": "deleted",
+}
 
 
 @dataclass(frozen=True)
@@ -284,10 +289,15 @@ class RulesScheduler:
             lines_added=proposal.lines_added,
             lines_removed=proposal.lines_removed,
             modified_existing_test_paths=tuple(
-                f.path for f in proposal.files if is_test_file(f.path) and f.status == "modified"
+                f.path
+                for f in proposal.files
+                if is_test_file(f.path)
+                and _EXISTING_TEST_STATUS.get(f.status, "modified") == "modified"
             ),
             deleted_existing_test_paths=tuple(
-                f.path for f in proposal.files if is_test_file(f.path) and f.status == "deleted"
+                f.path
+                for f in proposal.files
+                if is_test_file(f.path) and _EXISTING_TEST_STATUS.get(f.status) == "deleted"
             ),
             evidence=evidence,
         )

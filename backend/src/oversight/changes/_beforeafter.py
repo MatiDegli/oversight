@@ -17,6 +17,7 @@ from oversight.workspace import JUnitOutcome as Outcome
 from oversight.workspace import JUnitRun as TestRun
 from oversight.workspace import RunProblem as RunProblem
 from oversight.workspace import parse_junit as parse_junit
+from oversight_contracts.common import CaseOutcome
 
 __all__ = [
     "MAX_TESTS",
@@ -45,6 +46,18 @@ UnknownReason = Literal[
     "after_report_problem",
     "before_setup_or_import_error",
 ]
+_AFTER_OUTCOMES: dict[CaseOutcome, FactKind | None] = {
+    "passed": None,  # Only a pass may proceed to the before evidence.
+    "failed": "fails_after",
+    "error": "fails_after",
+    "skipped": "skipped",
+}
+_BEFORE_OUTCOMES: dict[CaseOutcome, tuple[FactKind, UnknownReason | None]] = {
+    "passed": ("passes_before_and_after", None),
+    "failed": ("fails_before_passes_after", None),
+    "error": ("unknown", "before_setup_or_import_error"),
+    "skipped": ("skipped", None),
+}
 
 
 @dataclass(frozen=True)
@@ -84,24 +97,16 @@ def _fact(test_id: str, before: TestRun | None, after: TestRun) -> TestFact:
         kind, reason = "unknown", "after_report_problem"
     elif new is None:
         kind = "not_collected_after"
-    elif new in {"failed", "error"}:
-        kind = "fails_after"
-    elif new == "skipped":
-        kind = "skipped"
+    elif (after_kind := _AFTER_OUTCOMES.get(new, "unknown")) is not None:
+        kind = after_kind
     elif before is None:
         kind, reason = "unknown", "before_run_missing"
     elif before.problems:
         kind, reason = "unknown", "before_report_problem"
     elif old is None:
         kind, reason = "unknown", "before_test_missing"
-    elif old == "skipped":
-        kind = "skipped"
-    elif old == "error":
-        kind, reason = "unknown", "before_setup_or_import_error"
-    elif old == "failed":
-        kind = "fails_before_passes_after"
     else:
-        kind = "passes_before_and_after"
+        kind, reason = _BEFORE_OUTCOMES.get(old, ("unknown", None))
     return TestFact(test_id, kind, old, new, reason)
 
 

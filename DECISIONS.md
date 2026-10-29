@@ -1493,6 +1493,12 @@ failing run, a new cross-review verdict, and a new call-edge kind (`EdgeKind`) o
 (`Confidence`). No existing value passes this way; the maintainer decided to make those four paths
 fail closed in a separate change after standing grants land. He approved the first amendment's
 request and its final change in the coordinator's session, not through another line.
+
+2026-10-29: The four merge-deciding families now fail closed with explicit enum tables and
+completeness tests: existing-test file statuses, before/after case outcomes, cross-review
+verdicts, and impact call-edge kinds/confidence. Unknown values touch an existing test or leave
+the case/review/cone unknown, so they cannot make the change pass its rules.
+
 ## 2026-10-29 — Contracts 1.7.0 — approved by the maintainer
 
 The maintainer approved `docs/plans/standing-grants.md` and its contract change on 2026-10-29,
