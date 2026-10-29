@@ -390,7 +390,7 @@ async def test_every_recorded_event_validates_against_the_regenerated_schema(
     from oversight_contracts import CONTRACT_VERSION
 
     schema = json.loads((ROOT / "contracts/generated/oversight.schema.json").read_text())
-    assert CONTRACT_VERSION == "1.6.0" and "1.6.0" in schema["$comment"]
+    assert CONTRACT_VERSION == "1.7.0" and CONTRACT_VERSION in schema["$comment"]
     records = []
     for path in ROOT.rglob("*.jsonl"):
         if any(part in {"node_modules", ".git", ".runtime", ".venv"} for part in path.parts):

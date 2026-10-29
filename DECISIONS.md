@@ -1374,6 +1374,95 @@ with no new contract field: "asked for" only from the classification, which neve
 the person" from a card answered Yes by the person. The summary and proof 3's counts keep them apart. A card's
 kind is read from its server-authored question, one of two fixed texts. When pinned examples exist (item 13), a
 Yes on a could-not-tell question is the one offered as "keep as example".
+## 2026-10-29 — The inbox header count lands on the maintainer's approval of its captures
+
+The card and inbox shots gate holds every card or inbox front until the maintainer approves its
+captures. For `frontend/inbox-count` he approved its four header captures and confirmed it to the
+coordinator directly on October 29. An approval relayed by another coordinator session does not
+count: it must come from him in the session that lands.
+
+## 2026-10-29 — small_cone does not pass what it cannot see
+
+Audit note: commit 13c08bc replaced the same-day entry "Small cones require no unobserved
+possible callers" with this consolidated entry. It retains that decision's unknown-on-unmeasured
+count, shared caller definition and both measuring producers; this is not a new maintainer decision.
+
+The impact cone follows exact calls only, so an empty or small cone can mean "nothing calls this"
+or "the graph could not tell who calls this". On Boltons most functions have no exact callers, and
+many of them have callers the graph marks as possible. `small_cone` used to pass both cases.
+
+The maintainer decided that the rule answers `unknown` when a changed node or a node in its cone has
+a caller linked only by possible calls, or when that count was not measured. The count is exactly
+the review's "N possible callers, not followed": distinct non-test callers outside the changed nodes
+and the cone, with a possible call into them and no exact one. The proposal assessment and the
+merge-time re-measure both measure it. `unknown` never counts as passing, so in rules mode the
+change waits for the person, and the inbox entry lists those callers. His Yes is recorded as
+accepted by him, never as asked for, as with D6. A cone that already fails the exact limits stays
+`fail`. The contracts do not change: the recorded observation keeps its five counts. Planning
+estimates for Boltons d31d821, not reproducible from this repository (the corpus measurement and the
+drafted task list are not checked in), put 446 of 898 single-function changes and 5 of the 16
+drafted proof 2 tasks in this case. The tasks are not changed to avoid it, and the run reports
+whatever share results.
+
+## 2026-10-29 — Standing grants: Oversight remembers what the person let go
+
+With the `small_cone` fix, proof 2 would ask the maintainer about most Boltons changes, often the
+same question about the same module. He decided that Oversight remembers what he authorized.
+Three layers decide whether a change waits, each in one direction: rules pass or wait with
+evidence; Muse Spark Open's decision can only add a wait; the person's grants can only remove a
+wait the person could accept themselves.
+
+A grant comes only from the person's own answer to an inbox entry (Yes plus "don't ask again",
+with a scope they pick), never from an agent, a lead plan or a message relayed by another session.
+Free-text grants may come later, always turned into a structured grant he confirms.
+It can waive possible callers not followed or a protected path, never failing tests, conflicts,
+test integrity, cross-review or a decision question. It applies by exact scope match, never by a
+model's judgment; its scope is narrow (one reason kind, for one module, path, agent or run) and it
+ends with the run or the session unless he chooses otherwise. Grants are listed with Revoke,
+a change merged under a grant says so on its card, with the grant and when it was given.
+Every use is recorded as evidence, and proof 2 counts questions asked and grants applied
+separately. Building waits for his approval of the plan in `docs/plans/standing-grants.md`.
+Using his past answers as
+examples for the open model is later, with its own bench arm.
+
+## 2026-10-29 — Standing grants approved as contracts 1.7.0; the creation bundle moves to 1.8.0
+
+The maintainer approved the plan in `docs/plans/standing-grants.md` and its contract change on
+2026-10-29, in the coordinator's session. Review then found that 1.7.0 was already reserved for
+safe creation, nullable SaveFile.base_hash, zones and inventory (the 2026-10-28 contracts 1.6.0
+entry and `docs/proposal.md` section 4.9). He decided that grants take 1.7.0 and ship first, and
+that safe creation, nullable SaveFile.base_hash, zones and inventory move to 1.8.0. The reason is
+the one from 2026-10-28: they are not designed yet and must not hold an approved addition. No
+schema has shipped under 1.7.0, so no version string names two schemas. The earlier entries stay
+as the approval history.
+
+## 2026-10-29 — Proof 2 measures correctness with hidden checks and a paired arm
+
+Proof 2's counts said how many changes were accepted, not how many were correct, and nothing
+compared Oversight with agents that merge on passing tests alone. The maintainer approved adding
+both on 2026-10-29, in the coordinator's session. Each proof 2 task gets hidden checks, written and
+frozen before the run without seeing any agent output, and kept outside the product workspace as
+`tools/eval` already does. The same run then yields two arms judged by those checks: without
+Oversight, each agent's first proposal with passing tests, merged as it is; with Oversight, what
+reached main after rules, questions and revisions. Model, tasks and generation are identical, so
+only the gate differs, at no extra model cost. Each arm reports correct changes on main,
+regressions that got through, questions per accepted change, questions the checks show were not
+needed, and cost and wall time per correct change; questions and grants applied stay separate.
+The reporting rule is fixed before measuring. The arm without Oversight does not model an agent
+that never receives Request changes, and the report says so. Line B owns `tools/eval` and builds
+it after the maintainer approves the proof 2 tasks.
+
+## 2026-10-29 — Keys typed into a packaged app wait for after the hackathon
+
+Oversight runs locally from the repository with its own `.env`, and judges open the static build,
+which has no backend and no keys. A packaged app would take keys in Settings instead: write-only,
+kept by the local backend in the system keychain or a user-only file, never returned to the
+browser, events or recordings, with `.env` kept for developers. That needs the secrets rule in
+AGENTS.md changed by the maintainer, a contract change, and an independently reviewed security
+plan, since a server on 127.0.0.1 must refuse requests from other sites open in the same browser.
+On 2026-10-29 the maintainer placed it after the hackathon: it serves none of the three proofs,
+and no judge types a key.
+
 ## 2026-10-29 — Aggregate counts on demand and measured frame titles
 
 The maintainer approved both fixes on October 28 at 23:52 ART (October 29 UTC).
@@ -1420,3 +1509,71 @@ On Boltons d31d821, 726 of 925 library functions and methods have an empty exact
 it hides every possible caller of 310 methods (OrderedMultiDict 42, IndexedSet 25,
 BarrelList 24), leaving 278 of them apparently without callers at all. Count every possible
 call here, regardless of name; do not follow these calls or imply the cone is complete.
+
+## 2026-10-29 — Repository memory is a candidate: only what search cannot find
+
+The maintainer proposed what Oversight should remember about a repository, recorded as a candidate
+and not queued; nothing is built before the freeze (docs/additions.md, "Repository memory"). Search
+finds what code says, never the decisions, invariants and reasons that are not written down, and it
+neither enforces a rule nor notices a stale one. So the memory holds only that, each kind in the
+mechanism that fits it: executable pins, text pins anchored to nodes, the repository's own AGENTS.md
+and skills, and standing grants. Facts from running something wait for a later version, with command
+output as evidence. Text pins load deterministically; Muse Spark Open can only stop or flag; only
+the person creates or confirms a pin. Text pins are built only if a measured Boltons trial after
+the freeze shows fewer rule contradictions at equal or lower cost.
+
+## 2026-10-29 — Item 13's pin record carries a kind and a node anchor
+
+Checking the reserved shape showed that `ExamplePin` is a confirmation stamp inside a task example,
+so it cannot hold a text rule without faking an example's inputs and expected result. The
+maintainer decided that item 13's pin record is born with `kind`, only `example` for now, and a node
+anchor, so that a later text rule is one new kind rather than a second pin family; `ExamplePin`
+stays as it is. Because a node anchor breaks on a rename, a pin whose anchor no longer exists shows
+as orphaned, in the Pinned lens and as an inbox entry, and never vanishes silently. A new enum value
+is not a minor change under proposal section 4.9 today; the request to make it one is his to decide.
+
+## 2026-10-29 — A new enum value is a minor contract change, under conditions
+
+Section 4.9 of the proposal listed a field with a default, an endpoint and an event type as minor
+additions, but not a new enum value; 1.4.0 needed a bounded exception to extend reserved enums,
+and item 13's pin `kind` would need another for a later text rule. The maintainer approved a
+narrow amendment on 2026-10-29: a new value in an existing enum is minor when every existing
+payload and fixture still validates and every TypeScript consumer of the enum is exhaustive, so
+the compiler forces the UI to handle it, as with a new event type. A consumer that is not
+exhaustive is made exhaustive in the same change, or the change is not minor. Strict models are
+unchanged, and removing or renaming a value stays 2.0. This answers the request left open in the
+entry above on item 13's pin record, so its later text-rule kind can ship in a minor version.
+
+## 2026-10-29 — Python consumers of a contract enum are exhaustive too, and merge decisions fail closed
+
+The first enum amendment required exhaustive TypeScript consumers only. The backend also branches
+on contract enums, such as rule results, merge modes, file statuses and review verdicts, and there
+a value nobody handles can fall into a pass branch, as `small_cone` once passed callers it could
+not see. The maintainer amended the rule the same day: every Python consumer is exhaustive too,
+with a `match` that ends in `assert_never` or a table keyed by the enum, checked by pyright, or a
+test where pyright cannot check it; and code that decides a merge, a rule result or whether a
+change waits fails closed, so an unknown value makes the change wait. A read-only survey of
+`bb64e65`, counting one consumer per file and enum, found 152 of 153 Python consumers not
+exhaustive; 39 of them decide a merge, a rule result or a wait, and in four code paths across five
+enums a new value would pass: a test file's new file status, a new test case outcome after a
+failing run, a new cross-review verdict, and a new call-edge kind (`EdgeKind`) or confidence
+(`Confidence`). No existing value passes this way; the maintainer decided to make those four paths
+fail closed in a separate change after standing grants land. He approved the first amendment's
+request and its final change in the coordinator's session, not through another line.
+## 2026-10-29 — Contracts 1.7.0 — approved by the maintainer
+
+The maintainer approved `docs/plans/standing-grants.md` and its contract change on 2026-10-29,
+in the coordinator's session, as recorded above under "Standing grants approved as contracts
+1.7.0; the creation bundle moves to 1.8.0". This version adds the structured grant request on
+Approve, person-created and revoked grant events, and immutable grant-use receipts on rules
+resolutions. Existing 1.6.0 recordings and commands remain valid with absent new fields.
+The revoke command is POST /grants/{grant_id}/revoke, with no body.
+Contracts 1.7.0 deliberately omit the plan's `grant.expired` event: run expiry ends a grant
+with its run. Adding that event later requires another minor version.
+
+The first backend supports possible_callers, exact module or run scope, and run expiry only.
+Unsupported reasons, scopes and expiry are refused rather than silently broadened. A grant
+removes only the measured possible-callers unknown; it never changes the recorded assessment
+or waives tests, a failed rule, missing measurements, or another unknown. Server authorization
+is rechecked at every rules barrier and serialized with revoke at the Git effect boundary.
+The creation bundle remains reserved for 1.8.0.

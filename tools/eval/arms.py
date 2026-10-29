@@ -6,14 +6,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from tools.eval.grade import Tariff
+from tools.eval.paths import PAID_OUTPUT as PAID_OUTPUT
+from tools.eval.paths import output_path as canonical_path
 from tools.eval.session import PROFILES
-from tools.eval.tasks import REPO, BenchError, digest
+from tools.eval.tasks import BenchError, digest
 
 from oversight.agents import PROMPT_VERSION
 from oversight.app import LIMITS
 from oversight_contracts.events import RunStarted
-
-PAID_OUTPUT = REPO / ".eval-output" / "bench" / "results.jsonl"
 
 
 class Arm(BaseModel):
@@ -62,17 +62,4 @@ def load_arms(path: Path, selected: list[str]) -> list[Arm]:
 
 
 def output_path(out: Path, *, paid: bool) -> Path:
-    out = out.resolve()
-    if paid:
-        if out != PAID_OUTPUT.resolve():
-            raise BenchError(f"paid --out must resolve to {PAID_OUTPUT}")
-        # Older directories cannot silently disappear from cumulative accounting.
-        older = [
-            p
-            for p in PAID_OUTPUT.parent.parent.rglob("ledger.json")
-            if not p.is_relative_to(PAID_OUTPUT.parent)
-            and p.parent != PAID_OUTPUT.parent.parent / "lead"
-        ]
-        if older:
-            raise BenchError("legacy bench ledgers need consolidation before paid runs")
-    return out
+    return canonical_path(out, paid=paid, canonical=PAID_OUTPUT)

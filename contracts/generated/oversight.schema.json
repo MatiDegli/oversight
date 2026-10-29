@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.6.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.7.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -444,6 +444,18 @@
             }
           ],
           "default": null
+        },
+        "grant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GrantRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Create a standing grant from this personal approval, when its wait and scope match."
         },
         "answers": {
           "anyOf": [
@@ -1331,6 +1343,21 @@
           ],
           "default": null,
           "description": "The accepted human answers, copied by the server from a decision command."
+        },
+        "grants": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/GrantUse"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Immutable authorization and measured callers waived by a rules approval."
         }
       },
       "required": [
@@ -2405,6 +2432,287 @@
         "end_line"
       ],
       "title": "FocusRange",
+      "type": "object"
+    },
+    "GrantAuthorization": {
+      "additionalProperties": false,
+      "description": "Server capture after exact scope matching, bound to this assessment target.\n\nScope is captured from the server's matched grant, never from a model or command receipt.\nHistorical validation consumes this capture; only live barriers consult mutable grants.",
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/GrantReason"
+        },
+        "scope": {
+          "$ref": "#/$defs/GrantScope"
+        },
+        "creation_seq": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "creation_ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "checked_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "active_at_effect": {
+          "type": "boolean"
+        },
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "reason",
+        "scope",
+        "creation_seq",
+        "creation_ts",
+        "run_id",
+        "session_id",
+        "checked_at",
+        "active_at_effect",
+        "change_id",
+        "agent_id",
+        "revision",
+        "head_commit"
+      ],
+      "title": "GrantAuthorization",
+      "type": "object"
+    },
+    "GrantCreated": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/GrantReason"
+        },
+        "scope": {
+          "$ref": "#/$defs/GrantScope"
+        },
+        "grant_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "granted_by": {
+          "const": "person",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "scope",
+        "grant_id",
+        "change_id",
+        "revision",
+        "head_commit",
+        "run_id",
+        "session_id",
+        "granted_by"
+      ],
+      "title": "GrantCreated",
+      "type": "object"
+    },
+    "GrantCreatedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "grant.created",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/GrantCreated"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "GrantCreatedEvent",
+      "type": "object"
+    },
+    "GrantReason": {
+      "enum": [
+        "possible_callers",
+        "protected_path"
+      ],
+      "type": "string"
+    },
+    "GrantRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/GrantReason"
+        },
+        "scope": {
+          "$ref": "#/$defs/GrantScope"
+        }
+      },
+      "required": [
+        "reason",
+        "scope"
+      ],
+      "title": "GrantRequest",
+      "type": "object"
+    },
+    "GrantRevoked": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "grant_id"
+      ],
+      "title": "GrantRevoked",
+      "type": "object"
+    },
+    "GrantRevokedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "grant.revoked",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/GrantRevoked"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "GrantRevokedEvent",
+      "type": "object"
+    },
+    "GrantScope": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "module",
+            "path",
+            "agent",
+            "run"
+          ],
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "expires": {
+          "enum": [
+            "run",
+            "session"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value",
+        "expires"
+      ],
+      "title": "GrantScope",
+      "type": "object"
+    },
+    "GrantUse": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "rule": {
+          "$ref": "#/$defs/RuleId"
+        },
+        "caller_ids": {
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "caller_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "authorization": {
+          "$ref": "#/$defs/GrantAuthorization"
+        }
+      },
+      "required": [
+        "grant_id",
+        "rule",
+        "caller_ids",
+        "caller_count",
+        "authorization"
+      ],
+      "title": "GrantUse",
       "type": "object"
     },
     "GraphDelta": {
@@ -4972,6 +5280,8 @@
           "change.reviewed": "#/$defs/ChangeReviewedEvent",
           "change.updated": "#/$defs/ChangeUpdatedEvent",
           "error": "#/$defs/ErrorReportEvent",
+          "grant.created": "#/$defs/GrantCreatedEvent",
+          "grant.revoked": "#/$defs/GrantRevokedEvent",
           "graph.delta": "#/$defs/GraphDeltaEvent",
           "graph.snapshot": "#/$defs/GraphSnapshotEvent",
           "lead.status": "#/$defs/LeadStatusEvent",
@@ -5045,6 +5355,12 @@
         },
         {
           "$ref": "#/$defs/LeadStatusEvent"
+        },
+        {
+          "$ref": "#/$defs/GrantCreatedEvent"
+        },
+        {
+          "$ref": "#/$defs/GrantRevokedEvent"
         }
       ]
     },

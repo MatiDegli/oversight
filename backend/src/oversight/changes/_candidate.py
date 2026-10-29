@@ -1,9 +1,13 @@
 """Measure the prepared combination from immutable Git objects, against captured main."""
 
+from dataclasses import dataclass
+
+from oversight.changes._grants import Measurement
+from oversight.changes._grants import measure as measure_grants
 from oversight.changes._policy import PolicyInputs, assess
 from oversight.changes._support import ChangeContext, RulesFailure
 from oversight.changes._versions import parse
-from oversight.graph import change_cone, change_graph, possible_callers
+from oversight.graph import change_cone, change_graph
 from oversight.workspace import MergeGuard
 from oversight_contracts.events import Limits
 from oversight_contracts.policy import ChangeAssessment, RuleAssessment
@@ -28,9 +32,15 @@ async def python_files(ctx: ChangeContext, tree: str) -> dict[str, str]:
     return files
 
 
+@dataclass(frozen=True)
+class Measured:
+    rules: tuple[RuleAssessment, ...]
+    grants: Measurement
+
+
 async def measure(
     ctx: ChangeContext, guard: MergeGuard, pending: ChangeAssessment, limits: Limits
-) -> tuple[RuleAssessment, ...]:
+) -> Measured:
     stats = await ctx.git(
         ctx.workspace.main,
         "diff",
@@ -58,6 +68,7 @@ async def measure(
     cone = change_cone(
         delta, candidate.graph, max_depth=limits.cone_max_depth, max_nodes=limits.cone_max_nodes
     )
+    grant_measurement = measure_grants(base.graph, candidate.graph, delta, paths, cone)
     measured = assess(
         PolicyInputs(
             change_id=pending.change_id,
@@ -73,11 +84,14 @@ async def measure(
             lines_added=added,
             lines_removed=removed,
             cone=cone,
-            possible_callers=len(possible_callers(candidate.graph, cone)),
+            possible_callers=grant_measurement.caller_count,
             parse_errors=len(base.graph.parse_errors) + len(candidate.graph.parse_errors),
             unresolved_removed=len(delta.nodes_removed),
             evidence={r.rule: tuple(r.evidence) for r in pending.rules},
         ),
         pending.policy_version,
     )
-    return tuple(r for r in measured.rules if r.rule in {"small_change", "small_cone"})
+    return Measured(
+        tuple(r for r in measured.rules if r.rule in {"small_change", "small_cone"}),
+        grant_measurement,
+    )

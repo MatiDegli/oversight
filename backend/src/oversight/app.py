@@ -868,7 +868,13 @@ class LiveRun:
             revision=request.revision,
             head_commit=request.head_commit,
             answers=request.answers,
+            grant=request.grant,
         )
+
+    async def revoke_grant(self, grant_id: str) -> None:
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        await self._manager.revoke_grant(grant_id)
 
     def reject(self, change_id: str, request: RejectChange) -> None:
         if self._manager is None:

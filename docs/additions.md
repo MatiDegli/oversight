@@ -13,7 +13,11 @@ The freeze is organized around three proofs. Judge each front by the proof it se
    merged by rules, questions asked and differences tests missed, plus cost per accepted change.
    Paid calls for this run have a US$25 Meta-budget cap, separate from the bench's US$20.
    End on the decisions inbox: this many agents for this many hours, and these were the only
-   decisions the person had to make.
+   decisions the person had to make. Each task gets hidden checks, frozen before the run without
+   seeing agent output. The same run reports two arms judged by them: each agent's first proposal
+   with passing tests, merged as it is (without Oversight), and what reached main (with
+   Oversight). Each arm reports correct changes on main, regressions that got through, questions
+   per accepted change, questions that were not needed, and cost and wall time per correct change.
 3. **Unrequested behavior among green patches.** From that same run, measure the share of patches
    with passing tests whose behavior diff reveals a difference the task did not request. Fix the
    reporting rule before measuring: if the share is low or the sample too small, tell the scale
@@ -60,6 +64,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 13 | Pinned examples and graph lenses | Queued — no pins or lens control on main `535e6f6` | Yes |
 | 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
 | 18 | Remaining packages 11–14 | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
+| — | [Standing grants](#standing-grants) | Plan approved 2026-10-29 in [standing-grants.md](plans/standing-grants.md); backend front next, ahead of item 9's decision-veto wiring | Contracts 1.7.0, approved 2026-10-29; the creation bundle moved to 1.8.0 — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route |
 
 ### Only if time remains
 
@@ -96,6 +101,9 @@ These retain useful ideas from the old inventory without approving a front or ch
 - Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
 - Zoom levels (see README), a Tauri shell, a local model in slot B, and named editor cursors.
+- [Repository memory](#repository-memory): what Oversight remembers about a repository that
+  search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
+  before the freeze.
 
 ## Next
 
@@ -114,6 +122,8 @@ These retain useful ideas from the old inventory without approving a front or ch
 - Mask older tool results on long runs; measure dollars and correctness before adoption.
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
+- After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
+  local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 
 ## No
 
@@ -389,6 +399,11 @@ belongs in the proposal. The Cost per node lens was dropped: cost is measured pe
 so a node lens would present an allocation estimate as a measurement. The cost-per-node field in
 usage events was declined too. Do not treat a file-naming convention alone as confirmed-pin enforcement.
 
+The pin record is born with `kind` (only `example` for now) and a node anchor, so that a later text
+rule is one new kind rather than a second pin family; `ExamplePin` in contracts 1.5.0 stays as it
+is. A node anchor breaks on a rename: when a pin's anchor no longer exists, the pin shows as
+orphaned, in the Pinned lens and as an inbox entry, and never vanishes silently.
+
 ### 14. Node card explained by examples
 
 The node card first shows the test source where the function is called,
@@ -458,6 +473,72 @@ Package 14 is person-to-agent messages, pause/resume and replay timeline. Messag
 reserved and still 501 (`backend/src/oversight/api/commands.py:51`); playback already consumes ordered
 events. Reuse those interfaces/local controls without claiming messaging or seeking already works.
 Earlier-today history belongs to item 8; usage views belong to item 10.
+
+### Standing grants
+
+Added by the maintainer on 2026-10-29. Oversight remembers what the person authorized, so it does
+not ask again for the same thing. Rules pass or wait with evidence, Muse Spark Open's decision can
+only add a wait, and the person's grants can only remove a wait the person could accept. A grant
+is made only from the person's answer to an inbox entry, with a narrow scope that expires with the
+run; it waives possible callers not followed or a protected path, never tests, conflicts, test
+integrity, cross-review or a decision question. Grants are listed with Revoke, recorded on every
+change they merge, and counted apart from questions in proof 2. Plan, contract proposal and order:
+[standing-grants.md](plans/standing-grants.md). Proposed pitch line, for PRODUCT.md and the video
+once approved: "Rules check. The open model can only stop. Only you can let go, and Oversight
+remembers what you let go."
+
+### Repository memory
+
+A candidate from the maintainer, 2026-10-29. It is not queued, and nothing is built before the
+freeze.
+
+An agent finds with search what is written in code. It cannot find what is not written down, such
+as the maintainer's decisions, invariants and the reasons behind them, or what it does not know to
+look for. Search also enforces nothing and does not notice when a rule went stale. This candidate
+covers only that gap. It never stores what search or the graph already give, such as where
+something is defined or who calls it.
+
+Each kind of knowledge goes to the mechanism that fits it:
+
+- Checkable behavior: an executable pin, item 13's generated test; breaking it fails the rules.
+- A rule or invariant with a place in the code: a text pin anchored to a node, function or module.
+- A global decision with no anchor: the repository's own AGENTS.md, not a format of ours, so any
+  tool that opens the repository reads it.
+- A procedure: the repository's own skills, as they exist; nothing to build.
+- Authorizations: [standing grants](#standing-grants).
+- Facts an agent discovered by running something, such as a test that needs `TZ=UTC`: later, with
+  the command output as evidence, and not in a first version.
+
+Text pins load deterministically, with no model choosing: the pins in the task's zone; the pins in
+its cone, here including possible calls, because for context a false positive costs only tokens;
+and an index that is always present, one line per pin, capped at about 30 lines, holding only what
+search cannot derive.
+
+Muse Spark Open can still only stop or flag. It checks whether a change contradicts a text pin in
+its zone or cone; if so, the change waits, quoting the pin. When an anchored node changes, it says
+whether the pin still applies: unsure becomes an inbox entry for the person, and it never deletes a
+pin. It rejects proposed entries that duplicate or contradict one of the maintainer's decisions. It
+never accepts alone and never chooses what is loaded.
+
+Only the person creates or confirms text pins and decisions. An agent may propose one, and it
+counts once the person confirms it. Text an agent read in the repository never becomes a pin on its
+own. Pins live in Oversight's state with provenance (who confirmed it, from which task) and show in
+the graph through item 13's Pinned lens. When the person gives the same answer three times,
+Oversight offers to save it as a pin; the offer is deterministic, with no model.
+
+Before committing to build text pins, after the freeze and only if budget remains after proof 2:
+about 10 hand-written rules for Boltons and their index go into the task text through saved flows,
+with no new code. The same 5 tasks run twice, without and with them, measured by what Oversight
+already records: steps to the first edit, search and read calls, cost, tests, and changes that
+contradict a rule. Success is fixed before measuring: fewer rule contradictions at equal or lower
+cost. If the rules only save a few steps, text pins are not built.
+
+Contract check, 2026-10-29: `ExamplePin` (contracts 1.5.0) is a confirmation stamp inside a task
+example, which requires inputs and an expected result, so a text rule cannot be one without faking
+those fields. Item 13's pin record carries the kind and anchor instead (item 13 above). Since
+2026-10-29, adding a value to an existing enum is a minor change under `docs/proposal.md` section
+4.9 when every existing payload still validates and every consumer of the enum, TypeScript and
+Python, is exhaustive, so a later text-rule kind can ship in a minor version.
 
 ### Shipped editor language highlighting
 

@@ -12,7 +12,13 @@ from typing import Any, Protocol
 from fastapi import APIRouter, Request, Response
 
 from oversight.api.errors import ApiError
-from oversight.changes import ChangeNotFound, InvalidAnswers, WrongState
+from oversight.changes import (
+    ChangeNotFound,
+    GrantNotFound,
+    InvalidAnswers,
+    InvalidGrant,
+    WrongState,
+)
 from oversight.telemetry import CURRENT, TRACE_HEADER, evaluation_trace, mark
 from oversight.workspace import TREE_TIMEOUT_S, FileTooLarge, InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
@@ -61,6 +67,7 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
     ("POST", "/changes/{change_id}/approve", "Approve"),
     ("POST", "/changes/{change_id}/reject", "Reject"),
     ("POST", "/changes/{change_id}/request-changes", "Request changes"),
+    ("POST", "/grants/{grant_id}/revoke", "Revoke grant"),
     ("GET", "/files", "Reading files"),
     ("PUT", "/files", "Saving files"),
     ("POST", "/graph/rescan", "Rescanning the graph"),
@@ -76,6 +83,8 @@ class Commands(Protocol):
     async def start(self, request: StartAgent) -> AgentCreated: ...
 
     def approve(self, change_id: str, request: ApproveChange) -> None: ...
+
+    async def revoke_grant(self, grant_id: str) -> None: ...
 
     def reject(self, change_id: str, request: RejectChange) -> None: ...
 
@@ -112,7 +121,7 @@ def _decide[A](decision: Callable[[str, A], None], change_id: str, comment: A) -
         raise ApiError("not_found", f"there is no change {change_id!r}") from None
     except WrongState as error:
         raise ApiError("wrong_state", str(error)) from None
-    except InvalidAnswers as error:
+    except (InvalidAnswers, InvalidGrant) as error:
         raise ApiError("invalid_request", str(error)) from None
 
 
@@ -130,7 +139,7 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
 
     @router.post("/agents", status_code=201)
     async def start_agent(request: StartAgent, http: Request) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
-        # request.zone is reserved and ignored until zones are delivered in 1.7.0.
+        # request.zone is reserved and ignored until zones are delivered in 1.8.0.
         attempt_id = http.headers.get(TRACE_HEADER)
         if attempt_id is not None and not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
             raise ApiError(
@@ -156,6 +165,16 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
         change_id: str, body: RejectChange
     ) -> Response:
         _decide(commands.reject, change_id, body)
+        return Response(status_code=202)
+
+    @router.post("/grants/{grant_id}/revoke", status_code=202, response_class=Response)
+    async def revoke_grant(grant_id: str) -> Response:  # pyright: ignore[reportUnusedFunction]
+        try:
+            await commands.revoke_grant(grant_id)
+        except GrantNotFound:
+            raise ApiError("not_found", f"there is no grant {grant_id!r}") from None
+        except WrongState as error:
+            raise ApiError("wrong_state", str(error)) from None
         return Response(status_code=202)
 
     @router.post("/changes/{change_id}/request-changes", status_code=202, response_class=Response)
