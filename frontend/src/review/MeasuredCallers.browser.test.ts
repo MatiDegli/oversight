@@ -50,7 +50,7 @@ async function mount(page: Page, theme: string) {
     const provenance = document.createElement("p");
     provenance.textContent = "Hand-written UI fixture · illustrative measurements";
     provenance.style.cssText =
-      "position:fixed;top:16px;left:50%;color:var(--muted);font-size:var(--caption-size);z-index:100";
+      "position:fixed;bottom:4px;left:300px;color:var(--muted);font-size:var(--caption-size);z-index:100";
     document.body.append(provenance);
   }, theme);
   await page.getByRole("button", { name: /^Decisions:/ }).click();
