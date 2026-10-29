@@ -1,9 +1,5 @@
-import { readFileSync } from "node:fs";
-
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { applyEvent, createInitialState } from "../state";
-import type { ServerEvent } from "@contracts";
 import type { State } from "../state";
 import { graphScope } from "./graphScope";
 import { fieldInput, fieldScope } from "./fieldScope";
@@ -11,17 +7,8 @@ import { through } from "./replay.fixture";
 import { initialView } from "./view";
 import type { View } from "./view";
 
-/** The recorded run with the change waiting on an open entry in the decisions inbox (seq 21). */
-const awaiting = () =>
-  readFileSync(
-    new URL("../../../fixtures/events/handwritten-level1-waiting.jsonl", import.meta.url),
-    "utf8",
-  )
-    .trim()
-    .split("\n")
-    .map((line) => JSON.parse(line) as ServerEvent)
-    .filter((event) => event.seq <= 21)
-    .reduce(applyEvent, createInitialState());
+/** The recorded run with the change waiting on its open entry in the decisions inbox (seq 20). */
+const awaiting = () => through(20);
 
 const DIFF = { changeId: "change-1", path: "shop/pricing.py" };
 const FILE = { path: "shop/pricing.py", agentId: null, startLine: 1, endLine: 20 };
@@ -85,12 +72,6 @@ describe("the field's scope follows what the person has open", () => {
     const live = fieldInput(through(12), watching);
     expect(live.mode).toBe("live-diff");
     expect(live.lights.map((light) => light.id)).toContain("shop.pricing:compute_price");
-  });
-
-  it("has no light for an agent that waits for review and has no open entry in the inbox", () => {
-    const waiting = fieldInput(through(20), reviewing);
-    expect(waiting.mode).toBe("review");
-    expect(waiting.lights).toEqual([]);
   });
 
   it.each([initialView, watching, reviewing, reading])(

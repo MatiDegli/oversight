@@ -22,21 +22,11 @@ const through = (seq: number) =>
 const config = fieldConfig(themes.dark, "watch");
 
 /**
- * The same run with an entry in the decisions inbox, which the recorded run predates: a review card
- * for the change is recorded at seq 21, right after the proposal waits (20), and the decision that
- * follows (approved, merged) is seq 22 and names the candidate it decided, so it closes the entry.
+ * The recorded run waits at seq 20: the proposal opened an entry in the decisions inbox, which stays
+ * open until the decision, the approval at seq 21.
  */
-const waitingEvents = readFileSync(
-  new URL("../../../../fixtures/events/handwritten-level1-waiting.jsonl", import.meta.url),
-  "utf8",
-)
-  .trim()
-  .split("\n")
-  .map((line) => JSON.parse(line) as ServerEvent);
-const awaiting = () =>
-  waitingEvents.filter((event) => event.seq <= 21).reduce(applyEvent, createInitialState());
-const decided = () =>
-  waitingEvents.filter((event) => event.seq <= 22).reduce(applyEvent, createInitialState());
+const awaiting = () => through(20);
+const decided = () => through(21);
 
 describe("R4 sources", () => {
   it("uses one current node at full strength and only the single supplied last read at 0.4", () => {
@@ -137,7 +127,7 @@ describe("R4 sources", () => {
     for (let k = 0; k < 40; k += 1)
       later = applyEvent(later, {
         ...tick,
-        seq: 22 + k,
+        seq: 21 + k,
         ts: new Date(Date.parse("2026-10-27T14:04:00.000Z") + k * 600_000).toISOString(),
       });
     expect(later.clock).not.toBe(awaiting().clock);
@@ -171,7 +161,7 @@ describe("R4 sources", () => {
     const look = afterlightOf(themes.dark);
     const life = new MergeLife(look);
     life.update([], 0, false, true);
-    life.update([merge], 0, false, false);
+    life.update([merge], 0, false, false, waiting);
     expect(life.lights(look.rise)[0]?.weight).toBeCloseTo(waiting[0]?.weight ?? Number.NaN, 10);
     expect(life.lights(look.rise)[0]?.id).toBe(waiting[0]?.id);
     expect(life.lights(look.delay + look.travel + look.duration / 2)[0]?.weight).toBeLessThan(
@@ -181,8 +171,9 @@ describe("R4 sources", () => {
 
   it("leaves the field dark at rest: the recorded run, once it is merged, has no source", () => {
     expect(selectSignalLights(through(13))).not.toHaveLength(0);
-    expect(selectSignalLights(through(20))).toEqual([]);
-    expect(selectSignalLights(through(22))).toEqual([]);
+    expect(selectSignalLights(through(20))).not.toHaveLength(0);
+    expect(selectSignalLights(through(21))).toEqual([]);
+    expect(selectSignalLights(through(23))).toEqual([]);
   });
 
   it("takes both colors and weights from the active tokens", () => {
@@ -228,7 +219,7 @@ it.each(["watch", "live-diff", "file", "review"] as const)(
 it("fades marker and light together when the agent stops acting, stops the ring immediately, and jumps under reduced motion", () => {
   const transition = new FieldTransition({ lights: selectSignalLights(through(13)), config });
   transition.set(
-    { mode: "watch", lights: selectSignalLights(through(20)) },
+    { mode: "watch", lights: selectSignalLights(through(21)) },
     config,
     0,
     "240ms",

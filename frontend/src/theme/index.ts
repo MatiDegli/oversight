@@ -77,7 +77,7 @@ const baseThemes = {
     "added-tint": { color: "#6fd08a", alpha: 0.11 },
     "removed-tint": { color: "#ff6464", alpha: 0.12 },
     "guide-dot": { color: "#ededea", alpha: 0.1 },
-    "contour-line": { color: "#ededea", alpha: 0.09 },
+    "contour-line": { color: "#ededea", alpha: 0.1 },
     "agent-a-node": { color: "#1e0c04", alpha: 0.95 },
     "agent-a-node-new": { color: "#140a04", alpha: 0.95 },
     "agent-b-node": { color: "#060c1e", alpha: 0.95 },
@@ -236,7 +236,7 @@ const baseThemes = {
     // The rest contours: the height between two lines, a hill's base height and the range its
     // callers add to it, how wide it spreads over its frame, the soft mounds in empty areas, and
     // how fast the drift runs (1 is a few minutes per swing). Heights are computed on a coarse grid.
-    "contour-step": 0.15,
+    "contour-step": 0.1,
     "contour-hill-base": 0.52,
     "contour-hill-range": 0.2,
     "contour-hill-spread": 0.78,
@@ -246,7 +246,7 @@ const baseThemes = {
     // The most levels drawn above the ground, how much of its alpha the outermost line keeps, and
     // the line's width.
     "contour-levels": 8,
-    "contour-fade": 0.45,
+    "contour-fade": 0.65,
     "contour-line-width": "1px",
     // How often the field repaints for what changes slowly: the contour drift and the afterlight.
     "field-slow-interval": "500ms",

@@ -8,7 +8,7 @@ import { Frame } from "./Frame";
 import { initialView, openChange, openReview } from "./view";
 import type { View } from "./view";
 import { applyEvent, createInitialState, stateStore } from "../state";
-import log from "../../../fixtures/events/handwritten-level1-waiting.jsonl?raw";
+import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 
 const CHANGED = "shop.pricing:compute_price";
 
@@ -22,21 +22,19 @@ host.style.height = "100vh";
 document.body.replaceChildren(host);
 const root = createRoot(host);
 
-type Scene = "watch" | "live-diff" | "review" | "waiting" | "unattended" | "rest";
+type Scene = "watch" | "live-diff" | "review" | "waiting" | "rest";
 
 /**
- * The recorded level 1 run, with a review card for its change at 21 (the run predates the inbox):
- * the agent edits at 13, has its change live at 14, proposes at 19 and waits at 20 ("unattended":
- * ready for review, nothing open in the inbox), the card opens an entry at 21 ("waiting" and
- * "review": the change waits on it), the person approves at 22, and the agent is done at 24.
+ * The recorded level 1 run: the agent edits at 13, has its change live at 14, proposes at 19 and
+ * waits at 20, with the proposal's entry open in the decisions inbox ("waiting" and "review": the
+ * change waits on it), the person approves at 21, and the agent is done at 23 ("rest").
  */
 const sceneAt = {
   watch: 13,
   "live-diff": 14,
-  review: 21,
-  waiting: 21,
-  unattended: 20,
-  rest: 24,
+  review: 20,
+  waiting: 20,
+  rest: 23,
 } satisfies Record<Scene, number>;
 
 const stateAt = (seq: number) =>

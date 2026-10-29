@@ -81,7 +81,7 @@
   --added-tint: color-mix(in srgb, var(--passed) 11%, transparent);
   --removed-tint: color-mix(in srgb, var(--failed) 12%, transparent);
   --guide-dot: color-mix(in srgb, var(--text) 10%, transparent);
-  --contour-line: color-mix(in srgb, var(--text) 9%, transparent);
+  --contour-line: color-mix(in srgb, var(--text) 10%, transparent);
   --agent-a-node: rgba(30, 12, 4, 0.95);
   --agent-a-node-new: rgba(20, 10, 4, 0.95);
   --agent-b-node: rgba(6, 12, 30, 0.95);
@@ -312,7 +312,7 @@
   --transition-duration: 240ms;
   --transition-easing: cubic-bezier(0.2, 0.7, 0.2, 1);
   --status-lamp-duration: 1600ms;
-  --contour-step: 0.15;
+  --contour-step: 0.1;
   --contour-hill-base: 0.52;
   --contour-hill-range: 0.2;
   --contour-hill-spread: 0.78;
@@ -320,7 +320,7 @@
   --contour-drift-speed: 1;
   --contour-cell-size: 16px;
   --contour-levels: 8;
-  --contour-fade: 0.45;
+  --contour-fade: 0.65;
   --contour-line-width: 1px;
   --field-slow-interval: 500ms;
   --waiting-light-weight: 0.5;

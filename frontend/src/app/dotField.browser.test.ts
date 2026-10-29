@@ -43,7 +43,7 @@ interface Options {
   noWebGL?: boolean;
   /** The renderer's draw call throws: the one error the field may log, once. */
   failingDraw?: boolean;
-  scene?: "watch" | "live-diff" | "review" | "waiting" | "unattended" | "rest";
+  scene?: "watch" | "live-diff" | "review" | "waiting" | "rest";
   /** The page's clock is the test's: time moves when the test says so. */
   clock?: boolean;
   viewport?: { width: number; height: number };
@@ -672,7 +672,7 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     expect(waiting).toBeGreaterThan(50);
     expect((await fieldPixels(page)).warm).toBeGreaterThan(200);
     await page.evaluate(() => {
-      window.fieldTest.advance(22);
+      window.fieldTest.advance(21);
     });
     // The merge is told, but the pulse waits a moment before it leaves the card.
     expect((await lifeOf(page))?.pulses).toBe(0);
@@ -733,7 +733,7 @@ it("has no travel under reduced motion: the light stays where it was and fades a
     const waiting = await lightMass(page);
     expect(waiting).toBeGreaterThan(50);
     await page.evaluate(() => {
-      window.fieldTest.advance(22);
+      window.fieldTest.advance(21);
     });
     await page.clock.runFor(100);
     expect(await lifeOf(page)).toMatchObject({ pulses: 0, lights: 1 });
@@ -781,12 +781,12 @@ it("holds a steady, dimmer light while the change waits on an inbox entry, howev
   });
 }, 60_000);
 
-it("keeps the waiting light in review, and shows none for an agent with nothing open in the inbox", async () => {
+it("keeps the waiting light in review, and shows none once the change is done", async () => {
   await withPage({ scene: "review", reducedMotion: "reduce" }, async (page) => {
     expect((await look(page)).near?.level).toBeGreaterThan(0);
     expect((await fieldPixels(page)).warm).toBeGreaterThan(200);
   });
-  await withPage({ scene: "unattended", reducedMotion: "reduce" }, async (page) => {
+  await withPage({ scene: "rest", reducedMotion: "reduce" }, async (page) => {
     expect((await look(page)).near?.level).toBe(0);
     expect((await fieldPixels(page)).warm).toBeLessThan(STRAY);
   });
@@ -865,7 +865,7 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
   // Frames drawn in real time while the pulse travels and then while the light fades.
   await withPage({ scene: "waiting", viewport }, async (page) => {
     await page.evaluate(() => {
-      window.fieldTest.advance(22);
+      window.fieldTest.advance(21);
     });
     const { travel, afterlight } = await page.evaluate(() => {
       const probe = window.fieldTest.elements().field.oversightField;
@@ -900,7 +900,7 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
         });
     });
     await page.evaluate(() => {
-      window.fieldTest.advance(22);
+      window.fieldTest.advance(21);
     });
     await page.waitForFunction(
       () => window.fieldTest.elements().field.oversightField?.life().pulses === 1,
@@ -975,7 +975,7 @@ it("captures the life layer at 1920 by 1080, and sets each capture beside its sk
   await withPage({ scene: "waiting", viewport, clock: true }, async (page) => {
     await shoot(page, "light-waiting");
     await page.evaluate(() => {
-      window.fieldTest.advance(22);
+      window.fieldTest.advance(21);
     });
     await page.clock.runFor(250 + 725);
     await shoot(page, "merge-mid");

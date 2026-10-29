@@ -1,8 +1,9 @@
-// What a decided change leaves on the field. A merge sends a pulse from the agent's card to its
-// node; either way the node's light keeps the level it waited at (so the hand-off from the waiting
-// light is seamless), then fades out over about 90 seconds. Pure functions of a clock in
-// milliseconds, so the controller only evaluates them and tests drive them with any times. Every
-// number comes from a theme token.
+// What a decided change leaves on the field. A decision fades only a light that exists: the node's
+// light starts from the level the change had at that moment (working or waiting), so the hand-off
+// is seamless, and fades out over about 90 seconds. A change with no light then gets none, except
+// that a merge still sends its pulse from the agent's card to the node, and the node lights as the
+// pulse arrives. Pure functions of a clock in milliseconds, so the controller only evaluates them
+// and tests drive them with any times. Every number comes from a theme token.
 import type { FieldLight, FieldMerge } from "./lights";
 import { ease } from "./transition";
 
@@ -22,7 +23,7 @@ export interface AfterlightTheme {
 }
 
 export interface Afterlight {
-  /** The light's weight before the mode's gain: the level a waiting change's light stands at. */
+  /** The weight a merge's light arrives with when the change had no light: a waiting change's. */
   weight: number;
   /** Milliseconds for the light to fade out. */
   duration: number;
@@ -81,6 +82,10 @@ export interface Pulse {
 interface Running {
   merge: FieldMerge;
   start: number;
+  /** The weight the light starts from: the change's own light at the decision, or the token's. */
+  level: number;
+  /** Milliseconds after the decision when the light comes up: 0 when it had one, else the arrival. */
+  onset: number;
   /** Reduced motion: the light is there at once. */
   jump: boolean;
   /** Whether a pulse travels: a merge, and not under reduced motion. */
@@ -105,9 +110,18 @@ export class MergeLife {
   /**
    * Takes the merges the state reports. A key seen before is not started again, and one that
    * leaves the state is forgotten, so a replay that starts over starts them again. With `history`
-   * (the state the field mounts on) every merge is only recorded: it happened before.
+   * (the state the field mounts on) every merge is only recorded: it happened before. `before` is
+   * the lights the field showed just before: a decided change fades the light it had on its node,
+   * and one that had none fades nothing (a merge still sends its pulse and lights its node as the
+   * pulse arrives).
    */
-  update(merges: readonly FieldMerge[], now: number, jump: boolean, history: boolean) {
+  update(
+    merges: readonly FieldMerge[],
+    now: number,
+    jump: boolean,
+    history: boolean,
+    before: readonly FieldLight[] = [],
+  ) {
     const keys = new Set(merges.map((merge) => merge.key));
     for (const key of [...this.seen])
       if (!keys.has(key)) {
@@ -118,7 +132,23 @@ export class MergeLife {
       if (this.seen.has(merge.key)) continue;
       this.seen.add(merge.key);
       if (history) continue;
-      const run = { merge, start: now - Math.max(0, merge.age), jump, pulse: merge.pulse && !jump };
+      const had = Math.max(
+        0,
+        ...before
+          .filter((light) => light.id === merge.id && light.source === merge.source)
+          .map((light) => light.weight),
+      );
+      // A rejection has no pulse, so it has nothing to show when its change had no light.
+      if (had <= 0 && !merge.pulse) continue;
+      const run: Running = {
+        merge,
+        start: now - Math.max(0, merge.age),
+        level: had > 0 ? had : this.look.weight,
+        onset: 0,
+        jump,
+        pulse: merge.pulse && !jump,
+      };
+      if (had <= 0) run.onset = this.arrival(run);
       if (now < run.start + this.arrival(run) + this.look.duration)
         this.running.set(merge.key, run);
     }
@@ -142,10 +172,11 @@ export class MergeLife {
 
   /**
    * The node lights at `now`: one per decided change whose fade is not over. The light comes up as
-   * the waiting light goes out, holds its level while the pulse travels, then fades.
+   * the light the change had goes out, holds its level while the pulse travels, then fades. One
+   * that had none comes up as the pulse arrives.
    */
   lights(now: number): FieldLight[] {
-    const { weight, duration, curve, rise, easing } = this.look;
+    const { duration, curve, rise, easing } = this.look;
     const lights: FieldLight[] = [];
     for (const [key, run] of [...this.running]) {
       const since = now - run.start;
@@ -154,11 +185,13 @@ export class MergeLife {
         this.running.delete(key);
         continue;
       }
-      const coming = run.jump || rise <= 0 ? 1 : ease(Math.min(1, since / rise), easing);
+      if (since < run.onset) continue;
+      const coming =
+        run.jump || rise <= 0 ? 1 : ease(Math.min(1, (since - run.onset) / rise), easing);
       lights.push({
         id: run.merge.id,
         source: run.merge.source,
-        weight: weight * coming * fadeShare(fading / duration, curve),
+        weight: run.level * coming * fadeShare(fading / duration, curve),
         pulses: false,
         steady: true,
       });

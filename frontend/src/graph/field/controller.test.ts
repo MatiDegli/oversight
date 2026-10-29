@@ -408,7 +408,7 @@ describe("the rest ground", () => {
     expect(canvas.oversightField?.life().contours).toBe(false);
     controller.update(ground);
     const contours = contoursOf();
-    expect(contours?.look).toMatchObject({ step: 0.15, levels: 8, fade: 0.45, width: 1 });
+    expect(contours?.look).toMatchObject({ step: 0.1, levels: 8, fade: 0.65, width: 1 });
     expect(contours?.look.color).toEqual([237, 237, 234]);
     // 12 by 7 cells of 100px, plus an edge: the height peaks over a module's frame.
     expect(contours?.heights.cell).toBe(16);
@@ -500,6 +500,20 @@ describe("a merge's pulse and light", () => {
     age: 0,
   };
   const live: FieldInput = { mode: "watch", lights: [], merges: [merge] };
+  /** The change's light just before its decision: waiting on an open entry. */
+  const waiting: FieldInput = {
+    mode: "watch",
+    lights: [
+      {
+        id: "a",
+        source: "agent-a",
+        weight: themes.dark["waiting-light-weight"],
+        pulses: false,
+        steady: true,
+      },
+    ],
+    merges: [],
+  };
   const look = {
     delay: Number.parseFloat(themes.dark["merge-travel-delay"]),
     travel: Number.parseFloat(themes.dark["merge-travel-duration"]),
@@ -529,7 +543,7 @@ describe("a merge's pulse and light", () => {
 
   it("sends a pulse for a merge that arrives later, then lights the node and fades it", () => {
     const controller = createFieldController(canvas, source);
-    controller.update({ mode: "watch", lights: [], merges: [] });
+    controller.update(waiting);
     now = 1000;
     controller.update(live);
     expect(canvas.oversightField?.life().pulses).toBe(0);
@@ -558,7 +572,7 @@ describe("a merge's pulse and light", () => {
 
   it("fades the light on the slow timer, with no animation frame, and weaker each time", () => {
     const controller = createFieldController(canvas, source);
-    controller.update({ mode: "watch", lights: [], merges: [] });
+    controller.update(waiting);
     controller.update(live);
     const weights: number[] = [];
     for (const share of [0.1, 0.3, 0.6, 0.9]) {
@@ -576,7 +590,7 @@ describe("a merge's pulse and light", () => {
   it("has no pulse under reduced motion: the light is whole at once and fades as long", () => {
     media.matches = true;
     const controller = createFieldController(canvas, source);
-    controller.update({ mode: "watch", lights: [], merges: [] });
+    controller.update(waiting);
     now = 5;
     controller.update(live);
     expect(canvas.oversightField?.life()).toMatchObject({ pulses: 0, lights: 1 });
@@ -609,6 +623,45 @@ describe("a merge's pulse and light", () => {
     now += look.delay + 100;
     controller.redraw();
     expect(canvas.oversightField?.life().pulses).toBe(1);
+    controller.dispose();
+  });
+
+  it("lights nothing for a rejection whose change had no light, and fades the light of one that had", () => {
+    const rejection = { ...live, merges: [{ ...merge, pulse: false }] };
+    const dark = createFieldController(canvas, source);
+    dark.update({ mode: "watch", lights: [], merges: [] });
+    now = 10;
+    dark.update(rejection);
+    settle();
+    expect(canvas.oversightField?.life()).toMatchObject({ pulses: 0, lights: 0 });
+    expect(canvas.oversightField?.animating()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    dark.dispose();
+    const lit = createFieldController(canvas, source);
+    lit.update(waiting);
+    now = 20;
+    lit.update(rejection);
+    expect(canvas.oversightField?.life()).toMatchObject({ pulses: 0, lights: 1 });
+    // It comes up as the waiting light goes out, to the same level, and fades from there.
+    now = 20 + Number.parseFloat(themes.dark["transition-duration"]);
+    lit.redraw();
+    expect(burning()?.weight).toBeCloseTo(themes.dark["waiting-light-weight"], 2);
+    lit.dispose();
+  });
+
+  it("shows an approve whose change had no light the pulse first, and the light as it arrives", () => {
+    const controller = createFieldController(canvas, source);
+    controller.update({ mode: "watch", lights: [], merges: [] });
+    now = 1000;
+    controller.update(live);
+    now = 1000 + look.delay + look.travel / 2;
+    controller.redraw();
+    expect(canvas.oversightField?.life()).toMatchObject({ pulses: 1, lights: 0 });
+    expect(burning()).toBeUndefined();
+    now = 1000 + arrival + 300;
+    controller.redraw();
+    expect(canvas.oversightField?.life().lights).toBe(1);
+    expect(burning()?.weight).toBeGreaterThan(0);
     controller.dispose();
   });
 });

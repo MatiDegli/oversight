@@ -481,7 +481,14 @@ class FieldRuntime implements FieldController {
       sameModules(next.modules, this.input.modules)
     )
       return;
-    if (next.merges) this.life.update(next.merges, performance.now(), this.reducedMotion, history);
+    if (next.merges)
+      this.life.update(
+        next.merges,
+        performance.now(),
+        this.reducedMotion,
+        history,
+        this.input.lights,
+      );
     this.input = next;
     this.setTarget();
     this.redraw();

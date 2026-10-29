@@ -52,6 +52,32 @@ describe("one hill per module", () => {
     expect(high - low).toBeLessThan(config.range * 1.4);
   });
 
+  it("draws five to seven rings around a hill that stands alone, whatever its callers", () => {
+    // Rings are the levels a ray from the peak crosses on its way out: the lines of one hill.
+    const alone: TerrainModule[] = [
+      { id: "far.none", callers: 0, frame: frame(300, 250) },
+      { id: "far.some", callers: 4, frame: frame(1100, 250) },
+      { id: "far.most", callers: 9, frame: frame(700, 650) },
+    ];
+    const grid = heights(config, hillsOf(config, alone), 1800, 1000, null);
+    const rings = alone.map(({ frame: box }) => {
+      const [cx, cy] = centerOf(box);
+      const along = Array.from({ length: 80 }, (_, i) => at(grid, cx + i * 8, cy));
+      let count = 0;
+      for (let level = 1; level <= config.levels; level += 1) {
+        const line = level * config.step;
+        if (along.some((h) => h >= line) && along.some((h) => h < line)) count += 1;
+      }
+      return count;
+    });
+    for (const count of rings) {
+      expect(count).toBeGreaterThanOrEqual(5);
+      expect(count).toBeLessThanOrEqual(7);
+    }
+    expect(rings[2]).toBeGreaterThanOrEqual(rings[0] ?? 0);
+    expect(config.step).toBeLessThanOrEqual(0.1);
+  });
+
   it("rises to a few lines, never more than the level cap, and falls outward", () => {
     const grid = heights(config, hillsOf(config, modules), W, H, null);
     const [cx, cy] = centerOf(modules[1]?.frame ?? frame(0, 0));
