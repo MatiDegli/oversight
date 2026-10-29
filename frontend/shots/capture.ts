@@ -114,7 +114,7 @@ async function main(): Promise<number> {
       }
       if (scene?.log) {
         liveLog = captureLog;
-        await writeFile(join(out, `${scene.name}.jsonl`), liveLog);
+        await writeFile(join(out, `${scene.name}.events`), liveLog);
       }
       const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
       context.setDefaultTimeout(TIMEOUT_MS);

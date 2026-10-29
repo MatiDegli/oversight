@@ -23,7 +23,7 @@ import { foldController } from "./foldController";
 import { createBoxSource, DotField } from "./field";
 import type { FieldInput } from "./field";
 import { exposeProbe } from "./probe";
-import { showSelection } from "./selection";
+import { showNodeHover, showSelection } from "./selection";
 import { setScratch } from "./scratch";
 import { edgeShape, graphStyles } from "./styles";
 import { openingCone, panelGeometry, reportFraming } from "./viewFraming";
@@ -228,10 +228,16 @@ export function GraphView({
       };
       reportViewport.current = reportSoon;
       cy.on("viewport", reportSoon);
-      cy.on("mouseover mouseout", "edge.aggregate", (event) => {
+      cy.on("mouseover mouseout", "edge", (event) => {
         cy.batch(() => {
-          (event.target as EdgeSingular).toggleClass("count-hover", event.type === "mouseover");
+          const edge = event.target as EdgeSingular;
+          const enter = event.type === "mouseover";
+          edge.toggleClass("count-hover", enter);
+          cy.nodes(".module").toggleClass("edge-shield", enter && edge.hasClass("possible"));
         });
+      });
+      cy.on("mouseover mouseout", "node", (event) => {
+        showNodeHover(cy, event.type === "mouseover" ? (event.target as NodeSingular).id() : null);
       });
       let interacting = false;
       let quietUntil = 0;

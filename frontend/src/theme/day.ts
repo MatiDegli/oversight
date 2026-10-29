@@ -24,6 +24,8 @@ export const dayColors = {
   "node-hover": "#8d8c86",
   edge: "#6e6d67",
   "edge-possible": "#85847e",
+  "edge-faint": "#d2d1cb",
+  "edge-hover": "#353530",
   "lit-edge": "#3a3936",
   "work-light": "#6b6a64",
   "agent-a": "#b23c0a",

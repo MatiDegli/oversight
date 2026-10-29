@@ -34,6 +34,8 @@ const baseThemes = {
     "node-hover": "#6b6e77",
     edge: "#6a6a65",
     "edge-possible": "#5f5f5b",
+    "edge-faint": "#29292c",
+    "edge-hover": "#f0f0eb",
     "lit-edge": "#d6d3cb",
     "work-light": "#8c8c88",
     "agent-a": "#ff5c1f",

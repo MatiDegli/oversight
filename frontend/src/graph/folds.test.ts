@@ -218,9 +218,14 @@ it("aggregates only cross-file calls by directed module pair with either end fol
     const actual = new Map(
       projected.elements
         .filter((e) => e.classes.includes("aggregate"))
-        .map((e) => [`${e.data.source ?? ""}>${e.data.target ?? ""}`, e.data.callCount]),
+        .map((e) => [
+          `${e.data.source ?? ""}>${e.data.target ?? ""}`,
+          (e.data.exactCount ?? 0) + (e.data.possibleCount ?? 0),
+        ]),
     );
     expect(actual).toEqual(expected);
+    for (const e of projected.elements.filter((e) => e.classes.includes("aggregate")))
+      expect(e.data.callCount).toBe(e.data.exactCount || e.data.possibleCount);
     expect(actual.get("shop.pricing>shop.cart")).toBe(1);
     expect(actual.get("shop.cart>shop.pricing")).toBeGreaterThan(1);
     const before = foldElements(full, allOpen, modules);

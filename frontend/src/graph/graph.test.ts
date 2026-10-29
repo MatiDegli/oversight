@@ -182,7 +182,7 @@ describe("graph mapping", () => {
     const graph = render(initial());
     const module = graph.getElementById("billing");
     expect(module.style("background-color")).toBe(rgb(theme.panel));
-    expect(Number(module.style("background-opacity"))).toBe(theme["module-opacity"]);
+    expect(Number(module.style("background-opacity"))).toBe(1);
     expect(module.style("color")).toBe(rgb(theme["module-label"]));
     expect(module.style("font-family")).toBe(theme["text-font"]);
     module.addClass("dimmed");
@@ -292,9 +292,13 @@ describe("graph mapping", () => {
       // orthogonal segments. An import is not drawn at all, so it is not routed.
       expect(EDGE_CURVE_STYLE).toBe("taxi");
       expect(edge.style("curve-style")).toBe(
-        edge.hasClass("imports") ? "bezier" : "round-segments",
+        edge.hasClass("possible")
+          ? "straight"
+          : edge.hasClass("imports")
+            ? "bezier"
+            : "round-segments",
       );
-      expect(edge.style("display")).toBe(edge.hasClass("imports") ? "none" : "element");
+      expect(edge.style("display")).toBe(edge.is(".imports, .possible") ? "none" : "element");
     }
   });
 
@@ -986,7 +990,10 @@ describe("edges in watch: draw order and the quiet of edges nobody is at", () =>
     const graph = render(initial());
     const z = (id: string) => Number(graph.getElementById(id).style("z-index"));
     const frames = [z("billing"), z("billing:Bill")];
-    const edges = graph.edges().map((edge) => Number(edge.style("z-index")));
+    const edges = graph
+      .edges()
+      .not(".possible")
+      .map((edge) => Number(edge.style("z-index")));
     const leaves = [z("billing:fee"), z("billing:Bill.total")];
     expect(Math.max(...frames)).toBeLessThan(Math.min(...edges));
     expect(Math.max(...edges)).toBeLessThan(Math.min(...leaves));

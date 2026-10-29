@@ -54,8 +54,10 @@ export function createBoxSource(): BoxSource {
         .edges()
         .filter(
           (item) =>
-            (item.source().id() === a && item.target().id() === b) ||
-            (item.source().id() === b && item.target().id() === a),
+            item.style("display") !== "none" &&
+            item.visible() &&
+            ((item.source().id() === a && item.target().id() === b) ||
+              (item.source().id() === b && item.target().id() === a)),
         )
         .first();
       if (edge.empty() || !edge.isEdge() || edge.hasClass("unroutable")) return null;

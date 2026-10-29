@@ -9,7 +9,7 @@ import type { State } from "../state";
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 // M8 reserves frost for the graph's legend, zoom and future segmented controls.
-const surface = "frosted border border-border";
+const surface = "frosted graph-text-shield border border-border";
 
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 
@@ -20,7 +20,7 @@ export function GraphHeading({ state }: { state: State }) {
   const count = (value: number, one: string, many: string) =>
     `${String(value)} ${plural(value, one, many)}`;
   return (
-    <div className="overlay-fill flex flex-wrap items-baseline gap-x-3.5 gap-y-1 rounded-control px-(--spacing-sm) py-(--spacing-xs)">
+    <div className="overlay-fill graph-text-shield flex flex-wrap items-baseline gap-x-3.5 gap-y-1 rounded-control px-(--spacing-sm) py-(--spacing-xs)">
       <h2 className="text-(length:--headline-size) leading-(--headline-line-height) font-bold">
         {repo}
       </h2>
@@ -75,8 +75,8 @@ export function Legend({ state }: { state: State }) {
         Not in main yet
       </li>
       <li className="flex items-center gap-2">
-        <span aria-hidden="true" className="w-6 border-t border-edge-possible" />
-        Possible call
+        <span aria-hidden="true" className="w-6 border-t border-edge-faint" />
+        Possible call, matched by name
       </li>
     </ul>
   );
