@@ -697,8 +697,9 @@ Agent and model-slot cards add their 2px agent-colored top line. Divider separat
 border encloses cards and controls where decorative. Neither replaces control-edge or the focus
 ring when a boundary carries meaning.
 
-Graph overlays keep their shell or panel backing at 90 to 94% opacity and frost the graph beneath
-with a 12px backdrop blur. Their field mask keeps moving light out of the overlay. The review
+The graph heading and legend use fully opaque `panel` plates to mask lines behind their text.
+Other graph overlays keep their shell or panel backing at 90 to 94% opacity and frost the graph
+beneath with a 12px backdrop blur. Their field mask keeps moving light out of the overlay. The review
 header retains its matte still grain. Every gradient end, highlight, shadow and overlay color is
 a theme token under `data-theme`, including what Cytoscape, Monaco and the field canvas receive.
 
@@ -863,7 +864,7 @@ Functions and Details all keep this rule.
 
 Hovering or selecting a node reveals its incoming and outgoing calls; a module includes its rows,
 and a row also reveals its module's aggregates. Possible calls reveal without the name filter,
-as thin, solid gray straight lines with direction arrows. Calls within one module can reveal too. A displayed
+as thin, solid gray straight lines with direction arrows. A displayed
 cone reveals calls with both endpoints in its seeds and entries; possible lines do not extend the
 cone, which follows exact calls only. Review and live diff use the displayed cone. Pending edges
 and agent lighting retain their rules; possible calls always stay solid and gray.

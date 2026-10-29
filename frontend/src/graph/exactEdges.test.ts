@@ -1,28 +1,18 @@
 import { readFileSync } from "node:fs";
-import { gunzipSync } from "node:zlib";
-import type { GraphSnapshot, ServerEvent } from "@contracts";
+import type { ServerEvent } from "@contracts";
 import cytoscape from "cytoscape";
 import { expect, it } from "vitest";
 import { createInitialState } from "../state";
 import { themes } from "../theme";
 import { graphElements } from "./elements";
+import { readBoltonsSnapshot } from "./exactFixtures.testSupport";
 import { foldElements } from "./foldElements";
 import { applyRoutes } from "./routes";
 import { showNodeHover, showSelection } from "./selection";
 import { graphStyles } from "./styles";
 
 const root = new URL("../../../", import.meta.url);
-const boltons = JSON.parse(
-  gunzipSync(
-    Buffer.from(
-      readFileSync(new URL("fixtures/graph/boltons-d31d821.snapshot.json.base64", root)).toString(),
-      "base64",
-    ),
-  ).toString(),
-) as GraphSnapshot;
-boltons.positions = JSON.parse(
-  readFileSync(new URL("fixtures/layouts/boltons-d31d821.json", root), "utf8"),
-) as GraphSnapshot["positions"];
+const boltons = readBoltonsSnapshot(root);
 const events = readFileSync(new URL("fixtures/events/recorded-demo.jsonl", root), "utf8")
   .trim()
   .split("\n")
@@ -31,10 +21,55 @@ const snapshot = events.find((e) => e.type === "graph.snapshot");
 if (snapshot?.type !== "graph.snapshot") throw new Error("Missing demo snapshot");
 const demo = snapshot.payload;
 
+it("keeps internal exact calls hidden during hover, selection and cone or agent lighting", () => {
+  const full = graphElements({ ...createInitialState(), graph: demo });
+  const projected = foldElements(
+    full,
+    new Set(full.filter((e) => e.data.kind === "class").map((e) => e.data.id)),
+    new Set(),
+  );
+  const cy = cytoscape({
+    headless: true,
+    styleEnabled: true,
+    style: graphStyles(themes.dark),
+    elements: projected.elements,
+    layout: { name: "preset" },
+  });
+  try {
+    const edges = cy.edges(".internal.exact");
+    expect(edges.length).toBeGreaterThan(0);
+    for (const edge of edges) {
+      expect(edge.style("display")).toBe("none");
+      for (const show of [showNodeHover, showSelection]) {
+        for (const id of [edge.source().id(), edge.source().ancestors(".module").first().id()]) {
+          show(cy, id);
+          expect(edge.hasClass(show === showSelection ? "touching" : "node-hover")).toBe(true);
+          expect(edge.style("display")).toBe("none");
+          show(cy, null);
+        }
+      }
+      edge.addClass("lit");
+      expect(edge.style("display")).toBe("none");
+      edge.removeClass("lit quiet").addClass("pending-A");
+      expect(edge.style("display")).toBe("none");
+    }
+  } finally {
+    cy.destroy();
+  }
+});
+
 for (const [name, graph, exactPairs, faint, exactCalls] of [
   ["Boltons", boltons, 13, 9, 13],
   ["demo", demo, 4, 3, 12],
 ] as const) {
+  if (graph === null) {
+    // Only the optional external fixture may skip; the recorded demo always runs.
+    it.skip(`${name}: exact-only directed counts, one faint line per surviving unordered pair`);
+    it.skip(
+      `${name}: open calls stay exact at rest, possible calls reveal and clear without agent revival`,
+    );
+    continue;
+  }
   const state = { ...createInitialState(), graph };
   const full = graphElements(state);
   const modules = new Set(full.filter((e) => e.data.kind === "module").map((e) => e.data.id));

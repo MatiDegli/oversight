@@ -418,11 +418,6 @@ export function graphStyles(
       },
     },
     {
-      selector:
-        "edge.internal.exact.touching, edge.internal.exact.node-hover, edge.internal.exact.lit",
-      style: { display: "element" },
-    },
-    {
       selector: "edge.aggregate",
       style: {
         label: "",

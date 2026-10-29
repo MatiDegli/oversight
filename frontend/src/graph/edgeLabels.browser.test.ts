@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { chromium, expect as browserExpect } from "@playwright/test";
@@ -6,6 +7,8 @@ import type { Core } from "cytoscape";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
+
+import { readBoltonsSnapshot } from "./exactFixtures.testSupport";
 
 let server: ViteDevServer;
 let browser: Browser;
@@ -246,11 +249,81 @@ it("reserves the real title/count gap including the folded chevron", async () =>
   }
 });
 
-it.each(["boltons", "demo"])(
+async function inspectFaintLines(page: Page) {
+  return page.evaluate(() => {
+    const cy = window.edgeLabelGraph;
+    const { headerLayers, themes } = window.edgeLabels;
+    const cards = cy.nodes(".module");
+    let textBoxes = 0;
+    for (const node of cards) {
+      const box = node.boundingBox({ includeLabels: false, includeOverlays: false });
+      // Actual font glyph bounds from the renderer's own SVG header layers.
+      for (const layer of headerLayers(
+        themes.dark,
+        String(node.data("title")),
+        String(node.data("count")),
+        { width: node.width(), height: node.height() },
+        "empty",
+        undefined,
+        true,
+      )) {
+        const svg = document.createElement("div");
+        svg.innerHTML = decodeURIComponent(layer.image.split(",").slice(1).join(",")).replace(
+          /<style>.*?<\/style>/,
+          "",
+        );
+        document.body.append(svg);
+        const glyph = svg.querySelector("text")?.getBBox();
+        if (glyph) {
+          const left = (layer.x === "100%" ? node.width() - layer.width : 0) + layer.offsetX;
+          if (left + glyph.x < 0 || left + glyph.x + glyph.width > box.w)
+            throw new Error("Unmasked header text");
+          textBoxes++;
+        }
+        svg.remove();
+      }
+      if (node.numericStyle("background-opacity") !== 1) throw new Error("Translucent card");
+    }
+    for (const edge of cy.edges(".faint")) {
+      if (
+        edge.style("curve-style") !== "straight" ||
+        edge.style("target-arrow-shape") !== "none" ||
+        edge.numericStyle("width") !== 1 ||
+        edge.style("line-style") !== "solid"
+      )
+        throw new Error("Invalid faint line");
+      // Lines are clipped at endpoints and masked by every opaque card above them.
+      for (const [point, node] of [
+        [edge.sourceEndpoint(), edge.source()],
+        [edge.targetEndpoint(), edge.target()],
+      ] as const) {
+        const b = node.boundingBox({ includeLabels: false, includeOverlays: false });
+        const borderDistance = Math.min(
+          Math.abs(point.x - b.x1),
+          Math.abs(point.x - b.x2),
+          Math.abs(point.y - b.y1),
+          Math.abs(point.y - b.y2),
+        );
+        if (borderDistance > 2) throw new Error(`Endpoint off border: ${String(borderDistance)}`);
+      }
+      if (cards.toArray().some((n) => n.numericStyle("z-index") <= edge.numericStyle("z-index")))
+        throw new Error("Line above card text");
+    }
+    // DOM titles, headers, counters and legend have opaque plates above the graph canvas.
+    for (const plate of document.querySelectorAll(".graph-text-shield"))
+      if (getComputedStyle(plate).backgroundColor.includes("rgba"))
+        throw new Error("Translucent text plate");
+    return {
+      textBoxes,
+      exact: cy.edges(".exact").filter((e) => e.visible()).length,
+      faint: cy.edges(".faint").length,
+    };
+  });
+}
+
+it.for(["boltons", "demo"])(
   "%s: straight faint endpoints and opaque text masks at start and Modules fit",
-  async (name) => {
-    const { readFileSync } = await import("node:fs");
-    const { gunzipSync } = await import("node:zlib");
+  async (name, { skip }) => {
     const root = new URL("../../../", import.meta.url);
     const events = readFileSync(new URL("fixtures/events/recorded-demo.jsonl", root), "utf8")
       .trim()
@@ -258,23 +331,8 @@ it.each(["boltons", "demo"])(
       .map((s) => JSON.parse(s) as import("@contracts").ServerEvent);
     const demo = events.find((e) => e.type === "graph.snapshot");
     if (demo?.type !== "graph.snapshot") throw new Error("Missing snapshot");
-    const graph =
-      name === "demo"
-        ? demo.payload
-        : (JSON.parse(
-            gunzipSync(
-              Buffer.from(
-                readFileSync(
-                  new URL("fixtures/graph/boltons-d31d821.snapshot.json.base64", root),
-                ).toString(),
-                "base64",
-              ),
-            ).toString(),
-          ) as typeof demo.payload);
-    if (name === "boltons")
-      graph.positions = JSON.parse(
-        readFileSync(new URL("fixtures/layouts/boltons-d31d821.json", root), "utf8"),
-      ) as typeof graph.positions;
+    const graph = name === "demo" ? demo.payload : readBoltonsSnapshot(root);
+    if (graph === null) skip();
     const page = await browser.newPage({
       viewport: { width: 1920, height: 1080 },
       reducedMotion: "reduce",
@@ -317,78 +375,7 @@ it.each(["boltons", "demo"])(
       );
       for (const fit of [false, true]) {
         if (fit) await page.getByRole("button", { name: "Modules", exact: true }).click();
-        const result = await page.evaluate(() => {
-          const cy = window.edgeLabelGraph;
-          const { headerLayers, themes } = window.edgeLabels;
-          const cards = cy.nodes(".module");
-          let textBoxes = 0;
-          for (const node of cards) {
-            const box = node.boundingBox({ includeLabels: false, includeOverlays: false });
-            // Actual font glyph bounds from the renderer's own SVG header layers.
-            for (const layer of headerLayers(
-              themes.dark,
-              String(node.data("title")),
-              String(node.data("count")),
-              { width: node.width(), height: node.height() },
-              "empty",
-              undefined,
-              true,
-            )) {
-              const svg = document.createElement("div");
-              svg.innerHTML = decodeURIComponent(layer.image.split(",").slice(1).join(",")).replace(
-                /<style>.*?<\/style>/,
-                "",
-              );
-              document.body.append(svg);
-              const glyph = svg.querySelector("text")?.getBBox();
-              if (glyph) {
-                const left = (layer.x === "100%" ? node.width() - layer.width : 0) + layer.offsetX;
-                if (left + glyph.x < 0 || left + glyph.x + glyph.width > box.w)
-                  throw new Error("Unmasked header text");
-                textBoxes++;
-              }
-              svg.remove();
-            }
-            if (node.numericStyle("background-opacity") !== 1) throw new Error("Translucent card");
-          }
-          for (const edge of cy.edges(".faint")) {
-            if (
-              edge.style("curve-style") !== "straight" ||
-              edge.style("target-arrow-shape") !== "none" ||
-              edge.numericStyle("width") !== 1 ||
-              edge.style("line-style") !== "solid"
-            )
-              throw new Error("Invalid faint line");
-            // Lines are clipped at endpoints and masked by every opaque card above them.
-            for (const [point, node] of [
-              [edge.sourceEndpoint(), edge.source()],
-              [edge.targetEndpoint(), edge.target()],
-            ] as const) {
-              const b = node.boundingBox({ includeLabels: false, includeOverlays: false });
-              const borderDistance = Math.min(
-                Math.abs(point.x - b.x1),
-                Math.abs(point.x - b.x2),
-                Math.abs(point.y - b.y1),
-                Math.abs(point.y - b.y2),
-              );
-              if (borderDistance > 2)
-                throw new Error(`Endpoint off border: ${String(borderDistance)}`);
-            }
-            if (
-              cards.toArray().some((n) => n.numericStyle("z-index") <= edge.numericStyle("z-index"))
-            )
-              throw new Error("Line above card text");
-          }
-          // DOM titles, headers, counters and legend have opaque plates above the graph canvas.
-          for (const plate of document.querySelectorAll(".graph-text-shield"))
-            if (getComputedStyle(plate).backgroundColor.includes("rgba"))
-              throw new Error("Translucent text plate");
-          return {
-            textBoxes,
-            exact: cy.edges(".exact").filter((e) => e.visible()).length,
-            faint: cy.edges(".faint").length,
-          };
-        });
+        const result = await inspectFaintLines(page);
         expect(result.exact).toBe(name === "boltons" ? 13 : 4);
         expect(result.faint).toBe(name === "boltons" ? 9 : 3);
         expect(result.textBoxes).toBeGreaterThan(0);
