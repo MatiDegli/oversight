@@ -43,7 +43,7 @@ interface Options {
   noWebGL?: boolean;
   /** The renderer's draw call throws: the one error the field may log, once. */
   failingDraw?: boolean;
-  scene?: "watch" | "live-diff" | "review" | "waiting" | "rest";
+  scene?: "watch" | "live-diff" | "review" | "waiting" | "rest" | "both";
   /** The page's clock is the test's: time moves when the test says so. */
   clock?: boolean;
   viewport?: { width: number; height: number };
@@ -962,7 +962,7 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
     );
     report.travelFrameCallback = summary(times);
   });
-  const dir = fileURLToPath(new URL("../../../.shots/life-look/r2/", import.meta.url));
+  const dir = fileURLToPath(new URL("../../../.shots/life-look/r3/", import.meta.url));
   mkdirSync(dir, { recursive: true });
   writeFileSync(`${dir}frame-cost.json`, JSON.stringify(report, null, 2));
   for (const key of [
@@ -1000,6 +1000,35 @@ async function beside(
   }
 }
 
+/**
+ * Lamps at levels 0, 1/3, 2/3 and 1 over the 7 px cells no node covers, as the field computed them
+ * (the nodes' bounds include their labels, a little wider than the drawn boxes).
+ */
+function lampHistogram(page: Page) {
+  return page.evaluate(() => {
+    const { graph, field } = window.fieldTest.elements();
+    const probe = field.oversightField;
+    const camera = graph.oversightGraph;
+    if (!probe || !camera) throw new Error("No probe");
+    const zoom = camera.zoom();
+    const pan = camera.pan();
+    const covers = camera.nodeBounds().map((b) => ({
+      x1: b.x1 * zoom + pan.x,
+      y1: b.y1 * zoom + pan.y,
+      x2: b.x2 * zoom + pan.x,
+      y2: b.y2 * zoom + pan.y,
+    }));
+    const counts = [0, 0, 0, 0];
+    for (let y = 3.5; y < field.clientHeight; y += 7)
+      for (let x = 3.5; x < field.clientWidth; x += 7) {
+        if (covers.some((b) => x > b.x1 && x < b.x2 && y > b.y1 && y < b.y2)) continue;
+        const level = probe.lamp(x, y)?.level ?? 0;
+        counts[level] = (counts[level] ?? 0) + 1;
+      }
+    return counts;
+  });
+}
+
 /** Renders the approved interactive reference at 1920 by 1080, still, in a state and a theme. */
 async function referenceShot(state: "rest" | "watch", theme: "dark" | "day", out: string) {
   if (!browser) throw new Error("Browser was not started");
@@ -1020,7 +1049,7 @@ async function referenceShot(state: "rest" | "watch", theme: "dark" | "day", out
 
 it("captures rest and busy at 1920 by 1080, dark and day, beside their sketches", async () => {
   const viewport = { width: 1920, height: 1080 };
-  const shots = fileURLToPath(new URL("../../../.shots/life-look/r2/", import.meta.url));
+  const shots = fileURLToPath(new URL("../../../.shots/life-look/r3/", import.meta.url));
   const sketches = fileURLToPath(new URL("../../../docs/sketches/life/", import.meta.url));
   mkdirSync(shots, { recursive: true });
   const shoot = async (page: Page, name: string) => {
@@ -1029,19 +1058,40 @@ it("captures rest and busy at 1920 by 1080, dark and day, beside their sketches"
   };
   await withPage({ scene: "rest", viewport }, (page) => shoot(page, "rest-dark"));
   await withPage({ scene: "rest", viewport, theme: "day" }, (page) => shoot(page, "rest-day"));
-  await withPage({ scene: "watch", viewport, reducedMotion: "reduce" }, (page) =>
-    shoot(page, "busy-dark"),
-  );
-  await withPage({ scene: "watch", viewport, reducedMotion: "reduce", theme: "day" }, (page) =>
-    shoot(page, "busy-day"),
-  );
+  const histograms: Record<string, number[]> = {};
+  const busy = (name: string, scene: "watch" | "both", theme?: "day") =>
+    withPage(
+      { scene, viewport, reducedMotion: "reduce", ...(theme ? { theme } : {}) },
+      async (page) => {
+        // The functions level opens the modules, so the rows A and B touch are visible; a method of
+        // a folded class is lit through the class's own box.
+        if (scene === "both")
+          await page.getByRole("button", { name: "Functions", exact: true }).click();
+        await shoot(page, name);
+        histograms[name] = await lampHistogram(page);
+      },
+    );
+  await busy("busy-dark", "watch");
+  await busy("busy-day", "watch", "day");
+  await busy("busy-both-dark", "both");
+  await busy("busy-both-day", "both", "day");
   await withPage({ scene: "waiting", viewport, clock: true }, async (page) => {
     await page.evaluate(() => {
       window.fieldTest.advance(21);
     });
     await page.clock.runFor(250 + 725);
     await shoot(page, "merge-mid");
+    // The decided fade, from the light's arrival on: how much light is left every five seconds.
+    await page.clock.fastForward(725 + 350 + 1500);
+    const fade: { t: number; mass: number; warm: number }[] = [];
+    for (let t = 0; t <= 100; t += 5) {
+      fade.push({ t, mass: await lightMass(page), warm: (await fieldPixels(page)).warm });
+      await page.clock.fastForward(5_000);
+    }
+    writeFileSync(`${shots}fade.json`, JSON.stringify(fade));
+    expect(fade.at(-1)?.warm).toBeLessThan(STRAY);
   });
+  writeFileSync(`${shots}histograms.json`, JSON.stringify(histograms));
   await referenceShot("rest", "dark", `${shots}reference-rest-dark.png`);
   await referenceShot("rest", "day", `${shots}reference-rest-day.png`);
   await referenceShot("watch", "dark", `${shots}reference-busy-dark.png`);
@@ -1074,6 +1124,13 @@ it("captures rest and busy at 1920 by 1080, dark and day, beside their sketches"
     BUSY_AT.shot,
     "busy-day",
   );
+  // Both agents at once: the sketch window holds A and B side by side; the product's two lights sit
+  // further apart, so each gets its own window.
+  for (const theme of ["dark", "day"]) {
+    const sketch = `${shots}reference-busy-${theme}.png`;
+    await pair(sketch, BUSY_AT.sketch, `busy-both-${theme}`, [60, 300], `busy-both-${theme}-b`);
+    await pair(sketch, BUSY_AT.sketch, `busy-both-${theme}`, [940, 430], `busy-both-${theme}-a`);
+  }
   await pair(`${sketches}merge-mid.png`, [480, 200], "merge-mid", [560, 200], "merge-mid");
 }, 240_000);
 
