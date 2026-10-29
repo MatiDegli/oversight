@@ -20,3 +20,5 @@ One line per day, in Argentina time (ART).
   handling and the live diff's impact light.
 - **2026-10-28:** Added the pinned outside-source workspace profile, explicit Boltons fetch and
   offline graph export, with fixture-only source, provenance and pytest acceptance.
+- **2026-10-29:** Added measured caller evidence to review, with revision-isolated event replay,
+  partial/unavailable reasons and static cone limits; hand-written UI fixtures and browser checks.

@@ -146,7 +146,7 @@ describe("the recorded impact cone", () => {
     const html = renderToStaticMarkup(
       <ReviewPanel state={state} changeId="change-1" onClose={() => undefined} />,
     );
-    expect(html).toContain('class="text-(length:--data-size) text-muted"');
+    expect(html).toContain('aria-label="Impact cone"');
     expect(html.replace(/<[^>]*>/g, "")).toContain(
       "9 functions possibly affected, up to distance 2",
     );

@@ -1596,3 +1596,24 @@ Missing receipts, versions, identities, runs or passes retain explicit uncertain
 independent proven findings. Validation recomputes the exact projection and edit references
 from the frozen capture before publication. Zone/reach and other producer diagnostics
 survive, facts remain incomplete, and an empty finding list grants no merge authority.
+
+## 2026-10-29 — Measured caller evidence stays inside static possibilities
+
+Review shows published caller outcomes only for the current proposal revision and head, joined
+by node id to the retained static cone in distance order. A missing name falls back to its id.
+Observed equality means “No difference measured on these inputs”; it establishes neither
+behavioral equivalence nor coverage. A caller without measurement stays possible. Invocation
+counts remain independent of caller counts and bounded display samples; unstable samples never
+supply stable difference evidence.
+
+Availability is independent of outcome: partial evidence preserves stable differences, while
+zero admitted comparisons shows unavailable measurements and the published reasons. Matching,
+recording and probing diagnostics remain visible, without inferred causes or use of overall
+facts completeness as caller completeness. Missing/null legacy evidence differs from an explicit
+empty array. The static graph, bounds, omissions and possible callers remain visible beside the
+focus panel, and both summary paths share one context scroll without displacing the diff or
+choices. Samples are escaped text, disclosed only by a person; incoming events never move focus.
+
+Impeccable 4.5.2 conflicts resolved in favor of Signal: retain the project's dense title/data
+roles instead of a generic 16px body floor or 65–75ch minimum, and add no authored motion to
+measured evidence. Existing tokens, spacing, Next/Mono roles and review geometry govern.

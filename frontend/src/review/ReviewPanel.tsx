@@ -260,8 +260,7 @@ export function ReviewPanel({
   const change = state.changes[changeId];
   const proposal = change?.proposal ?? null;
   const facts = proposal === null ? undefined : factsForRevision(state, proposal);
-  const hasFacts = facts !== undefined;
-  const hasSummary = (facts?.summary?.length ?? 0) > 0;
+  const hasContext = proposal !== null;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
   const [editing, setEditing] = useState<{
@@ -291,9 +290,7 @@ export function ReviewPanel({
       {change && (!attempt || attempt.revision !== proposal?.revision) && (
         <CrossReviewNote change={change} />
       )}
-      {proposal && hasFacts && (
-        <ReviewFacts state={state} proposal={proposal} scrollable={!hasSummary} />
-      )}
+      {proposal && <ReviewFacts state={state} proposal={proposal} scrollable={false} />}
     </>
   );
   const report = (
@@ -341,13 +338,8 @@ export function ReviewPanel({
           </button>
         </div>
         {change && <ChangeFactsRow state={state} changeId={changeId} />}
-        {proposal && !hasFacts && (
-          <p className="text-(length:--data-size) text-muted">
-            <ReviewFacts state={state} proposal={proposal} />
-          </p>
-        )}
       </header>
-      {hasSummary ? (
+      {hasContext ? (
         <section aria-label="Review context" className="min-h-0 overflow-y-auto">
           {context}
           {report}
@@ -355,8 +347,8 @@ export function ReviewPanel({
       ) : (
         context
       )}
-      <div className={`flex flex-1 flex-col ${hasSummary ? "min-h-min" : "min-h-0"}`}>
-        {!hasSummary && report}
+      <div className={`flex flex-1 flex-col ${hasContext ? "min-h-min" : "min-h-0"}`}>
+        {!hasContext && report}
         {files.map((path) => {
           const open = path === openPath;
           const stat = stats.get(path);
@@ -365,7 +357,7 @@ export function ReviewPanel({
             <section
               key={path}
               aria-label={`Diff of ${path}`}
-              className={`flex flex-col border-b border-page-border ${open ? (hasSummary ? "min-h-min flex-1" : "min-h-0 flex-1") : ""}`}
+              className={`flex flex-col border-b border-page-border ${open ? (hasContext ? "min-h-min flex-1" : "min-h-0 flex-1") : ""}`}
             >
               <button
                 type="button"

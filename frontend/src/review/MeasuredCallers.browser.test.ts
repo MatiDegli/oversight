@@ -1,0 +1,210 @@
+import { mkdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import type { ChangeFacts } from "@contracts";
+import { chromium } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
+import { createServer } from "vite";
+import type { ViteDevServer } from "vite";
+import { afterAll, beforeAll, expect, it } from "vitest";
+
+let server: ViteDevServer;
+let browser: Browser;
+let url: string;
+let html: string;
+const shots = fileURLToPath(new URL("../../../.shots/measured-cone-review/", import.meta.url));
+
+declare global {
+  interface Window {
+    measuredFacts: ChangeFacts[];
+  }
+}
+
+beforeAll(async () => {
+  server = await createServer({
+    root: fileURLToPath(new URL("../../", import.meta.url)),
+    cacheDir: `${shots}test-cache`,
+    server: { host: "127.0.0.1", port: 0, strictPort: false },
+  });
+  html = await server.transformIndexHtml(
+    "/",
+    '<!doctype html><html><body><script type="module">import "/src/theme/index.css"; import { reviewTest } from "/src/app/review.browser.fixture.tsx"; import { measuredFacts } from "/src/review/measuredCallers.fixture.ts"; window.reviewTest = reviewTest; window.measuredFacts = measuredFacts;</script></body></html>',
+  );
+  await server.listen();
+  url = server.resolvedUrls?.local[0] ?? "";
+  browser = await chromium.launch();
+  if (process.env.MEASURED_SHOTS === "1") await mkdir(shots, { recursive: true });
+}, 60_000);
+
+afterAll(async () => {
+  await browser.close();
+  await server.close();
+});
+
+async function mount(page: Page, theme: string) {
+  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+  await page.goto(url);
+  await page.waitForFunction(() => "measuredFacts" in window);
+  await page.evaluate((theme) => {
+    document.documentElement.dataset.theme = theme;
+    window.reviewTest.mount(false, 20);
+    const provenance = document.createElement("p");
+    provenance.textContent = "Hand-written UI fixture · illustrative measurements";
+    provenance.style.cssText =
+      "position:fixed;top:16px;left:50%;color:var(--muted);font-size:var(--caption-size);z-index:100";
+    document.body.append(provenance);
+  }, theme);
+  await page.getByRole("button", { name: /^Decisions:/ }).click();
+  await page.locator(".monaco-diff-editor").first().waitFor();
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll(".monaco-diff-editor .view-lines")].some((lines) =>
+      lines.textContent.includes("percent"),
+    ),
+  );
+  await page.evaluate(() => document.fonts.ready);
+}
+
+async function publish(page: Page, index: number, summary: boolean, stress = false) {
+  await page.evaluate(
+    ({ index, summary, stress }) => {
+      const facts = window.measuredFacts[index];
+      if (!facts) throw new Error("Missing fixture");
+      const state = window.reviewTest.state();
+      const proposal = state.changes["change-1"]?.proposal;
+      if (!proposal) throw new Error("Missing proposal");
+      if (stress)
+        window.reviewTest.emit({
+          seq: 0,
+          ts: "2026-10-29T15:00:00Z",
+          type: "change.proposed",
+          payload: {
+            ...proposal,
+            impact: {
+              ...proposal.impact,
+              omitted_by_depth: 12,
+              omitted_by_limit: 3,
+              entries: [
+                { node_id: "unknown_caller_".repeat(24), distance: 1 },
+                ...proposal.impact.entries,
+              ],
+            },
+          },
+        });
+      window.reviewTest.emit({
+        seq: 0,
+        ts: "2026-10-29T15:00:00Z",
+        type: "change.facts_recorded",
+        payload: {
+          ...facts,
+          summary: summary ? facts.summary : null,
+          measured_cone: stress
+            ? (facts.measured_cone?.map((caller) => ({
+                ...caller,
+                problems: ["Published diagnostic ".repeat(40), ...caller.problems],
+              })) ?? null)
+            : facts.measured_cone,
+        },
+      });
+    },
+    { index, summary, stress },
+  );
+}
+
+async function checkGeometry(page: Page) {
+  const panel = page.getByRole("complementary", { name: "Review panel" });
+  const geometry = await panel.evaluate((element) => {
+    const get = (selector: string) => {
+      const found = element.querySelector<HTMLElement>(selector);
+      if (!found) throw new Error(selector);
+      return found;
+    };
+    const context = get('[aria-label="Review context"]');
+    const decision = get('[aria-label="Decision"]');
+    const diff = get('[aria-label^="Diff of"] > div');
+    const measured = get('[aria-label="Measured callers · Possibly affected"]');
+    return {
+      decisionBottom: decision.getBoundingClientRect().bottom,
+      panelBottom: element.getBoundingClientRect().bottom,
+      diffHeight: diff.getBoundingClientRect().height,
+      contextHeight: context.clientHeight,
+      overflow: context.scrollWidth > context.clientWidth,
+      nested: [...context.querySelectorAll("*")].some((child) =>
+        /auto|scroll/.test(getComputedStyle(child).overflowY),
+      ),
+      measuredOverflow: measured.scrollWidth > measured.clientWidth,
+    };
+  });
+  expect(geometry.decisionBottom).toBeLessThanOrEqual(geometry.panelBottom);
+  expect(geometry.diffHeight).toBeGreaterThanOrEqual(192);
+  expect(geometry.contextHeight).toBeGreaterThan(0);
+  expect(geometry.overflow || geometry.measuredOverflow || geometry.nested).toBe(false);
+  expect(await page.getByRole("main", { name: "Graph stage" }).isVisible()).toBe(true);
+  expect(
+    await page.getByRole("region", { name: "Possibly affected", exact: true }).isVisible(),
+  ).toBe(true);
+}
+
+const cases = ["available", "partial", "unavailable", "absent"];
+for (const width of [1920, 1280])
+  for (const theme of ["dark", "day"])
+    for (const summary of [true, false]) {
+      it.each(cases)(
+        `keeps %s evidence, diff, decisions and focus at ${String(width)} in ${theme}, summary ${String(summary)}`,
+        async (label) => {
+          const page = await browser.newPage({
+            viewport: { width, height: width === 1920 ? 1080 : 800 },
+            deviceScaleFactor: 1,
+            reducedMotion: "reduce",
+          });
+          const errors: string[] = [];
+          page.on("pageerror", (error) => errors.push(error.message));
+          try {
+            await mount(page, theme);
+            const comment = page.getByRole("textbox", { name: "Comment" });
+            await comment.fill("Keep my review comment");
+            await publish(page, cases.indexOf(label), summary);
+            const measured = page.getByRole("region", {
+              name: "Measured callers · Possibly affected",
+              exact: true,
+            });
+            await measured.waitFor();
+            expect(await comment.evaluate((element) => document.activeElement === element)).toBe(
+              true,
+            );
+            expect(await comment.inputValue()).toBe("Keep my review comment");
+            expect(await measured.textContent()).toContain(
+              label === "available"
+                ? "Comparisons available"
+                : label === "partial"
+                  ? "Partial measurements"
+                  : label === "unavailable"
+                    ? "Recording unavailable: suite stopped"
+                    : "Caller measurements not recorded for this revision",
+            );
+            await checkGeometry(page);
+            await measured.evaluate((element) => {
+              const context = element.closest('[aria-label="Review context"]');
+              if (context)
+                context.scrollTop +=
+                  element.getBoundingClientRect().top - context.getBoundingClientRect().top;
+            });
+            if (process.env.MEASURED_SHOTS === "1")
+              await page.screenshot({
+                path: `${shots}review-${theme}-${label}-${String(width)}-${summary ? "summary" : "no-summary"}.png`,
+              });
+            await publish(page, 1, summary, true);
+            await checkGeometry(page);
+            expect(await comment.evaluate((element) => document.activeElement === element)).toBe(
+              true,
+            );
+            const panel = page.getByRole("complementary", { name: "Review panel" });
+            expect(await panel.textContent()).toContain("+12 omitted by depth");
+            expect(await panel.textContent()).toContain("+3 omitted by the node limit");
+            expect(await panel.textContent()).toContain("+2 possible callers, not followed");
+            expect(errors).toEqual([]);
+          } finally {
+            await page.close();
+          }
+        },
+        60_000,
+      );
+    }
