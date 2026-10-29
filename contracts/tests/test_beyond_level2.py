@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from oversight.workspace import run_process
+from oversight.workspace import ProcessResult, run_process
 from oversight_contracts.commands import (
     ApproveChange,
     ChangeView,
@@ -381,6 +381,63 @@ def test_shape_facts_allow_file_observations_without_a_node() -> None:
         ShapeFact.model_validate({**fact, "kind": "size_gate"})
 
 
+async def recorded_event_paths(root: Path) -> list[Path]:
+    result = await run_process(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.jsonl"],
+        cwd=root,
+        timeout_s=10,
+    )
+    assert result.returncode == 0 and not result.timed_out and not result.truncated, (
+        f"git ls-files failed (timeout={result.timed_out}, truncated={result.truncated}):\n"
+        + result.stdout
+        + result.stderr
+    )
+    return [root / name for name in result.stdout.split("\0") if name]
+
+
+@pytest.mark.anyio
+async def test_recorded_event_discovery_respects_git_ignore(tmp_path: Path) -> None:
+    result = await run_process(["git", "init", "--quiet"], cwd=tmp_path, timeout_s=10)
+    assert result.returncode == 0, result.stdout + result.stderr
+    (tmp_path / ".gitignore").write_text(".eval-output/\n.shots/\n")
+    tracked = tmp_path / ".shots" / "tracked log.jsonl"
+    tracked.parent.mkdir()
+    tracked.write_text("{}\n")
+    result = await run_process(
+        ["git", "add", "--force", "--", str(tracked)], cwd=tmp_path, timeout_s=10
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    untracked = tmp_path / "fixtures" / "new\nlog.jsonl"
+    untracked.parent.mkdir()
+    untracked.write_text("{}\n")
+    for name in (".eval-output/bench/results.jsonl", ".shots/scan-log.jsonl"):
+        ignored = tmp_path / name
+        ignored.parent.mkdir(parents=True, exist_ok=True)
+        ignored.write_text("{}\n")
+    (tmp_path / "other.txt").write_text("not an event log")
+
+    assert set(await recorded_event_paths(tmp_path)) == {tracked, untracked}
+
+
+@pytest.mark.anyio
+async def test_recorded_event_discovery_fails_outside_git(tmp_path: Path) -> None:
+    with pytest.raises(AssertionError, match="not a git repository"):
+        await recorded_event_paths(tmp_path)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("timed_out,truncated", [(True, False), (False, True)])
+async def test_recorded_event_discovery_rejects_incomplete_git_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, timed_out: bool, truncated: bool
+) -> None:
+    async def incomplete(*args: Any, **kwargs: Any) -> ProcessResult:
+        return ProcessResult(0, "partial.jsonl\0", "git diagnostic", timed_out, truncated, 0)
+
+    monkeypatch.setitem(globals(), "run_process", incomplete)
+    with pytest.raises(AssertionError, match=r"partial\.jsonl\x00git diagnostic"):
+        await recorded_event_paths(tmp_path)
+
+
 @pytest.mark.anyio
 async def test_every_recorded_event_validates_against_the_regenerated_schema(
     tmp_path: Path,
@@ -392,9 +449,7 @@ async def test_every_recorded_event_validates_against_the_regenerated_schema(
     schema = json.loads((ROOT / "contracts/generated/oversight.schema.json").read_text())
     assert CONTRACT_VERSION == "1.7.0" and CONTRACT_VERSION in schema["$comment"]
     records = []
-    for path in ROOT.rglob("*.jsonl"):
-        if any(part in {"node_modules", ".git", ".runtime", ".venv"} for part in path.parts):
-            continue
+    for path in await recorded_event_paths(ROOT):
         for line in path.read_text().splitlines():
             event = EVENTS.validate_json(line)
             assert EVENTS.validate_json(EVENTS.dump_json(event)) == event, path
