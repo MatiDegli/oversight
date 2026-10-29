@@ -94,6 +94,21 @@ These retain useful ideas from the old inventory without approving a front or ch
   tasks that change functions only and state that limit in the write-up; current targets are
   module-level functions (`backend/src/oversight/changes/_behavior.py:79`).
 - A dependency guard for package existence, license and vulnerability evidence.
+- Native workflow candidates from the maintainer (2026-10-29), none queued. The cut line drawn
+  after the Saturday checkpoint comes before any of them is considered.
+  - Resource admission: the person's cap on running agents stays the limit. Memory and spend can
+    only hold a start below that cap, never raise it, and a held start shows its reason, for
+    example "Waiting: memory at 88%, 2 test runs ahead". Thresholds are deterministic; no model
+    decides.
+  - A start-box warning: when the person starts an agent by hand and its target lies inside a
+    running agent's impact cone, the start box says so. It only warns; it never blocks or
+    reassigns. Plan zones and the cone check are item 11, and live overlap is item 5; only this
+    warning is new.
+  - Time per stage for each change: agent work, test runs and waiting for the person's decision,
+    shown beside cost and rounds (item 10).
+  - A visible merge queue. Item 8 already tests a change on the combined result when main moved
+    since its base (`backend/src/oversight/changes/_merge.py:65`, `combined_tests_pass` at :120);
+    only the visible queue is new.
 - Export reviewed revisions/comments as decision pairs; no training during this event.
 - A person-approved plan before editing protected areas; item 8's deterministic veto is separate.
 - Person-drawn work zones that limit edits, with a scope-request tool, warn mode and zone growth by approval; item 11's server-computed zones and the reserved `within_zone` rule are separate.
