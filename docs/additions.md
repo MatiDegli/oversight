@@ -537,8 +537,8 @@ Contract check, 2026-10-29: `ExamplePin` (contracts 1.5.0) is a confirmation sta
 example, which requires inputs and an expected result, so a text rule cannot be one without faking
 those fields. Item 13's pin record carries the kind and anchor instead (item 13 above). Since
 2026-10-29, adding a value to an existing enum is a minor change under `docs/proposal.md` section
-4.9 when every existing payload still validates and every TypeScript consumer of the enum is
-exhaustive, so a later text-rule kind can ship in a minor version.
+4.9 when every existing payload still validates and every consumer of the enum, TypeScript and
+Python, is exhaustive, so a later text-rule kind can ship in a minor version.
 
 ### Shipped editor language highlighting
 

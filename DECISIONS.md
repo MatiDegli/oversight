@@ -1476,3 +1476,20 @@ the compiler forces the UI to handle it, as with a new event type. A consumer th
 exhaustive is made exhaustive in the same change, or the change is not minor. Strict models are
 unchanged, and removing or renaming a value stays 2.0. This answers the request left open in the
 entry above on item 13's pin record, so its later text-rule kind can ship in a minor version.
+
+## 2026-10-29 — Python consumers of a contract enum are exhaustive too, and merge decisions fail closed
+
+The first enum amendment required exhaustive TypeScript consumers only. The backend also branches
+on contract enums, such as rule results, merge modes, file statuses and review verdicts, and there
+a value nobody handles can fall into a pass branch, as `small_cone` once passed callers it could
+not see. The maintainer amended the rule the same day: every Python consumer is exhaustive too,
+with a `match` that ends in `assert_never` or a table keyed by the enum, checked by pyright, or a
+test where pyright cannot check it; and code that decides a merge, a rule result or whether a
+change waits fails closed, so an unknown value makes the change wait. A read-only survey of
+`bb64e65`, counting one consumer per file and enum, found 152 of 153 Python consumers not
+exhaustive; 39 of them decide a merge, a rule result or a wait, and in four enum families a new
+value would pass: a test file's new file status, a new test case outcome after a failing run, a new
+cross-review verdict, and a new call-edge kind or confidence. No existing value passes this way;
+whether to fix them before any such value is added is the maintainer's call. Both approvals of the
+first amendment, of the request and of the final change, came from the maintainer in the
+coordinator's session.
