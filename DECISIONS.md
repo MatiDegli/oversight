@@ -1442,3 +1442,14 @@ On Boltons d31d821, 726 of 925 library functions and methods have an empty exact
 it hides every possible caller of 310 methods (OrderedMultiDict 42, IndexedSet 25,
 BarrelList 24), leaving 278 of them apparently without callers at all. Count every possible
 call here, regardless of name; do not follow these calls or imply the cone is complete.
+
+## 2026-10-29 — A new enum value is a minor contract change, under conditions
+
+Section 4.9 of the proposal listed a field with a default, an endpoint and an event type as minor
+additions, but not a new enum value; 1.4.0 needed a bounded exception to extend reserved enums,
+and item 13's pin `kind` would need another for a later text rule. The maintainer approved a
+narrow amendment on 2026-10-29: a new value in an existing enum is minor when every existing
+payload and fixture still validates and every TypeScript consumer of the enum is exhaustive, so
+the compiler forces the UI to handle it, as with a new event type. Strict models are unchanged,
+and removing or renaming a value stays 2.0. Earlier notes that call this request pending are
+superseded by this entry.
