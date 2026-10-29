@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`pins every route coordinate and omission at translation -144, -80 1`] = `"973badcd653bc017d5c88335c06ee33b33c4f35bc3a475cfcedfb22369255aae"`;
+
+exports[`pins every route coordinate and omission at translation 0, 0 1`] = `"de9fba65be06eaf9fcf53beef5359409d79a2e52cc7197850bdb13caba299477"`;
+
+exports[`pins every route coordinate and omission at translation 11, 7 1`] = `"e359eee8f84ababa5ce860088503b60449b705747db3d8641061f9669cae5a8d"`;
+
+exports[`pins every route coordinate and omission at translation 470, 0 1`] = `"4442eb517f8139d55723e4414f55819cc6f1072427c47127d2cb2af06fffc8a1"`;
