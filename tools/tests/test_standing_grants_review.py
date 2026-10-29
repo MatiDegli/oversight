@@ -105,3 +105,56 @@ def test_replay_filters_ended_grants_without_erasing_historical_uses() -> None:
         "Historical card lines and use counters remain",
     ):
         assert boundary in contract
+
+
+def test_protected_path_waiver_requires_separate_rule_semantics_change() -> None:
+    contract = section(PLAN, "## Contract change (proposed contracts 1.7.0)")
+    for boundary in (
+        "`protected_paths` uses `CheckInputs`",
+        "`RuleAssessment` forces `fail` for a proven violation",
+        "incomplete check is not a protected-path hit",
+        "record a hit as a waivable `unknown` wait",
+        "separately approved rule-semantics and assessment-validation change outside 1.7.0",
+        "`protected_path` remains refused until that design ships",
+    ):
+        assert boundary in contract
+
+
+def test_session_identifier_has_a_server_owned_producer_and_lifetime() -> None:
+    contract = section(PLAN, "## Contract change (proposed contracts 1.7.0)")
+    for boundary in (
+        "No session identifier exists in the shipped contracts or backend",
+        "backend generates a fresh UUID at startup as `session_id`",
+        "one server lifetime, shared by its runs",
+        "never supplied by a browser or model",
+        "creation event and the immutable authorization capture copy that server-owned id",
+        "smallest version uses only `run_id` and run expiry",
+    ):
+        assert boundary in contract
+
+
+def test_grants_decision_records_card_visibility_and_grant_timestamp() -> None:
+    decision = section(
+        DECISIONS, "## 2026-10-29 — Standing grants: Oversight remembers what the person let go"
+    )
+    assert (
+        "change merged under a grant says so on its card, with the grant and when it was given"
+        in decision
+    )
+    assert "Every use is recorded as evidence" in decision
+
+
+def test_queue_records_completed_plan_and_contract_approval() -> None:
+    order = section(PLAN, "## Order and what it displaces")
+    assert (
+        "1. Done on 2026-10-29: the maintainer approved this plan and the contract change." in order
+    )
+
+
+def test_plan_links_proposed_product_and_video_pitch() -> None:
+    introduction = (ROOT / PLAN).read_text(encoding="utf-8").split("\n## ", 1)[0]
+    assert "Proposed pitch line for PRODUCT.md and the video:" in introduction
+    assert "[Standing grants in additions.md](../additions.md#standing-grants)" in introduction
+    addition = (ROOT / "docs/additions.md").read_text(encoding="utf-8")
+    pitch = addition.split("### Standing grants\n", 1)[1].split("\n### ", 1)[0]
+    assert "Rules check. The open model can only stop." in pitch

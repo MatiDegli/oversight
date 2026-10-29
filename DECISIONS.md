@@ -1352,8 +1352,9 @@ It can waive possible callers not followed or a protected path, never failing te
 test integrity, cross-review or a decision question. It applies by exact scope match, never by a
 model's judgment; its scope is narrow (one reason kind, for one module, path, agent or run) and it
 ends with the run or the session unless he chooses otherwise. Grants are listed with Revoke,
-every use is recorded on the change it merged, and proof 2 counts questions asked and grants
-applied separately. Building waits for his approval of the plan in `docs/plans/standing-grants.md`.
+a change merged under a grant says so on its card, with the grant and when it was given.
+Every use is recorded as evidence, and proof 2 counts questions asked and grants applied
+separately. Building waits for his approval of the plan in `docs/plans/standing-grants.md`.
 Using his past answers as
 examples for the open model is later, with its own bench arm.
 

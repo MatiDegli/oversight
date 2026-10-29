@@ -4,6 +4,8 @@ Proposed on 2026-10-29 and approved by the maintainer the same day, with its con
 contracts 1.7.0. Nothing here is built yet, and no contract has changed. The decision is in
 DECISIONS.md ("Standing grants: Oversight remembers what the person let go", then its approval
 and version), and the queue entry is in [additions.md](../additions.md#standing-grants).
+Proposed pitch line for PRODUCT.md and the video:
+[Standing grants in additions.md](../additions.md#standing-grants).
 
 ## Why now
 
@@ -92,6 +94,13 @@ version string names two schemas.
   parse error or unresolved removal. `protected_path` covers only the protected-path wait, never
   another rule's finding on the same file. `GrantUse.rule` records the mapped RuleId.
 
+  Today `protected_paths` uses `CheckInputs`, and `RuleAssessment` forces `fail` for a proven
+  violation; an incomplete check is not a protected-path hit. The future protected-path design
+  must record a hit as a waivable `unknown` wait, with structured wait evidence rather than a
+  proven `CheckInputs` violation. This requires a separately approved rule-semantics and
+  assessment-validation change outside 1.7.0; this grant contract does not change those semantics.
+  `protected_path` remains refused until that design ships. No grant waives the current `fail`.
+
 - `ApproveChange.grant: GrantRequest | None` (`reason`, `scope`). Refused with
   `invalid_request` unless the change's current wait has that reason and the scope covers the
   change it is given from.
@@ -99,6 +108,12 @@ version string names two schemas.
   `head_commit`, `run_id`, `session_id`, `granted_by: "person"`) and `grant.revoked` (`grant_id`).
   The creation event's `ts` is when it was given. `grant.expired` (`grant_id`, `reason`:
   `run_ended` or `session_ended`) records the applicable lifecycle boundary for replay.
+  No session identifier exists in the shipped contracts or backend. For the proposed session
+  expiry, the backend generates a fresh UUID at startup as `session_id`: one server lifetime,
+  shared by its runs, never supplied by a browser or model. The creation event and the immutable
+  authorization capture copy that server-owned id; a restart generates a different one. The
+  smallest version uses only `run_id` and run expiry; the session producer is built with session
+  expiry, not assumed to exist today.
 - `ChangeResolved.grants: list[GrantUse] | None` on rules approvals: `grant_id`, `rule`, and what
   was waived (for `possible_callers`, the caller ids, at most 20, and their measured total count).
   Each `GrantUse.authorization` is an immutable server capture: reason, scope, creation event seq
@@ -146,7 +161,7 @@ expiry is checked there too. A grant created later does not revive the stopped r
 
 ## Order and what it displaces
 
-1. Maintainer approves this plan and the contract change.
+1. Done on 2026-10-29: the maintainer approved this plan and the contract change.
 2. The `small_cone` rule and candidate re-measure are already on main. The caller-listing inbox
    entry remains to be built and approved; the rule landing is not a pending prerequisite.
 3. Contract 1.7.0 and backend in one front: about half a day with review. It shares rules
