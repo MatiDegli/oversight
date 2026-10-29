@@ -67,22 +67,33 @@ describe("R4 sources", () => {
     expect(selectSignalLights(state).map((light) => light.source)).toEqual(["agent-b"]);
   });
 
-  it("starts and stops a work ring from agent.status, including reads and revising", () => {
+  it("lights only an agent that is acting: a ring while it works or revises, nothing otherwise", () => {
     const state = through(9);
     const agent = state.agents["agent-1"];
     if (!agent) throw new Error("Missing agent");
     for (const status of [
+      "starting",
       "working",
       "revising",
       "ready_for_review",
       "paused",
+      "halted",
+      "done",
       "stopped",
     ] as const) {
       state.agents["agent-1"] = { ...agent, state: status };
-      expect(selectSignalLights(state)[0]?.pulses).toBe(
-        status === "working" || status === "revising",
-      );
+      const acting = status === "working" || status === "revising";
+      expect(
+        selectSignalLights(state).map((light) => light.pulses),
+        status,
+      ).toEqual(acting ? [true] : []);
     }
+  });
+
+  it("leaves the field dark at rest: the recorded run, once it is merged, has no source", () => {
+    expect(selectSignalLights(through(13))).not.toHaveLength(0);
+    expect(selectSignalLights(through(20))).toEqual([]);
+    expect(selectSignalLights(through(22))).toEqual([]);
   });
 
   it("takes both colors and weights from the active tokens", () => {
@@ -125,10 +136,10 @@ it.each(["watch", "live-diff", "file", "review"] as const)(
   },
 );
 
-it("fades marker and light together on approval, stops the ring immediately, and jumps under reduced motion", () => {
-  const transition = new FieldTransition({ lights: selectSignalLights(through(20)), config });
+it("fades marker and light together when the agent stops acting, stops the ring immediately, and jumps under reduced motion", () => {
+  const transition = new FieldTransition({ lights: selectSignalLights(through(13)), config });
   transition.set(
-    { mode: "watch", lights: selectSignalLights(through(21)) },
+    { mode: "watch", lights: selectSignalLights(through(20)) },
     config,
     0,
     "240ms",
