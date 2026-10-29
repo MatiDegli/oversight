@@ -43,7 +43,9 @@ interface Options {
   noWebGL?: boolean;
   /** The renderer's draw call throws: the one error the field may log, once. */
   failingDraw?: boolean;
-  scene?: "watch" | "live-diff" | "review";
+  scene?: "watch" | "live-diff" | "review" | "waiting" | "unattended" | "rest";
+  /** The page's clock is the test's: time moves when the test says so. */
+  clock?: boolean;
   viewport?: { width: number; height: number };
 }
 
@@ -86,6 +88,7 @@ async function withPage(options: Options, test: (page: Page) => Promise<void>) {
         };
       });
     }
+    if (options.clock) await page.clock.install();
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     await page.goto(url);
     await page.waitForFunction(() => "fieldTest" in window);
@@ -99,6 +102,12 @@ async function withPage(options: Options, test: (page: Page) => Promise<void>) {
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
     );
+    if (options.clock) {
+      // Stop time where the scene stands, once the camera has settled: from here the test moves it.
+      await settledGraph(page);
+      const now = await page.evaluate(() => Date.now());
+      await page.clock.pauseAt(now + 1_000);
+    }
     await test(page);
     expect(errors).toEqual([]);
     // The field says so once when it gives up, and not at all otherwise.
@@ -429,10 +438,12 @@ it("moves with breathing and rings, and stops moving under reduced motion", asyn
 it.each(["review", "live-diff"] as const)(
   "draws the %s light on its change and cone",
   async (scene) => {
+    // The live diff opens on an agent that is editing: the working light, at its strongest. Review
+    // opens on a change that waits on an open inbox entry: the steady, dimmer light.
     await withPage({ reducedMotion: "reduce", scene }, async (page) => {
       const seen = await look(page);
       expect(seen.state).toBe("webgl");
-      expect(seen.near?.level).toBeGreaterThanOrEqual(2);
+      expect(seen.near?.level).toBeGreaterThanOrEqual(scene === "review" ? 1 : 2);
       const graph = await page.evaluate(() => {
         const probe = window.fieldTest.elements().graph.oversightGraph;
         return {
@@ -452,6 +463,334 @@ it.each(["review", "live-diff"] as const)(
   },
   30_000,
 );
+
+/**
+ * What the field draws over the graph's area, found by shooting the page with and without its
+ * canvas: how many pixels it changes, how many of those are not gray, how many are warm (agent A's
+ * orange), and how many lie inside an overlay, which must stay clean.
+ */
+async function fieldPixels(page: Page) {
+  await settledGraph(page);
+  const { rect, overlays } = await page.evaluate(() => {
+    const { graph } = window.fieldTest.elements();
+    const box = graph.getBoundingClientRect();
+    const boxes = [
+      ...document.querySelectorAll(
+        '.pointer-events-auto, [data-field-mask], dialog[open], [role="dialog"], .shell-sidebar, .agents-expanded, .narrow-notice',
+      ),
+    ]
+      .map((element) => element.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0)
+      .map((r) => ({
+        // Inset by a pixel: an edge that falls inside a device pixel is not "under" the overlay.
+        x1: r.left - box.x + 1,
+        y1: r.top - box.y + 1,
+        x2: r.right - box.x - 1,
+        y2: r.bottom - box.y - 1,
+      }));
+    return {
+      rect: { x: box.x, y: box.y, width: box.width, height: box.height },
+      overlays: boxes,
+    };
+  });
+  const shot = await page.screenshot({ clip: rect });
+  await page.evaluate(() => {
+    window.fieldTest.elements().field.style.visibility = "hidden";
+  });
+  const bare = await page.screenshot({ clip: rect });
+  await page.evaluate(() => {
+    window.fieldTest.elements().field.style.visibility = "";
+  });
+  return page.evaluate(
+    async ({ withField, withoutField, boxes }) => {
+      const decode = async (base64: string) => {
+        const bitmap = await createImageBitmap(
+          new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))]),
+        );
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("No 2d context");
+        context.drawImage(bitmap, 0, 0);
+        return {
+          width: bitmap.width,
+          data: context.getImageData(0, 0, bitmap.width, bitmap.height).data,
+        };
+      };
+      const [a, b] = [await decode(withField), await decode(withoutField)];
+      const count = { changed: 0, colored: 0, warm: 0, inside: 0, sum: 0 };
+      for (let at = 0; at < a.data.length; at += 4) {
+        const [r, g, bl] = [a.data[at] ?? 0, a.data[at + 1] ?? 0, a.data[at + 2] ?? 0];
+        const before = [b.data[at] ?? 0, b.data[at + 1] ?? 0, b.data[at + 2] ?? 0];
+        if (r === before[0] && g === before[1] && bl === before[2]) continue;
+        count.changed += 1;
+        count.sum += Math.abs(r - (before[0] ?? 0)) + Math.abs(g - (before[1] ?? 0));
+        if (Math.max(r, g, bl) - Math.min(r, g, bl) > 6) count.colored += 1;
+        if (r > bl + 20) count.warm += 1;
+        const x = (at / 4) % a.width;
+        const y = Math.floor(at / 4 / a.width);
+        if (boxes.some((box) => x >= box.x1 && x < box.x2 && y >= box.y1 && y < box.y2)) {
+          count.inside += 1;
+        }
+      }
+      return count;
+    },
+    { withField: shot.toString("base64"), withoutField: bare.toString("base64"), boxes: overlays },
+  );
+}
+
+/** The graph's area as a PNG, with the field as it stands. */
+async function groundShot(page: Page) {
+  await settledGraph(page);
+  const rect = await page.evaluate(() => {
+    const { x, y, width, height } = window.fieldTest.elements().graph.getBoundingClientRect();
+    return { x, y, width, height };
+  });
+  return page.screenshot({ clip: rect });
+}
+
+/** How far two shots of the same area differ: the sum of the channel differences of their pixels. */
+function differing(page: Page, a: Buffer, b: Buffer) {
+  return page.evaluate(
+    async ({ first, second }) => {
+      const decode = async (base64: string) => {
+        const bitmap = await createImageBitmap(
+          new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))]),
+        );
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("No 2d context");
+        context.drawImage(bitmap, 0, 0);
+        return context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+      };
+      const [x, y] = [await decode(first), await decode(second)];
+      let sum = 0;
+      for (let at = 0; at < x.length; at += 4)
+        sum +=
+          Math.abs((x[at] ?? 0) - (y[at] ?? 0)) +
+          Math.abs((x[at + 1] ?? 0) - (y[at + 1] ?? 0)) +
+          Math.abs((x[at + 2] ?? 0) - (y[at + 2] ?? 0));
+      return sum;
+    },
+    { first: a.toString("base64"), second: b.toString("base64") },
+  );
+}
+
+/**
+ * How much light the field has computed: the sum of the lamp levels on a 14 px grid over the
+ * canvas. It reads the field's own cells, so the graph's styling over them cannot move it.
+ */
+function lightMass(page: Page) {
+  return page.evaluate(() => {
+    const { field } = window.fieldTest.elements();
+    const probe = field.oversightField;
+    let mass = 0;
+    for (let y = 7; y < field.clientHeight; y += 14)
+      for (let x = 7; x < field.clientWidth; x += 14) mass += probe?.lamp(x, y)?.level ?? 0;
+    return mass;
+  });
+}
+
+/**
+ * A few pixels of the graph's own antialiased edges sit over a contour line and blend with it, so
+ * they change with the field hidden: that is not light. A lit node changes hundreds.
+ */
+const STRAY = 30;
+
+const lifeOf = (page: Page) =>
+  page.evaluate(() => window.fieldTest.elements().field.oversightField?.life());
+
+it("draws the rest ground: gray lines, no colored light, and nothing under an overlay", async () => {
+  await withPage({ scene: "rest", reducedMotion: "reduce" }, async (page) => {
+    expect(await lifeOf(page)).toEqual({ pulses: 0, lights: 0, contours: true });
+    const seen = await fieldPixels(page);
+    // Lines over the empty ground, in every channel alike, and none of agent A's orange.
+    expect(seen.changed).toBeGreaterThan(2000);
+    expect(seen.colored).toBe(0);
+    expect(seen.warm).toBe(0);
+    // The mask holds: no line shows through the title, the legend, the zoom controls or a panel.
+    expect(seen.inside).toBe(0);
+  });
+}, 60_000);
+
+it("still draws the lines in the day theme, as ink on paper", async () => {
+  await withPage({ scene: "rest", reducedMotion: "reduce" }, async (page) => {
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = "day";
+    });
+    await page.waitForFunction(
+      () => window.fieldTest.elements().field.oversightField?.life().contours === true,
+    );
+    const seen = await fieldPixels(page);
+    expect(seen.changed).toBeGreaterThan(2000);
+    expect(seen.colored).toBe(0);
+    expect(seen.inside).toBe(0);
+  });
+}, 60_000);
+
+it("keeps the lines still under reduced motion, and lets them drift otherwise, without frames", async () => {
+  await withPage({ scene: "rest", reducedMotion: "reduce", clock: true }, async (page) => {
+    const before = await groundShot(page);
+    await page.clock.fastForward(240_000);
+    expect(await differing(page, before, await groundShot(page))).toBe(0);
+    expect((await lifeOf(page))?.contours).toBe(true);
+  });
+  await withPage({ scene: "rest", clock: true }, async (page) => {
+    const draws = () =>
+      page.evaluate(() => window.fieldTest.elements().field.oversightField?.draws() ?? 0);
+    const still = await draws();
+    await page.clock.runFor(2_000);
+    // The slow timer repaints, and no animation frame is running: the drift is not a loop.
+    expect(await draws()).toBeGreaterThanOrEqual(still + 3);
+    expect(
+      await page.evaluate(() => window.fieldTest.elements().field.oversightField?.animating()),
+    ).toBe(false);
+    const first = await groundShot(page);
+    await page.clock.runFor(1_000);
+    const second = await groundShot(page);
+    await page.clock.fastForward(240_000);
+    const third = await groundShot(page);
+    const seconds = await differing(page, first, second);
+    const minutes = await differing(page, first, third);
+    // A second moves the ground by a hair; minutes change its shape.
+    expect(minutes).toBeGreaterThan(500);
+    expect(seconds).toBeLessThan(minutes / 2);
+  });
+}, 120_000);
+
+it("sends a merge's pulse along the graph to its node, then lights it and fades the light", async () => {
+  await withPage({ scene: "waiting", clock: true }, async (page) => {
+    const nodeCenters = () =>
+      page.evaluate(() => window.fieldTest.elements().graph.oversightGraph?.nodeCenters());
+    const camera = () =>
+      page.evaluate(() => {
+        const graph = window.fieldTest.elements().graph.oversightGraph;
+        return [graph?.zoom(), graph?.pan(), document.activeElement?.tagName];
+      });
+    // The change waits on an open entry: its steady light is on before the decision.
+    expect(await lifeOf(page)).toMatchObject({ pulses: 0, lights: 0 });
+    const waiting = await lightMass(page);
+    expect(waiting).toBeGreaterThan(50);
+    expect((await fieldPixels(page)).warm).toBeGreaterThan(200);
+    await page.evaluate(() => {
+      window.fieldTest.advance(22);
+    });
+    // The merge is told, but the pulse waits a moment before it leaves the card.
+    expect((await lifeOf(page))?.pulses).toBe(0);
+    await page.clock.runFor(250 + 725);
+    expect((await lifeOf(page))?.pulses).toBe(1);
+    // The decision itself settles the graph (the node's pending look goes); from here on, the pulse
+    // and the light must leave the camera and the nodes exactly where they are.
+    const still = [await camera(), await nodeCenters()];
+    const mid = await page.evaluate(() => {
+      const layer = document.querySelector("[data-field-travel]");
+      const head = layer?.querySelector("circle");
+      return {
+        clipped: layer?.getAttribute("clip-path"),
+        pieces: [...(layer?.querySelectorAll("path[stroke]") ?? [])]
+          .map((path) => path.getAttribute("d") ?? "")
+          .filter((d) => d !== "").length,
+        stroke: layer?.querySelector("path[stroke]")?.getAttribute("stroke"),
+        color: getComputedStyle(document.documentElement).getPropertyValue("--agent-a").trim(),
+        head: [head?.getAttribute("cx"), head?.getAttribute("cy")],
+        pointer: layer ? getComputedStyle(layer).pointerEvents : null,
+      };
+    });
+    expect(mid.clipped).toMatch(/^url\(#field-travel-/);
+    expect(mid.pieces).toBeGreaterThan(2);
+    expect(mid.stroke?.toLowerCase()).toBe(mid.color.toLowerCase());
+    expect(mid.pointer).toBe("none");
+    expect(mid.head.every((value) => Number.isFinite(Number(value)))).toBe(true);
+    // The light holds its level through the travel: no dip when the entry closes, no flare either.
+    const travelling = await lightMass(page);
+    expect(travelling).toBeGreaterThan(waiting * 0.9);
+    expect(travelling).toBeLessThan(waiting * 1.1);
+    // Never moves the camera, the focus or a node.
+    expect([await camera(), await nodeCenters()]).toEqual(still);
+    // The pulse arrives at the node, and its trail fades; then the node's light is up and warm.
+    await page.clock.fastForward(725 + 350 + 1500);
+    expect(await lifeOf(page)).toMatchObject({ pulses: 0, lights: 1 });
+    expect(
+      await page.evaluate(() => document.querySelectorAll("[data-field-travel] g").length),
+    ).toBe(0);
+    const lit = await lightMass(page);
+    expect(lit).toBeGreaterThan(waiting * 0.9);
+    expect(lit).toBeLessThan(waiting * 1.1);
+    // Soft: the light is not a block, its colour stays off the overlays, and it fades as time goes.
+    await page.clock.fastForward(45_000);
+    const half = await fieldPixels(page);
+    expect(half.warm).toBeGreaterThan(0);
+    expect(await lightMass(page)).toBeLessThan(lit * 0.8);
+    expect(half.inside).toBe(0);
+    await page.clock.fastForward(46_000);
+    expect(await lifeOf(page)).toMatchObject({ pulses: 0, lights: 0 });
+    expect((await fieldPixels(page)).warm).toBeLessThan(STRAY);
+    expect([await camera(), await nodeCenters()]).toEqual(still);
+  });
+}, 120_000);
+
+it("has no travel under reduced motion: the light stays where it was and fades as long", async () => {
+  await withPage({ scene: "waiting", reducedMotion: "reduce", clock: true }, async (page) => {
+    const waiting = await lightMass(page);
+    expect(waiting).toBeGreaterThan(50);
+    await page.evaluate(() => {
+      window.fieldTest.advance(22);
+    });
+    await page.clock.runFor(100);
+    expect(await lifeOf(page)).toMatchObject({ pulses: 0, lights: 1 });
+    expect(
+      await page.evaluate(() => document.querySelectorAll("[data-field-travel] g").length),
+    ).toBe(0);
+    const lit = await lightMass(page);
+    expect(lit).toBeGreaterThan(waiting * 0.9);
+    expect(lit).toBeLessThan(waiting * 1.1);
+    await page.clock.fastForward(45_000);
+    // The lamps thin out as the light fades; some are still lit, and fewer than before.
+    expect((await fieldPixels(page)).warm).toBeGreaterThan(0);
+    expect(await lightMass(page)).toBeLessThan(lit * 0.8);
+    await page.clock.fastForward(46_000);
+    expect(await lifeOf(page)).toMatchObject({ lights: 0 });
+    expect((await fieldPixels(page)).warm).toBeLessThan(STRAY);
+  });
+}, 120_000);
+
+/** The lamp level at the lit node while its agent is editing: the strongest light the field shows. */
+async function workingLevel() {
+  let level = 0;
+  await withPage({ scene: "watch", reducedMotion: "reduce" }, async (page) => {
+    level = (await look(page)).near?.level ?? 0;
+  });
+  return level;
+}
+
+it("holds a steady, dimmer light while the change waits on an inbox entry, however long", async () => {
+  await withPage({ scene: "waiting", clock: true }, async (page) => {
+    const working = await workingLevel();
+    const seen = await look(page);
+    expect(seen.near?.level).toBeGreaterThan(0);
+    expect(seen.near?.level).toBeLessThan(working);
+    const lit = await lightMass(page);
+    expect(lit).toBeGreaterThan(50);
+    expect((await fieldPixels(page)).warm).toBeGreaterThan(200);
+    // No ring and no frames: the light has no motion, and a long wait changes nothing.
+    expect(
+      await page.evaluate(() => window.fieldTest.elements().field.oversightField?.animating()),
+    ).toBe(false);
+    await page.clock.fastForward(600_000);
+    expect(await lifeOf(page)).toEqual({ pulses: 0, lights: 0, contours: true });
+    expect(await lightMass(page)).toBe(lit);
+  });
+}, 60_000);
+
+it("keeps the waiting light in review, and shows none for an agent with nothing open in the inbox", async () => {
+  await withPage({ scene: "review", reducedMotion: "reduce" }, async (page) => {
+    expect((await look(page)).near?.level).toBeGreaterThan(0);
+    expect((await fieldPixels(page)).warm).toBeGreaterThan(200);
+  });
+  await withPage({ scene: "unattended", reducedMotion: "reduce" }, async (page) => {
+    expect((await look(page)).near?.level).toBe(0);
+    expect((await fieldPixels(page)).warm).toBeLessThan(STRAY);
+  });
+}, 60_000);
 
 it("measures a frame at 1920 by 1080", async () => {
   // The lamps are computed on the CPU and drawn on the GPU; headless Chromium's GPU is a software
@@ -479,3 +818,109 @@ it("measures a frame at 1920 by 1080", async () => {
     expect(Number.isFinite(cost.browserFrameMs)).toBe(true);
   });
 }, 60_000);
+
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)] ?? 0;
+};
+const p95 = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)] ?? 0;
+};
+const summary = (values: number[]) => ({
+  samples: values.length,
+  medianMs: Number(median(values).toFixed(2)),
+  p95Ms: Number(p95(values).toFixed(2)),
+});
+
+/** The time of whole frames: lamps, ground, upload, draw and read back, one call to the probe each. */
+function wholeFrames(page: Page, runs: number) {
+  return page.evaluate((count) => {
+    const probe = window.fieldTest.elements().field.oversightField;
+    if (!probe) throw new Error("No probe");
+    const times: number[] = [];
+    for (let k = 0; k < count; k += 1) {
+      const start = performance.now();
+      probe.pixel(0, 0);
+      times.push(performance.now() - start);
+    }
+    return times;
+  }, runs);
+}
+
+it("measures the frame with contours at rest and during a merge travel, at 1920 by 1080", async () => {
+  const viewport = { width: 1920, height: 1080 };
+  const report: Record<string, unknown> = { viewport };
+  // The whole frame is a bound: it waits for the GPU. The callback is what the page's own frames cost.
+  await withPage({ scene: "rest", viewport }, async (page) => {
+    report.renderer = await page.evaluate(() => {
+      const gl = document.createElement("canvas").getContext("webgl2");
+      const info = gl?.getExtension("WEBGL_debug_renderer_info");
+      return info ? String(gl?.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "unknown";
+    });
+    expect((await lifeOf(page))?.contours).toBe(true);
+    await wholeFrames(page, 10);
+    report.restWholeFrame = summary(await wholeFrames(page, 100));
+  });
+  // Frames drawn in real time while the pulse travels and then while the light fades.
+  await withPage({ scene: "waiting", viewport }, async (page) => {
+    await page.evaluate(() => {
+      window.fieldTest.advance(22);
+    });
+    const { travel, afterlight } = await page.evaluate(() => {
+      const probe = window.fieldTest.elements().field.oversightField;
+      if (!probe) throw new Error("No probe");
+      const travel: number[] = [];
+      const afterlight: number[] = [];
+      const end = performance.now() + 3_000;
+      while (performance.now() < end) {
+        const start = performance.now();
+        probe.pixel(0, 0);
+        const took = performance.now() - start;
+        const { pulses, lights } = probe.life();
+        if (pulses > 0) travel.push(took);
+        else if (lights > 0 && travel.length > 0) afterlight.push(took);
+      }
+      return { travel, afterlight };
+    });
+    report.travelWholeFrame = summary(travel);
+    report.afterlightWholeFrame = summary(afterlight);
+  });
+  // The page's own frames while a pulse travels, in real time: the time inside each frame callback.
+  await withPage({ scene: "waiting", viewport }, async (page) => {
+    await page.evaluate(() => {
+      const times: number[] = [];
+      Object.assign(window, { frameTimes: times });
+      const request = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (callback) =>
+        request((stamp) => {
+          const start = performance.now();
+          callback(stamp);
+          times.push(performance.now() - start);
+        });
+    });
+    await page.evaluate(() => {
+      window.fieldTest.advance(22);
+    });
+    await page.waitForFunction(
+      () => window.fieldTest.elements().field.oversightField?.life().pulses === 1,
+    );
+    await page.waitForFunction(
+      () => window.fieldTest.elements().field.oversightField?.life().pulses === 0,
+    );
+    const times = await page.evaluate(
+      () => (window as unknown as { frameTimes: number[] }).frameTimes,
+    );
+    report.travelFrameCallback = summary(times);
+  });
+  const dir = fileURLToPath(new URL("../../../.shots/life-look/", import.meta.url));
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(`${dir}frame-cost.json`, JSON.stringify(report, null, 2));
+  for (const key of [
+    "restWholeFrame",
+    "travelWholeFrame",
+    "afterlightWholeFrame",
+    "travelFrameCallback",
+  ])
+    expect((report[key] as { samples: number }).samples).toBeGreaterThan(10);
+}, 180_000);
