@@ -2,9 +2,12 @@
 // RGBA texel per cell, the lamp's color and, as alpha, its level. One full-screen triangle draws
 // them: each fragment finds its cell, keeps the lamp's square (72% of the cell) and, on a lamp that
 // is off, the guide dot every few cells. The gaps between lamps stay transparent, so the ground
-// behind the canvas shows. Where WebGL2 is missing this returns null and the graph shows plain ground.
+// behind the canvas shows. With contours, the same pass draws the rest ground's lines from a height
+// grid, in the places no lamp is drawn: there an off lamp is not drawn at all. Where WebGL2 is
+// missing this returns null and the graph shows plain ground.
 import { maskLamps } from "./mask";
 import type { Box, LampGrid, Rgb } from "./model";
+import type { Contours } from "./terrain";
 
 /** What the shader draws besides the grid: sizes in CSS px and the guide dot's color. */
 export interface LampLook {
@@ -22,7 +25,8 @@ export interface LampRenderer {
   check: () => void;
   /** Sizes the drawing buffer to a CSS size at a device pixel ratio. */
   resize(width: number, height: number, ratio: number): void;
-  draw(grid: LampGrid, look: LampLook, masks?: readonly Box[]): void;
+  /** With `contours`, the rest ground's lines are drawn too; without them the field is as it was. */
+  draw(grid: LampGrid, look: LampLook, masks?: readonly Box[], contours?: Contours): void;
   /** The pixel last drawn at a point in CSS px, as red, green, blue and alpha, or null off the buffer. */
   pixel(x: number, y: number): [number, number, number, number] | null;
   /** True once the browser took the context away. */
@@ -48,6 +52,13 @@ uniform float uLamp;
 uniform float uGuide;
 uniform int uEvery;
 uniform vec4 uGuideColor;
+uniform sampler2D uTerrain;
+uniform vec2 uTerrainSize;
+uniform float uTerrainCell;
+uniform float uContourOn;
+uniform vec4 uContour;
+uniform vec4 uContourLook;
+uniform float uContourWidth;
 out vec4 outColor;
 
 // A CSS length in whole device pixels, so lamps keep sharp edges at any pixel ratio.
@@ -57,21 +68,55 @@ bool inside(vec2 p, vec2 low, vec2 size) {
   return all(greaterThanEqual(p, low)) && all(lessThan(p, low + size));
 }
 
+// The line of the rest ground at a point: its alpha, premultiplied. The heights are the red
+// channel, the cover of light the green one. A line is the distance to the nearest whole level,
+// measured in pixels by the slope, so it is one pixel wide and soft at any angle.
+vec4 contourAt(float f, float slope, float cover) {
+  float level = floor(f + 0.5);
+  if (level < 1.0 || level > uContourLook.y) return vec4(0.0);
+  float reach = 0.5 * uContourWidth * uScale + 0.5;
+  float line = clamp(reach - abs(f - level) / max(slope, 0.0005), 0.0, 1.0);
+  float share = clamp(level * uContourLook.x / uContourLook.w, 0.0, 1.0);
+  float a = line * mix(uContourLook.z, 1.0, share) * uContour.a
+      * (1.0 - smoothstep(0.02, 0.35, cover));
+  return vec4(uContour.rgb * a, a);
+}
+
 void main() {
   vec2 p = vec2(gl_FragCoord.x, uView.y - gl_FragCoord.y);
   vec2 cell = floor(p / (uCell * uScale));
+  // Derivatives need every fragment, so the terrain is read before any early return.
+  float f = 0.0;
+  float cover = 0.0;
+  if (uContourOn > 0.5) {
+    vec2 ground = texture(uTerrain, (p / uScale / uTerrainCell + 0.5) / uTerrainSize).rg;
+    f = ground.r / uContourLook.x;
+    cover = ground.g;
+  }
+  float slope = fwidth(f);
   outColor = vec4(0.0);
   if (cell.x >= uGrid.x || cell.y >= uGrid.y) return;
-  vec2 origin = cell * uCell;
-  if (!inside(p, snap(origin + 0.5 * (uCell - uLamp)), snap(vec2(uLamp)))) return;
   vec4 lamp = texelFetch(uCells, ivec2(cell), 0);
   if (lamp.a > 0.0 && lamp.a < 0.01) return;
-  vec3 color = lamp.rgb;
+  vec2 origin = cell * uCell;
+  bool onLamp = inside(p, snap(origin + 0.5 * (uCell - uLamp)), snap(vec2(uLamp)));
   ivec2 index = ivec2(cell);
-  if (lamp.a < 0.001 && index.x % uEvery == 0 && index.y % uEvery == 0
-      && inside(p, snap(origin + 0.5 * (uCell - uGuide)), snap(vec2(uGuide)))) {
-    color = mix(color, uGuideColor.rgb, uGuideColor.a);
+  bool guide = lamp.a < 0.001 && index.x % uEvery == 0 && index.y % uEvery == 0
+      && inside(p, snap(origin + 0.5 * (uCell - uGuide)), snap(vec2(uGuide)));
+  if (uContourOn > 0.5) {
+    // An off lamp is not drawn: only a lit one, a guide dot, or the ground's line.
+    if (onLamp && lamp.a >= 0.01) {
+      outColor = vec4(lamp.rgb, 1.0);
+      return;
+    }
+    vec4 line = contourAt(f, slope, cover);
+    float g = guide ? uGuideColor.a : 0.0;
+    outColor = vec4(uGuideColor.rgb * g, g) + line * (1.0 - g);
+    return;
   }
+  if (!onLamp) return;
+  vec3 color = lamp.rgb;
+  if (guide) color = mix(color, uGuideColor.rgb, uGuideColor.a);
   outColor = vec4(color, 1.0);
 }`;
 
@@ -149,6 +194,13 @@ function initialize(resources: Resources) {
     guide: uniform("uGuide"),
     every: uniform("uEvery"),
     guideColor: uniform("uGuideColor"),
+    terrain: uniform("uTerrain"),
+    terrainSize: uniform("uTerrainSize"),
+    terrainCell: uniform("uTerrainCell"),
+    contourOn: uniform("uContourOn"),
+    contour: uniform("uContour"),
+    contourLook: uniform("uContourLook"),
+    contourWidth: uniform("uContourWidth"),
   };
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
@@ -193,6 +245,9 @@ function renderer(
   const { texture } = initialized;
   let ratio = 1;
   let uploaded = { cols: 0, rows: 0 };
+  // Made when the first contours come, so a field without them holds one texture only.
+  let ground: WebGLTexture | null = null;
+  let groundSize = { cols: 0, rows: 0 };
   return {
     check: () => {
       check(gl);
@@ -207,12 +262,18 @@ function renderer(
         check(gl);
       }
     },
-    draw(grid, look, masks = []) {
+    draw(grid, look, masks = [], contours) {
       gl.activeTexture(gl.TEXTURE0);
       maskLamps(grid, look.cell, masks);
       upload(gl, grid, texture, uploaded);
       uploaded = { cols: grid.cols, rows: grid.rows };
-      paint(gl, canvas, initialized, grid, look, ratio);
+      gl.activeTexture(gl.TEXTURE1);
+      if (contours) {
+        ground ??= groundTexture(resources);
+        groundSize = uploadGround(gl, contours, ground, groundSize);
+      } else gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.activeTexture(gl.TEXTURE0);
+      paint(gl, canvas, initialized, grid, look, ratio, contours);
     },
     pixel(x, y) {
       const px = Math.floor(x * ratio);
@@ -262,6 +323,37 @@ function upload(
   }
 }
 
+/** The height texture: two floats per node, read with linear filtering for smooth lines. */
+function groundTexture(resources: Resources): WebGLTexture {
+  const { gl } = resources;
+  const texture = resources.own(gl.createTexture(), (handle) => {
+    gl.deleteTexture(handle);
+  });
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return texture;
+}
+
+function uploadGround(
+  gl: WebGL2RenderingContext,
+  { heights }: Contours,
+  texture: WebGLTexture,
+  known: { cols: number; rows: number },
+): { cols: number; rows: number } {
+  const { cols, rows, data } = heights;
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  if (known.cols === cols && known.rows === rows) {
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RG, gl.FLOAT, data);
+  } else {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, cols, rows, 0, gl.RG, gl.FLOAT, data);
+    check(gl);
+  }
+  return { cols, rows };
+}
+
 function paint(
   gl: WebGL2RenderingContext,
   canvas: HTMLCanvasElement,
@@ -269,6 +361,7 @@ function paint(
   grid: LampGrid,
   look: LampLook,
   ratio: number,
+  contours: Contours | undefined,
 ) {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.useProgram(program);
@@ -282,6 +375,17 @@ function paint(
   gl.uniform1i(at.every, look.guideEvery);
   const [r, g, b] = look.guide.color;
   gl.uniform4f(at.guideColor, r / 255, g / 255, b / 255, look.guide.alpha);
+  gl.uniform1i(at.terrain, 1);
+  gl.uniform1f(at.contourOn, contours ? 1 : 0);
+  if (contours) {
+    const { heights, look: line } = contours;
+    const [cr, cg, cb] = line.color;
+    gl.uniform2f(at.terrainSize, heights.cols, heights.rows);
+    gl.uniform1f(at.terrainCell, heights.cell);
+    gl.uniform4f(at.contour, cr / 255, cg / 255, cb / 255, line.alpha);
+    gl.uniform4f(at.contourLook, line.step, line.levels, line.fade, line.top);
+    gl.uniform1f(at.contourWidth, line.width);
+  }
   gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
