@@ -274,7 +274,6 @@ export const scenes: readonly Scene[] = [
     enabled: true,
     log: "editing",
     prepare: async (page) => {
-      await page.emulateMedia({ reducedMotion: "reduce" });
       await clickChangedNode(page, "Live diff panel");
     },
   },
@@ -370,15 +369,6 @@ export const scenes: readonly Scene[] = [
       await openFileView(page);
       await page.getByRole("button", { name: "Start an agent here" }).click();
       const box = page.getByLabel("Task for the new agent");
-      // Python bracket colors arrive after the first text render; framing may also follow
-      // the task box resize. Wait for both before comparing this scene pixel for pixel.
-      await page.locator(".monaco-editor .bracket-highlighting-0").first().waitFor();
-      await page.waitForFunction(
-        () =>
-          document
-            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-            ?.oversightGraph?.animating() === false,
-      );
       assert.equal(await box.inputValue(), "In shop/cart.py, Cart.add: ");
       assert.equal(await box.evaluate((element) => document.activeElement === element), true);
     },

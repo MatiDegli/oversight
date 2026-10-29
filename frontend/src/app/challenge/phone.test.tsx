@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { PhonePractice } from "./PhonePractice";
-import { AgentLine } from "./PhoneGraph";
+import { AgentLine, PhoneGraph } from "./PhoneGraph";
 import { freshAttempt } from "./PracticePanel";
 import { manifest, validateManifest } from "./manifest";
 import { recording } from "./recording.fixture";
@@ -15,6 +15,12 @@ const actions = {
   onRestart: vi.fn(),
   onExit: vi.fn(),
 };
+it.each([false, true])("separates per-agent impact counts with a middot (merged: %s)", (merged) => {
+  const html = renderToStaticMarkup(<PhoneGraph practice={practice} merged={merged} />);
+  expect(html).toContain(
+    'class="pp-graph-foot">A · 9 possibly affected · B · 0 possibly affected</p>',
+  );
+});
 it.each([
   ["muse-spark", "Recorded contributor"],
   ["unlisted-model", "unlisted-model"],

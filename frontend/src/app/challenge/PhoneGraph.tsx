@@ -169,7 +169,7 @@ export function PhoneGraph({
               (item) =>
                 `${caseSlot(practice, item)} · ${String(item.proposal.impact.entries.length)} possibly affected`,
             )
-            .join("　")}
+            .join(" · ")}
         </p>
       ) : (
         !entry.proposal.impact.entries.length && (

@@ -154,7 +154,7 @@ async function main(): Promise<number> {
         }, job.theme);
         if (pageErrors.length > 0) throw new Error(`page errors: ${pageErrors.join("; ")}`);
         const path = join(out, job.file);
-        await page.screenshot({ path, caret: "hide", animations: "disabled" });
+        await page.screenshot({ path });
         const metrics = await page.evaluate(() => {
           const probe = document.querySelector<GraphProbeHost>(
             '[aria-label="Repository graph"]',
