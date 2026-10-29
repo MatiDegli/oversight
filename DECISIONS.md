@@ -1464,3 +1464,15 @@ anchor, so that a later text rule is one new kind rather than a second pin famil
 stays as it is. Because a node anchor breaks on a rename, a pin whose anchor no longer exists shows
 as orphaned, in the Pinned lens and as an inbox entry, and never vanishes silently. A new enum value
 is not a minor change under proposal section 4.9 today; the request to make it one is his to decide.
+
+## 2026-10-29 — A new enum value is a minor contract change, under conditions
+
+Section 4.9 of the proposal listed a field with a default, an endpoint and an event type as minor
+additions, but not a new enum value; 1.4.0 needed a bounded exception to extend reserved enums,
+and item 13's pin `kind` would need another for a later text rule. The maintainer approved a
+narrow amendment on 2026-10-29: a new value in an existing enum is minor when every existing
+payload and fixture still validates and every TypeScript consumer of the enum is exhaustive, so
+the compiler forces the UI to handle it, as with a new event type. A consumer that is not
+exhaustive is made exhaustive in the same change, or the change is not minor. Strict models are
+unchanged, and removing or renaming a value stays 2.0. This answers the request left open in the
+entry above on item 13's pin record, so its later text-rule kind can ship in a minor version.

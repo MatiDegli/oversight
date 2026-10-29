@@ -623,6 +623,13 @@ the single error format.
   still validate; a new endpoint; a new event type, which the reducer's exhaustive switch then
   forces the UI to handle. Renames, removals and type changes would be 2.0; they are avoided during
   the hackathon.
+- **A new enum value, approved by the maintainer, 2026-10-29:** a new value in an existing enum (a
+  `Literal` in the contract models) is also minor when every existing payload and recorded fixture
+  still validates unchanged and every TypeScript consumer of that enum is exhaustive (a switch with
+  a `never` check, or a `Record` keyed by the enum), so the compiler forces the UI to handle the new
+  value, as it does for a new event type. A consumer that is not exhaustive is made exhaustive in
+  the same change, or the change is not minor. Strict models stay as they are: extra fields remain
+  forbidden, and a new field still needs a default. Removing or renaming a value stays 2.0.
 - **Bounded exception, approved by the maintainer, 2026-10-27:** 1.4.0 extends reserved
   enums and requires observed `revision` and `head_commit` in Approve, Reject and Request
   changes. Approve and Request changes require a positive revision; Reject alone accepts zero,
