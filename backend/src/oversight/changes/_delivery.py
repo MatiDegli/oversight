@@ -87,6 +87,9 @@ def resolution(
         merge=merge,
         merge_commit=merge_commit,
         conflict=conflict,
+        answers=list(rec.evidence.answers)
+        if rec.evidence and rec.evidence.answers is not None
+        else None,
     )
 
     if rec.evidence is None:

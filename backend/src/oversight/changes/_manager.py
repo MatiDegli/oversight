@@ -35,6 +35,7 @@ from oversight.changes import _proposal as proposal
 from oversight.changes import _revision as revision
 from oversight.changes import _rules as rules
 from oversight.changes import _transaction as transaction
+from oversight.changes._answers import require_yes, validate_answers
 from oversight.changes._assessment import RulesScheduler
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
@@ -70,7 +71,7 @@ from oversight_contracts.commands import FileContent, FileSaved, SetMergeMode
 from oversight_contracts.common import AgentId, ChangeId
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
-from oversight_contracts.review import ChangeTarget, FinishDeclaration
+from oversight_contracts.review import ChangeTarget, FinishDeclaration, ReviewCard
 
 
 class ChangeManager:
@@ -361,13 +362,30 @@ class ChangeManager:
         task.add_done_callback(lambda done: cross_review.release(rec, done))
         return task
 
+    def _decision_answers(
+        self, rec: ChangeRecord, answers: list[ReviewCard] | None, *, approve: bool = False
+    ) -> tuple[ReviewCard, ...] | None:
+        job = self._ctx.cards.for_change(rec) if self._ctx.cards else None
+        cards = (job.facts.review_cards or []) if job and job.facts else []
+        accepted = validate_answers(cards, answers)
+        if approve:
+            require_yes(cards, accepted, pending=job is not None and job.status == "pending")
+        return tuple(accepted) if accepted is not None else None
+
     def approve(
-        self, change_id: ChangeId, comment: str | None, *, revision: int, head_commit: str
+        self,
+        change_id: ChangeId,
+        comment: str | None,
+        *,
+        revision: int,
+        head_commit: str,
+        answers: list[ReviewCard] | None = None,
     ) -> asyncio.Task[None]:
         current = self._ctx.state.changes.get(change_id)
         if current is None:
             raise ChangeNotFound(change_id)
         validate_decision_target(current, revision, head_commit, APPROVABLE)
+        accepted = self._decision_answers(current, answers, approve=True)
         evidence = WriteEvidence(
             change_id,
             current.agent_id,
@@ -377,6 +395,7 @@ class ChangeManager:
             "person",
             "approved",
             comment,
+            answers=accepted,
         )
         validate_resolution_intent(evidence)
         rec = self._take(change_id, APPROVABLE, "approve")
@@ -390,6 +409,23 @@ class ChangeManager:
         wait = self._ctx.assessment.waits.get(rec.change_id)
         if wait is None or not self._ctx.assessment.valid(wait):
             return None
+        job = self._ctx.cards.for_change(rec) if self._ctx.cards else None
+        if job is not None:
+            if job.status == "pending":
+                return (
+                    "policy_invalid",
+                    "Review questions are still being prepared; review this change yourself.",
+                )
+            if job.facts and job.facts.review_cards:
+                return (
+                    "policy_invalid",
+                    "Review questions need the person's answers; review this change yourself.",
+                )
+            if job.status in {"failed", "truncated"}:
+                return (
+                    "policy_invalid",
+                    "Review questions could not be completed; review this change yourself.",
+                )
         try:
             reservation = rules.capture(self._ctx, wait, assessment)
         except RulesFailure as error:
@@ -407,12 +443,19 @@ class ChangeManager:
         return None
 
     def reject(
-        self, change_id: ChangeId, comment: str | None, *, revision: int, head_commit: str
+        self,
+        change_id: ChangeId,
+        comment: str | None,
+        *,
+        revision: int,
+        head_commit: str,
+        answers: list[ReviewCard] | None = None,
     ) -> asyncio.Task[None]:
         current = self._ctx.state.changes.get(change_id)
         if current is None:
             raise ChangeNotFound(change_id)
         validate_decision_target(current, revision, head_commit, REJECTABLE)
+        accepted = self._decision_answers(current, answers)
         evidence = WriteEvidence(
             change_id,
             current.agent_id,
@@ -422,6 +465,7 @@ class ChangeManager:
             "person",
             "rejected",
             comment,
+            answers=accepted,
         )
         validate_resolution_intent(evidence)
         rec = self._take(change_id, REJECTABLE, "reject")
@@ -429,7 +473,13 @@ class ChangeManager:
         return self._decide(rec, self._reject(rec, comment))
 
     def request_changes(
-        self, change_id: ChangeId, comment: str, *, revision: int, head_commit: str
+        self,
+        change_id: ChangeId,
+        comment: str,
+        *,
+        revision: int,
+        head_commit: str,
+        answers: list[ReviewCard] | None = None,
     ) -> asyncio.Task[Revision | None]:
         """Send the comment back to the agent; its worktree, branch, base and files stay. From
         `conflict`, main is merged into the agent's branch first. The task returns what the agent
@@ -440,6 +490,7 @@ class ChangeManager:
         if current is None:
             raise ChangeNotFound(change_id)
         validate_decision_target(current, revision, head_commit, REVISABLE)
+        accepted = self._decision_answers(current, answers)
         evidence = WriteEvidence(
             change_id,
             current.agent_id,
@@ -449,6 +500,7 @@ class ChangeManager:
             "person",
             "changes_requested",
             comment,
+            answers=accepted,
         )
         validate_resolution_intent(evidence)
         rec = self._take(change_id, REVISABLE, "request changes")

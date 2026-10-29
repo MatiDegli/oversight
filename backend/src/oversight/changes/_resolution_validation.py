@@ -67,4 +67,7 @@ def validate_resolution_evidence(payload: ChangeResolved, evidence: WriteEvidenc
         raise ValueError("resolution differs from its captured authorization and target")
     if payload.assessment != evidence.assessment or tuple(payload.reasons) != evidence.reasons:
         raise ValueError("resolution policy evidence differs from its capture")
+    answers = tuple(payload.answers) if payload.answers is not None else None
+    if answers != evidence.answers:
+        raise ValueError("resolution answers differ from their captured authorization")
     ChangeResolved.model_validate(payload.model_dump(mode="json"), context={"live": True})

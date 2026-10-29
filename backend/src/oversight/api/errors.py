@@ -1,5 +1,7 @@
 """The single error format of section 4.7: `{"error": {"code", "message"}}`, for every error."""
 
+from typing import cast
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -41,11 +43,26 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _invalid_request(_: Request, error: RequestValidationError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        problems = "; ".join(
-            f"{'.'.join(str(part) for part in problem['loc'])}: {problem['msg']}"
-            for problem in error.errors()
-        )
-        return error_response("invalid_request", problems or "invalid request")
+        body: object = error.body
+        problems: list[str] = []
+        for problem in error.errors():
+            loc = problem["loc"]
+            message = f"{'.'.join(str(part) for part in loc)}: {problem['msg']}"
+            # Contract validation can reject an answer before decision admission, for example
+            # when answered_by is absent. Identify that card just like the domain validator.
+            if len(loc) >= 3 and loc[:2] == ("body", "answers") and isinstance(body, dict):
+                answers, index = cast(dict[str, object], body).get("answers"), loc[2]
+                if (
+                    isinstance(answers, list)
+                    and isinstance(index, int)
+                    and 0 <= index < len(cast(list[object], answers))
+                ):
+                    card = cast(list[object], answers)[index]
+                    if isinstance(card, dict):
+                        card = cast(dict[str, object], card)
+                        message += f" ({card.get('node_id')}: {card.get('question')})"
+            problems.append(message)
+        return error_response("invalid_request", "; ".join(problems) or "invalid request")
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(_: Request, error: StarletteHTTPException) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
