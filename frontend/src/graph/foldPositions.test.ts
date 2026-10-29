@@ -1,8 +1,33 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { themes } from "../theme";
 import type { GraphElement } from "./elements";
 import { foldPositions } from "./foldPositions";
+
+it("measures expanded bounds once per elements snapshot and geometry across fold cycles", () => {
+  const elements = modules(2);
+  const leaf = elements.find((e) => e.data.id === "m0:f0");
+  if (!leaf) throw new Error("Missing measurement sentinel");
+  const measure = vi.fn(() => 282);
+  Object.defineProperty(leaf.data, "w", { get: measure });
+  for (let i = 0; i < 3; i++) {
+    foldPositions(elements, new Set(), themes.dark, new Set(["m0"]));
+    const open = foldPositions(elements, new Set(), { ...themes.dark });
+    for (const e of elements) expect(open.positions.get(e.data.id)).toEqual(e.position);
+  }
+  expect(measure).toHaveBeenCalledTimes(1);
+  foldPositions([...elements], new Set(), themes.dark);
+  expect(measure).toHaveBeenCalledTimes(2);
+  const theme = { ...themes.dark, "frame-pad-top": "64px" };
+  const resized = foldPositions(elements, new Set(), theme);
+  expect(resized.positions.get("m0")).not.toEqual(elements[0]?.position);
+  foldPositions(elements, new Set(), theme, new Set(["m0"]));
+  expect(measure).toHaveBeenCalledTimes(3);
+  // Even an in-place theme geometry edit invalidates the cached measurement.
+  theme["frame-pad-top"] = "74px";
+  foldPositions(elements, new Set(), theme);
+  expect(measure).toHaveBeenCalledTimes(4);
+});
 
 /** Synthetic expanded modules: two far-apart rows, 80 units between full frames. */
 function modules(count: number): GraphElement[] {

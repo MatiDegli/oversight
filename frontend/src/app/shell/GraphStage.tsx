@@ -50,6 +50,7 @@ export function GraphStage({
     key: string | null;
     outOfView: ReadonlySet<string>;
   }>();
+  const [routingOmissions, setRoutingOmissions] = useState(0);
   const coneCardRef = useRef<HTMLDivElement>(null);
   const startAreaRef = useRef<HTMLDivElement>(null);
   const graphApi = useRef<GraphApi | null>(null);
@@ -73,6 +74,7 @@ export function GraphStage({
         frameKey={frameKey}
         onFramed={onFramed}
         coneCardRef={coneCardRef}
+        onRoutingOmissions={setRoutingOmissions}
         apiRef={graphApi}
         startAreaRef={startAreaRef}
         field={field}
@@ -90,6 +92,7 @@ export function GraphStage({
               >
                 <ImpactConeCard
                   cone={cone}
+                  routingOmissions={routingOmissions}
                   outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
                   onReveal={(id) => graphApi.current?.reveal(id)}
                   nodes={[...(state.graph?.nodes ?? []), ...(shownChange?.graph.nodes_added ?? [])]}

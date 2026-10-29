@@ -12,14 +12,24 @@ interface Box {
   height: number;
 }
 
-/** Project from the expanded preset each time; unfolding never accumulates layout offsets. */
-export function foldPositions(
+interface ExpandedSnapshot {
+  geometry: string;
+  nodes: GraphElement[];
+  children: Map<string, GraphElement[]>;
+  roots: GraphElement[];
+  full: Map<string, Box>;
+}
+
+const expandedSnapshots = new WeakMap<readonly GraphElement[], ExpandedSnapshot>();
+
+/** Elements are immutable snapshots; only geometry, never fold choices, changes their bounds. */
+function expandedSnapshot(
   elements: readonly GraphElement[],
-  expanded: ReadonlySet<string>,
-  theme: GeometryTokens,
-  foldedModules: ReadonlySet<string> = new Set(),
-) {
-  const g = nodeGeometry(theme);
+  g: ReturnType<typeof nodeGeometry>,
+): ExpandedSnapshot {
+  const geometry = JSON.stringify(g);
+  const cached = expandedSnapshots.get(elements);
+  if (cached?.geometry === geometry) return cached;
   const nodes = elements.filter((e) => e.group === "nodes");
   const children = new Map<string, GraphElement[]>();
   for (const node of nodes) {
@@ -29,6 +39,20 @@ export function foldPositions(
   }
   const roots = children.get("") ?? [];
   const full = measureExpanded(roots, children, g);
+  const snapshot = { geometry, nodes, children, roots, full };
+  expandedSnapshots.set(elements, snapshot);
+  return snapshot;
+}
+
+/** Project from the expanded preset each time; unfolding never accumulates layout offsets. */
+export function foldPositions(
+  elements: readonly GraphElement[],
+  expanded: ReadonlySet<string>,
+  theme: GeometryTokens,
+  foldedModules: ReadonlySet<string> = new Set(),
+) {
+  const g = nodeGeometry(theme);
+  const { nodes, children, roots, full } = expandedSnapshot(elements, g);
   const maxHeight = 9 * (g.headerHeight + g.rowGap);
   const compact = compactModules(roots, full, maxHeight);
   const positions = new Map<string, Point>();
