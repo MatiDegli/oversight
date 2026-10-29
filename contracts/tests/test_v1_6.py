@@ -244,6 +244,17 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
         }:
             assert current[name] == definition, name
     assert current["Slot"]["enum"] == list("ABCDEF")
+    for name, field in (("ApproveChange", "grant"), ("ChangeResolved", "grants")):
+        properties = current[name]["properties"]
+        assert set(properties) - set(baseline[name]["properties"]) == {field}
+        assert properties[field]["default"] is None
+        assert field not in current[name]["required"]
+        assert {key: value for key, value in properties.items() if key != field} == baseline[name][
+            "properties"
+        ]
+        assert {key: value for key, value in current[name].items() if key != "properties"} == {
+            key: value for key, value in baseline[name].items() if key != "properties"
+        }
     for name in ("StartAgent", "AgentStatus"):
         fields = current[name]["properties"]
         assert set(fields) - set(baseline[name]["properties"]) == {"answering"}

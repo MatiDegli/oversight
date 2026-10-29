@@ -12,6 +12,7 @@ from test_policy_profiles import PROFILE, policy_inputs
 
 from oversight.changes import _candidate, _transaction
 from oversight.changes._policy import assess, merges_alone
+from oversight.changes._resolution_validation import validate_resolution_intent
 from oversight.changes._rules import pending_policy
 from oversight.events import export_run, read_jsonl
 from oversight_contracts.events import ChangeResolved
@@ -149,6 +150,20 @@ async def test_revoke_serializes_with_the_effect(h, granted, monkeypatch):
     await revoke
     assert h.payloads(ChangeResolved)[-1].decided_by == "rules"
     assert len(h.payloads(GrantRevoked)) == 1
+
+
+async def test_effect_uses_the_exact_capture_checked_by_the_pure_guard(h, granted, monkeypatch):
+    checked = []
+    validate = validate_resolution_intent
+
+    def recorded(evidence):
+        validate(evidence)
+        checked.append(evidence)
+
+    monkeypatch.setattr(_transaction, "validate_resolution_intent", recorded)
+    decisions = await later(h, monkeypatch)
+    await decisions[0]
+    assert checked[-1] is h.manager._agents["agent-2"].evidence
 
 
 @pytest.mark.parametrize("query,tree", [("rev-parse", "agent-2"), ("ls-tree", "main")])

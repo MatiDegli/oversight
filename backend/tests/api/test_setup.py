@@ -30,6 +30,7 @@ from oversight.app import LIMITS, ClientFactory, LiveRun, create_app
 from oversight.changes import ChangeManager, Revision
 from oversight.settings import Settings
 from oversight.setup import missing_settings, offered_profiles
+from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import ErrorResponse, Health, StartAgent
 from oversight_contracts.events import ModelProfile
 
@@ -172,7 +173,7 @@ async def test_start_returns_only_the_selected_slots_setup_problems(
             "missing": [{"name": name, "problem": problem, "slots": ["B"]}],
         }
         health = Health.model_validate((await client.get("/health")).json())
-        assert health.ok and health.contract_version == "1.6.0"
+        assert health.ok and health.contract_version == CONTRACT_VERSION
         assert health.missing_settings == missing_settings(settings, offered_profiles(settings))
         assert all(entry.slots == ["A", "B"] for entry in health.missing_settings)
     assert clients.calls == 0

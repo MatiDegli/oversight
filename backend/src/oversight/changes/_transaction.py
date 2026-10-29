@@ -141,6 +141,7 @@ class Transaction:
                 for ref in rule.evidence
             ):
                 raise RulesFailure("policy_invalid", "Definitive evidence is no longer available.")
+            validate_resolution_intent(self.definitive)
             rec.evidence = self.definitive
             yield
 
