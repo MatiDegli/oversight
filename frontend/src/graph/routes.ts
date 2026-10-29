@@ -243,9 +243,9 @@ function writeRoutes(cy: Core, edges: EdgeCollection, routes: ReadonlyMap<string
     );
 }
 
-/** Every call still marked unroutable is disclosed, including calls within an open module. */
+/** Count all non-import edges hidden by edge.unroutable, including calls and inheritance. */
 export function routingOmissions(edges: EdgeCollection): number {
-  return edges.filter(".calls.unroutable").length;
+  return edges.filter("edge.unroutable").not(".imports").length;
 }
 
 /** A module drag is a rigid translation: reuse measured boxes, never remeasure SVG labels. */

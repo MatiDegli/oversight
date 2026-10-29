@@ -57,6 +57,7 @@ function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
   const api = useRef<GraphApi | null>(null);
   const card = useRef<HTMLDivElement>(null);
   const startArea = useRef<HTMLDivElement>(null);
+  const [routingOmissions, setRoutingOmissions] = useState(0);
   const [framing, setFraming] = useState<Framing | null>(null);
   const view = useMemo(
     () => ({
@@ -85,6 +86,7 @@ function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
             litIds={litIds}
             onFramed={setFraming}
             coneCardRef={card}
+            onRoutingOmissions={setRoutingOmissions}
             apiRef={api}
             startAreaRef={startArea}
           />
@@ -94,6 +96,7 @@ function Harness({ mode, demo = false }: { mode: Mode; demo?: boolean }) {
                 <div ref={card} className="pointer-events-auto w-(--cone-card-width)">
                   <ImpactConeCard
                     cone={impact}
+                    routingOmissions={routingOmissions}
                     nodes={nodes}
                     outOfView={framing?.outOfView}
                     onReveal={(id) => api.current?.reveal(id)}
