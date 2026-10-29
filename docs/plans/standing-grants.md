@@ -29,14 +29,26 @@ entire wait reason is covered by an active grant; unsupported waits and any `fai
 The recorded result stays `unknown` when a grant removes its wait. Existing exact-profile,
 evidence, target, mode and integrity guards stay unchanged.
 
+The `small_cone` discriminator is structured, never inferred from its evidence text: `observed`
+is present with all five counts, `0 <= nodes <= 5`, `omitted_by_depth == 0`,
+`omitted_by_limit == 0`, `parse_errors == 0` and `unresolved_removed == 0`. Only then can an
+`unknown` be covered by `possible_callers`, with a measured positive possible-callers count from
+the same tree, captured in the grant-use evidence below. `observed=None` always waits for the
+person; a missing count, an exceeded limit or an unmeasured caller count also waits. This applies
+at admission, candidate re-measure and both pure resolution checks; a module scope never waives
+missing measurements or unresolved removals.
+
 - Admission: `pending_policy` in `backend/src/oversight/changes/_rules.py` applies that check to
   every non-combined rule. `combined_tests` keeps its existing pending-unknown requirement until
   the combined suite runs; a grant never covers it.
 - Definitive authorization: `merges_alone` in `backend/src/oversight/changes/_policy.py`, called
-  by `backend/src/oversight/changes/_transaction.py`, applies the same grant-aware check to the
-  final assessment, including the candidate rules re-measured by
+  by `backend/src/oversight/changes/_transaction.py` and the pure
+  `validate_resolution_intent` check, applies the same grant-aware check to the final assessment,
+  including the candidate rules re-measured by
   `backend/src/oversight/changes/_candidate.py`. Combined tests must now pass. A prior grant use
   cannot authorize a newly uncovered wait in the re-measured assessment.
+  `ChangeResolved._rules_decision` must accept that same evidence when validating the event;
+  both pure checks are part of the proposed change below.
 
 ## What a grant is
 
@@ -53,7 +65,8 @@ evidence, target, mode and integrity guards stay unchanged.
   in this run). Matching is set membership and string equality on server data; no model judges a
   match. A grant covers one reason kind.
 - **It expires** with the run by default; `session` (until the server stops) is the only other
-  choice. Nothing persists past a restart, and nothing is global.
+  choice in this proposal. The maintainer may choose otherwise through a separately approved
+  expiry contract. Nothing persists past a restart, and nothing is global.
 - **Visible and revocable:** a grants list with Revoke; a change merged under a grant says so on
   its card, with the grant and when it was given.
 - **Counted:** proof 2 reports questions asked and grants applied separately.
@@ -78,12 +91,33 @@ evidence, target, mode and integrity guards stay unchanged.
   `invalid_request` unless the change's current wait has that reason and the scope covers the
   change it is given from.
 - Events: `grant.created` (`grant_id`, `reason`, `scope`, `change_id`, `revision`,
-  `head_commit`, `granted_by: "person"`) and `grant.revoked` (`grant_id`). The event's `ts` is
-  when it was given.
+  `head_commit`, `run_id`, `session_id`, `granted_by: "person"`) and `grant.revoked` (`grant_id`).
+  The creation event's `ts` is when it was given. `grant.expired` (`grant_id`, `reason`:
+  `run_ended` or `session_ended`) records the applicable lifecycle boundary for replay.
 - `ChangeResolved.grants: list[GrantUse] | None` on rules approvals: `grant_id`, `rule`, and what
-  was waived (for `possible_callers`, the caller ids, at most 20, and their count).
+  was waived (for `possible_callers`, the caller ids, at most 20, and their measured total count).
+  Each `GrantUse.authorization` is an immutable server capture: reason, scope, creation event seq
+  and timestamp, run/session ids, `checked_at`, `active_at_effect`, and the assessment target
+  (change_id, agent_id, revision and head_commit). It binds the grant and caller measurement to
+  the exact assessment; missing or mismatched evidence cannot cover an unknown.
+- Relax `ChangeResolved._rules_decision` in `contracts/src/oversight_contracts/events.py` and
+  `validate_resolution_intent` in `backend/src/oversight/changes/_resolution_validation.py`:
+  accept `pass` or a fully covered `unknown`, using the discriminator above, never `fail`.
+  The former reads `ChangeResolved.grants`; the latter reads the identical immutable
+  `WriteEvidence.grants` capture passed to `merges_alone`. Both validate the reason/rule mapping,
+  counts, exact target and scope, and activity at `checked_at`, without reading mutable grant
+  state. The transaction refreshes that capture from current server state at every barrier and
+  at the serialized effect boundary, where `active_at_effect` must be true before Git changes.
+  For validation after effects, `validate_resolution_evidence` requires the event's grants to
+  equal the captured grants before repeating both pure checks. Retries and replay use the
+  original capture: later expiry or revocation cannot invalidate a historical receipt or
+  authorize a new merge.
 - `POST /grants/{grant_id}/revoke`: `not_found` for an unknown id, `wrong_state` once revoked or
-  expired. The list, the card line and the counters derive from events, so replay shows them.
+  expired. The active list derives from events and filters expired or revoked grants using the
+  replay event clock and the recorded lifecycle boundaries (run ended or session ended), not
+  the replay host's session. A restart never restores an earlier live session's grants; a
+  recording missing its closing boundary treats remaining grants as inactive at its end.
+  Historical card lines and use counters remain visible after expiry, distinct from active grants.
 
 ## Smallest version that helps proof 2
 
@@ -92,7 +126,9 @@ yet supported); `module` and `run` scopes; run expiry only; grant creation on Ap
 admission through `pending_policy` and definitive authorization through `merges_alone` use the
 grant-aware checks above, including the merge-time re-measure on the candidate tree; revoke.
 Frontend (line B, size M): the "Don't ask again" control on the inbox entry, the grants list with
-Revoke, and the card line. Report: two counters in the proof 2 summary.
+Revoke in the existing Settings tab, and the card line. The inbox uses the existing decisions
+chip; both surfaces follow DESIGN.md as located in the shots below. Report: two counters in the
+proof 2 summary.
 
 At admission, the candidate re-measure, and every revalidation barrier, re-check that each grant
 used is active and still covers the current wait and scope. Read current server state, never
@@ -106,7 +142,8 @@ expiry is checked there too. A grant created later does not revive the stopped r
 ## Order and what it displaces
 
 1. Maintainer approves this plan and the contract change.
-2. `changes/small-cone` lands (running now).
+2. The `small_cone` rule and candidate re-measure are already on main. The caller-listing inbox
+   entry remains to be built and approved; the rule landing is not a pending prerequisite.
 3. Contract 1.7.0 and backend in one front: about half a day with review. It shares rules
    admission with [item 9](../additions.md#9-a-change-card-with-three-states)'s remaining
    decision-veto wiring into rules admission (the open model can add a wait, never approve), so
@@ -121,6 +158,10 @@ This is a proposed capacity allowance, not a verified list of displaced fronts. 
 checkpoint list is dropped.
 
 ## Shots the maintainer approves first
+
+These stay inside DESIGN.md's existing shell: the decisions chip opens the inbox, where the
+person creates a grant; the grants list lives in the Settings tab in the focus panel, alongside
+the standing merge choices. The graph remains visible. No new navigation surface is proposed.
 
 1. The inbox entry for a possible-callers wait, with the callers marked "not followed", Approve,
    and the "Don't ask again" control open with its two scopes (this module, this run).

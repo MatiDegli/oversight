@@ -1316,6 +1316,10 @@ count: it must come from him in the session that lands.
 
 ## 2026-10-29 — small_cone does not pass what it cannot see
 
+Audit note: commit 13c08bc replaced the same-day entry "Small cones require no unobserved
+possible callers" with this consolidated entry. It retains that decision's unknown-on-unmeasured
+count, shared caller definition and both measuring producers; this is not a new maintainer decision.
+
 The impact cone follows exact calls only, so an empty or small cone can mean "nothing calls this"
 or "the graph could not tell who calls this". On Boltons most functions have no exact callers, and
 many of them have callers the graph marks as possible. `small_cone` used to pass both cases.
@@ -1343,12 +1347,14 @@ wait the person could accept themselves.
 
 A grant comes only from the person's own answer to an inbox entry (Yes plus "don't ask again",
 with a scope they pick), never from an agent, a lead plan or a message relayed by another session.
+Free-text grants may come later, always turned into a structured grant he confirms.
 It can waive possible callers not followed or a protected path, never failing tests, conflicts,
 test integrity, cross-review or a decision question. It applies by exact scope match, never by a
 model's judgment; its scope is narrow (one reason kind, for one module, path, agent or run) and it
-ends with the run or the session. Grants are listed with Revoke, every use is recorded on the
-change it merged, and proof 2 counts questions asked and grants applied separately. Building
-waits for his approval of the plan in `docs/plans/standing-grants.md`. Using his past answers as
+ends with the run or the session unless he chooses otherwise. Grants are listed with Revoke,
+every use is recorded on the change it merged, and proof 2 counts questions asked and grants
+applied separately. Building waits for his approval of the plan in `docs/plans/standing-grants.md`.
+Using his past answers as
 examples for the open model is later, with its own bench arm.
 
 ## 2026-10-29 — Aggregate counts on demand and measured frame titles
