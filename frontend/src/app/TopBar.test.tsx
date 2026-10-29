@@ -19,7 +19,7 @@ describe("the top bar", () => {
     expect(markup).toContain("lucide-git-branch");
   });
 
-  it("puts the review queue counter on the control radius with its count in the label's type", () => {
+  it("puts the decisions chip on the control radius with its count in the label's type", () => {
     const markup = render(20, vi.fn());
     const button = /<button type="button" title="Open the review queue[^>]*>/.exec(markup)?.[0];
     expect(button).toContain("rounded-control");
@@ -32,6 +32,13 @@ describe("the top bar", () => {
     expect(render(14)).toContain("text-muted");
     expect(render(14)).toContain('aria-label="Decisions: 0 pending. Open review queue"');
     expect(render(14)).not.toContain("status-lamp-size");
+  });
+
+  it("keeps the decisions chip label in one inline run with a single space before the count", () => {
+    expect(render(20, vi.fn())).toContain(
+      '<span>Decisions · <span class="font-mono tabular-nums">1</span></span>',
+    );
+    expect(render(14, vi.fn())).toContain("<span>Nothing needs you</span>");
   });
 
   it("shows search and its Ctrl K hint while leaving out history and settings", () => {
@@ -57,7 +64,7 @@ describe("the top bar", () => {
     expect(/\b(?:review\s+)?queue\s+counter\b/i.test(design)).toBe(false);
   });
 
-  it("keeps the queue counter and the spend at the right edge beside search", () => {
+  it("keeps the decisions chip and the spend at the right edge beside search", () => {
     const markup = render(20, vi.fn());
     expect(markup.indexOf('aria-label="Review queue"')).toBeLessThan(markup.indexOf("Spent"));
     expect(markup).toMatch(/aria-label="Review queue" class="ml-auto /);

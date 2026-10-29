@@ -87,11 +87,11 @@ export function TopBar({
           className={`inline-flex h-(--queue-counter-height) items-center gap-2.5 rounded-control border border-border bg-raised px-3.5 text-(length:--label-size) font-semibold ${ready > 0 ? "text-text" : "text-muted"} enabled:hover:bg-page-raised ${focusRing}`}
         >
           {ready === 0 ? (
-            "Nothing needs you"
+            <span>Nothing needs you</span>
           ) : (
-            <>
+            <span>
               Decisions · <span className="font-mono tabular-nums">{ready}</span>
-            </>
+            </span>
           )}
         </button>
       </div>
