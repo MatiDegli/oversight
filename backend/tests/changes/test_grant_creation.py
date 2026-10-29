@@ -1,5 +1,7 @@
 """Personal creation validates before taking a change; rejected commands have no effects."""
 
+import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import replace
 
 import pytest
@@ -11,8 +13,9 @@ from test_policy_profiles import policy_inputs
 
 from oversight.changes import GrantNotFound, InvalidGrant, WrongState
 from oversight.graph import possible_callers
-from oversight_contracts.events import ChangeResolved
+from oversight_contracts.events import ChangeResolved, ErrorReport
 from oversight_contracts.grants import GrantCreated, GrantRequest, GrantRevoked
+from oversight_contracts.policy import MergeModeState
 
 pytestmark = pytest.mark.anyio
 RUN = "run-20261026-120000"
@@ -122,11 +125,15 @@ async def test_unmeasured_callers_are_not_a_waivable_wait(h, possible):
 async def test_failed_creation_does_not_merge_and_expired_grant_cannot_be_revoked(h, possible):
     h.fail_once = GrantCreated
     before = await h.main_head()
-    with pytest.raises(RuntimeError, match="publish failure"):
-        await h.manager.approve(
-            "change-1", None, grant=request(), **observed_target(h.manager, "change-1")
-        )
+    await h.manager.approve(
+        "change-1", None, grant=request(), **observed_target(h.manager, "change-1")
+    )
     assert await h.main_head() == before and not h.payloads(ChangeResolved)
+    [error] = h.payloads(ErrorReport)
+    assert error.source == "server" and not error.fatal
+    assert error.change_id == "change-1" and error.agent_id == rec(h).agent_id
+    assert "Grant creation failed" in error.message and "publish failure" in error.message
+    assert rec(h).state == "ready" and not h.payloads(GrantCreated)
     await h.manager.approve(
         "change-1", None, grant=request(), **observed_target(h.manager, "change-1")
     )
@@ -135,6 +142,42 @@ async def test_failed_creation_does_not_merge_and_expired_grant_cannot_be_revoke
     with pytest.raises(WrongState, match="expired"):
         await h.manager.revoke_grant(created.grant_id)
     assert not h.payloads(GrantRevoked)
+
+
+async def test_creation_rechecks_mode_after_waiting_for_its_lock(h, possible, monkeypatch):
+    mode = h.manager._ctx.mode
+    waiting = asyncio.Event()
+    original = mode.held
+
+    @asynccontextmanager
+    async def queued():
+        waiting.set()
+        async with original():
+            yield
+
+    monkeypatch.setattr(mode, "held", queued)
+    h.gate = MergeModeState
+    before = await h.main_head()
+    disabling = asyncio.create_task(select(h, "ask_me", 1))
+    approving = None
+    try:
+        async with asyncio.timeout(5):
+            await h.at_gate.wait()
+            assert mode.snapshot().mode == "merge_when_safe"
+            approving = h.manager.approve(
+                "change-1", None, grant=request(), **observed_target(h.manager, "change-1")
+            )
+            await waiting.wait()
+    finally:
+        h.open_gate.set()
+        await disabling
+        if approving is not None:
+            await approving
+    assert mode.snapshot().mode == "ask_me"
+    assert not h.payloads(GrantCreated) and not h.payloads(ChangeResolved)
+    assert await h.main_head() == before and rec(h).state == "ready"
+    [error] = h.payloads(ErrorReport)
+    assert "merge_when_safe" in error.message and not error.fatal
 
 
 @pytest.mark.parametrize("scope", [request(), request(kind="run", value=RUN)])

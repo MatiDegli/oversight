@@ -413,7 +413,16 @@ class ChangeManager:
         self, rec: ChangeRecord, comment: str | None, created: GrantCreated | None
     ) -> None:
         if created is not None:
-            await self._ctx.whole(self._ctx.grants.create(self._ctx, created))
+            try:
+                await self._ctx.whole(self._ctx.grants.create(self._ctx, created))
+            except Exception as error:
+                await self._ctx.error(
+                    "server",
+                    f"Grant creation failed; approval merged nothing: {error}",
+                    rec,
+                    fatal=False,
+                )
+                return
         await approval.approve(self._ctx, rec, comment)
 
     async def revoke_grant(self, grant_id: str) -> None:

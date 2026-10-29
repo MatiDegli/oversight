@@ -165,6 +165,8 @@ class GrantRegistry:
 
     async def create(self, ctx: "ChangeContext", created: GrantCreated) -> None:
         async with ctx.mode.held():
+            if ctx.mode.snapshot().mode != "merge_when_safe":
+                raise WrongState("Grant creation requires merge_when_safe mode")
             if created.run_id != self.run_id or ctx.state.closing:
                 raise WrongState("The grant's run has ended")
             # The synchronous command reserves its id before another Approve can use it.
