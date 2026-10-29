@@ -327,7 +327,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 
 **Key Characteristics:**
 
-- Black ground, warm white text, two agent colors and two state colors, nothing else.
+- Near-black ground (#070707), warm white text, two agent colors and two state colors, nothing else.
 - One family, Atkinson Hyperlegible, in sentence case.
 - Layered dark surfaces with hairline borders; light lives only on the graph.
 - Every state is told in words or signs as well as color.
@@ -969,8 +969,16 @@ WebGL2 canvas behind the graph that draws the lamps, the rest contours and nothi
 WebGL2, a failed draw or a lost context leaves plain ground behind the graph: no lamps, no contour
 lines (the fallback that existed before the contours).
 
-- **LEDs:** a canvas of 7px square LEDs under transparent Cytoscape, with off and three lit levels
-  chosen by ordered dithering. Only a lit lamp is drawn: its square, in the light's color. An off
+- **LEDs:** a canvas of 7px cells under transparent Cytoscape, each a 5px square lamp with a 2px
+  gap. A lamp's brightness is continuous (no ordered dither, no levels): the light's intensity,
+  raised to `lamp-gamma` and held back by a smooth cut (off under `lamp-cut-low`, free from
+  `lamp-cut-high`), so the glow hugs its card and ends on a lamp, not on scattered dust. Its color
+  follows its brightness, all from tokens: dim lamps lean to the deep end of the agent's color (the
+  weaker channels scaled by `lamp-ramp-deep`, orange toward deep red, blue toward deep blue), a lamp
+  at `lamp-ramp-mid` shows the agent's own color, and the hot core, above it, moves `lamp-ramp-hot`
+  of the way to the ink (lighter orange or blue on the dark ground, darker on paper). It replaces
+  the earlier four levels chosen by ordered dithering and the one color mixed between lamp-off and
+  the light. Only a lit lamp is drawn: its square, in the light's color. An off
   lamp is not drawn, so the ground and its contour lines show between the lit ones, and a faint
   guide dot every 28px stays. At rest no light reaches anything, so no lamp is drawn (this replaces
   "lamp-off and guide-dot make a faint 28px grid at rest"; a field told no modules, so with no
@@ -979,7 +987,9 @@ lines (the fallback that existed before the contours).
   them in blocks. The canvas reads rendered boxes; it does not draw graph nodes or edges.
 - **Shape and spread:** light follows the outline of the current row or folded card, never its
   whole module frame. The near and far spreads are about 26px and 72px at 100% zoom, measured
-  outward from that box, and scale with graph zoom. This preserves the box-shaped pool of light.
+  outward from that box, and scale with graph zoom; the near term decays as an exponential and the
+  far one has the long tail 1 over one plus the square of its distance (the sketch's), so the
+  halo thins over several rings. This preserves the box-shaped pool of light.
   A light always falls off softly on every side, however faint it has become.
 - **Sources:** only each agent's current node at full strength and its last read node at about
   0.4 emit light, in that agent's token, and only while that agent is acting (see Agent light).
@@ -1033,17 +1043,20 @@ front) the first version of the rule, which gave an agent waiting for review no 
   (calls into it from other modules) over a small range, so no hill dominates, plus a few soft
   mounds in empty areas;
 - wide spacing between levels: 5 to 7 lines around a hill that stands alone (`contour-step` 0.1
-  over hill heights of 0.52 to 0.72), never more than 8; 1px, antialiased, very faint, and
-  fainter toward the outside (`contour-fade`: the outermost line keeps 65% of the alpha);
+  over hill heights of 0.52 to 0.72), never more than 8; a soft 1px line (whole within a tenth of
+  a pixel of its center, gone 1.1px past its edge), and fainter toward the outside
+  (`contour-fade`: the outermost line keeps 65% of the alpha); each hill spreads over its frame
+  (`contour-hill-spread` 1), so rings show outside big cards;
 - they drift slowly and continuously, so a change of shape takes minutes and never waits and
   jumps; under reduced motion they are still;
-- gray only: the line color is the `contour-line` token (white at 10% in dark, ink at 8% in day), never
+- gray only: the line color is the `contour-line` token (white at 9% in dark, ink at 8% in day), never
   an agent color and never an accent; text keeps 4.5:1 and never sits on them;
 - the field's own mask hides them under overlays; they draw in every mode, behind everything.
 
 **Merge travel.** When a change is merged, a pulse in the agent's color leaves that agent's rail
-card, runs along the graph's edges to the merged node with a short trail that fades behind it,
-and arrives. The node's light, which held the level the change had from the decision, then fades as in
+card, runs along the graph's edges to the merged node with a short trail that fades behind it
+(about 100px: 28px bright, then 72px that fade with the square of what is left, so no line
+stays lit), and arrives. The node's light, which held the level the change had from the decision, then fades as in
 Agent light (a rejection sends no pulse; its light fades from the decision). The travel is drawn above
 the graph, clipped by the field mask, and never moves the camera, opens a panel or takes focus.
 Under reduced motion there is no travel: the light is there at once and fades over the same time.
@@ -1269,6 +1282,6 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 | 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the decisions chip; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
 | 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
-| Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker, the rest contours and merge travel; plain black ground whenever WebGL2 is missing |
+| Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker, the rest contours and merge travel; plain ground (#070707 in dark) whenever WebGL2 is missing |
 | After level 1, never blocking | the matte header's grain |
 | Mon Nov 2, only with level 2 closed | day mode |

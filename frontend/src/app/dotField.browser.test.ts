@@ -303,6 +303,8 @@ it("keeps the graph on plain ground where there is no WebGL", async () => {
     }, png.toString("base64"));
     const [r, g, b] = ground.pixel;
     expect(ground.ground).toBe(`rgb(${String(r)}, ${String(g)}, ${String(b)})`);
+    // Without WebGL the ground is the dark ground token, #070707: near black, not pure black.
+    expect([r, g, b]).toEqual([7, 7, 7]);
   });
 }, 30_000);
 
@@ -715,13 +717,14 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     const lit = await lightMass(page);
     expect(lit).toBeGreaterThan(waiting * 0.9);
     expect(lit).toBeLessThan(waiting * 1.1);
-    // Soft: the light is not a block, its colour stays off the overlays, and it fades as time goes.
-    await page.clock.fastForward(45_000);
+    // Soft: the light is not a block, its colour stays off the overlays, and it fades as time goes:
+    // 20 s in, its halo outside the card is still lit and thinner; the cut ends it before the 90 s.
+    await page.clock.fastForward(20_000);
     const half = await fieldPixels(page);
     expect(half.warm).toBeGreaterThan(0);
     expect(await lightMass(page)).toBeLessThan(lit * 0.8);
     expect(half.inside).toBe(0);
-    await page.clock.fastForward(46_000);
+    await page.clock.fastForward(71_000);
     expect(await lifeOf(page)).toMatchObject({ pulses: 0, lights: 0 });
     expect((await fieldPixels(page)).warm).toBeLessThan(STRAY);
     expect([await camera(), await nodeCenters()]).toEqual(still);
@@ -743,11 +746,11 @@ it("has no travel under reduced motion: the light stays where it was and fades a
     const lit = await lightMass(page);
     expect(lit).toBeGreaterThan(waiting * 0.9);
     expect(lit).toBeLessThan(waiting * 1.1);
-    await page.clock.fastForward(45_000);
+    await page.clock.fastForward(20_000);
     // The lamps thin out as the light fades; some are still lit, and fewer than before.
     expect((await fieldPixels(page)).warm).toBeGreaterThan(0);
     expect(await lightMass(page)).toBeLessThan(lit * 0.8);
-    await page.clock.fastForward(46_000);
+    await page.clock.fastForward(71_000);
     expect(await lifeOf(page)).toMatchObject({ lights: 0 });
     expect((await fieldPixels(page)).warm).toBeLessThan(STRAY);
   });

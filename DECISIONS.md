@@ -1578,3 +1578,38 @@ tests scan, rolling numbers, top-edge light, focus glow and button press are par
 
 Reason: light that is on at rest stops telling who is working; a ground that carries the repository's
 shape gives the idle screen something true to show without competing with the graph.
+
+## 2026-10-29 — Life layer, look fixes from the maintainer's side-by-side captures
+
+The maintainer compared the part 1 captures with the approved sketches and asked for four changes.
+Each is built from tokens; DESIGN.md says which earlier lines each replaces.
+
+1. **The dark ground is #070707, not pure black.** It is the `ground` token (and `background`,
+   which mirrors it) and `lamp-off`, so an unlit lamp is the ground. Without WebGL the ground is
+   #070707 too: he reads "plain black" in AGENTS.md as near black, and AGENTS.md is unchanged.
+   This replaces DESIGN.md's `ground: "#000000"`, `lamp-off: "#050505"` and the "Black ground" key
+   characteristic. Panels, rows and text contrast were checked: the token tests still hold.
+2. **Contours at the sketch's level.** The brightest lines are about 25 to 28 on #070707 (they were
+   about 11 on black), the median line about 23, and the lines cover about 4 to 6% of a clear area
+   (the sketch's: 6 to 7%; it was 2.7%). The line is a soft 1px (whole within a tenth of a pixel of
+   its center, gone 1.1px past its edge) at white 9%; each hill spreads over its frame
+   (`contour-hill-spread` 1, from 0.78), so rings show outside big cards. 5 to 7 rings per lone
+   hill, gray only, masks unchanged. This replaces "white at 10% in dark" in DESIGN.md's rest
+   background.
+3. **The busy light is an LED panel.** Each lamp has a continuous brightness: the light's intensity
+   raised to `lamp-gamma` 0.6 and held back by a smooth cut (`lamp-cut-low` 0.08, `lamp-cut-high`
+   0.22), so no dither and no scattered dust, and the glow hugs its card. The far tail of the
+   falloff is the sketch's (1 over one plus the square of the distance). The color follows the
+   brightness: dim lamps lean to the deep end of the agent's color, mid is the agent's own, the hot
+   core is lighter, all from `lamp-ramp-deep`, `lamp-ramp-mid` and `lamp-ramp-hot`, so agent B
+   gets the same in its blue. This replaces the four levels chosen by ordered dithering
+   (`dot-level-count`, `dot-dither-size`, removed). Cost: a light now ends sooner as it fades, so
+   its halo outside a module card is gone about 35 to 55 seconds into the 90, not at 90; the node's
+   marker and the rail still tell the rest.
+4. **The merge trail is short.** The orange right-angled line the maintainer saw on the right edge
+   was the merge trail: 200px behind the head. It is now about 100px (28px bright, then 72px that
+   fade with the square of what is left), and it is gone 350ms after the pulse arrives.
+
+Reason: the screen must show at a glance which agent is working and where, and the ground must
+look the way the approved sketches look; every number is a token so the look can be tuned without
+code.
