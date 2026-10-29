@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from oversight.limits import MAX_FILE_BYTES
+from oversight.limits import MAX_REPORT_LINE_BYTES
 from oversight.workspace.runner import DEFAULT_OUTPUT_CAP, ProcessResult, run_process
 from oversight.workspace.suite import OUTPUT_TAIL, parse_report, run_suite, summarize
 
@@ -153,7 +153,7 @@ async def test_an_oversized_report_names_the_report_and_is_removed(tmp_path: Pat
         assert env is not None
         report = Path(env["OVERSIGHT_REPORT"])
         report.parent.mkdir(parents=True, exist_ok=True)
-        report.write_bytes(b"x" * (MAX_FILE_BYTES + 1))
+        report.write_bytes(b"x" * (MAX_REPORT_LINE_BYTES + 1))
         return ProcessResult(0, "pytest finished", "", False, False, 12)
 
     run = await run_suite(
@@ -167,7 +167,7 @@ async def test_an_oversized_report_names_the_report_and_is_removed(tmp_path: Pat
     )
     assert report is not None
     assert run.result.outcome == "error"
-    reason = f"{report.name} exceeds the {MAX_FILE_BYTES}-byte size limit"
+    reason = f"{report.name} exceeds the {MAX_REPORT_LINE_BYTES}-byte size limit"
     assert run.result.failed_tests == [reason]
     assert run.output.endswith(reason)
     assert not await asyncio.to_thread(report.exists)
