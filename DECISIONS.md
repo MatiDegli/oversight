@@ -1596,3 +1596,30 @@ Missing receipts, versions, identities, runs or passes retain explicit uncertain
 independent proven findings. Validation recomputes the exact projection and edit references
 from the frozen capture before publication. Zone/reach and other producer diagnostics
 survive, facts remain incomplete, and an empty finding list grants no merge authority.
+
+## 2026-10-29 — Review shows bounded direct behavior evidence
+
+Review renders the latest facts matching both revision and head, without falling back to older
+optional evidence. Direct changed-node probes remain separate from measured caller observations
+and the static “possibly affected” cone. All published nodes survive, including removed or unknown
+IDs; graph labels resolve where available and IDs remain the fallback.
+
+Counts describe admitted inputs and stable measured differences. No same-result count is displayed:
+ten comparisons and nine differences can include instability beyond the eight retained samples.
+Visible instability is partial evidence, never an established difference. Positive comparisons with
+zero differences say “No difference measured on these inputs” only without published limitations or
+visible instability; the bounded-input qualification remains beside it. Null or omitted evidence is
+not recorded, an empty list means no changed-node probes, and facts completeness says nothing about
+behavior completeness. Missing current facts stay explicit in review; the portable block itself
+returns null without direct evidence so other parents can choose their own absent-state copy.
+
+Published reasons are limited to unsupported node kind, unavailable version and unavailable probe.
+Only a graph-confirmed method/class gets the specific method/class wording. Unknown reasons are
+preserved as text; no timeout, isolation or signature diagnosis is inferred. Samples are escaped,
+losslessly wrapped display strings, with disclosures initially closed to preserve editor space.
+
+DESIGN.md wins over Impeccable's ordinary 16px body floor and generic card/motion recommendations:
+review keeps its existing 14px dense evidence role, theme tokens, plain surfaces and event-driven
+focus rules. Facts, signals and the agent report share one bounded context scroll even without
+a summary, so expanded evidence cannot overlap Monaco or the decision footer at 1280×800.
+No new animation or visual world is introduced.

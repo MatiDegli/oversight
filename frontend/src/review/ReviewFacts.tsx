@@ -1,6 +1,11 @@
 import type { AddedTestProbe, ChangeFacts, ChangeProposed, SuiteExecution } from "@contracts";
 
 import type { State } from "../state";
+import { BehaviorDiff } from "./BehaviorDiff";
+import { behaviorNotRecorded } from "./behaviorEvidence";
+import { factsForRevision } from "./factsForRevision";
+
+export { factsForRevision } from "./factsForRevision";
 
 /** The same neutral vocabulary as changes/_reviewfacts.py; no policy assessment. */
 export function detectorLine(facts: ChangeFacts): string {
@@ -112,12 +117,6 @@ function executionLine(seq: number, execution: SuiteExecution): string {
   return `Tests #${String(seq)} (${execution.phase}): ${suite.outcome}; ${String(suite.passed)} passed, ${String(suite.failed)} failed, ${String(suite.skipped)} skipped${failed.length ? `; failed ids: ${failed.join(", ")}` : ""}${suite.cases_complete === true ? "" : "; per-test evidence incomplete"}`;
 }
 
-export function factsForRevision(state: State, proposal: ChangeProposed): ChangeFacts | undefined {
-  return state.changeFacts[proposal.change_id]?.findLast(
-    (f) => f.revision === proposal.revision && f.head_commit === proposal.head_commit,
-  );
-}
-
 const probeLabels: Record<AddedTestProbe["result"], string> = {
   fails_before_passes_after: "fails before, passes after",
   passes_before_and_after: "passes before and after",
@@ -139,7 +138,14 @@ export function ReviewFacts({
   scrollable?: boolean;
 }) {
   const facts = factsForRevision(state, proposal);
-  if (!facts) return <span> · Facts incomplete: facts for this revision are unavailable</span>;
+  if (!facts) {
+    return (
+      <span>
+        {" "}
+        · Facts incomplete: facts for this revision are unavailable. {behaviorNotRecorded}
+      </span>
+    );
+  }
   const executions = facts.test_runs
     .map((seq) => state.testExecutions[seq])
     .filter(
@@ -192,6 +198,10 @@ export function ReviewFacts({
                 ))}
               </ul>
             )}
+            <div className="mt-3.5">
+              <BehaviorDiff state={state} changeId={proposal.change_id} />
+              {facts.behavior_diff == null && <p>{behaviorNotRecorded}</p>}
+            </div>
             {!facts.complete && <p>Incomplete: {facts.problems.join("; ")}</p>}
           </>
         </div>

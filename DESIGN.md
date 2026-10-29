@@ -924,6 +924,13 @@ change is proposed.
   tests rerun first if main moved), Request changes (level 2, secondary, with a line saying it keeps
   the worktree and sends the comment back), and Reject (destructive).
 
+- **Behavior evidence:** direct changed-node comparisons sit beside test evidence in review signals,
+  grouped by node with neutral counts and explicit limitations. Retained Input / Before / After
+  samples use lossless soft wraps inside initially closed disclosures. The portable block has no
+  outer margin, fixed width or scroll region; its parent owns those. Reviews with facts share one
+  context scroll, whether or not a summary was recorded. Close, decisions,
+  the graph and at least 192px of diff viewport remain available.
+
 ### Live diff and file view
 
 - **Which panel a node opens:** a node whose change is proposed opens review; a node with a change
