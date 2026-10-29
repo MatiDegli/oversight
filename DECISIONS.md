@@ -1596,3 +1596,25 @@ Missing receipts, versions, identities, runs or passes retain explicit uncertain
 independent proven findings. Validation recomputes the exact projection and edit references
 from the frozen capture before publication. Zone/reach and other producer diagnostics
 survive, facts remain incomplete, and an empty finding list grants no merge authority.
+
+## 2026-10-29 — Current-run history pages have a fixed horizon and a 1 MiB wire budget
+
+`GET /history` now reads committed envelopes from the current event store in live and server
+replay modes. The first request captures the store's acknowledged committed sequence before
+awaiting disk IO; continuations resend that `through_seq` and use `next_seq` as `after_seq`.
+Later appends cannot change that traversal. ASCII integer queries are bounded to 18 digits;
+invalid bounds are rejected rather than clamped. Defaults are after 0, limit 50 and the captured
+horizon, with limits from 1 to 100 as reserved in the proposal.
+
+The reader uses a separate read-only SQLite connection in a worker thread, filters by the exact
+`HistoryPage` event-type allowlist before pagination, and reads at most limit plus one sequence
+and byte-length records. It fetches only envelopes that fit. Original envelopes and provenance
+are preserved, without consulting live command state or granting decision authority.
+
+This front introduces an implementation policy, not a contract constraint: the complete serialized
+UTF-8 success body, including metadata and punctuation, is capped at 1 MiB (1,048,576 bytes).
+A page may therefore contain fewer than the requested limit. Its cursor still names its last
+returned event when an eligible successor exists within the horizon, so no event is skipped.
+If the first eligible envelope cannot fit intact, the response is the existing typed `too_large`
+413; payloads are never truncated. Unexpected disk or validation failures use the existing
+`internal` error path. No index or schema migration is introduced.

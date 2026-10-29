@@ -10,7 +10,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from oversight.api.commands import Commands, add_command_routes
 from oversight.api.errors import ApiError
-from oversight.events import EventStore
+from oversight.events import EventStore, HistoryTooLarge, InvalidHistoryRequest, read_history
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import GraphResponse, Health, MissingSetting
 
@@ -69,6 +69,23 @@ def create_router(
         # after 15 seconds without an event.
         async for event in store.subscribe(after):
             yield ServerSentEvent(raw_data=event.envelope, id=str(event.seq))
+
+    @router.get("/history")
+    async def history(  # pyright: ignore[reportUnusedFunction]
+        after_seq: str = "0",
+        limit: str = "50",
+        through_seq: str | None = None,
+    ) -> Response:
+        after = _seq(after_seq, "after_seq")
+        count = _seq(limit, "limit")
+        through = None if through_seq is None else _seq(through_seq, "through_seq")
+        try:
+            body = await read_history(store, after_seq=after, limit=count, through_seq=through)
+        except InvalidHistoryRequest as error:
+            raise ApiError("invalid_request", str(error)) from error
+        except HistoryTooLarge as error:
+            raise ApiError("too_large", str(error)) from error
+        return Response(body, media_type="application/json")
 
     @router.get("/graph")
     async def graph() -> GraphResponse:  # pyright: ignore[reportUnusedFunction]
