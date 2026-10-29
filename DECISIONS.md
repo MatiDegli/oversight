@@ -1529,9 +1529,12 @@ Approve.
 The card says "N choices need you" and gives one line, from events, with what was asked and what
 was done. Each question shows its smallest example as large before -> after cells, the after cell
 in the agent's color, with Yes keep it, No send it back and Unsure decide later; an answered
-question collapses to one line with its answer. "Everything else is the same" counts the functions
+question collapses to one line with its answer. A block headed with what was compared,
+such as "No other difference in what was compared · 1 function, 24 inputs", counts the functions
 and inputs compared, as one row of function squares per module, beside the changed module with its
-changed functions numbered to their questions, and their callers. A footer reads "k of N answered"
+changed functions numbered to their questions, and their callers; functions not compared stay
+neutral, and the block never claims that everything else is the same.
+A footer reads "k of N answered"
 next to the locked Approve. The inbox shows the large count; one line computed from events, such
 as how many agents took how many steps in how long and how many of those decisions needed a
 person; when each decision arrived; and rows with their before -> after, never a row whose before
