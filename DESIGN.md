@@ -76,7 +76,7 @@ colors:
   matte-bottom: "#0f0f0f"
   lamp-off: "#050505"
   guide-dot: "rgba(237, 237, 234, 0.10)"
-  contour-line: "rgba(237, 237, 234, 0.09)"
+  contour-line: "rgba(237, 237, 234, 0.10)"
   day-ground: "#f4f3ef"
   day-shell: "#e9e8e3"
   day-panel: "#eeede8"
@@ -1010,10 +1010,13 @@ in three states (maintainer, 2026-10-29):
    marker, no breathing, and it never pulses, blinks or grows stronger however long it waits.
    Opening the review or clicking the node does not turn it off (the mode only scales it, as it
    scales every light); closing the entries does.
-3. **Decided.** Merged (by rules or by the person), approved or rejected: the light holds the
-   waiting level and fades out over about 90 seconds (the sketch uses `(1 - p)^1.6` for the share
-   left). A merge also sends its pulse (Merge travel) and the fade starts when it arrives; a
-   rejection fades from the decision.
+3. **Decided.** Merged (by rules or by the person), approved or rejected: a decision fades only a
+   light that exists. The afterlight starts from the light the change had on its node at that
+   moment (the waiting level, or a working agent's) and fades out over about 90 seconds (the
+   sketch uses `(1 - p)^1.6` for the share left). A change with no light then gets none: a
+   rejection of it lights nothing. A merge still sends its pulse (Merge travel) and the fade starts
+   when it arrives; one whose change had no light brings its light as the pulse arrives, with
+   nothing before it.
 
 No color or pulse anywhere else for this: the header's "Decisions · N" counter stays neutral, and
 what changed earlier stays told without color by the rail cards and the node marks. An agent that
@@ -1029,17 +1032,18 @@ front) the first version of the rule, which gave an agent waiting for review no 
 - one moderate hill per module, centered on its frame; its height grows with the module's callers
   (calls into it from other modules) over a small range, so no hill dominates, plus a few soft
   mounds in empty areas;
-- wide spacing between levels, at most about 8 lines per hill; 1px, antialiased, very faint, and
-  fainter toward the outside;
+- wide spacing between levels: 5 to 7 lines around a hill that stands alone (`contour-step` 0.1
+  over hill heights of 0.52 to 0.72), never more than 8; 1px, antialiased, very faint, and
+  fainter toward the outside (`contour-fade`: the outermost line keeps 65% of the alpha);
 - they drift slowly and continuously, so a change of shape takes minutes and never waits and
   jumps; under reduced motion they are still;
-- gray only: the line color is the `contour-line` token (white at 9% in dark, ink at 8% in day), never
+- gray only: the line color is the `contour-line` token (white at 10% in dark, ink at 8% in day), never
   an agent color and never an accent; text keeps 4.5:1 and never sits on them;
 - the field's own mask hides them under overlays; they draw in every mode, behind everything.
 
 **Merge travel.** When a change is merged, a pulse in the agent's color leaves that agent's rail
 card, runs along the graph's edges to the merged node with a short trail that fades behind it,
-and arrives. The node's light, which held the waiting level from the decision, then fades as in
+and arrives. The node's light, which held the level the change had from the decision, then fades as in
 Agent light (a rejection sends no pulse; its light fades from the decision). The travel is drawn above
 the graph, clipped by the field mask, and never moves the camera, opens a panel or takes focus.
 Under reduced motion there is no travel: the light is there at once and fades over the same time.

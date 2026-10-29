@@ -1306,20 +1306,21 @@ tests scan, rolling numbers, top-edge light, focus glow and button press are par
    the change's node, steady and dimmer (`waiting-light-weight` 0.5, a theme-independent token, so
    both token sets carry it), with no motion, and never pulses, blinks or grows however long it
    waits; opening the review or clicking the node does not turn it off, closing the entries does.
-   (c) Decided, whether merged (by rules or by the person), approved or rejected: the light holds
-   the waiting level and fades out over about 90 seconds, along `(1 - p)^1.6`. At rest nothing is
-   lit. No color or pulse is added anywhere else: the "Decisions · N" counter stays neutral, and
+   (c) Decided, whether merged (by rules or by the person), approved or rejected: a decision fades
+   only a light that exists. The afterlight starts from the light the change had on its node at
+   that moment (waiting, or a working agent's) and fades out over about 90 seconds, along
+   `(1 - p)^1.6`; a change with no light then gets none (a rejection of it lights nothing), and a
+   merge still sends its pulse and brings its light as the pulse arrives. At rest nothing is lit. No color or pulse is added anywhere else: the "Decisions · N" counter stays neutral, and
    what changed earlier stays told without color by the rail cards and the node marks. This
    replaces the rule that an agent's current node and last read stay lit until the change is
    decided, and the 240ms fade of the light on approval. Ambient motion and light without events
    stay allowed. The first version of this entry gave an agent waiting for review no light and asked
-   the maintainer; his clarification of the same day is state (b). The recorded runs predate the
-   inbox, so their replays show no waiting light: a merge there brings its light at the decision
-   (the pulse travels, the light holds and fades), and a hand-written run with a review card
-   (`fixtures/events/handwritten-level1-waiting.jsonl`) shows all three states.
+   the maintainer; his clarification of the same day is state (b). Every proposal now opens an
+   inbox entry, so the recorded runs show the waiting light between the proposal and the decision.
 2. **The rest ground is gray topographic contours derived from the graph:** one moderate hill per
    module (its height grows with the calls into it from other modules, over a small range), a few
-   soft mounds in empty areas, wide level spacing (at most about 8 lines per hill), 1px, very
+   soft mounds in empty areas, wide level spacing (5 to 7 lines around a lone hill, never more than
+   8; the maintainer asked for the sketch's density at 13:32 UTC), 1px, very
    faint, fading outward, drifting slowly and continuously (a change of shape takes minutes),
    masked under overlays, still under reduced motion, gray only. It replaces the faint 28px lamp
    grid at rest: lamps now draw only where light reaches.
