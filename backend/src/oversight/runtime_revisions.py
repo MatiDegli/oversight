@@ -49,7 +49,11 @@ def request_revision(
     # additionally requires the author's earlier run to have released the runtime registry.
     if review is None:
         decision = manager.request_changes(
-            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+            change_id,
+            request.comment,
+            revision=request.revision,
+            head_commit=request.head_commit,
+            answers=request.answers,
         )
     else:
         capture, outcome, seq = review

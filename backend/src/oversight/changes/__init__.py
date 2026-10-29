@@ -3,6 +3,7 @@
 Other modules import only what this file exports; everything else here is internal.
 """
 
+from oversight.changes._answers import InvalidAnswers
 from oversight.changes._assessment import RulesEvidence
 from oversight.changes._behavior import BehaviorDiff, BehaviorRow, FunctionBehavior
 from oversight.changes._behavior_inputs import BehaviorInput, BehaviorInputs, behavior_inputs
@@ -29,6 +30,7 @@ __all__ = [
     "DetectionResult",
     "Finding",
     "FunctionBehavior",
+    "InvalidAnswers",
     "ModeController",
     "PolicyInputs",
     "ReviewCapture",

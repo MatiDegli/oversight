@@ -237,6 +237,7 @@ async def requested(
         requested_by=evidence.requested_by,
         reasons=list(evidence.reasons),
         assessment=evidence.assessment,
+        answers=list(evidence.answers) if evidence.answers is not None else None,
         head_commit=evidence.head_commit,
         reason=None,
         comment=comment,

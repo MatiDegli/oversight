@@ -12,7 +12,7 @@ from typing import Any, Protocol
 from fastapi import APIRouter, Request, Response
 
 from oversight.api.errors import ApiError
-from oversight.changes import ChangeNotFound, WrongState
+from oversight.changes import ChangeNotFound, InvalidAnswers, WrongState
 from oversight.telemetry import CURRENT, TRACE_HEADER, evaluation_trace, mark
 from oversight.workspace import TREE_TIMEOUT_S, FileTooLarge, InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
@@ -112,6 +112,8 @@ def _decide[A](decision: Callable[[str, A], None], change_id: str, comment: A) -
         raise ApiError("not_found", f"there is no change {change_id!r}") from None
     except WrongState as error:
         raise ApiError("wrong_state", str(error)) from None
+    except InvalidAnswers as error:
+        raise ApiError("invalid_request", str(error)) from None
 
 
 def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: str) -> None:

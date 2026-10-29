@@ -103,6 +103,11 @@ class CardJob:
     problems: list[str] = field(default_factory=list[str])
     status: str = "pending"
 
+    @property
+    def preparing(self) -> bool:
+        """Classification is not settled until its final publication returns a receipt."""
+        return self.status == "pending" or (self.task is not None and not self.task.done())
+
 
 class ReviewCards:
     """One run-owned producer. Only committed receipts enter its evidence registry.
@@ -181,6 +186,29 @@ class ReviewCards:
                 capture.target.head_commit,
                 capture.target.base_commit,
             )
+        )
+
+    def for_change(self, rec: ChangeRecord) -> CardJob | None:
+        """Find the observed proposal, including after a failed decision invalidated its worker.
+
+        A revision captures only one exact target (enforced by prepare). Published questions
+        survive worker cancellation; a later revision or head must never inherit them.
+        """
+        return next(
+            (
+                job
+                for job in self.jobs.values()
+                if job.capture.run_id == self.run_id
+                and (
+                    job.capture.target.change_id,
+                    job.capture.agent_id,
+                    job.capture.target.revision,
+                    job.capture.target.base_commit,
+                    job.capture.target.head_commit,
+                )
+                == (rec.change_id, rec.agent_id, rec.revision, rec.base_commit, rec.head_commit)
+            ),
+            None,
         )
 
     def diagnostics(self, job: CardJob) -> list[str]:
