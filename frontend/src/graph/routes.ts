@@ -9,8 +9,7 @@
 // across it), which the stylesheet reads from the edge's data.
 import type { Core, EdgeCollection } from "cytoscape";
 
-import { writeData } from "./writes";
-import { crosses, orthogonalPath, simplify } from "./orthogonal";
+import { obstacleChecks, orthogonalPath, simplify } from "./orthogonal";
 import type { XY } from "./orthogonal";
 
 /** A node's box, in graph units, and the line an edge meets it on. */
@@ -78,11 +77,23 @@ function encode(points: XY[], from: RouteBox, to: RouteBox): Route {
 /** One incoming trunk per target, immediately left of its module's column. */
 function trunks(boxes: readonly RouteBox[], edges: readonly RouteEdge[], tuning: Tuning) {
   const byId = new Map(boxes.map((box) => [box.id, box]));
+  const incoming = new Map<string, number[]>();
+  for (const edge of edges) {
+    const source = byId.get(edge.source);
+    if (!source) continue;
+    const ys = incoming.get(edge.target) ?? [];
+    ys.push(source.anchorY);
+    incoming.set(edge.target, ys);
+  }
   const columns = new Map<number, RouteBox[]>();
   for (const id of new Set(edges.map((edge) => edge.target))) {
     const target = byId.get(id);
     const frame = target && byId.get(target.top);
-    if (target && frame) columns.set(frame.x1, [...(columns.get(frame.x1) ?? []), target]);
+    if (target && frame) {
+      const column = columns.get(frame.x1) ?? [];
+      column.push(target);
+      columns.set(frame.x1, column);
+    }
   }
   const lanes = new Map<string, number>();
   for (const [left, targets] of columns) {
@@ -96,15 +107,7 @@ function trunks(boxes: readonly RouteBox[], edges: readonly RouteEdge[], tuning:
     const occupied: number[] = [];
     const spans = targets
       .map((target) => {
-        const ys = [
-          target.anchorY,
-          ...edges
-            .filter((e) => e.target === target.id)
-            .flatMap((e) => {
-              const source = byId.get(e.source);
-              return source ? [source.anchorY] : [];
-            }),
-        ];
+        const ys = [target.anchorY, ...(incoming.get(target.id) ?? [])];
         return { target, low: Math.min(...ys), high: Math.max(...ys) };
       })
       .sort(
@@ -130,6 +133,7 @@ export function routeEdges(
 ): Map<string, Route> {
   const byId = new Map(boxes.map((box) => [box.id, box]));
   const tops = boxes.filter((box) => box.id === box.top);
+  const blocked = obstacleChecks(tops);
   const lanes = trunks(boxes, edges, tuning);
   const routes = new Map<string, Route>();
   for (const edge of edges) {
@@ -146,11 +150,11 @@ export function routeEdges(
     const exit = { x: source.x2 + tuning.laneGap, y: start.y };
     const trunk = { x: lane, y: end.y };
     const entry = { x: lane, y: start.y };
-    const path = tops.some((box) => crosses(entry, trunk, box))
+    const path = blocked(entry, trunk)
       ? null
-      : orthogonalPath(exit, entry, tops, tuning.laneGap);
+      : orthogonalPath(exit, entry, tops, tuning.laneGap, blocked);
     const preferred = path && simplify([start, ...path, trunk, end]);
-    if (preferred && clearRoute(preferred, from, to, tops)) {
+    if (preferred && clearRoute(preferred, from, to, blocked)) {
       routes.set(edge.id, encode(preferred, from, to));
       continue;
     }
@@ -168,12 +172,12 @@ export function routeEdges(
     ].filter((x) => x < to.x1);
     for (const x of candidates) {
       const ingress = { x, y: end.y };
-      if (tops.some((box) => box.id !== to.top && crosses(ingress, end, box))) continue;
-      if (tops.some((box) => box.id !== from.top && crosses(start, exit, box))) break;
-      const alternate = orthogonalPath(exit, ingress, tops, tuning.laneGap);
+      if (blocked(ingress, end, (box) => box.id === to.top)) continue;
+      if (blocked(start, exit, (box) => box.id === from.top)) break;
+      const alternate = orthogonalPath(exit, ingress, tops, tuning.laneGap, blocked);
       if (!alternate) continue;
       const points = simplify([start, ...alternate, end]);
-      if (!clearRoute(points, from, to, tops)) continue;
+      if (!clearRoute(points, from, to, blocked)) continue;
       routes.set(edge.id, encode(points, from, to));
       break;
     }
@@ -182,16 +186,21 @@ export function routeEdges(
 }
 
 /** Endpoint taps may traverse their own frame, but never any foreign frame. */
-function clearRoute(points: XY[], from: RouteBox, to: RouteBox, tops: RouteBox[]): boolean {
+function clearRoute(
+  points: XY[],
+  from: RouteBox,
+  to: RouteBox,
+  blocked: ReturnType<typeof obstacleChecks<RouteBox>>,
+): boolean {
   return points.slice(1).every((b, i) => {
     const a = points[i];
     return (
       a !== undefined &&
-      tops.every((box) => {
-        if (i === 0 && box.id === from.top) return true;
-        if (i === points.length - 2 && box.id === to.top) return true;
-        return !crosses(a, b, box);
-      })
+      !blocked(
+        a,
+        b,
+        (box) => (i === 0 && box.id === from.top) || (i === points.length - 2 && box.id === to.top),
+      )
     );
   });
 }
@@ -227,13 +236,26 @@ interface RoutingContext {
 }
 const contexts = new WeakMap<Core, RoutingContext>();
 
+const ROUTE_FIELDS = ["s", "t", "w", "d"] as const;
+
+/** All route fields are numeric arrays; avoid serializing every edge twice per frame. */
+function sameRoute(a: Route | undefined, b: Route | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  for (const key of ROUTE_FIELDS) {
+    if (a[key].length !== b[key].length) return false;
+    for (let i = 0; i < a[key].length; i++) if (a[key][i] !== b[key][i]) return false;
+  }
+  return true;
+}
+
 function writeRoutes(cy: Core, edges: EdgeCollection, routes: ReadonlyMap<string, Route>) {
   cy.batch(() => {
     for (const edge of edges) {
       const route = routes.get(edge.id());
       const unroutable = !route && !edge.hasClass("imports");
       if (edge.hasClass("unroutable") !== unroutable) edge.toggleClass("unroutable", unroutable);
-      writeData(edge, { route });
+      if (!sameRoute(edge.data("route") as Route | undefined, route)) edge.data({ route });
     }
   });
   const container = cy.container();
