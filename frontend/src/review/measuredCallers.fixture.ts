@@ -19,7 +19,7 @@ export const firstCaller = availableFacts.measured_cone?.[0] as MeasuredCaller;
 export function withMeasuredFacts(facts = availableFacts) {
   return applyEvent(measuredState, {
     seq: 21,
-    ts: "2026-10-29T15:00:00Z",
+    ts: "2026-10-29T15:00:00.000Z",
     type: "change.facts_recorded",
     payload: facts,
   });

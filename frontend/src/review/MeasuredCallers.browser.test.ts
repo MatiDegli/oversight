@@ -74,7 +74,7 @@ async function publish(page: Page, index: number, summary: boolean, stress = fal
       if (stress)
         window.reviewTest.emit({
           seq: 0,
-          ts: "2026-10-29T15:00:00Z",
+          ts: "2026-10-29T15:00:00.000Z",
           type: "change.proposed",
           payload: {
             ...proposal,
@@ -91,7 +91,7 @@ async function publish(page: Page, index: number, summary: boolean, stress = fal
         });
       window.reviewTest.emit({
         seq: 0,
-        ts: "2026-10-29T15:00:00Z",
+        ts: "2026-10-29T15:00:00.000Z",
         type: "change.facts_recorded",
         payload: {
           ...facts,
