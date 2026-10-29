@@ -292,6 +292,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Long name on a touched row | not drawn | the name is cut with an ellipsis where it would meet the state word | a row is fixed at 282px; the state word and badges keep their place |
 | Title weight of a frame | light, Mono | 600, Next | AGENTS.md: graph labels use Next; at 17px a light weight does not keep 4.5:1 |
 | Import edges | not drawn | in the data, not drawn | the sketch draws calls; imports say which files, not which functions |
+| Aggregate call counts | counts at rest | count on the hovered edge and the selected node's aggregates only | the maintainer approved removing resting label collisions on 2026-10-29; arrows and count data stay |
 | Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed border or line means a pending change in the agent's color, and color is an agent only on its own change |
 | Skip-column edges | routed around the frames | visibility-grid routes outside frames, sharing one trunk per target | only short endpoint taps traverse their own containing frame; back calls use an outside detour |
 | First view | the whole demo in view | 100% on the module of the hub, more beyond the edges | the graph is a canvas to pan and zoom; the demo has 36 functions, not the sketch's 19 |
@@ -887,7 +888,9 @@ Classes and modules fold. At start, every module is one folded card, such as
 "pricing.py · 6 functions". A module opens when an agent reads or edits inside it. Clicking a
 module's header toggles it open or folded, including after an agent opened it.
 Cross-file calls aggregate whenever either endpoint module is folded: one edge per directed
-module pair, labeled with its count. The count includes only calls in that direction;
+module pair. Its count appears on the hovered edge and on the selected node's aggregate edges,
+never at rest. Labels appear and disappear immediately, without motion, delay, focus or camera
+changes. The count includes only calls in that direction;
 A → B and B → A keep separate arrows and counts. The aggregate attaches to each module's card
 or open frame, so this also applies when only one module is folded.
 

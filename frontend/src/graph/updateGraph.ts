@@ -88,8 +88,10 @@ export function updateGraph(
         element.move({ source: definition.data.source, target: definition.data.target });
       }
       writeData(element, definition.data, OPTIONAL_DATA);
-      // Selection and routing own these classes; resetting either causes redundant restyles.
-      const owned = ["touching", "unroutable"].filter((name) => element.hasClass(name));
+      // Selection, pointer and routing state survive incoming events without redundant restyles.
+      const owned = ["touching", "count-hover", "unroutable"].filter((name) =>
+        element.hasClass(name),
+      );
       element.classes([...definition.classes.split(/\s+/).filter(Boolean), ...owned]);
     }
   });

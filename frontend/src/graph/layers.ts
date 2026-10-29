@@ -9,6 +9,8 @@ import regular from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyper
 import semibold from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-600-normal.woff2?inline";
 import bold from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-700-normal.woff2?inline";
 
+import { textWidth } from "./textWidth";
+
 /** The words a node says about what an agent is doing with it, in order of precedence. */
 export type Word = "editing" | "changed" | "new" | "read";
 
@@ -155,9 +157,11 @@ const wordText = (theme: LayerTheme, marks: NodeMarks, attributes: string) =>
  * free. The name's own room is the row's width less its two paddings and this.
  */
 export function marksClearance(theme: LayerTheme, marks: NodeMarks): number {
-  // The word's width is an estimate of the type's average glyph, short of the real one; the name's
-  // own ellipsis keeps it from touching the word whatever its length.
-  const word = marks.word.length * px(theme["node-word-size"]) * GLYPH_EM;
+  const word = textWidth(
+    marks.word,
+    `${String(theme["label-weight"])} ${theme["node-word-size"]} ${theme["text-font"]}`,
+    px(theme["node-word-size"]),
+  );
   return word + px(theme["node-word-gap"]) + badgesWidth(theme, marks.badges.length);
 }
 
@@ -206,14 +210,25 @@ function rowImage(theme: LayerTheme, width: number, body: string): string {
 
 /**
  * The title cut to the room it has, with an ellipsis, so a narrow frame never shows half a letter.
- * An SVG image cannot be measured here, so the width is an estimate of the type's average glyph;
- * it errs on the short side, and the image's own clip stays as the backstop.
+ * The canvas uses the same loaded face as the SVG; the image's clip stays as the backstop.
  */
-const GLYPH_EM = 0.55;
 function fitTitle(theme: LayerTheme, title: string, room: number): string {
-  const fit = Math.floor(room / (px(theme["frame-title-size"]) * GLYPH_EM));
-  if (title.length <= fit) return title;
-  return fit > 1 ? `${title.slice(0, fit - 1)}\u2026` : "";
+  const width = (value: string) =>
+    textWidth(
+      value,
+      `${String(theme["frame-title-weight"])} ${theme["frame-title-size"]} ${theme["text-font"]}`,
+      px(theme["frame-title-size"]),
+    );
+  if (width(title) <= room) return title;
+  if (width("\u2026") > room) return "";
+  let low = 0;
+  let high = title.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (width(`${title.slice(0, middle)}\u2026`) <= room) low = middle;
+    else high = middle - 1;
+  }
+  return `${title.slice(0, low)}\u2026`;
 }
 
 const rowBaseline = `y="${String(HEADER.height / 2)}" dy=".35em"`;
@@ -246,7 +261,7 @@ function titleLayer(
         theme["frame-title-size"],
         theme["frame-title-weight"],
         theme["module-label"],
-        escape(folded ? fitTitle(theme, title, Math.max(0, width - 14)) : title),
+        escape(fitTitle(theme, title, Math.max(0, width - (folded ? 14 : 0)))),
       ) +
         (folded
           ? `<path d="M1 9 L7 14 L1 19" fill="none" stroke="${theme["module-label"]}" stroke-width="${theme["border-width"]}"/>`
@@ -300,7 +315,7 @@ export function headerLayers(
     const room = Math.max(0, Math.min(HEADER.titleWidth, size.width - 2 * inset - cluster - gap));
     const centerY = HEADER.height / 2;
     return [
-      titleLayer(theme, fitTitle(theme, title, room), room, top, folded),
+      titleLayer(theme, title, room, top, folded),
       trailing(
         cluster,
         wordText(
@@ -312,24 +327,20 @@ export function headerLayers(
       ),
     ];
   }
-  return [
-    titleLayer(
-      theme,
-      fitTitle(
-        theme,
-        title,
-        Math.max(
-          0,
-          size.width -
-            2 * inset -
-            Math.min(HEADER.countWidth, count.length * px(theme["frame-count-size"]) * GLYPH_EM) -
-            px(theme["node-word-gap"]),
-        ),
-      ),
-      Math.max(1, Math.min(HEADER.titleWidth, size.width - 2 * inset)),
-      top,
-      folded,
+  const countWidth = textWidth(
+    count,
+    `${String(theme["caption-weight"])} ${theme["frame-count-size"]} ${theme["text-font"]}`,
+    px(theme["frame-count-size"]),
+  );
+  const room = Math.max(
+    0,
+    Math.min(
+      HEADER.titleWidth,
+      size.width - 2 * inset - Math.min(HEADER.countWidth, countWidth) - px(theme["node-word-gap"]),
     ),
+  );
+  return [
+    titleLayer(theme, title, room, top, folded),
     trailing(
       HEADER.countWidth,
       text(

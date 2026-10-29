@@ -396,7 +396,7 @@ export function graphStyles(
     {
       selector: "edge.aggregate",
       style: {
-        label: (edge: EdgeSingular) => `×${String(edge.data("callCount"))}`,
+        label: "",
         "font-family": theme["text-font"],
         "font-size": theme["frame-count-size"],
         color: theme.muted,
@@ -405,6 +405,10 @@ export function graphStyles(
         "text-background-padding": theme["spacing-xs"],
         "text-background-shape": "roundrectangle",
       },
+    },
+    {
+      selector: "edge.aggregate.count-hover, edge.aggregate.touching",
+      style: { label: (edge: EdgeSingular) => `×${String(edge.data("callCount"))}` },
     },
     { selector: "node.dimmed, edge.dimmed", style: { opacity: theme["dim-node"] } },
     { selector: "node.module.dimmed", style: { opacity: theme["dim-module"] } },
