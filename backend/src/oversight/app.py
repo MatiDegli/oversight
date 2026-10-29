@@ -627,7 +627,7 @@ class LiveRun:
         if name not in offered:
             raise ApiError("invalid_request", f"this server runs agents on {', '.join(offered)}")
         if offered[name].provider == "fake":
-            raise ApiError("invalid_request", f"slot {slot} has no fake script")
+            raise ApiError("invalid_request", f"slot {slot} has no script for {name}")
         return offered[name]
 
     def _check_spending(self, slot: Slot, profile: ModelProfile) -> None:
