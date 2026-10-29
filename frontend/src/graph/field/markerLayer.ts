@@ -1,3 +1,4 @@
+import { slotForFamily } from "../../theme";
 import { getActiveTheme } from "../../theme";
 import { unmaskedPath } from "./mask";
 import { lightBoxKey } from "./marker";
@@ -72,7 +73,7 @@ export class MarkerLayer {
       attr(text, "font-weight", String(theme["badge-weight"]));
       attr(text, "text-anchor", "middle");
       attr(text, "dominant-baseline", "central");
-      const letter = light.source === "agent-a" ? "A" : "B";
+      const letter = light.source === "work-light" ? "" : slotForFamily(light.source);
       if (text.textContent !== letter) text.textContent = letter;
     }
     for (const [id, group] of this.items)

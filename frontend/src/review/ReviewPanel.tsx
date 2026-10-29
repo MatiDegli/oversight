@@ -1,4 +1,5 @@
-import type { ChangeResolved, Slot } from "@contracts";
+import { agentLook } from "../theme";
+import type { ChangeResolved } from "@contracts";
 import { Check, ChevronDown, ChevronRight, GitMerge, MessageSquare, X } from "lucide-react";
 import { useState } from "react";
 
@@ -20,18 +21,6 @@ const statusWords: Record<ChangeState["status"], string> = {
   conflict: "Not merged",
   approved: "Approved",
   rejected: "Rejected",
-};
-
-// C-F are unreachable until the backend admits more than two agents.
-// Line B many-agents look replaces this neutral placeholder before backend admission.
-const unadmittedAgentLook = { swatch: "bg-raised text-muted", pill: "bg-raised text-muted" };
-const agentLook: Record<Slot, { swatch: string; pill: string }> = {
-  A: { swatch: "bg-agent-a text-on-agent", pill: "bg-agent-a-tint text-agent-a-text" },
-  B: { swatch: "bg-agent-b text-on-agent", pill: "bg-agent-b-tint text-agent-b-text" },
-  C: unadmittedAgentLook,
-  D: unadmittedAgentLook,
-  E: unadmittedAgentLook,
-  F: unadmittedAgentLook,
 };
 
 const focusRing =
@@ -336,7 +325,7 @@ export function ReviewPanel({
           </h2>
           {change && (
             <span
-              className={`shrink-0 rounded-full px-2.5 py-0.5 text-sm ${look?.pill ?? "bg-raised text-text"}`}
+              className={`shrink-0 rounded-full px-2.5 py-0.5 text-sm ${look?.tint ?? "bg-raised text-text"}`}
             >
               {statusWords[change.status]}
             </span>

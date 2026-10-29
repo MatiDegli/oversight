@@ -1,3 +1,4 @@
+import { agentLook } from "../theme";
 import type { RefObject } from "react";
 import { Maximize, Minus, Plus } from "lucide-react";
 
@@ -32,18 +33,6 @@ export function GraphHeading({ state }: { state: State }) {
   );
 }
 
-// C-F are unreachable until the backend admits more than two agents.
-// Line B many-agents look replaces this neutral placeholder before backend admission.
-const unadmittedSlotSwatch = "bg-muted";
-const slotSwatch = {
-  A: "bg-agent-a",
-  B: "bg-agent-b",
-  C: unadmittedSlotSwatch,
-  D: unadmittedSlotSwatch,
-  E: unadmittedSlotSwatch,
-  F: unadmittedSlotSwatch,
-} as const;
-
 /**
  * What the graph's looks mean, in the states it can draw now. A glyph is never the only signal: each
  * has its words. A dashed border is the pending change, the one thing it means: filled for a node
@@ -60,7 +49,7 @@ export function Legend({ state }: { state: State }) {
     >
       {slots.map(({ slot }) => (
         <li key={slot} className="flex items-center gap-2">
-          <span aria-hidden="true" className={`size-3 rounded-label ${slotSwatch[slot]}`} />
+          <span aria-hidden="true" className={`size-3 rounded-label ${agentLook[slot].fill}`} />
           Agent {slot}
         </li>
       ))}

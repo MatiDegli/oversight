@@ -1,3 +1,4 @@
+import { agentLook, agentSlots } from "../theme";
 import type { EdgeSingular, NodeSingular, StylesheetJson } from "cytoscape";
 import badgeFont from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-700-normal.woff2?inline";
 
@@ -40,7 +41,6 @@ export function graphStyles(
   shape: EdgeShape = EDGE_CURVE_STYLE,
 ): StylesheetJson {
   const px = Number.parseFloat;
-  const agents = { A: "agent-a", B: "agent-b" } as const;
   const badgeSize = px(theme["distance-badge-size"]);
   const badges = new Map<number, string>();
   const badge = (distance: number) => {
@@ -254,8 +254,8 @@ export function graphStyles(
       style: layered(leafOnce),
     },
     ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
-      (["A", "B"] as const).map((slot) => {
-        const agent = agents[slot];
+      agentSlots.map((slot) => {
+        const agent = agentLook[slot].family;
         const fill = theme[`${agent}-node`];
         return {
           selector: `node.focus-${slot}-${mode}`,
@@ -274,8 +274,8 @@ export function graphStyles(
       }),
     ),
     { selector: "node.pending", style: pendingBorder },
-    ...(["A", "B"] as const).flatMap((slot): StylesheetJson => {
-      const agent = agents[slot];
+    ...agentSlots.flatMap((slot): StylesheetJson => {
+      const agent = agentLook[slot].family;
       const fill = theme[`${agent}-node`];
       const added = theme[`${agent}-node-new`];
       return [
@@ -363,12 +363,12 @@ export function graphStyles(
       style: { "target-arrow-shape": "chevron", display: "none" },
     },
     { selector: "edge.inherits", style: { "target-arrow-shape": "triangle-tee" } },
-    ...(["A", "B"] as const).map((slot) => ({
+    ...agentSlots.map((slot) => ({
       selector: `edge.pending-${slot}`,
       style: {
         "line-style": "dashed" as const,
-        "line-color": theme[agents[slot]],
-        "target-arrow-color": theme[agents[slot]],
+        "line-color": theme[agentLook[slot].family],
+        "target-arrow-color": theme[agentLook[slot].family],
         width: theme["pending-edge-width"],
         "line-dash-pattern": [px(theme["pending-dash-length"]), px(theme["pending-dash-gap"])],
       },

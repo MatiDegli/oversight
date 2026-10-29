@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
+import { agentLook, agentSlots } from "./agentLook";
 import { getActiveTheme, themes } from "./index";
 
 const css = readFileSync(new URL("./index.css", import.meta.url), "utf8");
@@ -24,6 +25,7 @@ const tsOnly = [
 const radiusBlock = /@theme\s*\{([^}]+)\}/;
 const rootBlock = /:root\s*\{([^}]+)\}/;
 const themeBlock = /@theme inline\s*\{([^}]+)\}/;
+const dayBlock = /:root\[data-theme="day"\]\s*\{([^}]+)\}/;
 const darkBlock = /:root:not\(\[data-theme\]\),\s*:root\[data-theme="dark"\]\s*\{([^}]+)\}/;
 
 function required(value: string | undefined): string {
@@ -63,12 +65,15 @@ function rgba(red: string, green: string, blue: string, alpha: string) {
   };
 }
 
-function cssValue(value: string): unknown {
+function cssValue(value: string, values = shared): unknown {
   const alias = /^var\(--([\w-]+)\)$/.exec(value);
-  if (alias) return cssValue(required(shared[required(alias[1])]));
+  if (alias) return cssValue(required(values[required(alias[1])]), values);
   const mix = /^color-mix\(in srgb, var\(--([\w-]+)\) ([\d.]+)%, transparent\)$/.exec(value);
   if (mix)
-    return { color: cssValue(required(shared[required(mix[1])])), alpha: Number(mix[2]) / 100 };
+    return {
+      color: cssValue(required(values[required(mix[1])]), values),
+      alpha: Number(mix[2]) / 100,
+    };
   const channels = /^rgba\((\d+), (\d+), (\d+), ([\d.]+)\)$/.exec(value);
   if (channels)
     return rgba(
@@ -94,6 +99,7 @@ describe("theme", () => {
       declarations(
         css
           .replace(darkBlock, "")
+          .replace(dayBlock, "")
           .replace(rootBlock, "")
           .replace(radiusBlock, "")
           .replace(themeBlock, ""),
@@ -216,14 +222,16 @@ describe("theme", () => {
   });
 
   it("selects the root theme at call time and defaults to dark without a DOM", () => {
-    expect(Object.keys(themes)).toEqual(["dark"]);
+    expect(Object.keys(themes)).toEqual(["dark", "day"]);
     expect(getActiveTheme()).toBe(themes.dark);
     const root = { dataset: {} } as HTMLElement;
     expect(getActiveTheme(root)).toBe(themes.dark);
     root.dataset.theme = "dark";
     expect(getActiveTheme(root)).toBe(themes.dark);
     root.dataset.theme = "day";
-    expect(() => getActiveTheme(root)).toThrow("Unsupported theme: day");
+    expect(getActiveTheme(root)).toBe(themes.day);
+    root.dataset.theme = "unknown";
+    expect(() => getActiveTheme(root)).toThrow("Unsupported theme: unknown");
     root.dataset.theme = "dark";
     expect(getActiveTheme(root)).toBe(themes.dark);
   });
@@ -262,6 +270,10 @@ const bodyText = [
   "faint",
   "agent-a-text",
   "agent-b-text",
+  "agent-c-text",
+  "agent-d-text",
+  "agent-e-text",
+  "agent-f-text",
   "passed",
   "failed",
   "failed-text",
@@ -271,7 +283,12 @@ it.each(surfaces)("meets body contrast for every shell text token on %s", (surfa
     expect(contrast(tokens[text], tokens[surface]), `${text} on ${surface}`).toBeGreaterThanOrEqual(
       4.5,
     );
-  for (const mark of ["agent-a", "agent-b", "text", "passed", "failed"] as const)
+  for (const mark of [
+    ...agentSlots.map((slot) => agentLook[slot].family),
+    "text",
+    "passed",
+    "failed",
+  ] as const)
     expect(
       contrast(tokens[mark], tokens[surface]),
       `${mark} UI mark on ${surface}`,
@@ -298,7 +315,7 @@ function composite(foreground: { color: string; alpha: number }, background: str
     .join("")}`;
 }
 
-it.each(["agent-a", "agent-b"] as const)(
+it.each(agentSlots.map((slot) => agentLook[slot].family))(
   "meets body contrast for %s text on its tint and letters on its fill",
   (agent) => {
     // Card badges include both gradient ends; the collapsed agent rail uses shell.
@@ -366,3 +383,59 @@ it("retires unused per-mode emitter weights from TypeScript and CSS", () => {
   expect(tokens["watch-editing-weight"]).toBe(1);
   expect(tokens["live-diff-read-weight"]).toBe(0.4);
 });
+
+it("keeps the prepared day CSS, TypeScript and DESIGN palette in sync", () => {
+  const values = declarations(dayBlock.exec(css)?.[1] ?? "");
+  const active = { ...shared, ...values };
+  const expected = Object.fromEntries(
+    Object.entries(themes.day).filter(([name]) => !tsOnly.some((token) => token === name)),
+  );
+  expect(
+    Object.fromEntries(
+      Object.entries(active).map(([key, value]) => [key, cssValue(value, active)]),
+    ),
+  ).toEqual(expected);
+  const front = required(design.split("---")[1]);
+  for (const [, name, value] of front.matchAll(/^ {2}day-([\w-]+): "([^"\n]+)"$/gm)) {
+    const actual = themes.day[required(name) as keyof typeof themes.day];
+    const normalized = typeof actual === "object" && actual.alpha === 1 ? actual.color : actual;
+    expect(normalized, name).toEqual(cssValue(required(value), active));
+  }
+});
+
+it.each(agentSlots)(
+  "checks %s graphic, text, tinted text and filled letter in both palettes",
+  (slot) => {
+    const { family, text } = agentLook[slot];
+    for (const [name, palette] of Object.entries(themes)) {
+      const backgrounds =
+        name === "dark"
+          ? ["#101012", "#151518", "#131313"]
+          : ["#f8f7f3", "#fcfbf8", "#fbfaf7", "#f4f3ef", "#eeede8"];
+      for (const background of backgrounds) {
+        expect(
+          contrast(palette[family], background),
+          `${name} ${slot} graphic on ${background}`,
+        ).toBeGreaterThanOrEqual(3);
+        expect(
+          contrast(palette[text], background),
+          `${name} ${slot} text on ${background}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+      for (const surface of ["shell", "card", "card-end", "matte-top"] as const)
+        expect(
+          contrast(palette[text], composite(palette[`${family}-tint`], palette[surface])),
+          `${name} ${slot} tint on ${surface}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      for (const suffix of ["-node", "-node-new"] as const)
+        expect(
+          contrast(palette[text], composite(palette[`${family}${suffix}`], palette.ground)),
+          `${name} ${slot} ${suffix}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrast(palette["on-agent"], palette[family]),
+        `${name} ${slot} letter on fill`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  },
+);

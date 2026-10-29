@@ -106,11 +106,8 @@ p.dock-note {
   color: var(--muted);
   font-weight: var(--badge-weight);
 }
-.dock-letter[data-slot="A"] {
-  color: var(--agent-a-text);
-}
-.dock-letter[data-slot="B"] {
-  color: var(--agent-b-text);
+.dock-letter[data-slot] {
+  color: var(--slot-text, var(--muted));
 }
 .dock-failures {
   margin: var(--spacing-sm) 0 0 var(--spacing-overlay);

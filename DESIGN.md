@@ -38,6 +38,26 @@ colors:
   agent-b-tint: "rgba(79, 125, 255, 0.16)"
   agent-b-node: "rgba(6, 12, 30, 0.95)"
   agent-b-node-new: "rgba(4, 8, 20, 0.95)"
+  agent-c: "#a392d6"
+  agent-c-text: "#a392d6"
+  agent-c-tint: "rgba(163, 146, 214, 0.14)"
+  agent-c-node: "rgba(23, 20, 30, 0.95)"
+  agent-c-node-new: "rgba(15, 14, 20, 0.95)"
+  agent-d: "#dba4c8"
+  agent-d-text: "#dba4c8"
+  agent-d-tint: "rgba(219, 164, 200, 0.14)"
+  agent-d-node: "rgba(30, 22, 27, 0.95)"
+  agent-d-node-new: "rgba(20, 15, 18, 0.95)"
+  agent-e: "#a1c7f8"
+  agent-e-text: "#a1c7f8"
+  agent-e-tint: "rgba(161, 199, 248, 0.14)"
+  agent-e-node: "rgba(19, 24, 30, 0.95)"
+  agent-e-node-new: "rgba(13, 16, 20, 0.95)"
+  agent-f: "#ab6e9e"
+  agent-f-text: "#b27ba7"
+  agent-f-tint: "rgba(171, 110, 158, 0.14)"
+  agent-f-node: "rgba(30, 19, 28, 0.95)"
+  agent-f-node-new: "rgba(20, 13, 18, 0.95)"
   on-agent: "#17110b"
   passed: "#6fd08a"
   failed: "#ff6464"
@@ -92,6 +112,26 @@ colors:
   day-agent-b-tint: "rgba(42, 79, 201, 0.12)"
   day-agent-b-node: "#e6ebfa"
   day-agent-b-node-new: "#eff2fc"
+  day-agent-c: "#4f3189"
+  day-agent-c-text: "#4f3189"
+  day-agent-c-tint: "rgba(79, 49, 137, 0.12)"
+  day-agent-c-node: "#e7e3eb"
+  day-agent-c-node-new: "#f0edf0"
+  day-agent-d: "#a2568a"
+  day-agent-d-text: "#894674"
+  day-agent-d-tint: "rgba(162, 86, 138, 0.12)"
+  day-agent-d-node: "#f1e7eb"
+  day-agent-d-node-new: "#f6eff0"
+  day-agent-e: "#3475c4"
+  day-agent-e-text: "#255ea1"
+  day-agent-e-tint: "rgba(52, 117, 196, 0.12)"
+  day-agent-e-node: "#e4ebf2"
+  day-agent-e-node-new: "#eef2f4"
+  day-agent-f: "#623659"
+  day-agent-f-text: "#623659"
+  day-agent-f-tint: "rgba(98, 54, 89, 0.12)"
+  day-agent-f-node: "#eae3e5"
+  day-agent-f-node-new: "#f1eded"
   day-on-agent: "#ffffff"
   day-passed: "#1a6f36"
   day-failed: "#b8262b"
@@ -317,7 +357,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 
 ## Colors
 
-A black field with warm near-whites, where orange and blue only ever mean Agent A and Agent B, and
+A black field with warm near-whites, where each agent hue identifies its slot A–F, and
 green and red only ever mean passed and failed.
 
 ### Primary
@@ -327,9 +367,28 @@ green and red only ever mean passed and failed.
   small text stays readable on near-black (darker in day mode, for the same reason).
 - **Agent B blue** (agent-b): the same roles for Agent B, with agent-b-text for text. Orange and
   blue are the pair that people with the common forms of color blindness tell apart best.
-- **Agent tints** (agent-a-tint, agent-b-tint): the fill behind a letter avatar or an agent's status
-  pill. **Agent node fills** (agent-a-node, agent-b-node, and the slightly darker `-new` pair): the
+- **Agents C–F:** violet C, pink D, sky E and plum F use their own `agent-c` through
+  `agent-f` families for the same roles. The letter always carries identity, including for
+  color-blind viewers; six hues cannot stay far apart under every color-vision deficiency.
+- **Agent tints** (`agent-{a..f}-tint`): the fill behind a letter avatar or an agent's status
+  pill. **Agent node fills** (`agent-{a..f}-node` and the slightly darker `-node-new` family): the
   fill of a node with that agent's pending change.
+
+C–F follow the A/B fill recipe: dark tints use graphic RGB at 14% alpha (A 14%, B 16%
+remain unchanged); dark node RGB scales the graphic channels so the maximum channel is 30,
+and new-node RGB scales to 20, rounded to the nearest integer, both at 95% alpha. Day tints
+use graphic RGB at 12% alpha; day node and new-node fills mix 12% and 7% graphic RGB over
+`day-card` in sRGB, rounded to the nearest integer. Existing A/B day fills stay unchanged.
+The maintainer approved distinct text values on 2026-10-28 at 22:30 ART: dark F text
+`#b27ba7` keeps graphic `#ab6e9e`; day D text `#894674` keeps graphic `#a2568a`;
+day E text `#255ea1` keeps graphic `#3475c4`. These text variants meet 4.5:1 on
+raised surfaces and on the agent tints used by cards, rail avatars and review pills.
+F text reaches 5.14:1 on dark raised and 4.65:1 on its tint over card. Day D/E reach
+5.08:1 / 5.07:1 on raised and 4.63:1 / 4.65:1 on their tints over shell.
+All slots retain the same translucent tint recipe and original node fills. Tints are
+used over shell, card, card-end and matte-top; tint over raised is not an intended pair
+(D 4.42:1 and E 4.44:1). Approval changes text only, including on the existing node fills;
+graphics and filled-badge letters retain their values.
 
 ### Secondary
 
@@ -410,7 +469,7 @@ otherwise it is cut like level 3. The screenshots (`make shots`, once it exists)
   canvas receive. The token sets hang off `data-theme` on the root element (`dark` or `day`); no
   component picks a color itself, and switching the attribute repaints everything.
 - **The light set** is the frontmatter's `day-` tokens, for the paired roles:
-  `day-agent-a-text` and `day-agent-b-text` replace the agents' text variants, `day-failed-text`
+  `day-agent-{a..f}-text` replace the agents' text variants, `day-failed-text`
   replaces failed-text (so Reject is `#b8262b`, not the dark `#ff7b7b`, which is 2.34:1 on
   day-page), and `day-span-highlight` and `day-fold-tint` (black at 4% and 3%) replace the white
   highlights. The new dark-only card layers reuse day-card in day mode, and inset uses day-field;
@@ -446,6 +505,16 @@ Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1
 | day-agent-b-text on agent-b tint | over day-card / day-page / day-panel / day-shell / day-matte-bottom (worst) | 6.3 / 6.1 / 5.6 / 5.3 / 5.5 |
 | day-agent-a, day-agent-b as graphics | day-ground | 5.3 / 6.2 |
 | day-on-agent (white) | day-agent-a / day-agent-b | 5.9 / 6.9 |
+| day-agent-c / day-agent-c-text | page / card / field / ground / panel (graphic; text) | 9.18; 9.18 / 9.51; 9.51 / 9.43; 9.43 / 8.87; 8.87 / 8.40; 8.40 |
+| day-on-agent | day-agent-c | 9.85 |
+| day-agent-d / day-agent-d-text | page / card / field / ground / panel (graphic; text) | 4.63; 6.14 / 4.79; 6.36 / 4.75; 6.30 / 4.47; 5.93 / 4.23; 5.61 |
+| day-on-agent | day-agent-d | 4.96 |
+| day-agent-d-text | tint over shell / node / new-node | 4.63 / 5.44 / 5.80 |
+| day-agent-e / day-agent-e-text | page / card / field / ground / panel (graphic; text) | 4.37; 6.13 / 4.52; 6.35 / 4.48; 6.30 / 4.21; 5.92 / 3.99; 5.61 |
+| day-on-agent | day-agent-e | 4.68 |
+| day-agent-e-text | tint over shell / node / new-node | 4.65 / 5.47 / 5.84 |
+| day-agent-f / day-agent-f-text | page / card / field / ground / panel (graphic; text) | 8.94; 8.94 / 9.26; 9.26 / 9.18; 9.18 / 8.63; 8.63 / 8.18; 8.18 |
+| day-on-agent | day-agent-f | 9.58 |
 | day-passed | day-page / day-shell | 5.8 / 5.1 |
 | day-failed, day-failed-text (Reject) | day-page / day-card / day-shell / day-raised (worst) | 5.85 / 6.06 / 5.11 / 4.84 |
 | day-page (button label) | day-text fill / day-text-hover fill | 15.9 / 19.6 |
@@ -873,6 +942,8 @@ a failed draw or a lost context leaves plain ground behind the graph.
 - **Sources:** only each agent's current node at full strength and its last read node at about
   0.4 emit light, in that agent's token. The last read is one node, not an accumulating history;
   other changed nodes, selected neighbors and the impact cone are not additional emitters.
+  The existing eight-source budget is unchanged: current foci first, then last reads, with
+  stable slot/agent-id order within each group; excess sources are dropped.
 - **Mask:** the title, legend, zoom controls and every overlay mask the field, including the
   resting grid. Neither the LEDs nor a travelling light may show through those areas.
 - **Working ring:** an expanding ring in the agent's color reports a working agent. It stops
@@ -966,6 +1037,10 @@ text foreground, even where its use is restricted. **Bold** ratios fall below th
 | module-label | 13.12 | 12.80 | 12.53 | 12.01 | 12.43 | 11.32 | 13.11 |
 | agent-a-text | 7.70 | 7.51 | 7.35 | 7.05 | 7.29 | 6.64 | 7.69 |
 | agent-b-text | 8.24 | 8.04 | 7.87 | 7.55 | 7.81 | 7.11 | 8.24 |
+| agent-c-text | 7.24 | 7.06 | 6.91 | 6.63 | 6.86 | 6.25 | 7.24 |
+| agent-d-text | 9.63 | 9.39 | 9.19 | 8.81 | 9.12 | 8.30 | 9.62 |
+| agent-e-text | 11.41 | 11.13 | 10.90 | 10.45 | 10.81 | 9.84 | 11.41 |
+| agent-f-text | 5.96 | 5.81 | 5.69 | 5.45 | 5.64 | 5.14 | 5.95 |
 | on-agent | **1.06** | **1.04** | **1.01** | **1.03** | **1.01** | **1.09** | **1.06** |
 | passed | 10.49 | 10.23 | 10.01 | 9.60 | 9.94 | 9.05 | 10.48 |
 | failed | 6.88 | 6.71 | 6.57 | 6.30 | 6.52 | 5.93 | 6.88 |
@@ -981,6 +1056,10 @@ text foreground, even where its use is restricted. **Bold** ratios fall below th
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | agent-a | 6.45 | 6.29 | 6.16 | 5.90 | 6.11 | 5.56 | 6.44 |
 | agent-b | 5.41 | 5.28 | 5.17 | 4.96 | 5.13 | 4.67 | 5.41 |
+| agent-c | 7.24 | 7.06 | 6.91 | 6.63 | 6.86 | 6.25 | 7.24 |
+| agent-d | 9.63 | 9.39 | 9.19 | 8.81 | 9.12 | 8.30 | 9.62 |
+| agent-e | 11.41 | 11.13 | 10.90 | 10.45 | 10.81 | 9.84 | 11.41 |
+| agent-f | 5.17 | 5.04 | 4.94 | 4.73 | 4.90 | 4.46 | 5.17 |
 | passed | 10.49 | 10.23 | 10.01 | 9.60 | 9.94 | 9.05 | 10.48 |
 | failed | 6.88 | 6.71 | 6.57 | 6.30 | 6.52 | 5.93 | 6.88 |
 | edge | 3.66 | 3.57 | 3.50 | 3.35 | 3.47 | 3.16 | 3.66 |
@@ -1024,8 +1103,13 @@ before use. Decorative divider and border do not meet 3:1 and must not identify 
 | --- | --- |
 | agent-a-text on its tint over shell / panel / page / card / card-bottom / raised / inset | 6.69 / 6.45 / 6.27 / 5.95 / 6.20 / 5.57 / 6.68 |
 | agent-b-text on its tint over shell / panel / page / card / card-bottom / raised / inset | 7.03 / 6.77 / 6.57 / 6.23 / 6.50 / 5.82 / 7.02 |
+| agent-f-text on its tint over shell / card / card-bottom / matte-top | 5.22 / 4.65 / 4.83 / 4.67 |
+| agent-f-text on its node / new-node fill | 5.44 / 5.77 |
 | page inverse label on text / text-hover fill | 16.20 / 19.01 |
 | text / muted / faint on matte-top (lighter header end) | 15.57 / 7.21 / 4.92 |
+
+C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10.74:1, F 4.86:1.
+
 
 ## Do's and Don'ts
 
@@ -1047,7 +1131,7 @@ before use. Decorative divider and border do not meet 3:1 and must not identify 
 
 - **Don't** use amber or yellow, for warnings or anything else.
 - **Don't** use color alone to say anything.
-- **Don't** give any hue a meaning other than Agent A, Agent B, passed or failed.
+- **Don't** give any hue a meaning other than agents A–F, passed or failed.
 - **Don't** steal focus or open a tab when an agent finishes; motion follows only the causes above.
 - **Don't** dash anything but a pending change: not possible calls, selection, hover or empty
   states.

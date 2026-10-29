@@ -1,6 +1,10 @@
+export { agentLook, agentSlots, slotForFamily, agentSlotStyle } from "./agentLook.ts";
+export type { AgentFamily } from "./agentLook.ts";
+import { dayColors } from "./day.ts";
+
 // DESIGN.md dark tokens. Keep shared values in sync with index.css.
 // Canvas, Cytoscape and Monaco read getActiveTheme() rather than choosing colors.
-export const themes = {
+const baseThemes = {
   dark: {
     ground: "#000000",
     shell: "#09090a",
@@ -36,6 +40,26 @@ export const themes = {
     "agent-a-text": "#ff7a45",
     "agent-b": "#4f7dff",
     "agent-b-text": "#86a3ff",
+    "agent-c": "#a392d6",
+    "agent-c-text": "#a392d6",
+    "agent-c-tint": { color: "#a392d6", alpha: 0.14 },
+    "agent-c-node": { color: "#17141e", alpha: 0.95 },
+    "agent-c-node-new": { color: "#0f0e14", alpha: 0.95 },
+    "agent-d": "#dba4c8",
+    "agent-d-text": "#dba4c8",
+    "agent-d-tint": { color: "#dba4c8", alpha: 0.14 },
+    "agent-d-node": { color: "#1e161b", alpha: 0.95 },
+    "agent-d-node-new": { color: "#140f12", alpha: 0.95 },
+    "agent-e": "#a1c7f8",
+    "agent-e-text": "#a1c7f8",
+    "agent-e-tint": { color: "#a1c7f8", alpha: 0.14 },
+    "agent-e-node": { color: "#13181e", alpha: 0.95 },
+    "agent-e-node-new": { color: "#0d1014", alpha: 0.95 },
+    "agent-f": "#ab6e9e",
+    "agent-f-text": "#b27ba7",
+    "agent-f-tint": { color: "#ab6e9e", alpha: 0.14 },
+    "agent-f-node": { color: "#1e131c", alpha: 0.95 },
+    "agent-f-node-new": { color: "#140d12", alpha: 0.95 },
     "on-agent": "#17110b",
     passed: "#6fd08a",
     failed: "#ff6464",
@@ -221,6 +245,8 @@ export const themes = {
     "fold-tint": { color: "#ffffff", alpha: 0.035 },
   },
 } as const;
+
+export const themes = { ...baseThemes, day: { ...baseThemes.dark, ...dayColors } } as const;
 
 // Read the root at call time, so consumers do not retain a stale theme selection.
 // Adding another set to themes and CSS does not change this interface.
