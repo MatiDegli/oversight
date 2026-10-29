@@ -3,7 +3,8 @@
 import json
 from dataclasses import dataclass
 
-from oversight.changes._behavior import BehaviorDiff
+from oversight.changes._behavior import BehaviorDiff, BehaviorRow
+from oversight.changes._review_samples import Observation
 from oversight.workspace import TypedResult
 from oversight_contracts.review import BehaviorDiffRow, NodeBehaviorDiff
 
@@ -16,6 +17,7 @@ class CapturedRow:
     before: str
     after: str
     unstable: bool
+    observation: Observation | None = None
 
 
 @dataclass(frozen=True)
@@ -41,7 +43,33 @@ def _render(result: TypedResult) -> str:
         display["value"] = result["value"]
     elif kind == "raised":
         display["class"], display["message"] = result["class"], result["message"]
-    return json.dumps(display, ensure_ascii=True, separators=(",", ":"))[:MAX_RENDERED]
+    return json.dumps(display, ensure_ascii=True, separators=(",", ":"))
+
+
+def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:
+    before, after = _render(row.before), _render(row.after)
+    identity = tuple(
+        f"{result['kind']}:{result.get('fingerprint', '')}" for result in (row.before, row.after)
+    )
+    reason = None
+    if not row.repeat_complete or not row.inputs_equal:
+        reason = "comparison or repetition incomplete"
+    elif row.unstable or identity[0] == identity[1]:
+        reason = "unstable or equal observation"
+    elif any(not result.get("fingerprint") for result in (row.before, row.after)):
+        reason = "typed identity unavailable"
+    elif any(len(text) > MAX_RENDERED for text in (row.call, before, after)):
+        reason = "display sample truncated"
+    observation = Observation(
+        node_id, (row.call, before, after), (row.call, identity[0], identity[1]), reason
+    )
+    return CapturedRow(
+        row.call[:MAX_RENDERED],
+        before[:MAX_RENDERED],
+        after[:MAX_RENDERED],
+        row.unstable,
+        observation,
+    )
 
 
 def _category(reason: str | None) -> str | None:
@@ -65,15 +93,7 @@ def capture_behavior(measured: BehaviorDiff | None) -> BehaviorEvidence | None:
                 item.node_id,
                 item.compared,
                 item.differing,
-                tuple(
-                    CapturedRow(
-                        row.call[:MAX_RENDERED],
-                        _render(row.before),
-                        _render(row.after),
-                        row.unstable,
-                    )
-                    for row in item.rows
-                ),
+                tuple(_capture_row(item.node_id, row) for row in item.rows),
                 _category(item.reason),
             )
             for item in measured.functions

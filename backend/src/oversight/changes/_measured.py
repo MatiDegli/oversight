@@ -14,6 +14,7 @@ from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
+from oversight.changes._review_samples import Observation
 from oversight.changes._shortcuts_common import is_test_file
 from oversight.changes._shortcuts_unknown import COLLECTION_CONFIG
 from oversight.changes._suite_evidence import publish_suite
@@ -129,7 +130,12 @@ def _matching(
     return pairs, len(before) - len(pairs), len(after) - len(pairs), reasons
 
 
-def _caller(node_id: str, reports: list[CallReport], problems: tuple[str, ...]) -> MeasuredCaller:
+def _caller(
+    node_id: str,
+    reports: list[CallReport],
+    problems: tuple[str, ...],
+    samples: list[Observation] | None = None,
+) -> MeasuredCaller:
     pairs, unmatched_before, unmatched_after, reasons = _matching(node_id, reports)
     diagnostics = list(problems) + [p for report in reports for p in report.problems]
     if len(reports) < 2:
@@ -181,6 +187,14 @@ def _caller(node_id: str, reports: list[CallReport], problems: tuple[str, ...]) 
                     unstable=unstable,
                 )
             )
+            if samples is not None:
+                values = (before.inputs, before.result, after.result)
+                reason = None
+                if not confirmed or problems:
+                    reason = "caller comparison or repetition incomplete"
+                elif any(len(value) > 2048 for value in values):
+                    reason = "display sample truncated"
+                samples.append(Observation(node_id, values, values, reason))
     if not pairs:
         complete = False
         reasons.append("no comparable caller invocations observed")
@@ -205,6 +219,15 @@ def project_measured(evidence: MeasuredEvidence, target: ChangeTarget) -> list[M
     """Pure re-projection used both to publish and to reject manipulated public evidence."""
     reports = _reports(evidence, target)
     return [_caller(entry.node_id, reports, evidence.problems) for entry in evidence.impact.entries]
+
+
+def capture_review_samples(evidence: MeasuredEvidence) -> tuple[Observation, ...]:
+    """Capture witnesses while the complete typed reports still exist, before display caps."""
+    samples: list[Observation] = []
+    reports = _reports(evidence, evidence.target)
+    for entry in evidence.impact.entries:
+        _caller(entry.node_id, reports, evidence.problems, samples)
+    return tuple(samples)
 
 
 def validate_measured(

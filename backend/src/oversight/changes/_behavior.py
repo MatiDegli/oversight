@@ -35,6 +35,8 @@ class BehaviorRow:
     before: TypedResult
     after: TypedResult
     unstable: bool
+    repeat_complete: bool = False
+    inputs_equal: bool = False
 
 
 @dataclass(frozen=True)
@@ -217,7 +219,17 @@ async def _measure_function(
             reason=result.reason or ("incomplete repeat" if incomplete else None),
         )
         if len(rows) < MAX_ROWS:
-            rows.append(BehaviorRow(inputs[result.node_id].inputs[index].call, old, new, unstable))
+            sample = inputs[result.node_id].inputs[index]
+            rows.append(
+                BehaviorRow(
+                    sample.call,
+                    old,
+                    new,
+                    unstable,
+                    repeat_complete=not incomplete,
+                    inputs_equal=sample.before == sample.after,
+                )
+            )
         result = replace(result, rows=tuple(rows))
         found[position] = result
 
