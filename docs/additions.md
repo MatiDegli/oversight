@@ -535,9 +535,10 @@ cost. If the rules only save a few steps, text pins are not built.
 
 Contract check, 2026-10-29: `ExamplePin` (contracts 1.5.0) is a confirmation stamp inside a task
 example, which requires inputs and an expected result, so a text rule cannot be one without faking
-those fields. Item 13's pin record carries the kind and anchor instead (item 13 above). Adding a
-value to an existing enum is not yet a minor change under `docs/proposal.md` section 4.9; a request
-to make it one is with the maintainer.
+those fields. Item 13's pin record carries the kind and anchor instead (item 13 above). Since
+2026-10-29, adding a value to an existing enum is a minor change under `docs/proposal.md` section
+4.9 when every existing payload still validates and every TypeScript consumer of the enum is
+exhaustive, so a later text-rule kind can ship in a minor version.
 
 ### Shipped editor language highlighting
 
