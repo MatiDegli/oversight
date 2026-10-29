@@ -510,9 +510,9 @@ Each kind of knowledge goes to the mechanism that fits it:
   the command output as evidence, and not in a first version.
 
 Text pins load deterministically, with no model choosing: the pins in the task's zone; the pins in
-its cone, here including possible calls, because for context a false positive costs only tokens,
-unlike merging, where only exact calls count; and an index that is always present, one line per
-pin, capped at about 30 lines, holding only what search cannot derive.
+its cone, here including possible calls, because for context a false positive costs only tokens;
+and an index that is always present, one line per pin, capped at about 30 lines, holding only what
+search cannot derive.
 
 Muse Spark Open can still only stop or flag. It checks whether a change contradicts a text pin in
 its zone or cone; if so, the change waits, quoting the pin. When an anchored node changes, it says

@@ -1450,9 +1450,10 @@ and not queued; nothing is built before the freeze (docs/additions.md, "Reposito
 finds what code says, never the decisions, invariants and reasons that are not written down, and it
 neither enforces a rule nor notices a stale one. So the memory holds only that, each kind in the
 mechanism that fits it: executable pins, text pins anchored to nodes, the repository's own AGENTS.md
-and skills, and standing grants. Text pins load deterministically; Muse Spark Open can only stop or
-flag; only the person creates or confirms a pin. Text pins are built only if a measured Boltons
-trial after the freeze shows fewer rule contradictions at equal or lower cost.
+and skills, and standing grants. Facts from running something wait for a later version, with command
+output as evidence. Text pins load deterministically; Muse Spark Open can only stop or flag; only
+the person creates or confirms a pin. Text pins are built only if a measured Boltons trial after
+the freeze shows fewer rule contradictions at equal or lower cost.
 
 ## 2026-10-29 — Item 13's pin record carries a kind and a node anchor
 
