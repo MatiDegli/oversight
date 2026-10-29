@@ -5,14 +5,17 @@ import type { LampGrid, PlacedLight } from "./model";
 import { createLampField, fieldConfig, parseHex } from "./model";
 import { sketchBusy } from "./sketchScene.fixture";
 
-/** Lamps at levels 0, 1/3, 2/3 and 1 over the cells whose centers no cover touches. */
+/** What hides lamps in the sketch: opaque rows and folded cards, then the header and chip masks. */
+const hidden = [...sketchBusy.covers, ...sketchBusy.masks];
+
+/** Lamps at levels 0, 1/3, 2/3 and 1 over the cells whose centers nothing hides: frame bodies count. */
 function histogram(grid: LampGrid): number[] {
   const counts = [0, 0, 0, 0];
   for (let row = 0; row < grid.rows; row += 1) {
     for (let col = 0; col < grid.cols; col += 1) {
       const x = (col + 0.5) * 7;
       const y = (row + 0.5) * 7;
-      if (sketchBusy.covers.some((b) => x > b.x1 && x < b.x2 && y > b.y1 && y < b.y2)) continue;
+      if (hidden.some((b) => x > b.x1 && x < b.x2 && y > b.y1 && y < b.y2)) continue;
       const level = Math.round(((grid.data[(row * grid.cols + col) * 4 + 3] ?? 0) / 255) * 3);
       counts[level] = (counts[level] ?? 0) + 1;
     }
@@ -31,19 +34,21 @@ describe("the field on the sketch's busy scene", () => {
   }));
   const grid = createLampField()(config, sketchBusy.width, sketchBusy.height, lights, null);
 
-  it("counts the four lamp levels like the sketch's own pass, over the cells no card covers", () => {
+  it("counts the four lamp levels like the sketch's own pass, over every cell no row, card or header hides", () => {
     const [off, first, second, whole] = histogram(grid);
     const [sketchOff, sketchFirst, sketchSecond, sketchWhole] = sketchBusy.counts;
     // The same cells are counted, so the four counts add up to the same total.
     expect((off ?? 0) + (first ?? 0) + (second ?? 0) + (whole ?? 0)).toBe(
       sketchOff + sketchFirst + sketchSecond + sketchWhole,
     );
-    // Mostly off, a thin fringe of single first-level lamps, a few at the second, none whole outside
-    // the cards: the first level within a tenth of the sketch's, the second within a few lamps.
+    // The frames are translucent, so the light shows in their bodies around the lit rows: some
+    // hundreds of first-level lamps, some hundreds at the second, and a hundred or so whole. The
+    // product's watch gain is 0.92 against the sketch's 0.9, which puts a few more lamps whole.
     expect((first ?? 0) / sketchFirst).toBeGreaterThan(0.9);
     expect((first ?? 0) / sketchFirst).toBeLessThan(1.1);
-    expect(Math.abs((second ?? 0) - sketchSecond)).toBeLessThanOrEqual(8);
-    expect(whole).toBe(sketchWhole);
+    expect(Math.abs((second ?? 0) - sketchSecond)).toBeLessThanOrEqual(15);
+    expect(sketchWhole).toBeGreaterThan(100);
+    expect(Math.abs((whole ?? 0) - sketchWhole) / sketchWhole).toBeLessThan(0.15);
     expect((off ?? 0) / sketchOff).toBeGreaterThan(0.99);
   });
 
