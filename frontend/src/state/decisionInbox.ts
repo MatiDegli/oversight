@@ -37,7 +37,10 @@ export function selectDecisionInbox(state: State): DecisionInboxEntry[] {
     });
     group.attempts = [
       ...new Map(
-        [...group.attempts, ...attempts].map((attempt) => [attempt.agentId, attempt]),
+        [...group.attempts, ...attempts].map((attempt) => [
+          JSON.stringify([attempt.agentId, attempt.echoSeq]),
+          attempt,
+        ]),
       ).values(),
     ].sort((a, b) => a.echoSeq - b.echoSeq);
     groups.set(id, group);

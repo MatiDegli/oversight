@@ -370,7 +370,7 @@ The neutral roles:
 - **Page** (page): the focus panel: review, live diff, file view and settings; Monaco's background.
 - **Card** (card, card-bottom): cards run from card at the top to card-bottom below; graph nodes
   at rest use card at 94%. Agent and model-slot cards carry a 2px top line in their agent token.
-- **Raised** (raised): hover on a control or row; a pressed rail button; the queue counter.
+- **Raised** (raised): hover on a control or row; a pressed rail button; the decisions chip.
 - **Page raised** (page-raised): chips, facts and file rows inside the left panel.
 - **Text** (text): primary text everywhere; a slightly warm white, because pure white glares on
   video against black. **Text hover** (text-hover): the primary button's fill on hover.
@@ -555,7 +555,7 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   left in review, legend bottom left, zoom controls bottom right. With the left panel open and no
   cone (live diff, file view) the top left is empty, as in the live sketch: the graph beside the
   panel is framed on its own nodes, and a heading there would sit on top of them.
-- **Sizes:** buttons 40px tall, small buttons 34px; search box and queue counter 34px; chips 30px;
+- **Sizes:** buttons 40px tall, small buttons 34px; search box and decisions chip 34px; chips 30px;
   letter avatar 36px; status lamp 10px; distance badge 20px; node letter badge 26px.
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
@@ -805,7 +805,7 @@ everything else steps back.
 
 ### Review panel with the matte header (signature component)
 
-Opened only by the person: from "Review change" on a card, the queue counter, or a node whose
+Opened only by the person: from "Review change" on a card, the decisions chip, or a node whose
 change is proposed.
 
 - **Header:** the change's title, the agent, its status pill, a close button, and the facts row.
@@ -1021,11 +1021,11 @@ before use. Decorative divider and border do not meet 3:1 and must not identify 
 
 - **Do** keep every agent color next to its letter, and every state color next to a word, a sign
   or an icon.
-- **Do** keep the review queue counter and any count across agents neutral.
+- **Do** keep the decisions chip and any count across agents neutral.
 - **Do** show a pending change with a dashed 1.5px border in its agent's color, changed and new
   alike.
-- **Do** keep the current view when an agent finishes: only its card, its pill and the queue
-  counter report readiness.
+- **Do** keep the current view when an agent finishes: only its card, its pill and the decisions
+  chip report readiness.
 - **Do** take every color from a token under `data-theme`, Cytoscape, Monaco and the dot field
   included: hovers, highlights, gradient ends and the grid's lamps and dots too, never a raw hex or
   `white` in a component.
@@ -1049,7 +1049,7 @@ before use. Decorative divider and border do not meet 3:1 and must not identify 
 
 | Level | Design elements |
 | --- | --- |
-| 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the queue counter; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
+| 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the decisions chip; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
 | 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
 | Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker; plain black ground whenever WebGL is missing |

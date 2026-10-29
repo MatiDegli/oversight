@@ -80,6 +80,7 @@ export function TopBar({
       >
         <button
           type="button"
+          disabled={onOpenQueue === undefined}
           onClick={onOpenQueue}
           title="Open the review queue"
           aria-label={`Decisions: ${String(ready)} pending. Open review queue`}

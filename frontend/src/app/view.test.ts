@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { through } from "./replay.fixture";
+import * as navigation from "./view";
 import {
   clickNode,
   closePanel,
@@ -13,7 +14,6 @@ import {
   openChange,
   openReview,
   panelOpen,
-  readyCount,
 } from "./view";
 
 const edited = "shop.pricing:compute_price";
@@ -195,11 +195,8 @@ describe("panel switching over the level 1 fixture", () => {
     expect(closesPanel({ ...key, key: "Enter" })).toBe(false);
   });
 
-  it("counts changes ready for review across agents from the proposal until the decision", () => {
-    expect(readyCount(through(18))).toBe(0);
-    expect(readyCount(through(19))).toBe(1);
-    expect(readyCount(through(20))).toBe(1);
-    expect(readyCount(through(21))).toBe(0);
+  it("keeps the superseded ready counter out of the navigation API", () => {
+    expect(navigation).not.toHaveProperty("readyCount");
   });
 
   it("keeps the change's nodes lit until it is decided, then none", () => {

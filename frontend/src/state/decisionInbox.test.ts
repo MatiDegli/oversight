@@ -276,3 +276,39 @@ it("counts changes through partial/all answers, final actions and new revisions"
     "risky_area",
   ]);
 });
+
+it("keeps separate attempts when one agent answers different cards of a change", () => {
+  const echo = events(count)[7];
+  if (echo?.type !== "agent.status" || echo.payload.answering?.kind !== "review_card")
+    throw new Error("Missing answering fixture");
+  let state = replay(count, 5);
+  const statuses = [
+    { ...echo.payload, state: "working" as const },
+    { ...echo.payload, state: "done" as const },
+    {
+      ...echo.payload,
+      state: "working" as const,
+      answering: { ...echo.payload.answering, question: "Keep yes?" },
+    },
+  ];
+  for (const payload of statuses)
+    state = applyEvent(state, { ...echo, seq: state.lastSeq + 1, payload });
+  const entry = groupedInbox(state)[0];
+  expect(entry?.decisions.flatMap((decision) => decision.attempts)).toHaveLength(2);
+  expect(entry?.attempts).toEqual([
+    { agentId: "agent-2", slot: "B", echoSeq: 6, endState: "done", endSeq: 7, reason: null },
+    { agentId: "agent-2", slot: "B", echoSeq: 8, endState: null, endSeq: null, reason: null },
+  ]);
+  // A repeated status for the same task must not duplicate either attempt.
+  state = applyEvent(state, {
+    ...echo,
+    seq: 9,
+    payload: {
+      ...echo.payload,
+      state: "working",
+      answering: { ...echo.payload.answering, question: "Keep yes?" },
+    },
+  });
+  expect(groupedInbox(state)[0]?.attempts).toEqual(entry?.attempts);
+  expect(selectDecisionInboxCount(state)).toBe(1);
+});
