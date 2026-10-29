@@ -40,9 +40,21 @@ it("loads only the optional runtime export, applies its preset and reports broke
   }
 });
 
-it("documents the opaque heading and legend plates that mask lines behind text", () => {
+const opaquePlates =
+  "The graph heading, legend, zoom controls and Modules/Functions/Details control " +
+  "(including zoom percentage) use fully opaque `panel` plates to mask lines behind their text.";
+
+it("documents every opaque graph plate that masks lines behind text", () => {
   const design = readFileSync(new URL("DESIGN.md", root), "utf8");
   const elevation = design.split("## Elevation & Depth")[1]?.split("### Named Rules")[0];
-  expect(elevation).toMatch(/heading and legend use fully opaque `panel` plates/);
+  expect(elevation?.replace(/\s+/g, " ")).toContain(opaquePlates);
   expect(elevation).toMatch(/other graph overlays[\s\S]*90 to 94%/i);
+});
+
+it("records the same complete opaque graph plate rule in the exact-call decision", () => {
+  const decisions = readFileSync(new URL("DECISIONS.md", root), "utf8");
+  const exactCalls = decisions.split(
+    "## 2026-10-29 — Exact calls at rest, possible links as quiet context",
+  )[1];
+  expect(exactCalls?.replace(/\s+/g, " ")).toContain(opaquePlates);
 });

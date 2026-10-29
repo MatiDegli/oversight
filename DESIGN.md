@@ -697,7 +697,8 @@ Agent and model-slot cards add their 2px agent-colored top line. Divider separat
 border encloses cards and controls where decorative. Neither replaces control-edge or the focus
 ring when a boundary carries meaning.
 
-The graph heading and legend use fully opaque `panel` plates to mask lines behind their text.
+The graph heading, legend, zoom controls and Modules/Functions/Details control (including zoom
+percentage) use fully opaque `panel` plates to mask lines behind their text.
 Other graph overlays keep their shell or panel backing at 90 to 94% opacity and frost the graph
 beneath with a 12px backdrop blur. Their field mask keeps moving light out of the overlay. The review
 header retains its matte still grain. Every gradient end, highlight, shadow and overlay color is

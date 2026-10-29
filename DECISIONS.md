@@ -1350,8 +1350,9 @@ with no motion, width change, camera move or focus transfer. A hidden line suppl
 Fixture checks read the optional offline export at `.runtime/graphs/boltons-d31d821.snapshot.json`
 and skip Boltons cases only when it is absent; provenance and regeneration are in
 `fixtures/layouts/README.md`. No Boltons snapshot is committed. Same-module exact calls remain
-hidden during hover, selection and lighting, preserving the prior behavior. The heading and legend
-use opaque panel plates so no faint line ghosts through their text; other overlays retain frost.
+hidden during hover, selection and lighting, preserving the prior behavior. The graph heading,
+legend, zoom controls and Modules/Functions/Details control (including zoom percentage) use fully
+opaque `panel` plates to mask lines behind their text. Other graph overlays retain frost.
 Screenshot logs use .events rather than .jsonl so generated cuts do not enter the repository-wide
 recording validation. This required tooling deviation touches `frontend/shots/run.sh` and
 `frontend/shots/capture.ts` outside the original `frontend/src` and design-document scope.

@@ -8,7 +8,8 @@ import type { State } from "../state";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
-// M8 reserves frost for the graph's legend, zoom and future segmented controls.
+// The heading, legend, zoom and detail controls (including zoom percentage) use opaque panel plates.
+// graph-text-shield overrides the frosted backing so graph lines cannot ghost through their text.
 const surface = "frosted graph-text-shield border border-border";
 
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
