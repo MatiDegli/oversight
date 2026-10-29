@@ -305,7 +305,12 @@ it.each(["width", "height"])(
 it.each(["width", "height"])(
   "sleeps with pulsing lights at zero %s and wakes on redraw",
   (axis) => {
-    const stage = { closest: () => null, querySelectorAll: () => [] };
+    const stage = {
+      closest: () => null,
+      querySelectorAll: () => [],
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
     Object.assign(canvas, {
       closest: () => stage,
       getBoundingClientRect: () => ({ left: 0, top: 0 }),
@@ -339,6 +344,38 @@ it.each(["width", "height"])(
     controller.dispose();
   },
 );
+
+it("measures the overlays again when the layout moves with no change to the markup", async () => {
+  // A font arrives, or a panel finishes growing: the overlay's box changes, the DOM does not.
+  const listeners = new Map<string, () => void>();
+  const stage = {
+    closest: () => null,
+    querySelectorAll: () => [overlay],
+    addEventListener: (type: string, listener: () => void) => listeners.set(type, listener),
+    removeEventListener: (type: string) => listeners.delete(type),
+  };
+  let right = 20;
+  const overlay = {
+    parentElement: null,
+    getBoundingClientRect: () => ({ left: 0, top: 0, right, bottom: 10, width: right, height: 10 }),
+  };
+  const fonts = Promise.resolve();
+  vi.stubGlobal("document", Object.assign(document, { fonts: { ready: fonts } }));
+  Object.assign(canvas, {
+    closest: () => stage,
+    getBoundingClientRect: () => ({ left: 0, top: 0 }),
+    ownerDocument: { querySelectorAll: () => [] },
+  });
+  const controller = createFieldController(canvas, source);
+  const masked = () => renderer.draw.mock.calls.at(-1)?.[2] as { x2: number }[];
+  await fonts;
+  expect(masked()).toEqual([{ x1: 0, y1: 0, x2: 20, y2: 10 }]);
+  right = 40;
+  listeners.get("transitionend")?.();
+  expect(masked()).toEqual([{ x1: 0, y1: 0, x2: 40, y2: 10 }]);
+  controller.dispose();
+  expect(listeners.has("transitionend")).toBe(false);
+});
 
 describe("the rest ground", () => {
   const frames = new Map([
@@ -459,6 +496,7 @@ describe("a merge's pulse and light", () => {
     slot: "A" as const,
     source: "agent-a" as const,
     id: "a",
+    pulse: true,
     age: 0,
   };
   const live: FieldInput = { mode: "watch", lights: [], merges: [merge] };
@@ -499,13 +537,14 @@ describe("a merge's pulse and light", () => {
     controller.redraw();
     expect(canvas.oversightField?.life().pulses).toBe(1);
     expect(canvas.oversightField?.animating()).toBe(true);
-    expect(burning()).toBeUndefined();
+    // The light holds the waiting level while the pulse travels, and never rises above it.
+    expect(burning()?.weight).toBeCloseTo(themes.dark["waiting-light-weight"], 10);
     now = 1000 + arrival + look.fade / 2;
     controller.redraw();
     settle();
     const half = burning();
     expect(half?.weight).toBeGreaterThan(0);
-    expect(half?.weight).toBeLessThan(0.4);
+    expect(half?.weight).toBeLessThan(themes.dark["waiting-light-weight"] * 0.5 ** 1.6 + 1e-9);
     expect(canvas.oversightField?.life()).toMatchObject({ pulses: 0, lights: 1 });
     expect(canvas.oversightField?.animating()).toBe(false);
     expect(vi.getTimerCount()).toBe(1);
@@ -543,7 +582,7 @@ describe("a merge's pulse and light", () => {
     expect(canvas.oversightField?.life()).toMatchObject({ pulses: 0, lights: 1 });
     expect(canvas.oversightField?.animating()).toBe(false);
     const whole = burning()?.weight ?? 0;
-    expect(whole).toBeGreaterThan(0.8);
+    expect(whole).toBeCloseTo(themes.dark["waiting-light-weight"], 10);
     now = 5 + look.fade / 2;
     vi.advanceTimersByTime(500);
     expect(burning()?.weight).toBeLessThan(whole / 2);

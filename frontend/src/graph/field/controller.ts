@@ -119,6 +119,8 @@ class FieldRuntime implements FieldController {
   private masksDirty = true;
   private maskSize = "";
   private readonly overlayObserver?: MutationObserver;
+  private layoutHost?: Element;
+  private disposed = false;
   private readonly frozen =
     import.meta.env.DEV && typeof location !== "undefined" ? fieldClock(location.search) : null;
   private readonly query =
@@ -169,13 +171,18 @@ class FieldRuntime implements FieldController {
           this.redraw();
         }
       });
-      this.overlayObserver.observe(stage.closest(".shell-frame") ?? stage, {
+      this.layoutHost = stage.closest(".shell-frame") ?? stage;
+      this.overlayObserver.observe(this.layoutHost, {
         childList: true,
         characterData: true,
         subtree: true,
         attributes: true,
         attributeFilter: ["class", "style", "hidden"],
       });
+      // An overlay can change size with no change to the page's markup: a font arrives, or a panel
+      // finishes growing. The masks are measured again, so no line shows under its new edge.
+      this.layoutHost.addEventListener("transitionend", this.onLayout);
+      if ("fonts" in document) void document.fonts.ready.then(this.onLayout);
     }
     this.renderer = createLampRenderer(canvas);
     this.checkContext = this.renderer?.check;
@@ -420,6 +427,11 @@ class FieldRuntime implements FieldController {
     this.schedule();
     this.redraw();
   };
+  private onLayout = () => {
+    if (this.disposed) return;
+    this.masksDirty = true;
+    this.redraw();
+  };
   private onVisibility = () => {
     this.redraw();
     this.schedule();
@@ -509,6 +521,8 @@ class FieldRuntime implements FieldController {
   }
 
   dispose() {
+    this.disposed = true;
+    this.layoutHost?.removeEventListener("transitionend", this.onLayout);
     if (this.frame !== 0) cancelAnimationFrame(this.frame);
     this.frame = 0;
     if (this.slowTimer !== undefined) clearTimeout(this.slowTimer);
