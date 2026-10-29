@@ -1291,3 +1291,43 @@ for opaque backings across every shell surface is retired with that treatment: t
 raised is not used by the UI and gives D 4.42:1 / E 4.44:1 with the approved values.
 The rendered card/rail/review regression from 0612105 remains. Exact-value tests pin the
 three newly approved text tokens and guard the restored translucent tints and original node fills.
+
+## 2026-10-29 — Life layer, part 1: contours at rest, light only while acting, merge travel
+
+The maintainer approved the life-layer look on 2026-10-29, after the sketches in
+docs/sketches/life/ (committed as an exception for approved sketches only; the interactive
+reference stays outside the repository). This part builds points 1 to 6 of his decision; the
+tests scan, rolling numbers, top-edge light, focus glow and button press are part 2.
+
+1. **Colored light means an agent is acting now.** An agent lights the graph while it is working
+   or revising. After a merge its light fades out over about 90 seconds, along `(1 - p)^1.6`; at
+   rest nothing is lit. What changed stays told by the rail cards and the node marks. This replaces
+   the rule that an agent's current node and last read stay lit until the change is decided, and
+   the 240ms fade of the light on approval. Ambient motion and light without events stay allowed.
+   An agent waiting for review is not acting, so it no longer lights the field (open question for
+   the maintainer: keep a light there?).
+2. **The rest ground is gray topographic contours derived from the graph:** one moderate hill per
+   module (its height grows with the calls into it from other modules, over a small range), a few
+   soft mounds in empty areas, wide level spacing (at most about 8 lines per hill), 1px, very
+   faint, fading outward, drifting slowly and continuously (a change of shape takes minutes),
+   masked under overlays, still under reduced motion, gray only. It replaces the faint 28px lamp
+   grid at rest: lamps now draw only where light reaches.
+3. **Out:** click waves, the hover flashlight, borders that follow the pointer, button flashes, a
+   boot sweep (at most a 0.5s fade-in) and view-change wipes (a plain crossfade). None existed on
+   main when this was recorded.
+4. **In, part 1:** the merge travels: a pulse leaves the agent's rail card, runs along the graph's
+   edges to its node with a short fading trail, then the node's light fades as in point 1, with a
+   soft falloff and never a hard or blocky edge (merge-mid.png's hard top edge is a known flaw).
+   It never moves the camera or takes focus. Reduced motion: no travel; the light appears and fades.
+5. **Build:** one WebGL2 canvas draws the lamps and the contours; the heights are computed on the
+   CPU at a coarse grid and sampled by the shader, so the contour cost does not grow with the graph.
+   Without WebGL2 the graph keeps plain ground and no contours. Text keeps 4.5:1 and never sits on
+   the lines, agents' colors mean agents only, and the real recorded run label stays.
+6. **Sketches:** rest-contour, rest-day, rest-rm, merge-mid and life-v2.webm are in
+   docs/sketches/life/ and linked from DESIGN.md as the target for the rest state and the life
+   layer. DESIGN.md records which earlier lines each decision replaces (Dot field and rings,
+   Motion, Reduced motion, the departures table). Where the build differs from a sketch, the
+   departures table says so: no "merged" chips on nodes yet, and the contour mask is cell-wide.
+
+Reason: light that is on at rest stops telling who is working; a ground that carries the repository's
+shape gives the idle screen something true to show without competing with the graph.

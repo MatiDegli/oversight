@@ -77,6 +77,7 @@ const baseThemes = {
     "added-tint": { color: "#6fd08a", alpha: 0.11 },
     "removed-tint": { color: "#ff6464", alpha: 0.12 },
     "guide-dot": { color: "#ededea", alpha: 0.1 },
+    "contour-line": { color: "#ededea", alpha: 0.09 },
     "agent-a-node": { color: "#1e0c04", alpha: 0.95 },
     "agent-a-node-new": { color: "#140a04", alpha: 0.95 },
     "agent-b-node": { color: "#060c1e", alpha: 0.95 },
@@ -232,6 +233,29 @@ const baseThemes = {
     "transition-duration": "240ms",
     "transition-easing": "cubic-bezier(0.2, 0.7, 0.2, 1)",
     "status-lamp-duration": "1600ms",
+    // The rest contours: the height between two lines, a hill's base height and the range its
+    // callers add to it, how wide it spreads over its frame, the soft mounds in empty areas, and
+    // how fast the drift runs (1 is a few minutes per swing). Heights are computed on a coarse grid.
+    "contour-step": 0.15,
+    "contour-hill-base": 0.52,
+    "contour-hill-range": 0.2,
+    "contour-hill-spread": 0.78,
+    "contour-mound-count": 10,
+    "contour-drift-speed": 1,
+    "contour-cell-size": "16px",
+    // How often the field repaints for what changes slowly: the contour drift and the afterlight.
+    "field-slow-interval": "500ms",
+    // A merge: the light of its node starts at the weight and fades over the duration along
+    // (1 - p) to the curve; the pulse waits, travels, and leaves a bright and a faint trail.
+    "afterlight-weight": 0.9,
+    "afterlight-duration": "90000ms",
+    "afterlight-curve": 1.6,
+    "merge-travel-delay": "250ms",
+    "merge-travel-duration": "1450ms",
+    "merge-trail-bright": "50px",
+    "merge-trail-faint": "150px",
+    "merge-trail-fade": "350ms",
+    "merge-pulse-width": "1.6px",
 
     // Monaco-only syntax and code highlights: intentionally absent from CSS.
     "syntax-plain": "#d8d7d0",

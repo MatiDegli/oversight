@@ -54,6 +54,7 @@ export const dayColors = {
   "matte-bottom": "#ecebe6",
   "lamp-off": "#eae9e5",
   "guide-dot": { color: "#1c1c1a", alpha: 0.1 },
+  "contour-line": { color: "#1c1c1a", alpha: 0.08 },
   "agent-c": "#4f3189",
   "agent-c-text": "#4f3189",
   "agent-c-tint": { color: "#4f3189", alpha: 0.12 },
