@@ -149,7 +149,7 @@ it("lifts the hovered path and count without moving routes, positions or focus",
       window.edgeLabels.tick();
     });
     expect(await page.evaluate(() => window.edgeLabelGraph.edges(".count-hover").length)).toBe(1);
-    await page.mouse.move(1395, 895);
+    await page.mouse.move(-10, -10);
     expect(await page.evaluate(() => window.edgeLabelGraph.edges(".count-hover").length)).toBe(0);
     expect(
       await page.evaluate(() => String(window.edgeLabelGraph.edges().first().style("line-color"))),

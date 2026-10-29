@@ -239,6 +239,13 @@ export function GraphView({
       cy.on("mouseover mouseout", "node", (event) => {
         showNodeHover(cy, event.type === "mouseover" ? (event.target as NodeSingular).id() : null);
       });
+      const clearPointer = () => {
+        cy.batch(() => {
+          cy.edges(".count-hover, .node-hover").removeClass("count-hover node-hover");
+          cy.nodes(".edge-shield").removeClass("edge-shield");
+        });
+      };
+      host.addEventListener("pointerleave", clearPointer);
       let interacting = false;
       let quietUntil = 0;
       const arriving = new Set<string>();
@@ -414,6 +421,7 @@ export function GraphView({
       };
       observeCard.current();
       dispose = () => {
+        host.removeEventListener("pointerleave", clearPointer);
         document.fonts.removeEventListener("loadingdone", refreshFonts);
         if (apiRef) apiRef.current = null;
         source.detach();
