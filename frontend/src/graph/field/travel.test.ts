@@ -32,7 +32,7 @@ describe("a path's length and slices", () => {
       { x: 0, y: 0 },
       { x: 30, y: 0 },
     ]);
-    expect(slicePath(L, 140, 400)?.at(-1)).toEqual({ x: 100, y: 50 });
+    expect(slicePath(L, 140, 400).at(-1)).toEqual({ x: 100, y: 50 });
     expect(slicePath(L, 60, 60)).toEqual([]);
     expect(slicePath(L, 200, 300)).toEqual([]);
     expect(slicePath([], 0, 10)).toEqual([]);

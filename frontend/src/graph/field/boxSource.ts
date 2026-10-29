@@ -2,7 +2,7 @@
 // changed. It reads rendered boxes and nothing else, so the field never draws a node or an edge and
 // the graph knows nothing about lights. GraphView attaches the instance it creates and detaches it
 // when it destroys it.
-import type { Core, EdgeSingular } from "cytoscape";
+import type { Core } from "cytoscape";
 
 import { getActiveTheme } from "../../theme";
 import type { XY } from "../orthogonal";
@@ -78,7 +78,9 @@ export function createBoxSource(): BoxSource {
       const at = visibleId(graph, id);
       const node = graph.getElementById(at);
       if (node.empty() || !node.isNode()) return [];
-      return (node.connectedEdges().toArray() as EdgeSingular[])
+      return node
+        .connectedEdges()
+        .toArray()
         .filter((edge) => !edge.hasClass("unroutable"))
         .flatMap((edge) => {
           const start = edge.renderedSourceEndpoint();
