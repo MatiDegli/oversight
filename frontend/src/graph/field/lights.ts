@@ -1,5 +1,5 @@
 import type { AgentFamily } from "../../theme";
-import type { ImpactCone } from "@contracts";
+import type { ImpactCone, Slot } from "@contracts";
 
 /** The field's four modes: watch, the live diff, the file view and review. */
 export type FieldMode = "watch" | "live-diff" | "file" | "review";
@@ -27,6 +27,25 @@ export interface FieldLight {
   pulses: boolean;
   /** Rendering envelope during an eased transition; pure selectors leave this unset. */
   pulseWeight?: number;
+}
+
+/** A merged change: where its pulse starts, where it arrives, and how long ago it happened. */
+export interface FieldMerge {
+  /** One merge, stable across renders: the change and the event that resolved it. */
+  key: string;
+  /** The agent's slot, to find its rail card. */
+  slot: Slot;
+  source: AgentFamily;
+  /** The node that merged: where the pulse arrives and its light stays. */
+  id: string;
+  /** Milliseconds from the merge to the latest event the state has applied, from event times. */
+  age: number;
+}
+
+/** A module the rest contours rise over, and how many modules call into it. */
+export interface FieldModule {
+  id: string;
+  callers: number;
 }
 
 /** True when two selections would draw the same field, so an event that changes neither skips a redraw. */
