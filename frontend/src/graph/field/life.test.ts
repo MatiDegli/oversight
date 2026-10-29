@@ -38,7 +38,7 @@ describe("merges", () => {
     expect(selectMerges(through(23))[0]?.key).toBe("change-1:21");
   });
 
-  it("leaves out a change that was rejected or that conflicted", () => {
+  it("tells a rejected change without a pulse, and leaves out one that conflicted", () => {
     const state = through(21);
     const change = state.changes["change-1"];
     if (!change?.resolution) throw new Error("Missing resolution");
@@ -51,7 +51,11 @@ describe("merges", () => {
         },
       },
     } as typeof state;
-    expect(selectMerges(rejected)).toEqual([]);
+    // A rejection fades the change's light as a merge does, but no pulse runs to its node.
+    expect(selectMerges(rejected)).toMatchObject([
+      { key: "change-1:21", id: "shop.pricing:compute_price", pulse: false },
+    ]);
+    expect(selectMerges(through(21))[0]?.pulse).toBe(true);
     const conflict = {
       ...state,
       changes: {

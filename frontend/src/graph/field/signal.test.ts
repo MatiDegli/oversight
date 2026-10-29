@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import type { ServerEvent } from "@contracts";
 import { describe, expect, it } from "vitest";
-import { applyEvent, createInitialState } from "../../state";
+import { applyEvent, createInitialState, selectDecisionInbox } from "../../state";
 import { agentSlots } from "../../theme";
 import { themes } from "../../theme";
+import { afterlightOf, MergeLife } from "./afterlight";
+import { selectMerges } from "./life";
 import { selectSignalLights } from "./signal";
 import { FieldTransition } from "./transition";
 import { createLampField, fieldConfig, signalConfig } from "./model";
@@ -18,6 +20,23 @@ const events = readFileSync(
 const through = (seq: number) =>
   events.filter((event) => event.seq <= seq).reduce(applyEvent, createInitialState());
 const config = fieldConfig(themes.dark, "watch");
+
+/**
+ * The same run with an entry in the decisions inbox, which the recorded run predates: a review card
+ * for the change is recorded at seq 21, right after the proposal waits (20), and the decision that
+ * follows (approved, merged) is seq 22 and names the candidate it decided, so it closes the entry.
+ */
+const waitingEvents = readFileSync(
+  new URL("../../../../fixtures/events/handwritten-level1-waiting.jsonl", import.meta.url),
+  "utf8",
+)
+  .trim()
+  .split("\n")
+  .map((line) => JSON.parse(line) as ServerEvent);
+const awaiting = () =>
+  waitingEvents.filter((event) => event.seq <= 21).reduce(applyEvent, createInitialState());
+const decided = () =>
+  waitingEvents.filter((event) => event.seq <= 22).reduce(applyEvent, createInitialState());
 
 describe("R4 sources", () => {
   it("uses one current node at full strength and only the single supplied last read at 0.4", () => {
@@ -88,6 +107,76 @@ describe("R4 sources", () => {
         status,
       ).toEqual(acting ? [true] : []);
     }
+  });
+
+  it("holds one steady, dimmer light on the change's node while the change has an open inbox entry", () => {
+    const state = awaiting();
+    expect(selectDecisionInbox(state).map((entry) => entry.changeId)).toContain("change-1");
+    const lights = selectSignalLights(state, { "agent-1": "shop.pricing:price_breakdown" });
+    expect(lights).toEqual([
+      {
+        id: "shop.pricing:compute_price",
+        source: "agent-a",
+        weight: themes.dark["waiting-light-weight"],
+        pulses: false,
+        steady: true,
+      },
+    ]);
+    // Dimmer than a working agent's, with no ring, no marker and no last read.
+    expect(themes.dark["waiting-light-weight"]).toBeLessThan(themes.dark["watch-editing-weight"]);
+    expect(lights[0]?.marker).toBeUndefined();
+    // The same light in the day token set: the weight is a theme-independent token.
+    expect(themes.day["waiting-light-weight"]).toBe(themes.dark["waiting-light-weight"]);
+  });
+
+  it("never grows, pulses or blinks however long it waits", () => {
+    const first = selectSignalLights(awaiting());
+    let later = awaiting();
+    const tick = events.find((event) => event.type === "usage.tick");
+    if (!tick) throw new Error("The fixtures changed");
+    for (let k = 0; k < 40; k += 1)
+      later = applyEvent(later, {
+        ...tick,
+        seq: 22 + k,
+        ts: new Date(Date.parse("2026-10-27T14:04:00.000Z") + k * 600_000).toISOString(),
+      });
+    expect(later.clock).not.toBe(awaiting().clock);
+    expect(selectSignalLights(later)).toEqual(first);
+    expect(first.every((light) => !light.pulses && light.weight < 1)).toBe(true);
+  });
+
+  it("goes working, waiting, then to the decision's fade, with no gap in the level", () => {
+    // Working: the ring at full weight, on the node the agent edits.
+    expect(selectSignalLights(through(13)).map(({ weight, pulses }) => [weight, pulses])).toEqual([
+      [1, true],
+    ]);
+    // Waiting: one steady light at the dimmer weight.
+    const waiting = selectSignalLights(awaiting());
+    expect(waiting.map(({ weight, pulses }) => [weight, pulses])).toEqual([
+      [themes.dark["waiting-light-weight"], false],
+    ]);
+    // Revising after a request for changes: the working light is back.
+    const revising = awaiting();
+    const agent = revising.agents["agent-1"];
+    if (!agent) throw new Error("Missing agent");
+    revising.agents["agent-1"] = { ...agent, state: "revising" };
+    expect(selectSignalLights(revising).map((light) => light.pulses)).toEqual([true]);
+    // Decided: the inbox entry closes, the signal is gone, and the change's fade takes over at
+    // the very weight the waiting light had.
+    const state = decided();
+    expect(selectDecisionInbox(state)).toEqual([]);
+    expect(selectSignalLights(state)).toEqual([]);
+    const [merge] = selectMerges(state);
+    if (!merge) throw new Error("The decision left no fade");
+    const look = afterlightOf(themes.dark);
+    const life = new MergeLife(look);
+    life.update([], 0, false, true);
+    life.update([merge], 0, false, false);
+    expect(life.lights(look.rise)[0]?.weight).toBeCloseTo(waiting[0]?.weight ?? Number.NaN, 10);
+    expect(life.lights(look.rise)[0]?.id).toBe(waiting[0]?.id);
+    expect(life.lights(look.delay + look.travel + look.duration / 2)[0]?.weight).toBeLessThan(
+      (waiting[0]?.weight ?? 0) / 2,
+    );
   });
 
   it("leaves the field dark at rest: the recorded run, once it is merged, has no source", () => {

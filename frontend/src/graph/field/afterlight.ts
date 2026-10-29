@@ -1,12 +1,14 @@
-// What a merge leaves on the field: a pulse that runs from the agent's card to its node, then the
-// node's light, which fades out over about 90 seconds. Pure functions of a clock in milliseconds,
-// so the controller only evaluates them and tests drive them with any times. Every number comes
-// from a theme token.
+// What a decided change leaves on the field. A merge sends a pulse from the agent's card to its
+// node; either way the node's light keeps the level it waited at (so the hand-off from the waiting
+// light is seamless), then fades out over about 90 seconds. Pure functions of a clock in
+// milliseconds, so the controller only evaluates them and tests drive them with any times. Every
+// number comes from a theme token.
 import type { FieldLight, FieldMerge } from "./lights";
+import { ease } from "./transition";
 
 /** The theme values this reads; the full theme satisfies it. */
 export interface AfterlightTheme {
-  "afterlight-weight": number;
+  "waiting-light-weight": number;
   "afterlight-duration": string;
   "afterlight-curve": number;
   "merge-travel-delay": string;
@@ -16,10 +18,11 @@ export interface AfterlightTheme {
   "merge-trail-fade": string;
   "merge-pulse-width": string;
   "transition-duration": string;
+  "transition-easing": string;
 }
 
 export interface Afterlight {
-  /** The light's weight when its pulse arrives, before the mode's gain. */
+  /** The light's weight before the mode's gain: the level a waiting change's light stands at. */
   weight: number;
   /** Milliseconds for the light to fade out. */
   duration: number;
@@ -34,15 +37,16 @@ export interface Afterlight {
   trailFade: number;
   /** The pulse's line width in px. */
   width: number;
-  /** Milliseconds the light takes to come up when the pulse arrives. */
+  /** Milliseconds the light takes to come up at the decision, as the waiting light goes out. */
   rise: number;
+  easing: string;
 }
 
 const ms = Number.parseFloat;
 
 export function afterlightOf(theme: AfterlightTheme): Afterlight {
   return {
-    weight: theme["afterlight-weight"],
+    weight: theme["waiting-light-weight"],
     duration: ms(theme["afterlight-duration"]),
     curve: theme["afterlight-curve"],
     delay: ms(theme["merge-travel-delay"]),
@@ -52,6 +56,7 @@ export function afterlightOf(theme: AfterlightTheme): Afterlight {
     trailFade: ms(theme["merge-trail-fade"]),
     width: ms(theme["merge-pulse-width"]),
     rise: ms(theme["transition-duration"]),
+    easing: theme["transition-easing"],
   };
 }
 
@@ -76,8 +81,10 @@ export interface Pulse {
 interface Running {
   merge: FieldMerge;
   start: number;
-  /** Reduced motion: no pulse, the light is there at once. */
+  /** Reduced motion: the light is there at once. */
   jump: boolean;
+  /** Whether a pulse travels: a merge, and not under reduced motion. */
+  pulse: boolean;
 }
 
 export class MergeLife {
@@ -90,9 +97,9 @@ export class MergeLife {
     this.look = look;
   }
 
-  /** Milliseconds from a merge's start until its pulse has arrived. */
+  /** Milliseconds from the decision until the pulse has arrived and the light starts to fade. */
   private arrival(run: Running): number {
-    return run.jump ? 0 : this.look.delay + this.look.travel;
+    return run.pulse ? this.look.delay + this.look.travel : 0;
   }
 
   /**
@@ -111,7 +118,7 @@ export class MergeLife {
       if (this.seen.has(merge.key)) continue;
       this.seen.add(merge.key);
       if (history) continue;
-      const run = { merge, start: now - Math.max(0, merge.age), jump };
+      const run = { merge, start: now - Math.max(0, merge.age), jump, pulse: merge.pulse && !jump };
       if (now < run.start + this.arrival(run) + this.look.duration)
         this.running.set(merge.key, run);
     }
@@ -122,7 +129,7 @@ export class MergeLife {
     const { delay, travel, trailFade } = this.look;
     const result: Pulse[] = [];
     for (const [key, run] of this.running) {
-      if (run.jump) continue;
+      if (!run.pulse) continue;
       const age = now - run.start;
       const progress = (age - delay) / travel;
       if (progress <= 0) continue;
@@ -133,22 +140,25 @@ export class MergeLife {
     return result;
   }
 
-  /** The node lights at `now`: one per merge whose pulse has arrived and whose fade is not over. */
+  /**
+   * The node lights at `now`: one per decided change whose fade is not over. The light comes up as
+   * the waiting light goes out, holds its level while the pulse travels, then fades.
+   */
   lights(now: number): FieldLight[] {
-    const { weight, duration, curve, rise } = this.look;
+    const { weight, duration, curve, rise, easing } = this.look;
     const lights: FieldLight[] = [];
     for (const [key, run] of [...this.running]) {
-      const since = now - run.start - this.arrival(run);
-      if (since < 0) continue;
-      if (since >= duration) {
+      const since = now - run.start;
+      const fading = since - this.arrival(run);
+      if (fading >= duration) {
         this.running.delete(key);
         continue;
       }
-      const coming = run.jump || rise <= 0 ? 1 : Math.min(1, since / rise);
+      const coming = run.jump || rise <= 0 ? 1 : ease(Math.min(1, since / rise), easing);
       lights.push({
         id: run.merge.id,
         source: run.merge.source,
-        weight: weight * coming * fadeShare(since / duration, curve),
+        weight: weight * coming * fadeShare(fading / duration, curve),
         pulses: false,
         steady: true,
       });
@@ -159,7 +169,7 @@ export class MergeLife {
   /** True while a pulse is on its way or its trail has not faded: frames are worth drawing. */
   travelling(now: number): boolean {
     const end = this.look.delay + this.look.travel + this.look.trailFade;
-    return [...this.running.values()].some((run) => !run.jump && now - run.start < end);
+    return [...this.running.values()].some((run) => run.pulse && now - run.start < end);
   }
 
   /** True while any merge has not finished: its light is on, or its pulse has not arrived. */

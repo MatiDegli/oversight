@@ -323,7 +323,7 @@
   --contour-fade: 0.45;
   --contour-line-width: 1px;
   --field-slow-interval: 500ms;
-  --afterlight-weight: 0.9;
+  --waiting-light-weight: 0.5;
   --afterlight-duration: 90000ms;
   --afterlight-curve: 1.6;
   --merge-travel-delay: 250ms;

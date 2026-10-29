@@ -7,18 +7,25 @@ import type { State } from "../../state";
 import { agentLook } from "../../theme";
 import type { FieldMerge, FieldModule } from "./lights";
 
+/** The node a change's light sits on: its first modified or added node. */
+export function changeLightNode(change: State["changes"][string]): string | undefined {
+  return change.graph.nodes_modified[0] ?? change.graph.nodes_added[0]?.id;
+}
+
 /**
- * The merges that landed: one per merged change, at its first modified or added node, as old as
- * the time between its decision and the latest event the state has applied. Rejected, conflicting
- * and waiting changes have none.
+ * The decided changes whose light fades: one per merged change (with a pulse) and one per rejected
+ * change (without), at the change's node, as old as the time between its decision and the latest
+ * event the state has applied. Waiting and conflicting changes have none: their light is steady
+ * (`selectSignalLights`) until the decision closes their inbox entries.
  */
 export function selectMerges(state: State): FieldMerge[] {
   const now = state.clock === null ? Number.NaN : Date.parse(state.clock);
   const merges: FieldMerge[] = [];
   for (const change of Object.values(state.changes)) {
-    if (change.resolution?.merge !== "merged") continue;
+    const merged = change.resolution?.merge === "merged";
+    if (!merged && change.resolution?.decision !== "rejected") continue;
     const agent = state.agents[change.agent_id];
-    const id = change.graph.nodes_modified[0] ?? change.graph.nodes_added[0]?.id;
+    const id = changeLightNode(change);
     if (!agent || id === undefined) continue;
     const decided = Date.parse(change.resolutionEvent?.ts ?? "");
     merges.push({
@@ -26,6 +33,7 @@ export function selectMerges(state: State): FieldMerge[] {
       slot: agent.slot,
       source: agentLook[agent.slot].family,
       id,
+      pulse: merged,
       age: Number.isFinite(now) && Number.isFinite(decided) ? Math.max(0, now - decided) : 0,
     });
   }

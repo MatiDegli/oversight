@@ -11,13 +11,14 @@ const merge = (key: string, age = 0): FieldMerge => ({
   slot: "A",
   source: "agent-a",
   id: "shop.pricing:compute_price",
+  pulse: true,
   age,
 });
 /** A merge life that was primed on an empty state, then told of one merge at time 0. */
-function merged(age = 0, jump = false) {
+function merged(age = 0, jump = false, pulse = true) {
   const life = new MergeLife(look);
   life.update([], 0, jump, true);
-  life.update([merge("change-1:22", age)], 0, jump, false);
+  life.update([{ ...merge("change-1:22", age), pulse }], 0, jump, false);
   return life;
 }
 
@@ -35,28 +36,36 @@ describe("the share of light left", () => {
 });
 
 describe("a merge's pulse and light", () => {
-  it("waits, travels along its route, fades its trail, then lights the node", () => {
+  it("waits, travels along its route and fades its trail", () => {
     const life = merged();
     expect(look.duration).toBe(90_000);
     expect(life.pulses(look.delay - 1)).toEqual([]);
-    expect(life.lights(look.delay - 1)).toEqual([]);
     const half = life.pulses(look.delay + look.travel / 2);
     expect(half).toHaveLength(1);
     expect(half[0]?.progress).toBeCloseTo(0.5, 10);
     expect(half[0]?.opacity).toBe(1);
-    // The light comes only when the pulse has arrived.
-    expect(life.lights(arrival - 1)).toEqual([]);
     const landed = life.pulses(arrival + look.trailFade / 2);
     expect(landed[0]?.progress).toBe(1);
     expect(landed[0]?.opacity).toBeCloseTo(0.5, 10);
     expect(life.pulses(arrival + look.trailFade)).toEqual([]);
   });
 
-  it("fades the node's light over 90 seconds along (1 - p) to 1.6, and then it is gone", () => {
+  it("comes up as the waiting light goes out, holds that level while the pulse travels, and never exceeds it", () => {
+    const life = merged();
+    const weight = (since: number) => life.lights(since)[0]?.weight ?? 0;
+    expect(weight(0)).toBeCloseTo(0, 5);
+    expect(weight(look.rise)).toBeCloseTo(look.weight, 10);
+    // Held through the wait and the travel, until the pulse arrives.
+    for (const since of [look.rise, look.delay, arrival / 2, arrival])
+      expect(weight(since)).toBeCloseTo(look.weight, 10);
+    const samples = Array.from({ length: 40 }, (_, k) => weight((k * look.duration) / 30));
+    expect(samples.every((value) => value <= look.weight + 1e-12)).toBe(true);
+  });
+
+  it("fades the node's light over 90 seconds along (1 - p) to 1.6 from the pulse's arrival, and then it is gone", () => {
     const life = merged();
     const at = (since: number) => life.lights(arrival + since)[0]?.weight;
-    expect(at(0)).toBe(0);
-    expect(at(look.rise)).toBeCloseTo(look.weight * fadeShare(look.rise / look.duration, 1.6), 10);
+    expect(at(0)).toBeCloseTo(look.weight, 10);
     expect(at(look.duration / 2)).toBeCloseTo(look.weight * 0.5 ** 1.6, 10);
     expect(at(look.duration * 0.9)).toBeCloseTo(look.weight * 0.1 ** 1.6, 10);
     const [light] = life.lights(arrival + 1000);
@@ -71,6 +80,20 @@ describe("a merge's pulse and light", () => {
     expect(life.active(arrival + look.duration - 1)).toBe(true);
     expect(life.lights(arrival + look.duration)).toEqual([]);
     expect(life.active(arrival + look.duration)).toBe(false);
+  });
+
+  it("fades a rejected change's light from its decision, with no pulse", () => {
+    const life = merged(0, false, false);
+    expect(life.pulses(look.delay + look.travel / 2)).toEqual([]);
+    expect(life.travelling(0)).toBe(false);
+    const at = (since: number) => life.lights(since)[0]?.weight;
+    expect(at(look.rise)).toBeCloseTo(
+      look.weight * fadeShare(look.rise / look.duration, look.curve),
+      10,
+    );
+    expect(at(look.duration / 2)).toBeCloseTo(look.weight * 0.5 ** 1.6, 10);
+    expect(life.active(look.duration - 1)).toBe(true);
+    expect(life.lights(look.duration)).toEqual([]);
   });
 
   it("travels while the pulse or its trail shows, and fades after that without frames", () => {

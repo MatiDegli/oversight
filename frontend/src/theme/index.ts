@@ -250,9 +250,10 @@ const baseThemes = {
     "contour-line-width": "1px",
     // How often the field repaints for what changes slowly: the contour drift and the afterlight.
     "field-slow-interval": "500ms",
-    // A merge: the light of its node starts at the weight and fades over the duration along
-    // (1 - p) to the curve; the pulse waits, travels, and leaves a bright and a faint trail.
-    "afterlight-weight": 0.9,
+    // A change's light stands at the waiting weight (dimmer than a working agent's 1) and never
+    // grows. Once it is decided the light holds that level through a merge's pulse, then fades over
+    // the duration along (1 - p) to the curve; the pulse waits, travels, and leaves a trail.
+    "waiting-light-weight": 0.5,
     "afterlight-duration": "90000ms",
     "afterlight-curve": 1.6,
     "merge-travel-delay": "250ms",

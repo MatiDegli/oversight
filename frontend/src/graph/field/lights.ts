@@ -29,15 +29,21 @@ export interface FieldLight {
   pulseWeight?: number;
 }
 
-/** A merged change: where its pulse starts, where it arrives, and how long ago it happened. */
+/**
+ * A change that was decided: merged (a pulse runs to its node) or rejected (none does). Either way
+ * its light stays at the waiting level and then fades out. Says where it starts, where it
+ * arrives, and how long ago it happened.
+ */
 export interface FieldMerge {
   /** One merge, stable across renders: the change and the event that resolved it. */
   key: string;
   /** The agent's slot, to find its rail card. */
   slot: Slot;
   source: AgentFamily;
-  /** The node that merged: where the pulse arrives and its light stays. */
+  /** The change's node: where the pulse arrives and its light stays. */
   id: string;
+  /** Whether a pulse leaves the agent's card for the node: a merge sends one, a rejection not. */
+  pulse: boolean;
   /** Milliseconds from the merge to the latest event the state has applied, from event times. */
   age: number;
 }
