@@ -174,6 +174,8 @@ const baseThemes = {
     "frame-title-inset": "23px",
     "frame-header-center": "29px",
     "frame-header-height": "70px",
+    // How far past a frame header the light is masked, as the sketch pads its masks.
+    "header-mask-pad": "6px",
     "frame-pad-top": "54px",
     "frame-pad-left": "27px",
     "frame-pad-right": "17px",
@@ -197,7 +199,10 @@ const baseThemes = {
     "pending-dash-gap": "4px",
     "focus-ring-width": "2px",
     "focus-ring-offset": "2px",
-    "module-opacity": 0.9,
+    // A module or class frame lets the light through, as the sketch's does: its fill is the panel at
+    // this opacity (0.62 on dark, 0.5 on day, set in the day palette), so the lamps around a lit row
+    // show in the frame's body. Only the header bands and folded cards are masked.
+    "module-opacity": 0.62,
     "node-opacity": 0.94,
     "dim-node": 0.16,
     "dim-module": 0.6,

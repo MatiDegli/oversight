@@ -665,3 +665,36 @@ describe("a merge's pulse and light", () => {
     controller.dispose();
   });
 });
+
+describe("frame headers", () => {
+  it("hide the lamps behind them at every draw, following the camera without a graph event", () => {
+    let header = { x1: 0, y1: 0, x2: 70, y2: 20 };
+    const framed = {
+      ...source,
+      headers: () => [header],
+    } as unknown as BoxSource;
+    compute.mockReturnValue({ cols: 10, rows: 10, data: new Uint8ClampedArray(400).fill(255) });
+    const controller = createFieldController(canvas, framed);
+    controller.update(light);
+    const drawn = () => renderer.draw.mock.calls.at(-1)?.[2] as { y2: number }[];
+    expect(drawn()).toContainEqual(header);
+    expect(canvas.oversightField?.masks()).toContainEqual(header);
+    // The frame moves with the camera: the next draw masks where it is now, not where it was.
+    header = { x1: 0, y1: 30, x2: 70, y2: 50 };
+    controller.redraw();
+    expect(drawn()).toContainEqual(header);
+    expect(drawn().some((box) => box.y2 === 20)).toBe(false);
+    expect(canvas.oversightField?.masks()).toEqual(drawn());
+    // The lamp under a header is dark; the lamp in the frame's body is the grid's.
+    expect(canvas.oversightField?.lamp(10, 40)?.level).toBe(0);
+    expect(canvas.oversightField?.lamp(10, 10)?.level).toBe(3);
+    controller.dispose();
+  });
+
+  it("hide nothing when the source has no headers", () => {
+    const controller = createFieldController(canvas, source);
+    controller.update(light);
+    expect(canvas.oversightField?.masks()).toEqual([]);
+    controller.dispose();
+  });
+});

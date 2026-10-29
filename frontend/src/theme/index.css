@@ -93,6 +93,7 @@
   --ground: #f4f3ef;
   --shell: #e9e8e3;
   --panel: #eeede8;
+  --module-opacity: 0.5;
   --field: #fbfaf7;
   --page: #f8f7f3;
   --card: #fcfbf8;
@@ -254,6 +255,7 @@
   --frame-title-inset: 23px;
   --frame-header-center: 29px;
   --frame-header-height: 70px;
+  --header-mask-pad: 6px;
   --frame-pad-top: 54px;
   --frame-pad-left: 27px;
   --frame-pad-right: 17px;
@@ -277,7 +279,7 @@
   --pending-dash-gap: 4px;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
-  --module-opacity: 0.9;
+  --module-opacity: 0.62;
   --node-opacity: 0.94;
   --dim-node: 0.16;
   --dim-module: 0.6;

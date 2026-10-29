@@ -93,6 +93,8 @@ export interface FieldProbe {
   life(): { pulses: number; lights: number; contours: boolean };
   /** The lamp of the cell at a point, in CSS px from the graph's top left, as last computed. */
   lamp(x: number, y: number): { level: number; color: [number, number, number] } | null;
+  /** The boxes that hid the lamps at the last draw: overlays and frame headers, in CSS px. */
+  masks(): Box[];
   /** The pixel the GPU draws at a point, read back after drawing again; null without WebGL. */
   pixel(x: number, y: number): [number, number, number, number] | null;
 }
@@ -116,6 +118,8 @@ class FieldRuntime implements FieldController {
   private readonly markers = new MarkerMotion();
   private readonly markerLayer: MarkerLayer;
   private masks: Box[] = [];
+  /** The overlay masks and the frame headers at the last draw: what hides the lamps. */
+  private drawnMasks: Box[] = [];
   private masksDirty = true;
   private maskSize = "";
   private readonly overlayObserver?: MutationObserver;
@@ -262,6 +266,9 @@ class FieldRuntime implements FieldController {
         this.masksDirty = false;
         this.maskSize = maskSize;
       }
+      // Frame headers move with the camera, so they are read on every draw; overlays only when dirty.
+      const masks = this.source.headers ? [...this.masks, ...this.source.headers()] : this.masks;
+      this.drawnMasks = masks;
       const time = this.reducedMotion ? null : (this.frozen ?? now / 1000);
       this.grid = this.lamps(
         this.source.zoom ? signalConfig(config, this.source.zoom()) : config,
@@ -271,8 +278,8 @@ class FieldRuntime implements FieldController {
         time,
       );
       const contours = this.contours(this.grid, width, height, time);
-      this.renderer.draw(this.grid, this.look, this.masks, contours);
-      this.markerLayer.draw(lights, boxes, this.masks, width, height);
+      this.renderer.draw(this.grid, this.look, masks, contours);
+      this.markerLayer.draw(lights, boxes, masks, width, height);
       this.drawPulses(now, width, height);
       this.paintedAt = now;
       this.draws += 1;
@@ -360,7 +367,7 @@ class FieldRuntime implements FieldController {
         );
       }
     }
-    this.travelLayer.draw(pulses, paths, this.masks, width, height, this.afterlight);
+    this.travelLayer.draw(pulses, paths, this.drawnMasks, width, height, this.afterlight);
   }
 
   private slowInterval() {
@@ -497,7 +504,8 @@ class FieldRuntime implements FieldController {
 
   private lamp(x: number, y: number): ReturnType<FieldProbe["lamp"]> {
     if (!this.grid) return null;
-    if (contains(this.masks, x, y)) return { level: 0, color: [...parseHex(this.theme.ground)] };
+    if (contains(this.drawnMasks, x, y))
+      return { level: 0, color: [...parseHex(this.theme.ground)] };
     const col = Math.floor(x / this.look.cell);
     const row = Math.floor(y / this.look.cell);
     if (col < 0 || row < 0 || col >= this.grid.cols || row >= this.grid.rows) return null;
@@ -520,6 +528,7 @@ class FieldRuntime implements FieldController {
         contours: this.renderer !== null && this.contoursShown,
       }),
       lamp: (x, y) => this.lamp(x, y),
+      masks: () => this.drawnMasks.map((box) => ({ ...box })),
       pixel: (x, y) => {
         this.redraw();
         return this.renderer?.pixel(x, y) ?? null;

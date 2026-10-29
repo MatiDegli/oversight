@@ -38,6 +38,14 @@ afterAll(async () => {
   await server?.close();
 });
 
+/** A box in CSS px from the graph's top left. */
+interface Rect {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 interface Options {
   reducedMotion?: "reduce" | "no-preference";
   noWebGL?: boolean;
@@ -212,7 +220,11 @@ async function settledGraph(page: Page) {
  * How many pixels of the graph's area turn warm (agent A's orange) because of the field: the page
  * is shot with the field's canvas shown and with it hidden, and the two are compared.
  */
-async function warmPixelsFromField(page: Page): Promise<number> {
+async function warmPixelsFromField(
+  page: Page,
+  /** Counts only pixels inside one of `within` and outside every box of `except`, in CSS px. */
+  region?: { within: Rect[]; except: Rect[] },
+): Promise<number> {
   await settledGraph(page);
   const rect = await page.evaluate(() => {
     const { x, y, width, height } = window.fieldTest.elements().graph.getBoundingClientRect();
@@ -227,7 +239,7 @@ async function warmPixelsFromField(page: Page): Promise<number> {
     window.fieldTest.elements().field.style.visibility = "";
   });
   return page.evaluate(
-    async ({ withField, withoutField }) => {
+    async ({ withField, withoutField, only }) => {
       const decode = async (base64: string) => {
         const bitmap = await createImageBitmap(
           new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))]),
@@ -239,14 +251,27 @@ async function warmPixelsFromField(page: Page): Promise<number> {
         return context.getImageData(0, 0, bitmap.width, bitmap.height).data;
       };
       const [a, b] = [await decode(withField), await decode(withoutField)];
+      const inBox = (list: Rect[], x: number, y: number) =>
+        list.some((box) => x >= box.x1 && x <= box.x2 && y >= box.y1 && y <= box.y2);
       let warm = 0;
       for (let at = 0; at < a.length; at += 4) {
         const changed = a[at] !== b[at] || a[at + 1] !== b[at + 1] || a[at + 2] !== b[at + 2];
-        if (changed && (a[at] ?? 0) > (a[at + 2] ?? 0) + 20) warm += 1;
+        // A lamp seen through a translucent fill is a strong tint; a faint one is a stray edge.
+        if (!changed || (a[at] ?? 0) <= (a[at + 2] ?? 0) + (only ? 50 : 20)) continue;
+        if (only) {
+          const x = (at / 4) % only.width;
+          const y = Math.floor(at / 4 / only.width);
+          if (!inBox(only.within, x, y) || inBox(only.except, x, y)) continue;
+        }
+        warm += 1;
       }
       return warm;
     },
-    { withField: shown.toString("base64"), withoutField: hidden.toString("base64") },
+    {
+      withField: shown.toString("base64"),
+      withoutField: hidden.toString("base64"),
+      only: region ? { ...region, width: Math.round(rect.width) } : null,
+    },
   );
 }
 
@@ -269,6 +294,73 @@ it("lights lamps near a lit node in its color and leaves the far cells dark", as
     expect(seen.far?.level).toBe(0);
   });
 }, 30_000);
+
+/** The boxes of a graph's frame bodies, and what hides lamps inside them: rows, cards, the masks. */
+function frameRegions(page: Page) {
+  return page.evaluate(() => {
+    const { graph, field } = window.fieldTest.elements();
+    const camera = graph.oversightGraph;
+    const probe = field.oversightField;
+    if (!camera || !probe) throw new Error("No probe");
+    const zoom = camera.zoom();
+    const pan = camera.pan();
+    const place = (b: { x1: number; y1: number; x2: number; y2: number }) => ({
+      x1: b.x1 * zoom + pan.x,
+      y1: b.y1 * zoom + pan.y,
+      x2: b.x2 * zoom + pan.x,
+      y2: b.y2 * zoom + pan.y,
+    });
+    const top = (name: string) =>
+      Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) * zoom;
+    const frames = camera.nodeBounds(".module:parent, .class:parent", false).map(place);
+    // The text band at the top of each open frame: the padding above its first row, per the theme.
+    const bands = [
+      ...camera
+        .nodeBounds(".module:parent", false)
+        .map(place)
+        .map((box) => ({ box, band: top("--frame-pad-top") })),
+      ...camera
+        .nodeBounds(".class:parent", false)
+        .map(place)
+        .map((box) => ({ box, band: top("--class-pad-top") })),
+    ];
+    return {
+      frames,
+      headers: bands.map(({ box, band }) => ({ ...box, y2: Math.min(box.y2, box.y1 + band) })),
+      rows: camera.nodeBounds(":childless", false).map(place),
+      masks: probe.masks(),
+    };
+  });
+}
+
+it.each([
+  ["dark", undefined],
+  ["day", "day" as const],
+])(
+  "shows the %s light through a module's translucent body, never under its header",
+  async (_name, theme) => {
+    await withPage(
+      { scene: "watch", viewport: { width: 1920, height: 1080 }, reducedMotion: "reduce", theme },
+      async (page) => {
+        const { frames, headers, rows, masks } = await frameRegions(page);
+        expect(frames.length).toBeGreaterThan(0);
+        expect(masks.length).toBeGreaterThan(0);
+        // The cells of a frame's body that no row, folded card or header hides take the lamps through
+        // the frame's fill: its panel, translucent. An opaque frame would show none of them.
+        const body = await warmPixelsFromField(page, {
+          within: frames,
+          except: [...rows, ...masks],
+        });
+        expect(body).toBeGreaterThan(300);
+        // Under a header the lamps are masked: the field adds nothing there but a stray few, though
+        // the lit row sits right below it.
+        const header = await warmPixelsFromField(page, { within: headers, except: rows });
+        expect(header).toBeLessThan(STRAY);
+      },
+    );
+  },
+  60_000,
+);
 
 it("keeps the graph on plain ground where there is no WebGL", async () => {
   await withPage({ noWebGL: true }, async (page) => {
@@ -962,7 +1054,7 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
     );
     report.travelFrameCallback = summary(times);
   });
-  const dir = fileURLToPath(new URL("../../../.shots/life-look/r3/", import.meta.url));
+  const dir = fileURLToPath(new URL("../../../.shots/life-look/r4/", import.meta.url));
   mkdirSync(dir, { recursive: true });
   writeFileSync(`${dir}frame-cost.json`, JSON.stringify(report, null, 2));
   for (const key of [
@@ -1001,8 +1093,9 @@ async function beside(
 }
 
 /**
- * Lamps at levels 0, 1/3, 2/3 and 1 over the 7 px cells no node covers, as the field computed them
- * (the nodes' bounds include their labels, a little wider than the drawn boxes).
+ * Lamps at levels 0, 1/3, 2/3 and 1 over the 7 px cells that nothing hides: not the rows and folded
+ * cards (opaque: the childless nodes, by their drawn boxes alone), not the masks
+ * (overlays and frame headers). The cells in a translucent frame's body, outside its rows, count.
  */
 function lampHistogram(page: Page) {
   return page.evaluate(() => {
@@ -1012,12 +1105,15 @@ function lampHistogram(page: Page) {
     if (!probe || !camera) throw new Error("No probe");
     const zoom = camera.zoom();
     const pan = camera.pan();
-    const covers = camera.nodeBounds().map((b) => ({
-      x1: b.x1 * zoom + pan.x,
-      y1: b.y1 * zoom + pan.y,
-      x2: b.x2 * zoom + pan.x,
-      y2: b.y2 * zoom + pan.y,
-    }));
+    const covers = [
+      ...camera.nodeBounds(":childless", false).map((b) => ({
+        x1: b.x1 * zoom + pan.x,
+        y1: b.y1 * zoom + pan.y,
+        x2: b.x2 * zoom + pan.x,
+        y2: b.y2 * zoom + pan.y,
+      })),
+      ...probe.masks(),
+    ];
     const counts = [0, 0, 0, 0];
     for (let y = 3.5; y < field.clientHeight; y += 7)
       for (let x = 3.5; x < field.clientWidth; x += 7) {
@@ -1049,7 +1145,7 @@ async function referenceShot(state: "rest" | "watch", theme: "dark" | "day", out
 
 it("captures rest and busy at 1920 by 1080, dark and day, beside their sketches", async () => {
   const viewport = { width: 1920, height: 1080 };
-  const shots = fileURLToPath(new URL("../../../.shots/life-look/r3/", import.meta.url));
+  const shots = fileURLToPath(new URL("../../../.shots/life-look/r4/", import.meta.url));
   const sketches = fileURLToPath(new URL("../../../docs/sketches/life/", import.meta.url));
   mkdirSync(shots, { recursive: true });
   const shoot = async (page: Page, name: string) => {

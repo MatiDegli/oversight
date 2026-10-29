@@ -3,6 +3,7 @@ export const dayColors = {
   ground: "#f4f3ef",
   shell: "#e9e8e3",
   panel: "#eeede8",
+  "module-opacity": 0.5,
   field: "#fbfaf7",
   page: "#f8f7f3",
   card: "#fcfbf8",
