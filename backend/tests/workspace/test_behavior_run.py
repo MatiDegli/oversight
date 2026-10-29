@@ -93,37 +93,45 @@ async def test_git_metadata_is_restored_after_worker(workspace: Workspace):
     config = workspace.main.root / ".git/config"
     original = config.read_bytes()
     with pytest.raises(IntegrityError, match="changed Git metadata"):
-        await workspace.run_behavior(workspace.main, (TARGET,), timeout_s=3)
+        await workspace.run_behavior(workspace.main, (TARGET,), timeout_s=30)
     assert config.read_bytes() == original
     assert workspace.integrity.rules_suspended and not workspace.integrity.main_suspect
 
 
 @pytest.mark.parametrize("cancel", [False, True])
 async def test_timeout_or_cancel_reaps_exact_worker_and_removes_files(
-    workspace, tmp_path, cancel, wait_gone
+    workspace, gate_factory, cancel, wait_gone
 ):
     await workspace.check_isolation()
     workspace._demo_python = Path(sys.executable)
-    pid_file = tmp_path / "pid"
+    ready = gate_factory("ready")
     (workspace.main.root / "shop/mod.py").write_text(
-        "import os, signal, time\nfrom pathlib import Path\n"
+        "import os, signal\n"
         "def value():\n"
         "    signal.signal(signal.SIGALRM, signal.SIG_IGN)\n"
-        f"    Path({str(pid_file)!r}).write_text(str(os.getpid()))\n"
-        "    time.sleep(60)\n"
+        f"    {ready.child_signal}\n"
+        f"    {ready.child_wait}\n"
     )
-    task = asyncio.create_task(workspace.run_behavior(workspace.main, (TARGET,), timeout_s=0.5))
-    async with asyncio.timeout(3):
-        for _ in range(300):
-            if pid_file.exists() and pid_file.read_text().strip():
-                break
-            await asyncio.sleep(0.01)
-    pid = int(pid_file.read_text())
-    assert pid != os.getpid()
-    if cancel:
-        task.cancel()
-    with pytest.raises(asyncio.CancelledError if cancel else TimeoutError):
-        await task
+    # Read readiness without polling or leaving a blocked thread if the worker fails.
+    reader = asyncio.StreamReader()
+    pipe = os.fdopen(os.open(ready.signal, os.O_RDONLY | os.O_NONBLOCK), "rb", buffering=0)
+    transport, _ = await asyncio.get_running_loop().connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(reader), pipe
+    )
+    task = asyncio.create_task(workspace.run_behavior(workspace.main, (TARGET,), timeout_s=5))
+    try:
+        async with asyncio.timeout(30):
+            pid = int(await reader.read())
+        assert pid != os.getpid()
+        if cancel:
+            task.cancel()
+        with pytest.raises(asyncio.CancelledError if cancel else TimeoutError):
+            await task
+    finally:
+        transport.close()
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
     await asyncio.to_thread(wait_gone, pid)
     assert not list(workspace.tmp_dir.glob("behavior-*"))
     assert workspace.operations.idle

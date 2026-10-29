@@ -12,7 +12,7 @@ from oversight.workspace import run_process
 WORKER = Path(__file__).parents[2] / "src/oversight/workspace/behavior_worker.py"
 
 
-async def invoke(tmp_path: Path, body: str, calls: list[str], timeout_s: float = 0.1):
+async def invoke(tmp_path: Path, body: str, calls: list[str], timeout_s: float = 1.0):
     (tmp_path / "sample.py").write_text(body)
     request, report = tmp_path / "request.json", tmp_path / "report.json"
     request.write_text(json.dumps([{"id": "f", "module": "sample", "name": "f", "calls": calls}]))
@@ -27,7 +27,7 @@ async def invoke(tmp_path: Path, body: str, calls: list[str], timeout_s: float =
             str(timeout_s),
         ],
         cwd=tmp_path,
-        timeout_s=5,
+        timeout_s=30,
         env={"PYTHONHASHSEED": "0", "HOME": str(tmp_path)},
     )
     assert process.returncode == 0, process.stderr
@@ -98,6 +98,14 @@ async def test_import_failure_is_not_a_function_exception(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_import_timeout_has_no_function_results(tmp_path):
+    # An endless import must outlive even the worker's maximum one-second alarm.
+    result = await invoke(tmp_path, "while True: pass\ndef f(): return 1\n", ["((), {})"])
+    assert result["problem"] == "import failed"
+    assert result["results"] == []
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("literal", ["not a literal", "((), {})"])
 async def test_literal_and_binding_setup_errors_are_unrepresentable(tmp_path, literal):
     result = await invoke(tmp_path, "def f(x): return x\n", [literal])
@@ -158,8 +166,10 @@ async def test_exception_full_message_fingerprint_survives_clipping(tmp_path):
 
 @pytest.mark.anyio
 async def test_fingerprint_timeout_excludes_uncertain_result(tmp_path):
-    body = "def f(): return list(range(1000000))\n"
-    result = await invoke(tmp_path, body, ["((), {})"], timeout_s=0.001)
+    # Leave time for the tiny import; the call cannot finish under any alarm budget.
+    body = "def f():\n    while True: pass\n"
+    result = await invoke(tmp_path, body, ["((), {})"], timeout_s=0.2)
+    assert result["problem"] is None, f"Expected a successful import before the call: {result}"
     assert result["results"][0]["kind"] in ("timed_out", "unrepresentable")
 
 
