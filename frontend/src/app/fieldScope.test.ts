@@ -39,17 +39,41 @@ describe("the field's scope follows what the person has open", () => {
   it("goes back to watch once the change is decided, as the graph's dimming does", () => {
     expect(fieldScope(through(21), reviewing)).toEqual({ mode: "watch" });
     expect(fieldScope(through(21), watching)).toEqual({ mode: "watch" });
-    expect(fieldInput(through(21), reviewing)).toEqual({ mode: "watch", lights: [] });
+    const decided = fieldInput(through(21), reviewing);
+    expect(decided.mode).toBe("watch");
+    expect(decided.lights).toEqual([]);
+    // The merge it leaves is not a light of the state: the field fades it from the merge's time.
+    expect(decided.merges).toEqual([
+      {
+        key: "change-1:21",
+        slot: "A",
+        source: "agent-a",
+        id: "shop.pricing:compute_price",
+        age: 0,
+      },
+    ]);
+    expect(decided.modules?.map((module) => module.id)).toContain("shop.pricing");
+    expect(fieldInput(through(20), reviewing).merges).toEqual([]);
   });
 
-  it("keeps the current agent signal in review and live diff", () => {
-    const review = fieldInput(through(20), reviewing);
+  it("keeps the signal of an agent that is acting, in review and live diff", () => {
+    // Revising: the person asked for changes, and the agent is working again while review is open.
+    const revising = through(20);
+    const agent = revising.agents["agent-1"];
+    if (!agent) throw new Error("Missing agent");
+    revising.agents["agent-1"] = { ...agent, state: "revising" };
+    const review = fieldInput(revising, reviewing);
     expect(review.mode).toBe("review");
     expect(review.lights.map((light) => light.id)).toContain("shop.pricing:compute_price");
-    expect(review.lights.every((light) => !light.pulses)).toBe(true);
     const live = fieldInput(through(12), watching);
     expect(live.mode).toBe("live-diff");
     expect(live.lights.map((light) => light.id)).toContain("shop.pricing:compute_price");
+  });
+
+  it("has no light for an agent that waits for review: colored light means acting now", () => {
+    const waiting = fieldInput(through(20), reviewing);
+    expect(waiting.mode).toBe("review");
+    expect(waiting.lights).toEqual([]);
   });
 });
 
