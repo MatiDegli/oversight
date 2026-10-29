@@ -1,7 +1,7 @@
 import type { ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
 
-import { parseEvent } from "../transport/events";
+import { parseEvent } from "../transport";
 import { applyEvent } from "./applyEvent";
 import { createInitialState } from "./types";
 

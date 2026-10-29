@@ -30,7 +30,7 @@ const eventTypes: Record<ServerEvent["type"], true> = {
   "queue.updated": true,
   "lead.status": true,
   "usage.tick": true,
-  "error": true,
+  error: true,
 };
 
 /** The server and fixture checks validate payload schemas; reject broken wire envelopes here. */
