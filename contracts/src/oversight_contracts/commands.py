@@ -24,6 +24,7 @@ from oversight_contracts.common import (
 from oversight_contracts.decisions import DecisionRef
 from oversight_contracts.events import ChangeProposed, ChangeResolved, FileDiff, ServerEvent
 from oversight_contracts.examples import TaskExample
+from oversight_contracts.grants import GrantRequest
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.plans import PlanZone, SubtaskDraft
 from oversight_contracts.policy import ChangeAssessment
@@ -69,6 +70,8 @@ class ApproveChange(ContractModel):
     """`POST /changes/{id}/approve`: approve the observed revision and head."""
 
     comment: str | None = None
+    grant: GrantRequest | None = None
+    """Create a standing grant from this personal approval, when its wait and scope match."""
     answers: list[ReviewCard] | None = Field(default=None, max_length=8)
     """The answered review cards for the observed revision and head."""
 

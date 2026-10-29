@@ -14,6 +14,7 @@ export type PlanId = string;
 export type QueuedTaskId = string;
 export type DecisionRef = ReviewCardDecisionRef | ChangeDecisionRef | LeadPlanDecisionRef;
 export type CaseOutcome = "passed" | "failed" | "error" | "skipped";
+export type GrantReason = "possible_callers" | "protected_path";
 export type MergeMode = "ask_me" | "merge_when_safe";
 export type RuleId =
   | "combined_tests"
@@ -37,6 +38,7 @@ export type Confidence = "exact" | "possible";
 export type PossibleReason =
   "unknown_receiver" | "several_candidates" | "rebound_name" | "star_import" | "dynamic_dispatch";
 export type FileStatus = "added" | "modified" | "deleted";
+export type RunId = string;
 export type ReviewSeverity = "BLOCKING" | "SHOULD-FIX" | "NIT";
 export type ErrorCode =
   | "not_found"
@@ -57,7 +59,6 @@ export type SettingName =
   | "OVERSIGHT_BUDGET_USD"
   | "MUSE_SPARK_INPUT_USD_PER_M"
   | "MUSE_SPARK_OUTPUT_USD_PER_M";
-export type RunId = string;
 export type ServerEvent =
   | RunStartedEvent
   | GraphSnapshotEvent
@@ -78,7 +79,9 @@ export type ServerEvent =
   | TestsExecutedEvent
   | RevertResolvedEvent
   | QueueUpdatedEvent
-  | LeadStatusEvent;
+  | LeadStatusEvent
+  | GrantCreatedEvent
+  | GrantRevokedEvent;
 
 /**
  * Observed before and after behavior of one added test.
@@ -370,6 +373,10 @@ export interface AgentStepEvent {
 export interface ApproveChange {
   comment?: string | null;
   /**
+   * Create a standing grant from this personal approval, when its wait and scope match.
+   */
+  grant?: GrantRequest | null;
+  /**
    * The answered review cards for the observed revision and head.
    */
   answers?: ReviewCard[] | null;
@@ -378,6 +385,15 @@ export interface ApproveChange {
    */
   revision: number;
   head_commit: NonEmptyText;
+}
+export interface GrantRequest {
+  reason: GrantReason;
+  scope: GrantScope;
+}
+export interface GrantScope {
+  kind: "module" | "path" | "agent" | "run";
+  value: NonEmptyText;
+  expires: "run" | "session";
 }
 /**
  * One server-authored question about an exact change target.
@@ -1041,6 +1057,10 @@ export interface ChangeResolved {
    * The accepted human answers, copied by the server from a decision command.
    */
   answers: ReviewCard1[] | null;
+  /**
+   * Immutable authorization and measured callers waived by a rules approval.
+   */
+  grants?: GrantUse[] | null;
 }
 export interface Conflict {
   kind: "merge" | "tests";
@@ -1052,6 +1072,33 @@ export interface Conflict {
    * The combined result's tests, for a test failure.
    */
   tests: SuiteResult | null;
+}
+export interface GrantUse {
+  grant_id: NonEmptyText;
+  rule: RuleId;
+  caller_ids: NodeId[];
+  caller_count: number;
+  authorization: GrantAuthorization;
+}
+/**
+ * Server capture after exact scope matching, bound to this assessment target.
+ *
+ * Scope is captured from the server's matched grant, never from a model or command receipt.
+ * Historical validation consumes this capture; only live barriers consult mutable grants.
+ */
+export interface GrantAuthorization {
+  reason: GrantReason;
+  scope: GrantScope;
+  creation_seq: number;
+  creation_ts: Timestamp;
+  run_id: RunId;
+  session_id: NonEmptyText | null;
+  checked_at: Timestamp;
+  active_at_effect: boolean;
+  change_id: ChangeId;
+  agent_id: AgentId;
+  revision: number;
+  head_commit: NonEmptyText;
 }
 export interface ChangeResolvedEvent {
   /**
@@ -1396,6 +1443,38 @@ export interface FileContent {
 export interface FileSaved {
   path: WorkspacePath;
   hash: string;
+}
+export interface GrantCreated {
+  reason: GrantReason;
+  scope: GrantScope;
+  grant_id: NonEmptyText;
+  change_id: ChangeId;
+  revision: number;
+  head_commit: NonEmptyText;
+  run_id: RunId;
+  session_id: NonEmptyText | null;
+  granted_by: "person";
+}
+export interface GrantCreatedEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "grant.created";
+  payload: GrantCreated;
+}
+export interface GrantRevoked {
+  grant_id: NonEmptyText;
+}
+export interface GrantRevokedEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "grant.revoked";
+  payload: GrantRevoked;
 }
 export interface GraphDelta {
   from_version: string;
@@ -2132,4 +2211,4 @@ export interface UpdatePlan {
   subtasks: [SubtaskDraft, SubtaskDraft];
 }
 
-export const CONTRACT_VERSION = "1.6.0";
+export const CONTRACT_VERSION = "1.7.0";

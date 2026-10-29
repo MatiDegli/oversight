@@ -222,10 +222,26 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
         "ReviewCardDecisionRef",
         "ChangeDecisionRef",
         "LeadPlanDecisionRef",
+        "GrantReason",
+        "GrantScope",
+        "GrantRequest",
+        "GrantCreated",
+        "GrantRevoked",
+        "GrantAuthorization",
+        "GrantUse",
+        "GrantCreatedEvent",
+        "GrantRevokedEvent",
     }
     assert not set(baseline) - set(current)
     for name, definition in baseline.items():
-        if name not in {"Slot", "StartAgent", "AgentStatus"}:
+        if name not in {
+            "Slot",
+            "StartAgent",
+            "AgentStatus",
+            "ApproveChange",
+            "ChangeResolved",
+            "ServerEvent",
+        }:
             assert current[name] == definition, name
     assert current["Slot"]["enum"] == list("ABCDEF")
     for name in ("StartAgent", "AgentStatus"):

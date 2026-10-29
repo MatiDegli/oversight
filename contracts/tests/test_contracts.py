@@ -233,6 +233,8 @@ def test_the_event_types_include_the_approved_level3_reservations() -> None:
         "revert.resolved",
         "queue.updated",
         "lead.status",
+        "grant.created",
+        "grant.revoked",
     }
 
 
@@ -409,6 +411,8 @@ def test_the_schema_forbids_extra_keys_and_requires_every_response_key() -> None
         assert definition["additionalProperties"] is False, name
         if name not in requests and not name.endswith("-Input"):
             optional = {"missing"} if name == "ErrorDetail" else set()
+            if name == "ChangeResolved":
+                optional = {"grants"}
             assert set(definition["required"]) == set(definition["properties"]) - optional, name
     assert "slot" not in schema["$defs"]["StartAgent"]["required"]
 

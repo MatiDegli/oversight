@@ -1442,3 +1442,19 @@ On Boltons d31d821, 726 of 925 library functions and methods have an empty exact
 it hides every possible caller of 310 methods (OrderedMultiDict 42, IndexedSet 25,
 BarrelList 24), leaving 278 of them apparently without callers at all. Count every possible
 call here, regardless of name; do not follow these calls or imply the cone is complete.
+
+## 2026-10-29 — Contracts 1.7.0 — approved by the maintainer
+
+The maintainer approved `docs/plans/standing-grants.md` and its contract change on 2026-10-29,
+in the coordinator's session, as recorded above under "Standing grants approved as contracts
+1.7.0; the creation bundle moves to 1.8.0". This version adds the structured grant request on
+Approve, person-created and revoked grant events, and immutable grant-use receipts on rules
+resolutions. Existing 1.6.0 recordings and commands remain valid with absent new fields.
+The revoke command is POST /grants/{grant_id}/revoke, with no body.
+
+The first backend supports possible_callers, exact module or run scope, and run expiry only.
+Unsupported reasons, scopes and expiry are refused rather than silently broadened. A grant
+removes only the measured possible-callers unknown; it never changes the recorded assessment
+or waives tests, a failed rule, missing measurements, or another unknown. Server authorization
+is rechecked at every rules barrier and serialized with revoke at the Git effect boundary.
+The creation bundle remains reserved for 1.8.0.
