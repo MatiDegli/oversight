@@ -1487,9 +1487,9 @@ with a `match` that ends in `assert_never` or a table keyed by the enum, checked
 test where pyright cannot check it; and code that decides a merge, a rule result or whether a
 change waits fails closed, so an unknown value makes the change wait. A read-only survey of
 `bb64e65`, counting one consumer per file and enum, found 152 of 153 Python consumers not
-exhaustive; 39 of them decide a merge, a rule result or a wait, and in four enum families a new
-value would pass: a test file's new file status, a new test case outcome after a failing run, a new
-cross-review verdict, and a new call-edge kind or confidence. No existing value passes this way;
-whether to fix them before any such value is added is the maintainer's call. Both approvals of the
-first amendment, of the request and of the final change, came from the maintainer in the
-coordinator's session.
+exhaustive; 39 of them decide a merge, a rule result or a wait, and in four code paths across five
+enums a new value would pass: a test file's new file status, a new test case outcome after a
+failing run, a new cross-review verdict, and a new call-edge kind (`EdgeKind`) or confidence
+(`Confidence`). No existing value passes this way; the maintainer decided to make those four paths
+fail closed in a separate change after standing grants land. He approved the first amendment's
+request and its final change in the coordinator's session, not through another line.

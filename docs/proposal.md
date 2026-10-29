@@ -625,14 +625,14 @@ the single error format.
   the hackathon.
 - **A new enum value, approved by the maintainer, 2026-10-29:** a new value in an existing enum (a
   `Literal` in the contract models) is also minor when every existing payload and recorded fixture
-  still validates unchanged and every consumer of that enum is exhaustive, so a checker forces each
-  consumer to handle the new value, as the compiler does for a new event type. A TypeScript
-  consumer is exhaustive with a switch with a `never` check, or a `Record` keyed by the enum. A
-  Python consumer is exhaustive with a `match` that ends in `assert_never`, or an explicit table
-  keyed by the enum, checked by pyright, which the repository already runs; where pyright cannot
-  check one, such as a table's completeness or code outside its strict scope, a test fails on an
-  unhandled value. A consumer that is not exhaustive is made exhaustive in the same change, or the
-  change is not minor. Code that decides a merge, a rule result or whether a change waits fails
+  still validates unchanged and every consumer of that enum is exhaustive, so a checker or a test
+  forces each consumer to handle the new value, as the compiler does for a new event type. A
+  TypeScript consumer is exhaustive with a switch with a `never` check, or a `Record` keyed by the
+  enum. A Python consumer is exhaustive with a `match` that ends in `assert_never`, or an explicit
+  table keyed by the enum, checked by pyright, which the repository already runs; where pyright
+  cannot check one, such as a table's completeness or code outside its strict scope, a test fails on
+  an unhandled value. A consumer that is not exhaustive is made exhaustive in the same change, or
+  the change is not minor. Code that decides a merge, a rule result or whether a change waits fails
   closed: an unknown value means the change waits. Strict models stay as they are: extra fields
   remain forbidden, and a new field still needs a default. Removing or renaming a value stays 2.0.
   The maintainer added the Python consumers and the fail-closed rule later the same day.
