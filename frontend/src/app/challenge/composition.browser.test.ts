@@ -135,6 +135,28 @@ it("opens source on demand and accepts a closed-diff phone decision", async () =
   });
 });
 
+it.each([1280, 1920])("excludes the phone rows and their styles at %ipx", async (width) => {
+  await visit(0, "/", async (page) => {
+    await page.setViewportSize({ width, height: 1080 });
+    await page.getByRole("button", { name: "Two-change practice", exact: true }).click();
+    await page.getByRole("button", { name: "Start practice", exact: true }).click();
+    await check(page.locator(".practice-panel")).toBeVisible();
+    await check(page.locator(".phone-practice, .pp-decision-row")).toHaveCount(0);
+    const rules = await page.evaluate(() => {
+      const sheet = document.querySelector<HTMLStyleElement>(
+        'style[data-vite-dev-id$="/phoneRows.css"]',
+      )?.sheet;
+      if (!sheet) throw new Error("Missing decision-row stylesheet");
+      return [...sheet.cssRules].map((rule) => ({
+        media: rule instanceof CSSMediaRule,
+        active: rule instanceof CSSMediaRule ? matchMedia(rule.conditionText).matches : true,
+      }));
+    });
+    expect(rules.length).toBeGreaterThan(0);
+    expect(rules.every((rule) => rule.media && !rule.active)).toBe(true);
+  });
+});
+
 it.each(["Approve", "Reject"])("accepts %s without ever opening source", async (answer) => {
   await visit(0, "/", async (page) => {
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
@@ -182,6 +204,8 @@ async function checkDecisionRows(page: Page) {
     await check(preview).toHaveCSS("overflow", "hidden");
     const muted = await tokenColor(page, "muted");
     await check(preview).toHaveCSS("color", muted);
+    await check(preview.locator(".pp-row-label")).toHaveCSS("color", muted);
+    await check(summary).toHaveCSS("font-size", "13px");
   }
   const task = page.locator(".pp-task");
   await check(rows.first().locator("summary")).toHaveText(

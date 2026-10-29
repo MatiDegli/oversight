@@ -20,7 +20,6 @@
   .pp-disclosure.pp-decision-row > summary {
     padding-inline: 0;
     border: 0;
-    font-size: 14px;
     color: var(--muted);
   }
   .pp-row-text {
@@ -28,9 +27,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .pp-row-label {
-    color: var(--text);
   }
   .pp-disclosure.pp-decision-row[open] > summary svg {
     transform: rotate(180deg);
