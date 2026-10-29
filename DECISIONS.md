@@ -1167,7 +1167,9 @@ This gives the person one place to answer and makes the run's need for human dec
 Slot now admits A through F as identifiers only. Existing two-subtask plans keep their explicit
 pair tuples, dependency indices 0/1 and assignment validators; widening slots does not enlarge a
 plan. OVERSIGHT_MAX_AGENTS, default 4 and maximum 6, is a backend setting outside contracts. The
-current backend still offers only A and B; admission of further agents belongs to its own front.
+backend offers the first N letters from A (integer 1–6, default 4), in letter order. A fake
+slot other than A needs its own script to be offered; a fake A without a script fails startup.
+Admission reserves each slot before any await and holds it until rejection or a successful merge.
 
 StartAgent and AgentStatus alone gain optional answering: DecisionRef, default null. It links
 a new task to its originating inbox entry, copied unchanged into every status for that task so

@@ -168,8 +168,8 @@ def test_configured_profiles_and_environment_precedence(
 
 
 def test_offered_profiles_match_live_defaults_without_starting_a_runtime() -> None:
-    assert offered_profiles(Settings()) == {"A": MUSE_SPARK, "B": MUSE_SPARK}
-    assert offered_profiles(Settings(agent_model_b="muse-spark-open")) == {
+    assert offered_profiles(Settings()) == {slot: MUSE_SPARK for slot in ("A", "B", "C", "D")}
+    assert offered_profiles(Settings(max_agents=2, agent_model_b="muse-spark-open")) == {
         "A": MUSE_SPARK,
         "B": MUSE_SPARK_OPEN,
     }
@@ -183,5 +183,5 @@ def test_offered_profiles_match_live_defaults_without_starting_a_runtime() -> No
         "A": FAKE_MODEL,
         "B": MUSE_SPARK_OPEN,
     }
-    with pytest.raises(ValueError, match="unknown model profile"):
+    with pytest.raises(ValueError, match="OVERSIGHT_AGENT_MODEL must be one of"):
         offered_profiles(Settings(agent_model="unknown"))
