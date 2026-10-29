@@ -2,6 +2,8 @@
 
 import json
 from dataclasses import dataclass
+from itertools import islice
+from typing import Any, cast
 
 from oversight.changes._behavior import BehaviorDiff, BehaviorRow
 from oversight.changes._review_samples import Observation
@@ -35,7 +37,27 @@ class BehaviorEvidence:
     functions: tuple[CapturedFunction, ...]
 
 
-def _render(result: TypedResult) -> str:
+def _shorten(value: Any, limit: int) -> Any:
+    """Clip public display structure, leaving JSON escaping to the serializer."""
+    if isinstance(value, str):
+        return value[:limit] + "..." if len(value) > limit else value
+    if isinstance(value, list):
+        values = cast(list[Any], value)
+        items = [_shorten(item, limit) for item in values[:limit]]
+        return [*items, "..."] if len(values) > limit else items
+    if isinstance(value, dict):
+        mapping = cast(dict[str, Any], value)
+        clipped = {
+            _shorten(key, limit): _shorten(item, limit)
+            for key, item in islice(mapping.items(), limit)
+        }
+        if len(mapping) > limit:
+            clipped["..."] = "..."
+        return clipped
+    return value
+
+
+def _render(result: TypedResult, *, bounded: bool = True) -> str:
     # Enumerate the public value fields, never serialize the private result object.
     kind = result["kind"]
     display = {"kind": kind}
@@ -43,11 +65,25 @@ def _render(result: TypedResult) -> str:
         display["value"] = result["value"]
     elif kind == "raised":
         display["class"], display["message"] = result["class"], result["message"]
-    return json.dumps(display, ensure_ascii=True, separators=(",", ":"))
+    rendered = json.dumps(display, ensure_ascii=True, separators=(",", ":"))
+    if not bounded:
+        return rendered
+    limit = MAX_RENDERED
+    while len(rendered) > MAX_RENDERED:
+        if limit == 0:
+            # Unexpected scalar leaves may not shrink; retain only the validated result kind.
+            return json.dumps({"kind": kind}, ensure_ascii=True, separators=(",", ":"))
+        limit //= 2
+        clipped = {
+            key: value if key == "kind" else _shorten(value, limit)
+            for key, value in display.items()
+        }
+        rendered = json.dumps(clipped, ensure_ascii=True, separators=(",", ":"))
+    return rendered
 
 
 def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:
-    before, after = _render(row.before), _render(row.after)
+    before, after = _render(row.before, bounded=False), _render(row.after, bounded=False)
     identity = tuple(
         f"{result['kind']}:{result.get('fingerprint', '')}" for result in (row.before, row.after)
     )
@@ -65,8 +101,8 @@ def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:
     )
     return CapturedRow(
         row.call[:MAX_RENDERED],
-        before[:MAX_RENDERED],
-        after[:MAX_RENDERED],
+        _render(row.before),
+        _render(row.after),
         row.unstable,
         observation,
     )

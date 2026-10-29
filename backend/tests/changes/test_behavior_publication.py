@@ -1,5 +1,6 @@
 """Public behavior samples are revision-bound observations, never private protocol dumps."""
 
+import json
 import time
 from dataclasses import replace
 from types import SimpleNamespace
@@ -9,8 +10,18 @@ from unittest.mock import AsyncMock
 import pytest
 from changes_helpers import EDIT, Harness
 
-from oversight.changes._behavior import FunctionBehavior, _compare
+from oversight.changes import _proposal
+from oversight.changes._behavior import (
+    BehaviorDiff,
+    BehaviorRow,
+    FunctionBehavior,
+    _compare,
+    _identity,
+)
 from oversight.changes._behavior_inputs import BehaviorInput, BehaviorInputs
+from oversight.changes._behavior_publish import MAX_RENDERED, capture_behavior, project_behavior
+from oversight.changes._facts import build_change_facts, validate_change_facts
+from oversight.changes._measured import project_measured
 from oversight.workspace import BehaviorObservation
 from oversight_contracts.review import ChangeFacts
 
@@ -61,7 +72,18 @@ async def test_stability_counts_cover_unstable_input_beyond_retained_rows():
     )
     assert found[0].compared == 10
     assert found[0].differing == 9
-    assert len(found[0].rows) == 8
+    assert found[0].rows == tuple(
+        BehaviorRow(
+            f"f(x={i})",
+            observation([i])["sample:f"].results[0],
+            observation([i + 10])["sample:f"].results[0],
+            False,
+            repeat_complete=True,
+            inputs_equal=True,
+        )
+        for i in range(8)
+    )
+    assert found[0].reason is None
     assert worker.await_count == 22  # Initial execution and one repeat per differing input/side.
 
 
@@ -80,16 +102,13 @@ async def test_incomplete_repeat_never_certifies_stable_difference():
             set(),
         )
     assert found[0].differing == 0
-    assert all(row.unstable for row in found[0].rows)
+    assert found[0].rows == ()
 
 
 @pytest.mark.anyio
 async def test_publication_captures_independent_revision_and_rejects_tampering(
     h: Harness, monkeypatch
 ):
-    from oversight.changes import _proposal
-    from oversight.changes._facts import build_change_facts, validate_change_facts
-
     captured = []
     original = _proposal.publish_facts
 
@@ -125,8 +144,6 @@ async def test_publication_captures_independent_revision_and_rejects_tampering(
 
 
 def test_result_kind_is_part_of_typed_identity():
-    from oversight.changes._behavior import _identity
-
     digest = "f" * 64
     assert _identity({"kind": "value", "fingerprint": digest}) != _identity(
         {"kind": "raised", "fingerprint": digest}
@@ -134,9 +151,6 @@ def test_result_kind_is_part_of_typed_identity():
 
 
 def test_projection_keeps_private_fields_and_diagnostics_out_of_public_samples():
-    from oversight.changes._behavior import BehaviorDiff, BehaviorRow
-    from oversight.changes._behavior_publish import capture_behavior, project_behavior
-
     private = "PRIVATE_PROTOCOL_SENTINEL"
     before = {"kind": "value", "value": ["int", "0x1"], "fingerprint": private, "path": private}
     after = {"kind": "raised", "class": "builtins.ValueError", "message": "public", "raw": private}
@@ -164,14 +178,172 @@ def test_projection_keeps_private_fields_and_diagnostics_out_of_public_samples()
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("disagreed", [False, True])
+async def test_incomplete_repeat_is_counted_but_not_published_as_a_stable_row(disagreed):
+    rec, inputs, found = comparison_fixture(1)
+    worker = AsyncMock(
+        side_effect=[
+            observation([0]),
+            observation([1]),
+            observation([99 if disagreed else 0]),
+            {"sample:f": BehaviorObservation(problem="budget exhausted")},
+        ]
+    )
+    await _compare(
+        cast(Any, SimpleNamespace(run_behavior=worker)),
+        rec,
+        cast(Any, ["base", "head"]),
+        inputs,
+        found,
+        time.monotonic() + 30,
+        set(),
+    )
+    projected = project_behavior(capture_behavior(BehaviorDiff(1, tuple(found))), revision=1)
+    assert projected is not None
+    [published] = projected
+    assert published.compared_count == 1
+    assert published.differing_count == 0
+    assert published.rows == []
+    assert published.not_probed == "probe unavailable"
+    assert found[0].reason == "incomplete repeat"
+
+
+@pytest.mark.anyio
+async def test_timeout_after_row_limit_retains_completed_counts_and_samples():
+    rec, inputs, found = comparison_fixture(10)
+    results = [observation(range(10)), observation(range(10, 20))]
+    for i in range(9):
+        results.extend([observation([i]), observation([i + 10])])
+    worker = AsyncMock(side_effect=[*results, TimeoutError()])
+    with pytest.raises(TimeoutError):
+        await _compare(
+            cast(Any, SimpleNamespace(run_behavior=worker)),
+            rec,
+            cast(Any, ["base", "head"]),
+            inputs,
+            found,
+            time.monotonic() + 30,
+            set(),
+        )
+    assert found[0].compared == 10
+    assert found[0].differing == 9
+    assert [row.call for row in found[0].rows] == [f"f(x={i})" for i in range(8)]
+    assert not any(row.unstable for row in found[0].rows)
+
+
+@pytest.mark.parametrize("kind", ["value", "raised"])
+@pytest.mark.parametrize("escape", ["\\", '"', "\n", "é", "😀"])
+def test_rendered_samples_keep_valid_json_at_escape_boundary(kind, escape):
+    # With the old serialized slice, the last character is the first backslash of an escape.
+    field = "value" if kind == "value" else "message"
+    sample = {"kind": kind, **({"class": "Error"} if kind == "raised" else {})}
+    sample[field] = ["str", ""] if kind == "value" else ""
+    prefix_length = json.dumps(sample, ensure_ascii=True, separators=(",", ":")).index('""') + 1
+    text = "x" * (MAX_RENDERED - prefix_length - 1) + escape * MAX_RENDERED
+    sample[field] = ["str", text] if kind == "value" else text
+    row = BehaviorRow("f()", sample, sample, False)
+    evidence = capture_behavior(BehaviorDiff(1, (FunctionBehavior("sample:f", rows=(row,)),)))
+    projected = project_behavior(evidence, revision=1)
+    assert projected is not None
+    [published] = projected
+    for rendered in (published.rows[0].before, published.rows[0].after):
+        assert len(rendered) <= MAX_RENDERED
+        display = json.loads(rendered)
+        assert display["kind"] == kind
+        assert "..." in (display[field][1] if kind == "value" else display[field])
+
+
+def test_large_nested_display_is_capped_before_json_serialization():
+    value = ["list", [["str", "é" * 512] for _ in range(32)], 32, "complete"]
+    sample = {"kind": "value", "value": value}
+    row = BehaviorRow("f()", sample, sample, False)
+    evidence = capture_behavior(BehaviorDiff(1, (FunctionBehavior("sample:f", rows=(row,)),)))
+    projected = project_behavior(evidence, revision=1)
+    assert projected is not None
+    rendered = projected[0].rows[0].before
+    assert len(rendered) <= MAX_RENDERED
+    assert json.loads(rendered)["value"][0] == "list"
+    assert "..." in rendered
+    assert sample["value"] == value
+
+
+@pytest.mark.parametrize("field", ["value", "message", "class"])
+@pytest.mark.parametrize("raw_dict", [False, True])
+def test_untrusted_display_leaves_converge_to_bounded_json(monkeypatch, field, raw_dict):
+    leaf = (
+        {"x" * MAX_RENDERED + str(i): {"nested": "é" * MAX_RENDERED} for i in range(32)}
+        if raw_dict
+        else 10 ** (2 * MAX_RENDERED)
+    )
+    kind = "value" if field == "value" else "raised"
+    sample = {"kind": kind, "class": "Error", "message": "message", field: leaf}
+    original = json.dumps
+    original_sample = original(sample)
+    calls = 0
+
+    def bounded_dumps(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        # Fail promptly on the old infinite loop without hanging the event loop or test worker.
+        assert calls <= 32, "display clipping failed to converge"
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr("oversight.changes._behavior_publish.json.dumps", bounded_dumps)
+    row = BehaviorRow("f()", sample, sample, False)
+    evidence = capture_behavior(BehaviorDiff(1, (FunctionBehavior("sample:f", rows=(row,)),)))
+    projected = project_behavior(evidence, revision=1)
+    assert projected is not None
+    for rendered in (projected[0].rows[0].before, projected[0].rows[0].after):
+        assert len(rendered) <= MAX_RENDERED
+        display = json.loads(rendered)
+        assert display["kind"] == kind
+        if raw_dict:
+            assert isinstance(display[field], dict)
+            assert "..." in rendered
+        else:
+            assert display == {"kind": kind}
+    assert original(sample) == original_sample
+
+
+@pytest.mark.anyio
+async def test_incomplete_repeat_appends_to_existing_unrepresentable_reason():
+    rec, inputs, found = comparison_fixture(3)
+    unrepresentable = {"kind": "unrepresentable"}
+    before = BehaviorObservation((unrepresentable, *observation([1, 2])["sample:f"].results))
+    after = BehaviorObservation((unrepresentable, *observation([3, 4])["sample:f"].results))
+    worker = AsyncMock(
+        side_effect=[
+            {"sample:f": before},
+            {"sample:f": after},
+            observation([1]),
+            {"sample:f": BehaviorObservation(problem="unavailable")},
+            observation([2]),
+            {"sample:f": BehaviorObservation(problem="unavailable")},
+        ]
+    )
+    await _compare(
+        cast(Any, SimpleNamespace(run_behavior=worker)),
+        rec,
+        cast(Any, ["base", "head"]),
+        inputs,
+        found,
+        time.monotonic() + 30,
+        set(),
+    )
+    assert found[0].reason == "unrepresentable input; incomplete repeat"
+    projected = project_behavior(capture_behavior(BehaviorDiff(1, tuple(found))), revision=1)
+    assert projected is not None
+    [published] = projected
+    assert published.compared_count == 2
+    assert published.differing_count == 0
+    assert published.rows == []
+    assert published.not_probed == "probe unavailable"
+
+
+@pytest.mark.anyio
 async def test_direct_and_caller_publications_capture_and_validate_separate_evidence(
     h, monkeypatch
 ):
-    from oversight.changes import _proposal
-    from oversight.changes._behavior_publish import capture_behavior, project_behavior
-    from oversight.changes._facts import build_change_facts, validate_change_facts
-    from oversight.changes._measured import project_measured
-
     captured = []
     publish = _proposal.publish_facts
 
