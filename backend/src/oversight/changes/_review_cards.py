@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Protocol
 
 from pydantic import TypeAdapter
@@ -13,8 +13,9 @@ from pydantic import TypeAdapter
 from oversight.agents import DecisionInput, DecisionOutcome, Publish
 from oversight.changes._measured import capture_review_samples, project_measured
 from oversight.changes._review_samples import Observation, Selection, select
+from oversight.changes._summary import AskedFor, SummaryEvidence, build_summary
 from oversight.events import EventPayload, StoredEvent
-from oversight_contracts.events import ServerEvent
+from oversight_contracts.events import ServerEvent, SuiteExecution
 from oversight_contracts.review import ChangeFacts, ChangeTarget, NodeBehaviorDiff, ReviewCard
 
 if TYPE_CHECKING:
@@ -83,11 +84,14 @@ class CardCapture:
     agent_id: str
     task: str
     selected: Selection
+    direct_nodes: frozenset[str]
+    executions: Mapping[int, SuiteExecution]
 
 
 @dataclass
 class CardJob:
     capture: CardCapture
+    summary_evidence: SummaryEvidence
     evidence: StoredEvent | None = None
     latest: StoredEvent | None = None
     facts: ChangeFacts | None = None
@@ -95,6 +99,7 @@ class CardJob:
     deadline: float | None = None
     consumed: int = 0
     cards: list[ReviewCard] = field(default_factory=list[ReviewCard])
+    asked_for: list[AskedFor] = field(default_factory=list[AskedFor])
     problems: list[str] = field(default_factory=list[str])
     status: str = "pending"
 
@@ -132,6 +137,9 @@ class ReviewCards:
                 for job in self.jobs.values()
             ):
                 raise ValueError("review card revision already captured a different target")
+            selected = selection(evidence, self.limits.classifications)
+            # A node may occur in both projections with different aggregate counts.
+            # Retain which producer supplied its selected witness before classifying.
             self.jobs[key] = CardJob(
                 CardCapture(
                     self.run_id,
@@ -139,8 +147,20 @@ class ReviewCards:
                     rec.card_generation,
                     rec.agent_id,
                     rec.task.task,
-                    selection(evidence, self.limits.classifications),
-                )
+                    selected,
+                    frozenset(
+                        sample.node_id
+                        for sample in selected.samples
+                        for node in (
+                            evidence.behavior_evidence.functions
+                            if evidence.behavior_evidence
+                            else ()
+                        )
+                        if any(row.observation == sample for row in node.rows)
+                    ),
+                    {seq: run.model_copy(deep=True) for seq, run in evidence.executions.items()},
+                ),
+                evidence.summary_evidence,
             )
         return self.jobs[key]
 
@@ -188,7 +208,7 @@ class ReviewCards:
                         else "truncated"
                     )
                     try:
-                        return await self._emit(job, self._result_facts(job))
+                        return await self._publish_result(job)
                     except BaseException:
                         job.status = "failed"
                         raise
@@ -215,13 +235,17 @@ class ReviewCards:
     async def _forward(self, payload: EventPayload) -> object:
         return await self._publish(payload)
 
-    async def _emit(self, job: CardJob, facts: ChangeFacts) -> StoredEvent:
-        return await self.ctx.whole(self._commit(job, facts))
+    async def _emit(
+        self, job: CardJob, facts: ChangeFacts, summary: SummaryEvidence | None = None
+    ) -> StoredEvent:
+        return await self.ctx.whole(self._commit(job, facts, summary))
 
-    async def _commit(self, job: CardJob, facts: ChangeFacts) -> StoredEvent:
+    async def _commit(
+        self, job: CardJob, facts: ChangeFacts, summary: SummaryEvidence | None
+    ) -> StoredEvent:
         frozen = ChangeFacts.model_validate_json(facts.model_dump_json())
-        if frozen.review_cards:
-            self.validate(job, frozen)
+        captured = summary if summary is not None else job.summary_evidence
+        self.validate(job, frozen, summary=captured)
         receipt = await self._publish(frozen)
         if not isinstance(receipt, StoredEvent):
             raise ValueError("review cards require a confirmed StoredEvent receipt")
@@ -234,11 +258,20 @@ class ReviewCards:
             raise ValueError("review card receipt differs from published facts")
         self.events[event.seq] = event
         job.facts, job.latest = event.payload, receipt
+        job.summary_evidence = captured
         return receipt
 
-    def validate(self, job: CardJob, facts: ChangeFacts) -> None:
+    def validate(
+        self, job: CardJob, facts: ChangeFacts, *, summary: SummaryEvidence | None = None
+    ) -> None:
         if target_of(facts) != job.capture.target or job.capture.run_id != self.run_id:
             raise ValueError("review cards belong to another target or run")
+        if facts.summary != build_summary(
+            summary if summary is not None else job.summary_evidence,
+            job.capture.executions,
+            revision=job.capture.target.revision,
+        ):
+            raise ValueError("review card summary differs from captured evidence")
         identities: set[tuple[str, str]] = set()
         eligible = {sample.node_id: sample.example() for sample in job.capture.selected.samples}
         for card in facts.review_cards or []:
@@ -281,9 +314,17 @@ class ReviewCards:
         async with self.lock:
             if not self.current(job.capture) or job.facts is None:
                 return
-            await self._emit(job, self._result_facts(job))
+            await self._publish_result(job)
 
-    def _result_facts(self, job: CardJob) -> ChangeFacts:
+    async def _publish_result(self, job: CardJob) -> StoredEvent:
+        summary = replace(
+            job.summary_evidence,
+            asked_for=tuple(job.asked_for),
+            questions=len(job.cards) if job.cards or job.asked_for else None,
+        )
+        return await self._emit(job, self._result_facts(job, summary), summary)
+
+    def _result_facts(self, job: CardJob, summary: SummaryEvidence) -> ChangeFacts:
         assert job.facts is not None
         previous = {(c.node_id, c.question): c for c in job.facts.review_cards or []}
         cards: list[ReviewCard] = []
@@ -295,9 +336,26 @@ class ReviewCards:
             deep=True,
             update={
                 "review_cards": cards,
+                "summary": build_summary(
+                    summary, job.capture.executions, revision=job.capture.target.revision
+                ),
                 "problems": [*problems, *self.diagnostics(job)],
             },
         )
+
+    def _asked_for(self, job: CardJob, sample: Observation) -> AskedFor:
+        assert job.evidence is not None
+        event = self.events[job.evidence.seq]
+        assert event.type == "change.facts_recorded"
+        sources = (
+            event.payload.behavior_diff
+            if sample.node_id in job.capture.direct_nodes
+            else event.payload.measured_cone
+        )
+        for node in sources or []:
+            if node.node_id == sample.node_id and sample.example() in node.rows:
+                return AskedFor(node.node_id, node.differing_count, node.compared_count)
+        raise ValueError("asked-for sample is absent from published evidence")
 
     async def _run(self, job: CardJob) -> None:
         try:
@@ -348,6 +406,8 @@ class ReviewCards:
                     job.problems.append(
                         f"{PREFIX}{sample.node_id}: unavailable ({outcome.unavailable})"
                     )
+                elif outcome.choice == "asked_for":
+                    job.asked_for.append(self._asked_for(job, sample))
                 elif outcome.choice in {"not_asked_for", "cannot_tell"}:
                     if len(job.cards) == 8:
                         job.problems.append(f"{PREFIX}{sample.node_id}: contractual card limit")

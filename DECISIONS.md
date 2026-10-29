@@ -1291,3 +1291,18 @@ for opaque backings across every shell surface is retired with that treatment: t
 raised is not used by the UI and gives D 4.42:1 / E 4.44:1 with the approved values.
 The rendered card/rail/review regression from 0612105 remains. Exact-value tests pin the
 three newly approved text tokens and guard the restored translucent tints and original node fills.
+## 2026-10-29 — Item 9 questions are only for unasked or untied differences
+
+The maintainer decided on 2026-10-29, as follow-up 3 to item 9 and the decisions inbox. This entry records the
+parts that touch item 9's producers and events; line B records the card, the inbox and the header.
+
+Questions are only for differences the task did not ask for, or that Oversight could not tie to the task: the
+decision model's `not_asked_for` and `cannot_tell`. A difference classified `asked_for` never becomes a review
+card. It goes into the server-written summary of what changed, so it is reported, never dropped.
+
+Yes means the same on every question, including "Oversight could not tell whether this was asked for". A Yes
+records that the person accepted the difference, never that the task asked for it. Both come from existing data,
+with no new contract field: "asked for" only from the classification, which never has a card, and "accepted by
+the person" from a card answered Yes by the person. The summary and proof 3's counts keep them apart. A card's
+kind is read from its server-authored question, one of two fixed texts. When pinned examples exist (item 13), a
+Yes on a could-not-tell question is the one offered as "keep as example".
