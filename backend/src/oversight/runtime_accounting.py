@@ -6,12 +6,26 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import json
+import os
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from oversight.agents import LedgerError, ModelReply, UnknownUsage, validate_usage_tick
+from oversight.agents import (
+    DecisionInput,
+    DecisionUnavailable,
+    LedgerError,
+    LedgerFile,
+    ModelReply,
+    Pricing,
+    UnknownUsage,
+    UsageLedger,
+    validate_usage_tick,
+)
 from oversight.events import format_needs_you, format_ts
+from oversight.settings import positive_amount
 from oversight_contracts.events import ModelProfile, UsageTick
 from oversight_contracts.review import ChangeTarget
 
@@ -52,6 +66,124 @@ async def write_tick(
 
 class ReviewLedgerFailure(Exception):
     """This review's paid attempt could not be recorded; no author state is implicated."""
+
+
+class BasetenDecisionAccounting:
+    """A separate, persistent decision-call balance, never the Meta credits ledger.
+
+    RuntimeDecisions serializes logical calls through accounting, so concurrent candidates cannot
+    both enter against an old balance. Existing author and cross-review metering is unchanged.
+    Missing prices/budget, unknown usage and any receipt failure close decision admission.
+    A failed receipt leaves a recovery marker: restart cannot silently trust the old total.
+    The maintainer must reconcile the provider bill and receipt before removing that marker.
+    """
+
+    def __init__(self, live: LiveRun) -> None:
+        self.live = live
+        self.ledger = LedgerFile(live._settings.runtime_dir / "baseten-decisions-ledger.json")
+        self._recovery = self.ledger.path.with_suffix(".unreliable")
+        self._loaded = False
+        self._lost = False
+        settings = live._settings
+        self.budget = positive_amount(str(settings.baseten_budget_usd))
+        input_price = positive_amount(str(settings.baseten_input_usd_per_m))
+        output_price = positive_amount(str(settings.baseten_output_usd_per_m))
+        self.pricing = (
+            Pricing(input_price, output_price, input_price)
+            if input_price is not None and output_price is not None
+            else None
+        )
+
+    async def load(self) -> None:
+        if not self._loaded:
+            self._loaded = True
+            try:
+                if self._recovery.exists():
+                    self._lost = True
+                    return
+                await self.ledger.load()
+            except (LedgerError, OSError):
+                self._lost = True
+
+    async def admit(self) -> None:
+        """No suspension between checking the current ledger and returning transport admission."""
+        if self.live._closing:
+            raise DecisionUnavailable("closed")
+        if self.budget is None:
+            raise DecisionUnavailable("budget_unconfigured")
+        if self.pricing is None:
+            raise DecisionUnavailable("pricing_unconfigured")
+        state = self.ledger.state
+        if self._lost or state is None:
+            raise DecisionUnavailable("ledger_unreliable")
+        if state.unknown:
+            raise DecisionUnavailable("ledger_unknown")
+        if UsageLedger(self.budget, state.spent_usd).brake == "blocked":
+            raise DecisionUnavailable("budget_blocked")
+
+    async def record(self, input: DecisionInput, reply: ModelReply) -> None:
+        await durable(self._record(input, reply))
+
+    async def _record(self, input: DecisionInput, reply: ModelReply) -> None:
+        assert self.budget is not None and self.pricing is not None
+        cost = self.pricing.cost(reply.usage)
+        entry = UnknownUsage(
+            self.live.run_id, input.agent_id, reply.model, format_ts(datetime.now(UTC))
+        )
+        try:
+            state = await self.ledger.record(cost, entry)
+            tick = UsageTick(
+                agent_id=input.agent_id,
+                change_id=input.target.change_id,
+                role="review",
+                model=reply.model,
+                input_tokens=reply.usage.input_tokens,
+                output_tokens=reply.usage.output_tokens,
+                cached_tokens=reply.usage.cached_tokens,
+                cost_usd=cost,
+                spent_usd=state.spent_usd,
+                budget_usd=self.budget,
+                brake="blocked"
+                if state.unknown
+                else UsageLedger(self.budget, state.spent_usd).brake,
+            )
+            validate_usage_tick(tick)
+            # Publish directly: LiveRun._publish meters according to the author's provider.
+            receipt = await self.live.store.publish(tick)
+            if self.live._manager is not None:
+                self.live._manager.usage_recorded(receipt)
+        except (Exception, asyncio.CancelledError) as error:
+            self._lost = True
+            # Preserve the failed receipt where possible and close admission across restart.
+            # A partial marker also blocks: it must never be interpreted as a settled total.
+            recovery = json.dumps(
+                {
+                    "run_id": self.live.run_id,
+                    "agent_id": input.agent_id,
+                    "change_id": input.target.change_id,
+                    "revision": input.target.revision,
+                    "node_id": input.difference.node_id,
+                    "model": reply.model,
+                    "usage": {
+                        "input_tokens": reply.usage.input_tokens,
+                        "output_tokens": reply.usage.output_tokens,
+                        "cached_tokens": reply.usage.cached_tokens,
+                    },
+                    "cost_usd": cost,
+                }
+            )
+            # The process remains closed even if storage itself is unavailable.
+            with contextlib.suppress(OSError):
+                await asyncio.to_thread(self._save_recovery, recovery)
+            if isinstance(error, asyncio.CancelledError) and error.__cause__ is None:
+                raise
+            raise DecisionUnavailable("ledger_unreliable") from error
+
+    def _save_recovery(self, text: str) -> None:
+        with self._recovery.open("w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
 
 
 class ReviewAccounting:
