@@ -62,14 +62,14 @@ def selection(evidence: FactsEvidence, limit: int) -> Selection:
                 problems.append(f"{PREFIX}{node.node_id}: row witness unavailable")
         if node.not_probed:
             problems.append(f"{PREFIX}{node.node_id}: behavior comparison incomplete")
-        if node.differing > len(node.rows):
+        if node.differing > sum(not row.unstable for row in node.rows):
             problems.append(f"{PREFIX}{node.node_id}: differing observations not retained")
     if evidence.measured:
         samples.extend(capture_review_samples(evidence.measured))
         for node in project_measured(evidence.measured, evidence.target):
             if not node.complete:
                 problems.append(f"{PREFIX}{node.node_id}: caller comparison incomplete")
-            if node.differing_count > len(node.rows):
+            if node.differing_count > sum(not row.unstable for row in node.rows):
                 problems.append(f"{PREFIX}{node.node_id}: differing observations not retained")
     result = select(tuple(samples), limit)
     return Selection(result.samples, tuple(dict.fromkeys((*problems, *result.problems))))
@@ -126,6 +126,12 @@ class ReviewCards:
     def prepare(self, rec: ChangeRecord, evidence: FactsEvidence) -> CardJob:
         key = evidence.target.model_dump_json()
         if key not in self.jobs:
+            if any(
+                (job.capture.target.change_id, job.capture.target.revision)
+                == (evidence.target.change_id, evidence.target.revision)
+                for job in self.jobs.values()
+            ):
+                raise ValueError("review card revision already captured a different target")
             self.jobs[key] = CardJob(
                 CardCapture(
                     self.run_id,
@@ -175,6 +181,17 @@ class ReviewCards:
                 raise ValueError("review card candidate is no longer current")
             # Re-publishing measurements must not reset selection, calls or later producer data.
             if job.latest is not None:
+                if job.status == "failed" and job.facts is not None:
+                    job.status = (
+                        "finished"
+                        if job.consumed == len(job.capture.selected.samples)
+                        else "truncated"
+                    )
+                    try:
+                        return await self._emit(job, self._result_facts(job))
+                    except BaseException:
+                        job.status = "failed"
+                        raise
                 return job.latest
             facts = payload.model_copy(
                 deep=True,
@@ -264,20 +281,23 @@ class ReviewCards:
         async with self.lock:
             if not self.current(job.capture) or job.facts is None:
                 return
-            previous = {(c.node_id, c.question): c for c in job.facts.review_cards or []}
-            cards: list[ReviewCard] = []
-            for card in job.cards:
-                old = previous.get((card.node_id, card.question))
-                cards.append(old if old is not None and old.example == card.example else card)
-            problems = [p for p in job.facts.problems if not p.startswith(PREFIX)]
-            facts = job.facts.model_copy(
-                deep=True,
-                update={
-                    "review_cards": cards,
-                    "problems": [*problems, *self.diagnostics(job)],
-                },
-            )
-            await self._emit(job, facts)
+            await self._emit(job, self._result_facts(job))
+
+    def _result_facts(self, job: CardJob) -> ChangeFacts:
+        assert job.facts is not None
+        previous = {(c.node_id, c.question): c for c in job.facts.review_cards or []}
+        cards: list[ReviewCard] = []
+        for card in job.cards:
+            old = previous.get((card.node_id, card.question))
+            cards.append(old if old is not None and old.example == card.example else card)
+        problems = [p for p in job.facts.problems if not p.startswith(PREFIX)]
+        return job.facts.model_copy(
+            deep=True,
+            update={
+                "review_cards": cards,
+                "problems": [*problems, *self.diagnostics(job)],
+            },
+        )
 
     async def _run(self, job: CardJob) -> None:
         try:

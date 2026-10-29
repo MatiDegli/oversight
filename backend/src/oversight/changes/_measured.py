@@ -14,6 +14,7 @@ from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
+from oversight.changes._review_identity import caller_identity
 from oversight.changes._review_samples import Observation
 from oversight.changes._shortcuts_common import is_test_file
 from oversight.changes._shortcuts_unknown import COLLECTION_CONFIG
@@ -194,7 +195,7 @@ def _caller(
                     reason = "caller comparison or repetition incomplete"
                 elif any(len(value) > 2048 for value in values):
                     reason = "display sample truncated"
-                samples.append(Observation(node_id, values, values, reason))
+                samples.append(Observation(node_id, values, caller_identity(values), reason))
     if not pairs:
         complete = False
         reasons.append("no comparable caller invocations observed")

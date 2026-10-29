@@ -37,6 +37,7 @@ class BehaviorRow:
     unstable: bool
     repeat_complete: bool = False
     inputs_equal: bool = False
+    input_identity: str | None = None
 
 
 @dataclass(frozen=True)
@@ -232,7 +233,8 @@ async def _measure_function(
                         new,
                         unstable,
                         repeat_complete=True,
-                        inputs_equal=sample.before == sample.after,
+                        inputs_equal=sample.input_identity is not None,
+                        input_identity=sample.input_identity,
                     )
                 )
     finally:

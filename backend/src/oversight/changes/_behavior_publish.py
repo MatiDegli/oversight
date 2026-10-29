@@ -6,6 +6,7 @@ from itertools import islice
 from typing import Any, cast
 
 from oversight.changes._behavior import BehaviorDiff, BehaviorRow
+from oversight.changes._review_identity import direct_result
 from oversight.changes._review_samples import Observation
 from oversight.workspace import TypedResult
 from oversight_contracts.review import BehaviorDiffRow, NodeBehaviorDiff
@@ -87,6 +88,7 @@ def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:
     identity = tuple(
         f"{result['kind']}:{result.get('fingerprint', '')}" for result in (row.before, row.after)
     )
+    results = direct_result(row.before), direct_result(row.after)
     reason = None
     if not row.repeat_complete or not row.inputs_equal:
         reason = "comparison or repetition incomplete"
@@ -96,8 +98,13 @@ def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:
         reason = "typed identity unavailable"
     elif any(len(text) > MAX_RENDERED for text in (row.call, before, after)):
         reason = "display sample truncated"
+    elif None in results or before == after:
+        reason = "typed display incomplete"
     observation = Observation(
-        node_id, (row.call, before, after), (row.call, identity[0], identity[1]), reason
+        node_id,
+        (row.call, before, after),
+        (row.input_identity or row.call, results[0] or identity[0], results[1] or identity[1]),
+        reason,
     )
     return CapturedRow(
         row.call[:MAX_RENDERED],

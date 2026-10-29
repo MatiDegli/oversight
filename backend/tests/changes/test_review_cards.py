@@ -1,6 +1,7 @@
 """Selection requires private row witnesses and orders only actually observed examples."""
 
 from dataclasses import replace
+from typing import Any
 
 import pytest
 from test_measured_cone import TARGET, evidence, invocation, suite
@@ -117,3 +118,82 @@ def test_caller_truncation_keeps_full_identity_but_excludes_sample():
     [observed] = capture_review_samples(measured)
     assert observed.excluded == "display sample truncated"
     assert len(observed.identity[0]) == 2049
+
+
+def test_identical_typed_observation_deduplicates_across_real_source_adapters():
+    from oversight.changes._review_identity import bound_inputs
+
+    inputs = '["dict",[[["str","x"],["int","0x1"]]]]'
+    old, new = [invocation(inputs=inputs)], [invocation('["value",["int","0x2"]]', inputs=inputs)]
+    measured = evidence(old, new, suite("base", old), suite("head", new))
+    [caller] = capture_review_samples(measured)
+    [direct] = captured(replace(direct_row(repeated=True), input_identity=bound_inputs({"x": 1})))
+    assert direct is not None and direct.identity == caller.identity
+    caller = replace(caller, node_id=direct.node_id)
+    result = select((direct, caller), 8)
+    assert len(result.samples) == 1 and not result.problems
+
+
+def test_omitted_default_changes_do_not_certify_equal_typed_inputs():
+    from oversight.changes import behavior_inputs
+
+    old = "def f(x=1): return x\n"
+    new = "def f(x=2): return x\n"
+    tests = "from pkg.mod import f\nf()\n"
+    result = behavior_inputs(
+        "pkg.mod",
+        "f",
+        {"pkg/mod.py": old, "test.py": tests},
+        {"pkg/mod.py": new, "test.py": tests},
+    )
+    omitted = next(item for item in result.inputs if item.call == "f()")
+    assert omitted.before == omitted.after and omitted.input_identity is None
+    assert all(item.input_identity is not None for item in result.inputs if item.call != "f()")
+
+
+def test_worker_truncation_marker_cannot_certify_a_display_sample():
+    row = direct_row(repeated=True)
+    row.after["value"] = ["str", "prefix", 5000, "cut"]
+    [observed] = captured(row)
+    assert observed is not None and observed.excluded == "typed display incomplete"
+
+
+def test_review_card_settings_load_and_validate(tmp_path, monkeypatch):
+    from oversight.settings import Settings
+
+    monkeypatch.setenv("OVERSIGHT_REVIEW_CARD_CLASSIFICATIONS", "3")
+    monkeypatch.setenv("OVERSIGHT_REVIEW_CARD_CALL_S", "2.5")
+    monkeypatch.setenv("OVERSIGHT_REVIEW_CARD_TOTAL_S", "7")
+    settings = Settings.load(env_file=tmp_path / "missing")
+    assert (
+        settings.review_card_classifications,
+        settings.review_card_call_s,
+        settings.review_card_total_s,
+    ) == (3, 2.5, 7)
+    invalid: tuple[dict[str, Any], ...] = (
+        {"review_card_classifications": -1},
+        {"review_card_call_s": 0},
+        {"review_card_total_s": float("nan")},
+    )
+    for kwargs in invalid:
+        with pytest.raises(ValueError):
+            Settings(**kwargs)
+
+
+def test_unstable_display_rows_do_not_hide_unretained_stable_differences():
+    from oversight.changes._facts import FactsEvidence
+    from oversight.changes._review_cards import selection
+
+    behavior = capture_behavior(
+        BehaviorDiff(
+            1,
+            (
+                FunctionBehavior(
+                    "m:f", 9, 1, tuple(direct_row(repeated=True, unstable=True) for _ in range(8))
+                ),
+            ),
+        )
+    )
+    source = FactsEvidence("agent-1", TARGET, None, (), (), (), {}, {}, behavior_evidence=behavior)
+    result = selection(source, 8)
+    assert not result.samples and any("not retained" in problem for problem in result.problems)

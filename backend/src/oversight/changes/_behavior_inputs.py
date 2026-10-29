@@ -8,6 +8,7 @@ from itertools import zip_longest
 from pathlib import PurePosixPath
 from typing import Any, cast
 
+from oversight.changes._review_identity import bound_inputs
 from oversight.changes._shortcuts_common import Source, walk_local
 
 MAX_INPUTS = 48
@@ -20,6 +21,7 @@ class BehaviorInput:
     call: str
     before: str
     after: str
+    input_identity: str | None = None
 
 
 @dataclass(frozen=True)
@@ -339,8 +341,18 @@ def _generate(
             return
         seen.add(key)
         rendered = ", ".join(f"{key}={literal_text(value)}" for key, value in named.items())
+        identities: list[str | None] = []
+        for sig, (args, kwargs) in zip(signatures, (before, after), strict=True):
+            effective = sig.bind(*args, **kwargs)
+            effective.apply_defaults()
+            identities.append(bound_inputs(dict(effective.arguments)))
         inputs.append(
-            BehaviorInput(f"{name}({rendered})", literal_text(before), literal_text(after))
+            BehaviorInput(
+                f"{name}({rendered})",
+                literal_text(before),
+                literal_text(after),
+                identities[0] if identities[0] == identities[1] else None,
+            )
         )
         seeds.append(named)
 

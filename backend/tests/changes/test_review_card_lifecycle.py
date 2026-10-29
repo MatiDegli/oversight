@@ -57,7 +57,7 @@ def enable(h, monkeypatch, client=None, limits=None):
 
 async def settled(cards):
     async with asyncio.timeout(10):
-        await asyncio.gather(*list(cards.tasks))
+        await asyncio.gather(*list(cards.tasks), return_exceptions=True)
 
 
 @pytest.mark.parametrize(
@@ -223,3 +223,150 @@ async def test_budget_zero_has_no_calls_and_explicit_omission(h, monkeypatch):
     await settled(cards)
     assert client.calls == []
     assert any("1 nodes omitted" in p for p in h.payloads(ChangeFacts)[-1].problems)
+
+
+async def test_agent_edit_without_a_new_proposal_invalidates_inflight_classification(
+    h, monkeypatch
+):
+    cards, client = enable(h, monkeypatch, FakeDecisions(hold=True, late=True))
+    await h.open(1)
+    assert await h.edit(1, *EDIT)
+    assert await h.manager.proposed("agent-1", "Done")
+    async with asyncio.timeout(5):
+        await client.entered.wait()
+    assert await h.edit(1, "shop/mod.py", "return 3", "return 4")
+    await settled(cards)
+    assert len(h.payloads(ChangeFacts)) == 1
+    assert h.manager._agents["agent-1"].revision == 1
+
+
+async def test_total_deadline_and_one_logical_call_per_node(h, monkeypatch):
+    cards, client = enable(
+        h, monkeypatch, FakeDecisions(hold=True), ReviewCardLimits(8, 0.02, 0.01)
+    )
+
+    async def probe(ctx, rec, *, head, revision):
+        return BehaviorDiff(
+            revision,
+            tuple(
+                FunctionBehavior(node, 1, 1, (direct_row(repeated=True),))
+                for node in (VALUE, "shop.mod:twice")
+            ),
+        )
+
+    monkeypatch.setattr(_proposal, "probe_behavior", probe)
+    await h.run_agent(1, EDIT)
+    await settled(cards)
+    [job] = cards.jobs.values()
+    assert len(client.calls) == job.consumed == 1
+    assert job.status == "truncated" and any(
+        "remaining nodes unclassified" in p for p in job.problems
+    )
+
+
+async def test_unrelated_main_advance_keeps_the_captured_target(h, monkeypatch):
+    from changes_helpers import commit_on_main
+
+    cards, client = enable(h, monkeypatch, FakeDecisions(hold=True))
+    await h.run_agent(1, EDIT)
+    async with asyncio.timeout(5):
+        await client.entered.wait()
+    [job] = cards.jobs.values()
+    target = job.capture.target
+    await commit_on_main(h, "shop/__init__.py", "", "# Unrelated main edit\n")
+    client.release.set()
+    await settled(cards)
+    assert job.facts is not None and job.facts.main_commit == target.main_commit
+    assert job.facts.review_cards
+
+
+async def test_concurrent_other_producer_update_survives_classification(h, monkeypatch):
+    cards, client = enable(h, monkeypatch, FakeDecisions(hold=True))
+    await h.run_agent(1, EDIT)
+    async with asyncio.timeout(5):
+        await client.entered.wait()
+    [job] = cards.jobs.values()
+    await h.manager.update_facts(job.capture.target, {"shape": [], "shape_complete": True})
+    client.release.set()
+    await settled(cards)
+    assert job.facts is not None and job.facts.shape_complete and job.facts.review_cards
+
+
+async def test_same_revision_cannot_reset_budget_under_different_main_context(h, monkeypatch):
+    from oversight.changes._facts import FactsEvidence
+
+    cards, client = enable(h, monkeypatch)
+    await h.run_agent(1, EDIT)
+    await settled(cards)
+    [job] = cards.jobs.values()
+    foreign = job.capture.target.model_copy(update={"main_commit": "other"})
+    evidence = FactsEvidence("agent-1", foreign, None, (), (), (), {}, {})
+    with pytest.raises(ValueError, match="different target"):
+        cards.prepare(h.manager._agents["agent-1"], evidence)
+    assert len(client.calls) == 1
+
+
+async def test_failed_final_publication_can_be_republished_without_new_calls(h, monkeypatch):
+    cards, client = enable(h, monkeypatch, FakeDecisions(hold=True))
+    await h.run_agent(1, EDIT)
+    async with asyncio.timeout(5):
+        await client.entered.wait()
+    h.fail_once = ChangeFacts
+    client.release.set()
+    await settled(cards)
+    [job] = cards.jobs.values()
+    assert job.status == "failed" and len(h.payloads(ChangeFacts)) == 1
+    first = h.payloads(ChangeFacts)[0]
+    await cards.publish(first)
+    await cards.publish(first)
+    assert len(client.calls) == 1 and len(h.payloads(ChangeFacts)) == 2
+    assert h.payloads(ChangeFacts)[-1].review_cards
+
+
+async def test_serialized_final_publication_precedes_the_invalidating_edit(h, monkeypatch):
+    cards, client = enable(h, monkeypatch, FakeDecisions(hold=True))
+    await h.open(1)
+    assert await h.edit(1, *EDIT)
+    assert await h.manager.proposed("agent-1", "Done")
+    async with asyncio.timeout(5):
+        await client.entered.wait()
+    h.gate = ChangeFacts
+    client.release.set()
+    async with asyncio.timeout(5):
+        await h.at_gate.wait()
+    editing = asyncio.create_task(h.edit(1, "shop/mod.py", "return 3", "return 4"))
+    await asyncio.sleep(0)
+    h.open_gate.set()
+    assert await editing
+    await settled(cards)
+    events = h.events()
+    final_seq = next(
+        e.seq for e in events if e.type == "change.facts_recorded" and e.payload.review_cards
+    )
+    edit_seq = max(e.seq for e in events if e.type == "change.updated")
+    assert final_seq < edit_seq
+
+
+@pytest.mark.parametrize("budget", [2, 8, 9])
+async def test_logical_budget_is_distinct_from_contractual_card_cap(h, monkeypatch, budget):
+    cards, client = enable(h, monkeypatch, limits=ReviewCardLimits(budget))
+
+    async def probe(ctx, rec, *, head, revision):
+        return BehaviorDiff(
+            revision,
+            tuple(
+                FunctionBehavior(f"m:f{i}", 1, 1, (direct_row(repeated=True, call=f"f(x={i})"),))
+                for i in reversed(range(9))
+            ),
+        )
+
+    monkeypatch.setattr(_proposal, "probe_behavior", probe)
+    await h.run_agent(1, EDIT)
+    await settled(cards)
+    final = h.payloads(ChangeFacts)[-1]
+    assert final.review_cards is not None
+    assert len(client.calls) == budget and len(final.review_cards) == min(8, budget)
+    assert [c.node_id for c in final.review_cards] == [
+        c[0].difference.node_id for c in client.calls[:8]
+    ]
+    assert any("limit" in p for p in final.problems)
