@@ -9,6 +9,7 @@ from test_review_cards import direct_row
 from oversight.changes import InvalidAnswers, WrongState, _proposal
 from oversight.changes._behavior import BehaviorDiff, FunctionBehavior
 from oversight_contracts.events import ChangeResolved
+from oversight_contracts.review import ChangeFacts
 
 pytestmark = pytest.mark.anyio
 
@@ -78,6 +79,32 @@ async def test_pending_questions_refuse_approve_without_cancelling_job(h, monkey
     finally:
         client.release.set()
         await settled(cards)
+
+
+async def test_approve_waits_until_final_card_publication_is_confirmed(h, monkeypatch):
+    cards, client = await questions(h, monkeypatch, FakeDecisions(hold=True))
+    await client.entered.wait()
+    h.hold = ChangeFacts
+    client.release.set()
+    await h.held.wait()
+    try:
+        [job] = cards.jobs.values()
+        assert job.status == "finished" and job.facts is not None
+        assert job.facts.review_cards == []
+        before = list(h.log)
+        with pytest.raises(WrongState, match="questions are still being prepared"):
+            h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
+        assert h.log == before and h.manager._agents["agent-1"].decision == 0
+    finally:
+        h.release.set()
+        await settled(cards)
+    await h.manager.approve(
+        "change-1",
+        None,
+        answers=[answer(card) for card in published(cards)],
+        **observed_target(h.manager, "change-1"),
+    )
+    assert h.payloads(ChangeResolved)[0].merge == "merged"
 
 
 @pytest.mark.parametrize(

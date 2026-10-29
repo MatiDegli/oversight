@@ -103,6 +103,11 @@ class CardJob:
     problems: list[str] = field(default_factory=list[str])
     status: str = "pending"
 
+    @property
+    def preparing(self) -> bool:
+        """Classification is not settled until its final publication returns a receipt."""
+        return self.status == "pending" or (self.task is not None and not self.task.done())
+
 
 class ReviewCards:
     """One run-owned producer. Only committed receipts enter its evidence registry.

@@ -369,7 +369,7 @@ class ChangeManager:
         cards = (job.facts.review_cards or []) if job and job.facts else []
         accepted = validate_answers(cards, answers)
         if approve:
-            require_yes(cards, accepted, pending=job is not None and job.status == "pending")
+            require_yes(cards, accepted, pending=job is not None and job.preparing)
         return tuple(accepted) if accepted is not None else None
 
     def approve(
@@ -411,7 +411,7 @@ class ChangeManager:
             return None
         job = self._ctx.cards.for_change(rec) if self._ctx.cards else None
         if job is not None:
-            if job.status == "pending":
+            if job.preparing:
                 return (
                     "policy_invalid",
                     "Review questions are still being prepared; review this change yourself.",
