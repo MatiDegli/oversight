@@ -193,33 +193,41 @@ async def _measure_function(
         compared=len(measured),
         reason="unrepresentable input" if len(measured) != len(before.results) else None,
     )
-    found[position] = result
     rows: list[BehaviorRow] = []
-    for index, old, new in measured:
-        if _identity(old) == _identity(new):
-            continue
-        # Until BOTH fresh repeats finish, this comparison certifies no stable difference.
-        unstable, incomplete = False, False
-        for side, tree in enumerate(trees):
-            rerun = await workspace.run_behavior(
-                tree,
-                _requests(rec, inputs, side, (result.node_id, index)),
-                timeout_s=_remaining(deadline),
+    try:
+        for index, old, new in measured:
+            if _identity(old) == _identity(new):
+                continue
+            # Until BOTH fresh repeats finish, this comparison certifies no stable difference.
+            unstable, incomplete = False, False
+            for side, tree in enumerate(trees):
+                rerun = await workspace.run_behavior(
+                    tree,
+                    _requests(rec, inputs, side, (result.node_id, index)),
+                    timeout_s=_remaining(deadline),
+                )
+                observation = rerun.get(result.node_id, BehaviorObservation(problem="unavailable"))
+                identity = (
+                    _identity(observation.results[0]) if len(observation.results) == 1 else None
+                )
+                incomplete |= observation.problem is not None or identity is None
+                unstable |= identity is not None and identity != _identity((old, new)[side])
+            reason = result.reason
+            if incomplete and (reason is None or "incomplete repeat" not in reason):
+                reason = f"{reason}; incomplete repeat" if reason else "incomplete repeat"
+            result = replace(
+                result,
+                differing=result.differing + int(not unstable and not incomplete),
+                reason=reason,
             )
-            observation = rerun.get(result.node_id, BehaviorObservation(problem="unavailable"))
-            identity = _identity(observation.results[0]) if len(observation.results) == 1 else None
-            incomplete |= observation.problem is not None or identity is None
-            unstable |= identity != _identity((old, new)[side])
-        unstable |= incomplete
-        result = replace(
-            result,
-            differing=result.differing + int(not unstable),
-            reason=result.reason or ("incomplete repeat" if incomplete else None),
-        )
-        if len(rows) < MAX_ROWS:
-            rows.append(BehaviorRow(inputs[result.node_id].inputs[index].call, old, new, unstable))
-        result = replace(result, rows=tuple(rows))
-        found[position] = result
+            # There is no per-row completeness field: keep incomplete samples out of public rows.
+            if not incomplete and len(rows) < MAX_ROWS:
+                rows.append(
+                    BehaviorRow(inputs[result.node_id].inputs[index].call, old, new, unstable)
+                )
+    finally:
+        # Preserve completed measurements even when a later rerun exhausts the shared deadline.
+        found[position] = replace(result, rows=tuple(rows))
 
 
 def _remaining(deadline: float) -> float:
