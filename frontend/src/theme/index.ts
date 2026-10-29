@@ -6,7 +6,7 @@ import { dayColors } from "./day.ts";
 // Canvas, Cytoscape and Monaco read getActiveTheme() rather than choosing colors.
 const baseThemes = {
   dark: {
-    ground: "#000000",
+    ground: "#070707",
     shell: "#09090a",
     panel: "#0d0d0f",
     field: "#0b0b0b",
@@ -66,8 +66,8 @@ const baseThemes = {
     "failed-text": "#ff7b7b",
     "matte-top": "#151515",
     "matte-bottom": "#0f0f0f",
-    "lamp-off": "#050505",
-    background: "#000000",
+    "lamp-off": "#070707",
+    background: "#070707",
     added: "#6fd08a",
     removed: "#ff6464",
     // Destructive text and icons (Reject, Stop) use failed-text.
@@ -205,8 +205,15 @@ const baseThemes = {
     "matte-grain": 0.02,
     "dot-cell-size": "7px",
     "dot-lamp-coverage": 0.72,
-    "dot-level-count": 4,
-    "dot-dither-size": 8,
+    // A lamp's brightness is continuous. Light under the low edge is off and the high edge is
+    // where it is whole, so the glow hugs its card and ends on a lamp, not on dust. Dim lamps lean
+    // to the deep end of their color (the weaker channels scaled by `deep`), a lamp whole at `mid`
+    // shows the agent's own color, and above it the hot core moves `hot` of the way to the ink.
+    "lamp-cut-low": 0.08,
+    "lamp-cut-high": 0.22,
+    "lamp-ramp-deep": 0.45,
+    "lamp-ramp-mid": 0.7,
+    "lamp-ramp-hot": 0.2,
     "guide-dot-size": "2px",
     "guide-dot-spacing": "28px",
     "light-near-weight": 0.72,

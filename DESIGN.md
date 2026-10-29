@@ -2,7 +2,7 @@
 name: Oversight
 description: A web IDE where one person supervises coding agents on a live graph of a Python repository.
 colors:
-  ground: "#000000"
+  ground: "#070707"
   shell: "#060606"
   panel: "#080808"
   field: "#0b0b0b"
@@ -74,7 +74,7 @@ colors:
   fold-tint: "rgba(255, 255, 255, 0.035)"
   matte-top: "#151515"
   matte-bottom: "#0f0f0f"
-  lamp-off: "#050505"
+  lamp-off: "#070707"
   guide-dot: "rgba(237, 237, 234, 0.10)"
   contour-line: "rgba(237, 237, 234, 0.10)"
   day-ground: "#f4f3ef"

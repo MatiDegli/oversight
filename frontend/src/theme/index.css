@@ -10,7 +10,7 @@
   color-scheme: dark;
   --top-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.045);
   --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-  --ground: #000000;
+  --ground: #070707;
   --shell: #09090a;
   --panel: #0d0d0f;
   --field: #0b0b0b;
@@ -70,7 +70,7 @@
   --failed-text: #ff7b7b;
   --matte-top: #151515;
   --matte-bottom: #0f0f0f;
-  --lamp-off: #050505;
+  --lamp-off: #070707;
   --background: var(--ground);
   --added: var(--passed);
   --removed: var(--failed);
@@ -285,8 +285,11 @@
   --matte-grain: 0.02;
   --dot-cell-size: 7px;
   --dot-lamp-coverage: 0.72;
-  --dot-level-count: 4;
-  --dot-dither-size: 8;
+  --lamp-cut-low: 0.08;
+  --lamp-cut-high: 0.22;
+  --lamp-ramp-deep: 0.45;
+  --lamp-ramp-mid: 0.7;
+  --lamp-ramp-hot: 0.2;
   --guide-dot-size: 2px;
   --guide-dot-spacing: 28px;
   --light-near-weight: 0.72;

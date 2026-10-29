@@ -502,9 +502,9 @@ class FieldRuntime implements FieldController {
     const row = Math.floor(y / this.look.cell);
     if (col < 0 || row < 0 || col >= this.grid.cols || row >= this.grid.rows) return null;
     const at = (row * this.grid.cols + col) * 4;
-    const top = this.transition.sample(performance.now()).config.levels - 1;
     return {
-      level: Math.round(((this.grid.data[at + 3] ?? 0) / 255) * top),
+      // The probe reads a lamp's continuous brightness in thirds, 0 off and 3 whole.
+      level: Math.round(((this.grid.data[at + 3] ?? 0) / 255) * 3),
       color: [this.grid.data[at] ?? 0, this.grid.data[at + 1] ?? 0, this.grid.data[at + 2] ?? 0],
     };
   }

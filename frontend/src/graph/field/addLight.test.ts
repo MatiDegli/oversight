@@ -1,14 +1,14 @@
 // Frozen reference from bb059a5. Only this test keeps the old addLight loop; the surrounding
-// pipeline stays here too, so byte comparisons include accumulation, clipping and dithering.
+// pipeline stays here too, so byte comparisons include accumulation and clipping; the shading is the product's own.
 import { describe, expect, it } from "vitest";
 
 import { themes } from "../../theme";
-import { bayerMatrix, createLampField, falloff, fieldConfig } from "./model";
+import { createLampField, falloff, fieldConfig, shadeLamps } from "./model";
 import type { Box, FieldConfig, LampGrid, PlacedLight } from "./model";
 import { breathing, ringIntensity, ringRadiusAt } from "./motion";
 
 function lowestLit(config: FieldConfig): number {
-  return 0.5 / (config.ditherSize * config.ditherSize * (config.levels - 1));
+  return config.cutLow;
 }
 
 /**
@@ -180,7 +180,7 @@ function createLegacyLampField() {
     reaching.sort((a, b) => b.light.weight - a.light.weight);
     for (const one of reaching.slice(0, config.limit))
       addLight(config, cols, rows, one, time, work);
-    quantize(config, cols, rows, work, work.data);
+    shadeLamps(config, cols, rows, work, work.data, new Uint8ClampedArray(cols * rows));
     return { cols, rows, data: work.data };
   };
 }
@@ -190,60 +190,6 @@ interface Accumulated {
   red: Float32Array;
   green: Float32Array;
   blue: Float32Array;
-}
-
-const dithers = new Map<number, Uint8Array>();
-/** The dither matrix of a size, made once. */
-function ditherOf(size: number): Uint8Array {
-  let matrix = dithers.get(size);
-  if (!matrix) {
-    matrix = bayerMatrix(size);
-    dithers.set(size, matrix);
-  }
-  return matrix;
-}
-
-/**
- * Turns each cell's intensity into a level with the ordered dither, and the level into a color
- * between lamp-off and the cell's mixed light color. The colors of overlapping lights mix by
- * intensity; their intensities add, up to the full light.
- */
-function quantize(
-  config: FieldConfig,
-  cols: number,
-  rows: number,
-  light: Accumulated,
-  out: Uint8ClampedArray,
-) {
-  const top = config.levels - 1;
-  const matrix = ditherOf(config.ditherSize);
-  const steps = config.ditherSize * config.ditherSize;
-  const [or, og, ob] = config.lampOff;
-  for (let row = 0; row < rows; row += 1) {
-    const rowOffset = (row % config.ditherSize) * config.ditherSize;
-    for (let col = 0; col < cols; col += 1) {
-      const k = row * cols + col;
-      const total = light.sum[k] ?? 0;
-      let level = 0;
-      if (total > 0) {
-        const threshold = ((matrix[rowOffset + (col % config.ditherSize)] ?? 0) + 0.5) / steps;
-        level = Math.min(top, Math.floor(Math.min(1, total) * top + threshold));
-      }
-      const o = k * 4;
-      if (level === 0) {
-        out[o] = or;
-        out[o + 1] = og;
-        out[o + 2] = ob;
-        out[o + 3] = 0;
-      } else {
-        const share = level / top;
-        out[o] = or + ((light.red[k] ?? 0) / total - or) * share;
-        out[o + 1] = og + ((light.green[k] ?? 0) / total - og) * share;
-        out[o + 2] = ob + ((light.blue[k] ?? 0) / total - ob) * share;
-        out[o + 3] = 255 * share;
-      }
-    }
-  }
 }
 
 const fixedLights: PlacedLight[] = [

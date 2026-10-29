@@ -44,8 +44,11 @@ export interface FieldTheme extends MotionTheme, ProfileTheme, Record<LightSourc
   "signal-light-near": string;
   "signal-light-far": string;
   "dot-cell-size": string;
-  "dot-level-count": number;
-  "dot-dither-size": number;
+  "lamp-cut-low": number;
+  "lamp-cut-high": number;
+  "lamp-ramp-deep": number;
+  "lamp-ramp-mid": number;
+  "lamp-ramp-hot": number;
   "light-near-weight": number;
   "light-far-weight": number;
   "light-source-limit": number;
@@ -54,9 +57,11 @@ export interface FieldTheme extends MotionTheme, ProfileTheme, Record<LightSourc
 export interface FieldConfig {
   /** A cell's side, in CSS px. */
   cell: number;
-  /** The levels a lamp can show, off included. */
-  levels: number;
-  ditherSize: number;
+  /** The intensity under which a lamp is off, and the one at which it is whole. */
+  cutLow: number;
+  cutHigh: number;
+  /** How a lamp's color follows its brightness: see the lamp-ramp tokens. */
+  ramp: { deep: number; mid: number; hot: number };
   /** The shares of a light's intensity that decay over the near and the far length. */
   nearShare: number;
   farShare: number;
@@ -98,8 +103,13 @@ export function fieldConfig(theme: FieldTheme, mode: FieldMode): FieldConfig {
   const key = profileKey[mode];
   return {
     cell: px(theme["dot-cell-size"]),
-    levels: theme["dot-level-count"],
-    ditherSize: theme["dot-dither-size"],
+    cutLow: theme["lamp-cut-low"],
+    cutHigh: theme["lamp-cut-high"],
+    ramp: {
+      deep: theme["lamp-ramp-deep"],
+      mid: theme["lamp-ramp-mid"],
+      hot: theme["lamp-ramp-hot"],
+    },
     nearShare: theme["light-near-weight"],
     farShare: theme["light-far-weight"],
     limit: theme["light-source-limit"],
@@ -140,34 +150,6 @@ export function placeLights(
   return [...placed.values()];
 }
 
-const matrices = new Map<number, Uint8Array>();
-
-/**
- * The ordered-dither matrix of a power-of-two size: each of 0 to size² - 1 once, built by the
- * recursive rule that doubles a matrix into four quarters offset by 0, 2, 3 and 1.
- */
-export function bayerMatrix(size: number): Uint8Array {
-  const known = matrices.get(size);
-  if (known) return known;
-  let matrix = [0];
-  for (let side = 1; side < size; side *= 2) {
-    const next = new Array<number>(4 * side * side).fill(0);
-    for (let y = 0; y < side; y += 1) {
-      for (let x = 0; x < side; x += 1) {
-        const base = 4 * (matrix[y * side + x] ?? 0);
-        next[y * 2 * side + x] = base;
-        next[y * 2 * side + x + side] = base + 2;
-        next[(y + side) * 2 * side + x] = base + 3;
-        next[(y + side) * 2 * side + x + side] = base + 1;
-      }
-    }
-    matrix = next;
-  }
-  const result = Uint8Array.from(matrix);
-  matrices.set(size, result);
-  return result;
-}
-
 /** Distance from a point to a box: 0 inside it. The light is shaped like the box. */
 export function boxDistance(box: Box, x: number, y: number): number {
   const dx = Math.max(box.x1 - x, 0, x - box.x2);
@@ -183,12 +165,9 @@ export function falloff(config: FieldConfig, distance: number): number {
   );
 }
 
-/**
- * The lowest intensity that can lift a lamp to its first level: the dither adds at least half a
- * step of the matrix to a level's share, so anything below this is off whatever the cell.
- */
+/** The lowest intensity that lights a lamp: anything under the cut's low edge is off. */
 function lowestLit(config: FieldConfig): number {
-  return 0.5 / (config.ditherSize * config.ditherSize * (config.levels - 1));
+  return config.cutLow;
 }
 
 /**
@@ -390,35 +369,46 @@ export function createLampField() {
       addLight(config, cols, rows, one, time, work);
     }
     decays = retained;
-    quantize(config, cols, rows, work, work.data, work.glow);
+    shadeLamps(config, cols, rows, work, work.data, work.glow);
     return { cols, rows, data: work.data, glow: work.glow };
   };
 }
 
-interface Accumulated {
+export interface Accumulated {
   sum: Float32Array;
   red: Float32Array;
   green: Float32Array;
   blue: Float32Array;
 }
 
-const dithers = new Map<number, Uint8Array>();
-/** The dither matrix of a size, made once. */
-function ditherOf(size: number): Uint8Array {
-  let matrix = dithers.get(size);
-  if (!matrix) {
-    matrix = bayerMatrix(size);
-    dithers.set(size, matrix);
-  }
-  return matrix;
+/** A smooth rise from 0 at `low` to 1 at `high`. */
+function smooth(low: number, high: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - low) / (high - low)));
+  return t * t * (3 - 2 * t);
+}
+
+/** One channel of a lit lamp: the light's, deepened if it is a weaker one, then lamp-off to it. */
+function lampColor(
+  channel: number,
+  peak: number,
+  weaker: number,
+  ink: number,
+  toInk: number,
+  off: number,
+  share: number,
+): number {
+  const base = channel >= peak ? channel : channel * weaker;
+  return off + (base + (ink - base) * toInk - off) * share;
 }
 
 /**
- * Turns each cell's intensity into a level with the ordered dither, and the level into a color
- * between lamp-off and the cell's mixed light color. The colors of overlapping lights mix by
- * intensity; their intensities add, up to the full light.
+ * Turns each cell's intensity into one lamp's brightness, the intensity itself held back by a smooth
+ * cut between its low edge and its high one, and the brightness into a color. Dim lamps lean to the deep end of the light's
+ * color, a lamp at `mid` shows it as it is, and the hot core moves `hot` of the way to the ink (the
+ * extreme away from lamp-off). The colors of overlapping lights mix by intensity; their
+ * intensities add, up to the full light.
  */
-function quantize(
+export function shadeLamps(
   config: FieldConfig,
   cols: number,
   rows: number,
@@ -426,35 +416,32 @@ function quantize(
   out: Uint8ClampedArray,
   glow: Uint8ClampedArray,
 ) {
-  const top = config.levels - 1;
-  const matrix = ditherOf(config.ditherSize);
-  const steps = config.ditherSize * config.ditherSize;
+  const { deep, mid, hot } = config.ramp;
   const [or, og, ob] = config.lampOff;
-  for (let row = 0; row < rows; row += 1) {
-    const rowOffset = (row % config.ditherSize) * config.ditherSize;
-    for (let col = 0; col < cols; col += 1) {
-      const k = row * cols + col;
-      const total = light.sum[k] ?? 0;
-      glow[k] = Math.min(1, total) * 255;
-      let level = 0;
-      if (total > 0) {
-        const threshold = ((matrix[rowOffset + (col % config.ditherSize)] ?? 0) + 0.5) / steps;
-        level = Math.min(top, Math.floor(Math.min(1, total) * top + threshold));
-      }
-      const o = k * 4;
-      if (level === 0) {
-        out[o] = or;
-        out[o + 1] = og;
-        out[o + 2] = ob;
-        out[o + 3] = 0;
-      } else {
-        const share = level / top;
-        out[o] = or + ((light.red[k] ?? 0) / total - or) * share;
-        out[o + 1] = og + ((light.green[k] ?? 0) / total - og) * share;
-        out[o + 2] = ob + ((light.blue[k] ?? 0) / total - ob) * share;
-        out[o + 3] = 255 * share;
-      }
+  const ink = or + og + ob > 381 ? 0 : 255;
+  for (let k = 0; k < cols * rows; k += 1) {
+    const total = light.sum[k] ?? 0;
+    glow[k] = Math.min(1, total) * 255;
+    const intensity = Math.min(1, total);
+    const share = intensity * smooth(config.cutLow, config.cutHigh, intensity);
+    const o = k * 4;
+    if (share <= 0) {
+      out[o] = or;
+      out[o + 1] = og;
+      out[o + 2] = ob;
+      out[o + 3] = 0;
+      continue;
     }
+    const red = (light.red[k] ?? 0) / total;
+    const green = (light.green[k] ?? 0) / total;
+    const blue = (light.blue[k] ?? 0) / total;
+    const peak = Math.max(red, green, blue);
+    const weaker = deep + (1 - deep) * Math.min(1, share / mid);
+    const toInk = share > mid ? ((share - mid) / (1 - mid)) * hot : 0;
+    out[o] = lampColor(red, peak, weaker, ink, toInk, or, share);
+    out[o + 1] = lampColor(green, peak, weaker, ink, toInk, og, share);
+    out[o + 2] = lampColor(blue, peak, weaker, ink, toInk, ob, share);
+    out[o + 3] = 255 * share;
   }
 }
 

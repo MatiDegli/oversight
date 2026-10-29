@@ -3,15 +3,15 @@ import { describe, expect, it } from "vitest";
 import { themes } from "../../theme";
 import type { FieldLight, FieldMode } from "./lights";
 import {
-  bayerMatrix,
   boxDistance,
   createLampField,
   falloff,
   fieldConfig,
   parseHex,
   placeLights,
+  shadeLamps,
 } from "./model";
-import type { Box, FieldConfig, LampGrid, PlacedLight, Rgb } from "./model";
+import type { Accumulated, Box, FieldConfig, LampGrid, PlacedLight, Rgb } from "./model";
 
 const ORANGE: Rgb = [255, 92, 31];
 const BLUE: Rgb = [79, 125, 255];
@@ -45,26 +45,6 @@ function levels(grid: LampGrid): number[] {
 
 const sum = (grid: LampGrid) => levels(grid).reduce((total, value) => total + value, 0);
 
-describe("the dither matrix", () => {
-  it("holds each of 0 to 63 once and builds from quarters offset by 0, 2, 3 and 1", () => {
-    const matrix = bayerMatrix(8);
-    expect([...matrix].sort((a, b) => a - b)).toEqual(Array.from({ length: 64 }, (_, k) => k));
-    // The corner of the 8 by 8 matrix: 0 and 32 over 48 and 16, as the recursion gives.
-    expect([matrix[0], matrix[1], matrix[8], matrix[9]]).toEqual([0, 32, 48, 16]);
-    const quarterOffset = [
-      [0, 0, 0],
-      [4, 0, 2],
-      [0, 4, 3],
-      [4, 4, 1],
-    ] as const;
-    for (const [x, y, offset] of quarterOffset) {
-      for (let row = 0; row < 4; row += 1)
-        for (let col = 0; col < 4; col += 1)
-          expect((matrix[(y + row) * 8 + x + col] ?? 0) % 4).toBe(offset);
-    }
-  });
-});
-
 describe("the field's numbers", () => {
   it("use the R4 spread tokens in every mode and keep each mode's gain", () => {
     const profile = (mode: FieldMode) => fieldConfig(themes.dark, mode).profile;
@@ -74,12 +54,13 @@ describe("the field's numbers", () => {
     expect(profile("review")).toEqual({ near: 26, far: 72, gain: 0.7 });
     expect(config).toMatchObject({
       cell: 7,
-      levels: 4,
-      ditherSize: 8,
+      cutLow: 0.08,
+      cutHigh: 0.22,
+      ramp: { deep: 0.45, mid: 0.7, hot: 0.2 },
       nearShare: 0.72,
       farShare: 0.28,
       limit: 8,
-      lampOff: [5, 5, 5],
+      lampOff: [7, 7, 7],
     });
   });
 
@@ -123,57 +104,50 @@ describe("the lamps", () => {
     const grid = lamps(config, 1920, 1080, [], null);
     expect([grid.cols, grid.rows]).toEqual([275, 155]);
     expect(levels(grid).every((value) => value === 0)).toBe(true);
-    expect(color(grid, 10, 10)).toEqual([5, 5, 5]);
+    expect(color(grid, 10, 10)).toEqual([7, 7, 7]);
     expect(grid.data[3]).toBe(0);
   });
 
-  it("carry a smooth glow beside the dithered levels: none without light, falling gently outward", () => {
+  it("carry a smooth glow beside the lamps: none without light, falling gently outward", () => {
     expect(lamps(config, 600, 400, [], null).glow?.every((value) => value === 0)).toBe(true);
     const grid = lamps(config, 1920, 400, [light(BOX)], null);
     const row = 25;
     const glow = Array.from({ length: 120 }, (_, i) => grid.glow?.[row * grid.cols + 40 + i] ?? 0);
     expect(glow[0]).toBeGreaterThan(200);
     expect(glow).toEqual([...glow].sort((a, b) => b - a));
-    // A level is a step of 85; the glow falls by less than that from one cell to the next.
-    expect(Math.max(...glow.slice(1).map((value, i) => (glow[i] ?? 0) - value))).toBeLessThan(85);
+    // The glow falls by a small step from one cell to the next.
+    expect(Math.max(...glow.slice(1).map((value, i) => (glow[i] ?? 0) - value))).toBeLessThan(50);
     expect(glow.at(-1)).toBeLessThan(40);
   });
 
-  it("show one of four levels by an 8 by 8 dither: 0.92 gives 49 lamps of 64 at the top", () => {
-    const grid = lamps(config, 600, 400, [light(BOX)], null);
-    // Cells 20..27 by 20..27 lie inside the box, where the light is 1 x 0.92 everywhere.
-    const block: number[] = [];
+  it("give each lamp its own brightness: the light's intensity, off under the cut, falling outward", () => {
+    const grid = lamps(config, 1920, 400, [light(BOX)], null);
+    const alpha = (col: number, row: number) => grid.data[(row * grid.cols + col) * 4 + 3] ?? 0;
+    // Inside the box the light is 1 x 0.92: every lamp shows 92% of its brightness there.
     for (let row = 20; row < 28; row += 1)
-      for (let col = 20; col < 28; col += 1) block.push(level(grid, col, row));
-    // 3 x 0.92 = 2.76: a lamp reaches level 3 where the matrix adds 0.24 or more, 49 of 64 steps.
-    expect(block.filter((value) => value === 3)).toHaveLength(49);
-    expect(block.filter((value) => value === 2)).toHaveLength(15);
-    // The same matrix repeats every 8 cells.
-    expect(level(grid, 20, 20)).toBe(level(grid, 28, 20));
-    expect(level(grid, 20, 20)).toBe(level(grid, 20, 28));
-  });
-
-  it("take their color from lamp-off to the light's color by level", () => {
-    const grid = lamps(config, 600, 400, [light(BOX)], null);
-    for (let row = 20; row < 28; row += 1) {
-      for (let col = 20; col < 28; col += 1) {
-        const at = level(grid, col, row);
-        const expected = ORANGE.map((channel) => Math.round(5 + (channel - 5) * (at / 3)));
-        expect(color(grid, col, row), `${String(col)},${String(row)}`).toEqual(expected);
-      }
-    }
+      for (let col = 20; col < 28; col += 1)
+        expect(Math.abs(alpha(col, row) - 0.92 * 255)).toBeLessThanOrEqual(1);
+    // Outward from the box the brightness falls with no matrix: many values, never rising.
+    const row = 25;
+    const along = Array.from({ length: 80 }, (_, i) => alpha(40 + i, row));
+    expect(along).toEqual([...along].sort((a, b) => b - a));
+    expect(new Set(along.filter((value) => value > 0)).size).toBeGreaterThan(8);
+    // Cells at the same distance from the box are equal, whatever their row: nothing is dithered.
+    for (let col = 40; col < 120; col += 1) expect(alpha(col, 21)).toBe(alpha(col, 27));
+    // Past the cut's low edge a lamp is off, and the light stays near its card.
+    expect(along.at(-1)).toBe(0);
   });
 
   it("agree with the formula on every cell: nothing is lost by cutting a light off far away", () => {
     const grid = lamps(config, 700, 500, [light(BOX)], null);
-    const matrix = bayerMatrix(8);
     for (let row = 0; row < grid.rows; row += 1) {
       for (let col = 0; col < grid.cols; col += 1) {
         const distance = boxDistance(BOX, (col + 0.5) * 7, (row + 0.5) * 7);
-        const intensity = 0.92 * falloff(config, distance);
-        const threshold = ((matrix[(row % 8) * 8 + (col % 8)] ?? 0) + 0.5) / 64;
-        const expected = Math.min(3, Math.floor(Math.min(1, intensity) * 3 + threshold));
-        expect(level(grid, col, row), `${String(col)},${String(row)}`).toBe(expected);
+        const intensity = Math.min(1, 0.92 * falloff(config, distance));
+        const t = Math.min(1, Math.max(0, (intensity - 0.08) / (0.22 - 0.08)));
+        const expected = 255 * intensity * t * t * (3 - 2 * t);
+        const alpha = grid.data[(row * grid.cols + col) * 4 + 3] ?? 0;
+        expect(Math.abs(alpha - expected), `${String(col)},${String(row)}`).toBeLessThanOrEqual(1);
       }
     }
   });
@@ -195,13 +169,47 @@ describe("the lamps", () => {
       [light(BOX, { weight: 1 }), light(BOX, { weight: 0.5, color: BLUE })],
       null,
     );
-    // Inside the box the intensities are 0.92 and 0.46: together past full, so the top level, in
-    // the mix of the two colors weighted by those intensities (two thirds orange, one third blue).
+    // Inside the box the intensities are 0.92 and 0.46: together past full, so a whole lamp, in
+    // the mix of the two colors weighted by those intensities (two thirds orange, one third blue),
+    // with its hot core a fifth of the way to white.
     const [r, g, b] = color(grid, 24, 24);
     expect(level(grid, 24, 24)).toBe(3);
-    expect(r).toBeCloseTo((255 * 2 + 79) / 3, 0);
-    expect(g).toBeCloseTo((92 * 2 + 125) / 3, 0);
-    expect(b).toBeCloseTo((31 * 2 + 255) / 3, 0);
+    const mixed = [(255 * 2 + 79) / 3, (92 * 2 + 125) / 3, (31 * 2 + 255) / 3];
+    const hot = (channel: number) => channel + (255 - channel) * 0.2;
+    expect(r).toBeCloseTo(hot(mixed[0] ?? 0), 0);
+    expect(g).toBeCloseTo(hot(mixed[1] ?? 0), 0);
+    expect(b).toBeCloseTo(hot(mixed[2] ?? 0), 0);
+  });
+
+  it("color a lamp along its brightness: deep when dim, the agent's own at mid, light at the core", () => {
+    const shades = (rgb: Rgb, intensities: number[], cfg: FieldConfig = config) => {
+      const cells = intensities.length;
+      const accumulated: Accumulated = {
+        sum: Float32Array.from(intensities),
+        red: Float32Array.from(intensities, (value) => value * rgb[0]),
+        green: Float32Array.from(intensities, (value) => value * rgb[1]),
+        blue: Float32Array.from(intensities, (value) => value * rgb[2]),
+      };
+      const data = new Uint8ClampedArray(cells * 4);
+      shadeLamps(cfg, cells, 1, accumulated, data, new Uint8ClampedArray(cells));
+      return Array.from({ length: cells }, (_, k) => [...data.slice(k * 4, k * 4 + 4)]);
+    };
+    // Under the low edge off; just above it a dim lamp; a lamp at the high edge's middle; whole.
+    const [off, dim, mid, whole] = shades(ORANGE, [0.05, 0.12, 0.17, 1]);
+    expect(off).toEqual([7, 7, 7, 0]);
+    // Dim: the weaker channels fall faster than the strong one, so the lamp leans to deep red.
+    const dimRatio = ((dim?.[1] ?? 0) - 7) / ((dim?.[0] ?? 1) - 7);
+    expect(dimRatio).toBeLessThan(92 / 255);
+    expect(dim?.[0]).toBeLessThan(mid?.[0] ?? 0);
+    // Whole: brighter and lighter than the agent's color, a fifth of the way to white.
+    expect(whole).toEqual([255, 125, 76, 255]);
+    // The same ramp in the agent's blue: its strong channel stays, the hot core is lighter.
+    const [, blueDim, , blueWhole] = shades(BLUE, [0.05, 0.12, 0.17, 1]);
+    expect(blueWhole).toEqual([114, 151, 255, 255]);
+    expect(((blueDim?.[0] ?? 0) - 7) / ((blueDim?.[2] ?? 1) - 7)).toBeLessThan(79 / 255);
+    // On the day ground the hot core goes the other way, toward ink.
+    const dayConfig = fieldConfig(themes.day, "watch");
+    expect(shades([178, 60, 10], [1], dayConfig)[0]).toEqual([142, 48, 8, 255]);
   });
 
   it("mix at most 8 lights: the strongest of those on the screen", () => {
@@ -318,13 +326,13 @@ describe("the lamps in motion", () => {
       return total;
     };
     const pulsing = light(BOX, { pulses: true });
-    // 0.92 x 0.72 = 0.66: 63 lamps at level 2 and one at 1; 0.92 x 1: 49 at level 3, 15 at 2.
-    expect(block(lamps(config, 600, 400, [pulsing], 0))).toBe(63 * 2 + 1);
-    expect(block(lamps(config, 600, 400, [pulsing], 1.45))).toBe(49 * 3 + 15 * 2);
+    // 0.92 x 0.72 = 0.66 is two thirds bright, 0.92 x 1 three thirds, in each of the 64 lamps.
+    expect(block(lamps(config, 600, 400, [pulsing], 0))).toBe(64 * 2);
+    expect(block(lamps(config, 600, 400, [pulsing], 1.45))).toBe(64 * 3);
     // The still light, with no clock, is the full weight.
-    expect(block(lamps(config, 600, 400, [pulsing], null))).toBe(49 * 3 + 15 * 2);
+    expect(block(lamps(config, 600, 400, [pulsing], null))).toBe(64 * 3);
     // A light that does not pulse ignores the clock.
-    expect(block(lamps(config, 600, 400, [light(BOX)], 0))).toBe(49 * 3 + 15 * 2);
+    expect(block(lamps(config, 600, 400, [light(BOX)], 0))).toBe(64 * 3);
   });
 
   it("send a ring from the node's center at 55 px per second, in the agent's color", () => {
@@ -336,9 +344,9 @@ describe("the lamps in motion", () => {
       });
     // At 2 s the ring is 110 px out: its band is lit, and 50 px inside or outside it is not.
     const grid = lamps(config, 800, 600, [pulsing], 2);
-    expect(at(grid, 110, 3)).toBeGreaterThan(1.8);
-    expect(at(grid, 60, 3)).toBeLessThan(at(grid, 110, 3) - 1);
-    expect(at(grid, 160, 3)).toBeLessThan(at(grid, 110, 3) - 1);
+    expect(at(grid, 110, 3)).toBeGreaterThan(1.4);
+    expect(at(grid, 60, 3)).toBeLessThan(at(grid, 110, 3) - 0.8);
+    expect(at(grid, 160, 3)).toBeLessThan(at(grid, 110, 3) - 0.8);
     // A cell on the band is in the agent's color, not a neutral one.
     const col = Math.round((400 + 110) / 7 - 0.5);
     const row = Math.round(300 / 7 - 0.5);
