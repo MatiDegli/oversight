@@ -365,6 +365,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Approve fill in v4 review | blue | text fill, page label | neutral decision; blue belongs to agent B |
 | Settings examples | sample numbers, rules and provider rows | backed settings only | the sketch does not create configuration or change contracts |
 | Light of a merge | merge-mid.png: a hard top edge | a soft falloff on every side | maintainer, 2026-10-29: never a hard or blocky edge |
+| Light of a waiting change | not drawn (the sketches show a merge only) | one steady light, dimmer than a working agent's, while the change has an open inbox entry | maintainer, 2026-10-29 clarification: the light belongs to a change, in three states |
 | "merged" chips on nodes | drawn in the rest and merge sketches | not built in this front: the graph shows a merged node in main's neutral look, and the rail card says what merged | the chips are a separate piece of the node look; until then the cards carry it (flagged to the maintainer) |
 | Contour mask | exact rectangles with a soft edge | whole 7px cells, the field's own mask | one mask for lamps and lines; a line ends within 7px of an overlay |
 | Tests scan, rolling numbers, top-edge light, focus glow, button press | drawn | not built in this front | part 2 of the life layer |
@@ -965,11 +966,12 @@ lines (the fallback that existed before the contours).
   A light always falls off softly on every side, however faint it has become.
 - **Sources:** only each agent's current node at full strength and its last read node at about
   0.4 emit light, in that agent's token, and only while that agent is acting (see Agent light).
-  The last read is one node, not an accumulating history; other changed nodes, selected neighbors
-  and the impact cone are not additional emitters. The existing eight-source budget is unchanged:
-  current foci first, then last reads, with stable slot/agent-id order within each group; excess
-  sources are dropped. A merge's fading light is one more source of its agent's color, counted in
-  the same budget.
+  A change waiting on an open inbox entry adds one steady, dimmer light on its node, and a decided
+  change one fading light. The last read is one node, not an accumulating history; other changed
+  nodes, selected neighbors and the impact cone are not additional emitters. The existing
+  eight-source budget is unchanged: current foci first, then last reads, with stable
+  slot/agent-id order within each group; excess sources are dropped. A decided change's fading
+  light is one more source of its agent's color, counted in the same budget.
 - **Mask:** the title, legend, zoom controls and every overlay mask the field, including the
   contour lines. Neither the LEDs, the lines nor a travelling light may show through those areas.
   Cards on the graph are 90 to 94% opaque, so lines are not seen through them either.
@@ -979,14 +981,31 @@ lines (the fallback that existed before the contours).
   route when one exists, carrying its local light with it. When the agent stops acting the marker
   fades out with its light; the Motion rules set its timing and reduced-motion fallback.
 
-**Agent light.** Colored light means an agent is acting now: its status is working or revising.
-A proposal, a pause, a halt, a stop or a decision ends it; an agent waiting for review has none.
-After a merge, that agent's light fades out over about 90 seconds (the sketch uses
-`(1 - p)^1.6` for the share left); at rest there is no colored light anywhere. What changed stays
-told by the rail cards and the node marks, never by light. Ambient motion and light that no event
-causes (the contours) remain allowed. This replaces the earlier rule in this section that the
-current node and last read stay lit, at their weights, until the change is decided, and the
-earlier line that the light fades out with the marker on approval.
+**Agent light.** Colored light means an agent is acting now, and then the light belongs to a change,
+in three states (maintainer, 2026-10-29):
+
+1. **Working.** The agent's status is working or revising: today's light, with its ring and its
+   marker where the agent reads or edits (current node at full weight, last read at about 0.4).
+2. **Waiting.** The change has at least one open entry in the decisions inbox, read from
+   `selectDecisionInbox(state)` and never from a rule of the field's own, so it follows the
+   selector when its rule changes. The light stays on the change's node, steady and dimmer
+   (`waiting-light-weight`, 0.5, against 1 for a working agent), with no motion: no ring, no
+   marker, no breathing, and it never pulses, blinks or grows stronger however long it waits.
+   Opening the review or clicking the node does not turn it off (the mode only scales it, as it
+   scales every light); closing the entries does.
+3. **Decided.** Merged (by rules or by the person), approved or rejected: the light holds the
+   waiting level and fades out over about 90 seconds (the sketch uses `(1 - p)^1.6` for the share
+   left). A merge also sends its pulse (Merge travel) and the fade starts when it arrives; a
+   rejection fades from the decision.
+
+No color or pulse anywhere else for this: the header's "Decisions · N" counter stays neutral, and
+what changed earlier stays told without color by the rail cards and the node marks. An agent that
+has stopped or finished, with nothing open in the inbox, has no light; at rest there is none
+anywhere, only the contours and ambient motion that no event causes. The dimmer level is a
+theme-independent token, so both token sets carry it. This replaces the earlier rule in this
+section that the current node and last read stay lit, at their weights, until the change is
+decided, the earlier line that the light fades out with the marker on approval, and (within this
+front) the first version of the rule, which gave an agent waiting for review no light at all.
 
 **Rest background.** The ground at rest is gray topographic contour lines derived from the graph:
 
@@ -1003,9 +1022,10 @@ earlier line that the light fades out with the marker on approval.
 
 **Merge travel.** When a change is merged, a pulse in the agent's color leaves that agent's rail
 card, runs along the graph's edges to the merged node with a short trail that fades behind it,
-and arrives. The node's light then starts and fades as in Agent light. The travel is drawn above
+and arrives. The node's light, which held the waiting level from the decision, then fades as in
+Agent light (a rejection sends no pulse; its light fades from the decision). The travel is drawn above
 the graph, clipped by the field mask, and never moves the camera, opens a panel or takes focus.
-Under reduced motion there is no travel: the light appears at once and fades over the same time.
+Under reduced motion there is no travel: the light is there at once and fades over the same time.
 
 **What is out of the life layer** (maintainer, 2026-10-29): click waves, a hover flashlight,
 borders that follow the pointer, button flashes, a boot sweep (at most a 0.5s fade-in) and
@@ -1210,7 +1230,9 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 - **Don't** add surface effects beyond the card layers, frosted graph overlays, still matte header and
   the field's contours; no click waves, hover flashlight, pointer-following borders, button flashes,
   boot sweep or wipes.
-- **Don't** leave colored light on at rest: only an agent that is acting, or has just merged, lights the graph.
+- **Don't** leave colored light on at rest: only an agent that is acting, a change that waits on an
+  open entry of the decisions inbox (steady and dimmer, never moving), or one decided in the last
+  90 seconds lights the graph.
 - **Don't** move nodes between modes.
 - **Don't** give Approve a keyboard shortcut, Ctrl+Enter included.
 - **Don't** use uppercase outside group labels, or Mono as decoration.

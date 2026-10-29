@@ -1299,13 +1299,24 @@ docs/sketches/life/ (committed as an exception for approved sketches only; the i
 reference stays outside the repository). This part builds points 1 to 6 of his decision; the
 tests scan, rolling numbers, top-edge light, focus glow and button press are part 2.
 
-1. **Colored light means an agent is acting now.** An agent lights the graph while it is working
-   or revising. After a merge its light fades out over about 90 seconds, along `(1 - p)^1.6`; at
-   rest nothing is lit. What changed stays told by the rail cards and the node marks. This replaces
-   the rule that an agent's current node and last read stay lit until the change is decided, and
-   the 240ms fade of the light on approval. Ambient motion and light without events stay allowed.
-   An agent waiting for review is not acting, so it no longer lights the field (open question for
-   the maintainer: keep a light there?).
+1. **Colored light means an agent is acting now, and it belongs to a change in three states.**
+   (a) Working: the agent's status is working or revising; today's light, with its ring where it
+   reads or edits. (b) Waiting: the change has at least one open entry in the decisions inbox, read
+   from `selectDecisionInbox(state)` and not from a rule of the field's own; the light stays on
+   the change's node, steady and dimmer (`waiting-light-weight` 0.5, a theme-independent token, so
+   both token sets carry it), with no motion, and never pulses, blinks or grows however long it
+   waits; opening the review or clicking the node does not turn it off, closing the entries does.
+   (c) Decided, whether merged (by rules or by the person), approved or rejected: the light holds
+   the waiting level and fades out over about 90 seconds, along `(1 - p)^1.6`. At rest nothing is
+   lit. No color or pulse is added anywhere else: the "Decisions · N" counter stays neutral, and
+   what changed earlier stays told without color by the rail cards and the node marks. This
+   replaces the rule that an agent's current node and last read stay lit until the change is
+   decided, and the 240ms fade of the light on approval. Ambient motion and light without events
+   stay allowed. The first version of this entry gave an agent waiting for review no light and asked
+   the maintainer; his clarification of the same day is state (b). The recorded runs predate the
+   inbox, so their replays show no waiting light: a merge there brings its light at the decision
+   (the pulse travels, the light holds and fades), and a hand-written run with a review card
+   (`fixtures/events/handwritten-level1-waiting.jsonl`) shows all three states.
 2. **The rest ground is gray topographic contours derived from the graph:** one moderate hill per
    module (its height grows with the calls into it from other modules, over a small range), a few
    soft mounds in empty areas, wide level spacing (at most about 8 lines per hill), 1px, very
