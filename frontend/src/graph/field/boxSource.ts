@@ -2,7 +2,7 @@
 // changed. It reads rendered boxes and nothing else, so the field never draws a node or an edge and
 // the graph knows nothing about lights. GraphView attaches the instance it creates and detaches it
 // when it destroys it.
-import type { Core } from "cytoscape";
+import type { Core, EdgeSingular } from "cytoscape";
 
 import { getActiveTheme } from "../../theme";
 import type { XY } from "../orthogonal";
@@ -16,9 +16,16 @@ export interface BoxSource {
   zoom?(): number;
   /** The actual rendered edge in travel order, or null when there is no edge. */
   route?(from: string, to: string): XY[] | null;
+  /**
+   * The routes of the edges that end at a node, each in travel order from its far end to the node.
+   * Edges that cannot be routed are left out; a node with no edge has none.
+   */
+  edgesAt?(id: string): XY[][];
   detach(): void;
   /** The rendered boxes of the nodes with these ids; an id with no node on the graph is left out. */
   boxes(ids: readonly string[]): Map<string, Box>;
+  /** The whole rendered frames of these nodes, an open container's header and body included. */
+  frames?(ids: readonly string[]): Map<string, Box>;
   /** Calls `listener` after Cytoscape renders, resizes or is attached; returns its unsubscribe. */
   subscribe(listener: () => void): () => void;
 }
@@ -65,6 +72,37 @@ export function createBoxSource(): BoxSource {
       const bends = edge.renderedSegmentPoints();
       const points = [start, ...(Array.isArray(bends) ? bends : []), end];
       return edge.source().id() === a ? points : points.reverse();
+    },
+    edgesAt(id) {
+      if (!graph) return [];
+      const at = visibleId(graph, id);
+      const node = graph.getElementById(at);
+      if (node.empty() || !node.isNode()) return [];
+      return (node.connectedEdges().toArray() as EdgeSingular[])
+        .filter((edge) => !edge.hasClass("unroutable"))
+        .flatMap((edge) => {
+          const start = edge.renderedSourceEndpoint();
+          const end = edge.renderedTargetEndpoint();
+          if (!validPoint(start) || !validPoint(end)) return [];
+          const bends = edge.renderedSegmentPoints();
+          const points = [start, ...(Array.isArray(bends) ? bends : []), end];
+          return [edge.target().id() === at ? points : points.reverse()];
+        });
+    },
+    frames(ids) {
+      const found = new Map<string, Box>();
+      if (!graph) return found;
+      for (const id of ids) {
+        const node = graph.getElementById(visibleId(graph, id));
+        if (node.empty() || !node.isNode()) continue;
+        const { x1, y1, x2, y2 } = node.renderedBoundingBox({
+          includeLabels: false,
+          includeOverlays: false,
+          includeEdges: false,
+        });
+        found.set(id, { x1, y1, x2, y2 });
+      }
+      return found;
     },
     boxes(ids) {
       const found = new Map<string, Box>();

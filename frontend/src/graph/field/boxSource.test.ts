@@ -62,3 +62,37 @@ it("uses the folded card or the open header, never an open module's whole frame,
     cy.destroy();
   }
 });
+
+it("gives an open module's whole frame, where boxes() gives only its header", () => {
+  const cy = cytoscape({
+    headless: true,
+    styleEnabled: true,
+    layout: { name: "preset" },
+    elements: [
+      { data: { id: "module" } },
+      { data: { id: "row", parent: "module" }, position: { x: 100, y: 200 } },
+    ],
+    style: [{ selector: "node", style: { width: 200, height: 200 } }],
+  });
+  const source = createBoxSource();
+  try {
+    source.attach(cy);
+    cy.zoom(0.5);
+    const frame = source.frames?.(["module", "missing"]);
+    const header = source.boxes(["module"]).get("module");
+    expect(frame?.size).toBe(1);
+    const whole = frame?.get("module");
+    expect((whole?.y2 ?? 0) - (whole?.y1 ?? 0)).toBeGreaterThan(100);
+    expect((whole?.y2 ?? 0) - (whole?.y1 ?? 0)).toBeGreaterThan(
+      (header?.y2 ?? 0) - (header?.y1 ?? 0),
+    );
+    expect(whole?.y1).toBe(header?.y1);
+    expect(source.edgesAt?.("row")).toEqual([]);
+    source.detach();
+    expect(source.frames?.(["module"]).size).toBe(0);
+    expect(source.edgesAt?.("row")).toEqual([]);
+  } finally {
+    source.detach();
+    cy.destroy();
+  }
+});
