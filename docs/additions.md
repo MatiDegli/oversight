@@ -60,7 +60,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 13 | Pinned examples and graph lenses | Queued — no pins or lens control on main `535e6f6` | Yes |
 | 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
 | 18 | Remaining packages 11–14 | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
-| — | [Standing grants](#standing-grants) | Plan proposed 2026-10-29 in [standing-grants.md](plans/standing-grants.md); position awaits the maintainer | Yes — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route |
+| — | [Standing grants](#standing-grants) | Plan proposed 2026-10-29 in [standing-grants.md](plans/standing-grants.md); position awaits the maintainer | Separate 1.7.0 proposal (2026-10-29), not in the Oct 28 set — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route |
 
 ### Only if time remains
 

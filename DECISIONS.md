@@ -1324,9 +1324,11 @@ has a caller linked only by possible calls, counted exactly as the review's "N p
 not followed" counts them. `unknown` never counts as passing, so in rules mode the change waits
 for the person, and the inbox entry lists those callers. His Yes is recorded as accepted by him,
 never as asked for, as with D6. A cone that already fails the exact limits stays `fail`. The
-contracts do not change: the recorded observation keeps its five counts. On Boltons d31d821 this
-sends about half of single-function changes to the person (446 of 898), and 5 of the 16 drafted
-proof 2 tasks; the tasks are not changed to avoid it, and the run reports whatever share results.
+contracts do not change: the recorded observation keeps its five counts. For Boltons d31d821,
+446 of 898 single-function changes and 5 of the 16 drafted proof 2 tasks are planning estimates,
+not reproducible from this repository: the corpus measurement and draft task list are not checked
+in, and the 16 are not `tools/eval/tasks.json`. The tasks are not changed to avoid it, and the run
+reports whatever share results.
 
 ## 2026-10-29 — Standing grants: Oversight remembers what the person let go
 
