@@ -28,7 +28,9 @@ def test_capacity_loads_from_file_and_environment(
     assert Settings.load(env).max_agents == 2
 
 
-@pytest.mark.parametrize("value", ["0", "7", "four", "", "1.5"])
+@pytest.mark.parametrize(
+    "value", ["0", "7", "four", "", "1.5", pytest.param("9" * 5000, id="oversized-integer")]
+)
 @pytest.mark.parametrize("source", ["file", "environment"])
 def test_invalid_capacity_names_the_variable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str, source: str

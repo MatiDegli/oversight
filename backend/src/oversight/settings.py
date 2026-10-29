@@ -243,7 +243,8 @@ def resolve_ports(
 
 def resolve_max_agents(values: Mapping[str, str]) -> int:
     """An absent capacity defaults to four; an explicitly empty value is invalid."""
-    raw = values.get("OVERSIGHT_MAX_AGENTS", "4")
-    if not raw.isascii() or not raw.isdecimal() or not 1 <= int(raw) <= 6:
+    raw = values.get("OVERSIGHT_MAX_AGENTS", "4").lstrip("0")
+    # Check the bounded value before int(): oversized input must name this variable too.
+    if raw not in ("1", "2", "3", "4", "5", "6"):
         raise ValueError("OVERSIGHT_MAX_AGENTS must be an integer from 1 to 6")
     return int(raw)
