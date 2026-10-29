@@ -3,8 +3,13 @@ import { expect, it } from "vitest";
 
 import delegation from "../../../fixtures/events/handwritten-inbox-delegation.jsonl?raw";
 import { parseEvent } from "../transport";
-import { applyEvent, createInitialState, selectDecisionInbox } from "./index";
+import { applyEvent, createInitialState, selectDecisionInbox as groupedInbox } from "./index";
 import type { State } from "./types";
+
+const selectDecisionInbox = (state: State) =>
+  groupedInbox(state)
+    .flatMap((entry) => entry.decisions)
+    .filter((decision) => decision.kind !== "change");
 
 const log = delegation.trim().split("\n").map(parseEvent);
 const replay = (end = log.length) => log.slice(0, end).reduce(applyEvent, createInitialState());
@@ -39,30 +44,9 @@ const secondAttempt = {
 };
 
 it("replays every step: halt, stop and proposal, retaining identity, order and attempts", () => {
-  const expectedQuestions = [
-    [],
-    [],
-    [],
-    [],
-    ["Finish delegation?", "Retry delegation?"],
-    ["Finish delegation?"],
-    ["Finish delegation?"],
-    ["Finish delegation?", "Retry delegation?"],
-    ["Finish delegation?", "Retry delegation?"],
-    ["Finish delegation?", "Retry delegation?"],
-    ["Finish delegation?"],
-    ["Finish delegation?", "Retry delegation?"],
-    ["Finish delegation?", "Retry delegation?"],
-    ["Finish delegation?", "Retry delegation?"],
-    ["Finish delegation?"],
-    ["Finish delegation?"],
-    ["Finish delegation?"],
-    [],
-    [],
-    [],
-    [],
-    [],
-  ];
+  const expectedQuestions = log.map((event) =>
+    event.seq < 5 ? [] : ["Finish delegation?", "Retry delegation?"],
+  );
   const original = retry(replay(5));
   expect(original).toBeDefined();
   let state = createInitialState();
@@ -87,33 +71,54 @@ it("replays every step: halt, stop and proposal, retaining identity, order and a
       });
       expect(reopened.age).toBe(selectDecisionInbox(state)[0]?.age);
       expect(reopened.attempts).toEqual(
-        event.seq >= 12 ? [firstAttempt, secondAttempt] : event.seq >= 8 ? [firstAttempt] : [],
+        event.seq >= 15
+          ? [
+              firstAttempt,
+              secondAttempt,
+              {
+                agentId: "agent-4",
+                slot: "D",
+                echoSeq: 15,
+                endState: event.seq >= 17 ? "halted" : null,
+                endSeq: event.seq >= 17 ? 17 : null,
+                reason: event.seq >= 17 ? "Ended after proposing" : null,
+              },
+            ]
+          : event.seq >= 12
+            ? [firstAttempt, secondAttempt]
+            : event.seq >= 11
+              ? [firstAttempt, { ...secondAttempt, endState: null, reason: null, endSeq: null }]
+              : event.seq >= 8
+                ? [firstAttempt]
+                : event.seq >= 6
+                  ? [{ ...firstAttempt, endState: null, reason: null, endSeq: null }]
+                  : [],
       );
     }
   }
   expect(state).toEqual(replay());
 });
 
-it("keeps proposals authoritative before or after an end, including repeated statuses", () => {
+it("retains attempts across proposals and repeated statuses", () => {
   const proposal = eventAt(16);
   if (proposal.type !== "change.proposed") throw new Error("Missing proposal");
   const proposed = {
     ...proposal,
     payload: { ...proposal.payload, agent_id: "agent-2", change_id: "change-2" },
   };
-  // An old proposal cannot make a later delegation successful.
+  // Proposals never consume the originating decision.
   let state = append(replay(5), proposed);
   state = append(state, eventAt(6));
   state = append(state, eventAt(8));
   expect(retry(state)?.attempts).toHaveLength(1);
   state = append(state, proposed);
-  expect(retry(state)).toBeUndefined();
+  expect(retry(state)).toBeDefined();
   state = append(state, eventAt(9));
-  expect(retry(state)).toBeUndefined();
-  // A proposal after the echo and before failure also keeps the entry closed.
+  expect(retry(state)).toBeDefined();
+  // The same holds when a proposal precedes the failure.
   state = append(replay(7), proposed);
   state = append(state, eventAt(8));
-  expect(retry(state)).toBeUndefined();
+  expect(retry(state)).toBeDefined();
 });
 
 it("ignores another agent's failure or proposal and retains links absent from later statuses", () => {
@@ -125,31 +130,31 @@ it("ignores another agent's failure or proposal and retains links absent from la
     ...end,
     payload: { ...end.payload, agent_id: "agent-6", answering: null },
   });
-  expect(retry(unrelated)).toBeUndefined();
+  expect(retry(unrelated)).toBeDefined();
   const reopened = append(unrelated, { ...end, payload: { ...end.payload, answering: null } });
   expect(retry(reopened)?.attempts).toEqual([{ ...firstAttempt, endSeq: 9 }]);
   expect(retry(append(reopened, proposal))?.attempts).toHaveLength(1);
 });
 
-it("keeps done closed without a proposal and another active task closed after one fails", () => {
+it("retains done and overlapping active delegations after one fails", () => {
   const end = eventAt(8);
   const echo = eventAt(11);
   if (end.type !== "agent.status" || echo.type !== "agent.status")
     throw new Error("Missing delegation");
   const done = append(replay(7), { ...end, payload: { ...end.payload, state: "done" } });
-  expect(retry(done)).toBeUndefined();
-  expect(retry(append(done, end))).toBeUndefined();
+  expect(retry(done)?.attempts[0]?.endState).toBe("done");
+  expect(retry(append(done, end))?.attempts[0]?.endState).toBe("done");
   const recovered = append(replay(14), {
     ...end,
     payload: { ...end.payload, state: "done" },
   });
-  expect(retry(recovered)).toBeUndefined();
+  expect(retry(recovered)).toBeDefined();
   const overlapping = append(replay(7), echo);
-  expect(retry(append(overlapping, end))).toBeUndefined();
+  expect(retry(append(overlapping, end))?.attempts).toHaveLength(2);
 });
 
 it.each(["yes", "no", "resolution"] as const)(
-  "keeps a later %s closed after a failed delegation",
+  "only a final resolution closes after a failed delegation (%s)",
   (answer) => {
     const facts = eventAt(5);
     if (facts.type !== "change.facts_recorded") throw new Error("Missing facts");
@@ -193,8 +198,8 @@ it.each(["yes", "no", "resolution"] as const)(
         },
       });
     }
-    expect(retry(state)).toBeUndefined();
-    expect(retry(append(state, eventAt(13)))).toBeUndefined();
+    expect(retry(state) === undefined).toBe(answer === "resolution");
+    expect(retry(append(state, eventAt(13))) === undefined).toBe(answer === "resolution");
   },
 );
 

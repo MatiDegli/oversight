@@ -1,14 +1,14 @@
 import type { ChangeFacts, ChangeProposed, DecisionRef, ReviewCard } from "@contracts";
 
 import { decisionIdentityKey, noRecordedExample } from "./decisionIdentity";
-import type { DecisionInboxEntry, InboxExample, InboxIdentity } from "./decisionIdentity";
+import type { DecisionInboxDecision, InboxExample, InboxIdentity } from "./decisionIdentity";
 import type { DecisionEvent } from "./decisionProjection";
 import { parseNeedsYou } from "./needsYou";
 import type { State } from "./types";
 
 type ChangeRef = Exclude<DecisionRef, { kind: "lead_plan" }>;
 export type Candidate = Pick<ChangeRef, "change_id" | "revision" | "head_commit">;
-export type PendingEntry = Omit<DecisionInboxEntry, "age" | "attempts">;
+export type PendingEntry = Omit<DecisionInboxDecision, "age" | "attempts">;
 export type Entries = Map<string, PendingEntry>;
 
 export function recordEntry(
@@ -126,8 +126,19 @@ export function recordChangeEntries(entries: Entries, state: State, event: Decis
         event.payload.agent_id,
       );
   }
-  if (event.type === "change.proposed")
+  if (event.type === "change.proposed") {
+    const { change_id, revision, head_commit } = event.payload;
+    recordEntry(
+      entries,
+      state,
+      event,
+      { kind: "change", change_id, revision, head_commit, evidence_seq: event.seq },
+      "Change awaits Approve, Request changes or Reject",
+      noRecordedExample,
+      event.payload.agent_id,
+    );
     recordExamples(entries, state, event, event.payload, event.payload.examples);
+  }
   if (
     event.type === "change.resolved" &&
     event.payload.merge === "conflict" &&

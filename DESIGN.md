@@ -513,7 +513,7 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 
 | Zone | Size at 1920x1080 | Contents |
 | --- | --- | --- |
-| Top bar | 52px high | product, repository, branch, hash; Ctrl K search; review queue, spend, history, settings |
+| Top bar | 52px high | product, repository, branch, hash; Ctrl K search; decisions chip, spend, history, settings |
 | Left rail | 56px wide | Graph, Files, Changes, Agents; terminal toggle and shortcuts at the bottom |
 | Sidebar | 280px wide, collapsible | Files tree or Changes: queue first, then decision history |
 | Focus panel | 880px wide | tabs for file view, live diff, review, conversation, plan and settings |
@@ -683,12 +683,17 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 
 ### Navigation
 
-- **Top bar** (shell): product name, repository, branch and short commit hash (Mono), the review
-  queue counter and the spend total (level 2, the budget in whole dollars when it is round:
+- **Top bar** (shell): product name, repository, branch and short commit hash (Mono), the
+  decisions chip and the spend total (level 2, the budget in whole dollars when it is round:
   "US$150"). The search box, the history icon and the settings icon join the bar when each feature
   is built, not before.
-- **Review queue counter:** "1 change ready for review" with a lamp, on raised. It counts across
-  agents, so it is neutral, never an agent's color.
+- **Decisions chip:** always visible in the same top-bar position and at the queue-counter height.
+  At zero it reads "Nothing needs you" in muted gray, with no lamp or badge. Otherwise it reads
+  "Decisions · N", neutral across agents, with N in Mono and tabular figures. One pending change
+  counts once, with its questions and other decisions inside; answers and delegations do not
+  consume it. Only its completed Approve, Request changes or Reject removes it. Standalone
+  decisions, such as a lead plan, each count once. Its accessible name includes the count.
+  Until the inbox view exists, clicking it opens the existing review queue.
 - **Left rail** (shell): icon buttons; the current view's button on raised.
 - **Agents rail** (whenever the focus panel is open): one letter avatar per agent: a 36px square
   with card radius,
@@ -894,8 +899,9 @@ Each motion says what changed:
 - **Agent starts:** its card slides and fades in from the right.
 - **agent.step / usage.tick:** a new step row slides in at the top, older rows move down; the
   step bar and spend number ease to the reported value.
-- **agent.status / change.proposed:** the status pill crossfades; the top bar's ready-for-review
-  pill slides in once. These events never open a panel or move keyboard focus.
+- **agent.status / change.proposed:** the agent card's status pill crossfades; the permanently
+  mounted decisions chip updates its label and count. These events never open a panel or move
+  keyboard focus.
 - **agent.focus:** the lettered marker in the agent's color glides between nodes, following the
   edge route when present, with its light following it. A working agent's status lamp may pulse
   (the existing 1.6s period) and its graph ring expands only while work continues.
