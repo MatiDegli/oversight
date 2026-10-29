@@ -1618,3 +1618,5 @@ returned event when an eligible successor exists within the horizon, so no event
 If the first eligible envelope cannot fit intact, the response is the existing typed `too_large`
 413; payloads are never truncated. Unexpected disk or validation failures use the existing
 `internal` error path. No index or schema migration is introduced.
+
+2026-10-29: Source profiles separate `pytest_options` from positional `pytest_targets`, so selected case reruns retain collection options while replacing only the targets (including Boltons doctests).

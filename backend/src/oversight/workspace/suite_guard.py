@@ -37,6 +37,7 @@ async def guarded_suite(
     case_ids: tuple[str, ...],
     spawn: Spawn,
     pytest_targets: tuple[str, ...] = (),
+    pytest_options: tuple[str, ...] = (),
     measured_targets: tuple[CallTarget, ...] | None = None,
 ) -> SuiteRun:
     """Caller retains main/worktree/lease through capture, namespace death and restoration."""
@@ -63,6 +64,7 @@ async def guarded_suite(
                 spawn=runner,
                 case_ids=case_ids,
                 pytest_targets=pytest_targets,
+                pytest_options=pytest_options,
                 harness_pack=workspace.harness_pack,
                 measured_targets=measured_targets,
             )

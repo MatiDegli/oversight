@@ -146,6 +146,7 @@ async def test_profile_reuses_demo_environment_stamp_without_building(
         BOLTONS.checkout(runtime),
         pytest_pin="9.1.1",
         pytest_targets=BOLTONS.pytest_targets,
+        pytest_options=BOLTONS.pytest_options,
     )
     calls: list[tuple[str, ...]] = []
 
@@ -171,7 +172,10 @@ async def test_source_validation_refuses_symlink(tmp_path: Path) -> None:
         await validate_source(BOLTONS, runtime)
 
 
-@pytest.mark.parametrize("case_ids", [(), ("tests/test_value.py::test_value",)])
+@pytest.mark.parametrize(
+    "case_ids",
+    [(), ("tests/test_value.py::test_value",), ("boltons/value.py::boltons.value.value",)],
+)
 async def test_source_suite_argv_and_collection(tmp_path: Path, case_ids: tuple[str, ...]) -> None:
     source = outside_tree(tmp_path / "source")
     workspace = Workspace(
@@ -180,6 +184,7 @@ async def test_source_suite_argv_and_collection(tmp_path: Path, case_ids: tuple[
         pytest_pin="9.1.1",
         demo_python=Path(sys.executable),
         pytest_targets=BOLTONS.pytest_targets,
+        pytest_options=BOLTONS.pytest_options,
     )
     calls: list[tuple[str, ...]] = []
 
@@ -222,6 +227,9 @@ async def test_source_suite_argv_and_collection(tmp_path: Path, case_ids: tuple[
             "junit_family=xunit1",
         )
         assert argv[11].startswith("--junitxml=")
-        assert argv[12:] == (("--", *case_ids) if case_ids else BOLTONS.pytest_targets)
+        assert argv[12:] == (
+            *BOLTONS.pytest_options,
+            *(("--", *case_ids) if case_ids else BOLTONS.pytest_targets),
+        )
     finally:
         workspace.release_runtime()

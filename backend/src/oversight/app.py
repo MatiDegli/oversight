@@ -236,6 +236,7 @@ class LiveRun:
             pytest_pin=pytest_pin(),
             demo_python=settings.demo_python,
             pytest_targets=self._source.pytest_targets if self._source else (),
+            pytest_options=self._source.pytest_options if self._source else (),
         )
         configure_suite(self.workspace, harness_pack=settings.harness_pack)
         self.run_id = new_run_id(settings.runtime_dir, datetime.now(UTC))
