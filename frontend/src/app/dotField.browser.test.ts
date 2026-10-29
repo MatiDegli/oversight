@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { chromium, expect as browserExpect } from "@playwright/test";
@@ -924,3 +924,85 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
   ])
     expect((report[key] as { samples: number }).samples).toBeGreaterThan(10);
 }, 180_000);
+
+/**
+ * Puts one area of the approved sketch and one of the product's capture side by side in one image,
+ * both at their own size, so lines and lamps compare pixel for pixel. The two layouts differ, so
+ * each area is given by its own corner.
+ */
+async function beside(
+  sketch: { path: string; x: number; y: number },
+  shot: { path: string; x: number; y: number },
+  out: string,
+) {
+  if (!browser) throw new Error("Browser was not started");
+  const [width, height] = [960, 600];
+  const area = ({ path, x, y }: { path: string; x: number; y: number }) =>
+    `<img src="data:image/png;base64,${readFileSync(path).toString("base64")}" style="width:${String(width)}px;height:${String(height)}px;object-fit:none;object-position:-${String(x)}px -${String(y)}px">`;
+  const page = await browser.newPage({ viewport: { width: width * 2, height } });
+  try {
+    await page.setContent(
+      `<body style="margin:0;display:flex;background:#000">${area(sketch)}${area(shot)}</body>`,
+    );
+    await page.waitForFunction(() => [...document.images].every((image) => image.complete));
+    writeFileSync(out, await page.screenshot());
+  } finally {
+    await page.close();
+  }
+}
+
+it("captures the life layer at 1920 by 1080, and sets each capture beside its sketch", async () => {
+  const viewport = { width: 1920, height: 1080 };
+  const shots = fileURLToPath(new URL("../../../.shots/life-look/", import.meta.url));
+  const sketches = fileURLToPath(new URL("../../../docs/sketches/life/", import.meta.url));
+  mkdirSync(shots, { recursive: true });
+  const taken: Record<string, Buffer> = {};
+  const shoot = async (page: Page, name: string) => {
+    await settledGraph(page);
+    const png = await page.screenshot();
+    taken[name] = png;
+    writeFileSync(`${shots}${name}.png`, png);
+  };
+  // The ground at rest, in motion and still.
+  await withPage({ scene: "rest", viewport }, (page) => shoot(page, "rest-dark"));
+  await withPage({ scene: "rest", viewport, reducedMotion: "reduce" }, (page) =>
+    shoot(page, "rest-rm"),
+  );
+  // The three states of a change's light, and the decision's pulse and fade, on one run.
+  await withPage({ scene: "watch", viewport, reducedMotion: "reduce" }, (page) =>
+    shoot(page, "light-working"),
+  );
+  await withPage({ scene: "waiting", viewport, clock: true }, async (page) => {
+    await shoot(page, "light-waiting");
+    await page.evaluate(() => {
+      window.fieldTest.advance(22);
+    });
+    await page.clock.runFor(250 + 725);
+    await shoot(page, "merge-mid");
+    await page.clock.fastForward(725 + 350 + 1500);
+    await shoot(page, "fade-0s");
+    await page.clock.fastForward(30_000);
+    await shoot(page, "fade-30s");
+    await page.clock.fastForward(30_000);
+    await shoot(page, "fade-60s");
+    await page.clock.fastForward(40_000);
+    await shoot(page, "fade-100s");
+  });
+  // The light is on when a change waits, thins as it fades, and is gone after the fade.
+  await withPage({ scene: "rest", viewport: { width: 400, height: 300 } }, async (page) => {
+    const apart = (a: string, b: string) =>
+      differing(page, taken[a] ?? Buffer.alloc(0), taken[b] ?? Buffer.alloc(0));
+    expect(await apart("light-waiting", "rest-rm")).toBeGreaterThan(100_000);
+    expect(await apart("fade-60s", "fade-0s")).toBeGreaterThan(100_000);
+    expect(await apart("fade-100s", "fade-0s")).toBeGreaterThan(await apart("fade-60s", "fade-0s"));
+  });
+  const pair = (name: string, shot: string, sketchAt: [number, number], shotAt: [number, number]) =>
+    beside(
+      { path: `${sketches}${name}.png`, x: sketchAt[0], y: sketchAt[1] },
+      { path: `${shots}${shot}.png`, x: shotAt[0], y: shotAt[1] },
+      `${shots}compare-${shot}.png`,
+    );
+  await pair("rest-contour", "rest-dark", [60, 200], [560, 400]);
+  await pair("rest-rm", "rest-rm", [60, 200], [560, 400]);
+  await pair("merge-mid", "merge-mid", [480, 200], [560, 200]);
+}, 240_000);
