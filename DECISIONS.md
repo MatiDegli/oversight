@@ -1566,3 +1566,33 @@ No refs, real index, checkout files, operation markers or worktree registrations
 only unreachable Git objects may be created. There is no mutating fallback. A clean result proves
 textual applicability against captured H, not semantic correctness or authorization for a later
 effect. A later Revert transaction must establish its own current evidence and authorization.
+## 2026-10-29 — Witnessed assertion-loosening run findings
+
+Package 5 now publishes only `kind="loosened"`: a resolved individual integrity fact,
+its agent-authored assertion edit, an earlier observed failure, and a later explicit
+per-case pass. The bridge reuses the temporal core but strengthens its absence-of-failure
+result to an observed pass; skip, deletion and uncollected cases establish no pass.
+The exact pytest id includes class and parameter identity. Broader temporal kinds remain
+reserved, and this producer enables no profile, rule authority or automatic merge.
+
+Evidence uses committed `tests.executed` and `change.updated` receipts, never tool-step
+numbers or adjacent global events. Receipts carry ownership and are retained at existing
+publication boundaries through cancellation. Only agent executions and the current
+proposal verification participate; probes and combined runs cannot witness recovery.
+Each proposal freezes its observations, and comparisons stay within that proposal round.
+
+An edit compares the immediately preceding observed source with its published modified
+source using the existing detector. Cumulative base-to-head findings alone cannot name
+an intervening weakening. Duplicate publications and human edits supply no agent edit
+witness; proposal republication supplies no new source-edit witness. Bounded source reads
+(at most 200 reported paths per execution) use the captured Git tree in the lock-owning
+task. Both executions must have the exact corresponding file version; intervening edits
+in that file conservatively leave a comparison unknown. No whole-log infrastructure or
+runtime/provider protocol is added.
+
+A listed, observed failure remains usable from a truncated initial failure list. Recovery
+requires a finished run, a complete failure list and complete retained per-case evidence.
+Missing receipts, versions, identities, runs or passes retain explicit uncertainty, alongside
+independent proven findings. Validation recomputes the exact projection and edit references
+from the frozen capture before publication. Zone/reach and other producer diagnostics
+survive, facts remain incomplete, and an empty finding list grants no merge authority.

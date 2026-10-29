@@ -9,7 +9,8 @@ import pytest
 from changes_helpers import EDIT, TESTS, Harness, assert_main_clean, queued_callbacks_ran
 from decision_helpers import observed_target
 
-from oversight.changes import _facts, _suite_evidence
+from oversight.changes import _facts, _proposal, _suite_evidence
+from oversight.changes._facts import FactsEvidence
 from oversight.changes._shortcuts_common import Source
 from oversight.changes._state import ChangeRecord
 from oversight.events import StoredEvent, read_store
@@ -164,6 +165,31 @@ async def test_suite_validation_refusal_never_reaches_store(
     assert evidence_events(h) == before
     assert rec.executions == executions and rec.suite_runs == runs
     assert h.payloads(ChangeProposed) == proposals
+
+
+@pytest.mark.anyio
+async def test_facts_construction_keeps_event_loop_responsive(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    loop = asyncio.get_running_loop()
+    responsive = threading.Event()
+    build = _facts.build_change_facts
+
+    def wait_for_loop(evidence: FactsEvidence) -> ChangeFacts:
+        loop.call_soon_threadsafe(responsive.set)
+        assert responsive.wait(5), "facts construction blocked the event loop"
+        return build(evidence)
+
+    monkeypatch.setattr(_proposal, "build_change_facts", wait_for_loop)
+    await h.open(1)
+    assert await h.edit(1, *EDIT)
+    assert await h.finish(1)
+    assert [event.type for event in evidence_events(h)] == [
+        "tests.executed",
+        "change.facts_recorded",
+    ]
+    [facts] = h.payloads(ChangeFacts)
+    assert facts.edited_paths == [EDIT[0]]
 
 
 @pytest.mark.anyio

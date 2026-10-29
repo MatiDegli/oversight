@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import replace
 
 from oversight.agents import AgentTask, RunEnd
@@ -11,6 +12,7 @@ from oversight.changes._facts import FactsEvidence, build_change_facts, capture_
 from oversight.changes._measured import measure_cone, unavailable_measured
 from oversight.changes._probes import added_cases, probe_added_tests
 from oversight.changes._review_port import ReviewCapture
+from oversight.changes._run_findings import EditReceipt, receipt
 from oversight.changes._state import (
     SUSPECT,
     By,
@@ -149,8 +151,9 @@ async def refresh(ctx: ChangeContext, rec: ChangeRecord, paths: set[str]) -> Non
 async def update(ctx: ChangeContext, rec: ChangeRecord, path: str) -> None:
     rec.observed_paths.add(path)
     rec.touched.add(path)
+    previous = rec.head_files.get(path)
     await refresh(ctx, rec, {path})
-    await send_file(ctx, rec, path)
+    await send_file(ctx, rec, path, previous=previous)
 
 
 async def totals(ctx: ChangeContext, rec: ChangeRecord) -> tuple[int, int, int]:
@@ -163,7 +166,14 @@ async def totals(ctx: ChangeContext, rec: ChangeRecord) -> tuple[int, int, int]:
     return files, added, removed
 
 
-async def send_file(ctx: ChangeContext, rec: ChangeRecord, path: str, author: By = "agent") -> None:
+async def send_file(
+    ctx: ChangeContext,
+    rec: ChangeRecord,
+    path: str,
+    author: By = "agent",
+    *,
+    previous: str | None = None,
+) -> None:
     original, modified = rec.base_files.get(path), rec.head_files.get(path)
     status = file_status(original, modified)
     if status is None:  # in neither version: nothing to show
@@ -171,28 +181,36 @@ async def send_file(ctx: ChangeContext, rec: ChangeRecord, path: str, author: By
         return
     added, removed = await count_lines_async(original, modified)
     files, total_added, total_removed = await totals(ctx, rec)
-    await ctx.publish(
-        ChangeUpdated(
-            change_id=rec.change_id,
-            agent_id=rec.agent_id,
-            author=author,
-            file=FileDiff(
-                path=path,
-                status=status,
-                original=original,
-                modified=modified,
-                lines_added=added,
-                lines_removed=removed,
-            ),
-            node_ids=nodes_in_path(rec.graph, rec.base.graph, rec.head.graph, path),
-            graph=rec.graph,
-            files_changed=files,
-            lines_added=total_added,
-            lines_removed=total_removed,
-        )
+    payload = ChangeUpdated(
+        change_id=rec.change_id,
+        agent_id=rec.agent_id,
+        author=author,
+        file=FileDiff(
+            path=path,
+            status=status,
+            original=original,
+            modified=modified,
+            lines_added=added,
+            lines_removed=removed,
+        ),
+        node_ids=nodes_in_path(rec.graph, rec.base.graph, rec.head.graph, path),
+        graph=rec.graph,
+        files_changed=files,
+        lines_added=total_added,
+        lines_removed=total_removed,
     )
-    rec.published[path] = modified
-    rec.unpublished.discard(path)
+    await ctx.whole(_record_file(ctx, rec, payload, previous))
+
+
+async def _record_file(
+    ctx: ChangeContext, rec: ChangeRecord, payload: ChangeUpdated, previous: str | None
+) -> None:
+    event = await ctx.publish(payload)
+    stored = receipt(event, payload)
+    if stored is not None and previous is not None:
+        rec.run_edits.append(EditReceipt(stored, rec.revision + 1, previous))
+    rec.published[payload.file.path] = payload.file.modified
+    rec.unpublished.discard(payload.file.path)
 
 
 async def proposed(ctx: ChangeContext, agent_id: AgentId, summary: str | None) -> bool:
@@ -351,8 +369,8 @@ async def record_probe_facts(
         impact=proposal.impact.model_copy(deep=True),
         added_tests=probes,
         problems=evidence.problems + problems,
-        executions=dict(rec.executions),
-        runs=dict(rec.suite_runs),
+        executions=deepcopy(rec.executions),
+        runs=deepcopy(rec.suite_runs),
     )
     await ctx.whole(publish_facts(ctx, evidence))
     if cancelled:
@@ -364,7 +382,8 @@ async def record_probe_facts(
 async def publish_facts(ctx: ChangeContext, evidence: FactsEvidence) -> None:
     if ctx.cards is not None and (ctx.behavior_diff or ctx.measured_cone):
         ctx.cards.prepare(ctx.state.changes[evidence.target.change_id], evidence)
-    await ctx.publish(build_change_facts(evidence))
+    facts = await asyncio.to_thread(build_change_facts, evidence)
+    await ctx.publish(facts)
     ctx.assessment.facts_ready(ctx.state.changes[evidence.target.change_id], evidence)
 
 
