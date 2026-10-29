@@ -6,6 +6,7 @@ import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import type { GraphProbeHost } from "../graph";
 import type { structureTest } from "./structure.browser.fixture";
+import { withCpuThrottling } from "./structure.browser.support";
 declare global {
   interface Window {
     structureTest: typeof structureTest;
@@ -266,42 +267,42 @@ it.each([
       if (!b) throw new Error("Missing module");
       const x = before.host.x + (b.x1 + 40) * before.zoom + before.pan.x,
         y = before.host.y + (b.y1 + 28) * before.zoom + before.pan.y;
-      const session = await page.context().newCDPSession(page);
-      await session.send("Emulation.setCPUThrottlingRate", { rate: cpuRate });
-      await page.mouse.move(x, y);
-      await page.mouse.down();
-      // Spread a short drag over enough frames that one GC/scheduling pause
-      // cannot decide the typical routing cost. Keep the cold first reroute.
-      for (let i = 1; i <= 32; i++) {
-        await page.mouse.move(x + i, y + i / 2);
-        await page.evaluate(
-          () =>
-            new Promise<void>((resolve) =>
-              requestAnimationFrame(() => {
-                resolve();
-              }),
-            ),
+      await withCpuThrottling(page, cpuRate, async () => {
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        // Spread a short drag over enough frames that one GC/scheduling pause
+        // cannot decide the typical routing cost. Keep the cold first reroute.
+        for (let i = 1; i <= 32; i++) {
+          await page.mouse.move(x + i, y + i / 2);
+          await page.evaluate(
+            () =>
+              new Promise<void>((resolve) =>
+                requestAnimationFrame(() => {
+                  resolve();
+                }),
+              ),
+          );
+        }
+        const during = await read(page);
+        expect(during.routes).not.toEqual(before.routes);
+        const samples = [...during.cost.dragMs].sort((a, b) => a - b);
+        expect(samples.length).toBeGreaterThanOrEqual(20);
+        const middle = Math.floor(samples.length / 2);
+        const median =
+          ((samples[Math.ceil(samples.length / 2) - 1] ?? 0) + (samples[middle] ?? 0)) / 2;
+        const worst = Math.max(...samples);
+        console.log(
+          `Graph drag (${String(cpuRate)}×): ${String(samples.length)} frames, median ${median.toFixed(2)} ms, max ${worst.toFixed(2)} ms`,
         );
-      }
-      const during = await read(page);
-      expect(during.routes).not.toEqual(before.routes);
-      const samples = [...during.cost.dragMs].sort((a, b) => a - b);
-      expect(samples.length).toBeGreaterThanOrEqual(20);
-      const middle = Math.floor(samples.length / 2);
-      const median =
-        ((samples[Math.ceil(samples.length / 2) - 1] ?? 0) + (samples[middle] ?? 0)) / 2;
-      const worst = Math.max(...samples);
-      console.log(
-        `Graph drag (${String(cpuRate)}×): ${String(samples.length)} frames, median ${median.toFixed(2)} ms, max ${worst.toFixed(2)} ms`,
-      );
-      // Keep 4ms at native speed and at most one 60Hz frame when throttled.
-      // 20-run calibration reached medians of 1.7/9.6/11.3ms at 1×/4×/6× and
-      // an isolated 60.7ms pause. The 80ms ceiling leaves scheduling headroom
-      // while still rejecting a long stall; no samples or cold calls are dropped.
-      expect(median, "median drag reroute (ms)").toBeLessThan(medianBudgetMs);
-      expect(worst, "worst drag reroute (ms)").toBeLessThan(80);
-      clearRoutes(during);
-      await page.mouse.up();
+        // Keep 4ms at native speed and at most one 60Hz frame when throttled.
+        // 20-run calibration reached medians of 1.7/9.6/11.3ms at 1×/4×/6× and
+        // an isolated 60.7ms pause. The 80ms ceiling leaves scheduling headroom
+        // while still rejecting a long stall; no samples or cold calls are dropped.
+        expect(median, "median drag reroute (ms)").toBeLessThan(medianBudgetMs);
+        expect(worst, "worst drag reroute (ms)").toBeLessThan(80);
+        clearRoutes(during);
+        await page.mouse.up();
+      });
     }),
   30_000,
 );
