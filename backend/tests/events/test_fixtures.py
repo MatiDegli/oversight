@@ -87,6 +87,14 @@ def test_an_absolute_path_inside_a_message_is_caught_whatever_its_directory(
         "failed in D:\\work\\demo.py",
         "failed in D:/work/demo.py",
         "C:\\x",
+        r"\\server\share",
+        r"\\server\share\dir\f.txt",
+        r"\\?\C:\x",
+        r"\\.\pipe\x",
+        "//host/share",
+        "/home/x",
+        "~/x",
+        "file:///x",
     ],
 )
 def test_absolute_paths_are_found_in_any_string(text: str) -> None:
@@ -119,6 +127,19 @@ def test_absolute_paths_are_found_in_any_string(text: str) -> None:
 )
 def test_relative_paths_urls_and_code_are_not_mistaken_for_absolute_paths(text: str) -> None:
     assert absolute_paths({"message": text}) == [], text
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        r'"""Split lines (default: ``\\n``)."""',
+        r'"""Separate fields with ``\\t``."""',
+        r'pattern = r"\\d+"',
+    ],
+    ids=["escaped-newline", "escaped-tab", "escaped-regex"],
+)
+def test_escaped_backslashes_in_source_are_not_unc_paths(source: str) -> None:
+    assert absolute_paths({"payload": {"modified": source}}) == []
 
 
 def test_an_invalid_line_is_caught(tmp_path: Path) -> None:
