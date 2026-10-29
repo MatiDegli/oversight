@@ -85,7 +85,10 @@ def _measurement(card: ReviewCard, facts: ChangeFacts, evidence: ServerEvent | N
         node.node_id == card.node_id
         and node.differing_count > 0
         and (card.example is None or card.example in node.rows)
-        for node in source.behavior_diff or []
+        for node in [
+            *(source.behavior_diff or []),
+            *(node for node in source.measured_cone or [] if node.outcome == "changed"),
+        ]
     )
 
 

@@ -35,6 +35,9 @@ class BehaviorRow:
     before: TypedResult
     after: TypedResult
     unstable: bool
+    repeat_complete: bool = False
+    inputs_equal: bool = False
+    input_identity: str | None = None
 
 
 @dataclass(frozen=True)
@@ -220,10 +223,19 @@ async def _measure_function(
                 differing=result.differing + int(not unstable and not incomplete),
                 reason=reason,
             )
-            # There is no per-row completeness field: keep incomplete samples out of public rows.
+            # Public rows exclude incomplete repeats; F2 also retains an explicit witness.
             if not incomplete and len(rows) < MAX_ROWS:
+                sample = inputs[result.node_id].inputs[index]
                 rows.append(
-                    BehaviorRow(inputs[result.node_id].inputs[index].call, old, new, unstable)
+                    BehaviorRow(
+                        sample.call,
+                        old,
+                        new,
+                        unstable,
+                        repeat_complete=True,
+                        inputs_equal=sample.input_identity is not None,
+                        input_identity=sample.input_identity,
+                    )
                 )
     finally:
         # Preserve completed measurements even when a later rerun exhausts the shared deadline.

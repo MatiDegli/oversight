@@ -36,7 +36,7 @@ def comparison_fixture(count) -> tuple[Any, dict[str, BehaviorInputs], list[Func
     rec = SimpleNamespace(head=SimpleNamespace(graph=SimpleNamespace(nodes=[node])))
     inputs = {
         node.id: BehaviorInputs(
-            tuple(BehaviorInput(f"f(x={i})", str(i), str(i)) for i in range(count))
+            tuple(BehaviorInput(f"f(x={i})", str(i), str(i), str(i)) for i in range(count))
         )
     }
     return rec, inputs, [FunctionBehavior(node.id)]
@@ -78,6 +78,9 @@ async def test_stability_counts_cover_unstable_input_beyond_retained_rows():
             observation([i])["sample:f"].results[0],
             observation([i + 10])["sample:f"].results[0],
             False,
+            repeat_complete=True,
+            inputs_equal=True,
+            input_identity=str(i),
         )
         for i in range(8)
     )

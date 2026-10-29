@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import Any, cast
 
-from oversight.changes._behavior import BehaviorDiff
+from oversight.changes._behavior import BehaviorDiff, BehaviorRow
+from oversight.changes._review_identity import direct_result
+from oversight.changes._review_samples import Observation
 from oversight.workspace import TypedResult
 from oversight_contracts.review import BehaviorDiffRow, NodeBehaviorDiff
 
@@ -18,6 +20,7 @@ class CapturedRow:
     before: str
     after: str
     unstable: bool
+    observation: Observation | None = None
 
 
 @dataclass(frozen=True)
@@ -55,7 +58,7 @@ def _shorten(value: Any, limit: int) -> Any:
     return value
 
 
-def _render(result: TypedResult) -> str:
+def _render(result: TypedResult, *, bounded: bool = True) -> str:
     # Enumerate the public value fields, never serialize the private result object.
     kind = result["kind"]
     display = {"kind": kind}
@@ -64,6 +67,8 @@ def _render(result: TypedResult) -> str:
     elif kind == "raised":
         display["class"], display["message"] = result["class"], result["message"]
     rendered = json.dumps(display, ensure_ascii=True, separators=(",", ":"))
+    if not bounded:
+        return rendered
     limit = MAX_RENDERED
     while len(rendered) > MAX_RENDERED:
         if limit == 0:
@@ -76,6 +81,38 @@ def _render(result: TypedResult) -> str:
         }
         rendered = json.dumps(clipped, ensure_ascii=True, separators=(",", ":"))
     return rendered
+
+
+def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:
+    before, after = _render(row.before, bounded=False), _render(row.after, bounded=False)
+    identity = tuple(
+        f"{result['kind']}:{result.get('fingerprint', '')}" for result in (row.before, row.after)
+    )
+    results = direct_result(row.before), direct_result(row.after)
+    reason = None
+    if not row.repeat_complete or not row.inputs_equal:
+        reason = "comparison or repetition incomplete"
+    elif row.unstable or identity[0] == identity[1]:
+        reason = "unstable or equal observation"
+    elif any(not result.get("fingerprint") for result in (row.before, row.after)):
+        reason = "typed identity unavailable"
+    elif any(len(text) > MAX_RENDERED for text in (row.call, before, after)):
+        reason = "display sample truncated"
+    elif None in results or before == after:
+        reason = "typed display incomplete"
+    observation = Observation(
+        node_id,
+        (row.call, before, after),
+        (row.input_identity or row.call, results[0] or identity[0], results[1] or identity[1]),
+        reason,
+    )
+    return CapturedRow(
+        row.call[:MAX_RENDERED],
+        _render(row.before),
+        _render(row.after),
+        row.unstable,
+        observation,
+    )
 
 
 def _category(reason: str | None) -> str | None:
@@ -99,15 +136,7 @@ def capture_behavior(measured: BehaviorDiff | None) -> BehaviorEvidence | None:
                 item.node_id,
                 item.compared,
                 item.differing,
-                tuple(
-                    CapturedRow(
-                        row.call[:MAX_RENDERED],
-                        _render(row.before),
-                        _render(row.after),
-                        row.unstable,
-                    )
-                    for row in item.rows
-                ),
+                tuple(_capture_row(item.node_id, row) for row in item.rows),
                 _category(item.reason),
             )
             for item in measured.functions

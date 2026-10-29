@@ -54,7 +54,7 @@ from oversight.api import (
     create_router,
     install_error_handlers,
 )
-from oversight.changes import ChangeManager, ReviewCapture, Revision, WrongState
+from oversight.changes import ChangeManager, ReviewCapture, ReviewCardLimits, Revision, WrongState
 from oversight.events import (
     EventPayload,
     EventStore,
@@ -368,6 +368,13 @@ class LiveRun:
             review=self,
             behavior_diff=self._settings.behavior_diff,
             measured_cone=self._settings.measured_cone,
+            difference_decisions=self.difference_decisions,
+            review_card_limits=ReviewCardLimits(
+                self._settings.review_card_classifications,
+                self._settings.review_card_call_s,
+                self._settings.review_card_total_s,
+            ),
+            run_id=self.run_id,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
 
@@ -376,6 +383,7 @@ class LiveRun:
         self._closing = True
         failure: BaseException | None = None
         steps = (
+            self._close_review_cards,
             self.difference_decisions.close,
             self._drain_reviews,
             self._stop_runs,
@@ -406,6 +414,10 @@ class LiveRun:
 
     async def _drain_reviews(self) -> None:
         await runtime_review.drain_reviews(self)
+
+    async def _close_review_cards(self) -> None:
+        if self._manager is not None:
+            await self._manager.close_review_cards()
 
     async def _stop_runs(self) -> None:
         """Cancel each run and each Request changes decision, and wait for them: a process group

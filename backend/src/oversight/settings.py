@@ -66,6 +66,10 @@ class Settings:
     # Difference decisions: independent profile and Baseten balance; no Meta credits.
     decision_model: str = "muse-spark-open"
     """OVERSIGHT_DECISION_MODEL: only Spark Open; fake transports are injected in tests."""
+    review_card_classifications: int = 8
+    review_card_call_s: float = 30
+    review_card_total_s: float = 120
+    """Provisional F2 limits per revision; no monetary allowance or provider retries."""
     baseten_budget_usd: float | None = None
     """OVERSIGHT_BASETEN_BUDGET_USD: decision-call budget only, set by the maintainer."""
     behavior_diff: bool = False
@@ -103,6 +107,14 @@ class Settings:
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        if (
+            type(self.review_card_classifications) is not int
+            or self.review_card_classifications < 0
+        ):
+            raise ValueError("OVERSIGHT_REVIEW_CARD_CLASSIFICATIONS must be a nonnegative integer")
+        for value in (self.review_card_call_s, self.review_card_total_s):
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError("Review card deadlines must be finite and positive")
 
     @classmethod
     def load(cls, env_file: Path = REPO_ROOT / ".env") -> "Settings":
@@ -128,6 +140,11 @@ class Settings:
             review_model=merged.get("OVERSIGHT_REVIEW_MODEL") or cls.review_model,
             # Difference decisions have no default allowance and never share Meta's balance.
             decision_model=merged.get("OVERSIGHT_DECISION_MODEL") or cls.decision_model,
+            review_card_classifications=int(
+                merged.get("OVERSIGHT_REVIEW_CARD_CLASSIFICATIONS", "8")
+            ),
+            review_card_call_s=float(merged.get("OVERSIGHT_REVIEW_CARD_CALL_S", "30")),
+            review_card_total_s=float(merged.get("OVERSIGHT_REVIEW_CARD_TOTAL_S", "120")),
             baseten_budget_usd=positive_amount(merged.get("OVERSIGHT_BASETEN_BUDGET_USD")),
             behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
             measured_cone=merged.get("OVERSIGHT_MEASURED_CONE", "false").lower() == "true",
