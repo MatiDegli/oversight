@@ -46,6 +46,7 @@ export interface FieldTheme extends MotionTheme, ProfileTheme, Record<LightSourc
   "dot-cell-size": string;
   "lamp-cut-low": number;
   "lamp-cut-high": number;
+  "lamp-gamma": number;
   "lamp-ramp-deep": number;
   "lamp-ramp-mid": number;
   "lamp-ramp-hot": number;
@@ -60,6 +61,8 @@ export interface FieldConfig {
   /** The intensity under which a lamp is off, and the one at which it is whole. */
   cutLow: number;
   cutHigh: number;
+  /** The power the intensity is raised to: under 1 it lifts the middle, so the core stays hot. */
+  gamma: number;
   /** How a lamp's color follows its brightness: see the lamp-ramp tokens. */
   ramp: { deep: number; mid: number; hot: number };
   /** The shares of a light's intensity that decay over the near and the far length. */
@@ -105,6 +108,7 @@ export function fieldConfig(theme: FieldTheme, mode: FieldMode): FieldConfig {
     cell: px(theme["dot-cell-size"]),
     cutLow: theme["lamp-cut-low"],
     cutHigh: theme["lamp-cut-high"],
+    gamma: theme["lamp-gamma"],
     ramp: {
       deep: theme["lamp-ramp-deep"],
       mid: theme["lamp-ramp-mid"],
@@ -157,11 +161,16 @@ export function boxDistance(box: Box, x: number, y: number): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-/** What share of a light's strength reaches `distance` from its box: a near term and a far one. */
+/**
+ * What share of a light's strength reaches `distance` from its box: a near term that decays fast
+ * and a far one with a long tail, 1 over one plus the square of the distance in far lengths, so the
+ * halo thins over several rings instead of ending at once.
+ */
 export function falloff(config: FieldConfig, distance: number): number {
   const { near, far } = config.profile;
   return (
-    config.nearShare * Math.exp(-distance / near) + config.farShare * Math.exp(-distance / far)
+    config.nearShare * Math.exp(-distance / near) +
+    config.farShare / (1 + (distance / far) * (distance / far))
   );
 }
 
@@ -180,7 +189,7 @@ function reach(config: FieldConfig, amplitude: number): number {
   const { near, far } = config.profile;
   return Math.max(
     near * Math.log((2 * config.nearShare * amplitude) / floor),
-    far * Math.log((2 * config.farShare * amplitude) / floor),
+    far * Math.sqrt(Math.max(0, (2 * config.farShare * amplitude) / floor - 1)),
     0,
   );
 }
@@ -402,8 +411,8 @@ function lampColor(
 }
 
 /**
- * Turns each cell's intensity into one lamp's brightness, the intensity itself held back by a smooth
- * cut between its low edge and its high one, and the brightness into a color. Dim lamps lean to the deep end of the light's
+ * Turns each cell's intensity into one lamp's brightness, the intensity raised to the gamma and held
+ * back by a smooth cut between its low edge and its high one, and the brightness into a color. Dim lamps lean to the deep end of the light's
  * color, a lamp at `mid` shows it as it is, and the hot core moves `hot` of the way to the ink (the
  * extreme away from lamp-off). The colors of overlapping lights mix by intensity; their
  * intensities add, up to the full light.
@@ -423,7 +432,7 @@ export function shadeLamps(
     const total = light.sum[k] ?? 0;
     glow[k] = Math.min(1, total) * 255;
     const intensity = Math.min(1, total);
-    const share = intensity * smooth(config.cutLow, config.cutHigh, intensity);
+    const share = intensity ** config.gamma * smooth(config.cutLow, config.cutHigh, intensity);
     const o = k * 4;
     if (share <= 0) {
       out[o] = or;

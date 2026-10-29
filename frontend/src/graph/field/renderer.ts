@@ -74,7 +74,8 @@ bool inside(vec2 p, vec2 low, vec2 size) {
 vec4 contourAt(float f, float slope, float cover) {
   float level = floor(f + 0.5);
   if (level < 1.0 || level > uContourLook.y) return vec4(0.0);
-  float reach = 0.5 * uContourWidth * uScale + 0.5;
+  // A soft 1px line: whole within a tenth of a pixel of its center, gone 1.1 px past its edge.
+  float reach = 0.5 * uContourWidth * uScale + 1.1;
   float line = clamp(reach - abs(f - level) / max(slope, 0.0005), 0.0, 1.0);
   float share = clamp(level * uContourLook.x / uContourLook.w, 0.0, 1.0);
   float a = line * mix(uContourLook.z, 1.0, share) * uContour.a

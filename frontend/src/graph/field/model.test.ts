@@ -56,6 +56,7 @@ describe("the field's numbers", () => {
       cell: 7,
       cutLow: 0.08,
       cutHigh: 0.22,
+      gamma: 0.6,
       ramp: { deep: 0.45, mid: 0.7, hot: 0.2 },
       nearShare: 0.72,
       farShare: 0.28,
@@ -84,17 +85,18 @@ describe("the light's shape", () => {
     expect(falloff(config, 0)).toBeCloseTo(1, 10);
     const { near, far } = config.profile;
     expect(falloff(config, near)).toBeCloseTo(
-      0.72 * Math.exp(-1) + 0.28 * Math.exp(-near / far),
+      0.72 * Math.exp(-1) + 0.28 / (1 + (near / far) ** 2),
       10,
     );
-    // Far out only the far term is left: its share, over its own decay.
-    expect(falloff(config, 500) / (0.28 * Math.exp(-500 / far))).toBeCloseTo(1, 3);
+    // Far out only the far term is left: its share over one plus the square of its length.
+    expect(falloff(config, 500) / (0.28 / (1 + (500 / far) ** 2))).toBeCloseTo(1, 3);
     let previous = Infinity;
     for (let d = 0; d < 400; d += 5) {
       expect(falloff(config, d)).toBeLessThan(previous);
       previous = falloff(config, d);
     }
   });
+
 });
 
 describe("the lamps", () => {
@@ -123,10 +125,10 @@ describe("the lamps", () => {
   it("give each lamp its own brightness: the light's intensity, off under the cut, falling outward", () => {
     const grid = lamps(config, 1920, 400, [light(BOX)], null);
     const alpha = (col: number, row: number) => grid.data[(row * grid.cols + col) * 4 + 3] ?? 0;
-    // Inside the box the light is 1 x 0.92: every lamp shows 92% of its brightness there.
+    // Inside the box the light is 1 x 0.92: every lamp shows 0.92 to the 0.6 of its brightness there.
     for (let row = 20; row < 28; row += 1)
       for (let col = 20; col < 28; col += 1)
-        expect(Math.abs(alpha(col, row) - 0.92 * 255)).toBeLessThanOrEqual(1);
+        expect(Math.abs(alpha(col, row) - 0.92 ** 0.6 * 255)).toBeLessThanOrEqual(1);
     // Outward from the box the brightness falls with no matrix: many values, never rising.
     const row = 25;
     const along = Array.from({ length: 80 }, (_, i) => alpha(40 + i, row));
@@ -145,7 +147,7 @@ describe("the lamps", () => {
         const distance = boxDistance(BOX, (col + 0.5) * 7, (row + 0.5) * 7);
         const intensity = Math.min(1, 0.92 * falloff(config, distance));
         const t = Math.min(1, Math.max(0, (intensity - 0.08) / (0.22 - 0.08)));
-        const expected = 255 * intensity * t * t * (3 - 2 * t);
+        const expected = 255 * intensity ** 0.6 * t * t * (3 - 2 * t);
         const alpha = grid.data[(row * grid.cols + col) * 4 + 3] ?? 0;
         expect(Math.abs(alpha - expected), `${String(col)},${String(row)}`).toBeLessThanOrEqual(1);
       }
@@ -345,8 +347,8 @@ describe("the lamps in motion", () => {
     // At 2 s the ring is 110 px out: its band is lit, and 50 px inside or outside it is not.
     const grid = lamps(config, 800, 600, [pulsing], 2);
     expect(at(grid, 110, 3)).toBeGreaterThan(1.4);
-    expect(at(grid, 60, 3)).toBeLessThan(at(grid, 110, 3) - 0.8);
-    expect(at(grid, 160, 3)).toBeLessThan(at(grid, 110, 3) - 0.8);
+    expect(at(grid, 60, 3)).toBeLessThan(at(grid, 110, 3) - 0.5);
+    expect(at(grid, 160, 3)).toBeLessThan(at(grid, 110, 3) - 0.5);
     // A cell on the band is in the agent's color, not a neutral one.
     const col = Math.round((400 + 110) / 7 - 0.5);
     const row = Math.round(300 / 7 - 0.5);

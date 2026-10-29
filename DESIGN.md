@@ -76,7 +76,7 @@ colors:
   matte-bottom: "#0f0f0f"
   lamp-off: "#070707"
   guide-dot: "rgba(237, 237, 234, 0.10)"
-  contour-line: "rgba(237, 237, 234, 0.10)"
+  contour-line: "rgba(237, 237, 234, 0.09)"
   day-ground: "#f4f3ef"
   day-shell: "#e9e8e3"
   day-panel: "#eeede8"

@@ -21,7 +21,7 @@ function reach(config: FieldConfig, amplitude: number): number {
   const { near, far } = config.profile;
   return Math.max(
     near * Math.log((2 * config.nearShare * amplitude) / floor),
-    far * Math.log((2 * config.farShare * amplitude) / floor),
+    far * Math.sqrt(Math.max(0, (2 * config.farShare * amplitude) / floor - 1)),
     0,
   );
 }

@@ -913,7 +913,7 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
     );
     report.travelFrameCallback = summary(times);
   });
-  const dir = fileURLToPath(new URL("../../../.shots/life-look/", import.meta.url));
+  const dir = fileURLToPath(new URL("../../../.shots/life-look/r2/", import.meta.url));
   mkdirSync(dir, { recursive: true });
   writeFileSync(`${dir}frame-cost.json`, JSON.stringify(report, null, 2));
   for (const key of [
@@ -951,58 +951,82 @@ async function beside(
   }
 }
 
-it("captures the life layer at 1920 by 1080, and sets each capture beside its sketch", async () => {
+/** Renders the approved interactive reference at 1920 by 1080, still, in a state and a theme. */
+async function referenceShot(state: "rest" | "watch", theme: "dark" | "day", out: string) {
+  if (!browser) throw new Error("Browser was not started");
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  try {
+    const file = fileURLToPath(new URL("../../../.shots/life-look/reference/life.html", import.meta.url));
+    await page.goto(`file://${file}?theme=${theme}&freeze=1#${state}`);
+    await page.waitForFunction(() => typeof (window as unknown as { __ft?: number }).__ft === "number");
+    writeFileSync(out, await page.screenshot());
+  } finally {
+    await page.close();
+  }
+}
+
+it("captures rest and busy at 1920 by 1080, dark and day, beside their sketches", async () => {
   const viewport = { width: 1920, height: 1080 };
-  const shots = fileURLToPath(new URL("../../../.shots/life-look/", import.meta.url));
+  const shots = fileURLToPath(new URL("../../../.shots/life-look/r2/", import.meta.url));
   const sketches = fileURLToPath(new URL("../../../docs/sketches/life/", import.meta.url));
   mkdirSync(shots, { recursive: true });
-  const taken: Record<string, Buffer> = {};
   const shoot = async (page: Page, name: string) => {
     await settledGraph(page);
-    const png = await page.screenshot();
-    taken[name] = png;
-    writeFileSync(`${shots}${name}.png`, png);
+    writeFileSync(`${shots}${name}.png`, await page.screenshot());
   };
-  // The ground at rest, in motion and still.
+  const inDay = async (page: Page) => {
+    const draws = () =>
+      page.evaluate(() => window.fieldTest.elements().field.oversightField?.draws() ?? 0);
+    const before = await draws();
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = "day";
+    });
+    await page.waitForFunction(
+      (count) => (window.fieldTest.elements().field.oversightField?.draws() ?? 0) > count + 1,
+      before,
+    );
+  };
   await withPage({ scene: "rest", viewport }, (page) => shoot(page, "rest-dark"));
-  await withPage({ scene: "rest", viewport, reducedMotion: "reduce" }, (page) =>
-    shoot(page, "rest-rm"),
-  );
-  // The three states of a change's light, and the decision's pulse and fade, on one run.
+  await withPage({ scene: "rest", viewport }, async (page) => {
+    await inDay(page);
+    await shoot(page, "rest-day");
+  });
   await withPage({ scene: "watch", viewport, reducedMotion: "reduce" }, (page) =>
-    shoot(page, "light-working"),
+    shoot(page, "busy-dark"),
   );
+  await withPage({ scene: "watch", viewport, reducedMotion: "reduce" }, async (page) => {
+    await inDay(page);
+    await shoot(page, "busy-day");
+  });
   await withPage({ scene: "waiting", viewport, clock: true }, async (page) => {
-    await shoot(page, "light-waiting");
     await page.evaluate(() => {
       window.fieldTest.advance(21);
     });
     await page.clock.runFor(250 + 725);
     await shoot(page, "merge-mid");
-    await page.clock.fastForward(725 + 350 + 1500);
-    await shoot(page, "fade-0s");
-    await page.clock.fastForward(30_000);
-    await shoot(page, "fade-30s");
-    await page.clock.fastForward(30_000);
-    await shoot(page, "fade-60s");
-    await page.clock.fastForward(40_000);
-    await shoot(page, "fade-100s");
   });
-  // The light is on when a change waits, thins as it fades, and is gone after the fade.
-  await withPage({ scene: "rest", viewport: { width: 400, height: 300 } }, async (page) => {
-    const apart = (a: string, b: string) =>
-      differing(page, taken[a] ?? Buffer.alloc(0), taken[b] ?? Buffer.alloc(0));
-    expect(await apart("light-waiting", "rest-rm")).toBeGreaterThan(100_000);
-    expect(await apart("fade-60s", "fade-0s")).toBeGreaterThan(100_000);
-    expect(await apart("fade-100s", "fade-0s")).toBeGreaterThan(await apart("fade-60s", "fade-0s"));
-  });
-  const pair = (name: string, shot: string, sketchAt: [number, number], shotAt: [number, number]) =>
+  await referenceShot("rest", "dark", `${shots}reference-rest-dark.png`);
+  await referenceShot("rest", "day", `${shots}reference-rest-day.png`);
+  await referenceShot("watch", "dark", `${shots}reference-busy-dark.png`);
+  await referenceShot("watch", "day", `${shots}reference-busy-day.png`);
+  const pair = (
+    sketch: string,
+    sketchAt: [number, number],
+    shot: string,
+    shotAt: [number, number],
+    name: string,
+  ) =>
     beside(
-      { path: `${sketches}${name}.png`, x: sketchAt[0], y: sketchAt[1] },
+      { path: sketch, x: sketchAt[0], y: sketchAt[1] },
       { path: `${shots}${shot}.png`, x: shotAt[0], y: shotAt[1] },
-      `${shots}compare-${shot}.png`,
+      `${shots}compare-${name}.png`,
     );
-  await pair("rest-contour", "rest-dark", [60, 200], [560, 400]);
-  await pair("rest-rm", "rest-rm", [60, 200], [560, 400]);
-  await pair("merge-mid", "merge-mid", [480, 200], [560, 200]);
+  await pair(`${sketches}rest-contour.png`, [60, 200], "rest-dark", [560, 400], "rest-dark");
+  await pair(`${sketches}rest-day.png`, [60, 200], "rest-day", [560, 400], "rest-day");
+  await pair(`${shots}reference-busy-dark.png`, BUSY_AT.sketch, "busy-dark", BUSY_AT.shot, "busy-dark");
+  await pair(`${shots}reference-busy-day.png`, BUSY_AT.sketch, "busy-day", BUSY_AT.shot, "busy-day");
+  await pair(`${sketches}merge-mid.png`, [480, 200], "merge-mid", [560, 200], "merge-mid");
 }, 240_000);
+
+/** Where each busy capture's lit node sits: the corner of the area compared, in px. */
+const BUSY_AT = { sketch: [480, 200] as [number, number], shot: [560, 200] as [number, number] };

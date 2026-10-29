@@ -81,7 +81,7 @@
   --added-tint: color-mix(in srgb, var(--passed) 11%, transparent);
   --removed-tint: color-mix(in srgb, var(--failed) 12%, transparent);
   --guide-dot: color-mix(in srgb, var(--text) 10%, transparent);
-  --contour-line: color-mix(in srgb, var(--text) 10%, transparent);
+  --contour-line: color-mix(in srgb, var(--text) 9%, transparent);
   --agent-a-node: rgba(30, 12, 4, 0.95);
   --agent-a-node-new: rgba(20, 10, 4, 0.95);
   --agent-b-node: rgba(6, 12, 30, 0.95);
@@ -287,6 +287,7 @@
   --dot-lamp-coverage: 0.72;
   --lamp-cut-low: 0.08;
   --lamp-cut-high: 0.22;
+  --lamp-gamma: 0.6;
   --lamp-ramp-deep: 0.45;
   --lamp-ramp-mid: 0.7;
   --lamp-ramp-hot: 0.2;
@@ -318,7 +319,7 @@
   --contour-step: 0.1;
   --contour-hill-base: 0.52;
   --contour-hill-range: 0.2;
-  --contour-hill-spread: 0.78;
+  --contour-hill-spread: 1;
   --contour-mound-count: 10;
   --contour-drift-speed: 1;
   --contour-cell-size: 16px;
@@ -331,8 +332,8 @@
   --afterlight-curve: 1.6;
   --merge-travel-delay: 250ms;
   --merge-travel-duration: 1450ms;
-  --merge-trail-bright: 50px;
-  --merge-trail-faint: 150px;
+  --merge-trail-bright: 28px;
+  --merge-trail-faint: 72px;
   --merge-trail-fade: 350ms;
   --merge-pulse-width: 1.6px;
 }

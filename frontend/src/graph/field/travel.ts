@@ -74,7 +74,8 @@ export interface TrailPiece {
 
 /**
  * The trail behind a head at arc length `head`: `bright` px that fade from full to a little over
- * half, then `faint` px that fade out, cut into `count` pieces from the head backwards.
+ * half, then `faint` px that fade out with the square of what is left, cut into `count` pieces from
+ * the head backwards.
  */
 export function trailPieces(
   points: readonly XY[],
@@ -90,7 +91,7 @@ export function trailPieces(
     const opacity =
       middle < look.bright
         ? 1 - 0.4 * (middle / look.bright)
-        : 0.6 * (1 - (middle - look.bright) / look.faint);
+        : 0.6 * (1 - (middle - look.bright) / look.faint) ** 2;
     const slice = slicePath(points, head - (i + 1) * step, head - i * step);
     if (slice.length >= 2 && opacity > 0) pieces.push({ points: slice, opacity });
   }

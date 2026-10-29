@@ -55,11 +55,11 @@ describe("one hill per module", () => {
   it("draws five to seven rings around a hill that stands alone, whatever its callers", () => {
     // Rings are the levels a ray from the peak crosses on its way out: the lines of one hill.
     const alone: TerrainModule[] = [
-      { id: "far.none", callers: 0, frame: frame(300, 250) },
-      { id: "far.some", callers: 4, frame: frame(1100, 250) },
-      { id: "far.most", callers: 9, frame: frame(700, 650) },
+      { id: "far.none", callers: 0, frame: frame(300, 350) },
+      { id: "far.some", callers: 4, frame: frame(1500, 350) },
+      { id: "far.most", callers: 9, frame: frame(2700, 350) },
     ];
-    const grid = heights(config, hillsOf(config, alone), 1800, 1000, null);
+    const grid = heights(config, hillsOf(config, alone), 3300, 700, null);
     const rings = alone.map(({ frame: box }) => {
       const [cx, cy] = centerOf(box);
       const along = Array.from({ length: 80 }, (_, i) => at(grid, cx + i * 8, cy));

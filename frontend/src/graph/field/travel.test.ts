@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { themes } from "../../theme";
+import { afterlightOf } from "./afterlight";
 import { approachPath, pathLength, slicePath, trailPieces } from "./travel";
 
 const L = [
@@ -98,6 +100,16 @@ describe("the trail behind a head", () => {
     // The pieces tile the trail from the head back, 200px in all.
     expect(pieces[0]?.points.at(-1)).toEqual({ x: 500, y: 0 });
     expect(pieces.at(-1)?.points[0]).toEqual({ x: 300, y: 0 });
+  });
+
+  it("is short with the theme's own tokens: about 100 px behind the head, gone at its end", () => {
+    const own = afterlightOf(themes.dark);
+    const pieces = trailPieces(line, 500, own, 12);
+    const reach = (pieces[0]?.points.at(-1)?.x ?? 0) - (pieces.at(-1)?.points[0]?.x ?? 0);
+    expect(reach).toBeLessThanOrEqual(100);
+    expect(pieces.at(-1)?.opacity).toBeLessThan(0.1);
+    // Past a quarter of the way back the trail is under half as bright as at the head.
+    expect(pieces[Math.floor(pieces.length / 2)]?.opacity).toBeLessThan(0.5);
   });
 
   it("is cut where the path starts, so a head near the card has a short trail", () => {
