@@ -25,11 +25,30 @@ def final_cards(event):
     )
 
 
+def classified_nodes(job, first, final, choice):
+    if choice != "asked_for":
+        assert not job.asked_for
+        return {card.node_id for card in final.review_cards}
+    assert final.review_cards == [] and job.asked_for
+    for entry in job.asked_for:
+        assert any(
+            entry.node_id == node.node_id
+            and (entry.differing_count, entry.compared_count)
+            == (node.differing_count, node.compared_count)
+            for node in [*first.behavior_diff, *first.measured_cone]
+        )
+    assert "asked for:" in final.summary[2]
+    assert "0 questions" in final.summary[2]
+    return {entry.node_id for entry in job.asked_for}
+
+
+@pytest.mark.parametrize("choice", ["cannot_tell", "asked_for"])
 async def test_measured_callers_and_edited_nodes_replay_from_sqlite_without_workspace(
     tmp_path,
     monkeypatch,
+    choice,
 ):
-    api = FakeApi(*(ok(body('{"choice":"cannot_tell"}')) for _ in range(8)))
+    api = FakeApi(*(ok(body(json.dumps({"choice": choice}))) for _ in range(8)))
     monkeypatch.setattr(runtime_decisions, "configured_decision", lambda _: client(api))
     settings = live_settings(
         tmp_path,
@@ -49,7 +68,7 @@ async def test_measured_callers_and_edited_nodes_replay_from_sqlite_without_work
         events = s.events()
         final = next(event for event in events if final_cards(event))
         first = next(event for event in events if event.type == "change.facts_recorded")
-        assert first.payload.review_cards == [] and final.payload.review_cards
+        assert first.payload.review_cards == []
         assert first.payload.behavior_diff == final.payload.behavior_diff
         assert first.payload.measured_cone == final.payload.measured_cone
         direct = {node.node_id for node in first.payload.behavior_diff}
@@ -71,14 +90,16 @@ async def test_measured_callers_and_edited_nodes_replay_from_sqlite_without_work
             )
             validate_answering(ref, events[: final.seq], run_id=s.live.run_id)
             refs.append(ref)
-        card_nodes = {card.node_id for card in final.payload.review_cards}
-        assert card_nodes & direct and card_nodes & (callers - direct)
+        assert s.live._manager is not None and s.live._manager._ctx.cards is not None
+        [job] = s.live._manager._ctx.cards.jobs.values()
+        nodes = classified_nodes(job, first.payload, final.payload, choice)
+        assert nodes & direct and nodes & (callers - direct)
         ticks = [
             event.payload
             for event in events
             if event.type == "usage.tick" and event.payload.role == "review"
         ]
-        assert len(ticks) == len(api.bodies) == len(final.payload.review_cards)
+        assert len(ticks) == len(api.bodies) == len(nodes)
         assert all(t.change_id == rec.change_id and t.cost_usd is not None for t in ticks)
         assert s.live.difference_decisions.accounting.ledger.read().spent_usd == pytest.approx(
             sum(t.cost_usd for t in ticks)
