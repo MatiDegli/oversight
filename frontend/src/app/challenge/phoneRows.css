@@ -1,0 +1,38 @@
+@media (width < 1280px) {
+  .pp-summary {
+    margin-bottom: 10px;
+  }
+  .pp-decision-rows {
+    border-block: 1px solid var(--divider);
+  }
+  .pp-disclosure.pp-decision-row {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .pp-decision-row + .pp-decision-row::before {
+    content: "";
+    display: block;
+    height: 1px;
+    background: var(--divider);
+  }
+  .pp-disclosure.pp-decision-row > summary {
+    padding-inline: 0;
+    border: 0;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .pp-row-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pp-row-label {
+    color: var(--text);
+  }
+  .pp-disclosure.pp-decision-row[open] > summary svg {
+    transform: rotate(180deg);
+  }
+}

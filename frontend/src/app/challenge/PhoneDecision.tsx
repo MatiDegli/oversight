@@ -1,15 +1,25 @@
 import { Check, X, ArrowRight, ChevronDown, Files } from "lucide-react";
 import { useState } from "react";
 import { AgentLine } from "./PhoneGraph";
-import { caseSlot } from "./phoneEvidence";
+import { caseSlot, countAt } from "./phoneEvidence";
+import "./phoneRows.css";
 import { Disclosure, PhoneDiff } from "./PhoneDiff";
 import type { PanelProps } from "./PracticePanel";
 import type { PracticeCase } from "./phoneEvidence";
 
 function Impact({ entry }: { entry: PracticeCase }) {
   const impact = entry.proposal.impact;
+  const preview = [1, 2]
+    .map((distance) => ({ distance, count: countAt(entry, distance) }))
+    .filter(({ count }) => count > 0)
+    .map(({ distance, count }) =>
+      distance === 1
+        ? `${String(count)} direct callers`
+        : `${String(count)} at distance ${String(distance)}`,
+    )
+    .join(", ");
   return (
-    <Disclosure label="Possibly affected" count={impact.entries.length}>
+    <Disclosure label="Possibly affected" variant="decision" preview={preview}>
       <div className="pp-impact">
         <p>
           Exact calls only · Depth limit {impact.max_depth} · Node limit {impact.max_nodes}
@@ -102,10 +112,12 @@ export function PhoneDecision({ practice, attempt, ...actions }: PanelProps) {
           <p>{entry.proposal.summary}</p>
         </section>
         {open ? <PhoneDiff {...{ practice, entry }} /> : <div id="phone-recorded-diff" hidden />}
-        <Disclosure label="Recorded task">
-          <p className="pp-task">{entry.proposal.task}</p>
-        </Disclosure>
-        {!!entry.proposal.impact.entries.length && <Impact entry={entry} />}
+        <div className="pp-decision-rows">
+          <Disclosure label="Recorded task" variant="decision" preview={entry.proposal.task}>
+            <p className="pp-task">{entry.proposal.task}</p>
+          </Disclosure>
+          {!!entry.proposal.impact.entries.length && <Impact entry={entry} />}
+        </div>
       </main>
       <DecisionDock practice={practice} attempt={attempt} {...actions} />
     </>

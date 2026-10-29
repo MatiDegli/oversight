@@ -1,6 +1,6 @@
 import { GitBranch } from "lucide-react";
 import type { Practice } from "./manifest";
-import { calledHelper, caseSlot, nodeName } from "./phoneEvidence";
+import { calledHelper, caseSlot, countAt, nodeName } from "./phoneEvidence";
 import type { PracticeCase } from "./phoneEvidence";
 
 export function AgentLetter({ slot }: { slot: string }) {
@@ -56,8 +56,6 @@ function Piece({
   merged: boolean;
   compact: boolean;
 }) {
-  const countAt = (distance: number) =>
-    entry.proposal.impact.entries.filter((node) => node.distance === distance).length;
   const helper = calledHelper(practice, entry);
   return (
     <div
@@ -114,7 +112,7 @@ function Piece({
         [1, 2].map((distance) => (
           <div className={`pp-fold pp-distance-${String(distance)}`} key={distance}>
             <span>
-              {countAt(distance)}{" "}
+              {countAt(entry, distance)}{" "}
               {distance === 1 ? "direct callers" : `at distance ${String(distance)}`}
             </span>
             <span className="pp-distance">{distance}</span>
