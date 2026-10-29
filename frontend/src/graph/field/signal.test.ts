@@ -169,6 +169,34 @@ describe("R4 sources", () => {
     );
   });
 
+  it("shows the waiting light after each proposal of the recorded demo, until its decision", () => {
+    const demo = readFileSync(
+      new URL("../../../../fixtures/events/recorded-demo.jsonl", import.meta.url),
+      "utf8",
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as ServerEvent);
+    const lit = (seq: number) =>
+      selectSignalLights(
+        demo.filter((event) => event.seq <= seq).reduce(applyEvent, createInitialState()),
+      )
+        .filter((light) => !light.pulses)
+        .map((light) => [light.id, light.weight]);
+    const waiting = themes.dark["waiting-light-weight"];
+    // Agent B proposes first (its change waits from seq 57), then agent A (from seq 63).
+    expect(lit(57)).toContainEqual(["shop.inventory:Inventory.reserve", waiting]);
+    expect(lit(63)).toEqual(
+      expect.arrayContaining([
+        ["shop.pricing:compute_price", waiting],
+        ["shop.inventory:Inventory.reserve", waiting],
+      ]),
+    );
+    // Agent A's change is decided at 64: only B's keeps its light, and then none at 67.
+    expect(lit(64)).toEqual([["shop.inventory:Inventory.reserve", waiting]]);
+    expect(lit(67)).toEqual([]);
+  });
+
   it("leaves the field dark at rest: the recorded run, once it is merged, has no source", () => {
     expect(selectSignalLights(through(13))).not.toHaveLength(0);
     expect(selectSignalLights(through(20))).not.toHaveLength(0);
