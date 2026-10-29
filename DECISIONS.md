@@ -1618,6 +1618,33 @@ Each is built from tokens; DESIGN.md says which earlier lines each replaces.
 4. **The merge trail is short.** The orange right-angled line the maintainer saw on the right edge
    was the merge trail: 200px behind the head. It is now about 100px (28px bright, then 72px that
    fade with the square of what is left), and it is gone 350ms after the pulse arrives.
+5. **Module frames are translucent, and only their headers are masked.** The sketch's frame is
+   `rgba(12,12,14,.62)` in dark and `rgba(255,255,255,.5)` in day, its class `.6` and `.4`, and its
+   masks cover frame headers, class headers, chips and overlays only, so the light around a lit
+   row shows through the frame's body. Ours was 90% opaque and hid the second and whole levels
+   there; the histogram over the cells outside rows could not see it. `module-opacity` is now
+   0.62 in dark and 0.5 in day (a token, the day palette overrides it), and the field masks
+   what the sketch masks: the header band of an open module or class (the padding above its first
+   row, 54px and 44px, padded by `header-mask-pad`, 6px) and the exact box of a folded card,
+   read at every draw so they follow the camera. A lit row's name and state word stay at 4.5:1 or
+   more over the brightest lamp beneath them, a test over both themes, both agents and the
+   frame label were it unmasked: the lowest is 4.93:1 (day, agent B's frame label).
+6. **The editing row is tinted with its agent's color.** It already wore the sketch's wash (dark
+   `#1e0c04` and `#060c1e` at 95%) from the `agent-a-node` and `agent-b-node` tokens; the capture
+   shows it for A (a row) and for B (a folded class card, since a method of a folded class is lit
+   through the class's box). Day uses a pale peach and a pale blue, opaque, as the sketch's day
+   keeps its dark wash, which reads as a defect there.
+7. **The histograms count the frame bodies.** The comparison with the sketch now covers every
+   cell that no row, folded card or mask hides, so the translucent bodies count. On the sketch's
+   own busy scene the product draws [20923, 943, 306, 181] lamps at the four levels against the
+   sketch's [20977, 905, 307, 164]: the first level within 5%, the second within a lamp, the
+   whole level 10% above, because the watch gain is 0.92 against the sketch's 0.9 (at 0.9 the
+   product counts 168). The product's own captures differ in geometry: agent A alone
+   [25011, 351, 76, 25], A and B [21406, 1027, 351, 80]. The field there equals the model run on
+   the same boxes (a window around agent A's row counts [0, 35, 114, 53] in both); against the
+   sketch's layout the second level is lower because the rows' rendered boxes are 48px tall
+   against the sketch's 46, and the whole level, a ring one cell thick, changes with where the
+   box's edge falls in the 7px grid.
 
 Reason: the screen must show at a glance which agent is working and where, and the ground must
 look the way the approved sketches look; every number is a token so the look can be tuned without

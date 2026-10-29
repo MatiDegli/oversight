@@ -1004,7 +1004,16 @@ lines (the fallback that existed before the contours).
   light is one more source of its agent's color, counted in the same budget.
 - **Mask:** the title, legend, zoom controls and every overlay mask the field, including the
   contour lines. Neither the LEDs, the lines nor a travelling light may show through those areas.
-  Cards on the graph are 90 to 94% opaque, so lines are not seen through them either.
+  So do the text bands: the header of every open module (its first 54px) or class (44px), padded by
+  6px (`header-mask-pad`), and the exact box of a folded card. Rows are 94% opaque and a folded card
+  hides its own lamps, so lines are not seen through them either.
+- **Module frames are translucent:** an open module or class takes the panel color at
+  `module-opacity`, 0.62 in dark and 0.5 in day, so the lamps around a lit row show through the
+  frame's body, as the sketch's frame does. Only its header is masked; the body between rows,
+  and the margin at their sides, carries the light. An editing row wears its agent's tint
+  (`agent-a-node`, `agent-b-node`: a near-black warm or cool wash in dark, a pale one in day), and
+  a lit row's text stays at 4.5:1 or more over the brightest lamp beneath it, which a test checks
+  in both themes.
 - **Working ring:** an expanding ring in the agent's color reports a working agent. It stops
   when the agent stops working. It is a work signal, not a second pool of ambient light.
 - **Marker:** on each agent.focus, the lettered marker glides to the current node along the edge
