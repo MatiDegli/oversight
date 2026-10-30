@@ -23,10 +23,11 @@ from live_helpers import (
 from oversight.agents import FAKE_MODEL, Message, ModelReply, ToolSchema
 from oversight.api import create_router, install_error_handlers
 from oversight.api.commands import NOT_BUILT
+from oversight.app import ReplayConfig, create_app
 from oversight.events import EventStore, read_jsonl
-from oversight.graph import parse_version
+from oversight.graph import node_cone, parse_version
 from oversight.settings import REPO_ROOT
-from oversight_contracts.commands import AgentCreated, FileContent
+from oversight_contracts.commands import AgentCreated, ChangeView, FileContent, GraphResponse
 from oversight_contracts.events import RunStartedEvent
 from oversight_contracts.graph import GraphDelta, ImpactCone
 
@@ -147,6 +148,45 @@ async def test_unknown_node_or_change(tmp_path: Path, mode: Literal["live", "rep
     async with endpoint(tmp_path, mode) as (_, client):
         for params in ({"node": "missing"}, {"node": "m:seed", "change": "change-999"}):
             assert error_code(await client.get("/impact", params=params)) == (404, "not_found")
+
+
+async def test_production_replay_uses_committed_graph_but_has_no_change_version(
+    tmp_path: Path,
+) -> None:
+    events = read_jsonl(LOG)
+    first = events[0]
+    assert isinstance(first, RunStartedEvent)
+    proposal = next(e.payload for e in events if e.type == "change.proposed")
+    app = create_app(
+        live_settings(tmp_path), ReplayConfig(log=LOG, speed=0, allow_fake_provider=True)
+    )
+    async with asyncio.timeout(DEADLINE_S), app.router.lifespan_context(app):
+        store: EventStore = app.state.store
+        assert (await anext(store.subscribe(len(events) - 1))).seq == len(events)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:8710"
+        ) as client:
+            graph = GraphResponse.model_validate((await client.get("/graph")).json())
+            node = next(
+                edge.dst
+                for edge in graph.graph.edges
+                if edge.kind == "calls" and edge.confidence == "exact"
+            )
+            before = store.graph(), store.last_seq
+            cone = success(await client.get("/impact", params={"node": node}))
+            assert cone == node_cone(
+                graph.graph,
+                node,
+                max_depth=first.payload.limits.cone_max_depth,
+                max_nodes=first.payload.limits.cone_max_nodes,
+            )
+            archived = await client.get(f"/changes/{proposal.change_id}")
+            assert archived.status_code == 200
+            assert ChangeView.model_validate(archived.json()).change_id == proposal.change_id
+            assert error_code(
+                await client.get("/impact", params={"node": node, "change": proposal.change_id})
+            ) == (404, "not_found")
+            assert (store.graph(), store.last_seq) == before
 
 
 @pytest.mark.parametrize("mode", ["live", "replay"])
