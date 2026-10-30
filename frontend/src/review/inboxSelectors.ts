@@ -32,9 +32,11 @@ export function selectPossibleCallersWait(state: State, changeId: string) {
   )
     return null;
   const callers = possibleCallerNodes(state, change, p.impact);
-  return callers?.length
-    ? { callers, module: p.files.length === 1 ? p.files[0]?.path : undefined }
-    : null;
+  const modules = state.graph?.nodes.filter(
+    (n) => n.kind === "module" && n.path === p.files[0]?.path,
+  );
+  const module = p.files.length === 1 && modules?.length === 1 ? modules[0] : undefined;
+  return callers?.length ? { callers, module } : null;
 }
 
 export type ChangeCardState = {
@@ -50,6 +52,13 @@ export function selectChangeCard(state: State, changeId: string): ChangeCardStat
   if (change.resolution?.decided_by === "rules" && change.resolution.merge === "merged")
     return { kind: "merged", change, facts };
   if (change.status !== "ready_for_review" && change.status !== "conflict") return null;
+  if (
+    selectDecisionInbox(state).some(
+      (entry) =>
+        entry.changeId === changeId && entry.decisions.some((d) => d.kind === "follow_main"),
+    )
+  )
+    return null;
   if (facts?.review_cards?.length) return { kind: "choice", change, facts };
   if (
     facts &&
@@ -62,15 +71,6 @@ export function selectChangeCard(state: State, changeId: string): ChangeCardStat
   )
     return { kind: "unavailable", change, facts };
   return null;
-}
-
-export function selectUnchanged(facts: ChangeFacts | undefined) {
-  const compared = facts?.behavior_diff?.reduce((n, b) => n + b.compared_count, 0) ?? 0;
-  const differing = facts?.behavior_diff?.reduce((n, b) => n + b.differing_count, 0) ?? 0;
-  const incomplete =
-    !facts?.behavior_diff?.length ||
-    facts.behavior_diff.some((b) => b.not_probed || b.rows.some((r) => r.unstable));
-  return { compared, unchanged: compared - differing, incomplete };
 }
 
 export function selectInboxSummary(state: State) {

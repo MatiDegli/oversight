@@ -1,74 +1,13 @@
-import { useId, useState } from "react";
-import { Check, ChevronDown, Inbox } from "lucide-react";
+import { useState } from "react";
+import { Inbox } from "lucide-react";
 import type { DecisionInboxEntry, State } from "../state";
 import { selectDecisionInbox, selectActiveGrants } from "../state";
 import { ChangeCard, eventTime } from "./ChangeCard";
 import { StandingGrants } from "./StandingGrants";
 import { Example } from "./AnswerChoices";
 import { selectInboxSummary, selectPossibleCallersWait } from "./inboxSelectors";
+import { GrantChoice } from "./GrantChoice";
 import "./inbox.css";
-
-function GrantChoice({ module }: { module?: string }) {
-  const scopeId = useId();
-  const [scope, setScope] = useState<"module" | "run" | null>(null);
-  const [notice, setNotice] = useState("");
-  return (
-    <div className="grant-choice">
-      <button
-        className="decision-primary"
-        onClick={() => {
-          setNotice(`Approve prepared${scope ? ` with ${scope} grant` : ""}. No command sent.`);
-        }}
-      >
-        Approve
-      </button>
-      <details
-        onToggle={(event) => {
-          if (!event.currentTarget.open) {
-            setScope(null);
-            setNotice("");
-          }
-        }}
-      >
-        <summary>
-          Don't ask again <ChevronDown size={14} aria-hidden="true" />
-        </summary>
-        <fieldset>
-          <legend>Allow possible callers, not followed</legend>
-          <label>
-            <input
-              type="radio"
-              name={scopeId}
-              checked={scope === "module"}
-              disabled={!module}
-              onChange={() => {
-                setScope("module");
-                setNotice("");
-              }}
-            />
-            This module <code>{module ?? "Multiple files; module scope unavailable"}</code>
-          </label>
-          <label>
-            <input
-              type="radio"
-              name={scopeId}
-              checked={scope === "run"}
-              onChange={() => {
-                setScope("run");
-                setNotice("");
-              }}
-            />
-            This run
-          </label>
-          <p>Ends with this run. Created only when you Approve.</p>
-        </fieldset>
-      </details>
-      <p role="status" className="decision-muted">
-        {notice}
-      </p>
-    </div>
-  );
-}
 
 function InboxRow({
   state,
@@ -112,6 +51,27 @@ function InboxRow({
       </h3>
       <p>{change?.proposal?.summary ?? entry.decisions[0]?.reason}</p>
       {example && <Example row={example} slot={slot ?? undefined} />}
+      <InboxAnswer state={state} entry={entry} />
+      {change && onReview && (
+        <button
+          className="review-link"
+          onClick={() => {
+            onReview(change.change_id);
+          }}
+        >
+          Review change →
+        </button>
+      )}
+    </article>
+  );
+}
+
+function InboxAnswer({ state, entry }: { state: State; entry: DecisionInboxEntry }) {
+  const change = entry.changeId ? state.changes[entry.changeId] : undefined;
+  const wait = entry.changeId ? selectPossibleCallersWait(state, entry.changeId) : null;
+  const question = entry.decisions.find((d) => d.kind === "review_card");
+  return (
+    <>
       {wait ? (
         <div className="possible-wait">
           <div>
@@ -130,7 +90,8 @@ function InboxRow({
           {!question && (
             <GrantChoice
               key={`${state.run?.run_id ?? ""}:${String(change?.proposal?.revision ?? "")}:${change?.proposal?.head_commit ?? ""}`}
-              module={wait.module}
+              state={state}
+              changeId={change?.change_id ?? ""}
             />
           )}
           {question && (
@@ -163,17 +124,7 @@ function InboxRow({
           )}
         </>
       )}
-      {change && onReview && (
-        <button
-          className="review-link"
-          onClick={() => {
-            onReview(change.change_id);
-          }}
-        >
-          Review change →
-        </button>
-      )}
-    </article>
+    </>
   );
 }
 
@@ -244,8 +195,7 @@ export function DecisionInbox({
             )}
           </div>
           <footer className="inbox-footnote">
-            <Check size={16} aria-hidden="true" /> A Yes is prepared, never saved alone. Approve
-            remains a separate decision.
+            A Yes is prepared, never saved alone. Approve remains a separate decision.
           </footer>
         </>
       )}

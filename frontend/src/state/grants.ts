@@ -43,7 +43,6 @@ export function selectActiveGrants(state: State) {
   return state.grantEvents.flatMap((event) =>
     event.type === "grant.created" &&
     event.payload.run_id === state.run?.run_id &&
-    event.payload.scope.expires === "run" &&
     !revoked.has(event.payload.grant_id)
       ? [
           {

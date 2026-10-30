@@ -1,16 +1,46 @@
+import { useState } from "react";
+import { replayDecisionWords, useDecisions } from "./DecisionContext";
+import { commandFailure } from "../transport";
 import { ShieldCheck } from "lucide-react";
 import type { State } from "../state";
 import { grantReasons, grantScopeWords, selectActiveGrants } from "../state";
 import { eventTime } from "./ChangeCard";
 import "./inbox.css";
 
+function Revoke({ id }: { id: string }) {
+  const { revokeGrant, replayOf } = useDecisions();
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState("");
+  return (
+    <div>
+      <button
+        type="button"
+        className="decision-reject"
+        disabled={!revokeGrant || pending}
+        onClick={() => {
+          if (!revokeGrant || pending) return;
+          setPending(true);
+          setFailure("");
+          void revokeGrant(id).catch((error: unknown) => {
+            setPending(false);
+            setFailure(commandFailure("Revoke", error));
+          });
+        }}
+      >
+        {pending ? "Revoking…" : "Revoke"}
+      </button>
+      {!revokeGrant && <p className="decision-muted">{replayDecisionWords(replayOf)}</p>}
+      {failure && <p role="alert">{failure}</p>}
+    </div>
+  );
+}
 export function StandingGrants({ state }: { state: State }) {
   const grants = selectActiveGrants(state);
   return (
     <section aria-label="Standing grants" className="grants-content">
       <h2>Standing grants</h2>
       <p className="decision-muted">
-        Choices you let through without asking again. Every grant ends with its run.
+        Choices you let through without asking again. Grants end with their recorded run or session.
       </p>
       {grants.length ? (
         grants.map((grant) => (
@@ -23,14 +53,7 @@ export function StandingGrants({ state }: { state: State }) {
                 {grant.uses === 1 ? "change" : "changes"} let through
               </p>
             </div>
-            <button
-              type="button"
-              className="decision-reject"
-              aria-disabled="true"
-              title="Preview: revoke is not connected yet"
-            >
-              Revoke
-            </button>
+            <Revoke id={grant.grant_id} />
           </article>
         ))
       ) : (
@@ -46,7 +69,6 @@ export function StandingGrants({ state }: { state: State }) {
           </p>
         </div>
       )}
-      <p className="decision-muted grants-note">Preview · Revoke is not connected in this stage.</p>
     </section>
   );
 }

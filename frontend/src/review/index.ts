@@ -6,3 +6,6 @@ export type { DecisionAction, DecisionAttempt, DecisionClient, DecisionView } fr
 export { ChangeFactsRow } from "./ChangeFactsRow";
 
 export { DecisionInbox } from "./DecisionInbox";
+
+export { DecisionContext } from "./DecisionContext";
+export { useAnswers } from "./answers";

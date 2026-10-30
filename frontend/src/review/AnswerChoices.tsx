@@ -35,87 +35,92 @@ export function Example({ row, slot }: { row: BehaviorDiffRow; slot?: Slot }) {
   );
 }
 
-export function AnswerChoices({
-  cards,
-  answers,
-  onAnswer,
-  slot,
-}: {
-  cards: ReviewCard[];
+type ChoiceProps = {
+  card: ReviewCard;
+  index: number;
   answers: Answers;
   onAnswer: (key: string, answer: ReviewCard["answer"]) => void;
   slot?: Slot;
-}) {
-  const answerQuestion = (button: HTMLButtonElement, key: string, answer: ReviewCard["answer"]) => {
-    const section = button.closest("section");
-    const hadFocus = document.activeElement === button;
-    flushSync(() => {
-      onAnswer(key, answer);
-    });
-    // Keep focus within the question when the person's action replaces its controls.
-    if (hadFocus)
-      section
-        ?.querySelector<HTMLButtonElement>(answer ? ".answer-reset" : ".decision-actions button")
-        ?.focus({ preventScroll: true });
-  };
+};
+function AnswerChoice({ card, index, answers, onAnswer, slot }: ChoiceProps) {
+  const key = cardKey(card);
+  const answer = cardAnswer(card, answers);
+  return (
+    <section className="choice-question" key={key} aria-label={card.question}>
+      <div className="decision-heading">
+        <h3>
+          <span className="question-number">{index + 1}.</span>{" "}
+          {answer ? `${card.question} · ${labels[answer]}` : card.question}
+          {answer && card.example && card.example.before !== card.example.after && (
+            <code className="collapsed-example">
+              {" "}
+              {card.example.inputs}: {card.example.before} → {card.example.after}
+            </code>
+          )}
+        </h3>
+        {answer && (
+          <button
+            className="answer-reset"
+            onClick={(event) => {
+              answerQuestion(event.currentTarget, key, null, onAnswer);
+            }}
+          >
+            Change answer
+          </button>
+        )}
+      </div>
+      {!answer && (
+        <>
+          {card.example ? (
+            <Example row={card.example} slot={slot} />
+          ) : (
+            <p className="decision-muted">No example was recorded for this question.</p>
+          )}
+          <div className="decision-actions">
+            {(["yes", "no", "unsure"] as const).map((value) => (
+              <button
+                type="button"
+                key={value}
+                onClick={(event) => {
+                  answerQuestion(event.currentTarget, key, value, onAnswer);
+                }}
+              >
+                {labels[value]}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+export function AnswerChoices({
+  cards,
+  ...props
+}: Omit<ChoiceProps, "card" | "index"> & { cards: ReviewCard[] }) {
   return (
     <div>
-      {cards.map((card, index) => {
-        const key = cardKey(card);
-        const answer = cardAnswer(card, answers);
-        return (
-          <section className="choice-question" key={key} aria-label={card.question}>
-            <div className="decision-heading">
-              <h3>
-                <span className="question-number">{index + 1}.</span>{" "}
-                {answer
-                  ? labels[answer]
-                  : card.question === "Was this behavior change asked for?"
-                    ? "The task did not ask for this difference. Keep it?"
-                    : card.question}
-                {answer && card.example && card.example.before !== card.example.after && (
-                  <code className="collapsed-example">
-                    {" "}
-                    {card.example.inputs}: {card.example.before} → {card.example.after}
-                  </code>
-                )}
-              </h3>
-              {answer && (
-                <button
-                  className="answer-reset"
-                  onClick={(event) => {
-                    answerQuestion(event.currentTarget, key, null);
-                  }}
-                >
-                  Change answer
-                </button>
-              )}
-            </div>
-            {!answer && (
-              <>
-                {card.example ? (
-                  <Example row={card.example} slot={slot} />
-                ) : (
-                  <p className="decision-muted">No example was recorded for this question.</p>
-                )}
-                <div className="decision-actions">
-                  {(["yes", "no", "unsure"] as const).map((value) => (
-                    <button
-                      type="button"
-                      key={value}
-                      onClick={(event) => {
-                        answerQuestion(event.currentTarget, key, value);
-                      }}
-                    >
-                      {labels[value]}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </section>
-        );
-      })}
+      {cards.map((card, index) => (
+        <AnswerChoice key={cardKey(card)} card={card} index={index} {...props} />
+      ))}
     </div>
   );
+}
+
+function answerQuestion(
+  button: HTMLButtonElement,
+  key: string,
+  answer: ReviewCard["answer"],
+  onAnswer: ChoiceProps["onAnswer"],
+) {
+  const section = button.closest("section");
+  const hadFocus = document.activeElement === button;
+  flushSync(() => {
+    onAnswer(key, answer);
+  });
+  // Keep focus within the question when the person's action replaces its controls.
+  if (hadFocus)
+    section
+      ?.querySelector<HTMLButtonElement>(answer ? ".answer-reset" : ".decision-actions button")
+      ?.focus({ preventScroll: true });
 }

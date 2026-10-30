@@ -130,7 +130,7 @@
 }
 .decision-actions button,
 .grant-choice > button,
-.grant-row > button {
+.grant-row button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -143,7 +143,7 @@
   font-weight: 600;
 }
 .decision-actions button:hover,
-.grant-row > button:hover {
+.grant-row button:hover {
   background: var(--raised);
 }
 button.decision-primary {
@@ -458,4 +458,10 @@ button.decision-reject {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.decision-actions button:disabled,
+.grant-row button:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
 }

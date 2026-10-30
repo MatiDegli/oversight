@@ -17,7 +17,6 @@ import {
   selectChangeCard,
   selectInboxSummary,
   selectPossibleCallersWait,
-  selectUnchanged,
 } from "./inboxSelectors";
 
 export const inboxEvents = log.trim().split("\n").map(parseEvent);
@@ -85,7 +84,7 @@ it("lists only unrevoked current-run grants and retains uses after revocation", 
           : e,
       ),
     }),
-  ).toEqual([]);
+  ).toHaveLength(1);
   const run = inboxEvents[0];
   if (run?.type !== "run.started") throw new Error("Missing run");
   const reset = applyEvent(state, {
@@ -114,7 +113,7 @@ it("names every contract scope and counts one change once even with repeated rec
 
 it("lists precisely the existing possible-callers count, with no tests or exact callers", () => {
   const wait = selectPossibleCallersWait(state, "change-2");
-  expect(wait?.module).toBe("shop/pricing.py");
+  expect(wait?.module).toMatchObject({ id: "shop.pricing", qualname: "shop.pricing" });
   const change = state.changes["change-2"];
   if (!change?.proposal || !wait) throw new Error("Missing change");
   expect(wait.callers).toHaveLength(possibleCallers(state, change, change.proposal.impact) ?? -1);
@@ -180,12 +179,6 @@ it("projects the three states from current evidence, with no inherited questions
   };
   expect(selectChangeCard(newer, "change-3")).toBeNull();
   expect(selectDecisionInbox(state)).toHaveLength(3);
-});
-
-it("counts compared inputs rather than claiming all behavior is unchanged", () => {
-  const facts = selectChangeCard(state, "change-3")?.facts;
-  expect(selectUnchanged(facts)).toEqual({ compared: 24, unchanged: 22, incomplete: false });
-  expect(selectUnchanged(undefined)).toEqual({ compared: 0, unchanged: 0, incomplete: true });
 });
 
 it("does not turn a follow-main conflict into an unavailable check", () => {
@@ -267,4 +260,31 @@ it("lets the person reopen an answer recorded in events without inheriting it ag
   const answered = { ...question, answer: "yes" as const, answered_by: "person" as const };
   expect(cardAnswer(answered, {})).toBe("yes");
   expect(cardAnswer(answered, { [cardKey(answered)]: null })).toBeNull();
+});
+
+it("keeps follow-main needs visible even with current review cards", () => {
+  const next = structuredClone(state);
+  const change = next.changes["change-3"];
+  if (!change?.proposal) throw new Error("Missing proposal");
+  change.status = "conflict";
+  next.decisionEvents.push({
+    type: "error",
+    seq: next.lastSeq + 1,
+    ts: next.clock ?? "2026-10-29T18:08:00.000Z",
+    payload: {
+      source: "git",
+      change_id: change.change_id,
+      agent_id: change.agent_id,
+      fatal: false,
+      message: `Needs you — revision=${String(change.proposal.revision)}; head=${change.proposal.head_commit}; code=main_moved; reason=main moved`,
+    },
+  });
+  expect(
+    selectDecisionInbox(next).some(
+      (entry) =>
+        entry.changeId === change.change_id &&
+        entry.decisions.some((d) => d.kind === "follow_main"),
+    ),
+  ).toBe(true);
+  expect(selectChangeCard(next, change.change_id)).toBeNull();
 });

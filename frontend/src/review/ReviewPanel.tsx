@@ -443,7 +443,7 @@ function LegacyReviewPanel({
 
 export function ReviewPanel(props: ReviewPanelProps) {
   return selectChangeCard(props.state, props.changeId) ? (
-    <ChangeCard state={props.state} changeId={props.changeId} />
+    <ChangeCard {...props} />
   ) : (
     <LegacyReviewPanel {...props} />
   );
