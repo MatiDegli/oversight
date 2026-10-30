@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import shutil
 import sys
 from pathlib import Path
 from textwrap import dedent
@@ -29,12 +30,13 @@ def test_frozen_tasks_and_no_hidden_prompt_text():
         assert task.pairs == (
             [f"p{j:02}" for j in (i // 2 * 2 + 1, i // 2 * 2 + 2)] if i < 14 else []
         )
-        if task.kind == "feature":
-            assert task.hidden_checks and task.reference
+        assert task.hidden_checks and task.reference
+        assert len(task.mutants) == (3 if task.kind == "tests" else 0)
         for check in task.hidden_checks:
             text = r.resource(check).read_text()
             assert text not in task.prompt and "def test_" not in task.prompt
         assert "check_p" not in task.prompt and ".patch" not in task.prompt
+    # Computed from git show 981b1ee:tools/eval/proof2/tasks.json (all 16 prompts).
     prompts = json.dumps([t.prompt for t in tasks], ensure_ascii=False).encode()
     assert (
         hashlib.sha256(prompts).hexdigest()
@@ -232,3 +234,141 @@ def test_cli_refusal_json(synthetic, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["proof2", "check", "--task", "p00", "--tree", str(tree)])
     assert cli.main() == 2
     assert "unknown task" in json.loads(capsys.readouterr().out)["error"]
+
+
+@pytest.fixture
+def d3(synthetic):
+    assets, tree = synthetic
+    base = tree.parent / "base"
+    shutil.copytree(tree, base)
+    reference = assets / "references/p10_test.py"
+    reference.write_text(
+        "from boltons.strutils import VALUE\ndef test_value(): assert VALUE == 0\n"
+    )
+    shutil.copyfile(reference, tree / "tests/test_added.py")
+    mutants = []
+    for i in range(1, 4):
+        name = f"mutants/p10/m{i}.py"
+        path = assets / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"# targets: VALUE\nVALUE = {i}\n")
+        mutants.append(name)
+    task = r.Task(
+        "p10",
+        "tests",
+        None,
+        "strutils",
+        "Synthetic D3",
+        ["references/p10_test.py"],
+        "references/p10_test.py",
+        [],
+        [],
+        mutants,
+    )
+    (assets / "tasks.json").write_text(json.dumps([vars(task)]))
+    return assets, tree, base
+
+
+@pytest.mark.parametrize(
+    "condition", ["production", "no_tests", "failing", "one_kill", "pass", "two_kills"]
+)
+def test_d3_conditions_and_immutable_inputs(d3, condition):
+    assets, tree, base = d3
+    added = tree / "tests/test_added.py"
+    if condition == "production":
+        (tree / "README").write_text("production artifact changed")
+    elif condition == "no_tests":
+        added.unlink()
+    elif condition == "failing":
+        added.write_text(added.read_text().replace("== 0", "== 9"))
+    elif condition in ("one_kill", "two_kills"):
+        added.write_text(
+            added.read_text().replace("== 0", "!= 1" if condition == "one_kill" else "< 2")
+        )
+    before_tree, before_base = snapshot(tree), snapshot(base)
+    result = asyncio.run(r.check("p10", tree, base=base))
+    assert result["exit_code"] == (0 if condition in ("pass", "two_kills") else 1)
+    assert result["production_unchanged"] == (condition != "production")
+    assert result["new_tests_present"] == (condition != "no_tests")
+    if condition == "production":
+        assert result["reason"] == "production code changed"
+        assert result["production_changed_paths"] == ["README"]
+    if condition == "failing":
+        assert not result["new_tests_pass"] and result["tests"]["failed"] == 1
+    if condition in ("pass", "one_kill", "two_kills"):
+        assert result["new_tests_pass"]
+        expected = {"pass": ["m1", "m2", "m3"], "one_kill": ["m1"], "two_kills": ["m2", "m3"]}
+        assert result["killed_mutants"] == expected[condition]
+        assert result["mutation_threshold"] == (condition != "one_kill")
+    assert snapshot(tree) == before_tree and snapshot(base) == before_base
+    assert not list(assets.glob(".proof2-*"))
+
+
+def test_missing_mutant_target_is_refused_before_append(d3):
+    assets, tree, base = d3
+    mutant = assets / "mutants/p10/m1.py"
+    mutant.write_text("# targets: VALUE, Missing.method\nVALUE = 1\n")
+    before = snapshot(tree)
+    with pytest.raises(ValueError, match=r"target unavailable.*Missing\.method"):
+        asyncio.run(r.check("p10", tree, base=base))
+    assert snapshot(tree) == before
+    task = r.load_tasks()[0]
+    with pytest.raises(ValueError, match="target unavailable"):
+        asyncio.run(r.apply_mutant(tree, task, task.mutants[0]))
+    assert snapshot(tree) == before
+
+
+def test_d3_requires_base(d3):
+    _, tree, _ = d3
+    with pytest.raises(ValueError, match="--base is required"):
+        asyncio.run(r.check("p10", tree))
+
+
+@pytest.mark.parametrize("kind", ["bug", "feature"])
+def test_cli_refuses_base_for_other_kinds(synthetic, monkeypatch, capsys, kind):
+    assets, tree = synthetic
+    tasks = json.loads((assets / "tasks.json").read_text())
+    tasks[0]["kind"] = kind
+    (assets / "tasks.json").write_text(json.dumps(tasks))
+    monkeypatch.setattr(
+        sys, "argv", ["proof2", "check", "--task", "p04", "--tree", str(tree), "--base", str(tree)]
+    )
+    assert cli.main() == 2
+    assert "--base is only allowed" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_validate_d3_reference_and_informational_original(d3, capsys):
+    _, _, base = d3
+    before = snapshot(base)
+    result = asyncio.run(r.validate(base))[0]
+    assert result["ok"] and result["all_mutants_apply"] and result["reference_passes"]
+    assert result["reference_kills"] == ["m1", "m2", "m3"]
+    assert result["original_kills"] == ["m2", "m3"]
+    assert json.loads(capsys.readouterr().out)["task"] == "p10"
+    assert snapshot(base) == before
+
+
+@pytest.mark.parametrize("path", [".proof2-artifact", ".venv/artifact", "__pycache__/artifact"])
+def test_d3_compares_even_artifacts_excluded_from_execution_copy(d3, path):
+    _, tree, base = d3
+    changed = tree / path
+    changed.parent.mkdir(exist_ok=True)
+    changed.write_bytes(b"changed")
+    result = asyncio.run(r.check("p10", tree, base=base))
+    assert result["reason"] == "production code changed"
+    assert result["production_changed_paths"] == [path]
+
+
+def test_d3_environment_files_refused_without_reading(d3, monkeypatch):
+    _, tree, base = d3
+    environment = tree / ".env.example"
+    environment.touch()
+    read = Path.read_bytes
+
+    def guarded(path):
+        assert path != environment
+        return read(path)
+
+    monkeypatch.setattr(Path, "read_bytes", guarded)
+    with pytest.raises(ValueError, match="environment files cannot be compared"):
+        asyncio.run(r.check("p10", tree, base=base))
