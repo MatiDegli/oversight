@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from oversight.agents._attempts import attempt_observer
 from oversight.agents._prompts import PLAN_PROMPT
 from oversight.agents.client import (
     CALL_SCOPE,
@@ -15,6 +16,7 @@ from oversight.agents.client import (
     ModelClient,
     ModelReply,
 )
+from oversight.events import EventPayload
 from oversight_contracts.graph import GraphSnapshot
 
 MAX_GRAPH_CHARS = 20_000
@@ -66,9 +68,18 @@ async def run_plan_call(
     *,
     ready_time: float,
     record: Callable[[ModelReply], Awaitable[None]],
+    agent_id: str | None = None,
+    publish: Callable[[EventPayload], Awaitable[object]] | None = None,
 ) -> PlanOutcome:
+    if (publish is None) != (agent_id is None):
+        raise ValueError("plan attempt events require both publish and the planner's agent_id")
     deadline = ready_time + 90.0
-    token = CALL_SCOPE.set(CallScope(deadline, record, role="plan"))
+    observer = (
+        attempt_observer(publish, agent_id=agent_id, change_id=None, role="plan")
+        if publish is not None and agent_id is not None
+        else None
+    )
+    token = CALL_SCOPE.set(CallScope(deadline, record, role="plan", attempt_failed=observer))
     try:
         try:
             async with asyncio.timeout_at(deadline):

@@ -94,7 +94,13 @@ class PlanService:
 
         try:
             outcome = await run_plan_call(
-                make_client, plan.task, snapshot, ready_time=ready_time, record=accounting.record
+                make_client,
+                plan.task,
+                snapshot,
+                ready_time=ready_time,
+                record=accounting.record,
+                agent_id=planner_id,
+                publish=self.live.store.publish,
             )
         finally:
             if accounting.failure is not None:

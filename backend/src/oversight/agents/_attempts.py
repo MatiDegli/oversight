@@ -29,7 +29,7 @@ def attempt_observer(
     *,
     agent_id: str,
     change_id: str | None = None,
-    role: Literal["agent", "review"] = "agent",
+    role: Literal["agent", "review", "plan"] = "agent",
 ) -> Callable[[FailedAttempt], Awaitable[None]]:
     """Bind caller identity without exposing publication through ModelClient."""
 
