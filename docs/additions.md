@@ -442,6 +442,16 @@ never sum cumulative `spent_usd`. Main keeps agent totals, not these aggregates
 change/role totals and rounds belong in the proposal. Unknown usage/unpriced Baseten work stays
 unknown, never free. The cumulative product Meta ledger is separate from the bench ledger.
 
+**Implementation premise — review timing:** the proposal-start interval above is the decided target,
+not an observed interval in the current runtime. `facts_ready` parks the proposal in `_review_pending`;
+`run_ended` schedules review and takes `ready_time` only after the author's run ends
+(`backend/src/oversight/runtime_review.py:59-74`). The call is bounded by `ready_time + 90 s`
+(`backend/src/oversight/agents/_review_call.py:55`). Counting from change.proposed today would include
+the author's remaining work, overstating reviewer hours and overlapping the author's own interval.
+The implementation front must resolve this gap with the maintainer: amend the decided interval to
+start at the end of the author's run, or retain proposal-start timing as an implementation requirement.
+Until that decision, change.proposed to change.reviewed must not be reported as observed review hours.
+
 ### 11. One plan, server-computed zones and task queue
 
 The person reviews one editable plan; independent subtasks can then run in two slots. The server
