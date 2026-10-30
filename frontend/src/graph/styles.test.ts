@@ -65,8 +65,8 @@ it.each([
     const frames = cy.nodes(".module:parent");
     const before = frames.map((frame) => ({
       frame,
-      background: frame.numericStyle("background-opacity"),
-      depth: frame.style("z-compound-depth"),
+      background: Number(frame.numericStyle("background-opacity")),
+      depth: String(frame.style("z-compound-depth")),
     }));
     const edge = cy.getElementById("possible");
     expect(edge.style("display")).toBe("element");
