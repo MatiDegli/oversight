@@ -71,7 +71,7 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   await expect(page.locator("#root")).toHaveAttribute("data-seq", "63");
   await start.click();
   const panel = practice(page);
-  await expect(panel).toContainText("Inventory.reserve · Agent B");
+  await expect(panel).toContainText("Inventory.reserve, Agent B");
   await expect(panel).toContainText("29 passing tests");
   await expect(panel.getByRole("button", { name: "Show findings" })).toBeDisabled();
   const approve = panel.getByRole("button", { name: "Approve", exact: true });
@@ -93,7 +93,7 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   await expect(panel).toContainText("Practice answer saved: Reject");
   await expect(panel.getByRole("button", { name: "Show findings" })).toBeDisabled();
   await panel.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(panel).toContainText("compute_price · Agent A");
+  await expect(panel).toContainText("compute_price, Agent A");
   await expect(panel).toContainText("32 passing tests");
   await expect(panel).toContainText("9 possibly affected entries");
   await expect(panel.getByText(/Recorded decision:/)).toHaveCount(0);

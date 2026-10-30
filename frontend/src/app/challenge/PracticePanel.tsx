@@ -119,7 +119,7 @@ function Decision({ practice, attempt, onAnswer, onNext, onReveal }: PanelProps)
         ])}
         .
       </p>
-      <p className="text-sm text-muted">{proposal.files.map((file) => file.path).join(" · ")}</p>
+      <p className="text-sm text-muted">{proposal.files.map((file) => file.path).join(", ")}</p>
       <p className="text-sm break-all">
         Head <span className="font-mono">{proposal.head_commit}</span>
       </p>

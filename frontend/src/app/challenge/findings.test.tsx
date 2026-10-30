@@ -12,6 +12,30 @@ const handlers = {
   onRestart: vi.fn(),
   onExit: vi.fn(),
 };
+
+it.each([
+  [0, "Inventory.reserve, Agent B"],
+  [1, "compute_price, Agent A"],
+] as const)("uses comma-separated decision copy for case %s", (index, heading) => {
+  const source = structuredClone(practice);
+  const item = source.cases[index];
+  if (!item) throw new Error("Missing case");
+  item.proposal.files = [
+    { path: "shop/pricing.py", status: "modified", lines_added: 1, lines_removed: 0 },
+    { path: "tests/test_pricing.py", status: "modified", lines_added: 2, lines_removed: 0 },
+  ];
+  const html = renderToStaticMarkup(
+    <PracticePanel
+      practice={source}
+      attempt={{ ...freshAttempt(), started: true, index }}
+      {...handlers}
+    />,
+  );
+  expect(html).toContain(`>${heading}</h2>`);
+  expect(html).toContain(">shop/pricing.py, tests/test_pricing.py</p>");
+  expect(html).not.toContain(" · ");
+});
+
 it("withholds historical findings until reveal; uses only recorded proposal facts", () => {
   const attempt = { ...freshAttempt(), started: true };
   const before = renderToStaticMarkup(
