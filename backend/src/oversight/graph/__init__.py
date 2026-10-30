@@ -14,6 +14,7 @@ from oversight.graph._impact import (
     possible_callers,
 )
 from oversight.graph._layout import read_layout
+from oversight.graph._test_reach import TestReach, call_graph_test_reach
 from oversight.graph._version import CodeVersion, parse_version
 from oversight.graph._workspace import WorkspaceGraph
 
@@ -21,7 +22,9 @@ __all__ = [
     "CodeVersion",
     "DeltaCause",
     "NodeNotFoundError",
+    "TestReach",
     "WorkspaceGraph",
+    "call_graph_test_reach",
     "change_cone",
     "change_graph",
     "graph_delta",

@@ -31,7 +31,8 @@ async def test_failure_assertion_edit_pass_has_stored_witnesses(h: Harness) -> N
     assert any(ref.event_seq == finding.edited_seq for ref in fact.evidence)
     assert not facts.complete
     assert "zone producer unavailable" in facts.problems
-    assert "reach producer unavailable" in facts.problems
+    assert facts.reach is not None
+    assert "reach producer unavailable" not in facts.problems
     assert not any("package 5" in p for p in facts.problems)
 
 
