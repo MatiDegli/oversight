@@ -91,6 +91,7 @@ def test_ambiguous_alias_stays_unresolved(binding):
         "(lambda call: call('shadow'))(other)",
         "(lambda: (call('shadow'), (call := other)))()",
         "def test_it(value):\n    call('shadow')\n    match value:\n        case call: pass",
+        "def test_it():\n    from elsewhere import *\n    call('shadow')",
     ],
 )
 def test_shadowed_alias_does_not_seed_target(calls):

@@ -124,7 +124,7 @@ def shadowed(source: Source, call: ast.Call, name: str) -> bool:
             for stmt in definition.body:
                 check_deadline(source.deadline)
                 extra.visit(stmt)
-            if name in extra.names:
+            if extra.star_import or name in extra.names:
                 return True
     for parent in ast.walk(source.tree):
         check_deadline(source.deadline)

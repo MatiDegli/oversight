@@ -381,11 +381,12 @@ def test_shape_facts_allow_file_observations_without_a_node() -> None:
         ShapeFact.model_validate({**fact, "kind": "size_gate"})
 
 
-async def recorded_event_paths(root: Path) -> list[Path]:
+async def recorded_event_paths(root: Path, *, env: dict[str, str] | None = None) -> list[Path]:
     result = await run_process(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.jsonl"],
         cwd=root,
         timeout_s=10,
+        env=env,
     )
     assert result.returncode == 0 and not result.timed_out and not result.truncated, (
         f"git ls-files failed (timeout={result.timed_out}, truncated={result.truncated}):\n"
@@ -422,7 +423,7 @@ async def test_recorded_event_discovery_respects_git_ignore(tmp_path: Path) -> N
 @pytest.mark.anyio
 async def test_recorded_event_discovery_fails_outside_git(tmp_path: Path) -> None:
     with pytest.raises(AssertionError, match="not a git repository"):
-        await recorded_event_paths(tmp_path)
+        await recorded_event_paths(tmp_path, env={"GIT_CEILING_DIRECTORIES": str(tmp_path.parent)})
 
 
 @pytest.mark.anyio
