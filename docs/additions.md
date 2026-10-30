@@ -37,8 +37,9 @@ next item by real progress.
 
 1. Evidence for an added optional parameter (bench tasks b02, b06, b08, b10, b12 and b18), inside
    the bench evidence fix: the most common change must not end in Needs you.
-2. Item 10 with agent-hours, project active hours and parallelism. Proof 1's closing line depends
-   on it.
+2. Item 10 with agent-hours, project active hours and parallelism. Proof 2's closing line ("this
+   many agents for this many hours") depends on it. (The maintainer confirmed proof 2 on
+   2026-10-30.)
 3. Reasons in words on the card instead of "probe unavailable"
    (`backend/src/oversight/changes/_behavior_publish.py:166`), from fixed templates over the
    evidence, never written by the model.
@@ -211,9 +212,9 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
 - Trained verifiers: no training pipeline within this hackathon.
 - Tree search: branching does not fit the bounded workflow and budget.
 - A model training room: after the hackathon and outside Oversight's scope; declined for now.
-- Native fine-tuning: after the hackathon and outside Oversight's scope; declined for now. It would
-  depend on TRL, Unsloth or Axolotl (Apache-2.0) or torchtune (BSD-3-Clause), and Muse Spark cannot be
-  fine-tuned through the API.
+- Native fine-tuning: after the hackathon and outside Oversight's scope; declined for now.
+  It would depend on TRL, Unsloth or Axolotl (Apache-2.0) or torchtune (BSD-3-Clause),
+  and Muse Spark cannot be fine-tuned through the API.
 
 ## Item descriptions
 
