@@ -9,13 +9,14 @@ from decision_client_helpers import INPUT, FakeApi, body, ok  # pyright: ignore[
 from tools.eval.behavior.catalog import load_patches
 from tools.eval.detection.accounting import Budget, task_for
 from tools.eval.detection.config import ARMS
+from tools.eval.detection.diagnostics import DetectionClient
 from tools.eval.detection.engine import run_attempt
 from tools.eval.detection.transport import TransportClient
 from tools.eval.detection_types import DetectionEvidence
 from tools.eval.ledger import Ledger
 from tools.eval.tests.test_detection_plan import ASSUMPTIONS, RATES, simulated_measure
 
-from oversight.agents import MUSE_SPARK_OPEN, DecisionUnavailable
+from oversight.agents import MUSE_SPARK_OPEN, DecisionUnavailable, classify_difference
 from oversight.agents.client import CallScope
 
 
@@ -28,6 +29,48 @@ def client(api, **kwargs):
         http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(api.handle)),
         **kwargs,
     )
+
+
+@pytest.mark.anyio
+async def test_transport_counter_preserves_request_bytes_and_headers(tmp_path):
+    requests: list[tuple[bytes, dict[str, str]]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append((request.content, dict(request.headers)))
+        return ok(body())
+
+    transport = httpx.MockTransport(handle)
+    ledger = Ledger(tmp_path / "results.jsonl", 20, None, multi_tariff=True)
+    patch = next(p for p in load_patches() if p.id == "d01")
+    record = ledger.reserve(task_for(patch), "baseten", "test", 1)
+    deadline = asyncio.get_running_loop().time() + 10
+    try:
+        for client_type in (TransportClient, DetectionClient):
+            budget = Budget(ledger, record, RATES["baseten"], 0.001, fake=False)
+            kwargs: dict = {"budget": budget} if client_type is TransportClient else {}
+            sdk = client_type(
+                MUSE_SPARK_OPEN,
+                base_url="https://decision.test/v1",
+                api_key="test",
+                max_output_tokens=512,
+                http_client=openai.DefaultAsyncHttpxClient(transport=transport),
+                **kwargs,
+            )
+            try:
+                result = await classify_difference(
+                    sdk,
+                    INPUT,
+                    deadline=deadline,
+                    admission=budget.admission,
+                    accounting=budget.accounting,
+                )
+                assert result.choice == "asked_for"
+            finally:
+                await sdk.aclose()
+        assert len(requests) == 2
+        assert requests[0] == requests[1]
+    finally:
+        ledger.close()
 
 
 @pytest.mark.anyio
