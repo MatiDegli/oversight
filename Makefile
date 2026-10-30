@@ -121,8 +121,10 @@ smoke: ## start the backend and check /health and /graph
 
 # test-browser: isolated real dev/replay proxy fixtures, then Chromium tests for Monaco/graph.
 # The timeout and memory scope cover both stages. CI invokes this target too.
-test-browser: ## fake-only launcher/proxy integration and Chromium tests; 600 s, 6G where supported
-	@$(NO_KEYS) timeout --kill-after=10 600 bash tools/capped.sh 6G bash tools/test-browser.sh
+# Green CI: 8m46s; 1200 s covers a slow runner with margin.
+# Exceeding the cap on a fast runner is a test defect, not a reason to raise it.
+test-browser: ## fake-only launcher/proxy integration and Chromium tests; 1200 s, 6G where supported
+	@$(NO_KEYS) timeout --kill-after=10 1200 bash tools/capped.sh 6G bash tools/test-browser.sh
 
 record-level2: ## regenerate the level 2 replay fixture from the HTTP backend and fake scripts
 	$(UV) python tools/record_level2.py
