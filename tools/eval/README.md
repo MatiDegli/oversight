@@ -42,7 +42,7 @@ original-suite result, failing hidden suite, and passing reference solution agai
 From the clone root, with the existing locked dependencies installed:
 
 ```sh
-uv run --offline --frozen pytest tools/eval/tests -n 2
+uv run --offline --frozen pytest tools/eval/tests -q
 UV_OFFLINE=1 npm_config_offline=true PNPM_CONFIG_OFFLINE=true make check
 ```
 

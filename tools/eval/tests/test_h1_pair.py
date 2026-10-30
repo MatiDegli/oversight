@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from tools.eval import arms as arm_module
-from tools.eval import bench, server
+from tools.eval import bench, planning, server
 from tools.eval.arms import Arm, load_arms
 from tools.eval.grade import Tariff
 from tools.eval.ledger import Ledger, State
@@ -411,3 +411,18 @@ def test_estimate_labels_the_reservation_rate_basis(tmp_path, rates, floored):
         assert basis == "default planning rates 0.1/0.2 USD per M, assumed"
     elif not floored:
         assert basis == "arm tariff"
+
+
+@pytest.mark.parametrize("rates,floored", [((0.2, 0), True), ((0, 0.3), False)])
+def test_estimate_rate_basis_follows_allowance_assumptions(tmp_path, monkeypatch, rates, floored):
+    floor = allowance("fake", Tariff(input=0, output=0))
+    # Model a changed token mix: only output contributes above the reservation floor.
+    monkeypatch.setattr(
+        planning, "allowance", lambda model, tariff: max(floor, tariff.output if tariff else 0)
+    )
+    arm = PAID.model_copy(update={"tariff": Tariff(input=rates[0], output=rates[1])})
+    result = estimate(tmp_path / "results.jsonl", None, schedule([arm], [TASK], 1, 0), None)
+    basis = result["rate_basis"][arm.arm_id]
+    assert ("floored at the default-rate allowance" in basis) is floored
+    reservation = result["reservations"][0]["reservation_usd"]
+    assert (reservation == floor) is floored

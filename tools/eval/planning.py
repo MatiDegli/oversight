@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tools.eval.arms import Arm, validate_pair
+from tools.eval.grade import Tariff
 from tools.eval.ledger import Ledger, Record, State
 from tools.eval.session import allowance
 from tools.eval.tasks import BenchError, Task
@@ -40,9 +41,7 @@ def schedule(arms: list[Arm], tasks: list[Task], repetitions: int, seed: int) ->
 def rate_basis(arm: Arm) -> str:
     if arm.tariff is None:
         return "default planning rates 0.1/0.2 USD per M, assumed"
-    # Match allowance()'s token assumptions to identify when its minimum wins.
-    tariff_allowance = 36 * (16000 * arm.tariff.input + 4096 * arm.tariff.output) / 1e6
-    if tariff_allowance < allowance("fake", None):
+    if allowance(arm.profile, arm.tariff) == allowance("fake", Tariff(input=0, output=0)):
         return "arm tariff, floored at the default-rate allowance"
     return "arm tariff"
 
