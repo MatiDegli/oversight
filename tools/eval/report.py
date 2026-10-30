@@ -1,5 +1,6 @@
 """Per-arm outcomes with individual repetitions and unknown-aware totals."""
 
+import json
 from collections import defaultdict
 
 from tools.eval.grade import Count
@@ -25,6 +26,89 @@ def metrics(records: list[Record]) -> dict:
         "cost_usd": "unknown" if incomplete else total([r.cost_usd for r in rows]),
         "wall_time_s": sum(r.duration_s for r in rows),
     }
+
+
+def failure_counts(ledger: Ledger, record: Record) -> dict:
+    path = ledger.out.parent / f"events-{record.run_id}.jsonl"
+    if not path.is_file() or record.agent_id is None:
+        return {"evidence": "not available"}
+    counts: dict = {
+        "tool_calls": {},
+        "edit_file_errors": 0,
+        "run_tests_failed": 0,
+        "finish_with_passing_tests": 0,
+        "finish_without_passing_tests": 0,
+        "terminal_status": None,
+    }
+    passed = False
+    for line in path.read_text().splitlines():
+        stored = json.loads(line)
+        event = stored["event"]
+        payload = event["payload"]
+        if stored["run_id"] != record.run_id or payload.get("agent_id") != record.agent_id:
+            continue
+        if event["type"] == "agent.status":
+            state = payload["state"]
+            if state in {"ready_for_review", "halted", "stopped", "done"} and (
+                counts["terminal_status"] is None or state == "stopped"
+            ):
+                counts["terminal_status"] = {"state": state, "detail": payload["detail"]}
+        elif event["type"] == "agent.step":
+            tool, result = payload["tool"], payload["result"]
+            by_result = counts["tool_calls"].setdefault(tool, {"ok": 0, "error": 0})
+            by_result[result] += 1
+            counts["edit_file_errors"] += tool == "edit_file" and result == "error"
+            if tool == "run_tests":
+                tests = payload["tests"]
+                counts["run_tests_failed"] += result == "error" or bool(
+                    tests and tests["outcome"] != "passed"
+                )
+                passed = bool(result == "ok" and tests and tests["outcome"] == "passed")
+            if tool == "edit_file" and result == "ok":
+                passed = False
+            if tool == "finish":
+                counts[
+                    "finish_with_passing_tests" if passed else "finish_without_passing_tests"
+                ] += 1
+    return counts
+
+
+def failure_table(ledger: Ledger) -> dict:
+    configurations = {
+        a["arm_id"]: a for p in ledger.state.plans.values() for a in p.get("arms", [])
+    }
+    table = {}
+    records = [r for r in ledger.state.records if r.arm_id in configurations]
+    for arm_id, config in configurations.items():
+        counterparts = {
+            name
+            for name, other in configurations.items()
+            if config.get("harness_pack") in {"on", "off"}
+            and other.get("harness_pack") != config["harness_pack"]
+            and all(config.get(f) == other.get(f) for f in ("profile", "reasoning", "tariff"))
+        }
+        table[arm_id] = {}
+        for task_id in sorted({r.task_id for r in records}):
+            cells = [r for r in records if r.arm_id == arm_id and r.task_id == task_id]
+            table[arm_id][task_id] = [
+                {
+                    "attempt_id": r.attempt_id,
+                    "repetition": r.repetition,
+                    "pairing": "paired"
+                    if any(
+                        other.arm_id in counterparts
+                        and other.task_id == task_id
+                        and other.task_hash == r.task_hash
+                        and other.repetition == r.repetition
+                        and other.agent_id is not None
+                        for other in records
+                    )
+                    else "unpaired",
+                    **failure_counts(ledger, r),
+                }
+                for r in cells
+            ] or "unpaired"
+    return {"measurement": "error kind: not measured", "arms": table}
 
 
 def report(ledger: Ledger) -> dict:
@@ -58,6 +142,7 @@ def report(ledger: Ledger) -> dict:
         }
     return {
         "arms": arms,
+        "failure_table": failure_table(ledger),
         "known_charges_usd": ledger.spent,
         "cost_usd": "unknown"
         if any(r.unknown or r.status != "finished" for r in ledger.state.records)

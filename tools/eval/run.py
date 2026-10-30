@@ -362,7 +362,7 @@ def positive(value: str) -> float:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if args and args[0] in {"pilot", "project", "plan", "report"}:
+    if args and args[0] in {"pilot", "project", "plan", "report", "estimate"}:
         from tools.eval.bench import main as bench_main
 
         return bench_main(args)

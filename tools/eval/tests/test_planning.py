@@ -222,7 +222,15 @@ def test_cli_refuses_projection_before_starting_any_process(tmp_path, monkeypatc
 async def test_owned_fake_process_pilot_plan_and_resume_record_seed_and_order(tmp_path):
     out = tmp_path / "results.jsonl"
     script_path = tmp_path / "script.json"
-    script_path.write_text(script())
+    script_data = json.loads(script())
+    script_data["turns"].insert(
+        -1,
+        {
+            "tool_calls": [{"name": "run_tests", "arguments": {}}],
+            "usage": {"input_tokens": 100, "output_tokens": 20},
+        },
+    )
+    script_path.write_text(json.dumps(script_data))
     ledger = Ledger(out, 1, None)
     try:
         first = await bench.run_plan(
@@ -280,7 +288,7 @@ def test_child_environment_passes_harness_and_never_exports_provider_keys(tmp_pa
     monkeypatch.setenv("OVERSIGHT_HARNESS_PACK", "ambient-value")
     for arm in (ON, OFF):
         env = environment(arm, tmp_path / ".runtime", 12345, 20)
-        assert env["OVERSIGHT_HARNESS_PACK"] == arm.harness_pack
+        assert env["OVERSIGHT_HARNESS_PACK"] == str(arm.harness_pack == "on").lower()
         assert env["OVERSIGHT_AGENT_MODEL"] == "fake"
         assert "META_API_KEY" not in env and "BASETEN_API_KEY" not in env
 
