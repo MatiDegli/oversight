@@ -61,6 +61,17 @@ class ClosableGatedModel(GatedModel):
         self.closed = True
 
 
+@dataclass
+class FailingCloseModel(PlanModel):
+    close_attempts: int = 0
+
+    async def aclose(self) -> None:
+        self.close_attempts += 1
+        if self.close_attempts == 1:
+            raise OSError("injected close failure")
+        await super().aclose()
+
+
 async def create(s: Any) -> Plan:
     response = await s.client.post("/plans", json={"task": TASK})
     assert response.status_code == 201, response.text
@@ -117,6 +128,26 @@ async def test_post_makes_exactly_one_logical_call_and_does_not_queue(
         assert second.plan_id != plan.plan_id and len(models) == 2
         assert all(len(model.calls) == 1 for model in models)
         assert all(model.closed for model in models)
+
+
+@pytest.mark.parametrize("api_error", [False, True])
+async def test_failed_client_close_preserves_the_proposal(tmp_path: Path, api_error: bool) -> None:
+    models: list[FailingCloseModel] = []
+
+    def factory(profile: ModelProfile, _slot: Any) -> FailingCloseModel:
+        model = FailingCloseModel(
+            profile, error=ModelAPIError("injected API failure") if api_error else None
+        )
+        models.append(model)
+        return model
+
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path), factory) as s:
+        plan = await create(s)
+        assert plan.state == "proposed" and plan.subtasks
+        assert plan.subtasks[0].task == (TASK if api_error else "The model subtask")
+        assert plan.detail and ("fallback" if api_error else "model wrote") in plan.detail
+        assert len(models) == 1 and models[0].close_attempts == 1 and not models[0].closed
+    assert models[0].close_attempts == 2 and models[0].closed
 
 
 @pytest.mark.parametrize("refusal", ["setup", "brake"])

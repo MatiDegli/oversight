@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from oversight.agents import MUSE_SPARK, ModelClient, close_model, run_plan_call
@@ -96,10 +97,12 @@ class PlanService:
                 make_client, plan.task, snapshot, ready_time=ready_time, record=accounting.record
             )
         finally:
+            if accounting.failure is not None:
+                await accounting.report_failure()
             if client is not None:
-                await self.live._finish(close_model(client))
-        if accounting.failure is not None:
-            await accounting.report_failure()
+                # TaskClients retains the client for a shutdown retry if this close fails.
+                with contextlib.suppress(Exception):
+                    await self.live._finish(close_model(client))
         if self.live._closing:
             return PlanCreated(plan_id=plan.plan_id)
         draft = SubtaskDraft(task=outcome.task, zone=plan_core.whole_graph(snapshot))

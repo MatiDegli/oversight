@@ -23,7 +23,7 @@ from oversight.app import LiveRun
 from oversight_contracts.commands import CreatePlan
 from oversight_contracts.events import UsageTick
 
-from .test_plan_call import TASK, ClosableGatedModel, PlanModel, create
+from .test_plan_call import TASK, ClosableGatedModel, FailingCloseModel, PlanModel, create
 
 pytestmark = pytest.mark.anyio
 
@@ -76,15 +76,18 @@ async def test_ledger_precedes_tick_and_unknown_cost_stays_null(
 
 
 @pytest.mark.parametrize("failure", [LedgerError, OSError])
+@pytest.mark.parametrize("close_fails", [False, True])
 async def test_failed_ledger_closes_meta_admission_and_preserves_fallback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     failure: type[Exception],
+    close_fails: bool,
 ) -> None:
     models: list[PlanModel] = []
 
     def factory(profile: Any, _slot: Any) -> PlanModel:
-        model = PlanModel(profile, usage=Usage(100, 200, 0))
+        model_type = FailingCloseModel if close_fails else PlanModel
+        model = model_type(profile, usage=Usage(100, 200, 0))
         models.append(model)
         return model
 
@@ -110,7 +113,11 @@ async def test_failed_ledger_closes_meta_admission_and_preserves_fallback(
                 403,
                 "spend_brake",
             )
-        assert len(models) == 1 and models[0].closed and not s.live._ledger_lost_agents
+        assert len(models) == 1 and not s.live._ledger_lost_agents
+        if close_fails:
+            assert isinstance(models[0], FailingCloseModel) and models[0].close_attempts == 1
+        else:
+            assert models[0].closed
 
 
 async def test_timeout_proposes_verbatim_subtask_through_the_http_entry(
@@ -150,9 +157,19 @@ async def test_timeout_proposes_verbatim_subtask_through_the_http_entry(
         assert not any(e.type == "queue.updated" for e in s.events())
 
 
-async def test_shutdown_cancels_held_call_and_lists_the_planning_plan(tmp_path: Path) -> None:
+async def test_shutdown_cancels_held_call_and_lists_the_planning_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     held = ClosableGatedModel()
     live = LiveRun(live_settings(tmp_path), lambda _p, _s: held)
+    closed_before_global: list[bool] = []
+    original_close = live.plans.close
+
+    async def close_plans() -> None:
+        await original_close()
+        closed_before_global.append(held.closed)
+
+    monkeypatch.setattr(live.plans, "close", close_plans)
     async with asyncio.timeout(DEADLINE_S):
         await live.startup()
         pending = asyncio.create_task(live.create_plan(CreatePlan(task=TASK)))
@@ -161,7 +178,7 @@ async def test_shutdown_cancels_held_call_and_lists_the_planning_plan(tmp_path: 
             await live.shutdown()
             result = await asyncio.gather(pending, return_exceptions=True)
             assert isinstance(result[0], asyncio.CancelledError) and held.cancelled.is_set()
-            assert held.closed
+            assert closed_before_global == [True]
             assert live.plans.get("plan-1").state == "planning"
             events = [json.loads(event.envelope) for event in live.store._events]
             assert any(e["type"] == "error" and "plan-1" in e["payload"]["message"] for e in events)
@@ -203,3 +220,60 @@ async def test_shutdown_drains_ledger_and_tick_without_proposing(
         [tick] = [e["payload"] for e in events if e["type"] == "usage.tick"]
         assert tick["role"] == "plan" and tick["plan_id"] == "plan-1"
         assert any(e["type"] == "error" and "plan-1" in e["payload"]["message"] for e in events)
+
+
+@pytest.mark.parametrize("failure", [LedgerError, OSError])
+async def test_shutdown_reports_held_ledger_failure_before_client_close(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: type[Exception]
+) -> None:
+    entered, release, plans_closing = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    model = FailingCloseModel(MUSE_SPARK, usage=Usage(100, 200, 0))
+    live = LiveRun(meta_settings(tmp_path), lambda _p, _s: model)
+    original_close = live.plans.close
+
+    async def close_plans() -> None:
+        plans_closing.set()
+        await original_close()
+        assert model.close_attempts == 1  # Before TaskClients retries the failed close.
+
+    async def held_record(*args: Any) -> Any:
+        entered.set()
+        await release.wait()
+        raise failure("injected held ledger failure")
+
+    close_model = model.aclose
+
+    async def checked_close() -> None:
+        # The fatal receipt must already be committed, even when this close then fails.
+        events = [json.loads(event.envelope) for event in live.store._events]
+        assert any(
+            e["type"] == "error" and e["payload"]["fatal"] and "settle" in e["payload"]["message"]
+            for e in events
+        )
+        await close_model()
+
+    monkeypatch.setattr(live.plans, "close", close_plans)
+    monkeypatch.setattr(live.ledger, "record", held_record)
+    monkeypatch.setattr(model, "aclose", checked_close)
+    async with asyncio.timeout(DEADLINE_S):
+        await live.startup()
+        pending = asyncio.create_task(live.create_plan(CreatePlan(task=TASK)))
+        await entered.wait()
+        closing = asyncio.create_task(live.shutdown())
+        try:
+            await plans_closing.wait()  # _create has been cancelled while its receipt drains.
+            assert not closing.done()
+        finally:
+            release.set()
+            await closing
+            result = await asyncio.gather(pending, return_exceptions=True)
+        assert isinstance(result[0], asyncio.CancelledError)
+        assert live._ledger_lost and live.brake_reason() is not None
+        assert live.plans.get("plan-1").state == "planning"
+        assert live.ledger.read().spent_usd == 0
+        events = [json.loads(event.envelope) for event in live.store._events]
+        [error] = [e["payload"] for e in events if e["type"] == "error" and e["payload"]["fatal"]]
+        assert error["agent_id"] == "agent-1" and "plan-1" in error["message"]
+        assert "Stop the server and settle with Meta's console total" in error["message"]
+        assert "uv run python -m oversight ledger settle --spent-usd X" in error["message"]
+        assert not any(e["type"] == "usage.tick" for e in events)
