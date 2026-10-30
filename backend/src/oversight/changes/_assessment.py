@@ -254,6 +254,9 @@ class RulesScheduler:
     async def report_terminal(
         self, wait: AssessmentWait, code: str, reason: str, current: Callable[[], bool]
     ) -> None:
+        from oversight.changes._rules import availability
+
+        availability(self.ctx)
         # No await between this final validation and entering the publisher's target claim.
         if not current():
             return

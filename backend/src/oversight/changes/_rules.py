@@ -166,16 +166,24 @@ def revalidate(ctx: ChangeContext, reservation: RulesReservation) -> tuple[str, 
 
 def availability(ctx: ChangeContext) -> tuple[str, str] | None:
     """Session facts only: restoration never clears workspace's suspension latch."""
-    if not ctx.mode.capability().confirmed or not ctx.workspace.isolation.available:
-        return "isolation_unavailable", "Confirmed session isolation is unavailable."
-    if ctx.workspace.integrity.rules_suspended:
-        return "policy_invalid", "Rules authority is suspended until restart."
+    capability = ctx.mode.capability()
+    failure = None
+    if not ctx.workspace.isolation.available:
+        failure = "isolation_unavailable", "Network isolation C is unavailable for this session"
+    elif ctx.workspace.integrity.rules_suspended:
+        failure = "policy_invalid", "Rules authority is suspended until restart"
+    elif not capability.confirmed:
+        failure = "policy_invalid", capability.reason
+    if failure:
+        ctx.mode.report_loss(ctx, failure[1])
+        return failure
     return None
 
 
 async def terminal(
     ctx: ChangeContext, reservation: RulesReservation, code: str, reason: str
 ) -> None:
+    availability(ctx)
     if code == "worktree_unverifiable":
         if reason.startswith("Rules preflight failed: code=integrity_invalid; reason="):
             code = "integrity_invalid"
