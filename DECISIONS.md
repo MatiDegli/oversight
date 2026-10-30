@@ -1844,3 +1844,79 @@ Each is built from tokens; DESIGN.md says which earlier lines each replaces.
 Reason: the screen must show at a glance which agent is working and where, and the ground must
 look the way the approved sketches look; every number is a token so the look can be tuned without
 code.
+
+## 2026-10-30 — Detection bench evidence fixes precede other line-A work
+
+At about 23:20 ART on October 29, after the main bench run, the maintainer put fixing the
+evidence before other line-A work, as part of Saturday's 23:00 ART checkpoint. All arms failed
+their criteria; the diagnosis showed that arms 3 and 4 measured missing evidence, not a model
+choice. The scope covers methods not probed, probe failures that lose the real reason, stored
+rows cut at 8, one classified example per function, and `compute_price` finding no difference
+in 48 inputs.
+
+The bench rule counting every unclassified difference as unavailable stays unchanged. If that
+rule ever changes, the report must say it changed after seeing results. The order is one run
+with the scripted fake model to confirm the evidence changed, its numbers to the maintainer,
+then one paid run: one measurement at a time.
+
+Reason: arms 3 and 4 measured missing evidence, not a model choice; one measurement at a time.
+
+## 2026-10-30 — B1: Omitted optional additions compare shared parameters
+
+At 23:31 ART on October 29, the maintainer decided that when the candidate adds an optional
+parameter and an input omits it, that input is compared over the parameters both versions
+share. A changed default of an existing parameter, explicit argument values that differ, and
+the two repeats stay strict. Public counts include only inputs with an identity.
+
+The contract's description of `compared_count` is to change accordingly; the schema shape and
+`CONTRACT_VERSION` stay unchanged. This work belongs to `changes/input-identity`.
+
+## 2026-10-30 — B2: Defaults may resolve a uniquely bound module literal
+
+At 23:31 ART on October 29, the maintainer decided that a default naming a module constant
+resolves when that constant is bound exactly once in the same module to a literal, read from
+the AST. No expression is ever evaluated. This narrows the opaque-default rule in
+"2026-10-29 — Behavior inputs follow unique module aliases and require opaque arguments".
+This work belongs to `changes/input-identity`.
+
+Reason: read from the AST; no expression is ever evaluated.
+
+## 2026-10-30 — B3: Classify one witness per outcome group within a function
+
+At 23:31 ART on October 29, the maintainer chose option a): within one function, group
+reproducible differences by outcome kind: returns a different value, now raises X, no longer
+raises X, or raises Y instead of X. Classify the smallest witness of each group and say on its
+card how many differing inputs it covers. This work belongs to `changes/difference-groups`.
+
+Raising the row and card limits was rejected because it requires a contract change, more
+tokens and more cards. Classifying more witnesses within 8 was also rejected: functions with
+25–26 differences still fail. This coverage rule was introduced after seeing the bench results,
+and the bench report must say so.
+
+Reason: one classified example per function leaves other reproducible differences unclassified;
+group coverage addresses that evidence gap without raising the row and card limits.
+
+## 2026-10-30 — B4: A different public object state gets an outcome card
+
+At 00:00 ART on October 30, the maintainer chose option a): a method or setter whose result is
+the same on both sides but leaves the object's public state different gets its own outcome
+kind, "leaves the object in a different state", with a card like the other kinds. This work
+belongs to `changes/methods-1`.
+
+Reason: showing the difference only in rows, without a card, leaves it unclassified and counted
+as unavailable; that alternative was rejected.
+
+## 2026-10-30 — Bench method scope supersedes D9's level 3 deferral
+
+The maintainer includes methods in the bench evidence fix scope. This supersedes
+"2026-10-28 — D9: Behavior probes for methods wait for level 3"; that entry remains as the
+record of the earlier decision.
+
+Method probing is assigned to two fronts: `changes/methods-1` covers sync methods and
+properties of simple project classes on receivers built from literal constructor calls,
+comparing result and public state; `changes/methods-2` covers object arguments. The static
+rejection of randomness and time access and the other effect filters stay unchanged. Only
+classes defined in the project's own non-test modules are constructed.
+
+Reason: deferring methods leaves missing evidence in the bench, so the evidence fix scope
+supersedes the level 3 deferral while retaining the existing effect and construction policies.
