@@ -23,7 +23,8 @@ function TestRuns({ evidence }: { evidence: Evidence }) {
               : run.source === "proposal"
                 ? "Proposal"
                 : `Execution (${words(run.phase ?? "unknown phase")})`}
-            : {run.tests.outcome}, {run.tests.passed} passed
+            : {run.tests.outcome}
+            {run.tests.passed ? `, ${String(run.tests.passed)} passed` : ""}
             {run.tests.failed ? `, ${String(run.tests.failed)} failed` : ""}
             {run.tests.skipped ? `, ${String(run.tests.skipped)} skipped` : ""}, in{" "}
             {run.tests.duration_ms} ms.
@@ -60,29 +61,31 @@ function Facts({ evidence }: { evidence: Evidence }) {
   return (
     <>
       {records.map((facts, i) => {
-        const counts = [
-          ...(facts.edited_paths.length
-            ? [`${String(facts.edited_paths.length)} edited paths`]
-            : []),
-          ...(facts.integrity.length
-            ? [`${String(facts.integrity.length)} integrity observations`]
-            : []),
-          ...(facts.added_tests.length
-            ? [`${String(facts.added_tests.length)} added-test probes`]
-            : []),
-          ...(facts.behavior_diff?.length
-            ? [`${String(facts.behavior_diff.length)} behavior comparisons`]
-            : []),
-          ...(facts.measured_cone?.length
-            ? [`${String(facts.measured_cone.length)} measured callers`]
-            : []),
-        ];
+        const counts = (
+          [
+            [facts.edited_paths.length, "edited path"],
+            [facts.integrity.length, "integrity observation"],
+            [facts.added_tests.length, "added-test probe"],
+            [facts.behavior_diff?.length ?? 0, "behavior comparison"],
+            [facts.measured_cone?.length ?? 0, "measured caller"],
+          ] as const
+        ).filter(([count]) => count > 0);
+        const verb = counts.length === 1 && counts[0]?.[0] === 1 ? "was" : "were";
         return (
           <div key={i}>
             {facts.summary?.map((line, j) => (
               <p key={j}>{line}</p>
             ))}
-            {counts.length > 0 && <p>{sentenceList(counts)} were recorded.</p>}
+            {counts.length > 0 && (
+              <p>
+                {sentenceList(
+                  counts.map(
+                    ([count, noun]) => `${String(count)} ${noun}${count === 1 ? "" : "s"}`,
+                  ),
+                )}{" "}
+                {verb} recorded.
+              </p>
+            )}
             {facts.behavior_diff?.length === 0 && (
               <p>The recorded behavior comparison list is empty.</p>
             )}

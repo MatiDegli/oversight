@@ -49,7 +49,7 @@ function Findings({ practice, attempt, onRestart }: PanelProps) {
     <>
       <p role="status">
         {score(practice, attempt)
-          ? `Matches with recorded decisions: ${String(score(practice, attempt))}/2.`
+          ? `Matches with recorded decisions: ${String(score(practice, attempt))}/${String(practice.cases.length)}.`
           : "None of your decisions matched the recording."}
       </p>
       {practice.cases.map((entry) => (

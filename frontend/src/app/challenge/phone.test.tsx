@@ -219,3 +219,20 @@ it("renders the retained finish state after a phone/desktop remount", () => {
   expect(html).toContain("Agreement is not proof");
   expect(html).toContain("Watch the recording");
 });
+
+it("uses words for a finish with no matching decisions", () => {
+  const html = renderToStaticMarkup(
+    <PhonePractice
+      {...actions}
+      practice={practice}
+      attempt={{
+        ...freshAttempt(),
+        started: true,
+        revealed: true,
+        finished: true,
+        answers: { "change-2": "Reject", "change-1": "Reject" },
+      }}
+    />,
+  );
+  expect(html).toContain('<p class="pp-score">None of your decisions matched the recording.</p>');
+});

@@ -85,3 +85,23 @@ it.each([false, true])("shows only nonzero omissions (revealed=%s)", (revealed) 
   expect(render()).toContain("7 more omitted by limit.");
   expect(render()).not.toContain("omitted by depth");
 });
+
+it("uses the case count as the findings score denominator", () => {
+  const source = structuredClone(practice);
+  const entry = source.cases[0];
+  if (!entry) throw new Error("Missing case");
+  source.cases.push({ ...entry, changeId: "third-change" });
+  const html = renderToStaticMarkup(
+    <PracticePanel
+      {...handlers}
+      practice={source}
+      attempt={{
+        ...freshAttempt(),
+        started: true,
+        revealed: true,
+        answers: { "change-2": "Approve" },
+      }}
+    />,
+  );
+  expect(html).toContain('<p role="status">Matches with recorded decisions: 1/3.</p>');
+});

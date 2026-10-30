@@ -108,6 +108,7 @@ function RecordedDecisions({ practice, attempt, onFinish }: PanelProps & { onFin
   );
 }
 function Finish({ practice, attempt, onRestart, onExit }: PanelProps) {
+  const matches = score(practice, attempt);
   const approved = practice.cases.filter((entry) => entry.reference === "Approve").length;
   const rejected = practice.cases.length - approved;
   const all = practice.cases.length === 2 ? "Both" : "All";
@@ -123,10 +124,16 @@ function Finish({ practice, attempt, onRestart, onExit }: PanelProps) {
         <h1>You’ve reviewed both changes.</h1>
         <p className="pp-purpose">See how your decisions compare.</p>
         <p className="pp-score">
-          <span>
-            {score(practice, attempt)} of {practice.cases.length}
-          </span>{" "}
-          decisions matched
+          {matches ? (
+            <>
+              <span>
+                {matches} of {practice.cases.length}
+              </span>{" "}
+              decisions matched
+            </>
+          ) : (
+            "None of your decisions matched the recording."
+          )}
         </p>
         <p className="pp-score-description">{recordedDecisions}</p>
         <div className="pp-recap">

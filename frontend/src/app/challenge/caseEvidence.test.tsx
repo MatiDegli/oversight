@@ -368,3 +368,44 @@ it("leaves only the heading and one absence sentence when all kinds are absent",
     "Not recorded for this revision: agent’s test runs, review facts, cross-review and review history.",
   );
 });
+
+it("omits zero run counts while retaining the outcome and duration", () => {
+  for (const [failed, expected] of [
+    [2, "Step 3: failed, 2 failed, in 300 ms."],
+    [0, "Step 3: failed, in 300 ms."],
+  ] as const) {
+    const source = structuredClone(practice);
+    source.events = source.events.map((event) =>
+      event.type === "agent.step" &&
+      event.payload.agent_id === entry.proposal.agent_id &&
+      event.payload.tool === "run_tests" &&
+      event.payload.step === 7
+        ? {
+            ...event,
+            payload: {
+              ...event.payload,
+              step: 3,
+              tests: {
+                ...entry.proposal.tests,
+                outcome: "failed",
+                passed: 0,
+                failed,
+                skipped: 0,
+                duration_ms: 300,
+                failed_tests: [],
+              },
+            },
+          }
+        : event,
+    );
+    expect(renderEvidence(source)).toContain(`<p>${expected}</p>`);
+  }
+});
+it("agrees the recorded fact noun and verb with its count", () => {
+  expect(renderEvidence(extended())).toContain("<p>1 edited path was recorded.</p>");
+  const record = required(additions.find((event) => event.type === "change.facts_recorded"));
+  const source = extended([
+    { ...record, payload: { ...facts, edited_paths: ["shop/inventory.py", "shop/cart.py"] } },
+  ]);
+  expect(renderEvidence(source)).toContain("<p>2 edited paths were recorded.</p>");
+});
