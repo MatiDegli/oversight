@@ -1349,7 +1349,7 @@ export interface EnqueueTask {
    */
   agent?: QueuedAgentTask | null;
   /**
-   * One proposed two-agent plan.
+   * One proposed plan with one to six subtasks.
    */
   plan_id?: PlanId | null;
   /**
@@ -1789,7 +1789,7 @@ export interface PlanUpdatedEvent {
   payload: Plan;
 }
 /**
- * The complete versioned state of a two-agent plan.
+ * The complete versioned state of a plan with one to six subtasks.
  */
 export interface Plan {
   plan_id: PlanId;
@@ -1797,7 +1797,7 @@ export interface Plan {
   task: NonEmptyText;
   graph_version: NonEmptyText;
   state: "planning" | "proposed" | "starting" | "running" | "completed" | "rejected" | "failed";
-  subtasks: [PlanSubtask, PlanSubtask] | null;
+  subtasks: PlanSubtask[] | null;
   detail: string | null;
   /**
    * The lead that requested this plan.
@@ -1815,10 +1815,17 @@ export interface PlanSubtask {
   task: NonEmptyText;
   zone: PlanZone;
   /**
-   * Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.
+   * Stable zero-based subtask ids; subtasks are not reordered within a revision.
    */
-  depends_on: (0 | 1)[];
+  depends_on: number[];
   agent_id: AgentId | null;
+  /**
+   * Null only for payloads written before 1.8.0. Waiting has no agent; running and merged
+   * have one. Prerequisites must merge before a subtask runs. Reject, discard and stop mean
+   * rejected; dependents of rejected or cancelled subtasks are cancelled. Request changes keeps
+   * the subtask running. Agent ids are per start, so later subtasks may reuse a released slot.
+   */
+  state: ("waiting" | "running" | "merged" | "rejected" | "cancelled") | null;
 }
 /**
  * The tests.executed envelope.
@@ -1927,7 +1934,9 @@ export interface QueueUpdatedEvent {
   payload: QueuedTask;
 }
 /**
- * One server-owned versioned queue item.
+ * One server-owned versioned queue item. A plan reserves slots only for subtasks that
+ * can start now. A dependent subtask that becomes ready takes the next released slot before
+ * later queue items, keeping its plan's place in the queue.
  */
 export interface QueuedTask {
   /**
@@ -1935,7 +1944,7 @@ export interface QueuedTask {
    */
   agent: QueuedAgentTask | null;
   /**
-   * One proposed two-agent plan.
+   * One proposed plan with one to six subtasks.
    */
   plan_id: PlanId | null;
   /**
@@ -1952,7 +1961,7 @@ export interface QueuedTask {
    */
   state: "queued" | "starting" | "running" | "completed" | "cancelled" | "blocked" | "failed";
   /**
-   * Agents assigned during dispatch.
+   * Agents assigned so far; a plan's list only grows as subtasks start.
    */
   agent_ids: AgentId[];
   /**
@@ -2203,9 +2212,9 @@ export interface SubtaskDraft {
   task: NonEmptyText;
   zone: PlanZone;
   /**
-   * Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.
+   * Stable zero-based subtask ids; subtasks are not reordered within a revision.
    */
-  depends_on?: (0 | 1)[];
+  depends_on?: number[];
 }
 /**
  * Reserved future 200 response; never emitted while the endpoint answers 501.
@@ -2253,16 +2262,12 @@ export interface TreeResponse {
   truncated: boolean;
 }
 /**
- * Replace both proposed subtasks using the expected plan revision.
+ * Replace the one to six proposed subtasks using the expected plan revision.
  */
 export interface UpdatePlan {
   revision: number;
   graph_version: NonEmptyText;
-  /**
-   * @minItems 2
-   * @maxItems 2
-   */
-  subtasks: [SubtaskDraft, SubtaskDraft];
+  subtasks: SubtaskDraft[];
 }
 
 export const CONTRACT_VERSION = "1.8.0";

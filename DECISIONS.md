@@ -1920,3 +1920,43 @@ classes defined in the project's own non-test modules are constructed.
 
 Reason: deferring methods leaves missing evidence in the bench, so the evidence fix scope
 supersedes the level 3 deferral while retaining the existing effect and construction policies.
+
+## Contracts 1.8.0 — approved by the maintainer, 2026-10-30
+
+E6 adds server-owned model.attempt_failed, once per failed attempt before its wait, including the
+final failure. It records agent_id (the author for review calls), optional change_id and role,
+model profile, provider, 1-based attempt and policy max_attempts, cause, HTTP status, provider
+Retry-After, wait_s and final reason. Attempt cannot exceed the limit; attempts_used requires the
+limit. Final is set exactly when wait_s is null. Rate limits require 429, server errors 500–599,
+and refused a different status; connection and timeout require null status. AgentStep.error_kind
+is optional, default null, and names only unknown_tool, invalid_json or invalid_arguments with
+result error; other tool errors remain null. The card derives "Waiting for model (retry n/5)"
+until that agent's next step, usage tick or failed attempt. There is no producer in this front;
+E6's client and loop front owns emission. History envelopes remain unchanged.
+
+P1–P2 replace fixed pairs with lists of one to six subtasks in Plan and UpdatePlan. A single
+subtask is the one-agent fallback. Dependency indices are stable within each revision (no
+reordering), range from 0 to 5, must be below the actual count, unique and exclude self. Both
+models share a complete acyclicity check, including disconnected cycles.
+
+P3 adds optional subtask state, null for historical payloads only. A plan cannot mix null and
+non-null states; all-null plans retain their historical assignment rules. Waiting has no agent;
+running and merged require one, with distinct per-start agent ids across subtasks even when a
+slot is reused. Prerequisites merge before a subtask runs. Reject, discard and stop reject the
+subtask; dependents of rejected or cancelled prerequisites are cancelled. Rejecting a plan
+cancels every subtask; completion requires merged, rejected or cancelled subtasks. Request
+changes keeps a subtask running.
+
+P4–P5 make plan queue agent_ids the growing list assigned so far (one to six at dispatch and
+completion); standalone dispatch still requires exactly one. A plan reserves only immediately
+ready subtasks' slots. Newly ready dependents take the next released slot before later queue
+items, preserving the plan's place. Only the person queues and dispatches an exact revision;
+Plan.started_by records a requesting lead without dispatch authority, and plan agents keep
+started_by null. PlanZone is unchanged. This reverses Contracts 1.6.0's "widening slots does not
+enlarge a plan" and changes FIFO decision 6's "a plan reserves both slots together".
+
+Safe creation, nullable SaveFile.base_hash, zones and inventory move again to 1.9.0 because E6
+and item 11's plans take 1.8.0. SaveFile remains unchanged. Earlier entries remain approval
+history. Generation and drift checks retain the pinned tools and 1.5.0 tuple baseline; bounded
+lists generate ordinary arrays. Consumer changes are mechanical; E6 producers, item 11a's
+scheduler and the card front follow separately.

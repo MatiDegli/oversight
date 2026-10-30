@@ -1968,7 +1968,7 @@
             }
           ],
           "default": null,
-          "description": "One proposed two-agent plan."
+          "description": "One proposed plan with one to six subtasks."
         },
         "plan_revision": {
           "anyOf": [
@@ -4039,7 +4039,7 @@
     },
     "Plan": {
       "additionalProperties": false,
-      "description": "The complete versioned state of a two-agent plan.",
+      "description": "The complete versioned state of a plan with one to six subtasks.",
       "properties": {
         "plan_id": {
           "$ref": "#/$defs/PlanId"
@@ -4070,16 +4070,11 @@
         "subtasks": {
           "anyOf": [
             {
-              "maxItems": 2,
-              "minItems": 2,
-              "prefixItems": [
-                {
-                  "$ref": "#/$defs/PlanSubtask"
-                },
-                {
-                  "$ref": "#/$defs/PlanSubtask"
-                }
-              ],
+              "items": {
+                "$ref": "#/$defs/PlanSubtask"
+              },
+              "maxItems": 6,
+              "minItems": 1,
               "type": "array"
             },
             {
@@ -4182,12 +4177,10 @@
           "$ref": "#/$defs/PlanZone"
         },
         "depends_on": {
-          "description": "Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.",
+          "description": "Stable zero-based subtask ids; subtasks are not reordered within a revision.",
           "items": {
-            "enum": [
-              0,
-              1
-            ],
+            "maximum": 5,
+            "minimum": 0,
             "type": "integer"
           },
           "type": "array"
@@ -4202,13 +4195,33 @@
             }
           ],
           "default": null
+        },
+        "state": {
+          "anyOf": [
+            {
+              "enum": [
+                "waiting",
+                "running",
+                "merged",
+                "rejected",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Null only for payloads written before 1.8.0. Waiting has no agent; running and merged\nhave one. Prerequisites must merge before a subtask runs. Reject, discard and stop mean\nrejected; dependents of rejected or cancelled subtasks are cancelled. Request changes keeps\nthe subtask running. Agent ids are per start, so later subtasks may reuse a released slot."
         }
       },
       "required": [
         "task",
         "zone",
         "depends_on",
-        "agent_id"
+        "agent_id",
+        "state"
       ],
       "title": "PlanSubtask",
       "type": "object"
@@ -4419,7 +4432,7 @@
     },
     "QueuedTask": {
       "additionalProperties": false,
-      "description": "One server-owned versioned queue item.",
+      "description": "One server-owned versioned queue item. A plan reserves slots only for subtasks that\ncan start now. A dependent subtask that becomes ready takes the next released slot before\nlater queue items, keeping its plan's place in the queue.",
       "properties": {
         "agent": {
           "anyOf": [
@@ -4443,7 +4456,7 @@
             }
           ],
           "default": null,
-          "description": "One proposed two-agent plan."
+          "description": "One proposed plan with one to six subtasks."
         },
         "plan_revision": {
           "anyOf": [
@@ -4480,7 +4493,7 @@
           "type": "string"
         },
         "agent_ids": {
-          "description": "Agents assigned during dispatch.",
+          "description": "Agents assigned so far; a plan's list only grows as subtasks start.",
           "items": {
             "$ref": "#/$defs/AgentId"
           },
@@ -5804,12 +5817,10 @@
           "$ref": "#/$defs/PlanZone"
         },
         "depends_on": {
-          "description": "Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.",
+          "description": "Stable zero-based subtask ids; subtasks are not reordered within a revision.",
           "items": {
-            "enum": [
-              0,
-              1
-            ],
+            "maximum": 5,
+            "minimum": 0,
             "type": "integer"
           },
           "type": "array"
@@ -6240,7 +6251,7 @@
     },
     "UpdatePlan": {
       "additionalProperties": false,
-      "description": "Replace both proposed subtasks using the expected plan revision.",
+      "description": "Replace the one to six proposed subtasks using the expected plan revision.",
       "properties": {
         "revision": {
           "exclusiveMinimum": 0,
@@ -6250,16 +6261,11 @@
           "$ref": "#/$defs/NonEmptyText"
         },
         "subtasks": {
-          "maxItems": 2,
-          "minItems": 2,
-          "prefixItems": [
-            {
-              "$ref": "#/$defs/SubtaskDraft"
-            },
-            {
-              "$ref": "#/$defs/SubtaskDraft"
-            }
-          ],
+          "items": {
+            "$ref": "#/$defs/SubtaskDraft"
+          },
+          "maxItems": 6,
+          "minItems": 1,
           "type": "array"
         }
       },

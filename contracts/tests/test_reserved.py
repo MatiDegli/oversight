@@ -41,7 +41,7 @@ def with_defaults(raw: Any) -> Any:
     if "failed_seq" in result and "fact_index" in result:
         result = {"kind": "loosened", **result}
     if "task" in result and "zone" in result and "agent_id" in result and "state" not in result:
-        result = {"depends_on": [], **result}
+        result = {"depends_on": [], **result, "state": None}
     if "failed_tests" in result:
         result = {"cases": None, "cases_complete": None, **result}
     defaults = {
@@ -150,8 +150,14 @@ def test_defaults_and_request_response_shapes() -> None:
         {"revision": 1, "graph_version": "v1", "subtasks": subtasks}
     )
     assert len(request.subtasks) == 2
-    with pytest.raises(ValidationError):
-        UpdatePlan.model_validate({"revision": 1, "graph_version": "v1", "subtasks": subtasks[:1]})
+    assert (
+        len(
+            UpdatePlan.model_validate(
+                {"revision": 1, "graph_version": "v1", "subtasks": subtasks[:1]}
+            ).subtasks
+        )
+        == 1
+    )
 
 
 @pytest.mark.parametrize("bad", ["plan-0", "plan-01", "plan-x", "", "agent-1"])
@@ -352,13 +358,14 @@ def test_generated_schema_keeps_defaults_and_request_optional_fields() -> None:
     assert definitions["UpdatePlan"]["required"] == ["revision", "graph_version", "subtasks"]
 
 
-def test_generated_types_preserve_two_typed_subtasks() -> None:
+def test_generated_types_keep_bounded_subtasks_as_arrays() -> None:
     typescript = (ROOT / "contracts/generated/contracts.ts").read_text()
-    assert "subtasks: [PlanSubtask, PlanSubtask] | null;" in typescript
-    assert "subtasks: [SubtaskDraft, SubtaskDraft];" in typescript
+    assert "subtasks: PlanSubtask[] | null;" in typescript
+    assert "subtasks: SubtaskDraft[];" in typescript
     definitions = json.loads((ROOT / "contracts/generated/oversight.schema.json").read_text())[
         "$defs"
     ]
     subtasks = definitions["Plan"]["properties"]["subtasks"]["anyOf"][0]
-    assert subtasks["minItems"] == subtasks["maxItems"] == 2
-    assert subtasks["prefixItems"] == [{"$ref": "#/$defs/PlanSubtask"}] * 2
+    assert subtasks["minItems"] == 1 and subtasks["maxItems"] == 6
+    assert subtasks["items"] == {"$ref": "#/$defs/PlanSubtask"}
+    assert "prefixItems" not in subtasks
