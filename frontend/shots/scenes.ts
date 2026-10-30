@@ -287,6 +287,10 @@ export const scenes: readonly Scene[] = [
       if (!resume) throw new Error("Focus scene needs the rest of the proposal stream");
       await resume();
       await page.getByRole("button", { name: /^Decisions:/ }).click();
+      await page
+        .getByRole("button", { name: /^Review change/ })
+        .first()
+        .click();
       await page.getByRole("complementary", { name: "Review panel", exact: true }).waitFor();
       await page.getByRole("tab", { name: /Live diff ·/ }).click();
       await page.getByRole("button", { name: "Files", exact: true }).click();
@@ -304,7 +308,7 @@ export const scenes: readonly Scene[] = [
           .getByRole("tablist", { name: "Open files and changes" })
           .getByRole("tab")
           .count(),
-        3,
+        4,
       );
       await page.locator('[aria-label="Live diff panel"] .line-insert').first().waitFor();
       await page.waitForFunction(

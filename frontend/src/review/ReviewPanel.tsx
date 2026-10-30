@@ -1,3 +1,5 @@
+import { ChangeCard } from "./ChangeCard";
+import { selectChangeCard } from "./inboxSelectors";
 import { agentLook } from "../theme";
 import type { ChangeResolved } from "@contracts";
 import { Check, ChevronDown, ChevronRight, GitMerge, MessageSquare, X } from "lucide-react";
@@ -248,7 +250,7 @@ function Decisions({
  * Review of one proposed change: what it is, its diff file by file, and the decisions. Opened only
  * by the person; events update it in place and never open or close it.
  */
-export function ReviewPanel({
+function LegacyReviewPanel({
   state,
   files: fileAccess,
   changeId,
@@ -436,5 +438,13 @@ export function ReviewPanel({
         />
       )}
     </aside>
+  );
+}
+
+export function ReviewPanel(props: ReviewPanelProps) {
+  return selectChangeCard(props.state, props.changeId) ? (
+    <ChangeCard {...props} />
+  ) : (
+    <LegacyReviewPanel {...props} />
   );
 }

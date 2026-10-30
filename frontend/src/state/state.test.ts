@@ -412,6 +412,7 @@ describe("applyEvent", () => {
     expect(applyEvent({ ...dirty, gap: true }, event(1, "run.started", newRun))).toEqual({
       ...createInitialState(),
       run: newRun,
+      runStartedAt: "2026-10-27T14:03:12.345Z",
       lastSeq: 1,
       // The new run's first event is its "now"; nothing of the old run's times survives.
       clock: "2026-10-27T14:03:12.345Z",

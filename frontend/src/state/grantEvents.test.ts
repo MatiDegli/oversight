@@ -5,7 +5,7 @@ import { parseEvent } from "../transport";
 import { applyEvent } from "./applyEvent";
 import { createInitialState } from "./types";
 
-it("parses grant event lines and consumes them without changing product state", () => {
+it("parses grant event lines and retains their envelopes without changing agents or changes", () => {
   const initial = createInitialState();
   const state = { ...initial, run: { run_id: "run-20261029-140000" } } as typeof initial;
   const ts = "2026-10-29T14:00:00.000Z";
@@ -33,6 +33,11 @@ it("parses grant event lines and consumes them without changing product state", 
     expect(() => {
       next = applyEvent(next, parseEvent(JSON.stringify(event)));
     }).not.toThrow();
-    expect(next).toEqual({ ...state, lastSeq: event.seq, clock: ts });
+    expect(next).toEqual({
+      ...state,
+      lastSeq: event.seq,
+      clock: ts,
+      grantEvents: events.slice(0, event.seq),
+    });
   }
 });

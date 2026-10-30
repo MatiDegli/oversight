@@ -7,6 +7,7 @@ import type {
 } from "@contracts";
 
 import type { ChangeState, State } from "../state";
+import { answeredCards, candidateKey, currentCards, useAnswers } from "./answers";
 import { commandFailure } from "../transport";
 
 export type DecisionAction = "approve" | "reject" | "request-changes";
@@ -137,7 +138,28 @@ export async function sendDecision(
     });
     return;
   }
-  const body = { revision, head_commit, ...(text === "" ? {} : { comment: text }) };
+  const answers = answeredCards(state, changeId);
+  if (
+    action === "approve" &&
+    (answers.length !== currentCards(state, changeId).length ||
+      answers.some((card) => card.answer !== "yes"))
+  ) {
+    record({
+      phase: "failed",
+      action,
+      revision,
+      message: "Approve needs Yes for every current question.",
+    });
+    return;
+  }
+  const grant = useAnswers.getState().grants[candidateKey(state, changeId)];
+  const body = {
+    revision,
+    head_commit,
+    ...(text === "" ? {} : { comment: text }),
+    ...(answers.length ? { answers } : {}),
+    ...(action === "approve" && grant ? { grant } : {}),
+  };
   try {
     await (action === "approve"
       ? client.approveChange(changeId, body)

@@ -108,6 +108,8 @@ export function createCommandClient(request: typeof fetch = fetch) {
       send<undefined>(change(id, "request-changes"), "POST", body),
     rejectChange: (id: string, body: RejectChange) =>
       send<undefined>(change(id, "reject"), "POST", body),
+    revokeGrant: (id: string) =>
+      send<undefined>(`/grants/${encodeURIComponent(id)}/revoke`, "POST"),
     getGraph: (signal?: AbortSignal) => send<GraphResponse>("/graph", "GET", undefined, signal),
     getTree: (signal?: AbortSignal, agent?: string) =>
       send<TreeResponse>(query("/tree", { agent }), "GET", undefined, signal),

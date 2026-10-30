@@ -2,7 +2,7 @@ import { MessageSquare } from "lucide-react";
 
 import type { ChangeState } from "../state";
 
-const verdicts = {
+const verdicts: Record<NonNullable<ChangeState["crossReview"]>["verdict"], string> = {
   clean: "No findings",
   changes_requested: "Changes requested",
   unknown: "Review unavailable",

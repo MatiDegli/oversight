@@ -82,6 +82,7 @@ export function agentSlotStyle(slot: Slot | undefined): CSSProperties {
   return slot
     ? ({
         "--slot-graphic": `var(--${agentLook[slot].family})`,
+        "--slot-tint": `var(--${agentLook[slot].family}-tint)`,
         "--slot-text": `var(--${agentLook[slot].text})`,
       } as CSSProperties)
     : {};

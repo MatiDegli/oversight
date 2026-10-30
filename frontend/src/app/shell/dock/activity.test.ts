@@ -66,6 +66,7 @@ it("retains envelopes and globally orders all kinds identically in live batches 
     {
       ...createInitialState(),
       run: { ...start.payload, run_id: "another" },
+      runStartedAt: start.ts,
       lastSeq: 1,
       clock: start.ts,
     },
