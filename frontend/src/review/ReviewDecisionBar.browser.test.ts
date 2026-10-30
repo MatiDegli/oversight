@@ -81,6 +81,66 @@ const check = (actual: Awaited<ReturnType<typeof measure>>) => {
   for (const key of Object.keys(expected) as (keyof typeof expected)[])
     expect(Math.abs(actual[key] - expected[key]), JSON.stringify(actual)).toBeLessThanOrEqual(1);
 };
+
+it.each(["dark", "day"])(
+  "contains long failures and preserves multilingual comments and focus in %s",
+  async (theme) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    try {
+      await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+      await page.goto(url);
+      await page.waitForFunction(() => "reviewTest" in window);
+      await page.evaluate((theme) => {
+        document.documentElement.dataset.theme = theme;
+        window.reviewTest.mount(false, 20);
+      }, theme);
+      await page.getByRole("button", { name: /^Decisions:/ }).click();
+      await browserExpect(page.getByLabel("Editable review file")).toHaveAttribute(
+        "data-state",
+        "clean",
+      );
+      const bar = page.getByRole("region", { name: "Decision", exact: true });
+      const comment = bar.getByRole("textbox", { name: "Comment for the agent" });
+      const draft = "Revisá 日本語 مرحبا 🙂 " + "x".repeat(200);
+      await comment.fill(draft);
+      await page.keyboard.press("Control+Enter");
+      expect(await page.evaluate(() => window.reviewTest.decisions)).toEqual([]);
+      await bar.getByRole("button", { name: "Request changes" }).click();
+      for (const button of await bar.getByRole("button").all())
+        await browserExpect(button).toBeDisabled();
+      await comment.focus();
+      const message = "Cannot update " + "workspace_path_".repeat(24) + ": try again.";
+      await page.evaluate((message) => {
+        window.reviewTest.emit({
+          seq: 0,
+          ts: "2026-10-30T18:00:00Z",
+          type: "error",
+          payload: {
+            source: "server",
+            message,
+            change_id: "change-1",
+            agent_id: "agent-1",
+            fatal: false,
+          },
+        });
+      }, message);
+      await browserExpect(bar.getByRole("alert")).toHaveText(message);
+      await browserExpect(comment).toHaveValue(draft);
+      await browserExpect(comment).toBeFocused();
+      await browserExpect(bar.getByRole("button", { name: "Request changes" })).toBeEnabled();
+      const size = await bar.evaluate((bar) => ({
+        content: bar.scrollWidth,
+        available: bar.clientWidth,
+      }));
+      expect(size.content).toBeLessThanOrEqual(size.available);
+      expect(await page.evaluate(() => window.reviewTest.decisions)).toHaveLength(1);
+    } finally {
+      await page.close();
+    }
+  },
+  60000,
+);
+
 async function comparison(
   page: Page,
   name: string,

@@ -446,7 +446,9 @@ button.decision-reject {
 /* Override the shell's compact legacy decision spacing only for the shared review bar. */
 .review-decision-bar,
 .focus-body .review-decision-bar[aria-label="Decision"] {
+  min-width: 0;
   padding: 12px 24px 10px;
+  overflow-wrap: anywhere;
 }
 .focus-body .review-decision-bar[aria-label="Decision"] textarea {
   resize: none;
