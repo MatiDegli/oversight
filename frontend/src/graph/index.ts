@@ -9,3 +9,6 @@ export { selectSignalLights } from "./field";
 export type { FieldInput, FieldLight, FieldMode, FieldProbe, FieldScope } from "./field";
 export { liveImpact, possibleCallers } from "./impact";
 export { routingOmissionText } from "./RoutingOmissions";
+export { selectGraphBehavior } from "./behavior";
+export type { GraphBehaviorEntry } from "./behavior";
+export { NodeBehavior } from "./NodeBehavior";
