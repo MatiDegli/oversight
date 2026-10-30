@@ -9,13 +9,20 @@ type Function = ast.FunctionDef | ast.AsyncFunctionDef
 
 def construction_ast(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
     methods: dict[str, list[Function]] = {}
+    bindings: set[str] = set()
     selected: set[ast.AST] = set(cls.decorator_list)
     for node in cls.body:
         check_deadline(deadline)
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             selected.add(node)
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            if any(isinstance(target, ast.Name) and target.id == "__init__" for target in targets):
+            bindings.update(
+                name.id
+                for target in targets
+                for name in ast.walk(target)
+                if isinstance(name, ast.Name) and isinstance(name.ctx, ast.Store)
+            )
+            if "__init__" in bindings:
                 return _whole_class(cls, deadline)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if any(
@@ -47,7 +54,7 @@ def construction_ast(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
         if method in selected:
             continue
         selected.add(method)
-        reached = _reached(method, methods, deadline)
+        reached = _reached(method, methods, bindings, deadline)
         if reached is None:
             return _whole_class(cls, deadline)
         pending.extend(reached)
@@ -66,7 +73,7 @@ def _whole_class(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
 
 
 def _reached(
-    method: Function, methods: dict[str, list[Function]], deadline: float
+    method: Function, methods: dict[str, list[Function]], bindings: set[str], deadline: float
 ) -> list[Function] | None:
     positional = [*method.args.posonlyargs, *method.args.args]
     if not positional or (
@@ -99,7 +106,8 @@ def _reached(
                 continue
             if node.value.id != receiver:
                 continue
-            if node.attr == "__class__":
+            if node.attr == "__class__" or node.attr in bindings:
+                # Class assignments may install descriptors with differently named accessors.
                 return None
             members = methods.get(node.attr, [])
             if isinstance(node.ctx, (ast.Store, ast.Del)) and any(

@@ -31,6 +31,25 @@ RENAMED_DELETER = (
     value = _delete_value
 """
 )
+ASSIGNED_SETTER = (
+    PRODUCT.replace("    @value.setter\n", "").replace(
+        "def value(self, value):", "def _set_value(self, value):"
+    )
+    + "    value = value.setter(_set_value)\n"
+)
+ASSIGNED_PROPERTY = """class Product:
+    def __init__(self, value): self.value = value
+    def _get(self): return self._value
+    def _set(self, value): self._value = self.normalize(value)
+    def normalize(self, value): return value
+    value = property(_get, _set)
+"""
+READ_PROPERTY = (
+    ASSIGNED_PROPERTY.replace(
+        "self.value = value", "self._value = value; self._value = self.snapshot()"
+    )
+    + "    def snapshot(self): return self.value\n"
+)
 
 
 def inputs(before, after):
@@ -67,6 +86,35 @@ def inputs(before, after):
             RENAMED_DELETER.replace("self._value = 0", "self._value = 1"),
         ),
         (
+            ASSIGNED_SETTER,
+            ASSIGNED_SETTER.replace(
+                "self._value = self.normalize(value)", "self._value = value + 1"
+            ),
+        ),
+        (
+            ASSIGNED_SETTER,
+            ASSIGNED_SETTER.replace("return value\n", "return value + 1\n"),
+        ),
+        (
+            ASSIGNED_PROPERTY,
+            ASSIGNED_PROPERTY.replace(
+                "self._value = self.normalize(value)", "self._value = value + 1"
+            ),
+        ),
+        (
+            READ_PROPERTY,
+            READ_PROPERTY.replace("return self._value\n", "return self._value + 1\n"),
+        ),
+        *[
+            (bound, bound.replace("self._value = self.normalize(value)", "self._value = value + 1"))
+            for bound in (
+                ASSIGNED_PROPERTY.replace("value = property", "value: property = property"),
+                ASSIGNED_PROPERTY.replace(
+                    "value = property(_get, _set)", "value, other = property(_get, _set), 0"
+                ),
+            )
+        ],
+        (
             PRODUCT,
             PRODUCT.replace(
                 "def normalize(self, value): return value",
@@ -94,6 +142,12 @@ def inputs(before, after):
         "renamed-setter",
         "renamed-setter-transitive-method",
         "renamed-deleter",
+        "assigned-setter",
+        "assigned-setter-transitive-method",
+        "assigned-property-setter",
+        "assigned-property-transitive-getter",
+        "annotated-property-setter",
+        "unpacked-property-setter",
         "transitive-method",
         "assignment",
         "annotated-field",
