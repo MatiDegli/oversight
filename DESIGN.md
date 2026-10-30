@@ -416,10 +416,11 @@ graphics and filled-badge letters retain their values.
 
 ### Neutral
 
-The frontmatter's colors record the current theme. The approved v4 dark surface target below
-is pending implementation in the shell front; it overrides these tokens and adds inset,
-card-bottom, top-highlight and card-shadow. All other colors retain their frontmatter values.
-The roles below and the v4 contrast tables use this target set.
+The v4 dark surfaces are implemented in `frontend/src/theme/index.css`; the frontmatter's
+colors are the earlier values. The table below matches the implementation except for `field`
+(`#0b0b0b`, target `#09090b`), `card-shadow` (`0 8px 24px rgba(0, 0, 0, 0.22)`, target color
+`rgba(0, 0, 0, 0.24)`), and `card-bottom` (no token; `card-end` is `#111113`).
+The roles below and the v4 contrast tables use the target set.
 
 | Token | v4 target |
 | --- | --- |
