@@ -24,8 +24,9 @@ from oversight_contracts.common import (
 from oversight_contracts.decisions import DecisionRef
 from oversight_contracts.events import ChangeProposed, ChangeResolved, FileDiff, ServerEvent
 from oversight_contracts.examples import TaskExample
+from oversight_contracts.grants import GrantRequest
 from oversight_contracts.graph import GraphSnapshot
-from oversight_contracts.plans import PlanZone, SubtaskDraft
+from oversight_contracts.plans import PlanZone, SubtaskDraft, validate_dependencies
 from oversight_contracts.policy import ChangeAssessment
 from oversight_contracts.queue import QueueSpec
 from oversight_contracts.review import ChangeFacts, ChangeUsage, CrossReview, ReviewCard
@@ -69,6 +70,8 @@ class ApproveChange(ContractModel):
     """`POST /changes/{id}/approve`: approve the observed revision and head."""
 
     comment: str | None = None
+    grant: GrantRequest | None = None
+    """Create a standing grant from this personal approval, when its wait and scope match."""
     answers: list[ReviewCard] | None = Field(default=None, max_length=8)
     """The answered review cards for the observed revision and head."""
 
@@ -244,11 +247,16 @@ class PlanCreated(ContractModel):
 
 
 class UpdatePlan(ContractModel):
-    """Replace both proposed subtasks using the expected plan revision."""
+    """Replace the one to six proposed subtasks using the expected plan revision."""
 
     revision: PositiveInt
     graph_version: NonEmptyText
-    subtasks: tuple[SubtaskDraft, SubtaskDraft]
+    subtasks: list[SubtaskDraft] = Field(min_length=1, max_length=6)
+
+    @model_validator(mode="after")
+    def _dependencies(self) -> Self:
+        validate_dependencies(self.subtasks)
+        return self
 
 
 class PlanRevision(ContractModel):

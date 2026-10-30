@@ -25,6 +25,11 @@ export function applyEvent(state: State, event: ServerEvent): State {
       : state.decisionEvents,
   };
   switch (event.type) {
+    case "model.attempt_failed": // The card front folds this event.
+      return next;
+    case "grant.created":
+    case "grant.revoked":
+      return next;
     case "run.started":
       return { ...createInitialState(), run: event.payload, lastSeq: event.seq, clock: event.ts };
     case "graph.snapshot":

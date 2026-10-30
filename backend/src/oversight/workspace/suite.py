@@ -154,7 +154,11 @@ def _take_tally(report: Path) -> tuple[Tally, bool, str | None]:
 
 
 def _pytest_argv(
-    python: Path, junit: Path, case_ids: tuple[str, ...], pytest_targets: tuple[str, ...]
+    python: Path,
+    junit: Path,
+    case_ids: tuple[str, ...],
+    pytest_targets: tuple[str, ...],
+    pytest_options: tuple[str, ...] = (),
 ) -> list[str]:
     return [
         str(python),
@@ -169,6 +173,7 @@ def _pytest_argv(
         "-o",
         "junit_family=xunit1",
         f"--junitxml={junit}",
+        *pytest_options,
         *(pytest_targets if not case_ids else ()),
         *(["--", *case_ids] if case_ids else []),
     ]
@@ -185,6 +190,7 @@ async def run_suite(
     spawn: Spawn,
     case_ids: tuple[str, ...] = (),
     pytest_targets: tuple[str, ...] = (),
+    pytest_options: tuple[str, ...] = (),
     harness_pack: bool = False,
     measured_targets: tuple[CallTarget, ...] | None = None,
 ) -> SuiteRun:
@@ -201,7 +207,7 @@ async def run_suite(
     request, recording = report.with_suffix(".calls-input"), report.with_suffix(".calls")
     if measured_targets is not None:
         env.update(OVERSIGHT_CALL_TARGETS=str(request), OVERSIGHT_CALL_REPORT=str(recording))
-    argv = _pytest_argv(python, junit, case_ids, pytest_targets)
+    argv = _pytest_argv(python, junit, case_ids, pytest_targets, pytest_options)
     failure: OSError | asyncio.CancelledError | None = None
     try:
         if measured_targets is not None:

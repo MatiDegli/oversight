@@ -10,12 +10,13 @@ import sys
 import tempfile
 from dataclasses import asdict
 from pathlib import Path
+from typing import Self
 from uuid import uuid4
 
 # Support both `python tools/eval/lead_probe.py` and module imports in tests.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from tools.eval.grade import Tariff
 from tools.eval.ledger import Ledger, Record, atomic_write
 from tools.eval.tasks import IGNORED, REPO, BenchError, digest
@@ -35,7 +36,7 @@ from oversight.graph import WorkspaceGraph
 from oversight.settings import Settings
 from oversight.workspace import run_process
 from oversight_contracts.graph import GraphSnapshot
-from oversight_contracts.plans import SubtaskDraft
+from oversight_contracts.plans import SubtaskDraft, validate_dependencies
 
 RUN_CAP = 0.05
 TOTAL_CAP = 0.50
@@ -63,6 +64,11 @@ class Arguments(BaseModel):
 
 class PlanArguments(Arguments):
     subtasks: list[SubtaskDraft] = Field(min_length=2, max_length=2)
+
+    @model_validator(mode="after")
+    def _dependencies(self) -> Self:
+        validate_dependencies(self.subtasks)
+        return self
 
 
 class ReadArguments(Arguments):

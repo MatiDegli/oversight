@@ -8,12 +8,22 @@ from itertools import zip_longest
 from pathlib import PurePosixPath
 from typing import Any, cast
 
+from oversight.changes._behavior_aliases import (
+    _AliasBindings,  # pyright: ignore[reportPrivateUsage]
+    module_aliases,
+    shadowed,
+)
 from oversight.changes._review_identity import bound_inputs
 from oversight.changes._shortcuts_common import Source, walk_local
 
 MAX_INPUTS = 48
 MAX_LITERAL = 4096
 MAX_AST_NODES = 128
+_OPAQUE_DEFAULT = object()
+
+
+class _LiteralLimit(ValueError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -63,17 +73,53 @@ def literal_text(value: Any) -> str:
 def _literal(node: ast.expr) -> Any:
     nodes = list(ast.walk(node))
     if len(nodes) > MAX_AST_NODES or len(ast.unparse(node)) > MAX_LITERAL:
-        raise ValueError("literal size cap")
+        raise _LiteralLimit("literal size cap")
     return ast.literal_eval(node)
 
 
-def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signature:
+def _constant_defaults(source: Source) -> dict[str, ast.expr]:
+    bindings = _AliasBindings(source.deadline)
+    bindings.visit(source.tree)
+    if bindings.star_import:
+        return {}
+    declared = {
+        name
+        for node in ast.walk(source.tree)
+        if isinstance(node, (ast.Global, ast.Nonlocal))
+        for name in node.names
+    }
+    constants: dict[str, ast.expr] = {}
+    for stmt in source.tree.body:
+        if not isinstance(stmt, (ast.Assign, ast.AnnAssign)) or stmt.value is None:
+            continue
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+        if len(targets) == 1 and isinstance(targets[0], ast.Name):
+            name = targets[0].id
+            if bindings.counts[name] == 1 and name not in declared:
+                constants[name] = stmt.value
+    return constants
+
+
+def _default(node: ast.expr, constants: dict[str, ast.expr]) -> Any:
+    if isinstance(node, ast.Name):
+        node = constants.get(node.id, node)
+    try:
+        return _literal(node)
+    except _LiteralLimit:
+        raise
+    except (ValueError, TypeError):
+        # This marker never enters pools, rendered calls or effective arguments.
+        return _OPAQUE_DEFAULT
+
+
+def _signature(source: Source, node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signature:
     if node.args.vararg or node.args.kwarg:
         raise ValueError("variadic signature")
     positional = [*node.args.posonlyargs, *node.args.args]
+    constants = _constant_defaults(source)
     missing = inspect.Parameter.empty
     defaults = [missing] * (len(positional) - len(node.args.defaults))
-    defaults += [_literal(value) for value in node.args.defaults]
+    defaults += [_default(value, constants) for value in node.args.defaults]
     params: list[inspect.Parameter] = []
     for index, (arg, default) in enumerate(zip(positional, defaults, strict=True)):
         kind = (
@@ -89,7 +135,7 @@ def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signatur
             inspect.Parameter(
                 arg.arg,
                 inspect.Parameter.KEYWORD_ONLY,
-                default=missing if default is None else _literal(default),
+                default=missing if default is None else _default(default, constants),
                 annotation=_annotation(arg),
             )
         )
@@ -112,6 +158,8 @@ def _arguments(
     if named.keys() - sig.parameters.keys():
         raise TypeError("unknown parameter")
     for name, param in sig.parameters.items():
+        if param.default is _OPAQUE_DEFAULT and name not in named:
+            raise TypeError("opaque default requires an explicit argument")
         if param.kind == inspect.Parameter.POSITIONAL_ONLY:
             if name in named:
                 args.append(named[name])
@@ -125,8 +173,16 @@ def _arguments(
     return tuple(args), kwargs
 
 
-def _resolved(source: Source, call: ast.Call, path: str, module: str, name: str) -> bool:
+def _resolved(
+    source: Source, call: ast.Call, path: str, module: str, name: str, aliases: dict[str, str]
+) -> bool:
     resolved = source.resolve(call.func)
+    if (
+        isinstance(call.func, ast.Name)
+        and call.func.id in aliases
+        and not shadowed(source, call, call.func.id)
+    ):
+        resolved = aliases[call.func.id]
     current = module_name(path)
     if resolved and resolved.startswith("."):
         level = len(resolved) - len(resolved.lstrip("."))
@@ -136,20 +192,7 @@ def _resolved(source: Source, call: ast.Call, path: str, module: str, name: str)
         return True
     if current != module or not isinstance(call.func, ast.Name) or call.func.id != name:
         return False
-    # A local binding or comprehension target shadows a module definition.
-    for definition, bindings in source.definition_bindings.items():
-        if (
-            definition.lineno <= call.lineno <= (definition.end_lineno or definition.lineno)
-            and name in bindings
-        ):
-            return False
-    return not any(
-        any(isinstance(target, ast.Name) and target.id == name for target in ast.walk(node.target))
-        and call in ast.walk(parent)
-        for parent in ast.walk(source.tree)
-        if isinstance(parent, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
-        for node in parent.generators
-    )
+    return not shadowed(source, call, name)
 
 
 def _calls(files: dict[str, str], module: str, name: str, deadline: float):
@@ -160,6 +203,7 @@ def _calls(files: dict[str, str], module: str, name: str, deadline: float):
             continue
         try:
             source = Source(text, deadline)
+            aliases = module_aliases(source)
         except (SyntaxError, ValueError, RecursionError):
             continue
         calls = sorted(
@@ -167,7 +211,7 @@ def _calls(files: dict[str, str], module: str, name: str, deadline: float):
             key=lambda n: (n.lineno, n.col_offset),
         )
         for call in calls:
-            if not _resolved(source, call, path, module, name):
+            if not _resolved(source, call, path, module, name, aliases):
                 continue
             try:
                 if any(kw.arg is None for kw in call.keywords):
@@ -290,7 +334,7 @@ def behavior_inputs(
         for source, node in definitions:
             if reason := _effect_reason(source, node):
                 return BehaviorInputs(reason=reason)
-        signatures = [_signature(node) for node in nodes]
+        signatures = [_signature(source, node) for source, node in definitions]
         integers = [
             value
             for source, _ in definitions
@@ -317,6 +361,7 @@ def _generate(
     skipped = 0
     pools: dict[str, list[Any]] = {key: [] for sig in signatures for key in sig.parameters}
     seeds: list[dict[str, Any]] = []
+    base_params = signatures[0].parameters
 
     def add(named: dict[str, Any]) -> None:
         nonlocal skipped
@@ -345,7 +390,12 @@ def _generate(
         for sig, (args, kwargs) in zip(signatures, (before, after), strict=True):
             effective = sig.bind(*args, **kwargs)
             effective.apply_defaults()
-            identities.append(bound_inputs(dict(effective.arguments)))
+            # Binding already rejects explicit head-only arguments and opaque omissions.
+            # Keep every base parameter: removal and changed shared defaults stay unequal.
+            arguments = {
+                key: value for key, value in effective.arguments.items() if key in base_params
+            }
+            identities.append(bound_inputs(arguments))
         inputs.append(
             BehaviorInput(
                 f"{name}({rendered})",
@@ -367,9 +417,9 @@ def _generate(
                 pools[param].append(value)
             add(dict(bound.arguments))
     pools = _pools(pools, nodes, signatures, integers)
-    seed = (
-        dict(seeds[0]) if seeds else {param: values[0] for param, values in pools.items() if values}
-    )
+    seed = {param: values[0] for param, values in pools.items() if values and param in base_params}
+    if seeds:
+        seed = dict(seeds[0])
     add(seed)
     # Share the cap across parameters so the first parameter cannot starve later ones.
     for row in zip_longest(*pools.values(), fillvalue=inspect.Parameter.empty):
@@ -388,18 +438,23 @@ def _pools(
 ) -> dict[str, list[Any]]:
     for param in pools:
         parameters = [sig.parameters[param] for sig in signatures if param in sig.parameters]
-        defaults = [p.default for p in parameters if p.default is not inspect.Parameter.empty]
+        defaults = [
+            p.default
+            for p in parameters
+            if p.default is not inspect.Parameter.empty and p.default is not _OPAQUE_DEFAULT
+        ]
         observed = pools[param] + defaults
         kinds = {p.annotation for p in parameters}
         is_int = "int" in kinds or (not kinds - {None} and any(type(v) is int for v in observed))
         is_str = "str" in kinds or (not kinds - {None} and any(type(v) is str for v in observed))
         if is_int:
+            pools[param].extend((0, -1))
             for value in integers:
                 pools[param].extend((value - 1, value, value + 1))
         if is_str:
             for node in nodes:
                 pools[param].extend(value for value in _literals(node) if type(value) is str)
-        pools[param].extend(([0, -1] if is_int else []) + defaults)
+        pools[param].extend(defaults)
         unique = {literal_text(v): v for v in pools[param] if not (is_int and type(v) is bool)}
         pools[param] = list(unique.values())[:MAX_INPUTS]
     return pools

@@ -147,6 +147,18 @@ async def test_plans_valid_overlap_arity_and_unparseable(graph):
         assert probe.validate_plan(invalid, graph) == (None, [{"code": "invalid_arguments"}])
 
 
+@pytest.mark.parametrize("dependencies", [([2], []), ([3], []), ([4], []), ([5], []), ([1], [0])])
+def test_plan_arguments_reject_invalid_dependencies(dependencies, snapshot):
+    subtasks = [
+        dict(task="Work", zone=dict(node_ids=[], paths=[path]), depends_on=depends_on)
+        for path, depends_on in zip(("a.py", "b.py"), dependencies, strict=True)
+    ]
+    assert probe.validate_plan(json.dumps(dict(subtasks=subtasks)), snapshot) == (
+        None,
+        [{"code": "invalid_arguments"}],
+    )
+
+
 @pytest.mark.anyio
 async def test_invalid_plan_can_be_corrected_in_tool_loop(tmp_path, graph):
     scenario = probe.scenarios()[0]

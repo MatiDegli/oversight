@@ -1,13 +1,13 @@
 """Explicit immutable public projection; worker protocol and diagnostics stay private."""
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import islice
 from typing import Any, cast
 
-from oversight.changes._behavior import BehaviorDiff, BehaviorRow
+from oversight.changes._behavior import BehaviorDiff, BehaviorRow, FunctionBehavior, result_display
 from oversight.changes._review_identity import direct_result
-from oversight.changes._review_samples import Observation
+from oversight.changes._review_samples import Observation, OutcomeKind, Selection
 from oversight.workspace import TypedResult
 from oversight_contracts.review import BehaviorDiffRow, NodeBehaviorDiff
 
@@ -24,12 +24,57 @@ class CapturedRow:
 
 
 @dataclass(frozen=True)
+class CapturedGroup:
+    kind: OutcomeKind
+    count: int
+    witness: Observation | None
+
+
+@dataclass(frozen=True)
 class CapturedFunction:
     node_id: str
     compared: int
     differing: int
     rows: tuple[CapturedRow, ...]
     not_probed: str | None
+    groups: tuple[CapturedGroup, ...] | None = None
+    unconfirmed: int = 0
+
+    def review_samples(self) -> Selection:
+        samples: list[Observation] = []
+        problems: list[str] = []
+
+        if self.groups is None:
+            for row in self.rows:
+                if row.observation is not None:
+                    samples.append(row.observation)
+                else:
+                    problems.append(f"review cards: {self.node_id}: row witness unavailable")
+            covered = sum(not row.unstable for row in self.rows)
+        else:
+            covered = sum(group.count for group in self.groups)
+            for group in self.groups:
+                if group.witness is None:
+                    problems.append(
+                        f"review cards: {self.node_id}: "
+                        f"{group.count} differing observations not retained "
+                        f"({group.kind.description})"
+                    )
+                else:
+                    samples.append(group.witness)
+            if self.unconfirmed:
+                problems.append(
+                    f"review cards: {self.node_id}: "
+                    f"{self.unconfirmed} differences unstable or incomplete"
+                )
+        if self.not_probed:
+            problems.append(f"review cards: {self.node_id}: behavior comparison incomplete")
+        if self.differing > covered:
+            problems.append(
+                f"review cards: {self.node_id}: "
+                f"{self.differing - covered} differing observations not retained"
+            )
+        return Selection(tuple(samples), tuple(problems))
 
 
 @dataclass(frozen=True)
@@ -61,11 +106,7 @@ def _shorten(value: Any, limit: int) -> Any:
 def _render(result: TypedResult, *, bounded: bool = True) -> str:
     # Enumerate the public value fields, never serialize the private result object.
     kind = result["kind"]
-    display = {"kind": kind}
-    if kind == "value":
-        display["value"] = result["value"]
-    elif kind == "raised":
-        display["class"], display["message"] = result["class"], result["message"]
+    display = result_display(result)
     rendered = json.dumps(display, ensure_ascii=True, separators=(",", ":"))
     if not bounded:
         return rendered
@@ -125,22 +166,44 @@ def _category(reason: str | None) -> str | None:
     return "probe unavailable"
 
 
+def _capture_function(item: FunctionBehavior) -> CapturedFunction:
+    rows = [_capture_row(item.node_id, row) for row in item.rows]
+    groups: list[CapturedGroup] | None = None
+    if item.groups is not None:
+        groups = []
+        for group in item.groups:
+            witness = None
+            for index, row in enumerate(item.rows):
+                if row == group.witness:
+                    observed = rows[index].observation
+                    if observed is not None:
+                        witness = replace(
+                            observed,
+                            group=group.kind,
+                            coverage=group.count,
+                            differing=item.differing,
+                        )
+                        rows[index] = replace(rows[index], observation=witness)
+                    break
+            groups.append(CapturedGroup(group.kind, group.count, witness))
+    return CapturedFunction(
+        item.node_id,
+        item.compared,
+        item.differing,
+        tuple(rows),
+        _category(item.reason),
+        tuple(groups) if groups is not None else None,
+        item.unconfirmed,
+    )
+
+
 def capture_behavior(measured: BehaviorDiff | None) -> BehaviorEvidence | None:
     """Detach all public evidence from mutable nested worker results after the probe."""
     if measured is None:
         return None
     return BehaviorEvidence(
         measured.revision,
-        tuple(
-            CapturedFunction(
-                item.node_id,
-                item.compared,
-                item.differing,
-                tuple(_capture_row(item.node_id, row) for row in item.rows),
-                _category(item.reason),
-            )
-            for item in measured.functions
-        ),
+        tuple(_capture_function(item) for item in measured.functions),
     )
 
 

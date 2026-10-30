@@ -3,9 +3,11 @@
 Other modules import only what this file exports; everything else here is internal.
 """
 
+from oversight.changes._answers import InvalidAnswers
 from oversight.changes._assessment import RulesEvidence
 from oversight.changes._behavior import BehaviorDiff, BehaviorRow, FunctionBehavior
 from oversight.changes._behavior_inputs import BehaviorInput, BehaviorInputs, behavior_inputs
+from oversight.changes._grants import GrantNotFound, InvalidGrant
 from oversight.changes._manager import ChangeManager
 from oversight.changes._mode import ModeController
 from oversight.changes._policy import PolicyInputs, SpendSnapshot
@@ -18,6 +20,7 @@ from oversight.changes._shortcut_detector import (
     detect_shortcuts,
 )
 from oversight.changes._state import ChangeNotFound, Revision, WrongState
+from oversight.changes._view import build_change_view, read_agent_status, read_change_view
 
 __all__ = [
     "BehaviorDiff",
@@ -29,6 +32,9 @@ __all__ = [
     "DetectionResult",
     "Finding",
     "FunctionBehavior",
+    "GrantNotFound",
+    "InvalidAnswers",
+    "InvalidGrant",
     "ModeController",
     "PolicyInputs",
     "ReviewCapture",
@@ -40,5 +46,8 @@ __all__ = [
     "SpendSnapshot",
     "WrongState",
     "behavior_inputs",
+    "build_change_view",
     "detect_shortcuts",
+    "read_agent_status",
+    "read_change_view",
 ]

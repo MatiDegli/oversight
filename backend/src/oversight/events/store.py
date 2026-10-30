@@ -31,12 +31,14 @@ from oversight_contracts.events import (
     ChangeUpdated,
     ErrorReport,
     LeadStatus,
+    ModelAttemptFailed,
     RevertResult,
     RunStarted,
     ServerEvent,
     SuiteExecution,
     UsageTick,
 )
+from oversight_contracts.grants import GrantCreated, GrantRevoked
 from oversight_contracts.graph import GraphDelta, GraphSnapshot
 from oversight_contracts.plans import Plan
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
@@ -57,6 +59,7 @@ type EventPayload = (
     | ChangeProposed
     | ChangeResolved
     | UsageTick
+    | ModelAttemptFailed
     | ErrorReport
     | ChangeAssessment
     | MergeModeState
@@ -67,6 +70,8 @@ type EventPayload = (
     | RevertResult
     | QueuedTask
     | LeadStatus
+    | GrantCreated
+    | GrantRevoked
 )
 
 EVENT_TYPES: dict[type[EventPayload], str] = {
@@ -80,6 +85,7 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     ChangeProposed: "change.proposed",
     ChangeResolved: "change.resolved",
     UsageTick: "usage.tick",
+    ModelAttemptFailed: "model.attempt_failed",
     ErrorReport: "error",
     ChangeAssessment: "change.assessed",
     MergeModeState: "merge_mode.changed",
@@ -90,6 +96,8 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     RevertResult: "revert.resolved",
     QueuedTask: "queue.updated",
     LeadStatus: "lead.status",
+    GrantCreated: "grant.created",
+    GrantRevoked: "grant.revoked",
 }
 """The event type each payload travels under; the store derives `type` from the payload."""
 

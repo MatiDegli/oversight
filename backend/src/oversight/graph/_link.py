@@ -1,4 +1,4 @@
-"""Resolve every file's call sites and imports against the whole workspace into edges.
+"""Resolve every file's call sites, imports and class bases against the workspace into edges.
 
 A call is "exact" only when its name resolves to a single function or class; otherwise it is
 "possible", with the reason. Calling a class is a call to the class node. Imports follow
@@ -129,6 +129,11 @@ class _Linker:
         for file in self.files:
             for target in self._imported(file):
                 add("imports", file.module, target, "exact", None)
+            for class_id, facts in file.classes.items():
+                for ref in facts.bases:
+                    for dst, conf, reason in self._resolve(file, ref):
+                        if self.nodes[dst].kind == "class":
+                            add("inherits", class_id, dst, conf, reason)
             for fact in file.calls:
                 for dst, conf, reason in self._resolve(file, fact.ref):
                     add("calls", fact.owner, dst, conf, reason)

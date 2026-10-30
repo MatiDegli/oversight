@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { PhonePractice } from "./PhonePractice";
+import { PhoneDiff } from "./PhoneDiff";
 import { AgentLine, PhoneGraph } from "./PhoneGraph";
 import { freshAttempt } from "./PracticePanel";
 import { manifest, validateManifest } from "./manifest";
 import { recording } from "./recording.fixture";
-import { calledHelper, diffRows, wrapSource } from "./phoneEvidence";
+import { calledHelper, countAt, diffRows, wrapSource } from "./phoneEvidence";
 const practice = validateManifest(manifest, recording);
 const actions = {
   onStart: vi.fn(),
@@ -15,11 +16,9 @@ const actions = {
   onRestart: vi.fn(),
   onExit: vi.fn(),
 };
-it.each([false, true])("separates per-agent impact counts with a middot (merged: %s)", (merged) => {
+it.each([false, true])("lists per-agent impact counts without zeros (merged: %s)", (merged) => {
   const html = renderToStaticMarkup(<PhoneGraph practice={practice} merged={merged} />);
-  expect(html).toContain(
-    'class="pp-graph-foot">A · 9 possibly affected · B · 0 possibly affected</p>',
-  );
+  expect(html).toContain('class="pp-graph-foot">A: 9 possibly affected, B: none</p>');
 });
 it.each([
   ["muse-spark", "Recorded contributor"],
@@ -42,7 +41,7 @@ it.each([
   if (!entry) throw new Error("Missing case");
   const html = renderToStaticMarkup(<AgentLine practice={fallback} entry={entry} />);
   expect(html).toContain("Agent B");
-  expect(html).toContain(`· ${label}`);
+  expect(html).toContain(`<span>${label}</span>`);
   expect(html).not.toContain("Muse Spark Open");
 });
 it.each([
@@ -111,6 +110,50 @@ it("derives cone folds and the new exact callee from the recording", () => {
   expect(calledHelper(practice, first)?.name).toBe("_check_quantity");
   expect(practice.cases[0]?.proposal.impact.entries).toEqual([]);
 });
+it.each([1, 2])("derives decision previews and graph counts with only distance %i", (distance) => {
+  const changed = structuredClone(practice);
+  const entry = changed.cases[1];
+  if (!entry) throw new Error("Missing case");
+  entry.proposal.task = "Read this verbatim task, including its final words.";
+  entry.proposal.impact.entries = entry.proposal.impact.entries
+    .filter((node) => node.distance === distance)
+    .slice(0, 2);
+  const count = countAt(entry, distance);
+  const preview = `${String(count)} ${distance === 1 ? "direct callers" : "at distance 2"}`;
+  const html = renderToStaticMarkup(
+    <PhonePractice
+      {...actions}
+      practice={changed}
+      attempt={{ ...freshAttempt(), started: true, index: 1 }}
+    />,
+  );
+  expect(html).toContain(`Recorded task</span> <span>${entry.proposal.task}`);
+  expect(html).toContain(`Possibly affected</span> <span>${preview}`);
+  const graph = renderToStaticMarkup(
+    <PhoneGraph practice={changed} entry={entry} merged={false} />,
+  );
+  expect(graph).toContain(preview);
+  expect(html).not.toMatch(/Possibly affected<\/span> <span>(?:0 |[^<]*, 0 )/);
+});
+it("keeps the zero-cone row absent and the diff disclosures boxed with right chevrons", () => {
+  const entry = practice.cases[0];
+  if (!entry) throw new Error("Missing case");
+  const html = renderToStaticMarkup(
+    <PhonePractice
+      {...actions}
+      practice={practice}
+      attempt={{ ...freshAttempt(), started: true }}
+    />,
+  );
+  expect(html).not.toContain("Possibly affected</span>");
+  expect(html).toContain("pp-decision-row");
+  expect(html).toContain("lucide-chevron-down");
+  expect(html).not.toContain("lucide-chevron-right");
+  const diff = renderToStaticMarkup(<PhoneDiff practice={practice} entry={entry} />);
+  expect(diff).toContain('class="pp-disclosure"');
+  expect(diff).toContain("lucide-chevron-right");
+  expect(diff).not.toContain("pp-decision-row");
+});
 it("reveals both solid merged pieces only with recorded decisions", () => {
   const html = renderToStaticMarkup(
     <PhonePractice
@@ -125,6 +168,10 @@ it("reveals both solid merged pieces only with recorded decisions", () => {
     />,
   );
   expect(html).toContain("Recorded decisions");
+  for (const label of ["Agent’s test runs", /review facts/i, /cross-review/i, "Review history"])
+    expect(html.split(label).length - 1).toBeGreaterThanOrEqual(2);
+  expect(html).toContain("2 runs, last 29 of 29 passed");
+  expect(html).toContain("Not recorded for this revision: review facts and cross-review.");
   expect(html).toContain("Both merged");
   expect(html).toContain("Same decision");
   expect(html).toContain("Different decision");
@@ -171,4 +218,21 @@ it("renders the retained finish state after a phone/desktop remount", () => {
   expect(html).toContain("decisions matched");
   expect(html).toContain("Agreement is not proof");
   expect(html).toContain("Watch the recording");
+});
+
+it("uses words for a finish with no matching decisions", () => {
+  const html = renderToStaticMarkup(
+    <PhonePractice
+      {...actions}
+      practice={practice}
+      attempt={{
+        ...freshAttempt(),
+        started: true,
+        revealed: true,
+        finished: true,
+        answers: { "change-2": "Reject", "change-1": "Reject" },
+      }}
+    />,
+  );
+  expect(html).toContain('<p class="pp-score">None of your decisions matched the recording.</p>');
 });

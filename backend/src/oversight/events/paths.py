@@ -9,10 +9,14 @@ from typing import cast
 #    character (so "a / b" is not). A URL's "//" is followed by "/", and its path follows a host.
 #  - "~/", for the home directory, and "file:///", for a path written as a URL.
 #  - a Windows drive: a letter, ":" and a separator, not glued to a word ("https://" is not).
-#  - a UNC or double-slash POSIX path, except a URL's scheme separator.
+#  - a UNC path: two backslashes, a host name and a backslash separator, or the device
+#    prefixes "\\?\" and "\\.\"; also their source-escaped forms with every backslash doubled.
+#    Neither form may follow a backslash. Escapes such as "\\n" have no host separator.
+#  - a double-slash POSIX path, except a URL's scheme separator.
 _ABSOLUTE = re.compile(
     r"(?<![\w.~/\\\)\]}<*])/(?=[\w.~@$%+-])"
-    r"|(?<![\w.:/\\])(?:/{2,}|\\{2,})(?=[\w.~@$%+-])"
+    r"|(?<![\w.:/\\])(?:/{2,}(?=[\w.~@$%+-])|\\{2}(?:[\w.~@$%+-]+\\|[?.]\\)"
+    r"|\\{4}(?:[\w.~@$%+-]+\\{2}|[?.]\\{2}))"
     r"|(?<![\w.~/\\])~/"
     r"|\bfile:///"
     r"|(?<!\w)[A-Za-z]:[\\/]"

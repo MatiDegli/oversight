@@ -56,15 +56,9 @@ def selection(evidence: FactsEvidence, limit: int) -> Selection:
     samples: list[Observation] = []
     problems: list[str] = []
     for node in evidence.behavior_evidence.functions if evidence.behavior_evidence else ():
-        for row in node.rows:
-            if row.observation is not None:
-                samples.append(row.observation)
-            else:
-                problems.append(f"{PREFIX}{node.node_id}: row witness unavailable")
-        if node.not_probed:
-            problems.append(f"{PREFIX}{node.node_id}: behavior comparison incomplete")
-        if node.differing > sum(not row.unstable for row in node.rows):
-            problems.append(f"{PREFIX}{node.node_id}: differing observations not retained")
+        direct = node.review_samples()
+        samples.extend(direct.samples)
+        problems.extend(direct.problems)
     if evidence.measured:
         samples.extend(capture_review_samples(evidence.measured))
         for node in project_measured(evidence.measured, evidence.target):
@@ -102,6 +96,11 @@ class CardJob:
     asked_for: list[AskedFor] = field(default_factory=list[AskedFor])
     problems: list[str] = field(default_factory=list[str])
     status: str = "pending"
+
+    @property
+    def preparing(self) -> bool:
+        """Classification is not settled until its final publication returns a receipt."""
+        return self.status == "pending" or (self.task is not None and not self.task.done())
 
 
 class ReviewCards:
@@ -183,6 +182,29 @@ class ReviewCards:
             )
         )
 
+    def for_change(self, rec: ChangeRecord) -> CardJob | None:
+        """Find the observed proposal, including after a failed decision invalidated its worker.
+
+        A revision captures only one exact target (enforced by prepare). Published questions
+        survive worker cancellation; a later revision or head must never inherit them.
+        """
+        return next(
+            (
+                job
+                for job in self.jobs.values()
+                if job.capture.run_id == self.run_id
+                and (
+                    job.capture.target.change_id,
+                    job.capture.agent_id,
+                    job.capture.target.revision,
+                    job.capture.target.base_commit,
+                    job.capture.target.head_commit,
+                )
+                == (rec.change_id, rec.agent_id, rec.revision, rec.base_commit, rec.head_commit)
+            ),
+            None,
+        )
+
     def diagnostics(self, job: CardJob) -> list[str]:
         return [
             *job.capture.selected.problems,
@@ -201,7 +223,12 @@ class ReviewCards:
                 raise ValueError("review card candidate is no longer current")
             # Re-publishing measurements must not reset selection, calls or later producer data.
             if job.latest is not None:
-                if job.status == "failed" and job.facts is not None:
+                excluded = {"review_cards", "problems", "summary"}
+                if job.facts is None or payload.model_dump(
+                    exclude=excluded
+                ) != job.facts.model_dump(exclude=excluded):
+                    raise ValueError("republished measurements differ from committed facts")
+                if job.status == "failed":
                     job.status = (
                         "finished"
                         if job.consumed == len(job.capture.selected.samples)
@@ -213,6 +240,7 @@ class ReviewCards:
                         job.status = "failed"
                         raise
                 return job.latest
+            job.status = "pending"
             facts = payload.model_copy(
                 deep=True,
                 update={
@@ -220,7 +248,11 @@ class ReviewCards:
                     "problems": [*payload.problems, *self.diagnostics(job)],
                 },
             )
-            receipt = await self._emit(job, facts)
+            try:
+                receipt = await self._emit(job, facts)
+            except BaseException:
+                job.status = "failed"
+                raise
             job.evidence = receipt
             job.deadline = asyncio.get_running_loop().time() + self.limits.total_s
             job.task = asyncio.create_task(
@@ -273,8 +305,14 @@ class ReviewCards:
         ):
             raise ValueError("review card summary differs from captured evidence")
         identities: set[tuple[str, str]] = set()
-        eligible = {sample.node_id: sample.example() for sample in job.capture.selected.samples}
+        witnesses: set[Observation] = set()
+        eligible = {
+            (sample.node_id, sample.question(base)): sample
+            for sample in job.capture.selected.samples
+            for base in (QUESTION, UNCERTAIN)
+        }
         for card in facts.review_cards or []:
+            sample = eligible.get((card.node_id, card.question))
             event = self.events.get(card.evidence_seq)
             if (
                 job.evidence is None
@@ -284,7 +322,8 @@ class ReviewCards:
                 or target_of(event.payload) != job.capture.target
                 or card.example is None
                 or card.example.unstable
-                or eligible.get(card.node_id) != card.example
+                or sample is None
+                or sample.example() != card.example
             ):
                 raise ValueError("review card lacks eligible prior evidence")
             sources = [*(event.payload.behavior_diff or []), *(event.payload.measured_cone or [])]
@@ -293,9 +332,10 @@ class ReviewCards:
             ):
                 raise ValueError("review card example is absent from evidence")
             identity = card.node_id, card.question
-            if identity in identities or card.question not in {QUESTION, UNCERTAIN}:
+            if identity in identities or sample in witnesses:
                 raise ValueError("review card identity is invalid or duplicated")
             identities.add(identity)
+            witnesses.add(sample)
         if len(identities) > 8:
             raise ValueError("review cards exceed the contractual limit")
 
@@ -354,8 +394,22 @@ class ReviewCards:
         )
         for node in sources or []:
             if node.node_id == sample.node_id and sample.example() in node.rows:
-                return AskedFor(node.node_id, node.differing_count, node.compared_count)
+                return AskedFor(
+                    node.node_id,
+                    sample.coverage if sample.group is not None else node.differing_count,
+                    node.compared_count,
+                )
         raise ValueError("asked-for sample is absent from published evidence")
+
+    def _record_asked_for(self, job: CardJob, sample: Observation) -> None:
+        asked = self._asked_for(job, sample)
+        for index, previous in enumerate(job.asked_for):
+            if previous.node_id == asked.node_id:
+                job.asked_for[index] = replace(
+                    asked, differing_count=previous.differing_count + asked.differing_count
+                )
+                return
+        job.asked_for.append(asked)
 
     async def _run(self, job: CardJob) -> None:
         try:
@@ -366,8 +420,12 @@ class ReviewCards:
                 now = asyncio.get_running_loop().time()
                 if now >= job.deadline:
                     job.status = "truncated"
+                    remaining = sum(
+                        item.coverage for item in job.capture.selected.samples[job.consumed :]
+                    )
                     job.problems.append(
-                        f"{PREFIX}review deadline exhausted; remaining nodes unclassified"
+                        f"{PREFIX}review deadline exhausted; remaining nodes unclassified; "
+                        f"{remaining} differing inputs unclassified"
                     )
                     break
                 job.consumed += 1
@@ -387,35 +445,31 @@ class ReviewCards:
                     async with asyncio.timeout_at(deadline):
                         outcome = await self.decisions.classify_difference(input, deadline=deadline)
                 except TimeoutError:
-                    job.problems.append(f"{PREFIX}{sample.node_id}: deadline")
+                    job.problems.append(sample.problem("deadline"))
                     continue
                 except Exception as error:
-                    job.problems.append(
-                        f"{PREFIX}{sample.node_id}: unavailable ({type(error).__name__})"
-                    )
+                    job.problems.append(sample.problem(f"unavailable ({type(error).__name__})"))
                     continue
                 if not self.current(job.capture):
                     return
                 if asyncio.get_running_loop().time() >= deadline:
-                    job.problems.append(f"{PREFIX}{sample.node_id}: deadline")
+                    job.problems.append(sample.problem("deadline"))
                 elif outcome.target != input.target or outcome.node_id != sample.node_id:
-                    job.problems.append(
-                        f"{PREFIX}{sample.node_id}: classification identity mismatch"
-                    )
+                    job.problems.append(sample.problem("classification identity mismatch"))
                 elif outcome.choice is None:
-                    job.problems.append(
-                        f"{PREFIX}{sample.node_id}: unavailable ({outcome.unavailable})"
-                    )
+                    job.problems.append(sample.problem(f"unavailable ({outcome.unavailable})"))
                 elif outcome.choice == "asked_for":
-                    job.asked_for.append(self._asked_for(job, sample))
+                    self._record_asked_for(job, sample)
                 elif outcome.choice in {"not_asked_for", "cannot_tell"}:
                     if len(job.cards) == 8:
-                        job.problems.append(f"{PREFIX}{sample.node_id}: contractual card limit")
+                        job.problems.append(sample.problem("contractual card limit"))
                     else:
                         job.cards.append(
                             ReviewCard(
                                 node_id=sample.node_id,
-                                question=UNCERTAIN if outcome.choice == "cannot_tell" else QUESTION,
+                                question=sample.question(
+                                    UNCERTAIN if outcome.choice == "cannot_tell" else QUESTION
+                                ),
                                 evidence_seq=job.evidence.seq,
                                 example=sample.example(),
                             )

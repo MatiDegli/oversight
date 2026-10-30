@@ -1,5 +1,3 @@
-import type { DecisionRef, ReviewCard, TaskExample } from "@contracts";
-
 import { decisionIdentityKey, noRecordedExample } from "./decisionIdentity";
 import type { InboxIdentity } from "./decisionIdentity";
 import { recordEntry, recordExamples } from "./decisionCandidates";
@@ -31,44 +29,18 @@ export function currentCandidate(state: State, changeId: string): Candidate | nu
     : null;
 }
 
-function matchesCard(card: ReviewCard, identity: DecisionRef): boolean {
-  return (
-    identity.kind === "review_card" &&
-    card.node_id === identity.node_id &&
-    card.question === identity.question &&
-    card.evidence_seq === identity.evidence_seq
-  );
-}
-
-function answered(card: ReviewCard, identity: DecisionRef): boolean {
-  return (
-    matchesCard(card, identity) &&
-    card.answered_by === "person" &&
-    (card.answer === "yes" || card.answer === "no")
-  );
-}
-
+/** Answers and delegations are evidence; only a completed final action closes a change. */
 export function isClosed(entry: PendingEntry, state: State): boolean {
   const identity = entry.identity;
-  return state.decisionEvents.some((event) => {
-    if (event.seq < entry.firstSeq) return false;
-    if (identity.kind === "lead_plan" || identity.kind === "revert_needs_you") return false;
-    if (event.type === "change.facts_recorded" && sameCandidate(event.payload, identity)) {
-      return event.payload.review_cards?.some((card) => answered(card, identity)) ?? false;
-    }
-    if (
-      event.type !== "change.resolved" ||
-      !event.payload.head_commit ||
-      !sameCandidate({ ...event.payload, head_commit: event.payload.head_commit }, identity)
-    )
-      return false;
-    const resolution = event.payload;
-    if (resolution.answers?.some((card) => answered(card, identity))) return true;
-    if (resolution.answers?.some((card) => matchesCard(card, identity) && card.answer === "unsure"))
-      return false;
-    if (resolution.merge === "conflict") return false;
-    return true;
-  });
+  if (identity.kind === "lead_plan" || identity.kind === "revert_needs_you") return false;
+  return state.decisionEvents.some(
+    (event) =>
+      event.type === "change.resolved" &&
+      event.payload.change_id === identity.change_id &&
+      event.payload.revision === identity.revision &&
+      (!event.payload.head_commit || event.payload.head_commit === identity.head_commit) &&
+      event.payload.merge !== "conflict",
+  );
 }
 
 /** Plan revision and lead revision are different counters; never substitute one for the other. */
@@ -161,33 +133,9 @@ export function recordOtherEntries(entries: Entries, state: State): void {
   }
 }
 
-function examplesConfirmed(entry: PendingEntry, state: State): boolean {
-  let examples: TaskExample[] | null = null;
-  for (const event of state.decisionEvents) {
-    if (event.type === "change.proposed" && sameCandidate(event.payload, entry.identity)) {
-      examples = event.payload.examples ?? examples;
-    }
-    if (
-      event.type === "agent.status" &&
-      event.payload.base_commit &&
-      sameCandidate(
-        {
-          change_id: event.payload.change_id,
-          revision: 0,
-          head_commit: event.payload.base_commit,
-        },
-        entry.identity,
-      )
-    )
-      examples = event.payload.examples ?? examples;
-  }
-  return examples !== null && examples.every((example) => example.pin);
-}
-
 export function isCurrent(entry: PendingEntry, state: State): boolean {
   if (entry.identity.kind === "lead_plan" || entry.identity.kind === "revert_needs_you")
     return true;
-  if (entry.kind === "examples_before_code" && examplesConfirmed(entry, state)) return false;
   const current = currentCandidate(state, entry.identity.change_id);
   return current !== null && sameCandidate(current, entry.identity);
 }

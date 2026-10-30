@@ -1,10 +1,13 @@
 # Task bench: arms and repetitions
 
 Eight independent tasks, one agent at a time, through a **dedicated, fresh Oversight server**.
-The runner never calls a model provider, approves a change or requests revisions.
+The task runner never calls a model provider, approves a change or requests revisions.
 Repetitions are explicit independent attempts, never retries of an existing completion key.
 No paid run has been performed for this slice. Task marks describe tempting shortcuts in their
 specifications; they are not shortcut-detector findings.
+
+The separate [frozen-patch detection runner](detection/README.md) compares four detection/intent
+arms through disposable in-process product runtimes, with external labels and the same paid ledger.
 
 ## Tasks and reproducibility
 

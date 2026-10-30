@@ -1,5 +1,6 @@
 """One-shot rules authorization; provisional evidence never authorizes a Git effect."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from oversight.changes._assessment import PROFILE, AssessmentWait
@@ -7,6 +8,7 @@ from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._state import APPROVABLE, WrongState
 from oversight.changes._support import ChangeContext, RulesFailure
+from oversight_contracts.grants import GrantUse, covered_rule
 from oversight_contracts.policy import POLICY_RULES, ChangeAssessment
 
 
@@ -17,16 +19,25 @@ class RulesReservation:
     decision: int
 
 
-def pending_policy(assessment: ChangeAssessment) -> bool:
+def pending_policy(assessment: ChangeAssessment, grants: Sequence[GrantUse] = ()) -> bool:
     return (
         assessment.policy_version == PROFILE
         and assessment.mode == "merge_when_safe"
         and len(assessment.rules) == len(POLICY_RULES[PROFILE])
         and {rule.rule for rule in assessment.rules} == set(POLICY_RULES[PROFILE])
+        and len(grants) == len({use.rule for use in grants})
+        and all(
+            any(
+                rule.rule == use.rule and covered_rule(assessment, rule, grants)
+                for rule in assessment.rules
+            )
+            for use in grants
+        )
         and all(
             (rule.result == "unknown" and rule.observed is None)
             if rule.rule == "combined_tests"
-            else rule.result == "pass" and bool(rule.evidence)
+            else (rule.result == "pass" and bool(rule.evidence))
+            or covered_rule(assessment, rule, grants)
             for rule in assessment.rules
         )
     )
@@ -36,10 +47,15 @@ def capture(
     ctx: ChangeContext, wait: AssessmentWait, assessment: ChangeAssessment
 ) -> RulesReservation:
     rec = wait.rec
+    grants = (
+        ctx.grants.uses(ctx, assessment, wait.grant_measurement)
+        if wait.grant_measurement is not None
+        else ()
+    )
     if failure := availability(ctx):
         raise RulesFailure(*failure)
     if (
-        not pending_policy(assessment)
+        not pending_policy(assessment, grants)
         or assessment != wait.latest
         or any(
             ref.event_seq is not None and ref.event_seq not in ctx.assessment.events
@@ -79,6 +95,7 @@ def capture(
         None,
         assessment=assessment.model_copy(deep=True),
         reasons=("All prerequisites confirmed; combined tests pending.",),
+        grants=grants,
     )
     return RulesReservation(wait, evidence, rec.decision + 1)
 
@@ -103,6 +120,16 @@ def revalidate(ctx: ChangeContext, reservation: RulesReservation) -> tuple[str, 
     if failure := availability(ctx):
         return failure
     rec, assessment = wait.rec, evidence.assessment
+    grants = (
+        ctx.grants.uses(ctx, assessment, wait.grant_measurement, only=evidence.grants)
+        if assessment is not None and wait.grant_measurement is not None
+        else ()
+    )
+    if evidence.grants and {g.grant_id for g in evidence.grants} != {g.grant_id for g in grants}:
+        return (
+            "policy_invalid",
+            "A standing grant is no longer active or no longer covers this wait.",
+        )
     if (
         rec.taken != evidence.revision
         or evidence.revision not in rec.rules_consumed
@@ -119,7 +146,7 @@ def revalidate(ctx: ChangeContext, reservation: RulesReservation) -> tuple[str, 
         rec.evidence is not evidence
         or assessment is None
         or assessment != wait.latest
-        or not pending_policy(assessment)
+        or not pending_policy(assessment, grants)
         or any(
             ref.event_seq is not None and ref.event_seq not in ctx.assessment.events
             for rule in assessment.rules

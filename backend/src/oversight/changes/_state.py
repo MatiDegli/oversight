@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from oversight.changes._measured import MeasuredEvidence
     from oversight.changes._review_port import ReviewCapture
+    from oversight.changes._run_findings import EditReceipt, SuiteReceipt
 
 from oversight.agents import AgentTask
 from oversight.changes._behavior import BehaviorDiff
@@ -120,6 +121,8 @@ class ChangeRecord:
     published: dict[str, str | None] = field(default_factory=lambda: dict[str, str | None]())
     """Per path, the `modified` last sent in a `change.updated`."""
     unpublished: set[str] = field(default_factory=lambda: set[str]())
+    run_edits: list[EditReceipt] = field(default_factory=lambda: list["EditReceipt"]())
+    run_suites: list[SuiteReceipt] = field(default_factory=lambda: list["SuiteReceipt"]())
     executions: dict[int, SuiteExecution] = field(default_factory=dict[int, SuiteExecution])
     summary_usage: dict[int, RoleUsage] = field(default_factory=dict[int, RoleUsage])
     suite_runs: dict[int, SuiteRun] = field(default_factory=dict[int, SuiteRun])

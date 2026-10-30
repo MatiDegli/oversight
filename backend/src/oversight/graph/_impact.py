@@ -12,9 +12,19 @@ functions that reach a seed instead.
 from collections import defaultdict
 from collections.abc import Iterable
 
-from oversight_contracts.graph import ChangeGraph, GraphNode, GraphSnapshot, ImpactCone, ImpactEntry
+from oversight_contracts.graph import (
+    ChangeGraph,
+    Confidence,
+    EdgeKind,
+    GraphNode,
+    GraphSnapshot,
+    ImpactCone,
+    ImpactEntry,
+)
 
 _CONSTRUCTORS = frozenset({"__init__", "__new__", "__post_init__"})
+_CALL_KINDS: dict[EdgeKind, bool] = {"imports": False, "calls": True, "inherits": False}
+_EXACT_CONFIDENCE: dict[Confidence, bool] = {"exact": True, "possible": False}
 
 
 class NodeNotFoundError(LookupError):
@@ -29,7 +39,7 @@ class _Calls:
         self.callers: defaultdict[str, set[str]] = defaultdict(set)
         self.callees: defaultdict[str, set[str]] = defaultdict(set)
         for edge in graph.edges:
-            if edge.kind == "calls" and edge.confidence == "exact":
+            if _CALL_KINDS.get(edge.kind) is True and _EXACT_CONFIDENCE.get(edge.confidence, False):
                 self.callers[edge.dst].add(edge.src)
                 self.callees[edge.src].add(edge.dst)
 
@@ -123,6 +133,32 @@ def change_cone(
     """The cone of a change, seeded by its added and modified nodes, on the change's version."""
     seeds = [n.id for n in change.nodes_added] + change.nodes_modified
     return impact_cone(graph, seeds, max_depth=max_depth, max_nodes=max_nodes)
+
+
+def possible_callers(graph: GraphSnapshot, cone: ImpactCone) -> list[str]:
+    """Distinct non-test callers linked only by possible calls to the seeds or entries.
+
+    A caller already in the cone, or with an exact call to any target, is already accounted
+    for. Ignore dangling edges and return stable ids in the same order as other graph helpers.
+    """
+    nodes = {node.id: node for node in graph.nodes}
+    targets = set(cone.seeds) | {entry.node_id for entry in cone.entries}
+    possible: set[str] = set()
+    exact: set[str] = set()
+    for edge in graph.edges:
+        if _CALL_KINDS.get(edge.kind) is False and edge.confidence in _EXACT_CONFIDENCE:
+            continue
+        if edge.dst not in targets or edge.dst not in nodes:
+            continue
+        source = nodes.get(edge.src)
+        if source is None or source.is_test or edge.src in targets:
+            continue
+        if _CALL_KINDS.get(edge.kind) is True and _EXACT_CONFIDENCE.get(edge.confidence, False):
+            exact.add(edge.src)
+        else:
+            # Unknown kinds and confidence are uncertain calls, never evidence of absence.
+            possible.add(edge.src)
+    return sorted(possible - exact)
 
 
 def node_cone(graph: GraphSnapshot, node_id: str, *, max_depth: int, max_nodes: int) -> ImpactCone:

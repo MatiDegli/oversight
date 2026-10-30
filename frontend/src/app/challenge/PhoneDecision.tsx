@@ -1,29 +1,36 @@
+import { omittedText } from "./evidenceCopy";
 import { Check, X, ArrowRight, ChevronDown, Files } from "lucide-react";
 import { useState } from "react";
 import { AgentLine } from "./PhoneGraph";
-import { caseSlot } from "./phoneEvidence";
+import { caseSlot, countAt } from "./phoneEvidence";
+import "./phoneRows.css";
 import { Disclosure, PhoneDiff } from "./PhoneDiff";
 import type { PanelProps } from "./PracticePanel";
 import type { PracticeCase } from "./phoneEvidence";
 
 function Impact({ entry }: { entry: PracticeCase }) {
   const impact = entry.proposal.impact;
+  const preview = [1, 2]
+    .map((distance) => ({ distance, count: countAt(entry, distance) }))
+    .filter(({ count }) => count > 0)
+    .map(({ distance, count }) =>
+      distance === 1
+        ? `${String(count)} direct callers`
+        : `${String(count)} at distance ${String(distance)}`,
+    )
+    .join(", ");
   return (
-    <Disclosure label="Possibly affected" count={impact.entries.length}>
+    <Disclosure label="Possibly affected" variant="decision" preview={preview}>
       <div className="pp-impact">
         <p>
-          Exact calls only · Depth limit {impact.max_depth} · Node limit {impact.max_nodes}
+          Exact calls only, depth limit {impact.max_depth} and node limit {impact.max_nodes}.
         </p>
         {impact.entries.map((node) => (
           <p key={node.node_id}>
             {node.distance} {node.node_id.split(":")[1]}
           </p>
         ))}
-        <p>
-          {impact.omitted_by_depth || impact.omitted_by_limit
-            ? `+${String(impact.omitted_by_depth)} omitted by depth · +${String(impact.omitted_by_limit)} omitted by node limit.`
-            : "No entries omitted by depth or node limit."}
-        </p>
+        {omittedText(impact) && <p>{omittedText(impact)}</p>}
       </div>
     </Disclosure>
   );
@@ -40,10 +47,12 @@ function Facts({
   const proposal = entry.proposal;
   return (
     <div className="pp-facts">
-      <span className="pp-chip">
-        <Files size={14} />
-        {proposal.files.length} files
-      </span>
+      {proposal.files.length > 0 && (
+        <span className="pp-chip">
+          <Files size={14} />
+          {proposal.files.length} files
+        </span>
+      )}
       <button
         className="pp-chip pp-diff-toggle"
         onClick={onToggle}
@@ -51,17 +60,22 @@ function Facts({
         aria-controls="phone-recorded-diff"
       >
         <span>
-          <span className="pp-positive">+{proposal.lines_added}</span>{" "}
-          <span className="pp-negative">−{proposal.lines_removed}</span> lines
+          {proposal.lines_added > 0 && <span className="pp-positive">+{proposal.lines_added}</span>}{" "}
+          {proposal.lines_removed > 0 && (
+            <span className="pp-negative">−{proposal.lines_removed}</span>
+          )}{" "}
+          lines
         </span>
         <span>
           {open ? "Hide diff" : "Show diff"} <ChevronDown size={14} />
         </span>
       </button>
-      <span className="pp-chip pp-positive">
-        <Check size={14} />
-        {proposal.tests.passed} passed
-      </span>
+      {proposal.tests.passed > 0 && (
+        <span className="pp-chip pp-positive">
+          <Check size={14} />
+          {proposal.tests.passed} passed
+        </span>
+      )}
     </div>
   );
 }
@@ -102,10 +116,12 @@ export function PhoneDecision({ practice, attempt, ...actions }: PanelProps) {
           <p>{entry.proposal.summary}</p>
         </section>
         {open ? <PhoneDiff {...{ practice, entry }} /> : <div id="phone-recorded-diff" hidden />}
-        <Disclosure label="Recorded task">
-          <p className="pp-task">{entry.proposal.task}</p>
-        </Disclosure>
-        {!!entry.proposal.impact.entries.length && <Impact entry={entry} />}
+        <div className="pp-decision-rows">
+          <Disclosure label="Recorded task" variant="decision" preview={entry.proposal.task}>
+            <p className="pp-task">{entry.proposal.task}</p>
+          </Disclosure>
+          {!!entry.proposal.impact.entries.length && <Impact entry={entry} />}
+        </div>
       </main>
       <DecisionDock practice={practice} attempt={attempt} {...actions} />
     </>

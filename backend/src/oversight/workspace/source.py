@@ -24,6 +24,7 @@ class SourceProfile:
     provenance: str
     pytest_targets: tuple[str, ...]
     extra_requirements: tuple[str, ...] = ()
+    pytest_options: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         # Boltons has no runtime dependencies; its dev group's pytest>=8 is satisfied by
@@ -41,7 +42,8 @@ BOLTONS = SourceProfile(
     commit="d31d821d56c8f7756af9c30a864077f2e5855321",
     checkout_dir="sources/boltons-d31d821",
     provenance="boltons@d31d821",
-    pytest_targets=("--doctest-modules", "boltons", "tests"),
+    pytest_targets=("boltons", "tests"),
+    pytest_options=("--doctest-modules",),
 )
 
 

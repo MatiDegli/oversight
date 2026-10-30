@@ -16,13 +16,37 @@ bound=$1
 shift
 grace=${BOUND_GRACE_S:-30}
 
+monotonic_centiseconds() {
+  local uptime unused
+  # The override is for tests; Linux exposes monotonic uptime with two decimal places.
+  if { read -r uptime unused < "${BOUND_UPTIME_PATH:-/proc/uptime}"; } 2>/dev/null &&
+      [[ $uptime =~ ^([0-9]+)\.([0-9]{2})$ ]]; then
+    echo "$((10#${BASH_REMATCH[1]} * 100 + 10#${BASH_REMATCH[2]}))"
+  else
+    return 1
+  fi
+}
+
+started=$(monotonic_centiseconds) || started=
 status=0
 timeout --kill-after="$grace" "$bound" "$@" || status=$?
+ended=$(monotonic_centiseconds) || ended=
+
+reached_bound=false
+if [[ -n $started && -n $ended ]]; then
+  # /proc/uptime truncates to centiseconds: the difference can undercount by less than 0.01 s.
+  # Allow one centisecond for that resolution, independently of wall-clock steps and SECONDS.
+  if (( ended - started + 1 >= bound * 100 )); then
+    reached_bound=true
+  fi
+elif [ "$SECONDS" -ge "$bound" ]; then
+  reached_bound=true
+fi
 
 # timeout answers 124 when it ended the command, and 137 when it had to kill it. Both statuses can
 # also come from the command itself (or from the kernel ending it for memory), so the line needs
-# the whole bound to have passed as well. SECONDS counts from the start of this script.
-if { [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; } && [ "$SECONDS" -ge "$bound" ]; then
+# the bound to have passed as well. If uptime is unavailable, SECONDS retains the original rule.
+if { [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; } && "$reached_bound"; then
   echo "TIME BOUND: the run passed its outer bound of ${bound} s and was ended (exit ${status}); RUN_TIMEOUT sets it" >&2
 fi
 exit "$status"

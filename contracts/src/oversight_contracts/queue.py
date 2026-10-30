@@ -35,7 +35,7 @@ class QueueSpec(ContractModel):
     agent: QueuedAgentTask | None = None
     """One standalone coding task."""
     plan_id: PlanId | None = None
-    """One proposed two-agent plan."""
+    """One proposed plan with one to six subtasks."""
     plan_revision: PositiveInt | None = None
     """The exact queued plan revision."""
 
@@ -49,7 +49,10 @@ class QueueSpec(ContractModel):
 
 
 class QueuedTask(QueueSpec):
-    """One server-owned versioned queue item."""
+    """One server-owned versioned queue item. A plan reserves slots only for subtasks that
+    can start now. A dependent subtask that becomes ready takes the next released slot before
+    later queue items, keeping its plan's place in the queue.
+    """
 
     queued_task_id: QueuedTaskId
     """The server-assigned queue identifier."""
@@ -58,7 +61,7 @@ class QueuedTask(QueueSpec):
     state: Literal["queued", "starting", "running", "completed", "cancelled", "blocked", "failed"]
     """The queue-item lifecycle state."""
     agent_ids: list[AgentId]
-    """Agents assigned during dispatch."""
+    """Agents assigned so far; a plan's list only grows as subtasks start."""
     detail: str | None
     """The dispatch or failure explanation."""
     started_by: AgentId | None = None
@@ -70,10 +73,12 @@ class QueuedTask(QueueSpec):
             raise ValueError("only a person may queue a plan")
         if len(set(self.agent_ids)) != len(self.agent_ids):
             raise ValueError("assigned agents must be distinct")
-        if self.state in {"starting", "running", "completed"} and len(self.agent_ids) != (
-            2 if self.plan_id else 1
-        ):
-            raise ValueError("dispatched work requires all assigned agents")
+        if self.state in {"starting", "running", "completed"}:
+            if self.plan_id is not None:
+                if not 1 <= len(self.agent_ids) <= 6:
+                    raise ValueError("a dispatched plan requires one to six assigned agents")
+            elif len(self.agent_ids) != 1:
+                raise ValueError("a dispatched standalone task requires exactly one agent")
         if self.state in {"queued", "cancelled", "blocked"} and self.agent_ids:
             raise ValueError("undispatched work has no agents")
         if self.state in {"blocked", "failed"} and not (self.detail and self.detail.strip()):

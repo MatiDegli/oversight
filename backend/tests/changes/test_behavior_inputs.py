@@ -5,6 +5,7 @@ import ast
 import pytest
 
 from oversight.changes import behavior_inputs
+from oversight.changes._review_identity import bound_inputs
 
 
 def generate(before: str, after: str | None = None, tests: str = ""):
@@ -41,6 +42,46 @@ def test_cap_and_one_parameter_at_a_time():
     assert all(
         kwargs["x"] == 500 or kwargs["y"] == 600
         for args, kwargs in (ast.literal_eval(item.before) for item in found.inputs)
+    )
+
+
+@pytest.mark.parametrize("tests", ["", "from pkg.mod import f\nf(500, 600, 700)\n"])
+def test_integer_boundaries_precede_constant_neighborhoods_with_shared_cap(tests):
+    body = "LIMITS = (10, 20, 30, 40, 50, 60)\ndef f(x: int, y: int, z: int): return x + y + z\n"
+    found = generate(body, tests=tests)
+    assert 0 < len(found.inputs) <= 48
+    arguments = [ast.literal_eval(item.before)[1] for item in found.inputs]
+    for param in ("x", "y", "z"):
+        assert {0, -1} <= {kwargs[param] for kwargs in arguments}
+    if tests:
+        assert arguments[0] == {"x": 500, "y": 600, "z": 700}
+
+
+def test_negative_quantity_is_generated_for_price_rejection():
+    before = (
+        "BULK_TIERS = ((50, 20), (10, 10))\n"
+        "TAX_PERCENT = 8\nFLAT_SHIPPING = 599\nFREE_SHIPPING_FROM = 10_000\n"
+        "def f(unit_price: int, quantity: int, extra_percent: int = 0) -> int:\n"
+        "    base = unit_price * quantity\n"
+        "    percent = extra_percent\n"
+        "    for minimum, tier_percent in BULK_TIERS:\n"
+        "        if quantity >= minimum:\n"
+        "            percent += tier_percent\n"
+        "            break\n"
+        "    return base - base * percent // 100\n"
+    )
+    after = before.replace(
+        "    base = unit_price * quantity\n",
+        "    if quantity < 0:\n"
+        "        raise ValueError('negative quantity')\n"
+        "    base = unit_price * quantity\n",
+    )
+    found = generate(before, after)
+    assert 0 < len(found.inputs) <= 48
+    assert any(
+        ast.literal_eval(item.before)[1]["quantity"] == -1
+        and ast.literal_eval(item.after)[1]["quantity"] == -1
+        for item in found.inputs
     )
 
 
@@ -137,3 +178,93 @@ def test_module_integer_boundaries_from_both_versions_and_every_body():
     values = {ast.literal_eval(item.before)[1]["x"] for item in single.inputs}
     assert {59, 60, 61, 19, 20, 21, 9, 10, 11, -8, -7, -6, 29, 30, 31} <= values
     assert all(type(value) is int for value in values)
+
+
+@pytest.mark.parametrize("parameter", ["extra=2", "*, extra=2", "extra=EXTRA"])
+def test_added_optional_parameter_omitted_uses_shared_identity(parameter):
+    before = "def f(x: int): return x\n"
+    after = f"EXTRA = 2\ndef f(x: int, {parameter}): return x + extra\n"
+    found = generate(before, after, "from pkg.mod import f\nf(7)\nf(7, extra=3)\n")
+    assert found.reason is None
+    assert found.inputs[0].call == "f(x=7)"
+    assert found.inputs[0].input_identity == bound_inputs({"x": 7})
+    assert all("extra=" not in item.call for item in found.inputs)
+    assert found.skipped_binding > 0  # Explicit new arguments cannot bind on base.
+
+
+def test_added_optional_parameter_without_call_sites_can_be_omitted():
+    found = generate("def f(x: int): return x\n", "def f(x: int, extra=2): return x + extra\n")
+    assert found.reason is None
+    assert found.inputs
+    assert all(item.input_identity is not None for item in found.inputs)
+
+
+@pytest.mark.parametrize(
+    "before, after, expected",
+    [
+        ("x=1", "x=2", None),
+        ("x=1", "x=True", None),
+        ("x=1, removed=2", "x=1", None),
+        ("x=1", "x=1, extra=2", bound_inputs({"x": 1})),
+        ("x=1", "x=2, extra=2", None),
+    ],
+)
+def test_shared_defaults_and_removed_parameters_keep_strict_identity(before, after, expected):
+    found = generate(
+        f"def f({before}): return x\n",
+        f"def f({after}): return x\n",
+        "from pkg.mod import f\nf()\n",
+    )
+    assert found.inputs[0].call == "f()"
+    assert found.inputs[0].input_identity == expected
+
+
+@pytest.mark.parametrize("assignment", ["VALUE = {value}", "VALUE: int = {value}"])
+@pytest.mark.parametrize("after_value", ["7", "True", "8"])
+def test_constant_defaults_resolve_in_each_versions_own_module(assignment, after_value):
+    before = assignment.format(value="7") + "\ndef f(x=VALUE, /): return x\n"
+    after = assignment.format(value=after_value) + "\ndef f(x=VALUE, /): return x\n"
+    found = generate(before, after, "from pkg.mod import f\nf()\n")
+    assert found.reason is None
+    omitted = found.inputs[0]
+    assert omitted.call == "f()"
+    assert ast.literal_eval(omitted.before) == ((7,), {})
+    assert ast.literal_eval(omitted.after) == ((ast.literal_eval(after_value),), {})
+    assert omitted.input_identity == (bound_inputs({"x": 7}) if after_value == "7" else None)
+
+
+@pytest.mark.parametrize(
+    "binding",
+    [
+        "VALUE = 7\nVALUE = 7",
+        "VALUE = 7\nVALUE += 1",
+        "VALUE = 7\ndel VALUE",
+        "from other import VALUE",
+        "VALUE = 7\nimport other as VALUE",
+        "if flag: VALUE = 7",
+        "VALUE = 7\nif flag: VALUE = 8",
+        "VALUE = 7\nfor VALUE in values: pass",
+        "VALUE = 7\nwith context() as VALUE: pass",
+        "VALUE = 7\nfrom other import *",
+        "VALUE = 7\ndef reset():\n    global VALUE",
+        "VALUE = 7\ndef reset():\n    nonlocal VALUE",
+        "VALUE = 1 + 6",
+        "VALUE = other()",
+        "OTHER = 7\nVALUE = OTHER",
+        "VALUE = OTHER = 7",
+        "VALUE: int",
+    ],
+)
+def test_ambiguous_or_nonliteral_constant_defaults_stay_opaque(binding):
+    source = binding + "\ndef f(x=VALUE): return x\n"
+    found = generate(source, tests="from pkg.mod import f\nf()\nf(x=None)\n")
+    assert found.reason is None
+    assert [item.call for item in found.inputs] == ["f(x=None)"]
+    assert found.inputs[0].input_identity == bound_inputs({"x": None})
+
+
+@pytest.mark.parametrize("value", [repr("x" * 4097), repr(list(range(129)))])
+def test_constant_defaults_preserve_literal_limits(value):
+    found = generate(f"VALUE = {value}\ndef f(x=VALUE): return x\n")
+    assert found.inputs == ()
+    assert found.reason == "unsupported signature"

@@ -317,9 +317,7 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
 
   await test.step("the Ready for review pill appears, and nothing opens by itself", async () => {
     await expect(card.getByRole("status")).toHaveText("Ready for review");
-    await expect(page.getByRole("status", { name: "Review queue" })).toContainText(
-      "1 change ready for review",
-    );
+    await expect(page.getByRole("status", { name: "Review queue" })).toContainText("Decisions · 1");
     await expect(page.getByRole("complementary", { name: "Live diff panel" })).toHaveCount(0);
     await expect(page.getByRole("complementary", { name: "Review panel" })).toHaveCount(0);
     // The change waits as dashed pending nodes, in the agent's color: the node it changed and the

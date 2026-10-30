@@ -1,6 +1,6 @@
 """Pure profile evaluation. Callers collect evidence; this module never executes a merge."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from math import isfinite
 from typing import Literal
@@ -8,8 +8,14 @@ from typing import Literal
 from pydantic import JsonValue, ValidationError
 
 from oversight.changes._facts import AddedTestsInventory, IntegrityStatus
+from oversight.changes._protected_paths import (
+    ChangedFileInventory,
+    ProtectedPathSnapshot,
+    check_protected_paths,
+)
 from oversight_contracts.common import MergeMode, RuleId
 from oversight_contracts.events import ModelProfile, SuiteResult
+from oversight_contracts.grants import GrantUse, rules_satisfied
 from oversight_contracts.graph import ImpactCone
 from oversight_contracts.policy import (
     POLICY_RULES,
@@ -21,6 +27,11 @@ from oversight_contracts.policy import (
 from oversight_contracts.review import AddedTestProbe, CrossReview, IntegrityFact
 
 type Result = Literal["pass", "fail", "unknown"]
+_REVIEW_VERDICTS: dict[Literal["clean", "changes_requested", "unknown"], bool] = {
+    "clean": True,
+    "changes_requested": True,
+    "unknown": False,
+}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -56,6 +67,7 @@ class PolicyInputs:
     cone: ImpactCone | None = None
     parse_errors: int | None = None
     unresolved_removed: int | None = None
+    possible_callers: int | None = None
     files: tuple[str, ...] | None = None
     lines_added: int | None = None
     lines_removed: int | None = None
@@ -68,6 +80,8 @@ class PolicyInputs:
     integrity_status: IntegrityStatus | None = None
     added_tests: tuple[AddedTestProbe, ...] | None = None
     added_tests_inventory: AddedTestsInventory | None = None
+    protected_paths: ProtectedPathSnapshot | None = field(default_factory=ProtectedPathSnapshot)
+    changed_files: ChangedFileInventory | None = None
     evidence: Mapping[RuleId, tuple[EvidenceRef, ...]] = field(
         default_factory=dict[RuleId, tuple[EvidenceRef, ...]]
     )
@@ -142,6 +156,8 @@ def _small_cone(inputs: PolicyInputs) -> RuleAssessment:
             and inputs.parse_errors == 0
             and inputs.unresolved_removed == 0
         )
+        if passes and inputs.possible_callers != 0:
+            passes = None
     return _record(
         inputs,
         "small_cone",
@@ -256,7 +272,7 @@ def _cross_review(inputs: PolicyInputs) -> RuleAssessment:
         and author is not None
         and review.complete
         and not review.problems
-        and review.verdict != "unknown"
+        and _REVIEW_VERDICTS.get(review.verdict, False)
         and review.author_model == author.model
         and review.reviewer_model != author.model
         and (review.change_id, review.revision, review.base_commit, review.head_commit)
@@ -320,6 +336,15 @@ def _added_tests_fail_before(inputs: PolicyInputs) -> RuleAssessment:
     return _check(inputs, "added_tests_fail_before", checks)
 
 
+def _protected_paths(inputs: PolicyInputs) -> RuleAssessment:
+    captured = check_protected_paths(inputs.protected_paths, inputs.changed_files)
+    checks = None
+    if captured is not None:
+        checks = CheckInputs(violations=len({hit.path for hit in captured.matches}), complete=True)
+        inputs = replace(inputs, evidence={**inputs.evidence, "protected_paths": captured.evidence})
+    return _check(inputs, "protected_paths", checks)
+
+
 def assess(inputs: PolicyInputs, profile: str = "safe-merge-v1") -> ChangeAssessment:
     """Evaluate exactly the named profile; unknown names have no fallback authority."""
     if profile not in POLICY_RULES:
@@ -333,6 +358,7 @@ def assess(inputs: PolicyInputs, profile: str = "safe-merge-v1") -> ChangeAssess
         "cross_review": _cross_review,
         "test_integrity": _test_integrity,
         "added_tests_fail_before": _added_tests_fail_before,
+        "protected_paths": _protected_paths,
     }
     return ChangeAssessment(
         change_id=inputs.change_id,
@@ -352,12 +378,12 @@ def assess(inputs: PolicyInputs, profile: str = "safe-merge-v1") -> ChangeAssess
     )
 
 
-def merges_alone(assessment: ChangeAssessment) -> bool:
+def merges_alone(assessment: ChangeAssessment, grants: Sequence[GrantUse] = ()) -> bool:
     """Require the exact eight-rule probes profile, mode and unanimous passing evidence."""
     return (
         assessment.policy_version == "safe-merge-probes-v1"
         and assessment.mode == "merge_when_safe"
         and len(assessment.rules) == 8
         and {rule.rule for rule in assessment.rules} == set(POLICY_RULES["safe-merge-probes-v1"])
-        and all(rule.result == "pass" for rule in assessment.rules)
+        and rules_satisfied(assessment, grants)
     )

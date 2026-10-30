@@ -20,8 +20,11 @@ export interface NodeBounds {
 export interface GraphProbe {
   /** Centers of the nodes the selector matches, in pixels from the graph element's top left. */
   nodeCenters(selector?: string): { id: string; x: number; y: number }[];
-  /** Model-space bounds, including labels and distance badges, for framing assertions. */
-  nodeBounds(selector?: string): NodeBounds[];
+  /**
+   * Model-space bounds for framing assertions: with labels and distance badges unless `labels` is
+   * false, which gives the drawn box alone.
+   */
+  nodeBounds(selector?: string, labels?: boolean): NodeBounds[];
   /** Layout positions of the nodes with no children, which no camera move may change. A box's own position follows its children. */
   positions(): Record<string, { x: number; y: number }>;
   representative(id: string): string;
@@ -67,11 +70,11 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
   host.oversightGraph = {
     nodeCenters: (selector = "node") =>
       cy.nodes(selector).map((node) => ({ id: node.id(), ...node.renderedPosition() })),
-    nodeBounds: (selector = "node") =>
+    nodeBounds: (selector = "node", labels = true) =>
       cy.nodes(selector).map((node) => ({
         id: node.id(),
         distance: node.data("distance") as number | undefined,
-        ...node.boundingBox({ includeLabels: true, includeOverlays: false }),
+        ...node.boundingBox({ includeLabels: labels, includeOverlays: false }),
       })),
     positions: () =>
       Object.fromEntries(cy.nodes(":childless").map((node) => [node.id(), { ...node.position() }])),

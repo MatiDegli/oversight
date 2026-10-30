@@ -1,0 +1,21 @@
+--- a/boltons/funcutils.py
++++ b/boltons/funcutils.py
+@@ -51,6 +51,18 @@
+     NO_DEFAULT = make_sentinel(var_name='NO_DEFAULT')
+ except ImportError:
+     NO_DEFAULT = object()
++
++
++def kwargs_decorator(func):
++    """Allow a decorator to be used bare or configured with keyword options."""
++    @functools.wraps(func)
++    def decorate(*args, **kwargs):
++        if len(args) > 1 or (args and not callable(args[0])):
++            raise TypeError('expected at most one callable positional argument')
++        if args:
++            return func(args[0], **kwargs)
++        return lambda obj: func(obj, **kwargs)
++    return decorate
+ 
+ 
+ def inspect_formatargspec(

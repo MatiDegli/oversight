@@ -10,7 +10,7 @@
   color-scheme: dark;
   --top-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.045);
   --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-  --ground: #000000;
+  --ground: #070707;
   --shell: #09090a;
   --panel: #0d0d0f;
   --field: #0b0b0b;
@@ -72,7 +72,7 @@
   --failed-text: #ff7b7b;
   --matte-top: #151515;
   --matte-bottom: #0f0f0f;
-  --lamp-off: #050505;
+  --lamp-off: #070707;
   --background: var(--ground);
   --added: var(--passed);
   --removed: var(--failed);
@@ -83,6 +83,7 @@
   --added-tint: color-mix(in srgb, var(--passed) 11%, transparent);
   --removed-tint: color-mix(in srgb, var(--failed) 12%, transparent);
   --guide-dot: color-mix(in srgb, var(--text) 10%, transparent);
+  --contour-line: color-mix(in srgb, var(--text) 9%, transparent);
   --agent-a-node: rgba(30, 12, 4, 0.95);
   --agent-a-node-new: rgba(20, 10, 4, 0.95);
   --agent-b-node: rgba(6, 12, 30, 0.95);
@@ -94,6 +95,7 @@
   --ground: #f4f3ef;
   --shell: #e9e8e3;
   --panel: #eeede8;
+  --module-opacity: 0.5;
   --field: #fbfaf7;
   --page: #f8f7f3;
   --card: #fcfbf8;
@@ -138,6 +140,7 @@
   --matte-bottom: #ecebe6;
   --lamp-off: #eae9e5;
   --guide-dot: rgba(28, 28, 26, 0.1);
+  --contour-line: rgba(28, 28, 26, 0.08);
   --agent-c: #4f3189;
   --agent-c-text: #4f3189;
   --agent-c-tint: rgba(79, 49, 137, 0.12);
@@ -256,6 +259,7 @@
   --frame-title-inset: 23px;
   --frame-header-center: 29px;
   --frame-header-height: 70px;
+  --header-mask-pad: 6px;
   --frame-pad-top: 54px;
   --frame-pad-left: 27px;
   --frame-pad-right: 17px;
@@ -279,7 +283,7 @@
   --pending-dash-gap: 4px;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
-  --module-opacity: 0.9;
+  --module-opacity: 0.62;
   --node-opacity: 0.94;
   --dim-node: 0.16;
   --dim-module: 0.6;
@@ -289,6 +293,11 @@
   --dot-lamp-coverage: 0.72;
   --dot-level-count: 4;
   --dot-dither-size: 8;
+  --lamp-cut-low: 0.08;
+  --lamp-cut-high: 0.22;
+  --lamp-ramp-deep: 0.45;
+  --lamp-ramp-mid: 0.7;
+  --lamp-ramp-hot: 0.2;
   --guide-dot-size: 2px;
   --guide-dot-spacing: 28px;
   --light-near-weight: 0.72;
@@ -314,6 +323,32 @@
   --transition-duration: 240ms;
   --transition-easing: cubic-bezier(0.2, 0.7, 0.2, 1);
   --status-lamp-duration: 1600ms;
+  --contour-step: 0.1;
+  --contour-hill-base: 0.52;
+  --contour-hill-range: 0.2;
+  --contour-hill-spread: 1;
+  --contour-mound-count: 10;
+  --contour-drift-speed: 1;
+  --contour-cell-size: 16px;
+  --contour-levels: 8;
+  --contour-fade: 0.65;
+  --contour-line-width: 1px;
+  --field-slow-interval: 500ms;
+  --waiting-light-weight: 0.5;
+  --afterlight-duration: 90000ms;
+  --afterlight-curve: 1.6;
+  --merge-travel-delay: 250ms;
+  --merge-travel-duration: 1450ms;
+  --merge-trail-bright: 28px;
+  --merge-trail-faint: 72px;
+  --merge-trail-fade: 350ms;
+  --merge-pulse-width: 1.6px;
+  --pulse-light-count: 6;
+  --pulse-light-spacing: 20px;
+  --pulse-light-intensity: 0.95;
+  --pulse-light-curve: 1.4;
+  --pulse-light-radius: 19px;
+  --pulse-light-limit: 12;
 }
 
 /* Register only the design radii; remove Tailwind's default radii. */
@@ -404,6 +439,7 @@
   --color-added-tint: var(--added-tint);
   --color-removed-tint: var(--removed-tint);
   --color-guide-dot: var(--guide-dot);
+  --color-contour-line: var(--contour-line);
   --color-agent-a-node: var(--agent-a-node);
   --color-agent-a-node-new: var(--agent-a-node-new);
   --color-agent-b-node: var(--agent-b-node);

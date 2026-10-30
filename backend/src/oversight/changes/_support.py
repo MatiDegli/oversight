@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from oversight.agents import Publish
 from oversight.changes._evidence import WriteEvidence
+from oversight.changes._grants import GrantRegistry
 from oversight.changes._mode import ModeController
 from oversight.changes._review_port import ReviewPort
 from oversight.changes._state import ChangeRecord, ChangeState, Source
@@ -76,6 +77,7 @@ class ChangeContext:
     behavior_diff: bool = False
     measured_cone: bool = False
     cards: "ReviewCards | None" = None
+    grants: GrantRegistry = field(default_factory=GrantRegistry)
     assessment: "RulesScheduler" = field(init=False)
 
     def date(self) -> str:

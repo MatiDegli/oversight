@@ -16,9 +16,22 @@ export interface BoxSource {
   zoom?(): number;
   /** The actual rendered edge in travel order, or null when there is no edge. */
   route?(from: string, to: string): XY[] | null;
+  /**
+   * The routes of the edges that end at a node, each in travel order from its far end to the node.
+   * Edges that cannot be routed are left out; a node with no edge has none.
+   */
+  edgesAt?(id: string): XY[][];
   detach(): void;
   /** The rendered boxes of the nodes with these ids; an id with no node on the graph is left out. */
   boxes(ids: readonly string[]): Map<string, Box>;
+  /** The whole rendered frames of these nodes, an open container's header and body included. */
+  frames?(ids: readonly string[]): Map<string, Box>;
+  /**
+   * The rendered text bands the light must not sit under: the header of every open module or class,
+   * a little wider than its text, and the exact box of a folded one, which is one header. The rest
+   * of an open frame is translucent and lets the lamps through.
+   */
+  headers?(): Box[];
   /** Calls `listener` after Cytoscape renders, resizes or is attached; returns its unsubscribe. */
   subscribe(listener: () => void): () => void;
 }
@@ -67,6 +80,68 @@ export function createBoxSource(): BoxSource {
       const bends = edge.renderedSegmentPoints();
       const points = [start, ...(Array.isArray(bends) ? bends : []), end];
       return edge.source().id() === a ? points : points.reverse();
+    },
+    edgesAt(id) {
+      if (!graph) return [];
+      const at = visibleId(graph, id);
+      const node = graph.getElementById(at);
+      if (node.empty() || !node.isNode()) return [];
+      return node
+        .connectedEdges()
+        .toArray()
+        .filter((edge) => !edge.hasClass("unroutable"))
+        .flatMap((edge) => {
+          const start = edge.renderedSourceEndpoint();
+          const end = edge.renderedTargetEndpoint();
+          if (!validPoint(start) || !validPoint(end)) return [];
+          const bends = edge.renderedSegmentPoints();
+          const points = [start, ...(Array.isArray(bends) ? bends : []), end];
+          return [edge.target().id() === at ? points : points.reverse()];
+        });
+    },
+    frames(ids) {
+      const found = new Map<string, Box>();
+      if (!graph) return found;
+      for (const id of ids) {
+        const node = graph.getElementById(visibleId(graph, id));
+        if (node.empty() || !node.isNode()) continue;
+        const { x1, y1, x2, y2 } = node.renderedBoundingBox({
+          includeLabels: false,
+          includeOverlays: false,
+          includeEdges: false,
+        });
+        found.set(id, { x1, y1, x2, y2 });
+      }
+      return found;
+    },
+    headers() {
+      if (!graph) return [];
+      const theme = getActiveTheme();
+      // The title band is the padding above a frame's first row, as the sketch's headers are.
+      const bands = {
+        module: Number.parseFloat(theme["frame-pad-top"]) * graph.zoom(),
+        class: Number.parseFloat(theme["class-pad-top"]) * graph.zoom(),
+      };
+      const pad = Number.parseFloat(theme["header-mask-pad"]);
+      return graph
+        .nodes(".module, .class")
+        .filter((node) => node.visible())
+        .toArray()
+        .map((node) => {
+          const { x1, y1, x2, y2 } = node.renderedBoundingBox({
+            includeLabels: false,
+            includeOverlays: false,
+            includeEdges: false,
+          });
+          // An open frame's header band, padded; a folded card is its own box, as a row is.
+          if (!(node.isNode() && node.isParent())) return { x1, y1, x2, y2 };
+          return {
+            x1: x1 - pad,
+            y1: y1 - pad,
+            x2: x2 + pad,
+            y2: Math.min(y2, y1 + bands[node.hasClass("class") ? "class" : "module"]) + pad,
+          };
+        });
     },
     boxes(ids) {
       const found = new Map<string, Box>();

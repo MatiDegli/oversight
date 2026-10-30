@@ -18,6 +18,12 @@ function context(failure: string) {
     COMPILE_STATUS: 3,
     LINK_STATUS: 4,
     NO_ERROR: 0,
+    TEXTURE_2D: 3553,
+    TEXTURE0: 33984,
+    TEXTURE1: 33985,
+    RG: 33319,
+    RG16F: 33324,
+    FLOAT: 5126,
     createShader: vi.fn(() => {
       if (failure === `shader-null-${String(shaders.length)}`) return null;
       const handle = {};
@@ -280,4 +286,82 @@ it("uploads masked cells in the same draw as the LEDs and guides, without additi
   expect(gl.drawArrays).toHaveBeenCalledOnce();
   expect(gl.clear).toHaveBeenCalledOnce();
   renderer?.dispose();
+});
+
+describe("contours", () => {
+  const heights = { cols: 4, rows: 3, cell: 16, data: new Float32Array(4 * 3 * 2) };
+  const contours = {
+    heights,
+    look: {
+      color: [237, 237, 234] as [number, number, number],
+      alpha: 0.09,
+      step: 0.15,
+      levels: 8,
+      fade: 0.45,
+      top: 0.72,
+      width: 1,
+    },
+  };
+  const grid = () => ({ cols: 10, rows: 10, data: new Uint8ClampedArray(400) });
+
+  it("keeps one texture and turns contours off for a field drawn without them", () => {
+    const { canvas, gl, textures } = context("");
+    const renderer = createLampRenderer(canvas);
+    renderer?.draw(grid(), look);
+    expect(textures).toHaveLength(1);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.anything(), 0);
+    expect(gl.uniform4f).not.toHaveBeenCalledWith(expect.anything(), 0.15, 8, 0.45, 0.72);
+    renderer?.dispose();
+  });
+
+  it("makes the ground texture with the first contours, then only updates it", () => {
+    const { canvas, gl, textures, deleted } = context("");
+    const renderer = createLampRenderer(canvas);
+    renderer?.draw(grid(), look, [], contours);
+    expect(textures).toHaveLength(2);
+    // The lamp texture, then the heights: two floats per node.
+    expect(gl.texImage2D).toHaveBeenCalledTimes(2);
+    expect(gl.texImage2D).toHaveBeenLastCalledWith(
+      gl.TEXTURE_2D,
+      0,
+      gl.RG16F,
+      4,
+      3,
+      0,
+      gl.RG,
+      gl.FLOAT,
+      heights.data,
+    );
+    expect(gl.uniform4f).toHaveBeenCalledWith(expect.anything(), 0.15, 8, 0.45, 0.72);
+    gl.texImage2D.mockClear();
+    renderer?.draw(grid(), look, [], contours);
+    expect(gl.texImage2D).not.toHaveBeenCalled();
+    expect(gl.texSubImage2D).toHaveBeenLastCalledWith(
+      gl.TEXTURE_2D,
+      0,
+      0,
+      0,
+      4,
+      3,
+      gl.RG,
+      gl.FLOAT,
+      heights.data,
+    );
+    renderer?.dispose();
+    expect(new Set(deleted.textures)).toEqual(new Set(textures));
+    expect(deleted.textures).toHaveLength(2);
+  });
+
+  it("allocates the heights again when the grid changes size, and checks the allocation", () => {
+    const { canvas, gl } = context("");
+    const renderer = createLampRenderer(canvas);
+    renderer?.draw(grid(), look, [], contours);
+    gl.getError.mockClear();
+    renderer?.draw(grid(), look, [], contours);
+    expect(gl.getError).not.toHaveBeenCalled();
+    const bigger = { ...contours, heights: { ...heights, cols: 5, data: new Float32Array(30) } };
+    renderer?.draw(grid(), look, [], bigger);
+    expect(gl.getError).toHaveBeenCalledOnce();
+    renderer?.dispose();
+  });
 });

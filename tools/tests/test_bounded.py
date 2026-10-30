@@ -85,6 +85,58 @@ def test_the_statuses_of_timeout_from_the_command_itself_are_not_blamed_on_the_b
     assert bound_lines(done.stderr) == []
 
 
+@pytest.mark.parametrize("status", [124, 137])
+@pytest.mark.parametrize(
+    ("ended", "names_bound"), [("11.00", True), ("10.99", True), ("10.98", False)]
+)
+def test_monotonic_elapsed_time_decides_even_when_seconds_stays_zero(
+    tmp_path: Path, status: int, ended: str, names_bound: bool
+) -> None:
+    uptime = tmp_path / "uptime"
+    uptime.write_text("10.00 0.00\n")
+    bash_env = tmp_path / "bash-env"
+    # Removing the special variable freezes it; the old SECONDS rule never names the bound.
+    bash_env.write_text("unset SECONDS\nreadonly SECONDS=0\n")
+    done = run_bounded(
+        "1",
+        sys.executable,
+        "-c",
+        "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2]); "
+        "sys.exit(int(sys.argv[3]))",
+        str(uptime),
+        f"{ended} 0.00\n",
+        str(status),
+        env={"BOUND_UPTIME_PATH": str(uptime), "BASH_ENV": str(bash_env)},
+    )
+    assert done.returncode == status, done.stderr
+    expected = [f"{LINE.format(status=status)}; RUN_TIMEOUT sets it"] if names_bound else []
+    assert bound_lines(done.stderr) == expected, done.stderr
+
+
+@pytest.mark.parametrize("unavailable_at", ["start", "end", "both"])
+@pytest.mark.parametrize("seconds", [0, 1])
+def test_unavailable_monotonic_time_falls_back_to_seconds(
+    tmp_path: Path, unavailable_at: str, seconds: int
+) -> None:
+    uptime = tmp_path / "uptime"
+    if unavailable_at == "end":
+        uptime.write_text("10.00 0.00\n")
+    bash_env = tmp_path / "bash-env"
+    bash_env.write_text(f"unset SECONDS\nreadonly SECONDS={seconds}\n")
+    done = run_bounded(
+        "1",
+        sys.executable,
+        "-c",
+        "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2]); sys.exit(124)",
+        str(uptime),
+        "11.00 0.00\n" if unavailable_at == "start" else "invalid\n",
+        env={"BOUND_UPTIME_PATH": str(uptime), "BASH_ENV": str(bash_env)},
+    )
+    assert done.returncode == 124, done.stderr
+    expected = [f"{LINE.format(status=124)}; RUN_TIMEOUT sets it"] if seconds else []
+    assert bound_lines(done.stderr) == expected, done.stderr
+
+
 def test_the_bound_gives_a_grace_of_30_seconds_before_the_kill_and_passes_the_command_on(
     tmp_path: Path,
 ) -> None:

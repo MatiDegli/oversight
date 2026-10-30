@@ -50,7 +50,14 @@ from oversight.api import (
     create_router,
     install_error_handlers,
 )
-from oversight.changes import ChangeManager, ReviewCapture, ReviewCardLimits, Revision, WrongState
+from oversight.changes import (
+    ChangeManager,
+    ChangeNotFound,
+    ReviewCapture,
+    ReviewCardLimits,
+    Revision,
+    WrongState,
+)
 from oversight.events import (
     EventPayload,
     EventStore,
@@ -106,6 +113,7 @@ from oversight_contracts.events import (
     SlotInfo,
     UsageTick,
 )
+from oversight_contracts.graph import GraphSnapshot
 
 _log = logging.getLogger(__name__)
 
@@ -236,6 +244,7 @@ class LiveRun:
             pytest_pin=pytest_pin(),
             demo_python=settings.demo_python,
             pytest_targets=self._source.pytest_targets if self._source else (),
+            pytest_options=self._source.pytest_options if self._source else (),
         )
         configure_suite(self.workspace, harness_pack=settings.harness_pack)
         self.run_id = new_run_id(settings.runtime_dir, datetime.now(UTC))
@@ -627,7 +636,7 @@ class LiveRun:
         if name not in offered:
             raise ApiError("invalid_request", f"this server runs agents on {', '.join(offered)}")
         if offered[name].provider == "fake":
-            raise ApiError("invalid_request", f"slot {slot} has no fake script")
+            raise ApiError("invalid_request", f"slot {slot} has no script for {name}")
         return offered[name]
 
     def _check_spending(self, slot: Slot, profile: ModelProfile) -> None:
@@ -863,14 +872,28 @@ class LiveRun:
         if self._manager.main_suspect:
             raise ApiError("wrong_state", MAIN_SUSPECT)
         self._manager.approve(
-            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+            change_id,
+            request.comment,
+            revision=request.revision,
+            head_commit=request.head_commit,
+            answers=request.answers,
+            grant=request.grant,
         )
+
+    async def revoke_grant(self, grant_id: str) -> None:
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        await self._manager.revoke_grant(grant_id)
 
     def reject(self, change_id: str, request: RejectChange) -> None:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
         self._manager.reject(
-            change_id, request.comment, revision=request.revision, head_commit=request.head_commit
+            change_id,
+            request.comment,
+            revision=request.revision,
+            head_commit=request.head_commit,
+            answers=request.answers,
         )
 
     def request_changes(self, change_id: str, request: RequestChanges) -> None:
@@ -886,6 +909,11 @@ class LiveRun:
         if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving
             raise ApiError("internal", "the run has not started")
         return await self._manager.read_file(agent_id, path)
+
+    def change_graph(self, change_id: str) -> GraphSnapshot:
+        if self._manager is None:
+            raise ChangeNotFound(change_id)
+        return self._manager.change_graph(change_id)
 
     async def get_tree(self, agent_id: str | None) -> TreeResponse:
         tree = self.workspace.main
@@ -975,6 +1003,7 @@ def _live_app(
             "live",
             live,
             missing_settings=missing_settings(settings, offered_profiles(settings)),
+            change_graph=live.change_graph,
         )
     )
     if settings.frontend_dist is not None:
@@ -1041,5 +1070,6 @@ def _replay_app(settings: Settings, replay: ReplayConfig) -> FastAPI:
                 await store.close()
 
     app = FastAPI(title="Oversight (replay)", lifespan=lifespan)
+    app.state.store = store
     app.include_router(create_router(store, "replay"))
     return app

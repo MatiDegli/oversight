@@ -13,17 +13,38 @@ The freeze is organized around three proofs. Judge each front by the proof it se
    merged by rules, questions asked and differences tests missed, plus cost per accepted change.
    Paid calls for this run have a US$25 Meta-budget cap, separate from the bench's US$20.
    End on the decisions inbox: this many agents for this many hours, and these were the only
-   decisions the person had to make.
+   decisions the person had to make. Each task gets hidden checks, frozen before the run without
+   seeing agent output. The same run reports two arms judged by them: each agent's first proposal
+   with passing tests, merged as it is (without Oversight), and what reached main (with
+   Oversight). Each arm reports correct changes on main, regressions that got through, questions
+   per accepted change, questions that were not needed, and cost and wall time per correct change.
 3. **Unrequested behavior among green patches.** From that same run, measure the share of patches
    with passing tests whose behavior diff reveals a difference the task did not request. Fix the
    reporting rule before measuring: if the share is low or the sample too small, tell the scale
    story without a percentage. Do not repeat the run to improve that result.
 
-Checkpoint: Sat Oct 31 at 23:00 ART. Items 1, 2, 4 and 9, the behavior-diff bench and proof 1
-must all be on main. If any is missing, cut work from item 12 down and tell the maintainer what
-was cut.
+Checkpoint: items 1, 2, 4 and 9, the behavior-diff bench and proof 1 must all be on main. The
+cut line is drawn as soon as they are, whatever the day. Sat Oct 31 at 23:00 ART is only the
+fallback deadline: if any is missing then, cut work from item 12 down and tell the maintainer
+what was cut.
 
 ## Decided queue
+
+### Hackathon priority (2026-10-30)
+
+The maintainer set this order on 2026-10-30, ahead of the queue below. It has no dates: take the
+next item by real progress.
+
+1. Evidence for an added optional parameter (bench tasks b02, b06, b08, b10, b12 and b18), inside
+   the bench evidence fix: the most common change must not end in Needs you.
+2. Item 10 with agent-hours, project active hours and parallelism. Proof 2's closing line ("this
+   many agents for this many hours") depends on it. (The maintainer confirmed proof 2 on
+   2026-10-30.)
+3. Reasons in words on the card instead of "probe unavailable"
+   (`backend/src/oversight/changes/_behavior_publish.py:166`), from fixed templates over the
+   evidence, never written by the model.
+4. "Waiting for model (retry n/5)" on the card, from the call's own data (five attempts,
+   `backend/src/oversight/agents/client.py:163`); a provider halt says so instead of "working".
 
 This is the working home for everything beyond level 2. The maintainer set this order on
 2026-10-28. When capacity opens, take the first unfinished item that can proceed; dates do not
@@ -60,6 +81,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 13 | Pinned examples and graph lenses | Queued — no pins or lens control on main `535e6f6` | Yes |
 | 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
 | 18 | Remaining packages 11–14 | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
+| — | [Standing grants](#standing-grants) | Plan approved 2026-10-29 in [standing-grants.md](plans/standing-grants.md); backend front next, ahead of item 9's decision-veto wiring | Contracts 1.7.0, approved 2026-10-29; the creation bundle moved to 1.8.0 — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route |
 
 ### Only if time remains
 
@@ -76,7 +98,40 @@ the task bench (10; eight-task base on main `9a1772f`, arms in progress on `tool
 ## Undecided candidates
 
 These retain useful ideas from the old inventory without approving a front or changing the freeze.
+None is queued: nothing is built until the maintainer orders level-3 work (2026-10-30).
 
+- Native sandbox, the first level-3 candidate (maintainer, 2026-10-30). "A sandbox" is on AGENTS.md's
+  out-of-scope list; lifting it needs the maintainer's decision. Goal: safety without slowing
+  agents. The sandbox bounds side effects, not what an agent does in its task; normal work runs
+  with no prompts.
+
+  1. On by default for agents; off only by the person's explicit choice. The person's own commands
+     are never sandboxed. Linux first, with bubblewrap or the unshare already in
+     `backend/src/oversight/workspace/isolation.py` (today network and PID only). On Windows and
+     macOS the card says "no sandbox on this system" and never implies one.
+  2. The worktree is the agent's world. Free, with no prompt: writing in its own worktree, reading
+     the repository, running tests, linters and builds, and installing from allowlisted registries
+     (PyPI, npm) or from shared read-only uv and pnpm caches. Blocked: writes outside its worktree,
+     other agents' worktrees included; credentials (SSH keys, .env, key files); any other network
+     egress; global installs.
+  3. One tier per role: writers as above; reviewers read-only; probes and test runs strictest, with
+     no network and writes only to a temporary directory; the person unsandboxed.
+  4. Fast exit: a blocked action returns a clear error to the agent ("network to X blocked"), and
+     the card shows "Needs you: asks for access to X". One click approves it, remembered per
+     repository, so the allowlist grows with use. The lead never grants an exit on its own.
+  5. Metric: exits requested per accepted change, beside questions per accepted change. A task type
+     that keeps hitting the boundary means the allowlist is wrong; the target is zero in normal
+     work.
+  6. Division of labor: Oversight's evidence guards what code reaches main; the sandbox guards what
+     code does while it runs.
+
+- Benchmarks view: a read-only view of the bench and proof results inside Oversight. Until it
+  exists, the README and the demo video carry the proofs.
+- Linux on demand: with the Tauri shell on Windows, git, Python and Node run natively, and only
+  what needs the Linux kernel (isolated test runs, the sandbox) goes to WSL, which starts on demand
+  and stops when idle.
+- Resume a halted agent in the same conversation and worktree, through the level-3 resume route
+  (reserved in the contract, 501 today, `backend/src/oversight/api/commands.py:62`).
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
 - No repeated automatic revision for an unchanged failure: before cross-review or rules follow-up
@@ -85,17 +140,38 @@ These retain useful ideas from the old inventory without approving a front or ch
   or it appears in that test's executed nodes when recorded. If nothing relevant changed, the card
   asks the person. This is deterministic, with no model call; if neither source can tell, ask
   instead of starting another round on a guess.
-- Behavior diff for methods, only if level 3 is reached. Until then, measure the third proof on
-  tasks that change functions only and state that limit in the write-up; current targets are
-  module-level functions (`backend/src/oversight/changes/_behavior.py:79`).
+- Behavior diff for methods was approved on 2026-10-30 as part of the bench evidence fix and is
+  no longer a candidate; see DECISIONS.md.
 - A dependency guard for package existence, license and vulnerability evidence.
+- Native workflow candidates from the maintainer (2026-10-29), none queued. The cut line, drawn
+  once the checkpoint list is on main, comes before any of them is considered.
+  - Resource admission: the person's cap on running agents stays the limit. Memory and spend can
+    only hold a start below that cap, never raise it, and a held start shows its reason, for
+    example "Waiting: memory at 88%, 2 test runs ahead". Thresholds are deterministic; no model
+    decides. An already-running agent waiting on a shared resource shows the reason in words on
+    its card, built from the scheduler's own data, for example "waiting for a test slot (2 queued)".
+    Use the same form as a model wait, for example "waiting for model (retry 3/5)".
+  - A start-box warning: when the person starts an agent by hand and its target lies inside a
+    running agent's impact cone, the start box says so. It only warns; it never blocks or
+    reassigns. Plan zones and the cone check are item 11, and live overlap is item 5; only this
+    warning is new.
+  - Time per stage for each change: agent work, test runs and waiting for the person's decision,
+    shown beside cost and rounds (item 10).
+  - A visible merge queue. Item 8 already tests a change on the combined result when main moved
+    since its base (`backend/src/oversight/changes/_merge.py:65`, `combined_tests_pass` at :120);
+    only the visible queue is new.
 - Export reviewed revisions/comments as decision pairs; no training during this event.
 - A person-approved plan before editing protected areas; item 8's deterministic veto is separate.
 - Person-drawn work zones that limit edits, with a scope-request tool, warn mode and zone growth by approval; item 11's server-computed zones and the reserved `within_zone` rule are separate.
 - A TypeScript graph adapter; another language/dependency needs a separate scope decision.
 - Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
-- Zoom levels (see README), a Tauri shell, a local model in slot B, and named editor cursors.
+- [Scale and depth](../DESIGN.md#scale-and-depth): define and sketch now; build decided with the
+  sketch, never before the Saturday checkpoint.
+- A Tauri shell, a local model in slot B, and named editor cursors.
+- [Repository memory](#repository-memory): what Oversight remembers about a repository that
+  search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
+  before the freeze.
 
 ## Next
 
@@ -114,6 +190,8 @@ These retain useful ideas from the old inventory without approving a front or ch
 - Mask older tool results on long runs; measure dollars and correctness before adoption.
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
+- After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
+  local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 
 ## No
 
@@ -133,6 +211,10 @@ These retain useful ideas from the old inventory without approving a front or ch
 - Hypothesis: its MPL-2.0 license is outside the dependency allowlist.
 - Trained verifiers: no training pipeline within this hackathon.
 - Tree search: branching does not fit the bounded workflow and budget.
+- A model training room: after the hackathon and outside Oversight's scope; declined for now.
+- Native fine-tuning: after the hackathon and outside Oversight's scope; declined for now.
+  It would depend on TRL, Unsloth or Axolotl (Apache-2.0) or torchtune (BSD-3-Clause),
+  and Muse Spark cannot be fine-tuned through the API.
 
 ## Item descriptions
 
@@ -202,7 +284,8 @@ coverage nor proof that all callers behave identically.
 
 Identify same-node edits on the node and both cards. If B has read something A is changing, say so
 on B's card and retain observed reads for the whole change. Edits inside another agent's cone
-become a fact at review. Never interrupt the person or move focus for overlap.
+become a fact at review. Never interrupt the person or move focus for overlap. Overlap warnings
+name the shared nodes and never block on their own: they warn, and the person decides.
 
 Reuse `pending-both` (`frontend/src/graph/styles.ts:302`), pending-node sets and live/proposal cones.
 Add pure selectors and change-lifetime read sets to the reducer; main retains only latest focus
@@ -316,6 +399,38 @@ an unavailable check to passing evidence.
 
 ### 10. Cost and rounds per accepted change
 
+**Agent-hours come first:** proof 2's closing line ("this many agents for this many hours") uses them. The
+intervals of one agent are unioned, distinct agents add up, and a lead that only waits for its agents adds
+nothing. Use observed intervals, never fixed time buckets: each agent's own working intervals come from its
+agent.status events, where starting, working and revising count and ready_for_review, halted, done, stopped and
+paused do not. A review is one bounded call that starts when the author's run ends after proposing, so its
+interval runs from that agent's ready_for_review status to change.reviewed and it counts as its own actor. Also report project active hours (the union
+of all intervals) and parallelism (agent-hours divided by project active hours). The lead has no producer yet
+and lead.status cannot tell waiting from working; until its contract can, lead hours are unavailable and its
+waits are never counted.
+
+**Costs are list-price equivalents, not a bill:** every cost names its dated price source. The source is
+Meta's official pricing page. The repository stores the price table extracted from it, with the page's URL and
+retrieval date, never a copy of the page; on 2026-10-30 it listed
+muse-spark-1.3-contributor at US$0.10 input, US$0.002 cached input and US$0.20 output per million tokens, and no
+price for Muse Spark Open, so Baseten work is unpriced. The view applies the stored price to each call's token
+counts. The budget brake keeps its own conservative ledger, which prices cached input as fresh, and the view
+never presents its figures as that ledger. A call whose cached count was not reported has a cost range; only
+its lower end enters the known subtotal.
+
+**Coverage:** missing usage, activity or price shows the known part as a lower bound and the total as
+unavailable, never a smaller total presented as complete. There are three levels: complete; missing metrics
+(unpriced work, or an actor with work but no interval); incomplete (an integrity failure). Null is unknown and
+zero is zero; zero usage costs zero even when unpriced. Unpriced rows sort last, and "—" means unknown only.
+A sum of period figures adds their known subtotals and is labeled a lower bound.
+
+**Grouping:** by team, agent, model and role, split by hour or day. A team is a lead and the agents it started
+(`started_by`); agents the person started form their own group. Periods follow local wall time, so a
+daylight-saving change gives a 23- or 25-hour day. Intervals are clipped at period edges; a cost falls in the
+period of its usage.tick and is never prorated. Group rows add up only when every group's activity is complete
+and their sum matches the global figure; the total always comes from the global figure. A comparison between
+periods uses exact values, never rounded display text, and shows a number only when both sides are complete.
+
 Count failed, stopped, rejected and review work too, divide all spend by accepted changes, and show
 role/model breakdowns, revision rounds and budget pace. Keep unsuccessful buckets visible. With
 no accepted changes the ratio is unavailable.
@@ -389,6 +504,11 @@ belongs in the proposal. The Cost per node lens was dropped: cost is measured pe
 so a node lens would present an allocation estimate as a measurement. The cost-per-node field in
 usage events was declined too. Do not treat a file-naming convention alone as confirmed-pin enforcement.
 
+The pin record is born with `kind` (only `example` for now) and a node anchor, so that a later text
+rule is one new kind rather than a second pin family; `ExamplePin` in contracts 1.5.0 stays as it
+is. A node anchor breaks on a rename: when a pin's anchor no longer exists, the pin shows as
+orphaned, in the Pinned lens and as an inbox entry, and never vanishes silently.
+
 ### 14. Node card explained by examples
 
 The node card first shows the test source where the function is called,
@@ -459,6 +579,72 @@ reserved and still 501 (`backend/src/oversight/api/commands.py:51`); playback al
 events. Reuse those interfaces/local controls without claiming messaging or seeking already works.
 Earlier-today history belongs to item 8; usage views belong to item 10.
 
+### Standing grants
+
+Added by the maintainer on 2026-10-29. Oversight remembers what the person authorized, so it does
+not ask again for the same thing. Rules pass or wait with evidence, Muse Spark Open's decision can
+only add a wait, and the person's grants can only remove a wait the person could accept. A grant
+is made only from the person's answer to an inbox entry, with a narrow scope that expires with the
+run; it waives possible callers not followed or a protected path, never tests, conflicts, test
+integrity, cross-review or a decision question. Grants are listed with Revoke, recorded on every
+change they merge, and counted apart from questions in proof 2. Plan, contract proposal and order:
+[standing-grants.md](plans/standing-grants.md). Proposed pitch line, for PRODUCT.md and the video
+once approved: "Rules check. The open model can only stop. Only you can let go, and Oversight
+remembers what you let go."
+
+### Repository memory
+
+A candidate from the maintainer, 2026-10-29. It is not queued, and nothing is built before the
+freeze.
+
+An agent finds with search what is written in code. It cannot find what is not written down, such
+as the maintainer's decisions, invariants and the reasons behind them, or what it does not know to
+look for. Search also enforces nothing and does not notice when a rule went stale. This candidate
+covers only that gap. It never stores what search or the graph already give, such as where
+something is defined or who calls it.
+
+Each kind of knowledge goes to the mechanism that fits it:
+
+- Checkable behavior: an executable pin, item 13's generated test; breaking it fails the rules.
+- A rule or invariant with a place in the code: a text pin anchored to a node, function or module.
+- A global decision with no anchor: the repository's own AGENTS.md, not a format of ours, so any
+  tool that opens the repository reads it.
+- A procedure: the repository's own skills, as they exist; nothing to build.
+- Authorizations: [standing grants](#standing-grants).
+- Facts an agent discovered by running something, such as a test that needs `TZ=UTC`: later, with
+  the command output as evidence, and not in a first version.
+
+Text pins load deterministically, with no model choosing: the pins in the task's zone; the pins in
+its cone, here including possible calls, because for context a false positive costs only tokens;
+and an index that is always present, one line per pin, capped at about 30 lines, holding only what
+search cannot derive.
+
+Muse Spark Open can still only stop or flag. It checks whether a change contradicts a text pin in
+its zone or cone; if so, the change waits, quoting the pin. When an anchored node changes, it says
+whether the pin still applies: unsure becomes an inbox entry for the person, and it never deletes a
+pin. It rejects proposed entries that duplicate or contradict one of the maintainer's decisions. It
+never accepts alone and never chooses what is loaded.
+
+Only the person creates or confirms text pins and decisions. An agent may propose one, and it
+counts once the person confirms it. Text an agent read in the repository never becomes a pin on its
+own. Pins live in Oversight's state with provenance (who confirmed it, from which task) and show in
+the graph through item 13's Pinned lens. When the person gives the same answer three times,
+Oversight offers to save it as a pin; the offer is deterministic, with no model.
+
+Before committing to build text pins, after the freeze and only if budget remains after proof 2:
+about 10 hand-written rules for Boltons and their index go into the task text through saved flows,
+with no new code. The same 5 tasks run twice, without and with them, measured by what Oversight
+already records: steps to the first edit, search and read calls, cost, tests, and changes that
+contradict a rule. Success is fixed before measuring: fewer rule contradictions at equal or lower
+cost. If the rules only save a few steps, text pins are not built.
+
+Contract check, 2026-10-29: `ExamplePin` (contracts 1.5.0) is a confirmation stamp inside a task
+example, which requires inputs and an expected result, so a text rule cannot be one without faking
+those fields. Item 13's pin record carries the kind and anchor instead (item 13 above). Since
+2026-10-29, adding a value to an existing enum is a minor change under `docs/proposal.md` section
+4.9 when every existing payload still validates and every consumer of the enum, TypeScript and
+Python, is exhaustive, so a later text-rule kind can ship in a minor version.
+
 ### Shipped editor language highlighting
 
 Non-Python highlighting shipped on main in `e1e5599` and `b238a6c`: YAML, Markdown, JSON, TOML,
@@ -482,7 +668,8 @@ The maintainer chooses the video script Mon Nov 2: start with a real clean-looki
 tests, ask for a decision, reveal an unrequested result and measured cone, then scale with real-run
 counts. Keep editor/file view/editable side out of the video. Replace the level 2 fallback only
 after three clean one-command runs without manual fixes. Robustness/takes freeze Tue Nov 3 at
-20:00 ART; submission target Wed Nov 4 at 20:00 ART.
+20:00 ART; submission target Wed Nov 4 at 20:00 ART. The pitch and the README state what is already
+isolated today, test runs in their own network and PID namespaces, and never claim a sandbox.
 
 **Graph polish (package 8).** Continue readability/performance within DESIGN.md's tokens, saved
 layout and single graph. Dot-field and palette exist; `535e6f6` includes Ctrl K navigation. No new

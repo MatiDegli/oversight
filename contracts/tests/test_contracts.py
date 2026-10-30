@@ -233,6 +233,9 @@ def test_the_event_types_include_the_approved_level3_reservations() -> None:
         "revert.resolved",
         "queue.updated",
         "lead.status",
+        "grant.created",
+        "grant.revoked",
+        "model.attempt_failed",
     }
 
 
@@ -262,6 +265,7 @@ def test_every_event_round_trips_with_every_key_present_in_order(event_type: str
             "assessment": None,
             "answers": None,
         },
+        "agent.step": {"error_kind": None},
         "usage.tick": {"role": None, "change_id": None, "plan_id": None},
     }
     original["payload"].update(defaults.get(event_type, {}))
@@ -409,6 +413,8 @@ def test_the_schema_forbids_extra_keys_and_requires_every_response_key() -> None
         assert definition["additionalProperties"] is False, name
         if name not in requests and not name.endswith("-Input"):
             optional = {"missing"} if name == "ErrorDetail" else set()
+            if name == "ChangeResolved":
+                optional = {"grants"}
             assert set(definition["required"]) == set(definition["properties"]) - optional, name
     assert "slot" not in schema["$defs"]["StartAgent"]["required"]
 

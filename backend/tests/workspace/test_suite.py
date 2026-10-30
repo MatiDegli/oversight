@@ -1,6 +1,7 @@
 import asyncio
 import json
 import stat
+import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -8,7 +9,8 @@ import pytest
 
 from oversight.limits import MAX_REPORT_LINE_BYTES
 from oversight.workspace.runner import DEFAULT_OUTPUT_CAP, ProcessResult, run_process
-from oversight.workspace.suite import OUTPUT_TAIL, parse_report, run_suite, summarize
+from oversight.workspace.source import BOLTONS, SourceProfile
+from oversight.workspace.suite import OUTPUT_TAIL, _pytest_argv, parse_report, run_suite, summarize
 
 
 def line(kind: str, nodeid: str = "", when: str = "", outcome: str = "") -> str:
@@ -112,6 +114,77 @@ def test_garbage_lines_are_ignored() -> None:
         ["", "[]", "42", "not json", line("test", "t.py::a", "call", "passed")], returncode=0
     )
     assert (result.outcome, result.passed) == ("passed", 1)
+
+
+@pytest.mark.parametrize(
+    ("profile", "case_ids", "suffix"),
+    [
+        pytest.param(BOLTONS, (), ("--doctest-modules", "boltons", "tests"), id="boltons-all"),
+        pytest.param(
+            BOLTONS,
+            ("boltons/iterutils.py::boltons.iterutils.pairwise",),
+            ("--doctest-modules", "--", "boltons/iterutils.py::boltons.iterutils.pairwise"),
+            id="boltons-selected",
+        ),
+        pytest.param(None, (), (), id="demo-all"),
+        pytest.param(
+            None,
+            ("tests/test_cart.py::test_total",),
+            ("--", "tests/test_cart.py::test_total"),
+            id="demo-selected",
+        ),
+    ],
+)
+def test_pytest_argv_preserves_profile_defaults(
+    profile: SourceProfile | None, case_ids: tuple[str, ...], suffix: tuple[str, ...]
+) -> None:
+    argv = _pytest_argv(
+        Path("/python"),
+        Path("/report.xml"),
+        case_ids,
+        profile.pytest_targets if profile else (),
+        profile.pytest_options if profile else (),
+    )
+    assert argv == [
+        "/python",
+        "-m",
+        "pytest",
+        "-q",
+        "--color=no",
+        "-p",
+        "no:cacheprovider",
+        "-p",
+        "oversight_report",
+        "-o",
+        "junit_family=xunit1",
+        "--junitxml=/report.xml",
+        *suffix,
+    ]
+
+
+@pytest.mark.anyio
+async def test_selected_doctest_keeps_source_collection_options(tmp_path: Path) -> None:
+    (tmp_path / "tmp").mkdir()
+    (tmp_path / "example.py").write_text(
+        'def answer():\n    """\n    >>> answer()\n    42\n    """\n    return 42\n'
+    )
+    case_id = "example.py::example.answer"
+    run = await run_suite(
+        python=Path(sys.executable),
+        plugin_dir=Path(__file__).parents[2] / "src/oversight/workspace/report_plugin",
+        runtime_root=tmp_path,
+        tree_root=tmp_path,
+        timeout_s=20,
+        redact=lambda text: text,
+        spawn=run_process,
+        case_ids=(case_id,),
+        pytest_targets=BOLTONS.pytest_targets,
+        pytest_options=BOLTONS.pytest_options,
+    )
+    assert run.result.outcome == "passed", run.output
+    assert (run.result.passed, run.result.failed, run.result.skipped) == (1, 0, 0)
+    assert [(case.test_id, case.outcome) for case in run.cases] == [(case_id, "passed")]
+    assert run.problems == ()
 
 
 @pytest.mark.anyio

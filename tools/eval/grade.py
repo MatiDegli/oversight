@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from tools.eval.detection_types import DetectionEvidence
 from tools.eval.identity import Identity
 from tools.eval.tasks import BenchError, Task, resource, safe_path
 
@@ -47,6 +48,7 @@ class Result(Identity):
     tokens: Tokens
     cost_usd: Cost
     test_result: Tests
+    detection: DetectionEvidence | None = None
 
 
 class Tariff(BaseModel):

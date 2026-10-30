@@ -1291,6 +1291,7 @@ for opaque backings across every shell surface is retired with that treatment: t
 raised is not used by the UI and gives D 4.42:1 / E 4.44:1 with the approved values.
 The rendered card/rail/review regression from 0612105 remains. Exact-value tests pin the
 three newly approved text tokens and guard the restored translucent tints and original node fills.
+
 ## 2026-10-29 — Item 9 questions are only for unasked or untied differences
 
 The maintainer decided on 2026-10-29, as follow-up 3 to item 9 and the decisions inbox. This entry records the
@@ -1306,6 +1307,95 @@ with no new contract field: "asked for" only from the classification, which neve
 the person" from a card answered Yes by the person. The summary and proof 3's counts keep them apart. A card's
 kind is read from its server-authored question, one of two fixed texts. When pinned examples exist (item 13), a
 Yes on a could-not-tell question is the one offered as "keep as example".
+## 2026-10-29 — The inbox header count lands on the maintainer's approval of its captures
+
+The card and inbox shots gate holds every card or inbox front until the maintainer approves its
+captures. For `frontend/inbox-count` he approved its four header captures and confirmed it to the
+coordinator directly on October 29. An approval relayed by another coordinator session does not
+count: it must come from him in the session that lands.
+
+## 2026-10-29 — small_cone does not pass what it cannot see
+
+Audit note: commit 13c08bc replaced the same-day entry "Small cones require no unobserved
+possible callers" with this consolidated entry. It retains that decision's unknown-on-unmeasured
+count, shared caller definition and both measuring producers; this is not a new maintainer decision.
+
+The impact cone follows exact calls only, so an empty or small cone can mean "nothing calls this"
+or "the graph could not tell who calls this". On Boltons most functions have no exact callers, and
+many of them have callers the graph marks as possible. `small_cone` used to pass both cases.
+
+The maintainer decided that the rule answers `unknown` when a changed node or a node in its cone has
+a caller linked only by possible calls, or when that count was not measured. The count is exactly
+the review's "N possible callers, not followed": distinct non-test callers outside the changed nodes
+and the cone, with a possible call into them and no exact one. The proposal assessment and the
+merge-time re-measure both measure it. `unknown` never counts as passing, so in rules mode the
+change waits for the person, and the inbox entry lists those callers. His Yes is recorded as
+accepted by him, never as asked for, as with D6. A cone that already fails the exact limits stays
+`fail`. The contracts do not change: the recorded observation keeps its five counts. Planning
+estimates for Boltons d31d821, not reproducible from this repository (the corpus measurement and the
+drafted task list are not checked in), put 446 of 898 single-function changes and 5 of the 16
+drafted proof 2 tasks in this case. The tasks are not changed to avoid it, and the run reports
+whatever share results.
+
+## 2026-10-29 — Standing grants: Oversight remembers what the person let go
+
+With the `small_cone` fix, proof 2 would ask the maintainer about most Boltons changes, often the
+same question about the same module. He decided that Oversight remembers what he authorized.
+Three layers decide whether a change waits, each in one direction: rules pass or wait with
+evidence; Muse Spark Open's decision can only add a wait; the person's grants can only remove a
+wait the person could accept themselves.
+
+A grant comes only from the person's own answer to an inbox entry (Yes plus "don't ask again",
+with a scope they pick), never from an agent, a lead plan or a message relayed by another session.
+Free-text grants may come later, always turned into a structured grant he confirms.
+It can waive possible callers not followed or a protected path, never failing tests, conflicts,
+test integrity, cross-review or a decision question. It applies by exact scope match, never by a
+model's judgment; its scope is narrow (one reason kind, for one module, path, agent or run) and it
+ends with the run or the session unless he chooses otherwise. Grants are listed with Revoke,
+a change merged under a grant says so on its card, with the grant and when it was given.
+Every use is recorded as evidence, and proof 2 counts questions asked and grants applied
+separately. Building waits for his approval of the plan in `docs/plans/standing-grants.md`.
+Using his past answers as
+examples for the open model is later, with its own bench arm.
+
+## 2026-10-29 — Standing grants approved as contracts 1.7.0; the creation bundle moves to 1.8.0
+
+The maintainer approved the plan in `docs/plans/standing-grants.md` and its contract change on
+2026-10-29, in the coordinator's session. Review then found that 1.7.0 was already reserved for
+safe creation, nullable SaveFile.base_hash, zones and inventory (the 2026-10-28 contracts 1.6.0
+entry and `docs/proposal.md` section 4.9). He decided that grants take 1.7.0 and ship first, and
+that safe creation, nullable SaveFile.base_hash, zones and inventory move to 1.8.0. The reason is
+the one from 2026-10-28: they are not designed yet and must not hold an approved addition. No
+schema has shipped under 1.7.0, so no version string names two schemas. The earlier entries stay
+as the approval history.
+
+## 2026-10-29 — Proof 2 measures correctness with hidden checks and a paired arm
+
+Proof 2's counts said how many changes were accepted, not how many were correct, and nothing
+compared Oversight with agents that merge on passing tests alone. The maintainer approved adding
+both on 2026-10-29, in the coordinator's session. Each proof 2 task gets hidden checks, written and
+frozen before the run without seeing any agent output, and kept outside the product workspace as
+`tools/eval` already does. The same run then yields two arms judged by those checks: without
+Oversight, each agent's first proposal with passing tests, merged as it is; with Oversight, what
+reached main after rules, questions and revisions. Model, tasks and generation are identical, so
+only the gate differs, at no extra model cost. Each arm reports correct changes on main,
+regressions that got through, questions per accepted change, questions the checks show were not
+needed, and cost and wall time per correct change; questions and grants applied stay separate.
+The reporting rule is fixed before measuring. The arm without Oversight does not model an agent
+that never receives Request changes, and the report says so. Line B owns `tools/eval` and builds
+it after the maintainer approves the proof 2 tasks.
+
+## 2026-10-29 — Keys typed into a packaged app wait for after the hackathon
+
+Oversight runs locally from the repository with its own `.env`, and judges open the static build,
+which has no backend and no keys. A packaged app would take keys in Settings instead: write-only,
+kept by the local backend in the system keychain or a user-only file, never returned to the
+browser, events or recordings, with `.env` kept for developers. That needs the secrets rule in
+AGENTS.md changed by the maintainer, a contract change, and an independently reviewed security
+plan, since a server on 127.0.0.1 must refuse requests from other sites open in the same browser.
+On 2026-10-29 the maintainer placed it after the hackathon: it serves none of the three proofs,
+and no judge types a key.
+
 ## 2026-10-29 — Aggregate counts on demand and measured frame titles
 
 The maintainer approved both fixes on October 28 at 23:52 ART (October 29 UTC).
@@ -1356,3 +1446,566 @@ opaque `panel` plates to mask lines behind their text. Other graph overlays reta
 Screenshot logs use .events rather than .jsonl so generated cuts do not enter the repository-wide
 recording validation. This required tooling deviation touches `frontend/shots/run.sh` and
 `frontend/shots/capture.ts` outside the original `frontend/src` and design-document scope.
+## 2026-10-29 — Count final decisions per change and keep their entry point visible
+
+The maintainer approved one inbox entry for the latest pending revision of each change, containing
+its questions and other decisions. Answers, card answers, answering echoes and delegations keep
+that entry pending; delegation attempts remain history. A completed Approve, Request changes or
+Reject removes it at change.resolved; a merge conflict still needs action. A new revision after
+Request changes is pending again. Decisions without a change, such as a lead plan, remain single
+entries. This replaces the earlier answer-or-echo closure rule and rule 3's hide/reopen behavior,
+while retaining its delegation history, original ordering, event-clock age and run reset.
+
+The header is the inbox entry point, always in the same place and at the same height: "Nothing
+needs you" at zero, in muted gray without a lamp or badge; "Decisions · N" otherwise, with a neutral
+count in tabular Mono. Its accessible name includes N. Until the inbox view exists it opens the
+current review queue. The agent card's "Ready for review" pill stays unchanged.
+
+
+## 2026-10-29 — Show possible callers the exact cone does not follow
+
+The maintainer approved this wording on 2026-10-29 at 09:39 ART, before proof 2 starts.
+An empty exact cone cannot establish that a change affects nothing. Review and live diff now
+state the one-hop possible callers outside the seeds and bounded cone, excluding tests and
+nodes with an exact call into either. The count uses the change overlay for live and proposed
+changes. DESIGN.md records the approved empty/non-empty texts and neutral presentation.
+
+On Boltons d31d821, 726 of 925 library functions and methods have an empty exact cone;
+356 of those have possible callers. A measured built-in method name filter was rejected:
+it hides every possible caller of 310 methods (OrderedMultiDict 42, IndexedSet 25,
+BarrelList 24), leaving 278 of them apparently without callers at all. Count every possible
+call here, regardless of name; do not follow these calls or imply the cone is complete.
+
+## 2026-10-29 — Repository memory is a candidate: only what search cannot find
+
+The maintainer proposed what Oversight should remember about a repository, recorded as a candidate
+and not queued; nothing is built before the freeze (docs/additions.md, "Repository memory"). Search
+finds what code says, never the decisions, invariants and reasons that are not written down, and it
+neither enforces a rule nor notices a stale one. So the memory holds only that, each kind in the
+mechanism that fits it: executable pins, text pins anchored to nodes, the repository's own AGENTS.md
+and skills, and standing grants. Facts from running something wait for a later version, with command
+output as evidence. Text pins load deterministically; Muse Spark Open can only stop or flag; only
+the person creates or confirms a pin. Text pins are built only if a measured Boltons trial after
+the freeze shows fewer rule contradictions at equal or lower cost.
+
+## 2026-10-29 — Item 13's pin record carries a kind and a node anchor
+
+Checking the reserved shape showed that `ExamplePin` is a confirmation stamp inside a task example,
+so it cannot hold a text rule without faking an example's inputs and expected result. The
+maintainer decided that item 13's pin record is born with `kind`, only `example` for now, and a node
+anchor, so that a later text rule is one new kind rather than a second pin family; `ExamplePin`
+stays as it is. Because a node anchor breaks on a rename, a pin whose anchor no longer exists shows
+as orphaned, in the Pinned lens and as an inbox entry, and never vanishes silently. A new enum value
+is not a minor change under proposal section 4.9 today; the request to make it one is his to decide.
+
+## 2026-10-29 — A new enum value is a minor contract change, under conditions
+
+Section 4.9 of the proposal listed a field with a default, an endpoint and an event type as minor
+additions, but not a new enum value; 1.4.0 needed a bounded exception to extend reserved enums,
+and item 13's pin `kind` would need another for a later text rule. The maintainer approved a
+narrow amendment on 2026-10-29: a new value in an existing enum is minor when every existing
+payload and fixture still validates and every TypeScript consumer of the enum is exhaustive, so
+the compiler forces the UI to handle it, as with a new event type. A consumer that is not
+exhaustive is made exhaustive in the same change, or the change is not minor. Strict models are
+unchanged, and removing or renaming a value stays 2.0. This answers the request left open in the
+entry above on item 13's pin record, so its later text-rule kind can ship in a minor version.
+
+## 2026-10-29 — Python consumers of a contract enum are exhaustive too, and merge decisions fail closed
+
+The first enum amendment required exhaustive TypeScript consumers only. The backend also branches
+on contract enums, such as rule results, merge modes, file statuses and review verdicts, and there
+a value nobody handles can fall into a pass branch, as `small_cone` once passed callers it could
+not see. The maintainer amended the rule the same day: every Python consumer is exhaustive too,
+with a `match` that ends in `assert_never` or a table keyed by the enum, checked by pyright, or a
+test where pyright cannot check it; and code that decides a merge, a rule result or whether a
+change waits fails closed, so an unknown value makes the change wait. A read-only survey of
+`bb64e65`, counting one consumer per file and enum, found 152 of 153 Python consumers not
+exhaustive; 39 of them decide a merge, a rule result or a wait, and in four code paths across five
+enums a new value would pass: a test file's new file status, a new test case outcome after a
+failing run, a new cross-review verdict, and a new call-edge kind (`EdgeKind`) or confidence
+(`Confidence`). No existing value passes this way; the maintainer decided to make those four paths
+fail closed in a separate change after standing grants land. He approved the first amendment's
+request and its final change in the coordinator's session, not through another line.
+
+2026-10-29: The four merge-deciding families now fail closed with explicit enum tables and
+completeness tests: existing-test file statuses, before/after case outcomes, cross-review
+verdicts, and impact call-edge kinds/confidence. Unknown values touch an existing test or leave
+the case/review/cone unknown, so they cannot make the change pass its rules.
+
+## 2026-10-29 — Contracts 1.7.0 — approved by the maintainer
+
+The maintainer approved `docs/plans/standing-grants.md` and its contract change on 2026-10-29,
+in the coordinator's session, as recorded above under "Standing grants approved as contracts
+1.7.0; the creation bundle moves to 1.8.0". This version adds the structured grant request on
+Approve, person-created and revoked grant events, and immutable grant-use receipts on rules
+resolutions. Existing 1.6.0 recordings and commands remain valid with absent new fields.
+The revoke command is POST /grants/{grant_id}/revoke, with no body.
+Contracts 1.7.0 deliberately omit the plan's `grant.expired` event: run expiry ends a grant
+with its run. Adding that event later requires another minor version.
+
+The first backend supports possible_callers, exact module or run scope, and run expiry only.
+Unsupported reasons, scopes and expiry are refused rather than silently broadened. A grant
+removes only the measured possible-callers unknown; it never changes the recorded assessment
+or waives tests, a failed rule, missing measurements, or another unknown. Server authorization
+is rechecked at every rules barrier and serialized with revoke at the Git effect boundary.
+The creation bundle remains reserved for 1.8.0.
+
+## 2026-10-29 — Evidence-backed protected-path evaluator; activation stays closed
+
+The coordinator approved a built-in category table for the reserved `protected_paths` rule,
+based on the four categories in `docs/additions.md:270`. The maintainer may change its patterns.
+`changes/_protected_paths.py` records manifests/lockfiles (`pyproject.toml`, `setup.py`, `setup.cfg`,
+`requirements*.txt`, `uv.lock`, `poetry.lock`, `Pipfile`, `Pipfile.lock`) and test configuration
+(`pytest.ini`, `tox.ini`, `noxfile.py`, `.coveragerc`, `conftest.py`) by basename at any depth.
+CI (`.github/**`, `.gitlab-ci.yml`) and security (`.env`, `.env.*`, `.gitignore`,
+`.pre-commit-config.yaml`, `.gitleaks.toml`) match workspace-relative paths from the root.
+Matching uses case-sensitive Python fnmatch semantics; there is no filesystem or directory
+expansion. Explicit list snapshots instead use exact membership, including literal glob characters.
+
+The pure evaluator requires complete snapshots and separate evidence identifying the table/list
+version and the changed-file source, retaining added/modified/deleted statuses. Missing or
+unreadable sources, missing receipts, incomplete inventories, malformed paths or unknown statuses
+produce unknown before counting, even beside a known hit. Captured empty lists and inventories
+are distinct from unavailable sources. Each distinct matched file counts once; a complete,
+evidenced hit fails and zero hits pass under the existing fixed CheckInputs threshold.
+Private results retain every hit's category and pattern. Contract assessments retain only counts,
+completeness and references to both sources, qualified by each hit's path; those snapshots allow
+the private diagnostic to be reproduced without adding fields to the wire format.
+
+This adds a callable evaluator, not live enforcement: the scheduler still selects exactly
+`safe-merge-probes-v1`, both merge predicates reject the paths profile, protected-path grants stay
+refused, and startup capability remains closed. Source capture/loading, settings, profile
+migration, activation and any future waivable-hit semantics require separate work.
+## 2026-10-29 — Internal object-only preflight for a rules merge's inverse
+
+`changes._revert_preflight.preflight` accepts a server-supplied resolution event (or its stored
+envelope), a `RevertChange` and the target change ID. Store lookup and HTTP remain separate work;
+Revert stays reserved. It revalidates provenance and the recorded assessment, including pass
+observations and grant coverage, and refuses unknown or inconsistent evidence.
+
+Classification holds main's lock and the shared Git lease, with one finite deadline covering lock
+waits and guarded asynchronous Git. It captures main's commit H, requires the caller's observed
+main and attached HEAD to agree, and refuses dirty, hidden-index or in-progress checkout state.
+The recorded merge M must exist in H's ancestry, have the assessed main P and proposal as its
+exact ordered parents, and match the assessed tree and rules commit identity/message.
+
+The inverse is `git merge-tree --write-tree --merge-base=M H P`. A successful single tree OID,
+its object type, strict object verification and a final unchanged-main observation are all
+required for `clean`. Unsupported plumbing, conflict, timeout, truncated/malformed output,
+missing objects or other uncertainty becomes `conflict`; cancellation propagates after process
+cleanup while locks remain held. Strict Git object verification may inspect other stored objects
+and shares the same deadline, so unrelated corruption or an oversized repository can also refuse.
+No refs, real index, checkout files, operation markers or worktree registrations are changed;
+only unreachable Git objects may be created. There is no mutating fallback. A clean result proves
+textual applicability against captured H, not semantic correctness or authorization for a later
+effect. A later Revert transaction must establish its own current evidence and authorization.
+## 2026-10-29 — Witnessed assertion-loosening run findings
+
+Package 5 now publishes only `kind="loosened"`: a resolved individual integrity fact,
+its agent-authored assertion edit, an earlier observed failure, and a later explicit
+per-case pass. The bridge reuses the temporal core but strengthens its absence-of-failure
+result to an observed pass; skip, deletion and uncollected cases establish no pass.
+The exact pytest id includes class and parameter identity. Broader temporal kinds remain
+reserved, and this producer enables no profile, rule authority or automatic merge.
+
+Evidence uses committed `tests.executed` and `change.updated` receipts, never tool-step
+numbers or adjacent global events. Receipts carry ownership and are retained at existing
+publication boundaries through cancellation. Only agent executions and the current
+proposal verification participate; probes and combined runs cannot witness recovery.
+Each proposal freezes its observations, and comparisons stay within that proposal round.
+
+An edit compares the immediately preceding observed source with its published modified
+source using the existing detector. Cumulative base-to-head findings alone cannot name
+an intervening weakening. Duplicate publications and human edits supply no agent edit
+witness; proposal republication supplies no new source-edit witness. Bounded source reads
+(at most 200 reported paths per execution) use the captured Git tree in the lock-owning
+task. Both executions must have the exact corresponding file version; intervening edits
+in that file conservatively leave a comparison unknown. No whole-log infrastructure or
+runtime/provider protocol is added.
+
+A listed, observed failure remains usable from a truncated initial failure list. Recovery
+requires a finished run, a complete failure list and complete retained per-case evidence.
+Missing receipts, versions, identities, runs or passes retain explicit uncertainty, alongside
+independent proven findings. Validation recomputes the exact projection and edit references
+from the frozen capture before publication. Zone/reach and other producer diagnostics
+survive, facts remain incomplete, and an empty finding list grants no merge authority.
+
+## 2026-10-29 — Current-run history pages have a fixed horizon and a 1 MiB wire budget
+
+`GET /history` now reads committed envelopes from the current event store in live and server
+replay modes. The first request captures the store's acknowledged committed sequence before
+awaiting disk IO; continuations resend that `through_seq` and use `next_seq` as `after_seq`.
+Later appends cannot change that traversal. ASCII integer queries are bounded to 18 digits;
+invalid bounds are rejected rather than clamped. Defaults are after 0, limit 50 and the captured
+horizon, with limits from 1 to 100 as reserved in the proposal.
+
+The reader uses a separate read-only SQLite connection in a worker thread, filters by the exact
+`HistoryPage` event-type allowlist before pagination, and reads at most limit plus one sequence
+and byte-length records. It fetches only envelopes that fit. Original envelopes and provenance
+are preserved, without consulting live command state or granting decision authority.
+
+This front introduces an implementation policy, not a contract constraint: the complete serialized
+UTF-8 success body, including metadata and punctuation, is capped at 1 MiB (1,048,576 bytes).
+A page may therefore contain fewer than the requested limit. Its cursor still names its last
+returned event when an eligible successor exists within the horizon, so no event is skipped.
+If the first eligible envelope cannot fit intact, the response is the existing typed `too_large`
+413; payloads are never truncated. Unexpected disk or validation failures use the existing
+`internal` error path. No index or schema migration is introduced.
+
+## 2026-10-29 — Phone decision disclosures read as list rows
+
+The maintainer wants full-width touch rows that read as a list, rather than empty buttons
+competing with Approve and Reject. Recorded task and Possibly affected share divider hairlines,
+verbatim task and shared graph-count previews, and down chevrons; their content expands in place.
+The diff's disclosures keep their existing boxes. Consolidating the rows and tightening the
+summary-to-list gap keeps the collapsed last row above the dock on first view at both phone sizes,
+without a guessed dock-height padding. Desktop composition and typography remain unchanged.
+
+## 2026-10-29 — Source profiles keep pytest options apart from targets
+
+Source profiles separate `pytest_options` from positional `pytest_targets`, so selected case
+reruns retain collection options while replacing only the targets (including Boltons doctests).
+## 2026-10-29 — Scale and depth are separate axes; the map waits for a sketch
+
+The maintainer approved the [Scale and depth definition](DESIGN.md#scale-and-depth) on 2026-10-29.
+The built Modules / Functions / Details control (`bfe7a18`) sets how much unfolds; zoom sets how it
+is drawn. The old middle scale level, function dots inside module frames, is dropped. The map
+would enter automatically when `frame-title-size` (17px) times zoom falls below the existing
+11 CSS px floor, below 64.7% (11/17), and leave above a slightly larger size set by the sketch to
+avoid flicker. Fit chooses cards at or above that leave threshold and the map otherwise; "Map"
+appears beside the percentage, with no fourth button.
+
+The map and folder groups are not built. Modules become circles at their reserved block centers,
+with area proportional to function count. Only the map groups by folder, at the first level that
+splits the repository into at least two groups, with tests separate; never computed clusters.
+Groups with fewer than two modules and flat repositories draw no frames. Cards stay as today,
+but continuous folder frames require a preset rearrangement that also moves card positions;
+the sketch must show this for the build decision. Group summaries use team-colored rings,
+neutral pending-decision counts and cone reach. Links keep the call-visibility rules
+([DESIGN.md "Call visibility"](DESIGN.md#graph-nodes-and-their-states-signature-component)): exact
+links at today's weight; possible links that survive the built-in name filter, drawn as faint lines.
+
+The [Boltons `d31d821` preset](fixtures/layouts/boltons-d31d821.json), the proof 2 repository,
+contains 66 modules by top folder: boltons 30, tests 32, misc 3, docs 1. That gives a large library
+group, tests and misc, while docs draws no frame. Fit is at the threshold without tests (65%) and
+lower with them. This remains in [Undecided candidates](docs/additions.md#undecided-candidates):
+define now, then sketch with real Boltons and demo data, and the proof 2 repository if it changes.
+The sketch shows Boltons fitted with and without tests and identifies the resulting level.
+Whether to build is decided with that sketch in view, never before the Saturday checkpoint;
+approval of the definition does not approve the build.
+## 2026-10-29 — Behavior inputs follow unique module aliases and require opaque arguments
+
+Behavior seed discovery accepts a direct module-level `name = module.function` or
+`name = imported_function` after its import, including annotated assignments. Both the alias
+and its imported root must have exactly one module binding. Rebinding, deletion, conflicting
+imports, star imports, global declarations and call-site shadowing keep the alias unresolved.
+The detector's binding visitor and lexical shadow checks are reused; alias chains, conditional
+alias definitions and aliases inside functions remain outside this rule. This recovers literal
+seeds without importing or executing the project.
+
+A nonliteral parameter default is an internal opaque marker, never a generated value. Every
+compared input must provide that parameter explicitly on both sides, using only the existing
+literal calls and value pools; otherwise the candidate is discarded. No sentinel value is guessed
+or evaluated. Literal defaults still participate in pools and effective-argument identities,
+including unequal defaults on the two sides. Literal size limits still reject oversized defaults.
+Input/row caps, deadlines, isolation, fresh repetitions, fingerprints and unsupported function
+kinds/effects are unchanged; the public `probe unavailable` projection remains unchanged.
+
+Temporary tests reproduce only the short `windowed`, `windowed_iter` and `ellipsize` signatures
+and the alias spelling from Boltons d31d821, with bodies written here. At that pin the actual
+`ellipsize = strutils.ellipsize` line is local to `test_ellipsize` (line 398), so the module-level
+fixture exercises the requested rule without claiming to resolve that local upstream alias.
+
+## 2026-10-29 — Detection model arms v2 preserve tests-only identity
+
+The detection pilots at 19:52 ART used a 512-token completion allowance: detect-2 consumed
+all 512 tokens with no usable classification, consistent with reasoning truncation documented
+by the API probe. Detect-3/4 targeted methods unsupported by D9, made no call and proved
+nothing about classification. Model arms therefore get new IDs detect-2-v2, detect-3-v2 and
+detect-4-v2, with explicit task/diff, behavior-Spark and behavior-Spark-Open roles. Their pilots
+use top-level development targets d02, d01 and d02. A model pilot without a sent call and
+bounded diagnostics refuses. Diagnostics record validation stages and metadata, never reply text.
+
+Each model arm hashes and sends the product D6 completion allowance (currently 4096), retaining
+the strict 512-character response validator. Since the product factory exports no allowance
+constant, evaluation imports it and extracts its single positive literal through AST inspection,
+without executing it or loading credentials. Imported ReviewCardLimits defaults supply the
+same per-call and total deadlines to configuration and runtime (30 and 120 seconds). Admission
+uses the greater of observed pilot cost and the declared calls/input-token worst case at the
+configured completion allowance. Old pilots are listed as superseded and keep counting toward
+cumulative spend. Detect-1 retains its byte-identical v1 configuration, fingerprint and finished
+pilot. Frozen patches and labels do not change: b09 Inventory.reserve, b14 Customer.email
+setter, b17 Cart.add and b19 Product.label remain unprobed questions by D9, in both denominators.
+No paid run or provider probe is part of this change.
+## 2026-10-29 — Life layer, part 1: contours at rest, light only while acting, merge travel
+
+The maintainer approved the life-layer look on 2026-10-29, after the sketches in
+docs/sketches/life/ (committed as an exception for approved sketches only; the interactive
+reference stays outside the repository). This part builds points 1 to 6 of his decision; the
+tests scan, rolling numbers, top-edge light, focus glow and button press are part 2.
+
+1. **Colored light means an agent is acting now, and it belongs to a change in three states.**
+   (a) Working: the agent's status is working or revising; today's light, with its ring where it
+   reads or edits. (b) Waiting: the change has at least one open entry in the decisions inbox, read
+   from `selectDecisionInbox(state)` and not from a rule of the field's own; the light stays on
+   the change's node, steady and dimmer (`waiting-light-weight` 0.5, a theme-independent token, so
+   both token sets carry it), with no motion, and never pulses, blinks or grows however long it
+   waits; opening the review or clicking the node does not turn it off, closing the entries does.
+   (c) Decided, whether merged (by rules or by the person), approved or rejected: a decision fades
+   only a light that exists. The afterlight starts from the light the change had on its node at
+   that moment (waiting, or a working agent's) and fades out over about 90 seconds, along
+   `(1 - p)^1.6`; a change with no light then gets none (a rejection of it lights nothing), and a
+   merge still sends its pulse and brings its light as the pulse arrives. At rest nothing is lit. No color or pulse is added anywhere else: the "Decisions · N" counter stays neutral, and
+   what changed earlier stays told without color by the rail cards and the node marks. This
+   replaces the rule that an agent's current node and last read stay lit until the change is
+   decided, and the 240ms fade of the light on approval. Ambient motion and light without events
+   stay allowed. The first version of this entry gave an agent waiting for review no light and asked
+   the maintainer; his clarification of the same day is state (b). Every proposal now opens an
+   inbox entry, so the recorded runs show the waiting light between the proposal and the decision.
+2. **The rest ground is gray topographic contours derived from the graph:** one moderate hill per
+   module (its height grows with the calls into it from other modules, over a small range), a few
+   soft mounds in empty areas, wide level spacing (5 to 7 lines around a lone hill, never more than
+   8; the maintainer asked for the sketch's density at 13:32 UTC), 1px, very
+   faint, fading outward, drifting slowly and continuously (a change of shape takes minutes),
+   masked under overlays, still under reduced motion, gray only. It replaces the faint 28px lamp
+   grid at rest: lamps now draw only where light reaches.
+3. **Out:** click waves, the hover flashlight, borders that follow the pointer, button flashes, a
+   boot sweep (at most a 0.5s fade-in) and view-change wipes (a plain crossfade). None existed on
+   main when this was recorded.
+4. **In, part 1:** the merge travels: a pulse leaves the agent's rail card, runs along the graph's
+   edges to its node with a short fading trail, then the node's light fades as in point 1, with a
+   soft falloff and never a hard or blocky edge (merge-mid.png's hard top edge is a known flaw).
+   The maintainer clarified on 2026-10-29 at about 21:17 ART that the travel also lights the LED
+   field, as in the sketch: six points, the head plus five every 20px behind it along the actual
+   path (corners included, clamped at the start), with intensity `0.95 * (1 - k/6)^1.4` for
+   `k = 0..5` and radius 19px. At most 12 points contribute `i * exp(-d² / (2r²))` before the
+   common four-level 8×8 dither and agent-color ramp; only cells within three radii are touched.
+   These keep the same 7px square LEDs and drawn lamp masks (overlays and header bands). The SVG
+   line and head stay as they were; points end at arrival, and add no idle animation. Other
+   milestone emitters are deferred. It never moves the camera or takes focus. Reduced motion:
+   no travel or point lights; the node light appears and fades.
+5. **Build:** one WebGL2 canvas draws the lamps and the contours; the heights are computed on the
+   CPU at a coarse grid and sampled by the shader, so the contour cost does not grow with the graph.
+   Without WebGL2 the graph keeps plain ground and no contours. Text keeps 4.5:1 and never sits on
+   the lines, agents' colors mean agents only, and the real recorded run label stays.
+6. **Sketches:** rest-contour, rest-day, rest-rm, merge-mid and life-v2.webm are in
+   docs/sketches/life/ and linked from DESIGN.md as the target for the rest state and the life
+   layer. DESIGN.md records which earlier lines each decision replaces (Dot field and rings,
+   Motion, Reduced motion, the departures table). Where the build differs from a sketch, the
+   departures table says so: no "merged" chips on nodes yet, and the contour mask is cell-wide.
+7. **Build departures:** with contours on, an off lamp is not drawn (a day-mode change: the paper
+   no longer shows a dotted grid at rest), because the lines need the ground bare. The lines fade
+   under a light by its smooth glow (a second grid beside the lamps, which the golden lamp test
+   leaves untouched), so the light's pool never cuts them in blocks. One slow timer (every 500ms)
+   repaints the drift and the light's fade; animation frames run only while a pulse travels, a
+   ring plays or a transition runs.
+
+Reason: light that is on at rest stops telling who is working; a ground that carries the repository's
+shape gives the idle screen something true to show without competing with the graph.
+
+## 2026-10-29 — Life layer, look fixes from the maintainer's side-by-side captures
+
+The maintainer compared the part 1 captures with the approved sketches and asked for four changes.
+Each is built from tokens; DESIGN.md says which earlier lines each replaces.
+
+1. **The dark ground is #070707, not pure black.** It is the `ground` token (and `background`,
+   which mirrors it) and `lamp-off`, so an unlit lamp is the ground. Without WebGL the ground is
+   #070707 too: he reads "plain black" in AGENTS.md as near black, and AGENTS.md is unchanged.
+   This replaces DESIGN.md's `ground: "#000000"`, `lamp-off: "#050505"` and the "Black ground" key
+   characteristic. Panels, rows and text contrast were checked: the token tests still hold.
+2. **Contours at the sketch's level.** The brightest lines are about 25 to 28 on #070707 (they were
+   about 11 on black), the median line about 23, and the lines cover about 4 to 6% of a clear area
+   (the sketch's: 6 to 7%; it was 2.7%). The line is a soft 1px (whole within a tenth of a pixel of
+   its center, gone 1.1px past its edge) at white 9%; each hill spreads over its frame
+   (`contour-hill-spread` 1, from 0.78), so rings show outside big cards. 5 to 7 rings per lone
+   hill, gray only, masks unchanged. This replaces "white at 10% in dark" in DESIGN.md's rest
+   background.
+3. **The busy light is four dithered levels again, in a color ramp.** Round 2 made each lamp's
+   brightness continuous (the intensity raised to a gamma). That read round, symmetric and flat, and
+   its premise was wrong: it took the sketch for a smooth glow, when `life.html` quantizes the
+   light to four levels with an 8 by 8 ordered dither (`floor(clamp(tot, 0, 1) * 3 + bayer8)` over
+   3). Near the core every lamp is whole; further out the dither leaves a regular pattern of single
+   lamps, and that pattern is the LED character. The levels and the matrix return exactly as the
+   sketch computes them (`dot-level-count` 4, `dot-dither-size` 8, no half-step offset), and
+   `lamp-gamma` is removed. Each light keeps its own smooth cut before the lights add up (the
+   sketch's `smoothstep(0.08, 0.22, I)`: `lamp-cut-low`, `lamp-cut-high`). The color ramp stays and
+   now applies per level: the first level leans to the deep end of the agent's color, the second is
+   close to its own, the whole level is lighter (`lamp-ramp-deep`, `lamp-ramp-mid`,
+   `lamp-ramp-hot`), so agent B gets the same in blue. The far tail of the falloff is the sketch's.
+   The lights follow the rows the agents touch, as the sketch's: each agent's current row at full
+   weight and its last read at 0.4, each its own box (a method of a folded class is lit through the
+   class's box), with lamps hidden under cards. On the sketch's own busy scene the product counts
+   lamps at the four levels within a tenth of the sketch's (a test). Cost: the dither's cut is
+   slightly higher than the continuous one (a lamp needs about 0.10 of one light, not 0.08), so the
+   decided fade's halo outside a module card is gone about 35 to 40 seconds into the 90; the node's
+   marker and the rail still tell the rest.
+4. **The merge trail is short.** The orange right-angled line the maintainer saw on the right edge
+   was the merge trail: 200px behind the head. It is now about 100px (28px bright, then 72px that
+   fade with the square of what is left), and it is gone 350ms after the pulse arrives.
+5. **Module frames are translucent, and only their headers are masked.** The sketch's frame is
+   `rgba(12,12,14,.62)` in dark and `rgba(255,255,255,.5)` in day, its class `.6` and `.4`, and its
+   masks cover frame headers, class headers, chips and overlays only, so the light around a lit
+   row shows through the frame's body. Ours was 90% opaque and hid the second and whole levels
+   there; the histogram over the cells outside rows could not see it. `module-opacity` is now
+   0.62 in dark and 0.5 in day (a token, the day palette overrides it), and the field masks
+   what the sketch masks: the header band of an open module or class (the padding above its first
+   row, 54px and 44px, padded by `header-mask-pad`, 6px) and the exact box of a folded card,
+   read at every draw so they follow the camera. A lit row's name and state word stay at 4.5:1 or
+   more over the brightest lamp beneath them, a test over both themes, both agents and the
+   frame label were it unmasked: the lowest is 4.93:1 (day, agent B's frame label). The header and
+   folded-card masks apply to lamps and lines only: the first cut agent B's marker in half on the
+   folded Inventory card, and markers and travel keep the overlay masks they had (the sketch's
+   marker is a DOM element, life.html:80, and its pulse canvas sits above everything, life.html:219;
+   neither is masked by a frame header, life.html:644 masks only the lamps).
+6. **The editing row is tinted with its agent's color.** It already wore the sketch's wash (dark
+   `#1e0c04` and `#060c1e` at 95%) from the `agent-a-node` and `agent-b-node` tokens; the capture
+   shows it for A (a row) and for B (a folded class card, since a method of a folded class is lit
+   through the class's box). Day uses a pale peach and a pale blue, opaque, as the sketch's day
+   keeps its dark wash, which reads as a defect there.
+7. **The histograms count the frame bodies.** The comparison with the sketch now covers every
+   cell that no row, folded card or mask hides, so the translucent bodies count. On the sketch's
+   own busy scene the product draws [20923, 943, 306, 181] lamps at the four levels against the
+   sketch's [20977, 905, 307, 164]: the first level within 5%, the second within a lamp, the
+   whole level 10% above, because the watch gain is 0.92 against the sketch's 0.9 (at 0.9 the
+   product counts 168). The product's own captures differ in geometry: agent A alone
+   [25011, 351, 76, 25], A and B [21406, 1027, 351, 80]. The field there equals the model run on
+   the same boxes (a window around agent A's row counts [0, 35, 114, 53] in both); against the
+   sketch's layout the second level is lower because the rows' rendered boxes are 48px tall
+   against the sketch's 46, and the whole level, a ring one cell thick, changes with where the
+   box's edge falls in the 7px grid.
+
+Reason: the screen must show at a glance which agent is working and where, and the ground must
+look the way the approved sketches look; every number is a token so the look can be tuned without
+code.
+
+## 2026-10-30 — Detection bench evidence fixes precede other line-A work
+
+At about 23:20 ART on October 29, after the main bench run, the maintainer put fixing the
+evidence before other line-A work, as part of Saturday's 23:00 ART checkpoint. All arms failed
+their criteria; the diagnosis showed that arms 3 and 4 measured missing evidence, not a model
+choice. The scope covers methods not probed, probe failures that lose the real reason, stored
+rows cut at 8, one classified example per function, and `compute_price` finding no difference
+in 48 inputs.
+
+The bench rule counting every unclassified difference as unavailable stays unchanged. If that
+rule ever changes, the report must say it changed after seeing results. The order is one run
+with the scripted fake model to confirm the evidence changed, its numbers to the maintainer,
+then one paid run: one measurement at a time.
+
+Reason: arms 3 and 4 measured missing evidence, not a model choice; one measurement at a time.
+
+## 2026-10-30 — B1: Omitted optional additions compare shared parameters
+
+At 23:31 ART on October 29, the maintainer decided that when the candidate adds an optional
+parameter and an input omits it, that input is compared over the parameters both versions
+share. A changed default of an existing parameter, explicit argument values that differ, and
+the two repeats stay strict. Public counts include only inputs with an identity.
+
+The contract's description of `compared_count` is to change accordingly; the schema shape and
+`CONTRACT_VERSION` stay unchanged. This work belongs to `changes/input-identity`.
+
+## 2026-10-30 — B2: Defaults may resolve a uniquely bound module literal
+
+At 23:31 ART on October 29, the maintainer decided that a default naming a module constant
+resolves when that constant is bound exactly once in the same module to a literal, read from
+the AST. No expression is ever evaluated. This narrows the opaque-default rule in
+"2026-10-29 — Behavior inputs follow unique module aliases and require opaque arguments".
+This work belongs to `changes/input-identity`.
+
+Reason: read from the AST; no expression is ever evaluated.
+
+## 2026-10-30 — B3: Classify one witness per outcome group within a function
+
+At 23:31 ART on October 29, the maintainer chose option a): within one function, group
+reproducible differences by outcome kind: returns a different value, now raises X, no longer
+raises X, or raises Y instead of X. Classify the smallest witness of each group and say on its
+card how many differing inputs it covers. This work belongs to `changes/difference-groups`.
+
+Raising the row and card limits was rejected because it requires a contract change, more
+tokens and more cards. Classifying more witnesses within 8 was also rejected: functions with
+25–26 differences still fail. This coverage rule was introduced after seeing the bench results,
+and the bench report must say so.
+
+Reason: one classified example per function leaves other reproducible differences unclassified;
+group coverage addresses that evidence gap without raising the row and card limits.
+
+## 2026-10-30 — B4: A different public object state gets an outcome card
+
+At 00:00 ART on October 30, the maintainer chose option a): a method or setter whose result is
+the same on both sides but leaves the object's public state different gets its own outcome
+kind, "leaves the object in a different state", with a card like the other kinds. This work
+belongs to `changes/methods-1`.
+
+Reason: showing the difference only in rows, without a card, leaves it unclassified and counted
+as unavailable; that alternative was rejected.
+
+## 2026-10-30 — Bench method scope supersedes D9's level 3 deferral
+
+The maintainer includes methods in the bench evidence fix scope. This supersedes
+"2026-10-28 — D9: Behavior probes for methods wait for level 3"; that entry remains as the
+record of the earlier decision.
+
+Method probing is assigned to two fronts: `changes/methods-1` covers sync methods and
+properties of simple project classes on receivers built from literal constructor calls,
+comparing result and public state; `changes/methods-2` covers object arguments. The static
+rejection of randomness and time access and the other effect filters stay unchanged. Only
+classes defined in the project's own non-test modules are constructed.
+
+Reason: deferring methods leaves missing evidence in the bench, so the evidence fix scope
+supersedes the level 3 deferral while retaining the existing effect and construction policies.
+
+## 2026-10-30 — Item 10 measures agent-hours from observed intervals, with dated list prices
+
+The maintainer amended item 10 of docs/additions.md. Agent-hours, project active hours and parallelism come
+first, because proof 2's closing line uses them. They come from each agent's own working intervals in its
+status events, not from fixed time buckets. Costs are list-price equivalents from Meta's official pricing
+page: the repository stores the extracted price table with the page's URL and retrieval date, not a copy of
+the page. Muse Spark Open via Baseten has no listed price, so its work is reported as a lower bound. Missing
+usage, activity or price shows the known part as a lower bound and the total as unavailable.
+
+Reason: Oversight records when each agent works, so measured intervals replace an approximation, and a waiting
+lead must not inflate the hours. A stored price table needs no contract change; recording a price in
+run.started was the rejected alternative. The coverage, grouping and comparison rules come from prior
+work in the maintainer's projects, rewritten for Oversight; no code was copied.
+## Contracts 1.8.0 — approved by the maintainer, 2026-10-30
+
+E6 adds server-owned model.attempt_failed, once per failed attempt before its wait, including the
+final failure. It records agent_id (the author for review calls), optional change_id and role,
+model profile, provider, 1-based attempt and policy max_attempts, cause, HTTP status, provider
+Retry-After, wait_s and final reason. Attempt cannot exceed the limit; attempts_used requires the
+limit. Final is set exactly when wait_s is null. Rate limits require 429, server errors 500–599,
+and refused a different status; connection and timeout require null status. AgentStep.error_kind
+is optional, default null, and names only unknown_tool, invalid_json or invalid_arguments with
+result error; other tool errors remain null. The card derives "Waiting for model (retry n/5)"
+until that agent's next step, usage tick or failed attempt. There is no producer in this front;
+E6's client and loop front owns emission. History envelopes remain unchanged.
+
+P1–P2 replace fixed pairs with lists of one to six subtasks in Plan and UpdatePlan. A single
+subtask is the one-agent fallback. Dependency indices are stable within each revision (no
+reordering), range from 0 to 5, must be below the actual count, unique and exclude self. Both
+models share a complete acyclicity check, including disconnected cycles.
+
+P3 adds optional subtask state, null for historical payloads only. A plan cannot mix null and
+non-null states; all-null states are allowed only for exactly two subtasks, retaining their
+historical assignment rules. Plans with one or three to six subtasks require states. Waiting
+has no agent; running and merged require one, with distinct per-start agent ids across subtasks
+even when a slot is reused. A running plan requires an assigned agent, following from P4's rule
+that a running queue item has at least one agent. Prerequisites must be merged for a running,
+merged or rejected subtask: Reject, discard and stop reject a subtask that started. Dependents
+of rejected or cancelled prerequisites are cancelled. Rejecting a plan cancels every subtask;
+completion requires merged, rejected or cancelled subtasks. Request changes keeps a subtask
+running.
+
+P4–P5 make plan queue agent_ids the growing list assigned so far (one to six at dispatch and
+completion); standalone dispatch still requires exactly one. A plan reserves only immediately
+ready subtasks' slots. Newly ready dependents take the next released slot before later queue
+items, preserving the plan's place. Only the person queues and dispatches an exact revision;
+Plan.started_by records a requesting lead without dispatch authority, and plan agents keep
+started_by null. PlanZone is unchanged. This reverses Contracts 1.6.0's "widening slots does not
+enlarge a plan" and changes FIFO decision 6's "a plan reserves both slots together".
+
+Safe creation, nullable SaveFile.base_hash, zones and inventory move again to 1.9.0 because E6
+and item 11's plans take 1.8.0. SaveFile remains unchanged. Earlier entries remain approval
+history. Generation and drift checks retain the pinned tools and 1.5.0 tuple baseline; bounded
+lists generate ordinary arrays. Consumer changes are mechanical; E6 producers, item 11a's
+scheduler and the card front follow separately.

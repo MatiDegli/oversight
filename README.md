@@ -8,21 +8,61 @@ work on a live graph of your repository. Each agent has its own git worktree. Th
 agent reads or edits light up in its color, and each change shows its impact cone, the functions
 possibly affected. Nothing reaches main until you approve it.
 
-Being built during the hackathon (see [docs/additions.md](docs/additions.md) for the state of
-each): for every change, Oversight runs the old and the new version of each changed function on
-the same inputs and shows what behaves differently. It also measures which callers changed, and it
-asks you only about differences the task did not ask for. A change that passes your rules can merge
-by itself, with its reasons and a Revert.
+Try [Would you approve it?](https://matidegli.github.io/oversight/): a real recorded run in your browser, no install, works at phone width; choose “Two-change practice”.
+
+Video: (link added at submission)
 
 The idea of running both versions of a change to find what tests miss is not new. Testora (ICSE
 2026) checks behavior differences in pull requests against their intent. DiffTestGen (2026)
 generates tests that expose them. Meta's just-in-time catching tests (FSE 2026) generate tests that
 catch a bug before a change lands. CONTRA (2026) asks only the clarifying questions whose answers
 change behavior, checked by running programs. Oversight brings these ideas to supervising agents
-while they work. Any number in this README about Oversight comes from its own bench.
+while they work. Product measurements come from Oversight's own bench; the build-process figures
+below are labeled separately.
 
 **Status:** in development during the Meta Global AI Developer Hackathon, from 2026-10-26 to
 2026-11-04.
+
+## What works today
+
+- Complete: a live graph of the repository and an impact cone of functions possibly affected.
+- Complete: agents work in their own git worktrees, with reads and edits lit on the graph.
+- Complete: live diff and review with Approve, Reject and Request changes.
+- Complete: two agents working in parallel.
+- Complete: a spend meter and a brake that refuses new runs above 90% of the credit budget.
+- The static replay build is complete: it plays the real two-agent run in `fixtures/events/recorded-demo.jsonl` without a backend; its label, `Recorded run · Oct 27, 2026`, comes from the recording's provenance sidecar.
+- Complete: facts and a summary derived from events for each change (item 1).
+- Complete: an agent harness pack with syntax checks, bounded search and test feedback (item 3).
+- Complete: checks that a new test fails before the change and passes after it (item 6).
+- Complete: cross-review and automatic Request changes (item 7).
+- In progress: behavior diff, comparing old and new functions on the same inputs.
+- In progress: a measured impact cone showing callers with observed result changes.
+- In progress: live overlap between agents, including shared edits and earlier reads.
+- In progress: merge by rules, following main and a one-click Revert.
+- In progress: a change card with three states.
+- In progress: cost and rounds per accepted change.
+- In progress: one plan, server-computed zones and a task queue.
+- In progress: standing grants for later changes within an approved scope.
+
+Muse Spark through the Meta Model API writes the changes; Muse Spark Open through Baseten
+cross-reviews each change and can only stop it or send it back, never merge it. Nothing reaches
+main without the person's approval.
+
+## How it was built
+
+Oversight was built during the hackathon with a hand-run version of its own workflow: parallel
+coding agents, each on its own branch and copy of the repository; a reviewer from a different
+model provider on every change; and a coordinator merging only after the full checks pass.
+
+These figures describe **our build process, not Oversight measurements**. Snapshot: Oct 29, 2026,
+22:38 ART, on main `d768d6d`.
+
+- 187 fronts (one task each) run through the loop; latest acceptance at review round 0: 128, round 1: 40, round 2: 5; median 1 review round per front.
+- 416 full verification runs over 380 review rounds: about 1.1 full suites per round.
+- Writer slots: 3 per coordinator line, two lines; at most 6 concurrent writers.
+- 13 collisions between two fronts found only at landing, after both were accepted.
+- 243 merges to main and 1,126 commits on main since the kickoff.
+- Tests are 59% of tracked Python and TypeScript source lines, excluding generated contracts, fixtures and the demo repository.
 
 ## Built during the hackathon
 
@@ -36,22 +76,8 @@ while they work. Any number in this README about Oversight comes from its own be
   ISC, and SIL OFL 1.1 for fonts. GPL projects were read for ideas only.
 - Agents inside the product use only Meta models: Muse Spark through the Meta Model API, and Muse
   Spark Open through partner inference.
-- Merged on day 1: repository tooling and CI; contracts v1 and 1.1 with generated schemas and types;
-  the demo repository; the SQLite event store and SSE; the graph core, impact cone and preset
-  layout; the worktree runner, agent runtime and scripted fake model; the change manager; and API
-  wiring with the spending brake. The UI includes the graph, agent cards, live diff, Approve and
-  Reject, task entry, the review impact cone and the spend meter. The runtime also supports revision
-  runs through `POST /changes/{id}/request-changes`, including the review UI.
-- `make demo` builds and serves the frontend and API together; starting an agent uses API credits.
-  `make demo-check` checks the API demo path three times from clean starts using two scripted fake
-  agents, without API keys or credits: overlap, Request changes and a higher revision, merge,
-  Stop/discard during work, a file edit on main, usage ticks and saving the editable new side
-  (`PUT /files` with `agent_id`). Smoke tests, screenshot tooling and test resource caps are merged.
-- Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
-  start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
-  scripted two-agent replay.
-- The static replay build plays the real two-agent run in `fixtures/events/recorded-demo.jsonl`.
-  Its label, `Recorded run · Oct 27, 2026`, comes from the recording's provenance sidecar.
+
+### Recording a real run
 
 To bundle a finished real run, install gitleaks 8.30.1 and run `make record RUN=<id>` (or
 `make record` for the latest run). This reads the SQLite log without model calls or credits and
@@ -63,7 +89,8 @@ static build requires the recording and its receipt; UI tests select their own f
 
 ## Next
 
-- Lead agent: deferred; the former Sunday gate required packages 1–6, and the run rule now comes later; lead routes and plan `started_by` remain reserved even if the lead never ships.
+- Lead agent: queued after item 11; hosted Muse Spark writes the plan and subtask text and starts agents, while the server keeps zones and the queue; the lead never merges.
+- Saved agent flows: after the lead, pick a repository flow with a target and expected checks, review or edit its filled task text, then start the agent.
 - Hidden test sets: extend beyond the external hidden grading already present in `tools/eval`.
 - A red agent to look for counterexamples to a proposed change.
 - A specialist engine for checks that need a dedicated tool.
@@ -79,25 +106,28 @@ static build requires the recording and its receipt; UI tests select their own f
 - Mask older tool results on long runs; measure dollars and correctness before adoption.
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
+- After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
+  local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 
-### Zoom levels
+### Scale and depth
 
-For a repository too large to read at once, the graph would switch between three levels as you zoom:
+Depth and scale are two axes. The built **Modules / Functions / Details** control (`bfe7a18`)
+sets how much unfolds. Scale is the zoom: how it is drawn.
 
-- **Modules:** each module is a circle sized by its function count, with one line per pair of
-  modules, thicker with more calls.
-- **Functions:** modules become frames and functions become dots, named only where an agent works or
-  the impact cone reaches.
-- **Details:** the labeled boxes of the current view, with every call.
+The **map is not built**. It would appear automatically when module titles fall below the reading
+floor, replacing each module with a circle at its block's center, with area proportional to its
+function count. Folder groups appear on the map only and are not built either. The earlier middle
+level, function dots inside module frames, is dropped.
 
-Agents and the impact cone stay visible at every level, nothing moves when the level changes, and
-labels keep their size on screen. Not built yet; it comes after the core features, if time allows.
+See [Scale and depth in DESIGN.md](DESIGN.md#scale-and-depth) for the approved definition and scope:
+define and sketch now; whether to build is decided with the sketch, never before the Saturday
+checkpoint.
 
-![Design sketch of the zoom levels, not built](docs/sketches/mockup-zoom-signal-far.png)
+![Earlier sketch of zoom levels](docs/sketches/mockup-zoom-signal-far.png)
 
-*Design sketch, not built. Its structure comes from a sketch made before the kickoff, redrawn in
-Oversight's look on 2026-10-26. It is a picture of the idea, not the product: its name and numbers
-are placeholders.*
+*Earlier sketch, not the target. Its structure comes from a sketch made before the kickoff,
+redrawn in Oversight's look on 2026-10-26. Its name and numbers are placeholders; it includes the
+middle level now dropped.*
 
 See [docs/additions.md](docs/additions.md) for the queue and candidates.
 

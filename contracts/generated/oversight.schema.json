@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.6.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.8.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -387,6 +387,23 @@
             }
           ],
           "description": "Set for run_tests."
+        },
+        "error_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "unknown_tool",
+                "invalid_json",
+                "invalid_arguments"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set only for malformed model tool calls; every other tool error stays null."
         }
       },
       "required": [
@@ -397,7 +414,8 @@
         "result",
         "error",
         "duration_ms",
-        "tests"
+        "tests",
+        "error_kind"
       ],
       "title": "AgentStep",
       "type": "object"
@@ -444,6 +462,18 @@
             }
           ],
           "default": null
+        },
+        "grant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GrantRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Create a standing grant from this personal approval, when its wait and scope match."
         },
         "answers": {
           "anyOf": [
@@ -1331,6 +1361,21 @@
           ],
           "default": null,
           "description": "The accepted human answers, copied by the server from a decision command."
+        },
+        "grants": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/GrantUse"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Immutable authorization and measured callers waived by a rules approval."
         }
       },
       "required": [
@@ -1923,7 +1968,7 @@
             }
           ],
           "default": null,
-          "description": "One proposed two-agent plan."
+          "description": "One proposed plan with one to six subtasks."
         },
         "plan_revision": {
           "anyOf": [
@@ -2405,6 +2450,287 @@
         "end_line"
       ],
       "title": "FocusRange",
+      "type": "object"
+    },
+    "GrantAuthorization": {
+      "additionalProperties": false,
+      "description": "Server capture after exact scope matching, bound to this assessment target.\n\nScope is captured from the server's matched grant, never from a model or command receipt.\nHistorical validation consumes this capture; only live barriers consult mutable grants.",
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/GrantReason"
+        },
+        "scope": {
+          "$ref": "#/$defs/GrantScope"
+        },
+        "creation_seq": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "creation_ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "checked_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "active_at_effect": {
+          "type": "boolean"
+        },
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "reason",
+        "scope",
+        "creation_seq",
+        "creation_ts",
+        "run_id",
+        "session_id",
+        "checked_at",
+        "active_at_effect",
+        "change_id",
+        "agent_id",
+        "revision",
+        "head_commit"
+      ],
+      "title": "GrantAuthorization",
+      "type": "object"
+    },
+    "GrantCreated": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/GrantReason"
+        },
+        "scope": {
+          "$ref": "#/$defs/GrantScope"
+        },
+        "grant_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "revision": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "granted_by": {
+          "const": "person",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "scope",
+        "grant_id",
+        "change_id",
+        "revision",
+        "head_commit",
+        "run_id",
+        "session_id",
+        "granted_by"
+      ],
+      "title": "GrantCreated",
+      "type": "object"
+    },
+    "GrantCreatedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "grant.created",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/GrantCreated"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "GrantCreatedEvent",
+      "type": "object"
+    },
+    "GrantReason": {
+      "enum": [
+        "possible_callers",
+        "protected_path"
+      ],
+      "type": "string"
+    },
+    "GrantRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/GrantReason"
+        },
+        "scope": {
+          "$ref": "#/$defs/GrantScope"
+        }
+      },
+      "required": [
+        "reason",
+        "scope"
+      ],
+      "title": "GrantRequest",
+      "type": "object"
+    },
+    "GrantRevoked": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "grant_id"
+      ],
+      "title": "GrantRevoked",
+      "type": "object"
+    },
+    "GrantRevokedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "grant.revoked",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/GrantRevoked"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "GrantRevokedEvent",
+      "type": "object"
+    },
+    "GrantScope": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "module",
+            "path",
+            "agent",
+            "run"
+          ],
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "expires": {
+          "enum": [
+            "run",
+            "session"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value",
+        "expires"
+      ],
+      "title": "GrantScope",
+      "type": "object"
+    },
+    "GrantUse": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_id": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "rule": {
+          "$ref": "#/$defs/RuleId"
+        },
+        "caller_ids": {
+          "items": {
+            "$ref": "#/$defs/NodeId"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "caller_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "authorization": {
+          "$ref": "#/$defs/GrantAuthorization"
+        }
+      },
+      "required": [
+        "grant_id",
+        "rule",
+        "caller_ids",
+        "caller_count",
+        "authorization"
+      ],
+      "title": "GrantUse",
       "type": "object"
     },
     "GraphDelta": {
@@ -3138,7 +3464,7 @@
         },
         "compared_count": {
           "default": 0,
-          "description": "Inputs compared on both sides with equal typed inputs.",
+          "description": "Inputs compared on both sides with equal typed inputs over shared parameters when\nomitted candidate-only parameters have literal or resolved constant defaults.",
           "minimum": 0,
           "type": "integer"
         },
@@ -3316,6 +3642,173 @@
       "title": "MissingSetting",
       "type": "object"
     },
+    "ModelAttemptFailed": {
+      "additionalProperties": false,
+      "description": "Emitted by the server once per failed attempt, before the retry wait and for the final\nfailure; never written by the model. The card reads \"Waiting for model (retry n/5)\" from\nan attempt with wait_s set, until that agent's next agent.step, usage.tick or\nmodel.attempt_failed.",
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "change_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "agent",
+                "review",
+                "plan",
+                "lead"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "model": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "provider": {
+          "enum": [
+            "meta",
+            "baseten",
+            "fake"
+          ],
+          "type": "string"
+        },
+        "attempt": {
+          "description": "The 1-based number of the attempt that failed.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "max_attempts": {
+          "description": "The retry policy limit, currently 5.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "cause": {
+          "enum": [
+            "rate_limited",
+            "server_error",
+            "connection",
+            "timeout",
+            "refused"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "HTTP status when the provider answered."
+        },
+        "retry_after_s": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Provider Retry-After, when sent."
+        },
+        "wait_s": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Wait before the next attempt; null when none follows."
+        },
+        "final": {
+          "anyOf": [
+            {
+              "enum": [
+                "attempts_used",
+                "not_retryable",
+                "deadline"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "agent_id",
+        "change_id",
+        "role",
+        "model",
+        "provider",
+        "attempt",
+        "max_attempts",
+        "cause",
+        "status",
+        "retry_after_s",
+        "wait_s",
+        "final"
+      ],
+      "title": "ModelAttemptFailed",
+      "type": "object"
+    },
+    "ModelAttemptFailedEvent": {
+      "additionalProperties": false,
+      "description": "The server-owned model.attempt_failed envelope.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "model.attempt_failed",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ModelAttemptFailed"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "ModelAttemptFailedEvent",
+      "type": "object"
+    },
     "ModelProfile": {
       "additionalProperties": false,
       "properties": {
@@ -3370,7 +3863,7 @@
         },
         "compared_count": {
           "default": 0,
-          "description": "Inputs compared on both sides with equal typed inputs.",
+          "description": "Inputs compared on both sides with equal typed inputs over shared parameters when\nomitted candidate-only parameters have literal or resolved constant defaults.",
           "minimum": 0,
           "type": "integer"
         },
@@ -3546,7 +4039,7 @@
     },
     "Plan": {
       "additionalProperties": false,
-      "description": "The complete versioned state of a two-agent plan.",
+      "description": "The complete versioned state of a plan with one to six subtasks.",
       "properties": {
         "plan_id": {
           "$ref": "#/$defs/PlanId"
@@ -3577,16 +4070,11 @@
         "subtasks": {
           "anyOf": [
             {
-              "maxItems": 2,
-              "minItems": 2,
-              "prefixItems": [
-                {
-                  "$ref": "#/$defs/PlanSubtask"
-                },
-                {
-                  "$ref": "#/$defs/PlanSubtask"
-                }
-              ],
+              "items": {
+                "$ref": "#/$defs/PlanSubtask"
+              },
+              "maxItems": 6,
+              "minItems": 1,
               "type": "array"
             },
             {
@@ -3689,12 +4177,10 @@
           "$ref": "#/$defs/PlanZone"
         },
         "depends_on": {
-          "description": "Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.",
+          "description": "Stable zero-based subtask ids; subtasks are not reordered within a revision.",
           "items": {
-            "enum": [
-              0,
-              1
-            ],
+            "maximum": 5,
+            "minimum": 0,
             "type": "integer"
           },
           "type": "array"
@@ -3709,13 +4195,33 @@
             }
           ],
           "default": null
+        },
+        "state": {
+          "anyOf": [
+            {
+              "enum": [
+                "waiting",
+                "running",
+                "merged",
+                "rejected",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Null only for payloads written before 1.8.0. Waiting has no agent; running and merged\nhave one. Prerequisites must merge before a subtask runs. Reject, discard and stop mean\nrejected; dependents of rejected or cancelled subtasks are cancelled. Request changes keeps\nthe subtask running. Agent ids are per start, so later subtasks may reuse a released slot."
         }
       },
       "required": [
         "task",
         "zone",
         "depends_on",
-        "agent_id"
+        "agent_id",
+        "state"
       ],
       "title": "PlanSubtask",
       "type": "object"
@@ -3926,7 +4432,7 @@
     },
     "QueuedTask": {
       "additionalProperties": false,
-      "description": "One server-owned versioned queue item.",
+      "description": "One server-owned versioned queue item. A plan reserves slots only for subtasks that\ncan start now. A dependent subtask that becomes ready takes the next released slot before\nlater queue items, keeping its plan's place in the queue.",
       "properties": {
         "agent": {
           "anyOf": [
@@ -3950,7 +4456,7 @@
             }
           ],
           "default": null,
-          "description": "One proposed two-agent plan."
+          "description": "One proposed plan with one to six subtasks."
         },
         "plan_revision": {
           "anyOf": [
@@ -3987,7 +4493,7 @@
           "type": "string"
         },
         "agent_ids": {
-          "description": "Agents assigned during dispatch.",
+          "description": "Agents assigned so far; a plan's list only grows as subtasks start.",
           "items": {
             "$ref": "#/$defs/AgentId"
           },
@@ -4972,10 +5478,13 @@
           "change.reviewed": "#/$defs/ChangeReviewedEvent",
           "change.updated": "#/$defs/ChangeUpdatedEvent",
           "error": "#/$defs/ErrorReportEvent",
+          "grant.created": "#/$defs/GrantCreatedEvent",
+          "grant.revoked": "#/$defs/GrantRevokedEvent",
           "graph.delta": "#/$defs/GraphDeltaEvent",
           "graph.snapshot": "#/$defs/GraphSnapshotEvent",
           "lead.status": "#/$defs/LeadStatusEvent",
           "merge_mode.changed": "#/$defs/MergeModeChangedEvent",
+          "model.attempt_failed": "#/$defs/ModelAttemptFailedEvent",
           "plan.updated": "#/$defs/PlanUpdatedEvent",
           "queue.updated": "#/$defs/QueueUpdatedEvent",
           "revert.resolved": "#/$defs/RevertResolvedEvent",
@@ -5017,6 +5526,9 @@
           "$ref": "#/$defs/UsageTickEvent"
         },
         {
+          "$ref": "#/$defs/ModelAttemptFailedEvent"
+        },
+        {
           "$ref": "#/$defs/ErrorReportEvent"
         },
         {
@@ -5045,6 +5557,12 @@
         },
         {
           "$ref": "#/$defs/LeadStatusEvent"
+        },
+        {
+          "$ref": "#/$defs/GrantCreatedEvent"
+        },
+        {
+          "$ref": "#/$defs/GrantRevokedEvent"
         }
       ]
     },
@@ -5299,12 +5817,10 @@
           "$ref": "#/$defs/PlanZone"
         },
         "depends_on": {
-          "description": "Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.",
+          "description": "Stable zero-based subtask ids; subtasks are not reordered within a revision.",
           "items": {
-            "enum": [
-              0,
-              1
-            ],
+            "maximum": 5,
+            "minimum": 0,
             "type": "integer"
           },
           "type": "array"
@@ -5735,7 +6251,7 @@
     },
     "UpdatePlan": {
       "additionalProperties": false,
-      "description": "Replace both proposed subtasks using the expected plan revision.",
+      "description": "Replace the one to six proposed subtasks using the expected plan revision.",
       "properties": {
         "revision": {
           "exclusiveMinimum": 0,
@@ -5745,16 +6261,11 @@
           "$ref": "#/$defs/NonEmptyText"
         },
         "subtasks": {
-          "maxItems": 2,
-          "minItems": 2,
-          "prefixItems": [
-            {
-              "$ref": "#/$defs/SubtaskDraft"
-            },
-            {
-              "$ref": "#/$defs/SubtaskDraft"
-            }
-          ],
+          "items": {
+            "$ref": "#/$defs/SubtaskDraft"
+          },
+          "maxItems": 6,
+          "minItems": 1,
           "type": "array"
         }
       },

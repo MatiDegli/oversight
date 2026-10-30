@@ -1,0 +1,20 @@
+--- a/boltons/iterutils.py
++++ b/boltons/iterutils.py
+@@ -499,6 +499,17 @@
+     of the iterable. For infinite iterators, setting *end* has no effect.
+     """
+     return windowed_iter(src, 2, fill=end)
++
++
++def replaced_iter(src, old, new):
++    """Lazily replace items equal to old, without modifying the source."""
++    for item in src:
++        yield new if item == old else item
++
++
++def replaced(src, old, new):
++    """Return a list of items with equal values replaced."""
++    return list(replaced_iter(src, old, new))
+ 
+ 
+ def windowed(src, size, fill=_UNSET):

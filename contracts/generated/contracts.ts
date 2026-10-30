@@ -14,6 +14,7 @@ export type PlanId = string;
 export type QueuedTaskId = string;
 export type DecisionRef = ReviewCardDecisionRef | ChangeDecisionRef | LeadPlanDecisionRef;
 export type CaseOutcome = "passed" | "failed" | "error" | "skipped";
+export type GrantReason = "possible_callers" | "protected_path";
 export type MergeMode = "ask_me" | "merge_when_safe";
 export type RuleId =
   | "combined_tests"
@@ -37,6 +38,7 @@ export type Confidence = "exact" | "possible";
 export type PossibleReason =
   "unknown_receiver" | "several_candidates" | "rebound_name" | "star_import" | "dynamic_dispatch";
 export type FileStatus = "added" | "modified" | "deleted";
+export type RunId = string;
 export type ReviewSeverity = "BLOCKING" | "SHOULD-FIX" | "NIT";
 export type ErrorCode =
   | "not_found"
@@ -57,7 +59,6 @@ export type SettingName =
   | "OVERSIGHT_BUDGET_USD"
   | "MUSE_SPARK_INPUT_USD_PER_M"
   | "MUSE_SPARK_OUTPUT_USD_PER_M";
-export type RunId = string;
 export type ServerEvent =
   | RunStartedEvent
   | GraphSnapshotEvent
@@ -69,6 +70,7 @@ export type ServerEvent =
   | ChangeProposedEvent
   | ChangeResolvedEvent
   | UsageTickEvent
+  | ModelAttemptFailedEvent
   | ErrorReportEvent
   | ChangeAssessedEvent
   | MergeModeChangedEvent
@@ -78,7 +80,9 @@ export type ServerEvent =
   | TestsExecutedEvent
   | RevertResolvedEvent
   | QueueUpdatedEvent
-  | LeadStatusEvent;
+  | LeadStatusEvent
+  | GrantCreatedEvent
+  | GrantRevokedEvent;
 
 /**
  * Observed before and after behavior of one added test.
@@ -318,6 +322,10 @@ export interface AgentStep {
    * Set for run_tests.
    */
   tests: SuiteResult | null;
+  /**
+   * Set only for malformed model tool calls; every other tool error stays null.
+   */
+  error_kind: ("unknown_tool" | "invalid_json" | "invalid_arguments") | null;
 }
 /**
  * A test run's result. Not "TestResult", which pytest would try to collect.
@@ -370,6 +378,10 @@ export interface AgentStepEvent {
 export interface ApproveChange {
   comment?: string | null;
   /**
+   * Create a standing grant from this personal approval, when its wait and scope match.
+   */
+  grant?: GrantRequest | null;
+  /**
    * The answered review cards for the observed revision and head.
    */
   answers?: ReviewCard[] | null;
@@ -378,6 +390,15 @@ export interface ApproveChange {
    */
   revision: number;
   head_commit: NonEmptyText;
+}
+export interface GrantRequest {
+  reason: GrantReason;
+  scope: GrantScope;
+}
+export interface GrantScope {
+  kind: "module" | "path" | "agent" | "run";
+  value: NonEmptyText;
+  expires: "run" | "session";
 }
 /**
  * One server-authored question about an exact change target.
@@ -694,7 +715,8 @@ export interface ReachFacts {
 export interface NodeBehaviorDiff {
   node_id: NodeId;
   /**
-   * Inputs compared on both sides with equal typed inputs.
+   * Inputs compared on both sides with equal typed inputs over shared parameters when
+   * omitted candidate-only parameters have literal or resolved constant defaults.
    */
   compared_count: number;
   /**
@@ -717,7 +739,8 @@ export interface NodeBehaviorDiff {
 export interface MeasuredCaller {
   node_id: NodeId;
   /**
-   * Inputs compared on both sides with equal typed inputs.
+   * Inputs compared on both sides with equal typed inputs over shared parameters when
+   * omitted candidate-only parameters have literal or resolved constant defaults.
    */
   compared_count: number;
   /**
@@ -1041,6 +1064,10 @@ export interface ChangeResolved {
    * The accepted human answers, copied by the server from a decision command.
    */
   answers: ReviewCard1[] | null;
+  /**
+   * Immutable authorization and measured callers waived by a rules approval.
+   */
+  grants?: GrantUse[] | null;
 }
 export interface Conflict {
   kind: "merge" | "tests";
@@ -1052,6 +1079,33 @@ export interface Conflict {
    * The combined result's tests, for a test failure.
    */
   tests: SuiteResult | null;
+}
+export interface GrantUse {
+  grant_id: NonEmptyText;
+  rule: RuleId;
+  caller_ids: NodeId[];
+  caller_count: number;
+  authorization: GrantAuthorization;
+}
+/**
+ * Server capture after exact scope matching, bound to this assessment target.
+ *
+ * Scope is captured from the server's matched grant, never from a model or command receipt.
+ * Historical validation consumes this capture; only live barriers consult mutable grants.
+ */
+export interface GrantAuthorization {
+  reason: GrantReason;
+  scope: GrantScope;
+  creation_seq: number;
+  creation_ts: Timestamp;
+  run_id: RunId;
+  session_id: NonEmptyText | null;
+  checked_at: Timestamp;
+  active_at_effect: boolean;
+  change_id: ChangeId;
+  agent_id: AgentId;
+  revision: number;
+  head_commit: NonEmptyText;
 }
 export interface ChangeResolvedEvent {
   /**
@@ -1295,7 +1349,7 @@ export interface EnqueueTask {
    */
   agent?: QueuedAgentTask | null;
   /**
-   * One proposed two-agent plan.
+   * One proposed plan with one to six subtasks.
    */
   plan_id?: PlanId | null;
   /**
@@ -1396,6 +1450,38 @@ export interface FileContent {
 export interface FileSaved {
   path: WorkspacePath;
   hash: string;
+}
+export interface GrantCreated {
+  reason: GrantReason;
+  scope: GrantScope;
+  grant_id: NonEmptyText;
+  change_id: ChangeId;
+  revision: number;
+  head_commit: NonEmptyText;
+  run_id: RunId;
+  session_id: NonEmptyText | null;
+  granted_by: "person";
+}
+export interface GrantCreatedEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "grant.created";
+  payload: GrantCreated;
+}
+export interface GrantRevoked {
+  grant_id: NonEmptyText;
+}
+export interface GrantRevokedEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "grant.revoked";
+  payload: GrantRevoked;
 }
 export interface GraphDelta {
   from_version: string;
@@ -1632,6 +1718,53 @@ export interface UsageTick {
   plan_id: PlanId | null;
 }
 /**
+ * The server-owned model.attempt_failed envelope.
+ */
+export interface ModelAttemptFailedEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "model.attempt_failed";
+  payload: ModelAttemptFailed;
+}
+/**
+ * Emitted by the server once per failed attempt, before the retry wait and for the final
+ * failure; never written by the model. The card reads "Waiting for model (retry n/5)" from
+ * an attempt with wait_s set, until that agent's next agent.step, usage.tick or
+ * model.attempt_failed.
+ */
+export interface ModelAttemptFailed {
+  agent_id: AgentId;
+  change_id: ChangeId | null;
+  role: ("agent" | "review" | "plan" | "lead") | null;
+  model: NonEmptyText;
+  provider: "meta" | "baseten" | "fake";
+  /**
+   * The 1-based number of the attempt that failed.
+   */
+  attempt: number;
+  /**
+   * The retry policy limit, currently 5.
+   */
+  max_attempts: number;
+  cause: "rate_limited" | "server_error" | "connection" | "timeout" | "refused";
+  /**
+   * HTTP status when the provider answered.
+   */
+  status: number | null;
+  /**
+   * Provider Retry-After, when sent.
+   */
+  retry_after_s: number | null;
+  /**
+   * Wait before the next attempt; null when none follows.
+   */
+  wait_s: number | null;
+  final: ("attempts_used" | "not_retryable" | "deadline") | null;
+}
+/**
  * The new server merge mode.
  */
 export interface MergeModeChangedEvent {
@@ -1656,7 +1789,7 @@ export interface PlanUpdatedEvent {
   payload: Plan;
 }
 /**
- * The complete versioned state of a two-agent plan.
+ * The complete versioned state of a plan with one to six subtasks.
  */
 export interface Plan {
   plan_id: PlanId;
@@ -1664,7 +1797,7 @@ export interface Plan {
   task: NonEmptyText;
   graph_version: NonEmptyText;
   state: "planning" | "proposed" | "starting" | "running" | "completed" | "rejected" | "failed";
-  subtasks: [PlanSubtask, PlanSubtask] | null;
+  subtasks: PlanSubtask[] | null;
   detail: string | null;
   /**
    * The lead that requested this plan.
@@ -1682,10 +1815,17 @@ export interface PlanSubtask {
   task: NonEmptyText;
   zone: PlanZone;
   /**
-   * Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.
+   * Stable zero-based subtask ids; subtasks are not reordered within a revision.
    */
-  depends_on: (0 | 1)[];
+  depends_on: number[];
   agent_id: AgentId | null;
+  /**
+   * Null only for payloads written before 1.8.0. Waiting has no agent; running and merged
+   * have one. Prerequisites must merge before a subtask runs. Reject, discard and stop mean
+   * rejected; dependents of rejected or cancelled subtasks are cancelled. Request changes keeps
+   * the subtask running. Agent ids are per start, so later subtasks may reuse a released slot.
+   */
+  state: ("waiting" | "running" | "merged" | "rejected" | "cancelled") | null;
 }
 /**
  * The tests.executed envelope.
@@ -1794,7 +1934,9 @@ export interface QueueUpdatedEvent {
   payload: QueuedTask;
 }
 /**
- * One server-owned versioned queue item.
+ * One server-owned versioned queue item. A plan reserves slots only for subtasks that
+ * can start now. A dependent subtask that becomes ready takes the next released slot before
+ * later queue items, keeping its plan's place in the queue.
  */
 export interface QueuedTask {
   /**
@@ -1802,7 +1944,7 @@ export interface QueuedTask {
    */
   agent: QueuedAgentTask | null;
   /**
-   * One proposed two-agent plan.
+   * One proposed plan with one to six subtasks.
    */
   plan_id: PlanId | null;
   /**
@@ -1819,7 +1961,7 @@ export interface QueuedTask {
    */
   state: "queued" | "starting" | "running" | "completed" | "cancelled" | "blocked" | "failed";
   /**
-   * Agents assigned during dispatch.
+   * Agents assigned so far; a plan's list only grows as subtasks start.
    */
   agent_ids: AgentId[];
   /**
@@ -2070,9 +2212,9 @@ export interface SubtaskDraft {
   task: NonEmptyText;
   zone: PlanZone;
   /**
-   * Stable zero-based subtask ids within the two-slot plan; slots cannot be reordered.
+   * Stable zero-based subtask ids; subtasks are not reordered within a revision.
    */
-  depends_on?: (0 | 1)[];
+  depends_on?: number[];
 }
 /**
  * Reserved future 200 response; never emitted while the endpoint answers 501.
@@ -2120,16 +2262,12 @@ export interface TreeResponse {
   truncated: boolean;
 }
 /**
- * Replace both proposed subtasks using the expected plan revision.
+ * Replace the one to six proposed subtasks using the expected plan revision.
  */
 export interface UpdatePlan {
   revision: number;
   graph_version: NonEmptyText;
-  /**
-   * @minItems 2
-   * @maxItems 2
-   */
-  subtasks: [SubtaskDraft, SubtaskDraft];
+  subtasks: SubtaskDraft[];
 }
 
-export const CONTRACT_VERSION = "1.6.0";
+export const CONTRACT_VERSION = "1.8.0";
