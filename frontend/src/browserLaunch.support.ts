@@ -15,7 +15,9 @@ export function browserLaunchOptions({
     args: [
       ...(options.args ?? []),
       ...(webGL ? [] : ["--disable-webgl"]),
-      ...(softwareRendering ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] : []),
+      ...(webGL && softwareRendering
+        ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+        : []),
     ],
   };
 }

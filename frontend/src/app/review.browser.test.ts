@@ -108,12 +108,16 @@ it("the queue counter reframes each proposal while review stays open and keeps k
   });
 }, 30_000);
 
-it("opens review only from the person's click, keeps the change and cone lit, dims the rest, and closes", async () => {
+it("disables WebGL and leaves the field hidden on the product's plain ground", async () => {
   await withPage(false, async (page) => {
     // No context shim: the shared launcher's Chromium flag must select the product fallback.
-    const field = await page.evaluate(() => {
-      const canvas = document.querySelector('[aria-label="Repository graph"]')?.parentElement
-        ?.firstElementChild as HTMLCanvasElement & { oversightField?: FieldProbe };
+    const fieldCanvas = page
+      .getByRole("img", { name: "Repository graph", exact: true })
+      .locator("..")
+      .locator(":scope > canvas");
+    await browserExpect(fieldCanvas).toHaveCount(1);
+    const field = await fieldCanvas.evaluate((element) => {
+      const canvas = element as HTMLCanvasElement & { oversightField?: FieldProbe };
       return {
         webgl2: document.createElement("canvas").getContext("webgl2") === null,
         hidden: canvas.hidden,
@@ -122,6 +126,11 @@ it("opens review only from the person's click, keeps the change and cone lit, di
       };
     });
     expect(field).toEqual({ webgl2: true, hidden: true, state: "plain", draws: 0 });
+  });
+});
+
+it("opens review only from the person's click, keeps the change and cone lit, dims the rest, and closes", async () => {
+  await withPage(false, async (page) => {
     const changed = await page.evaluate(() => window.reviewTest.changed);
     await browserExpect(page.getByRole("button", { name: "Review change" })).toBeVisible();
     await browserExpect(panel(page)).toHaveCount(0);

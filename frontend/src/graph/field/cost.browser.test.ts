@@ -1,4 +1,3 @@
-import { launchBrowser } from "../../browserLaunch.support";
 // Reproduce the watch comparison with `make test-browser`. Only the reference response lifts the
 // cap to 1.5; production source stays capped at one. Both shots use the same browser DPR, viewport,
 // graph, theme and frozen field clock, so only the field's drawing buffer changes.
@@ -9,6 +8,8 @@ import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
+
+import { launchBrowser } from "../../browserLaunch.support";
 
 const out = fileURLToPath(new URL("../../../../.shots/field-cost/", import.meta.url));
 let server: ViteDevServer | undefined;

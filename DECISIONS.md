@@ -2118,3 +2118,16 @@ pnpm -C frontend exec vitest run --config vite.config.ts --project browser src/a
 The existing long camera and dotField files and the native-shortcut test callback retain their
 structure; this front changes only launch wiring and the two proof assertions. This decision log
 remains append-only.
+
+### 2026-10-30 — Browser launcher review corrections
+
+The full-page captures in app/shell/agentLook.browser.test.ts intentionally show the product's
+no-WebGL ground while checking agent cards, rail avatars, review pills and pending borders. They
+do not claim to capture the field's appearance. The three field files listed above retain WebGL.
+
+The dotField fixture loads the shared launcher inside beforeAll, so fixture collection needs no
+new dependency stub. app/dotFieldChecks.test.ts is restored to its pre-front contents; its original
+collection assertions reject an eager launcher import. The no-WebGL proof is a separate review
+test that asserts the field canvas exists before reading its state. SwiftShader flags are now
+added only when WebGL is enabled, with launcher tests covering the environment variable, explicit
+overrides and preservation of other launch options. The cost test's header precedes its imports.

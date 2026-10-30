@@ -1,4 +1,3 @@
-import { launchBrowser } from "../browserLaunch.support";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -22,6 +21,7 @@ let browser: Browser | undefined;
 let url: string;
 let html: string;
 beforeAll(async () => {
+  const { launchBrowser } = await import("../browserLaunch.support");
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
     cacheDir: fileURLToPath(new URL("../../../.shots/dot-field-vite-cache", import.meta.url)),
