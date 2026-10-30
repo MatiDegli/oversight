@@ -389,7 +389,7 @@ it.each([1280, 1920])(
   60000,
 );
 
-it.each(["a", "b"] as const)(
+it.each(["a", "b", "c"] as const)(
   "wraps long %s evidence losslessly at ordinary size and 200%% zoom",
   async (name) => {
     if (!browser) throw new Error("Missing browser");
@@ -430,10 +430,14 @@ it.each(["a", "b"] as const)(
       );
       await page.evaluate(() => document.fonts.ready);
       for (const zoom of [1, 2]) {
-        await page.evaluate((zoom) => {
-          document.body.style.zoom = String(zoom);
-          (document.body.firstElementChild as HTMLElement).style.width = `${String(880 / zoom)}px`;
-        }, zoom);
+        await page.evaluate(
+          ({ zoom, width }) => {
+            document.body.style.zoom = String(zoom);
+            (document.body.firstElementChild as HTMLElement).style.width =
+              `${String(width / zoom)}px`;
+          },
+          { zoom, width: name === "c" ? 328 : 880 },
+        );
         const overflow = await page
           .locator(".review-body")
           .evaluate((body) =>

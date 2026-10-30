@@ -318,3 +318,10 @@
 .review-body-a > [aria-label="Change files"] {
   margin-top: 0;
 }
+
+@container (width < 280px) {
+  .review-body .example-pair > div {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
