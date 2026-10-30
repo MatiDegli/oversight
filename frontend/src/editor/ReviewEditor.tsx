@@ -45,12 +45,8 @@ export function ReviewEditor({
       files,
       setState,
       (text) => {
-        // A full replacement invalidates Monaco's folded ranges while its worker is diffing.
-        // Reattach the same owned models so the diff view rebuilds those ranges from the text.
-        const models = diff.getModel();
-        diff.setModel(null);
-        model.setValue(text);
-        diff.setModel(models);
+        // An edit rebuilds folded ranges without flushing the diff view or detaching its models.
+        model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
       },
       true,
     );
