@@ -42,7 +42,7 @@ original-suite result, failing hidden suite, and passing reference solution agai
 From the clone root, with the existing locked dependencies installed:
 
 ```sh
-uv run --offline --frozen pytest tools/eval/tests
+uv run --offline --frozen pytest tools/eval/tests -n 2
 UV_OFFLINE=1 npm_config_offline=true PNPM_CONFIG_OFFLINE=true make check
 ```
 
@@ -89,7 +89,10 @@ planning rates 0.1/0.2 USD per million. It needs no pilots, writes no ledger, st
 makes no model/network call. It is an **estimate, not a billing ceiling**. With `--detection`,
 a foreign ledger is refused; the combined figure is `ledger spent + pair pending +
 (detection estimated_total_usd - detection spent_usd)`, with whether it is within USD 20.
-Historical spend is counted once.
+Historical spend is counted once. Unknown-cost and unsettled-reservation counts are reported;
+if either is nonzero, `within_usd20` is `"unknown"`. Spent is then a lower bound and remaining an
+upper bound; estimated totals omit unmeasured charges. An explicit tariff below the reservation
+minimum is labeled "arm tariff, floored at the default-rate allowance".
 
 The CLI starts a dedicated Oversight process for every pending attempt. It passes
 `OVERSIGHT_HARNESS_PACK=true|false` from the arm's `on|off` setting; both paid and fake
@@ -182,11 +185,16 @@ cost, wall time, outcome and original/hidden/policy checks. Missing costs or tok
 `"unknown"`. `report` prints every attempt, per-repetition totals and per-arm aggregates, including
 **tasks solved** and mean tasks solved per observed repetition. Aggregation propagates unknowns.
 
-The report's `failure_table` groups stored event evidence by arm, task and repetition: tool calls
-by tool/result, edit errors, failed test runs, finish calls with/without an earlier passing test
-run, and the last agent status with its detail verbatim. Counts use event fields, never prose.
+The report's `failure_table` groups stored event evidence for bench-plan arms by task and
+repetition: tool calls by tool/result, edit errors, failed test runs, finish calls with/without
+a passing test run since the last successful edit, and the first terminal agent status with its
+detail verbatim. A nonpassing test run clears the passing flag. Terminal states are
+`ready_for_review`, `halted`, `done` and `stopped`; `stopped` overrides an earlier terminal state,
+matching the attempt observer. Counts use event fields, never prose.
 It states "error kind: not measured" and omits `error_kind`. Cells without a counterpart in the
-opposite pack arm read "unpaired"; absent event evidence is marked unavailable.
+opposite pack arm read "unpaired"; absent event evidence is marked unavailable. Only plan arm
+definitions (including tariff) establish counterparts; a manifest alone cannot establish a pair.
+Detection arms and their case IDs are excluded from this table.
 
 The durable ledger is written before results are materialized; reopening repairs missing/stale
 JSONL without duplicate rows. `manifest.json` retains each server advertisement, configuration,

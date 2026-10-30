@@ -37,6 +37,16 @@ def schedule(arms: list[Arm], tasks: list[Task], repetitions: int, seed: int) ->
     return jobs
 
 
+def rate_basis(arm: Arm) -> str:
+    if arm.tariff is None:
+        return "default planning rates 0.1/0.2 USD per M, assumed"
+    # Match allowance()'s token assumptions to identify when its minimum wins.
+    tariff_allowance = 36 * (16000 * arm.tariff.input + 4096 * arm.tariff.output) / 1e6
+    if tariff_allowance < allowance("fake", None):
+        return "arm tariff, floored at the default-rate allowance"
+    return "arm tariff"
+
+
 def estimate(
     out: Path, state: State | None, jobs: list[Job], detection: Path | None, cap: float = 20
 ) -> dict:
@@ -63,6 +73,8 @@ def estimate(
             }
         )
     spent = sum(r.charged_usd for r in records)
+    unknown = sum(r.unknown for r in records)
+    unsettled = sum(r.status != "finished" for r in records)
     pending = sum(a["reservation_usd"] for a in attempts if a["pending"])
     result = {
         "method": "estimate, not a billing ceiling",
@@ -71,14 +83,11 @@ def estimate(
         "reservations": attempts,
         "pending_total_usd": pending,
         "spent_usd": spent,
+        "unknown_costs": unknown,
+        "unsettled_reservations": unsettled,
         "remaining_usd": (state.cap_usd if state else cap) - spent,
         "estimated_total_usd": spent + pending,
-        "rate_basis": {
-            j.arm.arm_id: "arm tariff"
-            if j.arm.tariff
-            else "default planning rates 0.1/0.2 USD per M, assumed"
-            for j in jobs
-        },
+        "rate_basis": {j.arm.arm_id: rate_basis(j.arm) for j in jobs},
     }
     if detection:
         data = json.loads(detection.read_text())
@@ -91,7 +100,7 @@ def estimate(
         result.update(
             detection_pending_usd=detection_pending,
             combined_total_usd=combined,
-            within_usd20=combined <= 20,
+            within_usd20="unknown" if unknown or unsettled else combined <= 20,
         )
     return result
 

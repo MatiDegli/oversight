@@ -48,7 +48,11 @@ def failure_counts(ledger: Ledger, record: Record) -> dict:
         if stored["run_id"] != record.run_id or payload.get("agent_id") != record.agent_id:
             continue
         if event["type"] == "agent.status":
-            counts["terminal_status"] = {"state": payload["state"], "detail": payload["detail"]}
+            state = payload["state"]
+            if state in {"ready_for_review", "halted", "stopped", "done"} and (
+                counts["terminal_status"] is None or state == "stopped"
+            ):
+                counts["terminal_status"] = {"state": state, "detail": payload["detail"]}
         elif event["type"] == "agent.step":
             tool, result = payload["tool"], payload["result"]
             by_result = counts["tool_calls"].setdefault(tool, {"ok": 0, "error": 0})
@@ -59,7 +63,9 @@ def failure_counts(ledger: Ledger, record: Record) -> dict:
                 counts["run_tests_failed"] += result == "error" or bool(
                     tests and tests["outcome"] != "passed"
                 )
-                passed |= bool(result == "ok" and tests and tests["outcome"] == "passed")
+                passed = bool(result == "ok" and tests and tests["outcome"] == "passed")
+            if tool == "edit_file" and result == "ok":
+                passed = False
             if tool == "finish":
                 counts[
                     "finish_with_passing_tests" if passed else "finish_without_passing_tests"
@@ -71,16 +77,9 @@ def failure_table(ledger: Ledger) -> dict:
     configurations = {
         a["arm_id"]: a for p in ledger.state.plans.values() for a in p.get("arms", [])
     }
-    manifest = ledger.out.parent / "manifest.json"
-    if manifest.is_file():
-        for entry in json.loads(manifest.read_text())["runs"].values():
-            experiment = entry.get("experiment")
-            if experiment:
-                configurations.setdefault(experiment["arm_id"], experiment["configuration"])
     table = {}
-    records = ledger.state.records
-    for arm_id in {r.arm_id for r in records}:
-        config = configurations.get(arm_id, {})
+    records = [r for r in ledger.state.records if r.arm_id in configurations]
+    for arm_id, config in configurations.items():
         counterparts = {
             name
             for name, other in configurations.items()

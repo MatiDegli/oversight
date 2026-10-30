@@ -8,6 +8,7 @@ import pytest
 from tools.eval import arms as arm_module
 from tools.eval import bench, server
 from tools.eval.arms import Arm, load_arms
+from tools.eval.grade import Tariff
 from tools.eval.ledger import Ledger, State
 from tools.eval.planning import estimate, schedule
 from tools.eval.report import report
@@ -21,6 +22,19 @@ from tools.eval.tests.test_runner import TASK, script
 from tools.eval.transport import API, Events
 
 PAID = Arm(arm_id="paid", profile="muse-spark", reasoning="low", harness_pack="on")
+
+
+def recorded_plan(ledger, *, pilot_start):
+    specification = {
+        "arms": [PAID.model_dump(mode="json")],
+        "task_hashes": {TASK.id: TASK.hash},
+        "repetitions": 1,
+        "pilot": pilot_start,
+    }
+    plan_id = digest(json.dumps(specification, sort_keys=True))
+    ledger.state.plans[plan_id] = {**specification, "seed": 17}
+    ledger.save()
+    return plan_id
 
 
 @pytest.mark.parametrize("pack", ["on", "off"])
@@ -110,19 +124,26 @@ def gate_inputs(tmp_path, monkeypatch):
 @pytest.mark.parametrize("resume", [False, True])
 def test_paid_start_and_resume_require_gate(gate_inputs, monkeypatch, capsys, command, resume):
     out, arms, gate, pin = gate_inputs
+    monkeypatch.setattr(bench, "dedicated", lambda *a, **k: pytest.fail("server start"))
+    monkeypatch.setattr(bench, "execute", lambda *a, **k: pytest.fail("attempt start"))
+    plan_id = None
     if resume:
-        out.parent.mkdir(parents=True)
-        (out.parent / "ledger.json").write_text(
-            State(cap_usd=20, results_file=out.name, tariff=None).model_dump_json()
-        )
+        ledger = Ledger(out, 20, None)
+        try:
+            plan_id = recorded_plan(ledger, pilot_start=command == "pilot")
+        finally:
+            ledger.close()
     runner = AsyncMock(return_value={"accepted": True})
     monkeypatch.setattr(bench, "run_plan", runner)
-    args = [command, "--arms", str(arms), "--out", str(out)]
+    args = [command, "--arms", str(arms), "--out", str(out), "--task", TASK.id]
     assert bench.main(args) == 1
     assert "require --gate" in capsys.readouterr().err
     runner.assert_not_called()
     assert bench.main([*args, "--gate", *map(str, gate), "--labels-sha256", pin]) == 0
     runner.assert_awaited_once()
+    if resume:
+        assert plan_id is not None
+        assert plan_id in State.model_validate_json((out.parent / "ledger.json").read_bytes()).plans
 
 
 @pytest.mark.parametrize(
@@ -256,6 +277,10 @@ def test_failure_table_uses_only_events_and_preserves_detail(tmp_path):
                 "payload": {"agent_id": "agent-a", "state": "halted", "detail": detail},
             },
             {
+                "type": "agent.status",
+                "payload": {"agent_id": "agent-a", "state": "done", "detail": None},
+            },
+            {
                 "type": "agent.step",
                 "payload": {
                     "agent_id": "other",
@@ -314,7 +339,7 @@ def test_estimate_is_read_only_and_combines_pending_once(tmp_path, monkeypatch, 
     ] == allowance(PAID.profile, None)
     assert (
         estimate(out, None, schedule([OFF], [TASK], 1, 0), None)["rate_basis"][OFF.arm_id]
-        == "arm tariff"
+        == "arm tariff, floored at the default-rate allowance"
     )
     detection.write_text(
         json.dumps({"ledger": str(tmp_path / "foreign"), "spent_usd": 2, "estimated_total_usd": 5})
@@ -335,13 +360,54 @@ def test_estimate_is_read_only_and_combines_pending_once(tmp_path, monkeypatch, 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("pilot_start", [True, False])
-async def test_run_plan_itself_requires_gate_before_resume(tmp_path, pilot_start):
+async def test_run_plan_itself_requires_gate_before_resume(tmp_path, monkeypatch, pilot_start):
+    monkeypatch.setattr(bench, "dedicated", lambda *a, **k: pytest.fail("server start"))
+    monkeypatch.setattr(bench, "execute", lambda *a, **k: pytest.fail("attempt start"))
     ledger = Ledger(tmp_path / "results.jsonl", 20, None)
     try:
+        plan_id = recorded_plan(ledger, pilot_start=pilot_start)
+        before = ledger.path.read_bytes()
         with pytest.raises(BenchError, match="require --gate"):
             await bench.run_plan(
                 ledger, [PAID], [TASK], 1, None, pilot=pilot_start, fake_script=None
             )
-        assert not ledger.state.plans and not ledger.state.records
+        assert plan_id in ledger.state.plans and not ledger.state.records
+        assert ledger.path.read_bytes() == before
     finally:
         ledger.close()
+
+
+@pytest.mark.parametrize("unknown,unsettled", [(True, False), (False, True), (True, True)])
+def test_estimate_never_certifies_incomplete_costs(tmp_path, unknown, unsettled):
+    out = tmp_path / "results.jsonl"
+    ledger = Ledger(out, 20, None)
+    try:
+        record = pilot(ledger)
+        record.unknown = unknown
+        record.status = "reserved" if unsettled else "finished"
+        detection = tmp_path / "detection.json"
+        detection.write_text(
+            json.dumps({"ledger": str(ledger.path), "spent_usd": 0, "estimated_total_usd": 1})
+        )
+        result = estimate(out, ledger.state, schedule([OFF], [TASK], 2, 0), detection)
+        assert result["within_usd20"] == "unknown"
+        assert result["unknown_costs"] == int(unknown)
+        assert result["unsettled_reservations"] == int(unsettled)
+        assert result["spent_usd"] == record.charged_usd
+    finally:
+        ledger.close()
+
+
+@pytest.mark.parametrize(
+    "rates,floored", [(None, False), ((0, 0), True), ((0.05, 0.1), True), ((1, 2), False)]
+)
+def test_estimate_labels_the_reservation_rate_basis(tmp_path, rates, floored):
+    tariff = None if rates is None else Tariff(input=rates[0], output=rates[1])
+    arm = OFF.model_copy(update={"tariff": tariff})
+    result = estimate(tmp_path / "results.jsonl", None, schedule([arm], [TASK], 1, 0), None)
+    basis = result["rate_basis"][arm.arm_id]
+    assert ("floored at the default-rate allowance" in basis) is floored
+    if rates is None:
+        assert basis == "default planning rates 0.1/0.2 USD per M, assumed"
+    elif not floored:
+        assert basis == "arm tariff"
