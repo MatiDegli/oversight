@@ -163,6 +163,7 @@ def test_partial_initial_launch_refusals_and_ready_dependents_keep_priority() ->
     running = queue_transition(item, "running")
     assert refusal_state(running, "slot_busy") == "running"
     assert refusal_state(item, "invalid_request") == "failed"
+    assert refusal_state(item, "not_configured") == "failed"
     assert refusal_state(item, "internal", launch_failed=True) == "failed"
     failed = core.fail(plan, "launch failed")
     assert failed.state == "failed" and failed.detail == "launch failed"
