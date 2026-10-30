@@ -567,9 +567,11 @@ icon, in neutral colors.
 
 **Character:** One family built for legibility: Next for text and graph labels, Mono for code,
 hashes, money, step and line counts, and any number shown as data. In the review panel only,
-Mono is for code, inputs and outputs, paths, hashes, and money in chips; counts inside a sentence
-stay in Next. This local narrowing keeps prose readable without changing the agent card's numeric
-readings or the dock's counts, durations and times. Both fonts come from Fontsource packages;
+Mono is for code, inputs and outputs, paths and hashes; counts inside a sentence stay in Next.
+Cost stays in the provenance caption in Next, including "cost unknown"; review chips hold no money.
+Standalone line counts, including +2 −0 in chips and the file row, use Next 14/600.
+This local narrowing keeps prose readable without changing the agent card's numeric readings or
+the dock's counts, durations and times. Both fonts come from Fontsource packages;
 Monaco is created after the fonts load, or calls `monaco.editor.remeasureFonts()`.
 
 ### Hierarchy
@@ -588,7 +590,8 @@ Monaco is created after the fonts load, or calls `monaco.editor.remeasureFonts()
 - **Caption** (400, 13px): captions, keyboard hints, a module's function count.
 - **Badge** (700, 15px): the letter on a node badge (a 26px square); cursor names use 12px.
 - **Code** (Mono 400, 15px, 21px lines): code in Monaco; line numbers at 13px.
-- **Data** (Mono 400, 14px): hashes, money, counts shown as data.
+- **Data** (Mono 400, 14px): hashes, money and standalone counts outside review; the review
+  exceptions above apply to caption cost, sentence counts and added/removed line counts.
 
 The fonts need weights 400, 600 and 700 loaded.
 
@@ -688,29 +691,19 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 ### Phone width
 
 - The submission practice supports widths below 1280px; the full IDE keeps its widen-window notice.
-- Stack the top bar, provenance, graph context (about 200px maximum), evidence and decision dock.
-  Center the column at up to 430px with 16px gutters; only the evidence scrolls.
-- Draw node cards and taxi calls on plain ground when WebGL is unavailable. Next labels and
-  agent letters preserve Signal; compact graph names use 14–16px and folded nodes 13–14px.
-- Fold exact callers by distance; disclose members, bounds and nonzero truncation.
-  Added callees are calls, never affected callers. Zero exact callers does not prove no impact.
-- Pending changes keep agent-colored dashes. Reveal shows the recorded merged pieces solid.
-- Each decision starts with the verbatim recorded proposal summary, labeled as the agent’s words.
-  It is a claim to judge. Keep it with the files, lines and test facts.
-- The lines chip is a button at least 44px tall, with a chevron, Show diff / Hide diff and
-  aria-expanded. The changed file, Tests added and Called helper start hidden behind it.
-- Code uses 15px Mono at 21px leading, lossless soft wraps, hanging indents and continuation
-  gutter marks without repeated numbers. Prefer Python boundaries; never orphan closing punctuation.
-- Recorded task and Possibly affected form one list: no box, hairlines in divider, 44px touch rows.
-  Each has a one-line ellipsized preview in muted text and a down chevron that turns when open.
-  They expand in place; Recorded task retains the full verbatim text inside.
-- Keep the collapsed list above the dock on first view at 390×844 and 430×932; only evidence scrolls.
-- Approve and Reject share neutral, equal 48px containers; neither requires opening the diff.
-  Approve has no keyboard shortcut. Next and Show findings appear only after an answer.
-- Short titles are validated manifest curator fields. Prose numerals use Next; Mono is for code,
-  paths and data cells. Provenance appears once; browser-only choices are explained at entry,
-  correctness limits at finish, and leaving stays a quiet top-bar action.
-- Desktop at 1280px and wider retains its existing composition, type and behavior.
+- The approved review states f and f-b govern phone practice. Their full layout and copy are
+  specified under "Phone, f and f-b" in Review panel with the matte header below.
+- Stack the top bar, one provenance strip, 168px graph context, scrolling evidence and decision
+  dock at 390×844, with 16px gutters. Draw node cards and taxi calls on plain ground without WebGL;
+  pending changes keep agent-colored dashes and letters.
+- Lead with choices in f or the differing caller in f-b. Examples stack Before above After
+  with a down arrow; values use Mono 15 with soft wraps. In f, the three answers stack at 44px.
+- "What was compared" and "Show diff" are separate 44px disclosure rows with one-line previews.
+  The graph owns the possibly affected list; the panel keeps its lead and comparison summary.
+- "Approve" and "Reject" share equal 48px containers. In f, the rule caption sits above them;
+  in f-b, Approve is enabled and there is no dock caption. "1 of 2 answered" stays only in f's lead.
+  Approve has no keyboard shortcut and does not require opening the diff.
+- The desktop states at 1280px and wider follow the review anatomy below.
 
 ## Elevation & Depth
 
@@ -764,6 +757,9 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 - **Style:** page-raised fill, page-border border, control radius, 14px text, an icon in muted.
 - **Review:** at most four decision chips: files, added/removed lines, tests, and the cone's reach
   or "No exact callers". Provenance belongs to the header caption; no question-mark icon.
+  The shared copy is "1 file", "+2 −0", "28 passed"; the fourth chip is "No exact callers" in a,
+  "9 possibly affected · up to distance 2" in b–d2, and "2 possibly affected · up to distance 1"
+  in g. Phone f-b shortens the reach chip to "9 possibly affected".
 - **Live diff:** keeps its own facts row with tests, lines, base commit, worktree, steps and cost.
   The cone list keeps its distance badges.
 
@@ -917,7 +913,9 @@ everything else steps back.
   to 60%; nodes the agent read in this run keep their full read look while the agent works.
 - The cone card on the graph lists the possibly affected functions by distance, with counts, and
   says what the bounds cut, for example "+12 omitted by depth". It is "possibly affected", never a
-  complete list. The review panel keeps a one-line summary.
+  complete list. In review, the lead block presents differences, the reach chip summarizes the
+  cone's size and distance, and "What was compared" gives two to four lines about measurements
+  and their limits. The function list stays on the graph.
 - The cone follows exact calls only. On main's graph with the change's nodes and edges applied,
   count distinct non-test callers outside seeds and cone entries that have a possible call into
   either and no exact call into either. Count every possible call, without a built-in name filter;
@@ -960,6 +958,8 @@ The shared anatomy serves choices and ordinary review; the graph stays visible a
    letter 15/700, radius 7px, agent tint and 1.5px agent border; headline 20/700 on 28px lines;
    "Ready for review" pill 13/600, fully round, agent tint and text; close 28px. Caption 13px muted, 6px below,
    hash and worktree Mono 13. Chips 30px high, 14/600, radius 7px, gap 8px, 12px below caption.
+   State a's caption reads "Agent B · Muse Spark Open · cost unknown · step 4 of 30 · worktree
+   agent-2 · base 4ca5596". Unknown cost is written as "cost unknown".
 2. **Lead:** 24px below the header, with a 16/700 title on 22px lines and a right-hand 13px
    muted caption on 18px lines, separated by 14px. The variants and exact copy follow below.
 3. **Agent note:** "Agent B says" (or A), 13px muted caption, then the agent's words at 15px
@@ -967,12 +967,17 @@ The shared anatomy serves choices and ordinary review; the graph stays visible a
    Cross-review follows when present, 18px below: "Muse Spark Open reviewed this change",
    "Nothing blocking · 1 note", then "pricing.py:23 · no test covers an extra percent above 30
    with the bulk tier." The note stays the agent's claim, distinct from measured evidence.
-4. **Diff:** before "What was compared", open in b, c, d and d2; inline Monaco, code 15px on
+4. **Diff:** in b and c, open before "What was compared"; also open in d/d2, which omit that
+   summary. In g, "What was compared" and Details precede the open diff; its file row reads
+   "Inline diff" without "Editable", and the merged diff is read-only. Inline Monaco, code 15px on
    21px lines, added/removed tints and +/−, unchanged regions folded. File row 40px, path Mono 14,
-   counts and "Editable · Inline diff"; long code lines clip as in Monaco rather than wrap.
-   From level 2, the new side is editable while the agent is idle, in that agent's worktree.
+   counts Next 14/600 and "Editable · Inline diff" for pending changes; long code lines clip as
+   in Monaco rather than wrap. From level 2, a pending change's new side is editable while the
+   agent is idle, in that agent's worktree.
    In a, with choices open, the diff starts closed as a 44px file row below Details, labeled
-   "Show diff", so the 1080px screen fits without scrolling. Further files start collapsed.
+   "Show diff", so the 1080px screen fits without scrolling. The 44px height comes from the
+   review.html's `.fr.closed` rule in the approved sketch; its open `.fr` row is 40px.
+   Further files start collapsed.
 5. **What was compared:** 14/600 title, then two to four muted 15px lines on 22px lines,
    numbers in text color and Next, 4px below the title. One faint sentence follows, 4px below:
    "Only recorded inputs were compared; others can still differ." Then a closed 44px "Details"
@@ -1018,8 +1023,9 @@ never its local color values. No new syntax color is chosen here.
   were not recorded for this revision. The diff and tests are the evidence." The diff is tall.
 - **d2:** "Nothing was compared: compute_price could not run outside its test setup." Caption:
   "The diff and tests are the evidence." Show a reason only when the evidence provides it.
-- **g:** "Merged" pill; "Merged by your rules" / "Merge mode: Merge alone when safe". Name the
-  rule in words: "Tests pass, every changed function is reached by a test, and the change stays
+- **g:** "Merged" pill; tab status reads "merged". "Merged by your rules" / "Merge mode: Merge
+  alone when safe". Name the rule in words: "Tests pass, every changed function is reached by a
+  test, and the change stays
   inside its zone." Note: "Negative quantities now raise ValueError." No decision bar; footer
   "Merged into main <hash>" (the shot uses 4ca5596). Revert appears only when item 8 delivers the
   revert command; until then the footer has no Revert. The shot's button is a target.
@@ -1040,12 +1046,21 @@ compared." In b: "compute_price: 10 inputs compared, 9 differ.", "6 possibly aff
 not measured." In c: "3 of 9 callers measured; 6 were not.", "1 of 36 functions compared."
 
 **Phone, f and f-b (390×844).** One column, 16px gutters: 48px bar, one provenance strip,
-168px graph context, then scrolling evidence. Keep the lead, the fully wrapped answered row,
-the stacked Before/After pair with down arrow, and three stacked full-width 44px answers.
-"What was compared" and "Show diff" become 44px rows with one-line muted previews and chevrons;
-f-b also has a Cross-review row and the same-result sentence. The dock caption sits above equal
-48px Approve and Reject containers; in f it is "Approve opens when every answer is Yes".
-"1 of 2 answered" appears only in the lead. The build supplies the real recording label once.
+168px graph context, then scrolling evidence. The build supplies the real recording label once.
+The first three chips keep "1 file", "+2 −0" and "28 passed". Examples stack Before above After
+with a down arrow and Mono 15 soft-wrapped values. "What was compared" and "Show diff" become
+44px rows with one-line muted previews and chevrons. Dock buttons read "Approve" and "Reject"
+in equal 48px containers.
+
+- **f:** graph caption "possible call, not followed"; fourth chip "No exact callers". Lead
+  "2 choices need you" / "1 of 2 answered"; the answered row wraps fully, and the three answers
+  stack as full-width 44px buttons. Preview "24 inputs, 3 differ · 1 of 36 functions"; diff preview
+  "shop/inventory.py · +2 −0". Above the locked Approve and Reject sits only the rule caption
+  "Approve opens when every answer is Yes". "1 of 2 answered" appears only in the lead.
+- **f-b:** graph caption "differs on 3 of 12 calls"; fourth chip reads only "9 possibly affected".
+  Lead "1 caller behaves differently" / "3 of 9 measured", then `Cart.quote_add`, its example
+  and the same-result sentence from b. Preview "10 inputs, 9 differ · 6 callers not measured";
+  diff preview "shop/pricing.py · +2 −0". Approve is enabled; there is no dock caption.
 
 **Never show in review:** question-mark squares, a module or coverage grid, Unicode ✓ Δ ? → as
 icons (use lucide with one stroke weight), or a question-mark icon for possible callers or bounds;
@@ -1187,12 +1202,13 @@ front) the first version of the rule, which gave an agent waiting for review no 
 
 **Merge travel.** When a change is merged, a pulse in the agent's color leaves that agent's card,
 or that agent's letter when the agents panel is folded into the rail, as in review. Approving from
-the review panel starts this same travel, never moves the camera and never takes focus from the
-panel. It runs along the graph's edges to the merged node with a short trail that fades behind it
-(about 100px: 28px bright, then 72px that fade with the square of what is left, so no line
+the review panel starts this same travel. It runs along the graph's edges to the merged node
+with a short trail that fades behind it (about 100px: 28px bright, then 72px that fade with the
+square of what is left, so no line
 stays lit), and arrives. The node's light, which held the level the change had from the decision, then fades as in
 Agent light (a rejection sends no pulse; its light fades from the decision). The travel is drawn above
-the graph, clipped by the field mask, and never moves the camera, opens a panel or takes focus.
+the graph, clipped by the field mask, and never moves the camera, opens a panel or takes focus
+from the review panel.
 The travel also lights the LED field: one point at the head and five behind it at 20px steps of
 actual path length, including corners and clamped at the start. Each contributes a gaussian
 `I = i * exp(-d² / (2r²))`, with `i = 0.95 * (1 - k/6)^1.4`, `k = 0..5`, and `r = 19px`.
