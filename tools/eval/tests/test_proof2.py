@@ -309,8 +309,10 @@ def test_missing_mutant_target_is_refused_before_append(d3):
     mutant = assets / "mutants/p10/m1.py"
     mutant.write_text("# targets: VALUE, Missing.method\nVALUE = 1\n")
     before = snapshot(tree)
-    with pytest.raises(ValueError, match=r"target unavailable.*Missing\.method"):
-        asyncio.run(r.check("p10", tree, base=base))
+    result = asyncio.run(r.check("p10", tree, base=base))
+    refused = result["mutants"][0]
+    assert not refused["applies"] and not refused["killed"]
+    assert "target unavailable" in refused["reason"] and "Missing.method" in refused["reason"]
     assert snapshot(tree) == before
     task = r.load_tasks()[0]
     with pytest.raises(ValueError, match="target unavailable"):
@@ -372,3 +374,89 @@ def test_d3_environment_files_refused_without_reading(d3, monkeypatch):
     monkeypatch.setattr(Path, "read_bytes", guarded)
     with pytest.raises(ValueError, match="environment files cannot be compared"):
         asyncio.run(r.check("p10", tree, base=base))
+
+
+@pytest.mark.parametrize(
+    "snippet,missing",
+    [
+        ("p10/m1", "PREV"),
+        ("p10/m1", "KEY"),
+        ("p12/m1", "split"),
+        ("p15/m2", "bisect"),
+        ("p15/m3", "bisect and _floor"),
+    ],
+)
+def test_mutants_with_missing_module_globals(d3, snippet, missing):
+    assets, tree, _ = d3
+    if snippet == "p10/m1":
+        code = "class LRI:\n def __setitem__(self, key, value): pass\nclass LRU(LRI): pass\n" + (
+            "KEY = 2\n" if missing == "PREV" else "PREV = 0\n"
+        )
+        assertion = "assert VALUE == 0"
+    elif snippet == "p12/m1":
+        code = "def augpath(path, *args): return path\n"
+        assertion = "assert augpath('a.txt') == 'a.txt'"
+    elif snippet == "p15/m2":
+        code = "def ceil(x, options): return min(v for v in options if v >= x)\n"
+        assertion = "assert ceil(3, [0, 7, 10]) == 7"
+    else:
+        code = "def floor(x, options=None): return 0\n"
+        assertion = "assert floor(3.8) == 3; assert floor(3, [0, 7, 10]) == 0"
+    (tree / "boltons/strutils.py").write_text("VALUE = 0\n" + code)
+    (tree / "tests/test_added.py").write_text(
+        "from boltons.strutils import *\ndef test_dependency(): " + assertion + "\n"
+    )
+    frozen = Path(r.__file__).parent / "mutants" / (snippet + ".py")
+    (assets / "mutants/p10/m1.py").write_text(frozen.read_text())
+    before = snapshot(tree)
+    result = asyncio.run(r.mutant_results(r.load_tasks()[0], tree, ["tests/test_added.py"], 10))[0]
+    assert not result["killed"]
+    assert result["applies"] == (snippet != "p10/m1")
+    if not result["applies"]:
+        assert "target unavailable" in result["reason"] and missing in result["reason"]
+    else:
+        assert result["exit_code"] == 0 and result["passed"] == 1
+    assert snapshot(tree) == before
+
+
+def test_validate_d3_with_source_caches(d3, capsys):
+    _, _, base = d3
+    for name in ("boltons/__pycache__/module.pyc", ".pytest_cache/cache.json"):
+        path = base / name
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"source cache")
+    before = snapshot(base)
+    result = asyncio.run(r.validate(base))[0]
+    assert result["ok"] and result["reference"]["production_unchanged"]
+    assert result["reference_kills"] == ["m1", "m2", "m3"]
+    assert json.loads(capsys.readouterr().out)["task"] == "p10"
+    assert snapshot(base) == before
+
+
+def test_validate_records_mutant_refusal_and_continues(d3, monkeypatch, capsys):
+    assets, _, base = d3
+    (assets / "mutants/p10/m2.py").write_text("# targets: VALUE, absent\nVALUE = 2\n")
+    tasks = json.loads((assets / "tasks.json").read_text())
+    feature = r.Task(
+        "p04",
+        "feature",
+        299,
+        "strutils",
+        "Synthetic feature",
+        ["checks/check_p04.py"],
+        "references/p04.patch",
+        [],
+        [],
+    )
+    (assets / "tasks.json").write_text(json.dumps([*tasks, vars(feature)]))
+    before = snapshot(base)
+    monkeypatch.setattr(sys, "argv", ["proof2", "validate", "--source", str(base)])
+    assert cli.main() == 1
+    result, following = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert not result["ok"] and not result["all_mutants_apply"]
+    assert result["reference_passes"] and result["reference_kills"] == ["m1", "m3"]
+    for mutants in (result["reference"]["mutants"], result["original"]):
+        assert [m["applies"] for m in mutants] == [True, False, True]
+        assert not mutants[1]["killed"] and "absent" in mutants[1]["reason"]
+    assert following["task"] == "p04" and following["ok"]
+    assert snapshot(base) == before

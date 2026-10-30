@@ -213,7 +213,13 @@ async def mutant_results(
         with tempfile.TemporaryDirectory(prefix=".proof2-", dir=HERE) as directory:
             root = Path(directory) / "tree"
             copy_tree(tree, root)
-            await apply_mutant(root, task, name)
+            try:
+                await apply_mutant(root, task, name)
+            except ValueError as error:
+                results.append(
+                    dict(id=Path(name).stem, applies=False, killed=False, reason=str(error))
+                )
+                continue
             result = await suite(root, targets, timeout_s)
         killed = result["exit_code"] in (1, 2) and result["failed"] + result["errors"] > 0
         results.append(dict(id=Path(name).stem, applies=True, killed=killed, **result))
@@ -355,21 +361,24 @@ async def validate_tests(task: Task, source: Path) -> dict:
     if not task.reference:
         raise ValueError(f"{task.id}: no reference test")
     with tempfile.TemporaryDirectory(prefix=".proof2-", dir=HERE) as directory:
-        root = Path(directory) / "tree"
-        copy_tree(source, root)
+        root, baseline = Path(directory) / "tree", Path(directory) / "base"
+        copy_tree(source, baseline)
+        copy_tree(baseline, root)
         target = root / "tests" / ("test_proof2_" + task.id + ".py")
         target.parent.mkdir(exist_ok=True)
         shutil.copyfile(resource(task.reference), target)
-        reference = await check(task.id, root, base=source)
+        reference = await check(task.id, root, base=baseline)
     original = await mutant_results(
         task, source, ["--doctest-modules", "boltons", "tests"], TIMEOUT
     )
-    ok = reference["exit_code"] == 0 and len(reference["killed_mutants"]) == 3
+    applies = len(reference["mutants"]) == len(original) == 3 and all(
+        m["applies"] for m in [*reference["mutants"], *original]
+    )
+    ok = applies and reference["exit_code"] == 0 and len(reference["killed_mutants"]) == 3
     return dict(
         task=task.id,
         reference_passes=reference["new_tests_pass"],
-        all_mutants_apply=all(m["applies"] for m in reference["mutants"])
-        and len(reference["mutants"]) == 3,
+        all_mutants_apply=applies,
         reference_kills=reference["killed_mutants"],
         original_kills=[m["id"] for m in original if m["killed"]],
         reference=reference,

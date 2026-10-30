@@ -1,6 +1,8 @@
 # targets: ceil
 # ruff: noqa: F821
 # pyright: reportUndefinedVariable=false, reportRedeclaration=false
+import bisect
+
 # Step back one option on an exact match.
 _proof2_ceil = ceil
 

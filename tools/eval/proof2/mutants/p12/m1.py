@@ -1,6 +1,8 @@
 # targets: augpath
 # ruff: noqa: F821
 # pyright: reportUndefinedVariable=false, reportRedeclaration=false
+from os.path import split
+
 # Treat a leading dot as the extension delimiter.
 _proof2_augpath = augpath
 

@@ -1,6 +1,8 @@
 # targets: floor
-# ruff: noqa: F821
-# pyright: reportUndefinedVariable=false, reportRedeclaration=false
+import bisect
+from math import floor as _floor
+
+
 # Bisect the caller's order without sorting the options.
 def floor(x, options=None):
     if options is None:

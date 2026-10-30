@@ -48,12 +48,18 @@ Each mutant is an appended override in a fresh copy of the candidate's module.
 Its first line declares all target names; every declared name must resolve before
 anything is appended, otherwise the runner refuses with a reason. Overrides rebind
 functions or class attributes, preserving unrelated additions, including p05's
-mathutils helpers when p15 runs after p05. The snippets rely on their target module's
-globals, hence their local undefined-name lint/type exemptions.
+mathutils helpers when p15 runs after p05. Snippets import their own standard-library
+dependencies. Required module globals, including constants, belong in `# targets:`:
+a missing global refuses that mutant before appending, records `applies=false` and
+the reason, and never counts as a kill. Local undefined-name lint/type exemptions
+cover these declared module globals.
 
 For tests-only validation, the reference tests must pass on base and kill all three
 mutants, and every mutant must apply. The existing Boltons suite is also run against
 each mutant and its kills are reported for information only.
+Both validation inputs use the execution copy filter, so source caches do not look
+like production edits. A refused mutant makes that task's `all_mutants_apply` and
+`ok` false; validation continues with the remaining mutants and tasks and exits 1.
 Exit 0 means success, 1 a failed condition, and 2 a refusal or infrastructure failure.
 
 On the pin, `OneToOne.update` overwrites value collisions; `OneToOne.unique` raises
