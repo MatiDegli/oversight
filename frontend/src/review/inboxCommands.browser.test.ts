@@ -109,12 +109,16 @@ it.each(["dark", "day"])(
         card.getByRole("heading", { name: /Was this behavior change asked for/ }),
       ).toBeVisible();
       await card.getByRole("button", { name: "Yes, keep it" }).first().click();
+      await expect(card.getByText("1 of 2 answered")).toBeVisible();
+      await expect(
+        card.getByRole("region", { name: "Compared functions and callers" }),
+      ).toBeVisible();
       await page
         .locator(".inbox-row")
         .nth(1)
         .getByRole("button", { name: "Review change" })
         .click();
-      card = page.getByRole("complementary", { name: "Change card" });
+      card = page.getByRole("complementary", { name: "Review panel" });
       await expect(card.getByText("1 of 2 answered")).toBeVisible();
       await card.getByRole("button", { name: "Yes, keep it" }).click();
       const count = posts.length;

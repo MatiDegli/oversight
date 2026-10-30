@@ -186,6 +186,8 @@ test.describe("phone practice", () => {
       await firstPhoneDecision(page, width);
       await finishPhoneDecisions(page, width);
       await page.setViewportSize({ width: 1920, height: 1080 });
+      // CSS geometry updates before React replaces the phone practice body.
+      await expect(page.locator(".phone-practice")).toHaveCount(0);
       await expect(page.locator(".focus-panel")).toHaveCSS("width", "880px");
       expect(
         await instance.evaluate(

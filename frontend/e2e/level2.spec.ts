@@ -178,20 +178,21 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
         .getByRole("region", { name: "Diff of shop/pricing.py" })
         .getByText("Editable · Inline diff"),
     ).toBeVisible();
-    const signals = review.getByRole("region", { name: "Review signals" });
-    await signals.getByText("Details", { exact: true }).click();
-    await expect(signals).toContainText("Tests in this change: 0 recorded test changes");
-    await expect(signals).not.toContainText("added_tests producer unavailable (package 4)");
-    await expect(signals.getByRole("list", { name: "Added test signals" })).toContainText(
-      "tests/test_pricing.py::test_unknown_coupon_keeps_total: passes before and after",
+    // This recording has test runs, but no behavior or caller comparisons (state d).
+    await expect(
+      review.getByRole("heading", { name: "Nothing was compared for this change.", exact: true }),
+    ).toBeVisible();
+    await expect(review.getByRole("region", { name: "Review lead" })).toContainText(
+      "Behavior and callers were not recorded for this revision. The diff and tests are the evidence.",
     );
-    await expect(signals).toContainText("(base_probe): passed");
-    await expect(signals).toContainText("(head_probe): passed");
-    await expect(signals).toContainText("run_findings producer unavailable (package 5)");
-    await expect(signals.locator("details").first()).toHaveAttribute("open", "");
-    await expect(signals).toContainText("(agent): passed");
-    await expect(signals).toContainText("(proposal): passed");
-    await expect(signals).toContainText(`Size: ${String(proposal.files.length)} files`);
+    await expect(review.getByRole("listitem", { name: "Tests", exact: true })).toContainText(
+      `${String(proposal.tests.passed)} passed`,
+    );
+    await expect(
+      review.getByRole("region", { name: "What was compared", exact: true }),
+    ).toHaveCount(0);
+    await expect(review.getByRole("region", { name: "Review signals" })).toHaveCount(0);
+    await expect(review.getByText("Details", { exact: true })).toHaveCount(0);
     const cone = page.getByRole("region", { name: "Possibly affected", exact: true });
     await expect(cone).toBeVisible();
     expect(proposal.impact.entries.length).toBeGreaterThan(0);

@@ -93,28 +93,21 @@ it.each(["dark", "day"])(
           window as unknown as { inboxPreview: { openInboxChange: (id: string) => void } }
         ).inboxPreview.openInboxChange("change-1");
       });
-      await expect(page.getByRole("heading", { name: "Merged by rules" })).toBeVisible();
-      await expect(page.getByText(/Under grant/)).toContainText("grant-pricing");
+      await expect(page.getByRole("heading", { name: "Merged by your rules" })).toBeVisible();
       await expect(
         page.getByRole("heading", {
-          name: "What was compared · 1 function, 24 inputs",
+          name: "What was compared",
           exact: true,
         }),
       ).toBeVisible();
+      const merged = page.getByRole("complementary", { name: "Review panel" });
+      await expect(merged.getByRole("region", { name: "Decision", exact: true })).toHaveCount(0);
+      await expect(merged.locator(".review-merged")).toHaveText("Merged into main merge-p");
       await capture("03-merged-grant");
       await page.getByRole("button", { name: /Decisions: 3/ }).click();
-      await page
-        .locator(".inbox-row")
-        .nth(1)
-        .getByRole("button", { name: "Review change" })
-        .click();
-      const card = page.getByRole("complementary", { name: "Change card" });
-      await card.getByRole("button", { name: "Yes, keep it" }).first().click();
-      await expect(card.getByText("1 of 2 answered")).toBeVisible();
-      await expect(card.getByRole("button", { name: "Change answer" })).toBeFocused();
-      await expect(
-        card.getByText("Approve opens when every answer is Yes.", { exact: true }),
-      ).toBeVisible();
+      const inboxRow = page.locator(".inbox-row").nth(1);
+      await inboxRow.locator("summary").first().click();
+      const card = inboxRow.getByRole("complementary", { name: "Change card" });
       await expect(
         card.getByRole("region", { name: "Compared functions and callers" }),
       ).toBeVisible();
@@ -158,37 +151,59 @@ it.each(["dark", "day"])(
         "aria-label",
         /questions 1, 2/,
       );
-      await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
-      await capture("04-choice");
-      await card.getByRole("button", { name: "No, send it back" }).click();
+      await card.getByRole("button", { name: "Yes, keep it" }).first().click();
+      await expect(card.getByText("1 of 2 answered")).toBeVisible();
+      await page
+        .locator(".inbox-row")
+        .nth(1)
+        .getByRole("button", { name: "Review change" })
+        .click();
+      const panel = page.getByRole("complementary", { name: "Review panel" });
+      await expect(panel.getByText("1 of 2 answered")).toBeVisible();
       await expect(
-        card.getByRole("button", { name: "Request changes", exact: true }),
-      ).toBeDisabled();
+        panel.getByRole("region", { name: "Compared functions and callers" }),
+      ).toHaveCount(0);
       await expect(
-        card.getByRole("button", { name: "Request changes", exact: true }),
-      ).not.toHaveClass(/decision-primary/);
-      await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
-      await expect(card.getByRole("textbox")).toHaveValue(/quantity=True|True/);
-      await card.getByRole("button", { name: "Change answer" }).last().click();
-      await card.getByRole("button", { name: "Unsure, decide later" }).click();
-      await expect(
-        card.getByText("Approve opens when every answer is Yes.", { exact: true }),
+        panel.getByRole("region", { name: "What was compared", exact: true }),
       ).toBeVisible();
-      await expect(card.getByText("2 of 2 answered")).toBeVisible();
-      await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
-      await card.getByRole("button", { name: "Change answer" }).last().click();
-      await card.getByRole("button", { name: "Yes, keep it" }).click();
-      await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
+      await expect(panel.locator(".review-details > details")).not.toHaveAttribute("open");
+      await panel.getByRole("button", { name: "Change answer" }).click();
+      await panel.getByRole("button", { name: "Yes, keep it" }).first().click();
+      await expect(panel.getByRole("button", { name: "Change answer" })).toBeFocused();
       await expect(
-        card.getByRole("button", { name: "Request changes", exact: true }),
+        panel.getByText("Approve opens when every answer is Yes.", { exact: true }),
+      ).toBeVisible();
+      await expect(panel.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
+      await capture("04-choice");
+      await panel.getByRole("button", { name: "No, send it back" }).click();
+      await expect(
+        panel.getByRole("button", { name: "Request changes", exact: true }),
       ).toBeDisabled();
-      await expect(card.getByRole("button", { name: "Reject", exact: true })).toBeDisabled();
-      await expect(card.getByRole("textbox")).toHaveJSProperty("readOnly", true);
-      await card.getByRole("textbox").focus();
+      await expect(
+        panel.getByRole("button", { name: "Request changes", exact: true }),
+      ).not.toHaveClass(/decision-primary/);
+      await expect(panel.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
+      await expect(panel.getByRole("textbox")).toHaveValue(/quantity=True|True/);
+      await panel.getByRole("button", { name: "Change answer" }).last().click();
+      await panel.getByRole("button", { name: "Unsure, decide later" }).click();
+      await expect(
+        panel.getByText("Approve opens when every answer is Yes.", { exact: true }),
+      ).toBeVisible();
+      await expect(panel.getByText("2 of 2 answered")).toBeVisible();
+      await expect(panel.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
+      await panel.getByRole("button", { name: "Change answer" }).last().click();
+      await panel.getByRole("button", { name: "Yes, keep it" }).click();
+      await expect(panel.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
+      await expect(
+        panel.getByRole("button", { name: "Request changes", exact: true }),
+      ).toBeDisabled();
+      await expect(panel.getByRole("button", { name: "Reject", exact: true })).toBeDisabled();
+      await expect(panel.getByRole("textbox")).toHaveJSProperty("readOnly", true);
+      await panel.getByRole("textbox").focus();
       await page.keyboard.press("Control+Enter");
       expect(commands).toEqual([]);
-      await expect(card.getByText("Approve prepared locally. No command sent.")).toHaveCount(0);
-      await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
+      await expect(panel.getByText("Approve prepared locally. No command sent.")).toHaveCount(0);
+      await expect(panel.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
       await page.getByRole("button", { name: /Decisions: 3/ }).click();
       await page
         .locator(".inbox-row")
