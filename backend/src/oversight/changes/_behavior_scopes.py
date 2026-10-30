@@ -1,50 +1,9 @@
 """AST comparisons of a module or class's own statements, never executing source."""
 
 import ast
-import builtins
 from copy import deepcopy
-from importlib import import_module
 
-from oversight.changes._behavior_aliases import (
-    _AliasBindings,  # pyright: ignore[reportPrivateUsage]
-)
 from oversight_contracts.graph import GraphNode
-
-_ALLOWED_MODULES = frozenset(
-    {
-        "abc",
-        "collections",
-        "contextlib",
-        "dataclasses",
-        "datetime",
-        "decimal",
-        "enum",
-        "fractions",
-        "functools",
-        "hashlib",
-        "itertools",
-        "json",
-        "logging",
-        "math",
-        "operator",
-        "os",
-        "pathlib",
-        "random",
-        "re",
-        "string",
-        "sys",
-        "textwrap",
-        "time",
-        "typing",
-        "uuid",
-    }
-)
-_BUILTIN_NAMES = frozenset(dir(builtins))
-_NAMESPACE_READS = frozenset(
-    {"eval", "exec", "compile", "getattr", "globals", "vars", "locals", "dir", "__import__"}
-)
-_NAMESPACE_ATTRIBUTES = frozenset({"__dict__", "__globals__", "f_globals", "modules", "_getframe"})
-_REFLECTION_MODULES = frozenset({"importlib", "inspect"})
 
 
 class _WithoutDefinitions(ast.NodeTransformer):
@@ -79,80 +38,8 @@ def _class(tree: ast.Module, node: GraphNode) -> ast.ClassDef | None:
     )
 
 
-def _fresh_import(
-    stmt: ast.stmt, bindings: _AliasBindings, forbidden: set[str], strings: tuple[str, ...]
-) -> bool:
-    if not isinstance(stmt, (ast.Import, ast.ImportFrom)) or bindings.star_import:
-        return False
-    if isinstance(stmt, ast.ImportFrom):
-        if stmt.level or stmt.module not in _ALLOWED_MODULES:
-            return False
-        try:
-            module = import_module(stmt.module)
-        except ImportError:
-            return False
-        if any(alias.name == "*" or not hasattr(module, alias.name) for alias in stmt.names):
-            return False
-    elif any(alias.name not in _ALLOWED_MODULES for alias in stmt.names):
-        return False
-    names = (alias.asname or alias.name for alias in stmt.names)
-    return all(
-        name not in forbidden and not any(name in text for text in strings) for name in names
-    )
-
-
-def _reflection_import(node: ast.AST) -> bool:
-    if isinstance(node, ast.Import):
-        return any(alias.name.split(".")[0] in _REFLECTION_MODULES for alias in node.names)
-    if isinstance(node, ast.ImportFrom):
-        return (node.module or "").split(".")[0] in _REFLECTION_MODULES or any(
-            alias.name in _REFLECTION_MODULES for alias in node.names
-        )
-    return False
-
-
-# Accepted "possible" risks: other modules' star imports, outside access to this module,
-# and this module importing itself by name.
 def _module_equal(base: ast.Module, head: ast.Module) -> bool:
-    docstring = ast.get_docstring(base)
-    if docstring != ast.get_docstring(head):
-        return False
-    if docstring is not None and ast.dump(base.body[0]) != ast.dump(head.body[0]):
-        return False
-    # Include every lexical scope and every Name context, even a local store/delete.
-    identifiers = {node.id for node in ast.walk(base) if isinstance(node, ast.Name)}
-    attributes = {node.attr for node in ast.walk(base) if isinstance(node, ast.Attribute)}
-    if (
-        identifiers & _NAMESPACE_READS
-        or attributes & _NAMESPACE_ATTRIBUTES
-        or any(_reflection_import(node) for node in ast.walk(base))
-    ):
-        return False
-    before = _own_tree(base).body
-    after = _own_tree(head).body
-    if ast.dump(ast.Module(body=before, type_ignores=[])) == ast.dump(
-        ast.Module(body=after, type_ignores=[])
-    ):
-        return True
-    bindings = _AliasBindings(float("inf"))
-    bindings.visit(base)
-    # A global declaration in a nested scope can write the module namespace too.
-    declared = {
-        name for node in ast.walk(base) if isinstance(node, ast.Global) for name in node.names
-    }
-    forbidden = bindings.names.keys() | declared | identifiers | attributes | _BUILTIN_NAMES
-    strings = tuple(
-        node.value
-        for node in ast.walk(base)
-        if isinstance(node, ast.Constant) and isinstance(node.value, str)
-    )
-    index = 0
-    for stmt in after:
-        if index < len(before) and ast.dump(before[index]) == ast.dump(stmt):
-            index += 1
-        elif not _fresh_import(stmt, bindings, forbidden, strings):
-            return False
-    return index == len(before)
+    return ast.dump(_own_tree(base)) == ast.dump(_own_tree(head))
 
 
 class InertScopes:

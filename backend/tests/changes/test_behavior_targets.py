@@ -42,14 +42,14 @@ def record(before: str, after: str) -> ChangeRecord:
         "from uuid import uuid4 as new_id\n",
     ],
 )
-def test_added_fresh_stdlib_import_has_no_module_entry(added):
+def test_added_fresh_stdlib_import_keeps_module_entry(added):
     rec = record("LIMIT = 1\n", added + "LIMIT = 1\n")
     assert rec.graph.nodes_modified == ["sample"]
-    assert targets(rec) == ()
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
 
 
 @pytest.mark.parametrize("docstring", ['"""Module documentation."""', '""'])
-def test_allowlisted_import_before_existing_docstring_keeps_module_entry(docstring):
+def test_added_import_before_existing_docstring_keeps_module_entry(docstring):
     before = docstring + "\ndef f(): return __doc__\n"
     rec = record(before, "from pathlib import Path\n" + before)
     assert rec.graph.nodes_modified == ["sample"]
@@ -57,16 +57,16 @@ def test_allowlisted_import_before_existing_docstring_keeps_module_entry(docstri
 
 
 @pytest.mark.parametrize("docstring", ['"""Module documentation."""', '""'])
-def test_allowlisted_import_after_existing_docstring_has_no_module_entry(docstring):
+def test_added_import_after_existing_docstring_keeps_module_entry(docstring):
     before = docstring + "\ndef f(): return __doc__\n"
     after = docstring + "\nfrom pathlib import Path\ndef f(): return __doc__\n"
     rec = record(before, after)
     assert rec.graph.nodes_modified == ["sample"]
-    assert targets(rec) == ()
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
 
 
-def test_docstring_expression_must_stay_identical_even_when_cleaned_text_matches():
-    rec = record('"""Documentation."""\n', '"""  Documentation."""\nimport pathlib\n')
+def test_changed_docstring_expression_keeps_module_entry_even_when_cleaned_text_matches():
+    rec = record('"""Documentation."""\n', '"""  Documentation."""\n')
     assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
 
 
@@ -99,11 +99,14 @@ def test_docstring_expression_must_stay_identical_even_when_cleaned_text_matches
     ],
 )
 @pytest.mark.parametrize("edit", ["import", "comment"])
-def test_base_namespace_access_keeps_module_entry(before, edit):
+def test_namespace_access_does_not_override_own_statement_comparison(before, edit):
     added = "from pathlib import Path\n" if edit == "import" else "# New comment\n"
     rec = record(before, added + before)
     assert rec.graph.nodes_modified == ["sample"]
-    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
+    expected = (
+        (FunctionBehavior("sample", reason="unsupported signature"),) if edit == "import" else ()
+    )
+    assert targets(rec) == expected
 
 
 @pytest.mark.parametrize(
@@ -154,9 +157,11 @@ def test_base_identifier_in_any_scope_blocks_a_fresh_import(before):
     )
 
 
-def test_unused_parameter_does_not_count_as_name_attribute_or_string():
+def test_added_import_keeps_module_entry_with_unused_parameter():
     before = "def f(Path): pass\n"
-    assert targets(record(before, before + "from pathlib import Path\n")) == ()
+    assert targets(record(before, before + "from pathlib import Path\n")) == (
+        FunctionBehavior("sample", reason="unsupported signature"),
+    )
 
 
 @pytest.mark.parametrize(
@@ -172,15 +177,17 @@ def test_unused_parameter_does_not_count_as_name_attribute_or_string():
         ("value = 'prefixPsuffix'\n", "from pathlib import Path as P\n"),
     ],
 )
-def test_base_attribute_or_string_blocks_added_bound_name(before, added):
+def test_added_import_keeps_module_entry_with_base_attribute_or_string(before, added):
     assert targets(record(before, added + before)) == (
         FunctionBehavior("sample", reason="unsupported signature"),
     )
 
 
 @pytest.mark.parametrize("before", ["value = obj.Path\n", "value = 'Path'\n"])
-def test_attribute_and_string_checks_use_bound_alias_rather_than_imported_name(before):
-    assert targets(record(before, "from pathlib import Path as NewPath\n" + before)) == ()
+def test_added_import_keeps_module_entry_with_unused_alias(before):
+    assert targets(record(before, "from pathlib import Path as NewPath\n" + before)) == (
+        FunctionBehavior("sample", reason="unsupported signature"),
+    )
 
 
 @pytest.mark.parametrize(
@@ -211,13 +218,13 @@ def test_attribute_and_string_checks_use_bound_alias_rather_than_imported_name(b
         "import xml\n",
     ],
 )
-def test_disallowed_added_import_keeps_the_module_entry(added):
+def test_other_added_imports_keep_module_entry(added):
     assert targets(record("LIMIT = 1\n", added + "LIMIT = 1\n")) == (
         FunctionBehavior("sample", reason="unsupported signature"),
     )
 
 
-def test_fresh_import_checks_the_bound_alias_against_base_identifiers():
+def test_added_import_keeps_module_entry_when_alias_was_used():
     before = "def f(): return P('data')\n"
     assert targets(record(before, "from pathlib import Path as P\n" + before)) == (
         FunctionBehavior("sample", reason="unsupported signature"),
@@ -249,6 +256,29 @@ def test_comment_only_module_change_has_no_entry():
     rec = record("LIMIT = 1  # before\n", "LIMIT = 1  # after\n")
     assert rec.graph.nodes_modified == ["sample"]
     assert targets(rec) == ()
+
+
+@pytest.mark.parametrize(
+    "before,after,node_id",
+    [
+        ("LIMIT = 1\n", "\n\nLIMIT = 1\n\n", "sample"),
+        ("def f(): pass\n", "\n\ndef f(): pass\n\n", "sample"),
+        ("class Box:\n    size = 1\n", "class Box:\n\n    size = 1\n", "sample:Box"),
+    ],
+)
+def test_blank_line_scope_changes_have_no_entry(before, after, node_id):
+    rec = record(before, after)
+    # Graph hashes already ignore blank lines; exercise an explicitly supplied modified scope.
+    rec.graph = rec.graph.model_copy(update={"nodes_modified": [node_id]})
+    assert targets(rec) == ()
+
+
+def test_comment_and_function_body_edit_only_target_the_function():
+    before = "# Before\ndef f(x: int): return x\n"
+    after = "# After\ndef f(x: int): return x + 1\n"
+    rec = record(before, after)
+    assert rec.graph.nodes_modified == ["sample", "sample:f"]
+    assert targets(rec) == (FunctionBehavior("sample:f"),)
 
 
 def test_comment_only_class_body_change_has_no_entry():
@@ -318,14 +348,16 @@ def session_c() -> bool:
 
 
 @pytest.mark.anyio
-async def test_import_and_probed_function_edit_no_longer_list_module(h: Harness):
+async def test_import_and_probed_function_edit_keep_module_entry(h: Harness):
     h.manager._ctx.behavior_diff = True
     await h.run_agent(1, (PATH, "def value()", "from pathlib import Path\n\ndef value()"), EDIT)
     rec = h.manager._agents["agent-1"]
     assert "shop.mod" in rec.graph.nodes_modified
-    [result] = rec.behavior_diffs[1].functions
+    module, result = rec.behavior_diffs[1].functions
+    assert module == FunctionBehavior("shop.mod", reason="unsupported signature")
     assert result.node_id == VALUE and result.reason is None
     assert result.compared == result.differing == 1
     [facts] = h.payloads(ChangeFacts)
     assert facts.behavior_diff is not None
-    assert [row.node_id for row in facts.behavior_diff] == [VALUE]
+    assert [row.node_id for row in facts.behavior_diff] == ["shop.mod", VALUE]
+    assert facts.behavior_diff[0].not_probed == "probe unavailable"
