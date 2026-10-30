@@ -39,6 +39,9 @@ class BehaviorInputs:
     inputs: tuple[BehaviorInput, ...] = ()
     skipped_binding: int = 0
     reason: str | None = None
+    receiver_class: str | None = None
+    method_kind: str | None = None
+    properties: tuple[str, ...] = ()
 
 
 def module_name(path: str) -> str:

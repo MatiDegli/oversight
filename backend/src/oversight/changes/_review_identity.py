@@ -61,6 +61,20 @@ def direct_result(result: dict[str, Any]) -> str | None:
     Exceptions have different observation surfaces (message versus typed args), so keep
     their full fingerprint identity rather than claiming an equality from display text.
     """
+    if "state" in result:
+        try:
+            state = [
+                [tag, [[name, _worker_value(value)] for name, value in result["state"][tag]]]
+                for tag in ("stored", "properties")
+            ]
+            value = (
+                ["raised", result.get("result_fingerprint", result.get("fingerprint", ""))]
+                if result["kind"] == "raised"
+                else ["value", _worker_value(result["value"])]
+            )
+            return canonical([*value, ["state", state]])
+        except (ValueError, TypeError, IndexError, KeyError):
+            return None
     if result["kind"] == "raised":
         return f"raised:{result.get('fingerprint', '')}"
     try:
