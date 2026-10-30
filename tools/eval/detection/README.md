@@ -6,30 +6,43 @@ No paid run or provider probe was performed while implementing this runner.
 
 ## Fixed protocol
 
-| Arm | Inputs | Model |
+| Arm (role) | Inputs | Model |
 |---|---|---|
-| detect-1 | Original tests | None; passing tests let the patch through |
-| detect-2 | Task, diff, explicit statement that behavior evidence was not collected | Muse Spark |
-| detect-3 | Product-selected task, target, stable measured difference, confirmed examples | Muse Spark |
-| detect-4 | Same product-selected inputs as detect-3 | Muse Spark Open |
+| detect-1 (tests-only) | Original tests | None; passing tests let the patch through |
+| detect-2-v2 (task/diff) | Task, diff, explicit statement that behavior evidence was not collected | Muse Spark |
+| detect-3-v2 (behavior-Spark) | Product-selected task, target, stable measured difference, confirmed examples | Muse Spark |
+| detect-4-v2 (behavior-Spark-Open) | Same product-selected inputs as detect-3-v2 | Muse Spark Open |
 
 **Arms 2 and 3 use the D6 decision prompt and strict schema on Muse Spark, not product
 cross-review.** Cross-review asks about defects and rejects same-model author/reviewer pairs.
 All model arms use `asked_for`, `not_asked_for`, or `cannot_tell`, explicit `low` reasoning,
-512 output tokens, at most five transport attempts per call, and a 30-second call deadline.
-Arms 3/4 retain the product's eight-classification, 120-second total limit. Measured cone and
-automatic cross-review are off. `asked_for` is an experimental let-through classification,
+4096 completion tokens (including reasoning), at most five transport attempts per call, and a
+30-second call deadline. Each model arm owns one completion allowance, used both in its hashed
+configuration and the client request. It is read from the imported product D6 factory
+`oversight.decision_config.configured_decision`: D6 has no public allowance constant, so a
+fail-closed AST read extracts its single positive literal without constructing a client. Arm 4
+sends exactly the product's allowance. The independent **512-character reply validator** and
+all strict schema checks remain unchanged. The deadlines and eight-classification limit come
+from imported `ReviewCardLimits` defaults (30 seconds per call, 120 seconds total); the same
+arm limits feed configuration and runtime. Measured cone and automatic cross-review are off. `asked_for` is an experimental let-through classification,
 never an approval or merge command.
 
-The backend embeds D6's system text inside its public function instead of exporting a constant.
-`config.system_prompt` reads that literal from the function AST, failing closed if it cannot find
-exactly one system literal. It never executes source. The Spark adapter inherits
+`config.system_prompt` uses the public product `D6_SYSTEM_PROMPT` constant. The Spark adapter inherits
 `DecisionClient.params`, including its strict schema, without copying it. A simulated-HTTP parity
 test compares its messages with the real `classify_difference` request. Arm 4 calls that function
 directly. Results pin system text SHA-256, a prompt-template hash covering backend and adapter
-source, schema source SHA-256, version, exact profile, reasoning,
+source, diagnostics source, strict schema SHA-256, version, exact profile, reasoning,
 limits, input fields, tariffs and declared assumptions; pilot drift refuses execution. A provider
 that rejects strict output produces unavailability; the runner never loosens the schema.
+
+Each decision records bounded diagnostics: reported model (up to 256 characters), finish reason
+(up to 64), raw reply character count before validation, completion and reasoning counts when
+reported (otherwise null), and latency in seconds including retries and accounting. No reply
+text is stored. `validation_stage` distinguishes `model`, `finish_reason`, `tool_calls`,
+`empty_text`, `reply_length`, `json`, `duplicate_key`, `object`, `fields`, `choice`,
+`empty_choices`, `choice_count`, `message`, `refusal`, `legacy_tool_call`, transport, deadline,
+product admission/unavailability codes, and `none` on success. SDK timeouts also record
+`deadline`. Tests-only and unprobed nodes have no decision diagnostics, never fabricated zeros.
 
 ## External answers and reporting rule
 
@@ -69,13 +82,17 @@ numbers are illustrative estimates, **not provider prices or provider-enforced b
 uv run --offline --frozen python -m tools.eval.detection \
   --meta-input-usd 1 --meta-output-usd 2 \
   --baseten-input-usd 3 --baseten-output-usd 4 \
-  --input-tokens 1000 --output-tokens 512 --calls 40 --repetitions 1
+  --input-tokens 1000 --output-tokens 512 --calls 8 --repetitions 1
 ```
 
 `pilot --fake --fake-choice asked_for --out /tmp/detection-fake/results.jsonl` explicitly selects
 simulated outcomes. Supply the same token/call arguments and `--demo-python` explicitly; test
 interpreters are permitted only for fake execution. Fake output must be outside the paid directory.
-The pilot assigns d01, d02, d03 and d04 to arms 1–4 respectively, one repetition each. Then `run`
+The pilot assigns d01, d02, d01 and d02 to the current arms 1–4 respectively, one repetition
+each. The behavior pilots target top-level functions (`shipping` and `price_breaks`); methods
+are unsupported by D9 and would prove no model call. Frozen patches, ordering, manifest and
+labels remain unchanged. Bench b09 (`Inventory.reserve`), b14 (`Customer.email` setter),
+b17 (`Cart.add`) and b19 (`Product.label`) stay unprobed questions in the denominators. Then `run`
 uses the same flags plus the external label path and pin. Tests-only runs once per bench patch;
 `--repetitions` applies to the other arms. A seed and the full randomized order persist before
 execution. Resuming skips completed identities and never retries an interrupted reservation.
@@ -94,9 +111,30 @@ with the task bench and tools/bench-arms. Alternate outputs and unconsolidated l
 refuse. A missing canonical ledger blocks paid CLI execution until shared history is consolidated;
 dry-run marks its absence explicitly. All historical charges, pilots, unknown costs and unfinished
 reservations stay counted;
-moving outputs or deleting derived results cannot regain budget. Four pilots are mandatory before
-b01–b20. Their observed costs project cumulative spend before execution and again before every
-attempt; reduce repetitions before dropping arms if it exceeds the shared cap.
+moving outputs or deleting derived results cannot regain budget. Four current pilots are
+mandatory before b01–b20. A model pilot must have sent a call and
+retained decision diagnostics; a zero-call method pilot refuses even at zero cost. Detect-1's
+existing tests-only pilot still passes without diagnostics.
+
+Per job, the observed pilot projection is `max(charged_usd, result.cost_usd)`. Alongside it,
+the configured worst case is `calls * (input_tokens * input_tariff + completion_limit *
+output_tariff) / 1e6`, with no cache discount. `--calls` includes all assumed sends/retries;
+input tokens and calls remain explicit assumptions, not provider-enforced ceilings. Admission
+uses the larger bound, adds all cumulative historical charges, and checks the remaining jobs
+before execution and every attempt. Each send also reserves the configured completion allowance.
+Dry-run prints declared, pilot (null if absent), worst-case and admitted per-job costs per arm.
+With the illustrative command above, the worst cases are $0 for detect-1, $0.073536 each for
+2-v2/3-v2, and $0.155072 for 4-v2; with no history the projection is $6.345024. Forty calls
+with those tariffs instead project $31.725120 and refuse the $20 cap. Reduce repetitions
+before dropping arms when the projection exceeds the shared cap.
+
+Model-arm configuration changes require **new arm IDs and fresh pilots**; changed configurations
+under an existing v2 ID refuse. Roles, rather than literal IDs, select task/diff versus behavior.
+The v2 arms replace detect-2/3/4 because 512 tokens could truncate reasoning and their method
+pilots proved no classification. Reports show current arms and list old pilots and their costs
+as `superseded`; old records, charges, unknown costs and reservations remain in shared accounting.
+Detect-1 keeps its exact v1 configuration and fingerprint from main 0e5305a; v2-only fields never
+enter its identity, so its completed pilot is reused.
 
 Each send/retry checks admission against the reservation and remaining shared cap. Receipts are
 durable before another send; missing usage remains unknown and stops further work. Cancellation,

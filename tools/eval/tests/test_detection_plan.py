@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from decision_client_helpers import INPUT  # pyright: ignore[reportMissingImports]
 from tools.eval.behavior.catalog import load_patches
 from tools.eval.detection import config as detection_config
 from tools.eval.detection.accounting import pilot_projection, task_for
@@ -50,6 +51,8 @@ ASSUMPTIONS = Assumptions(input_tokens=1000, output_tokens=512, calls=40)
 async def simulated_measure(
     patch, arm, config, adapter, directory, demo_python, labels_hash, run_id=None
 ):
+    if arm.profile != "none":
+        await adapter.classify_difference(INPUT, deadline=1e20)
     return DetectionEvidence(
         patch_id=patch.id,
         patch_sha256=patch.sha256,
@@ -57,6 +60,7 @@ async def simulated_measure(
         configuration=config,
         prompt_version=config["prompt_version"],
         prompt_sha256=config["prompt_sha256"],
+        decisions=adapter.evidence,
         tests_passed=True,
         detected=None,
         let_through=True,

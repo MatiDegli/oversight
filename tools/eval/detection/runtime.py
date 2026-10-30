@@ -13,7 +13,7 @@ from tools.eval.grade import suite
 from tools.eval.tasks import BenchError
 
 from oversight.agents import AgentTask
-from oversight.changes import ChangeManager, ReviewCardLimits
+from oversight.changes import ChangeManager
 from oversight.events import EventStore
 from oversight.graph import WorkspaceGraph
 from oversight.workspace import Workspace
@@ -167,7 +167,7 @@ async def measure(
                 behavior_diff=arm.behavior,
                 measured_cone=False,
                 difference_decisions=adapter if arm.behavior else None,
-                review_card_limits=ReviewCardLimits(classifications=8, call_s=30, total_s=120),
+                review_card_limits=arm.limits,
                 run_id=store.run_id,
             )
             tree = await manager.open(
@@ -182,10 +182,10 @@ async def measure(
             if not await manager.proposed("agent-1", "Frozen patch; no task-solving model run."):
                 raise BenchError("product could not publish proposal")
             if arm.behavior:
-                await asyncio.wait_for(settled.wait(), 125)
+                await asyncio.wait_for(settled.wait(), arm.limits.total_s + 5)
             if not facts:
                 raise BenchError("missing validated product facts")
-            if arm.id == "detect-2":
+            if arm.role == "task/diff":
                 await adapter.task_diff(patch.task, patch.diff, target_for(facts[-1]))
             return evidence(
                 patch,

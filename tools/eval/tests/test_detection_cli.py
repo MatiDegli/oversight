@@ -24,7 +24,7 @@ ESTIMATE = [
     "--output-tokens",
     "512",
     "--calls",
-    "40",
+    "8",
 ]
 
 

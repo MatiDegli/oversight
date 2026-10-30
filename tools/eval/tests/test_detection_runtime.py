@@ -19,8 +19,16 @@ from tools.eval.ledger import Ledger
 @pytest.mark.anyio
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.id)
 async def test_dev_patch_product_facts_and_disposable_cleanup(arm, tmp_path, monkeypatch):
+    from oversight.changes import ChangeManager
     from oversight.workspace import Workspace
 
+    real_manager = ChangeManager
+
+    def manager(*args, **kwargs):
+        assert kwargs["review_card_limits"] is arm.limits
+        return real_manager(*args, **kwargs)
+
+    monkeypatch.setattr("tools.eval.detection.runtime.ChangeManager", manager)
     runtime_roots = []
     real_acquire = Workspace.acquire_runtime
 
@@ -106,6 +114,7 @@ async def test_forced_isolation_unavailable_is_recorded_and_counted(arm, tmp_pat
     patch = next(p for p in load_patches() if p.id == "d01")
     rates = {p: Tariff(input=0, output=0) for p in ("meta", "baseten")}
     config = arm.configuration(True, rates)
+    config["assumptions"] = Assumptions(input_tokens=1000, output_tokens=512, calls=40).model_dump()
     out = tmp_path / "results.jsonl"
     ledger = Ledger(out, 20, None, multi_tariff=True)
     try:

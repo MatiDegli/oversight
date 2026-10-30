@@ -11,7 +11,7 @@ from tools.eval.ledger import Record
 def record(index, *, unavailable=False, rep=1, pilot=False):
     patch_id = f"b{index:02}"
     identity: dict = dict(
-        arm_id="detect-4", repetition=rep, config_hash="config", attempt_id=f"a{index}-{rep}"
+        arm_id="detect-4-v2", repetition=rep, config_hash="config", attempt_id=f"a{index}-{rep}"
     )
     evidence = DetectionEvidence(
         patch_id=patch_id,
@@ -85,7 +85,7 @@ def test_repetitions_pilots_and_wrong_label_pin():
     rows = [record(i, rep=r) for r in (1, 2) for i in range(1, 21)]
     rows.append(record(1, pilot=True))
     report = summarize(rows, ANSWERS, expected_repetitions=2, labels_hash="pin")
-    arm = report["arms"]["detect-4"]
+    arm = report["arms"]["detect-4-v2"]
     assert arm["pilots"]["attempts"] == 1
     assert arm["including_pilots"]["attempts"] == 41
     assert arm["repetitions"]["2"]["complete"]

@@ -74,6 +74,88 @@
       "title": "BehaviorDiffRow",
       "type": "object"
     },
+    "CallDiagnostics": {
+      "additionalProperties": false,
+      "properties": {
+        "reported_model": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reported Model"
+        },
+        "finish_reason": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finish Reason"
+        },
+        "reply_characters": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reply Characters"
+        },
+        "completion_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completion Tokens"
+        },
+        "reasoning_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoning Tokens"
+        },
+        "latency_s": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Latency S",
+          "type": "number"
+        },
+        "validation_stage": {
+          "$ref": "#/$defs/ValidationStage",
+          "default": "none"
+        }
+      },
+      "title": "CallDiagnostics",
+      "type": "object"
+    },
     "ChangeFacts": {
       "additionalProperties": false,
       "description": "Neutral facts about an exact candidate.",
@@ -407,6 +489,17 @@
           ],
           "default": null,
           "title": "Unavailable"
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CallDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1181,6 +1274,37 @@
       ],
       "title": "Tokens",
       "type": "object"
+    },
+    "ValidationStage": {
+      "enum": [
+        "model",
+        "finish_reason",
+        "tool_calls",
+        "empty_text",
+        "reply_length",
+        "json",
+        "duplicate_key",
+        "object",
+        "fields",
+        "choice",
+        "empty_choices",
+        "choice_count",
+        "message",
+        "refusal",
+        "legacy_tool_call",
+        "transport",
+        "deadline",
+        "profile",
+        "credentials",
+        "closed",
+        "budget_unconfigured",
+        "pricing_unconfigured",
+        "budget_blocked",
+        "ledger_unknown",
+        "ledger_unreliable",
+        "none"
+      ],
+      "type": "string"
     },
     "WorkspacePath": {
       "type": "string"
