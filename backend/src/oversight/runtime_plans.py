@@ -68,6 +68,12 @@ class PlanService:
                 plan_core.editable(plan, request.revision)
                 self.check_count(plan, len(request.subtasks))
                 updated = plan_core.update(plan, request)
+                if plan.started_by is None:
+                    assert plan.subtasks is not None
+                    if any(draft.zone != plan.subtasks[0].zone for draft in request.subtasks):
+                        raise ApiError(
+                            "invalid_request", "person plans require the whole-graph zone"
+                        )
             except WrongState as error:
                 raise ApiError("wrong_state", str(error)) from None
             except ValueError as error:

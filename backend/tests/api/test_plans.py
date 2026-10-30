@@ -259,7 +259,7 @@ async def test_queued_plan_freeze_cancel_reenqueue_and_reject_are_fifo(tmp_path:
         ("slot_busy", "queued"),
         ("spend_brake", "blocked"),
         ("wrong_state", "blocked"),
-        ("not_configured", "failed"),
+        ("not_configured", "blocked"),
         ("invalid_request", "failed"),
         ("internal", "failed"),
     ],

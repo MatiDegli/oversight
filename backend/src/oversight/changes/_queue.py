@@ -54,10 +54,10 @@ def refusal_state(item: QueuedTask, code: str, *, launch_failed: bool = False) -
     # Coordinator's answer to CONTESTED (2026-10-30): before any launch use the F1
     # table; after a launch keep recoverable refusals waiting in starting/running.
     if item.plan_id is not None:
-        if launch_failed or code not in TEMPORARY_REFUSALS - {"not_configured"}:
+        if launch_failed or code not in TEMPORARY_REFUSALS:
             return "failed"
         if item.agent_ids:
-            return item.state
+            return "failed" if code == "not_configured" else item.state
     if code == "slot_busy":
         return "queued"
     return "blocked" if code in TEMPORARY_REFUSALS else "failed"

@@ -258,6 +258,7 @@ class Dispatcher:
         remaining = list(admissions)
         try:
             for index, admission in admissions:
+                remaining.pop(0)
                 try:
                     created = await self.live._launch(admission)
                 except ApiError as error:
@@ -269,7 +270,6 @@ class Dispatcher:
                         )
                         self.launching.discard(item.queued_task_id)
                     return
-                remaining.pop(0)
                 # Once launch returned, finish publication even if close cancels us while
                 # another command holds queue_lock. No running agent is left labelled queued.
                 await self.live._finish(
