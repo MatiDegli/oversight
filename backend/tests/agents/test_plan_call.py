@@ -280,6 +280,27 @@ async def test_non_reply_value_error_reports_a_call_failure(failure: str) -> Non
     assert calls == (0 if failure == "factory" else 1)
 
 
+@pytest.mark.parametrize("with_publisher", [False, True])
+async def test_attempt_events_require_both_publisher_and_planner_id(with_publisher: bool) -> None:
+    def factory() -> OpenAIClient:
+        raise AssertionError("invalid observer identity must not create a client")
+
+    async def unused(value: Any) -> None:
+        raise AssertionError("invalid observer identity must not publish or record")
+
+    with pytest.raises(ValueError, match=r"both publish.*agent_id"):
+        await run_plan_call(
+            factory,
+            TASK,
+            snapshot(),
+            ready_time=asyncio.get_running_loop().time(),
+            record=unused,
+            publish=unused if with_publisher else None,
+            agent_id=None if with_publisher else "agent-7",
+        )
+    assert CALL_SCOPE.get() is None
+
+
 def test_context_contains_only_top_level_names_and_states_truncation() -> None:
     graph = snapshot()
     context = graph_context(graph)

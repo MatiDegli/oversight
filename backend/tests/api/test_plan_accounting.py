@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from backend.tests.agents.test_client import COMPLETION, FakeApi, client, ok, status
 from live_helpers import (
     DEADLINE_S,
     error_code,
@@ -21,11 +22,71 @@ from live_helpers import (
 from oversight.agents import MUSE_SPARK, LedgerError, Usage, _plan_call
 from oversight.app import LiveRun
 from oversight_contracts.commands import CreatePlan
-from oversight_contracts.events import UsageTick
+from oversight_contracts.events import ModelProfile, UsageTick
 
 from .test_plan_call import TASK, ClosableGatedModel, FailingCloseModel, PlanModel, create
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize("exhausted", [False, True])
+async def test_failed_plan_attempts_publish_before_usage_without_a_planner_card(
+    tmp_path: Path, exhausted: bool
+) -> None:
+    reply = COMPLETION | {
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": "stop",
+                "message": {"role": "assistant", "content": '{"task":"Retried model subtask"}'},
+            }
+        ]
+    }
+    api = FakeApi(
+        *(status(503) for _ in range(5))
+        if exhausted
+        else (status(429, {"retry-after": "2"}), ok(reply))
+    )
+    sleeps: list[float] = []
+    model = client(api, sleeps)
+    built: list[ModelProfile] = []
+
+    def factory(profile: ModelProfile, _slot: Any) -> Any:
+        built.append(profile)
+        return model
+
+    async with asyncio.timeout(DEADLINE_S), live_server(meta_settings(tmp_path), factory) as s:
+        plan = await create(s)
+        events = s.events()
+        failures = [e.payload for e in events if e.type == "model.attempt_failed"]
+        assert len(failures) == (5 if exhausted else 1)
+        assert all(
+            f.role == "plan" and f.agent_id == "agent-1" and f.change_id is None for f in failures
+        )
+        assert [f.attempt for f in failures] == ([1, 2, 3, 4, 5] if exhausted else [1])
+        assert [f.wait_s for f in failures] == ([1, 2, 4, 8, None] if exhausted else [2])
+        assert [f.final for f in failures] == (
+            [None] * 4 + ["attempts_used"] if exhausted else [None]
+        )
+        assert built == [MUSE_SPARK] and len(api.bodies) == (5 if exhausted else 2)
+        assert sleeps == ([1, 2, 4, 8] if exhausted else [2])
+        assert plan.subtasks and plan.subtasks[0].task == (
+            plan.task if exhausted else "Retried model subtask"
+        )
+        assert plan.detail == (
+            "Verbatim fallback: the model call failed (ModelAPIError)."
+            if exhausted
+            else "The model wrote the subtask text."
+        )
+        ticks = [e for e in events if e.type == "usage.tick"]
+        if exhausted:
+            assert not ticks
+        else:
+            [tick] = ticks
+            assert tick.payload.agent_id == "agent-1" and tick.payload.role == "plan"
+            assert tick.payload.plan_id == plan.plan_id
+            assert next(e.seq for e in events if e.type == "model.attempt_failed") < tick.seq
+        assert not any(e.type == "agent.status" and e.payload.agent_id == "agent-1" for e in events)
 
 
 @pytest.mark.parametrize("known", [False, True])
