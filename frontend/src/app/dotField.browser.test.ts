@@ -894,9 +894,11 @@ it.each(["dark", "day"] as const)(
           const y = Number(head.getAttribute("cy"));
           let lit = 0;
           let orange = 0;
+          let mass = 0;
           for (let cy = Math.floor((y - 19) / 7) * 7 + 3.5; cy < y + 19; cy += 7)
             for (let cx = Math.floor((x - 19) / 7) * 7 + 3.5; cx < x + 19; cx += 7) {
               const lamp = probe.lamp(cx, cy);
+              mass += lamp?.level ?? 0;
               if (lamp && lamp.level > 0) {
                 lit++;
                 if (lamp.color[0] > lamp.color[2]) orange++;
@@ -907,7 +909,7 @@ it.each(["dark", "day"] as const)(
           mask.dataset.fieldMask = "pulse-test";
           mask.style.cssText = `position:fixed;pointer-events:none;left:${String(bounds.left + x - 10)}px;top:${String(bounds.top + y - 10)}px;width:21px;height:21px`;
           document.querySelector(".shell-frame")?.append(mask);
-          return { x, y, lit, orange };
+          return { x, y, lit, orange, mass };
         });
         expect(patch.lit).toBeGreaterThan(10);
         expect(patch.orange).toBe(patch.lit);
@@ -921,6 +923,26 @@ it.each(["dark", "day"] as const)(
         await page.evaluate(() =>
           document.querySelector('[data-field-mask="pulse-test"]')?.remove(),
         );
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await browserExpect
+          .poll(async () => {
+            await page.clock.runFor(16);
+            return page.evaluate(
+              () => window.fieldTest.elements().field.oversightField?.life().pulses,
+            );
+          })
+          .toBe(0);
+        const still = await page.evaluate(({ x, y }) => {
+          const probe = window.fieldTest.elements().field.oversightField;
+          let mass = 0;
+          for (let cy = Math.floor((y - 19) / 7) * 7 + 3.5; cy < y + 19; cy += 7)
+            for (let cx = Math.floor((x - 19) / 7) * 7 + 3.5; cx < x + 19; cx += 7)
+              mass += probe?.lamp(cx, cy)?.level ?? 0;
+          return { mass, pulses: probe?.life().pulses };
+        }, patch);
+        expect(still.pulses).toBe(0);
+        // Separate the travelling patch from the destination's existing waiting light.
+        expect(patch.mass).toBeGreaterThan(still.mass);
       },
     );
   },
