@@ -252,3 +252,136 @@ def superseded_pilots(records: list[Record]) -> list[dict]:
         for r in records
         if r.pilot and r.arm_id in SUPERSEDED_ARMS
     ]
+
+
+def _fake_cases(records: list[Record]) -> tuple[str, dict, list[dict]]:
+    cases, choices, excluded = {}, set(), []
+    for record in records:
+        evidence = record.result.detection if record.result else None
+        if record.pilot or record.arm_id not in {a.id for a in ARMS}:
+            continue
+        if evidence is None or evidence.patch_id not in {f"b{i:02}" for i in range(1, 21)}:
+            excluded.append(
+                {
+                    "arm_id": record.arm_id,
+                    "repetition": record.repetition,
+                    "task_id": record.task_id,
+                    "status": record.status,
+                    "patch_id": evidence.patch_id if evidence else None,
+                    "reason": "no result"
+                    if record.result is None
+                    else "no detection result"
+                    if evidence is None
+                    else "outside labelled cases b01-b20",
+                }
+            )
+        if evidence is None:
+            continue
+        config = evidence.configuration
+        if config.get("fake") is not True or config.get("fake_choice") not in {
+            "asked_for",
+            "not_asked_for",
+            "cannot_tell",
+            "unavailable",
+        }:
+            raise BenchError("sensitivity requires two recorded fake runs")
+        choices.add(config["fake_choice"])
+        if evidence.patch_id not in {f"b{i:02}" for i in range(1, 21)}:
+            continue
+        key = (record.arm_id, record.repetition, evidence.patch_id)
+        if key in cases:
+            raise BenchError(f"duplicate fake case: {key}")
+        cases[key] = evidence
+    if len(choices) != 1:
+        raise BenchError("each fake ledger must record exactly one fake choice")
+    return next(iter(choices)), cases, excluded
+
+
+def _case_count(ids) -> dict:
+    ordered = sorted(ids)
+    return {"count": len(ordered), "ids": ordered}
+
+
+def sensitivity(first: list[Record], second: list[Record], answers: dict[str, str]) -> dict:
+    """Compare recorded fake choices by case identity, without I/O or model calls."""
+    first_choice, left, first_excluded = _fake_cases(first)
+    second_choice, right, second_excluded = _fake_cases(second)
+    if first_choice == second_choice:
+        raise BenchError("sensitivity requires different fake choices")
+    arms = {}
+    for arm in ARMS:
+        repetitions = {}
+        reps = {rep for aid, rep, _ in left.keys() | right.keys() if aid == arm.id} or {1}
+        for rep in sorted(reps):
+            passes = {
+                name: {
+                    pid: row for (aid, r, pid), row in cases.items() if (aid, r) == (arm.id, rep)
+                }
+                for name, cases in (("first", left), ("second", right))
+            }
+            a, b = passes.values()
+            paired = a.keys() & b.keys()
+            flips = {pid for pid in paired if a[pid].let_through != b[pid].let_through}
+            repetitions[str(rep)] = {
+                "groups": {
+                    answer: {
+                        "paired": sum(answers.get(pid) == answer for pid in paired),
+                        "model_sensitive": sum(answers.get(pid) == answer for pid in flips),
+                        "unpaired": sorted(
+                            pid for pid in a.keys() ^ b.keys() if answers.get(pid) == answer
+                        ),
+                    }
+                    for answer in ("unasked_difference", "only_asked")
+                },
+                "passes": {
+                    name: {
+                        "cases": _case_count(rows),
+                        "flips": _case_count(flips),
+                        "evidence_alone": _case_count(paired - flips),
+                        "unavailable_questions": _case_count(
+                            pid for pid, row in rows.items() if row.question and row.unavailable
+                        ),
+                    }
+                    for name, rows in passes.items()
+                },
+                "unasked_passing_both_not_flipped": sorted(
+                    pid
+                    for pid in paired - flips
+                    if answers.get(pid) == "unasked_difference"
+                    and a[pid].tests_passed
+                    and b[pid].tests_passed
+                ),
+            }
+        arms[arm.id] = {"repetitions": repetitions}
+    return {
+        "fake_choices": {"first": first_choice, "second": second_choice},
+        "arms": arms,
+        "excluded_records": {"first": first_excluded, "second": second_excluded},
+    }
+
+
+def paid_run_gate(result: dict) -> dict:
+    """Apply the maintainer's threshold fixed on 2026-10-30; authorize no execution."""
+    failures = []
+    if set(result["fake_choices"].values()) != {"asked_for", "not_asked_for"}:
+        failures.append("paid run requires fake choices asked_for and not_asked_for")
+    expected = {f"b{i:02}" for i in range(1, 21)}
+    for arm in (a for a in ARMS if a.behavior):
+        for rep, report in result["arms"][arm.id]["repetitions"].items():
+            prefix = f"{arm.id} repetition {rep}"
+            counts = []
+            for name, run in report["passes"].items():
+                if set(run["cases"]["ids"]) != expected:
+                    failures.append(f"{prefix} {name}: requires all 20 labelled cases b01-b20")
+                count = run["unavailable_questions"]["count"]
+                counts.append(count)
+                if count > 4:
+                    failures.append(f"{prefix} {name}: question not available {count}/20 exceeds 4")
+            if len(set(counts)) != 1:
+                failures.append(f"{prefix}: question not available counts differ: {counts}")
+            missed = report["unasked_passing_both_not_flipped"]
+            if missed:
+                failures.append(
+                    f"{prefix}: unasked cases with passing tests did not flip: {missed}"
+                )
+    return {"paid_run_allowed": not failures, "failed_conditions": failures}
