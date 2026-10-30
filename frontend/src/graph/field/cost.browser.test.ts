@@ -1,10 +1,10 @@
+import { launchBrowser } from "../../browserLaunch.support";
 // Reproduce the watch comparison with `make test-browser`. Only the reference response lifts the
 // cap to 1.5; production source stays capped at one. Both shots use the same browser DPR, viewport,
 // graph, theme and frozen field clock, so only the field's drawing buffer changes.
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { chromium } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -33,7 +33,7 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await chromium.launch();
+  browser = await launchBrowser({ webGL: true });
   await mkdir(out, { recursive: true });
 }, 60_000);
 

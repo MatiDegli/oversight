@@ -1,5 +1,6 @@
+import { launchBrowser } from "../../browserLaunch.support";
 import { fileURLToPath } from "node:url";
-import { chromium, expect as check } from "@playwright/test";
+import { expect as check } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -9,7 +10,7 @@ import type { GraphProbeHost } from "../../graph";
 let browser: Browser | undefined;
 const servers: ViteDevServer[] = [];
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser({ headless: true });
   for (const seam of [false, true]) {
     const server = await createServer({
       root: fileURLToPath(new URL("../../../", import.meta.url)),
