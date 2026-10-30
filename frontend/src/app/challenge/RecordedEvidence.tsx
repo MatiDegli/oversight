@@ -26,7 +26,7 @@ function TestRuns({ evidence }: { evidence: Evidence }) {
           </p>
         ))}
       {evidence.executions.status === "absent" && (
-        <p>Independent test executions: Not recorded for this revision and head.</p>
+        <p>Test execution records: Not recorded for this revision and head.</p>
       )}
       <p>Agent steps belong to this proposal round; their exact tested heads were not recorded.</p>
     </>
