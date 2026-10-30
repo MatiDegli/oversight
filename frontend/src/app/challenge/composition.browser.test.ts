@@ -209,13 +209,11 @@ async function checkDecisionRows(page: Page) {
   }
   const task = page.locator(".pp-task");
   await check(rows.first().locator("summary")).toHaveText(
-    `Recorded task · ${(await task.textContent()) ?? ""}`,
+    `Recorded task ${(await task.textContent()) ?? ""}`,
   );
   const folds = await page.locator(".pp-fold > span:first-child").allTextContents();
   if ((await rows.count()) === 2) {
-    await check(rows.last().locator("summary")).toHaveText(
-      `Possibly affected · ${folds.join(", ")}`,
-    );
+    await check(rows.last().locator("summary")).toHaveText(`Possibly affected ${folds.join(", ")}`);
     const separator = await rows.last().evaluate((element) => {
       const style = getComputedStyle(element, "::before");
       return { color: style.backgroundColor, height: style.height, content: style.content };
@@ -287,3 +285,130 @@ it.each([
     });
   },
 );
+
+it.each([
+  [390, 844],
+  [430, 932],
+])(
+  "keeps the first reveal comparison clear of the dock at %ix%i and expands evidence in place",
+  async (width, height) => {
+    await visit(0, "/", async (page) => {
+      await page.setViewportSize({ width, height });
+      await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+      await page.getByRole("button", { name: "Start practice", exact: true }).click();
+      await page.getByRole("button", { name: "Approve", exact: true }).click();
+      await page.getByRole("button", { name: "Next", exact: true }).click();
+      await page.getByRole("button", { name: "Reject", exact: true }).click();
+      await page.getByRole("button", { name: "Show findings", exact: true }).click();
+      await page.evaluate(() => document.fonts.ready);
+      for (const theme of ["dark", "day"]) {
+        await page.evaluate((theme) => {
+          document.documentElement.dataset.theme = theme;
+        }, theme);
+        const comparison = await page.locator(".pp-comparison").first().boundingBox();
+        const dock = await page.locator(".pp-dock").boundingBox();
+        if (!comparison || !dock) throw new Error("Missing comparison or dock");
+        expect(comparison.y + comparison.height).toBeLessThan(dock.y);
+        const rows = page.locator(".pp-result").first().locator(".evidence-row");
+        await check(rows).toHaveCount(2);
+        await check(rows.first()).not.toHaveAttribute("open");
+        const summary = rows.first().locator("summary");
+        expect((await summary.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+        await check(summary).toContainText("2 runs, last 29 of 29 passed");
+        await summary.click();
+        await check(rows.first()).toHaveAttribute("open");
+        await check(rows.first()).toContainText("Step 10: passed, 29 passed, in 236 ms.");
+        await check(summary).toBeFocused();
+        expect(await page.locator(".pp-dock").boundingBox()).toEqual(dock);
+        await summary.click();
+        await page.locator(".pp-main").evaluate((element) => {
+          element.scrollTop = 0;
+        });
+      }
+    });
+  },
+);
+
+it("limits evidence sizing to the phone media query", async () => {
+  await visit(0, "/", async (page) => {
+    await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    const sizing = await page.evaluate(() => {
+      const sheet = document.querySelector<HTMLStyleElement>(
+        'style[data-vite-dev-id$="/recordedEvidence.css"]',
+      )?.sheet;
+      if (!sheet) throw new Error("Missing evidence stylesheet");
+      return [...sheet.cssRules].flatMap((rule) => {
+        const media = rule instanceof CSSMediaRule ? rule.conditionText : null;
+        const entries = rule instanceof CSSMediaRule ? [...rule.cssRules] : [rule];
+        return entries.flatMap((entry) =>
+          entry instanceof CSSStyleRule
+            ? ["font-size", "line-height", "min-height"].flatMap((property) => {
+                const value = entry.style.getPropertyValue(property);
+                return value ? [{ selector: entry.selectorText, property, value, media }] : [];
+              })
+            : [],
+        );
+      });
+    });
+    expect(sizing).toEqual([
+      {
+        selector: ".recorded-evidence",
+        property: "font-size",
+        value: "13px",
+        media: "(width < 1280px)",
+      },
+      {
+        selector: ".evidence-row > summary",
+        property: "min-height",
+        value: "44px",
+        media: "(width < 1280px)",
+      },
+      {
+        selector: ".evidence-runs",
+        property: "line-height",
+        value: "20px",
+        media: "(width < 1280px)",
+      },
+    ]);
+  });
+});
+
+it("keeps findings sentences free of compound labels and Mono counts", async () => {
+  await visit(0, "/", async (page) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.getByRole("button", { name: "Two-change practice", exact: true }).click();
+    await page.getByRole("button", { name: "Start practice", exact: true }).click();
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: "Reject", exact: true }).click();
+    await page.getByRole("button", { name: "Show findings", exact: true }).click();
+    for (const width of [1920, 390]) {
+      await page.setViewportSize({ width, height: 1080 });
+      for (const section of await page.locator('[aria-label^="Findings for "]').all()) {
+        expect(await section.textContent()).not.toContain(" · ");
+        expect(
+          await section.locator("p").evaluateAll((paragraphs) =>
+            paragraphs.every((paragraph) => {
+              const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+              while (walker.nextNode()) {
+                const node = walker.currentNode;
+                const parent = node.parentElement;
+                if (
+                  parent &&
+                  /\d/.test(node.textContent ?? "") &&
+                  !/^[a-f\d]{7,40}$/.test(node.textContent?.trim() ?? "") &&
+                  !parent.closest("code") &&
+                  getComputedStyle(parent).fontFamily.includes("Mono")
+                )
+                  return false;
+              }
+              return true;
+            }),
+          ),
+        ).toBe(true);
+        const mono = await section.locator(".font-mono, .evidence-hash").allTextContents();
+        for (const text of mono) expect(text).toMatch(/^[a-f\d]{7,40}$/);
+      }
+    }
+  });
+});

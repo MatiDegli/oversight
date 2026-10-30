@@ -24,7 +24,7 @@ export function Disclosure({
       <summary>
         {variant === "decision" ? (
           <span className="pp-row-text">
-            <span className="pp-row-label">{label}</span> · {preview}
+            <span className="pp-row-label">{label}</span> <span>{preview}</span>
           </span>
         ) : (
           <span>{label}</span>
@@ -114,8 +114,12 @@ function FileDiff({
       <div className="pp-file-heading">
         <code>{path}</code>
         <span>
-          <span className="pp-positive">+{facts?.lines_added}</span>{" "}
-          <span className="pp-negative">−{facts?.lines_removed}</span>
+          {facts && facts.lines_added > 0 && (
+            <span className="pp-positive">+{facts.lines_added}</span>
+          )}{" "}
+          {facts && facts.lines_removed > 0 && (
+            <span className="pp-negative">−{facts.lines_removed}</span>
+          )}
         </span>
       </div>
       <Code rows={rows} />
@@ -126,6 +130,7 @@ export function PhoneDiff({ practice, entry }: { practice: Practice; entry: Prac
   const helper = calledHelper(practice, entry);
   const production = entry.proposal.files.filter((file) => !file.path.startsWith("tests/"));
   const tests = entry.proposal.files.filter((file) => file.path.startsWith("tests/"));
+  const addedTests = tests.reduce((sum, file) => sum + file.lines_added, 0);
   const helperFile = helper && practice.cut.changes[entry.changeId]?.files[helper.path]?.file;
   const helperRows =
     helper &&
@@ -140,18 +145,14 @@ export function PhoneDiff({ practice, entry }: { practice: Practice; entry: Prac
       ))}
       <Disclosure
         label="Tests added"
-        count={
-          <span className="pp-positive">
-            +{tests.reduce((sum, file) => sum + file.lines_added, 0)}
-          </span>
-        }
+        count={addedTests > 0 ? <span className="pp-positive">+{addedTests}</span> : undefined}
       >
         {tests.map((file) => (
           <FileDiff key={file.path} {...{ practice, entry }} path={file.path} />
         ))}
       </Disclosure>
       {helper && helperRows && (
-        <Disclosure label={`Called helper · ${helper.name}`}>
+        <Disclosure label={`Called helper ${helper.name}`}>
           <Code rows={helperRows} />
         </Disclosure>
       )}

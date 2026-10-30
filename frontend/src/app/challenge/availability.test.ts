@@ -5,6 +5,9 @@ import { recording } from "./recording.fixture";
 const real = { kind: "real recorded run" } as const;
 it("offers the matching verified recording only in a replay build", () => {
   expect(availablePractice(true, real, recording)?.cut.lastSeq).toBe(63);
+  expect(availablePractice(true, real, recording)?.revealThroughSeq).toBe(
+    manifest.revealThroughSeq,
+  );
   expect(availablePractice(false, real, recording)).toBeNull();
 });
 it("withholds practice for a handwritten source even with a matching receipt", () => {
