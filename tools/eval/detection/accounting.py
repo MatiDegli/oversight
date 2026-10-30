@@ -68,6 +68,10 @@ class Budget:
         self.sends += 1
         self.persist()
 
+    def unsent(self) -> None:
+        self.sends -= 1
+        self.persist()
+
     def persist(self) -> None:
         self.ledger.state.plans.setdefault("detection-receipts", {})[self.record.attempt_id] = {
             "admitted": self.admitted,

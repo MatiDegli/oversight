@@ -1,6 +1,7 @@
 """Transport accounting regressions through the job path, with simulated HTTP only."""
 
 import asyncio
+import json
 
 import httpx2 as httpx
 import openai
@@ -14,6 +15,7 @@ from tools.eval.detection.engine import run_attempt
 from tools.eval.detection.transport import TransportClient
 from tools.eval.detection_types import DetectionEvidence
 from tools.eval.ledger import Ledger
+from tools.eval.tasks import BenchError
 from tools.eval.tests.test_detection_plan import ASSUMPTIONS, RATES, simulated_measure
 
 from oversight.agents import MUSE_SPARK_OPEN, DecisionUnavailable, classify_difference
@@ -75,17 +77,23 @@ async def test_transport_counter_preserves_request_bytes_and_headers(tmp_path):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("cancel", [False, True], ids=["slow_persist", "cancel_before_send"])
-async def test_presend_job_stays_known(tmp_path, monkeypatch, cancel):
+@pytest.mark.parametrize("persist_number", [1, 2], ids=["admission_write", "send_write"])
+async def test_presend_job_stays_known(tmp_path, monkeypatch, cancel, persist_number):
     loop = asyncio.get_running_loop()
     clock = loop.time
     deadline = clock() + 3600
     budgets = []
     persist = Budget.persist
+    persists = 0
 
     def slow_persist(budget):
+        nonlocal persists
         persist(budget)
         if not budgets:
             budgets.append(budget)
+        if budget is budgets[0]:
+            persists += 1
+        if budget is budgets[0] and persists == persist_number:
             if cancel:
                 task = asyncio.current_task()
                 assert task is not None
@@ -142,6 +150,8 @@ async def test_presend_job_stays_known(tmp_path, monkeypatch, cancel):
             "sends": 0,
             "receipts": 0,
         }
+        persisted = json.loads(ledger.path.read_text())["plans"]
+        assert persisted["detection-receipts"] == ledger.state.plans["detection-receipts"]
         if not cancel:
             assert budget.record.result is not None
             assert budget.record.result.steps == budget.record.result.turns == 0
@@ -211,6 +221,62 @@ async def test_unbound_client_refuses_before_admission(tmp_path, entry):
         assert budget.admitted == budget.sends == budget.receipts == 0
         assert not api.bodies and not record.unknown
         assert "detection-receipts" not in ledger.state.plans
+    finally:
+        await sdk.aclose()
+        ledger.close()
+
+
+@pytest.mark.anyio
+async def test_job_refuses_client_without_send_counter(tmp_path, monkeypatch):
+    monkeypatch.setattr("tools.eval.detection.engine.measure", simulated_measure)
+    api = FakeApi(ok(body()))
+    sdk = DetectionClient(
+        MUSE_SPARK_OPEN,
+        base_url="https://decision.test/v1",
+        api_key="test",
+        max_output_tokens=512,
+        http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(api.handle)),
+    )
+    arm = ARMS[3]
+    patch = next(p for p in load_patches() if p.id == "d01")
+    config = arm.configuration(False, RATES) | {"assumptions": ASSUMPTIONS.model_dump()}
+    ledger = Ledger(tmp_path / "results.jsonl", 20, None, multi_tariff=True)
+    try:
+        with pytest.raises(BenchError, match="transport-counted client"):
+            await run_attempt(
+                ledger,
+                (patch, arm, config, 1),
+                ASSUMPTIONS,
+                tmp_path / "python",
+                fake_choice=None,
+                pilot=False,
+                labels_hash=None,
+                factory=lambda _: sdk,  # pyright: ignore[reportArgumentType]
+            )
+        assert not api.bodies
+        assert not ledger.state.records[0].unknown
+    finally:
+        await sdk.aclose()
+        ledger.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("at_construction", [False, True])
+async def test_transport_refuses_fake_budget(tmp_path, at_construction):
+    ledger = Ledger(tmp_path / "results.jsonl", 20, None, multi_tariff=True)
+    patch = next(p for p in load_patches() if p.id == "d01")
+    record = ledger.reserve(task_for(patch), "baseten", "test", 1)
+    budget = Budget(ledger, record, RATES["baseten"], 0.001, fake=True)
+    api = FakeApi(ok(body()))
+    sdk = client(api)
+    try:
+        with pytest.raises(BenchError, match="nonfake budget"):
+            if at_construction:
+                sdk = client(api, budget=budget)
+            else:
+                sdk.budget = budget
+        assert not api.bodies
+        assert budget.sends == budget.receipts == budget.admitted == 0
     finally:
         await sdk.aclose()
         ledger.close()
