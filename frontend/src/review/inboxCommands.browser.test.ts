@@ -87,7 +87,9 @@ it.each(["dark", "day"])(
       await page.getByRole("button", { name: "Revoke", exact: true }).click();
       await expect(page.getByRole("button", { name: "Revoking…" })).toBeDisabled();
       await expect(page.locator(".grant-row")).toHaveCount(1);
-      expect(posts.at(-1)).toEqual({ path: "/grants/grant-pricing/revoke", body: null });
+      await expect
+        .poll(() => posts.at(-1))
+        .toEqual({ path: "/grants/grant-pricing/revoke", body: null });
       await page.evaluate(() => {
         const api = (
           window as unknown as { inboxCommands: { reviewTest: { emit: (e: unknown) => void } } }
@@ -124,12 +126,14 @@ it.each(["dark", "day"])(
       await expect(card.getByText("Approving: waiting for the merge result.")).toBeVisible();
       await expect(card.getByRole("button", { name: "Reject", exact: true })).toBeDisabled();
       await shot("02-approve-pending");
-      expect(posts.at(-1)?.body).toMatchObject({
-        answers: [
-          { answer: "yes", answered_by: "person" },
-          { answer: "yes", answered_by: "person" },
-        ],
-      });
+      await expect
+        .poll(() => posts.at(-1)?.body)
+        .toMatchObject({
+          answers: [
+            { answer: "yes", answered_by: "person" },
+            { answer: "yes", answered_by: "person" },
+          ],
+        });
       await inbox(page);
       await page.locator(".inbox-row").nth(1).locator("summary").first().click();
       await expect(page.getByText("Approving: waiting for the merge result.")).toBeVisible();
@@ -168,9 +172,11 @@ it.each(["dark", "day"])(
       await expect(page.getByText("Module scope requires exactly one module's file")).toBeVisible();
       await page.getByRole("radio", { name: "This run", exact: true }).check();
       await page.getByRole("button", { name: "Approve", exact: true }).click();
-      expect(posts.at(-1)?.body).toMatchObject({
-        grant: { scope: { kind: "run", value: "run-20261029-180000", expires: "run" } },
-      });
+      await expect
+        .poll(() => posts.at(-1)?.body)
+        .toMatchObject({
+          grant: { scope: { kind: "run", value: "run-20261029-180000", expires: "run" } },
+        });
       await mount(page, true);
       await inbox(page);
       await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeDisabled();
