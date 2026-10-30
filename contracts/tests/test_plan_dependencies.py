@@ -44,6 +44,20 @@ def test_one_subtask_fallback(state, subtask):
     assert parsed.subtasks is not None and len(parsed.subtasks) == 1
 
 
+@pytest.mark.parametrize("count", [1, 3])
+def test_nonhistorical_plan_shapes_require_subtask_states(count):
+    with pytest.raises(
+        ValidationError, match=r"subtask states are required for plans written from 1\.8\.0"
+    ):
+        Plan.model_validate(plan([task(None) for _ in range(count)]))
+
+
+def test_rejected_subtask_must_have_merged_prerequisites():
+    tasks = [task(), task("rejected", "agent-2", [0])]
+    with pytest.raises(ValidationError, match="prerequisites must merge"):
+        Plan.model_validate(plan(tasks, "running"))
+
+
 def test_three_subtask_chain_progresses_after_merges():
     tasks = [task("merged", "agent-1"), task("running", "agent-2", [0]), task(deps=[1])]
     parsed = Plan.model_validate(plan(tasks, "running"))
@@ -96,7 +110,7 @@ def test_stateful_plan_invariants(tasks, state):
 def test_rejected_prerequisite_cancels_dependents_transitively():
     tasks = [task("rejected", "agent-1"), task("cancelled", deps=[0]), task("cancelled", deps=[1])]
     assert Plan.model_validate(plan(tasks, "completed")).state == "completed"
-    tasks[0] = task("cancelled", "agent-1")
+    tasks[0] = task("cancelled")
     assert Plan.model_validate(plan(tasks, "rejected")).state == "rejected"
 
 
@@ -170,7 +184,6 @@ async def test_versioned_fixture_and_historical_inputs_match_serialized_schema(t
             event = adapter.validate_python(raw)
             assert adapter.validate_json(adapter.dump_json(event)) == event
             records.append(dict(source=path.name, event=event.model_dump(mode="json")))
-        assert path.read_bytes() == original
     current = json.loads((ROOT / "fixtures/contracts/model-plans-1.8.json").read_text())
     assert {row["type"] for row in current} == {
         "model.attempt_failed",

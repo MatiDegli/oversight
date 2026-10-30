@@ -131,7 +131,7 @@
     "payload": {
       "agent_id": "agent-1",
       "step": 1,
-      "tool": "read_file",
+      "tool": "unknown",
       "summary": "Malformed call",
       "result": "error",
       "error": "Invalid call",
@@ -419,7 +419,7 @@
           },
           "depends_on": [],
           "state": "cancelled",
-          "agent_id": "agent-1"
+          "agent_id": null
         },
         {
           "task": "Work",

@@ -1940,12 +1940,15 @@ reordering), range from 0 to 5, must be below the actual count, unique and exclu
 models share a complete acyclicity check, including disconnected cycles.
 
 P3 adds optional subtask state, null for historical payloads only. A plan cannot mix null and
-non-null states; all-null plans retain their historical assignment rules. Waiting has no agent;
-running and merged require one, with distinct per-start agent ids across subtasks even when a
-slot is reused. Prerequisites merge before a subtask runs. Reject, discard and stop reject the
-subtask; dependents of rejected or cancelled prerequisites are cancelled. Rejecting a plan
-cancels every subtask; completion requires merged, rejected or cancelled subtasks. Request
-changes keeps a subtask running.
+non-null states; all-null states are allowed only for exactly two subtasks, retaining their
+historical assignment rules. Plans with one or three to six subtasks require states. Waiting
+has no agent; running and merged require one, with distinct per-start agent ids across subtasks
+even when a slot is reused. A running plan requires an assigned agent, following from P4's rule
+that a running queue item has at least one agent. Prerequisites must be merged for a running,
+merged or rejected subtask: Reject, discard and stop reject a subtask that started. Dependents
+of rejected or cancelled prerequisites are cancelled. Rejecting a plan cancels every subtask;
+completion requires merged, rejected or cancelled subtasks. Request changes keeps a subtask
+running.
 
 P4–P5 make plan queue agent_ids the growing list assigned so far (one to six at dispatch and
 completion); standalone dispatch still requires exactly one. A plan reserves only immediately

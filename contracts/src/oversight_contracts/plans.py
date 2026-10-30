@@ -99,6 +99,8 @@ class Plan(ContractModel):
                     raise ValueError("subtask states must be all null or all set")
                 self._stateful_subtasks()
                 return self
+            if len(self.subtasks) != 2:
+                raise ValueError("subtask states are required for plans written from 1.8.0")
         if self.state == "running":
             if self.subtasks is None:
                 raise ValueError("a running plan requires subtasks")
@@ -125,7 +127,7 @@ class Plan(ContractModel):
             if task.state in {"running", "merged"} and task.agent_id is None:
                 raise ValueError("running and merged subtasks require an agent")
             prerequisites = [self.subtasks[index] for index in task.depends_on]
-            if task.state in {"running", "merged"} and any(
+            if task.state in {"running", "merged", "rejected"} and any(
                 prerequisite.state != "merged" for prerequisite in prerequisites
             ):
                 raise ValueError("prerequisites must merge before a subtask runs")
