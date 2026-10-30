@@ -1,11 +1,13 @@
 import { expect as browserExpect } from "@playwright/test";
 import { expect, it } from "vitest";
 
-import { data, withPage } from "../editor/LiveDiff.browser.support";
+import { data, withPage } from "./LiveDiff.browser.support";
 
 it("discards review text without detaching the shared diff models", async () => {
   await withPage(async (page) => {
-    await page.evaluate((data) => window.panelTest.renderReview(data), data);
+    await page.evaluate((data) => {
+      window.panelTest.renderReview(data);
+    }, data);
     const review = page.getByLabel("Editable review file");
     await browserExpect(review).toHaveAttribute("data-state", "clean");
     const before = await page.evaluate(() => {
