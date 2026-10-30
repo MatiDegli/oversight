@@ -1704,3 +1704,143 @@ cumulative spend. Detect-1 retains its byte-identical v1 configuration, fingerpr
 pilot. Frozen patches and labels do not change: b09 Inventory.reserve, b14 Customer.email
 setter, b17 Cart.add and b19 Product.label remain unprobed questions by D9, in both denominators.
 No paid run or provider probe is part of this change.
+## 2026-10-29 — Life layer, part 1: contours at rest, light only while acting, merge travel
+
+The maintainer approved the life-layer look on 2026-10-29, after the sketches in
+docs/sketches/life/ (committed as an exception for approved sketches only; the interactive
+reference stays outside the repository). This part builds points 1 to 6 of his decision; the
+tests scan, rolling numbers, top-edge light, focus glow and button press are part 2.
+
+1. **Colored light means an agent is acting now, and it belongs to a change in three states.**
+   (a) Working: the agent's status is working or revising; today's light, with its ring where it
+   reads or edits. (b) Waiting: the change has at least one open entry in the decisions inbox, read
+   from `selectDecisionInbox(state)` and not from a rule of the field's own; the light stays on
+   the change's node, steady and dimmer (`waiting-light-weight` 0.5, a theme-independent token, so
+   both token sets carry it), with no motion, and never pulses, blinks or grows however long it
+   waits; opening the review or clicking the node does not turn it off, closing the entries does.
+   (c) Decided, whether merged (by rules or by the person), approved or rejected: a decision fades
+   only a light that exists. The afterlight starts from the light the change had on its node at
+   that moment (waiting, or a working agent's) and fades out over about 90 seconds, along
+   `(1 - p)^1.6`; a change with no light then gets none (a rejection of it lights nothing), and a
+   merge still sends its pulse and brings its light as the pulse arrives. At rest nothing is lit. No color or pulse is added anywhere else: the "Decisions · N" counter stays neutral, and
+   what changed earlier stays told without color by the rail cards and the node marks. This
+   replaces the rule that an agent's current node and last read stay lit until the change is
+   decided, and the 240ms fade of the light on approval. Ambient motion and light without events
+   stay allowed. The first version of this entry gave an agent waiting for review no light and asked
+   the maintainer; his clarification of the same day is state (b). Every proposal now opens an
+   inbox entry, so the recorded runs show the waiting light between the proposal and the decision.
+2. **The rest ground is gray topographic contours derived from the graph:** one moderate hill per
+   module (its height grows with the calls into it from other modules, over a small range), a few
+   soft mounds in empty areas, wide level spacing (5 to 7 lines around a lone hill, never more than
+   8; the maintainer asked for the sketch's density at 13:32 UTC), 1px, very
+   faint, fading outward, drifting slowly and continuously (a change of shape takes minutes),
+   masked under overlays, still under reduced motion, gray only. It replaces the faint 28px lamp
+   grid at rest: lamps now draw only where light reaches.
+3. **Out:** click waves, the hover flashlight, borders that follow the pointer, button flashes, a
+   boot sweep (at most a 0.5s fade-in) and view-change wipes (a plain crossfade). None existed on
+   main when this was recorded.
+4. **In, part 1:** the merge travels: a pulse leaves the agent's rail card, runs along the graph's
+   edges to its node with a short fading trail, then the node's light fades as in point 1, with a
+   soft falloff and never a hard or blocky edge (merge-mid.png's hard top edge is a known flaw).
+   The maintainer clarified on 2026-10-29 at about 21:17 ART that the travel also lights the LED
+   field, as in the sketch: six points, the head plus five every 20px behind it along the actual
+   path (corners included, clamped at the start), with intensity `0.95 * (1 - k/6)^1.4` for
+   `k = 0..5` and radius 19px. At most 12 points contribute `i * exp(-d² / (2r²))` before the
+   common four-level 8×8 dither and agent-color ramp; only cells within three radii are touched.
+   These keep the same 7px square LEDs and drawn lamp masks (overlays and header bands). The SVG
+   line and head stay as they were; points end at arrival, and add no idle animation. Other
+   milestone emitters are deferred. It never moves the camera or takes focus. Reduced motion:
+   no travel or point lights; the node light appears and fades.
+5. **Build:** one WebGL2 canvas draws the lamps and the contours; the heights are computed on the
+   CPU at a coarse grid and sampled by the shader, so the contour cost does not grow with the graph.
+   Without WebGL2 the graph keeps plain ground and no contours. Text keeps 4.5:1 and never sits on
+   the lines, agents' colors mean agents only, and the real recorded run label stays.
+6. **Sketches:** rest-contour, rest-day, rest-rm, merge-mid and life-v2.webm are in
+   docs/sketches/life/ and linked from DESIGN.md as the target for the rest state and the life
+   layer. DESIGN.md records which earlier lines each decision replaces (Dot field and rings,
+   Motion, Reduced motion, the departures table). Where the build differs from a sketch, the
+   departures table says so: no "merged" chips on nodes yet, and the contour mask is cell-wide.
+7. **Build departures:** with contours on, an off lamp is not drawn (a day-mode change: the paper
+   no longer shows a dotted grid at rest), because the lines need the ground bare. The lines fade
+   under a light by its smooth glow (a second grid beside the lamps, which the golden lamp test
+   leaves untouched), so the light's pool never cuts them in blocks. One slow timer (every 500ms)
+   repaints the drift and the light's fade; animation frames run only while a pulse travels, a
+   ring plays or a transition runs.
+
+Reason: light that is on at rest stops telling who is working; a ground that carries the repository's
+shape gives the idle screen something true to show without competing with the graph.
+
+## 2026-10-29 — Life layer, look fixes from the maintainer's side-by-side captures
+
+The maintainer compared the part 1 captures with the approved sketches and asked for four changes.
+Each is built from tokens; DESIGN.md says which earlier lines each replaces.
+
+1. **The dark ground is #070707, not pure black.** It is the `ground` token (and `background`,
+   which mirrors it) and `lamp-off`, so an unlit lamp is the ground. Without WebGL the ground is
+   #070707 too: he reads "plain black" in AGENTS.md as near black, and AGENTS.md is unchanged.
+   This replaces DESIGN.md's `ground: "#000000"`, `lamp-off: "#050505"` and the "Black ground" key
+   characteristic. Panels, rows and text contrast were checked: the token tests still hold.
+2. **Contours at the sketch's level.** The brightest lines are about 25 to 28 on #070707 (they were
+   about 11 on black), the median line about 23, and the lines cover about 4 to 6% of a clear area
+   (the sketch's: 6 to 7%; it was 2.7%). The line is a soft 1px (whole within a tenth of a pixel of
+   its center, gone 1.1px past its edge) at white 9%; each hill spreads over its frame
+   (`contour-hill-spread` 1, from 0.78), so rings show outside big cards. 5 to 7 rings per lone
+   hill, gray only, masks unchanged. This replaces "white at 10% in dark" in DESIGN.md's rest
+   background.
+3. **The busy light is four dithered levels again, in a color ramp.** Round 2 made each lamp's
+   brightness continuous (the intensity raised to a gamma). That read round, symmetric and flat, and
+   its premise was wrong: it took the sketch for a smooth glow, when `life.html` quantizes the
+   light to four levels with an 8 by 8 ordered dither (`floor(clamp(tot, 0, 1) * 3 + bayer8)` over
+   3). Near the core every lamp is whole; further out the dither leaves a regular pattern of single
+   lamps, and that pattern is the LED character. The levels and the matrix return exactly as the
+   sketch computes them (`dot-level-count` 4, `dot-dither-size` 8, no half-step offset), and
+   `lamp-gamma` is removed. Each light keeps its own smooth cut before the lights add up (the
+   sketch's `smoothstep(0.08, 0.22, I)`: `lamp-cut-low`, `lamp-cut-high`). The color ramp stays and
+   now applies per level: the first level leans to the deep end of the agent's color, the second is
+   close to its own, the whole level is lighter (`lamp-ramp-deep`, `lamp-ramp-mid`,
+   `lamp-ramp-hot`), so agent B gets the same in blue. The far tail of the falloff is the sketch's.
+   The lights follow the rows the agents touch, as the sketch's: each agent's current row at full
+   weight and its last read at 0.4, each its own box (a method of a folded class is lit through the
+   class's box), with lamps hidden under cards. On the sketch's own busy scene the product counts
+   lamps at the four levels within a tenth of the sketch's (a test). Cost: the dither's cut is
+   slightly higher than the continuous one (a lamp needs about 0.10 of one light, not 0.08), so the
+   decided fade's halo outside a module card is gone about 35 to 40 seconds into the 90; the node's
+   marker and the rail still tell the rest.
+4. **The merge trail is short.** The orange right-angled line the maintainer saw on the right edge
+   was the merge trail: 200px behind the head. It is now about 100px (28px bright, then 72px that
+   fade with the square of what is left), and it is gone 350ms after the pulse arrives.
+5. **Module frames are translucent, and only their headers are masked.** The sketch's frame is
+   `rgba(12,12,14,.62)` in dark and `rgba(255,255,255,.5)` in day, its class `.6` and `.4`, and its
+   masks cover frame headers, class headers, chips and overlays only, so the light around a lit
+   row shows through the frame's body. Ours was 90% opaque and hid the second and whole levels
+   there; the histogram over the cells outside rows could not see it. `module-opacity` is now
+   0.62 in dark and 0.5 in day (a token, the day palette overrides it), and the field masks
+   what the sketch masks: the header band of an open module or class (the padding above its first
+   row, 54px and 44px, padded by `header-mask-pad`, 6px) and the exact box of a folded card,
+   read at every draw so they follow the camera. A lit row's name and state word stay at 4.5:1 or
+   more over the brightest lamp beneath them, a test over both themes, both agents and the
+   frame label were it unmasked: the lowest is 4.93:1 (day, agent B's frame label). The header and
+   folded-card masks apply to lamps and lines only: the first cut agent B's marker in half on the
+   folded Inventory card, and markers and travel keep the overlay masks they had (the sketch's
+   marker is a DOM element, life.html:80, and its pulse canvas sits above everything, life.html:219;
+   neither is masked by a frame header, life.html:644 masks only the lamps).
+6. **The editing row is tinted with its agent's color.** It already wore the sketch's wash (dark
+   `#1e0c04` and `#060c1e` at 95%) from the `agent-a-node` and `agent-b-node` tokens; the capture
+   shows it for A (a row) and for B (a folded class card, since a method of a folded class is lit
+   through the class's box). Day uses a pale peach and a pale blue, opaque, as the sketch's day
+   keeps its dark wash, which reads as a defect there.
+7. **The histograms count the frame bodies.** The comparison with the sketch now covers every
+   cell that no row, folded card or mask hides, so the translucent bodies count. On the sketch's
+   own busy scene the product draws [20923, 943, 306, 181] lamps at the four levels against the
+   sketch's [20977, 905, 307, 164]: the first level within 5%, the second within a lamp, the
+   whole level 10% above, because the watch gain is 0.92 against the sketch's 0.9 (at 0.9 the
+   product counts 168). The product's own captures differ in geometry: agent A alone
+   [25011, 351, 76, 25], A and B [21406, 1027, 351, 80]. The field there equals the model run on
+   the same boxes (a window around agent A's row counts [0, 35, 114, 53] in both); against the
+   sketch's layout the second level is lower because the rows' rendered boxes are 48px tall
+   against the sketch's 46, and the whole level, a ring one cell thick, changes with where the
+   box's edge falls in the 7px grid.
+
+Reason: the screen must show at a glance which agent is working and where, and the ground must
+look the way the approved sketches look; every number is a token so the look can be tuned without
+code.

@@ -6,7 +6,7 @@ import { dayColors } from "./day.ts";
 // Canvas, Cytoscape and Monaco read getActiveTheme() rather than choosing colors.
 const baseThemes = {
   dark: {
-    ground: "#000000",
+    ground: "#070707",
     shell: "#09090a",
     panel: "#0d0d0f",
     field: "#0b0b0b",
@@ -66,8 +66,8 @@ const baseThemes = {
     "failed-text": "#ff7b7b",
     "matte-top": "#151515",
     "matte-bottom": "#0f0f0f",
-    "lamp-off": "#050505",
-    background: "#000000",
+    "lamp-off": "#070707",
+    background: "#070707",
     added: "#6fd08a",
     removed: "#ff6464",
     // Destructive text and icons (Reject, Stop) use failed-text.
@@ -77,6 +77,7 @@ const baseThemes = {
     "added-tint": { color: "#6fd08a", alpha: 0.11 },
     "removed-tint": { color: "#ff6464", alpha: 0.12 },
     "guide-dot": { color: "#ededea", alpha: 0.1 },
+    "contour-line": { color: "#ededea", alpha: 0.09 },
     "agent-a-node": { color: "#1e0c04", alpha: 0.95 },
     "agent-a-node-new": { color: "#140a04", alpha: 0.95 },
     "agent-b-node": { color: "#060c1e", alpha: 0.95 },
@@ -173,6 +174,8 @@ const baseThemes = {
     "frame-title-inset": "23px",
     "frame-header-center": "29px",
     "frame-header-height": "70px",
+    // How far past a frame header the light is masked, as the sketch pads its masks.
+    "header-mask-pad": "6px",
     "frame-pad-top": "54px",
     "frame-pad-left": "27px",
     "frame-pad-right": "17px",
@@ -196,7 +199,10 @@ const baseThemes = {
     "pending-dash-gap": "4px",
     "focus-ring-width": "2px",
     "focus-ring-offset": "2px",
-    "module-opacity": 0.9,
+    // A module or class frame lets the light through, as the sketch's does: its fill is the panel at
+    // this opacity (0.62 on dark, 0.5 on day, set in the day palette), so the lamps around a lit row
+    // show in the frame's body. Only the header bands and folded cards are masked.
+    "module-opacity": 0.62,
     "node-opacity": 0.94,
     "dim-node": 0.16,
     "dim-module": 0.6,
@@ -204,8 +210,19 @@ const baseThemes = {
     "matte-grain": 0.02,
     "dot-cell-size": "7px",
     "dot-lamp-coverage": 0.72,
+    // A lamp shows one of four levels, picked by an 8 by 8 ordered dither: near the core every lamp
+    // is whole, further out single lamps stand in a regular pattern (the LED character). Each
+    // light is held back by its own cut, off under the low edge and whole at the high one, so a
+    // glow ends on a lamp, not on dust. Dim levels lean to the deep end of their color (the
+    // weaker channels scaled by `deep`), a level whole at `mid` shows the agent's own color, and
+    // the full level moves `hot` of the way to the ink.
     "dot-level-count": 4,
     "dot-dither-size": 8,
+    "lamp-cut-low": 0.08,
+    "lamp-cut-high": 0.22,
+    "lamp-ramp-deep": 0.45,
+    "lamp-ramp-mid": 0.7,
+    "lamp-ramp-hot": 0.2,
     "guide-dot-size": "2px",
     "guide-dot-spacing": "28px",
     "light-near-weight": 0.72,
@@ -232,6 +249,42 @@ const baseThemes = {
     "transition-duration": "240ms",
     "transition-easing": "cubic-bezier(0.2, 0.7, 0.2, 1)",
     "status-lamp-duration": "1600ms",
+    // The rest contours: the height between two lines, a hill's base height and the range its
+    // callers add to it, how wide it spreads over its frame, the soft mounds in empty areas, and
+    // how fast the drift runs (1 is a few minutes per swing). Heights are computed on a coarse grid.
+    "contour-step": 0.1,
+    "contour-hill-base": 0.52,
+    "contour-hill-range": 0.2,
+    "contour-hill-spread": 1,
+    "contour-mound-count": 10,
+    "contour-drift-speed": 1,
+    "contour-cell-size": "16px",
+    // The most levels drawn above the ground, how much of its alpha the outermost line keeps, and
+    // the line's width.
+    "contour-levels": 8,
+    "contour-fade": 0.65,
+    "contour-line-width": "1px",
+    // How often the field repaints for what changes slowly: the contour drift and the afterlight.
+    "field-slow-interval": "500ms",
+    // A change's light stands at the waiting weight (dimmer than a working agent's 1) and never
+    // grows. Once it is decided the light holds that level through a merge's pulse, then fades over
+    // the duration along (1 - p) to the curve; the pulse waits, travels, and leaves a trail.
+    "waiting-light-weight": 0.5,
+    "afterlight-duration": "90000ms",
+    "afterlight-curve": 1.6,
+    "merge-travel-delay": "250ms",
+    "merge-travel-duration": "1450ms",
+    "merge-trail-bright": "28px",
+    "merge-trail-faint": "72px",
+    "merge-trail-fade": "350ms",
+    "merge-pulse-width": "1.6px",
+    // Gaussian LEDs carried by each travelling head, shared by both themes.
+    "pulse-light-count": 6,
+    "pulse-light-spacing": "20px",
+    "pulse-light-intensity": 0.95,
+    "pulse-light-curve": 1.4,
+    "pulse-light-radius": "19px",
+    "pulse-light-limit": 12,
 
     // Monaco-only syntax and code highlights: intentionally absent from CSS.
     "syntax-plain": "#d8d7d0",
