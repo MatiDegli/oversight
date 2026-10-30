@@ -295,6 +295,24 @@ def test_receiver_refusals_are_independent(tmp_path, monkeypatch, source, overri
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("hook", ["__setattr__", "__delattr__"])
+@pytest.mark.parametrize("dataclass", [False, True], ids=["plain", "dataclass"])
+async def test_worker_refuses_custom_attribute_mutation_hooks(
+    tmp_path, monkeypatch, hook, dataclass
+):
+    prefix = "from dataclasses import dataclass\n@dataclass\n" if dataclass else ""
+    arguments = "self, name, value" if hook == "__setattr__" else "self, name"
+    source = (
+        prefix + f"class Box:\n    def {hook}({arguments}): pass\n    def change(self): return 1\n"
+    )
+    _, target = receiver_fixture(tmp_path, monkeypatch, source)
+    with pytest.raises(ValueError, match="custom receiver hooks"):
+        _receiver_class(target, tmp_path)
+    [row] = await invoke_method(tmp_path, source)
+    assert row["kind"] == "unrepresentable"
+
+
+@pytest.mark.anyio
 async def test_metaclass_is_refused_before_reading_class_attributes(tmp_path, monkeypatch):
     source = """reads = []
 class Meta(type):

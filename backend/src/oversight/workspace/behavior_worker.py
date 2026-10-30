@@ -16,6 +16,7 @@ import os
 import signal
 import sys
 from collections.abc import Callable
+from dataclasses import is_dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -271,10 +272,19 @@ def _receiver_class(target: dict[str, Any], root: Path) -> type[Any]:
         or relative.name.endswith("_test.py")
     ):
         raise ValueError("test module receiver")
-    if any(
-        name in cls.__dict__
-        for name in ("__getattr__", "__getattribute__", "__slots__", "__del__", "__new__")
-    ):
+    hooks = {
+        "__getattr__",
+        "__getattribute__",
+        "__setattr__",
+        "__delattr__",
+        "__slots__",
+        "__del__",
+        "__new__",
+    }
+    if is_dataclass(cls) and cls.__dict__["__dataclass_params__"].frozen:
+        # Frozen dataclasses generate these hooks and refuse user-defined versions.
+        hooks -= {"__setattr__", "__delattr__"}
+    if hooks.intersection(cls.__dict__):
         raise ValueError("custom receiver hooks")
     descriptor = inspect.getattr_static(cls, target["name"])
     kind = target["method_kind"]
