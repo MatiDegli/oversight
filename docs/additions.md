@@ -91,16 +91,17 @@ These retain useful ideas from the old inventory without approving a front or ch
   or it appears in that test's executed nodes when recorded. If nothing relevant changed, the card
   asks the person. This is deterministic, with no model call; if neither source can tell, ask
   instead of starting another round on a guess.
-- Behavior diff for methods, only if level 3 is reached. Until then, measure the third proof on
-  tasks that change functions only and state that limit in the write-up; current targets are
-  module-level functions (`backend/src/oversight/changes/_behavior.py:79`).
+- Behavior diff for methods was approved on 2026-10-30 as part of the bench evidence fix and is
+  no longer a candidate; see DECISIONS.md.
 - A dependency guard for package existence, license and vulnerability evidence.
 - Native workflow candidates from the maintainer (2026-10-29), none queued. The cut line, drawn
   once the checkpoint list is on main, comes before any of them is considered.
   - Resource admission: the person's cap on running agents stays the limit. Memory and spend can
     only hold a start below that cap, never raise it, and a held start shows its reason, for
     example "Waiting: memory at 88%, 2 test runs ahead". Thresholds are deterministic; no model
-    decides.
+    decides. An already-running agent waiting on a shared resource shows the reason in words on
+    its card, built from the scheduler's own data, for example "waiting for a test slot (2 queued)".
+    Use the same form as a model wait, for example "waiting for model (retry 3/5)".
   - A start-box warning: when the person starts an agent by hand and its target lies inside a
     running agent's impact cone, the start box says so. It only warns; it never blocks or
     reassigns. Plan zones and the cone check are item 11, and live overlap is item 5; only this
