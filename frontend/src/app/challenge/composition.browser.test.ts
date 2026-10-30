@@ -332,3 +332,47 @@ it.each([
     });
   },
 );
+
+it("limits evidence sizing to the phone media query", async () => {
+  await visit(0, "/", async (page) => {
+    await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    const sizing = await page.evaluate(() => {
+      const sheet = document.querySelector<HTMLStyleElement>(
+        'style[data-vite-dev-id$="/recordedEvidence.css"]',
+      )?.sheet;
+      if (!sheet) throw new Error("Missing evidence stylesheet");
+      return [...sheet.cssRules].flatMap((rule) => {
+        const media = rule instanceof CSSMediaRule ? rule.conditionText : null;
+        const entries = rule instanceof CSSMediaRule ? [...rule.cssRules] : [rule];
+        return entries.flatMap((entry) =>
+          entry instanceof CSSStyleRule
+            ? ["font-size", "line-height", "min-height"].flatMap((property) => {
+                const value = entry.style.getPropertyValue(property);
+                return value ? [{ selector: entry.selectorText, property, value, media }] : [];
+              })
+            : [],
+        );
+      });
+    });
+    expect(sizing).toEqual([
+      {
+        selector: ".recorded-evidence",
+        property: "font-size",
+        value: "13px",
+        media: "(width < 1280px)",
+      },
+      {
+        selector: ".evidence-row > summary",
+        property: "min-height",
+        value: "44px",
+        media: "(width < 1280px)",
+      },
+      {
+        selector: ".evidence-runs",
+        property: "line-height",
+        value: "20px",
+        media: "(width < 1280px)",
+      },
+    ]);
+  });
+});
