@@ -1,0 +1,14 @@
+--- a/boltons/typeutils.py
++++ b/boltons/typeutils.py
+@@ -37,6 +37,11 @@
+ from collections import deque
+ 
+ _issubclass = issubclass
++
++
++def typename(obj):
++    """Return the concrete type's name, including the metaclass for classes."""
++    return type(obj).__name__
+ 
+ 
+ def make_sentinel(name='_MISSING', var_name=None):
