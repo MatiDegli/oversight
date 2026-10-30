@@ -243,15 +243,25 @@ async def _measure_function(
     deadline: float,
 ) -> None:
     result = found[position]
+    samples = inputs[result.node_id].inputs
+    admitted = [index for index, sample in enumerate(samples) if sample.input_identity is not None]
     measured = [
         (index, old, new)
         for index, (old, new) in enumerate(zip(before.results, after.results, strict=True))
-        if _identity(old) is not None and _identity(new) is not None
+        if samples[index].input_identity is not None
+        and _identity(old) is not None
+        and _identity(new) is not None
     ]
     result = replace(
         result,
         compared=len(measured),
-        reason="unrepresentable input" if len(measured) != len(before.results) else None,
+        reason=(
+            "no equal typed inputs"
+            if not admitted
+            else "unrepresentable input"
+            if len(measured) != len(admitted)
+            else None
+        ),
     )
     rows: list[BehaviorRow] = []
     groups: dict[OutcomeKind, DifferenceGroup] = {}
@@ -290,7 +300,7 @@ async def _measure_function(
                     new,
                     unstable,
                     repeat_complete=True,
-                    inputs_equal=sample.input_identity is not None,
+                    inputs_equal=True,
                     input_identity=sample.input_identity,
                 )
                 if not unstable:

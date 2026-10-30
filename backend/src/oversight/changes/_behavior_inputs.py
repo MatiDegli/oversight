@@ -8,7 +8,11 @@ from itertools import zip_longest
 from pathlib import PurePosixPath
 from typing import Any, cast
 
-from oversight.changes._behavior_aliases import module_aliases, shadowed
+from oversight.changes._behavior_aliases import (
+    _AliasBindings,  # pyright: ignore[reportPrivateUsage]
+    module_aliases,
+    shadowed,
+)
 from oversight.changes._review_identity import bound_inputs
 from oversight.changes._shortcuts_common import Source, walk_local
 
@@ -73,7 +77,32 @@ def _literal(node: ast.expr) -> Any:
     return ast.literal_eval(node)
 
 
-def _default(node: ast.expr) -> Any:
+def _constant_defaults(source: Source) -> dict[str, ast.expr]:
+    bindings = _AliasBindings(source.deadline)
+    bindings.visit(source.tree)
+    if bindings.star_import:
+        return {}
+    declared = {
+        name
+        for node in ast.walk(source.tree)
+        if isinstance(node, (ast.Global, ast.Nonlocal))
+        for name in node.names
+    }
+    constants: dict[str, ast.expr] = {}
+    for stmt in source.tree.body:
+        if not isinstance(stmt, (ast.Assign, ast.AnnAssign)) or stmt.value is None:
+            continue
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+        if len(targets) == 1 and isinstance(targets[0], ast.Name):
+            name = targets[0].id
+            if bindings.counts[name] == 1 and name not in declared:
+                constants[name] = stmt.value
+    return constants
+
+
+def _default(node: ast.expr, constants: dict[str, ast.expr]) -> Any:
+    if isinstance(node, ast.Name):
+        node = constants.get(node.id, node)
     try:
         return _literal(node)
     except _LiteralLimit:
@@ -83,13 +112,14 @@ def _default(node: ast.expr) -> Any:
         return _OPAQUE_DEFAULT
 
 
-def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signature:
+def _signature(source: Source, node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signature:
     if node.args.vararg or node.args.kwarg:
         raise ValueError("variadic signature")
     positional = [*node.args.posonlyargs, *node.args.args]
+    constants = _constant_defaults(source)
     missing = inspect.Parameter.empty
     defaults = [missing] * (len(positional) - len(node.args.defaults))
-    defaults += [_default(value) for value in node.args.defaults]
+    defaults += [_default(value, constants) for value in node.args.defaults]
     params: list[inspect.Parameter] = []
     for index, (arg, default) in enumerate(zip(positional, defaults, strict=True)):
         kind = (
@@ -105,7 +135,7 @@ def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signatur
             inspect.Parameter(
                 arg.arg,
                 inspect.Parameter.KEYWORD_ONLY,
-                default=missing if default is None else _default(default),
+                default=missing if default is None else _default(default, constants),
                 annotation=_annotation(arg),
             )
         )
@@ -304,7 +334,7 @@ def behavior_inputs(
         for source, node in definitions:
             if reason := _effect_reason(source, node):
                 return BehaviorInputs(reason=reason)
-        signatures = [_signature(node) for node in nodes]
+        signatures = [_signature(source, node) for source, node in definitions]
         integers = [
             value
             for source, _ in definitions
@@ -331,6 +361,7 @@ def _generate(
     skipped = 0
     pools: dict[str, list[Any]] = {key: [] for sig in signatures for key in sig.parameters}
     seeds: list[dict[str, Any]] = []
+    base_params = signatures[0].parameters
 
     def add(named: dict[str, Any]) -> None:
         nonlocal skipped
@@ -359,7 +390,12 @@ def _generate(
         for sig, (args, kwargs) in zip(signatures, (before, after), strict=True):
             effective = sig.bind(*args, **kwargs)
             effective.apply_defaults()
-            identities.append(bound_inputs(dict(effective.arguments)))
+            # Binding already rejects explicit head-only arguments and opaque omissions.
+            # Keep every base parameter: removal and changed shared defaults stay unequal.
+            arguments = {
+                key: value for key, value in effective.arguments.items() if key in base_params
+            }
+            identities.append(bound_inputs(arguments))
         inputs.append(
             BehaviorInput(
                 f"{name}({rendered})",
@@ -381,9 +417,9 @@ def _generate(
                 pools[param].append(value)
             add(dict(bound.arguments))
     pools = _pools(pools, nodes, signatures, integers)
-    seed = (
-        dict(seeds[0]) if seeds else {param: values[0] for param, values in pools.items() if values}
-    )
+    seed = {param: values[0] for param, values in pools.items() if values and param in base_params}
+    if seeds:
+        seed = dict(seeds[0])
     add(seed)
     # Share the cap across parameters so the first parameter cannot starve later ones.
     for row in zip_longest(*pools.values(), fillvalue=inspect.Parameter.empty):

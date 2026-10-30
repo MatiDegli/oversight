@@ -189,3 +189,134 @@ def test_paid_requires_existing_shared_history(tmp_path, monkeypatch, no_provide
     args = cli.parser_for().parse_args(["pilot", "--paid", *ESTIMATE])
     with pytest.raises(BenchError, match="existing consolidated"):
         cli.configured_rates(args)
+
+
+@pytest.mark.parametrize(
+    "defect",
+    [
+        "none",
+        "allowed",
+        "missing_first",
+        "missing_second",
+        "same",
+        "pin_first",
+        "pin_second",
+        "plan_pin",
+    ],
+)
+def test_sensitivity_read_only_and_refusals(tmp_path, monkeypatch, capsys, no_providers, defect):
+    from tools.eval.detection.labels import load_labels
+    from tools.eval.ledger import State
+    from tools.eval.tests.test_detection_labels import synthetic_labels
+    from tools.eval.tests.test_detection_report import fake_pass
+
+    labels, data = synthetic_labels(tmp_path)
+    if defect == "allowed":
+        # Keep b17-b20 unavailable, all outside this synthetic unasked group.
+        for label in data["labels"]:
+            unasked = int(label["id"][1:]) <= 10
+            label["answer"] = "unasked_difference" if unasked else "only_asked"
+            label["difference"] = "synthetic difference" if unasked else ""
+        labels.write_text(json.dumps(data))
+    pin = sha256(labels.read_bytes())
+    # Pin validation uses only these synthetic labels, never external answers.
+    assert len(load_labels(labels, pin).answers) == 20
+    paths = [tmp_path / name / "results.jsonl" for name in ("first", "second")]
+    for index, out in enumerate(paths):
+        out.parent.mkdir()
+        rows = fake_pass("asked_for" if index == 0 or defect == "same" else "not_asked_for")
+        for row in rows:
+            wrong = (defect == "pin_first" and index == 0) or (
+                defect == "pin_second" and index == 1
+            )
+            row.result.detection.labels_sha256 = "wrong" if wrong else pin
+        state = State(cap_usd=20, results_file=out.name, tariff=None, records=rows)
+        if defect == "plan_pin":
+            state.plans["synthetic"] = {
+                "kind": "detection",
+                "pilot": False,
+                "labels_sha256": "wrong",
+            }
+        (out.parent / "ledger.json").write_text(state.model_dump_json())
+        out.write_bytes(b"derived results must remain untouched\n")
+    if defect.startswith("missing"):
+        (paths[defect == "missing_second"].parent / "ledger.json").unlink()
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("sensitivity must never execute or acquire a writable ledger")
+
+    for name in ("Ledger", "execute", "run_plan", "configured_rates", "check_baseline"):
+        monkeypatch.setattr(cli, name, forbidden)
+    code = cli.main(
+        [
+            "sensitivity",
+            "--out",
+            str(paths[0]),
+            "--against",
+            str(paths[1]),
+            "--labels",
+            str(labels),
+            "--labels-sha256",
+            pin,
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == (0 if defect in {"none", "allowed"} else 1)
+    if defect in {"none", "allowed"}:
+        result = json.loads(captured.out)
+        assert result["fake_choices"] == {"first": "asked_for", "second": "not_asked_for"}
+        assert result["paid_run_allowed"] is (defect == "allowed")
+        assert bool(result["failed_conditions"]) is (defect == "none")
+        run = result["arms"]["detect-3-v2"]["repetitions"]["1"]["passes"]["first"]
+        assert run["flips"]["count"] == 16 and run["evidence_alone"]["count"] == 4
+    else:
+        assert "Detection bench refused:" in captured.err
+        assert (
+            "labels pin"
+            if "pin" in defect
+            else "ledger"
+            if defect.startswith("missing")
+            else "choice"
+        ) in captured.err
+    assert {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before
+
+
+@pytest.mark.parametrize("side", ["first", "second"])
+@pytest.mark.parametrize(
+    "location", ["results.jsonl", "ledger.json", "ledger.lock", "detection/labels.json"]
+)
+def test_sensitivity_labels_outside_both_accounting_paths(
+    tmp_path, monkeypatch, capsys, no_providers, side, location
+):
+    from tools.eval.tests.test_detection_labels import synthetic_labels
+
+    labels, _ = synthetic_labels(tmp_path)
+    path = tmp_path / side / location
+    path.parent.mkdir(parents=True)
+    labels.rename(path)
+    pin = sha256(path.read_bytes())
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("accounting path guard must precede reading either ledger")
+
+    monkeypatch.setattr(cli, "history", forbidden)
+    assert (
+        cli.main(
+            [
+                "sensitivity",
+                "--out",
+                str(tmp_path / "first/results.jsonl"),
+                "--against",
+                str(tmp_path / "second/results.jsonl"),
+                "--labels",
+                str(path),
+                "--labels-sha256",
+                pin,
+            ]
+        )
+        == 1
+    )
+    assert "labels must be outside writable accounting paths" in capsys.readouterr().err
+    assert {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before

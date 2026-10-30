@@ -257,7 +257,8 @@ class NodeBehaviorDiff(ContractModel):
     node_id: NodeId
     """The stable graph identity, including removed or unsupported nodes."""
     compared_count: NonNegativeInt = 0
-    """Inputs compared on both sides with equal typed inputs."""
+    """Inputs compared on both sides with equal typed inputs over shared parameters when
+    omitted candidate-only parameters have literal or resolved constant defaults."""
     differing_count: NonNegativeInt = 0
     """Compared inputs with reproducible differing results; excludes unstable rows."""
     rows: list[BehaviorDiffRow] = Field(default_factory=list[BehaviorDiffRow], max_length=8)

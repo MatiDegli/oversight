@@ -710,7 +710,8 @@ export interface ReachFacts {
 export interface NodeBehaviorDiff {
   node_id: NodeId;
   /**
-   * Inputs compared on both sides with equal typed inputs.
+   * Inputs compared on both sides with equal typed inputs over shared parameters when
+   * omitted candidate-only parameters have literal or resolved constant defaults.
    */
   compared_count: number;
   /**
@@ -733,7 +734,8 @@ export interface NodeBehaviorDiff {
 export interface MeasuredCaller {
   node_id: NodeId;
   /**
-   * Inputs compared on both sides with equal typed inputs.
+   * Inputs compared on both sides with equal typed inputs over shared parameters when
+   * omitted candidate-only parameters have literal or resolved constant defaults.
    */
   compared_count: number;
   /**

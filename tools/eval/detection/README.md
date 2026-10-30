@@ -64,6 +64,17 @@ Per arm and model repetition, report these fixed criteria with denominators of t
   incomplete selection or no stable selected difference also wait for the person and count as
   questions. Each criterion line includes its unavailable-question count.
 
+The report splits question sources using recorded results only, without model calls:
+each question has exactly one source, in order: `questions_from_tests` when tests fail,
+`questions_from_evidence` when tests pass but evidence is unavailable, and `questions_from_model`
+when tests pass with no unavailable evidence. These three counts sum to `questions`; a question
+on the tests-only arm comes from failing tests. `model_asked` counts patches with at least one
+recorded decision; `unavailable_questions` counts questions with any unavailability, even when
+tests failed or a decision was recorded. `unavailable_causes` counts patches with each cause once,
+regardless of repeated reasons or nodes, in a fixed order (absent causes are omitted; unknown
+reasons count as `other`). Causes can overlap, so their counts need not sum to the question count.
+Both criterion lines append the three source counts; criteria and denominators remain unchanged.
+
 Unprobed cases remain in both denominators and are listed separately. An empty probe never means
 equivalence. Detection reports observed differences separately from intent choices; finding any
 difference does not establish that the labeled unasked difference was detected. Tests-only and
@@ -99,6 +110,13 @@ uses the same flags plus the external label path and pin. Tests-only runs once p
 `--repetitions` applies to the other arms. A seed and the full randomized order persist before
 execution. Resuming skips completed identities and never retries an interrupted reservation.
 Fake outcomes test plumbing and must never be presented as provider measurements.
+
+Run the fake measurement in two sequential passes, `--fake --fake-choice asked_for` and
+`--fake --fake-choice not_asked_for`, with separate output directories. Compare their recorded
+ledgers using `sensitivity --out FIRST/results.jsonl --against SECOND/results.jsonl` with the
+same `--labels` and `--labels-sha256` pin as `report`: `model_sensitive` counts paired non-pilot
+cases whose `let_through` flips. This read-only comparison spends nothing, makes no model call,
+and reports the maintainer's fixed paid-run gate and failures without starting a run.
 
 ## Future paid gate and durable accounting
 
