@@ -47,6 +47,8 @@ class Observation:
     def question(self, base: str) -> str:
         if self.group is None:
             return base
+        if not base.endswith((".", "?", "!")):
+            base += "."
         return (
             f"{base} {self.group.description}, "
             f"for {self.coverage} of {self.differing} differing inputs."

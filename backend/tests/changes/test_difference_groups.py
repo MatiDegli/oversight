@@ -117,7 +117,9 @@ async def test_twenty_six_value_differences_have_one_classified_witness(h, monke
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("choice,base", [("not_asked_for", QUESTION), ("cannot_tell", UNCERTAIN)])
+@pytest.mark.parametrize(
+    "choice,base", [("not_asked_for", QUESTION), ("cannot_tell", UNCERTAIN + ".")]
+)
 async def test_each_typed_outcome_kind_has_its_own_card(h, monkeypatch, choice, base):
     pairs = [
         (value(0), value(1)),
@@ -138,6 +140,37 @@ async def test_each_typed_outcome_kind_has_its_own_card(h, monkeypatch, choice, 
         base + f" {s}, for 1 of 4 differing inputs." for s in suffixes
     }
     assert not problems(facts)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "choice,question",
+    [
+        (
+            "cannot_tell",
+            "Oversight could not tell whether this was asked for. "
+            "Now raises ValueError, for 1 of 4 differing inputs.",
+        ),
+        (
+            "not_asked_for",
+            "Was this behavior change asked for? Now raises ValueError, "
+            "for 1 of 4 differing inputs.",
+        ),
+    ],
+)
+async def test_group_question_sentences_validate_and_round_trip(h, monkeypatch, choice, question):
+    function = await measure(
+        [(value(0), raised("ValueError")), *[(value(i), value(i + 4)) for i in range(1, 4)]]
+    )
+    cards, _, job, facts = await publish(h, monkeypatch, [function], choice=choice)
+    current = facts.review_cards
+    [card] = [c for c in current if "Now raises ValueError" in c.question]
+    assert card.question == question
+    cards.validate(job, facts)
+    yes = [c.model_copy(update={"answer": "yes", "answered_by": "person"}) for c in current]
+    assert validate_answers(current, list(reversed(yes))) == yes
+    await h.manager.reject("change-1", None, answers=yes, **observed_target(h.manager, "change-1"))
+    assert h.payloads(ChangeResolved)[0].answers == yes
 
 
 @pytest.mark.anyio
