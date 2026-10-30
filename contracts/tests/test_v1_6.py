@@ -1,6 +1,7 @@
 """Approved 1.6 identifiers and run-local inbox references, without runtime admission."""
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 from oversight_contracts.commands import AgentCreated, MissingSetting, StartAgent
 from oversight_contracts.events import AgentStatus, RunStarted, SlotInfo
 from oversight_contracts.queue import QueuedAgentTask
+from oversight_contracts.review import NodeBehaviorDiff
 
 ROOT = Path(__file__).resolve().parents[2]
 STATUS = dict(
@@ -234,6 +236,22 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
     }
     assert not set(baseline) - set(current)
     for name, definition in baseline.items():
+        if name in {"NodeBehaviorDiff", "MeasuredCaller"}:
+            approved = (
+                "Inputs compared on both sides with equal typed inputs over shared parameters "
+                "when\n"
+                "omitted candidate-only parameters have literal or resolved constant defaults."
+            )
+            updated = deepcopy(current[name])
+            field = updated["properties"]["compared_count"]
+            assert (
+                field["description"]
+                == NodeBehaviorDiff.model_fields["compared_count"].description
+                == approved
+            )
+            field["description"] = definition["properties"]["compared_count"]["description"]
+            assert updated == definition, name
+            continue
         if name not in {
             "Slot",
             "StartAgent",
