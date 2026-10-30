@@ -9,3 +9,4 @@ export { DecisionInbox } from "./DecisionInbox";
 
 export { DecisionContext } from "./DecisionContext";
 export { useAnswers } from "./answers";
+export { BehaviorDiff } from "./BehaviorDiff";

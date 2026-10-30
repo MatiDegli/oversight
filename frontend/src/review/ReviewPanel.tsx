@@ -263,7 +263,6 @@ function LegacyReviewPanel({
   const proposal = change?.proposal ?? null;
   const facts = proposal === null ? undefined : factsForRevision(state, proposal);
   const hasFacts = facts !== undefined;
-  const hasSummary = (facts?.summary?.length ?? 0) > 0;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
   const [editing, setEditing] = useState<{
@@ -294,7 +293,7 @@ function LegacyReviewPanel({
         <CrossReviewNote change={change} />
       )}
       {proposal && hasFacts && (
-        <ReviewFacts state={state} proposal={proposal} scrollable={!hasSummary} />
+        <ReviewFacts state={state} proposal={proposal} scrollable={!hasFacts} />
       )}
     </>
   );
@@ -349,7 +348,7 @@ function LegacyReviewPanel({
           </p>
         )}
       </header>
-      {hasSummary ? (
+      {hasFacts ? (
         <section aria-label="Review context" className="min-h-0 overflow-y-auto">
           {context}
           {report}
@@ -357,8 +356,8 @@ function LegacyReviewPanel({
       ) : (
         context
       )}
-      <div className={`flex flex-1 flex-col ${hasSummary ? "min-h-min" : "min-h-0"}`}>
-        {!hasSummary && report}
+      <div className={`flex flex-1 flex-col ${hasFacts ? "min-h-min" : "min-h-0"}`}>
+        {!hasFacts && report}
         {files.map((path) => {
           const open = path === openPath;
           const stat = stats.get(path);
@@ -367,7 +366,7 @@ function LegacyReviewPanel({
             <section
               key={path}
               aria-label={`Diff of ${path}`}
-              className={`flex flex-col border-b border-page-border ${open ? (hasSummary ? "min-h-min flex-1" : "min-h-0 flex-1") : ""}`}
+              className={`flex flex-col border-b border-page-border ${open ? (hasFacts ? "min-h-min flex-1" : "min-h-0 flex-1") : ""}`}
             >
               <button
                 type="button"
