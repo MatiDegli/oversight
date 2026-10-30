@@ -399,6 +399,38 @@ an unavailable check to passing evidence.
 
 ### 10. Cost and rounds per accepted change
 
+**Agent-hours come first:** proof 2's closing line ("this many agents for this many hours") uses them. The
+intervals of one agent are unioned, distinct agents add up, and a lead that only waits for its agents adds
+nothing. Use observed intervals, never fixed time buckets: each agent's own working intervals come from its
+agent.status events, where starting, working and revising count and ready_for_review, halted, done, stopped and
+paused do not. A review is one bounded call that starts when the change is proposed, so its interval runs from
+change.proposed to change.reviewed and it counts as its own actor. Also report project active hours (the union
+of all intervals) and parallelism (agent-hours divided by project active hours). The lead has no producer yet
+and lead.status cannot tell waiting from working; until its contract can, lead hours are unavailable and its
+waits are never counted.
+
+**Costs are list-price equivalents, not a bill:** every cost names its dated price source. The source is
+Meta's official pricing page. The repository stores the price table extracted from it, with the page's URL and
+retrieval date, never a copy of the page; on 2026-10-30 it listed
+muse-spark-1.3-contributor at US$0.10 input, US$0.002 cached input and US$0.20 output per million tokens, and no
+price for Muse Spark Open, so Baseten work is unpriced. The view applies the stored price to each call's token
+counts. The budget brake keeps its own conservative ledger, which prices cached input as fresh, and the view
+never presents its figures as that ledger. A call whose cached count was not reported has a cost range; only
+its lower end enters the known subtotal.
+
+**Coverage:** missing usage, activity or price shows the known part as a lower bound and the total as
+unavailable, never a smaller total presented as complete. There are three levels: complete; missing metrics
+(unpriced work, or an actor with work but no interval); incomplete (an integrity failure). Null is unknown and
+zero is zero; zero usage costs zero even when unpriced. Unpriced rows sort last, and "—" means unknown only.
+A sum of period figures adds their known subtotals and is labeled a lower bound.
+
+**Grouping:** by team, agent, model and role, split by hour or day. A team is a lead and the agents it started
+(`started_by`); agents the person started form their own group. Periods follow local wall time, so a
+daylight-saving change gives a 23- or 25-hour day. Intervals are clipped at period edges; a cost falls in the
+period of its usage.tick and is never prorated. Group rows add up only when every group's activity is complete
+and their sum matches the global figure; the total always comes from the global figure. A comparison between
+periods uses exact values, never rounded display text, and shows a number only when both sides are complete.
+
 Count failed, stopped, rejected and review work too, divide all spend by accepted changes, and show
 role/model breakdowns, revision rounds and budget pace. Keep unsuccessful buckets visible. With
 no accepted changes the ratio is unavailable.

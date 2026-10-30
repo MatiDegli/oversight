@@ -1920,3 +1920,17 @@ classes defined in the project's own non-test modules are constructed.
 
 Reason: deferring methods leaves missing evidence in the bench, so the evidence fix scope
 supersedes the level 3 deferral while retaining the existing effect and construction policies.
+
+## 2026-10-30 — Item 10 measures agent-hours from observed intervals, with dated list prices
+
+The maintainer amended item 10 of docs/additions.md. Agent-hours, project active hours and parallelism come
+first, because proof 2's closing line uses them. They come from each agent's own working intervals in its
+status events, not from fixed time buckets. Costs are list-price equivalents from Meta's official pricing
+page: the repository stores the extracted price table with the page's URL and retrieval date, not a copy of
+the page. Muse Spark Open via Baseten has no listed price, so its work is reported as a lower bound. Missing
+usage, activity or price shows the known part as a lower bound and the total as unavailable.
+
+Reason: Oversight records when each agent works, so measured intervals replace an approximation, and a waiting
+lead must not inflate the hours. A stored price table needs no contract change; recording a price in
+run.started was the rejected alternative. The coverage, grouping and comparison rules come from prior
+work in the maintainer's projects, rewritten for Oversight; no code was copied.
