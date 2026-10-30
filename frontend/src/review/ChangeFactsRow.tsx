@@ -3,11 +3,14 @@ import {
   Check,
   CircleHelp,
   Coins,
+  File,
   FileCode,
+  Diff,
   GitBranch,
   GitCommitHorizontal,
   ListChecks,
   ScanEye,
+  ScanLine,
   TestTube,
   X,
 } from "lucide-react";
@@ -93,10 +96,7 @@ export function ChangeFactsRow({
   if (!change) return null;
   const proposal = live && ["editing", "revising"].includes(change.status) ? null : change.proposal;
   const cone = live ? liveImpact(state, change) : proposal?.impact;
-  const possible = cone ? (possibleCallers(state, change, cone) ?? 0) : 0;
   const fileCount = live ? change.files_changed : (proposal?.files.length ?? change.files_changed);
-  const card = selectAgentCard(state, change.agent_id);
-  const base = proposal?.base_commit || card?.agent.base_commit;
   const lastTests = Object.values(state.testExecutions).findLast(
     (execution) =>
       execution.change_id === changeId &&
@@ -106,15 +106,15 @@ export function ChangeFactsRow({
   if (!live)
     return (
       <ul aria-label="Facts" className="flex flex-wrap items-center gap-2 text-text">
-        <Fact review label="Files" symbol={<FileCode aria-hidden="true" className={icon} />}>
+        <Fact review label="Files" symbol={<File aria-hidden="true" className={icon} />}>
           {fileCount} {fileCount === 1 ? "file" : "files"}
         </Fact>
-        <Fact review label="Lines" symbol={<ListChecks aria-hidden="true" className={icon} />}>
+        <Fact review label="Lines" symbol={<Diff aria-hidden="true" className={icon} />}>
           <span className="text-added">+{proposal?.lines_added ?? change.lines_added}</span>{" "}
           <span className="text-removed">−{proposal?.lines_removed ?? change.lines_removed}</span>
         </Fact>
         <TestsFact review tests={proposal?.tests ?? lastTests?.suite} />
-        <Fact review label="Impact cone" symbol={<ScanEye aria-hidden="true" className={icon} />}>
+        <Fact review label="Impact cone" symbol={<ScanLine aria-hidden="true" className={icon} />}>
           {!cone
             ? "Possibly affected: unknown"
             : cone.entries.length === 0
@@ -123,6 +123,10 @@ export function ChangeFactsRow({
         </Fact>
       </ul>
     );
+  const possible = cone ? (possibleCallers(state, change, cone) ?? 0) : 0;
+  const card = selectAgentCard(state, change.agent_id);
+  const base = proposal?.base_commit || card?.agent.base_commit;
+
   return (
     <ul aria-label="Facts" className="flex flex-wrap items-center gap-2 text-text">
       <Fact label="Files" symbol={<FileCode aria-hidden="true" className={icon} />}>

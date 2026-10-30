@@ -240,7 +240,7 @@ it("never approves from the keyboard in the comment box; the click waits for cha
       "clean",
     );
     const comment = panel(page).getByRole("textbox", {
-      name: "Comment (required for Request changes)",
+      name: "Comment for the agent",
     });
     await comment.click();
     await page.keyboard.type("Looks right");
@@ -276,12 +276,12 @@ it("never approves from the keyboard in the comment box; the click waits for cha
   });
 }, 30_000);
 
-it("approves only on a pointer click: Tab then Enter or Space says so and sends nothing", async () => {
+it("approves only on a pointer click: Tab then Enter or Space sends nothing and gives no hint", async () => {
   await withPage(false, async (page) => {
     await page.getByRole("button", { name: /^Decisions:/ }).click();
     const approve = panel(page).getByRole("button", { name: "Approve and merge" });
     const comment = panel(page).getByRole("textbox", {
-      name: "Comment (required for Request changes)",
+      name: "Comment for the agent",
     });
     const caption = panel(page).getByText("Approve with a click: it merges into main");
     await browserExpect(approve).toBeEnabled();
@@ -292,7 +292,7 @@ it("approves only on a pointer click: Tab then Enter or Space says so and sends 
     await browserExpect(caption).toHaveCount(0);
     for (const key of ["Enter", "Space"]) {
       await page.keyboard.press(key);
-      await browserExpect(caption).toBeVisible();
+      await browserExpect(caption).toHaveCount(0);
       expect(await page.evaluate(() => window.reviewTest.decisions.length)).toBe(0);
       await browserExpect(approve).toBeEnabled();
       // Pressing a key does not move focus either.
@@ -323,9 +323,7 @@ it("keeps Reject keyboard-operable", async () => {
     await browserExpect(
       panel(page).getByRole("button", { name: "Approve and merge" }),
     ).toBeEnabled();
-    await panel(page)
-      .getByRole("textbox", { name: "Comment (required for Request changes)" })
-      .click();
+    await panel(page).getByRole("textbox", { name: "Comment for the agent" }).click();
     await page.keyboard.press("Tab");
     await page.keyboard.press("Tab");
     await browserExpect(reject).toBeFocused();
@@ -340,7 +338,7 @@ it("Escape in the comment box only leaves it; Escape elsewhere closes review", a
   await withPage(false, async (page) => {
     await page.getByRole("button", { name: /^Decisions:/ }).click();
     const comment = panel(page).getByRole("textbox", {
-      name: "Comment (required for Request changes)",
+      name: "Comment for the agent",
     });
     await comment.click();
     await page.keyboard.type("Looks right");

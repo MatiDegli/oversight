@@ -7,6 +7,8 @@ import { agentSlotStyle } from "../theme";
 import { AnswerChoices } from "./AnswerChoices";
 import { candidateKey, useAnswers } from "./answers";
 import { useDecisions } from "./DecisionContext";
+import { ReviewDecisionBar } from "./ReviewDecisionBar";
+import { cardAnswer } from "./AnswerChoices";
 import { CardDecisions } from "./CardDecisions";
 import { decisionView } from "./decisions";
 import type { ReviewPanelProps } from "./ReviewPanel";
@@ -31,9 +33,12 @@ export function ChangeCard({
   onDecide,
   onClose,
   card: projectedCard,
-}: Pick<ReviewPanelProps, "state" | "changeId" | "attempt" | "onDecide"> & {
+  reviewPanel = false,
+  replayOf,
+}: Pick<ReviewPanelProps, "state" | "changeId" | "attempt" | "onDecide" | "replayOf"> & {
   onClose?: () => void;
   card?: ChangeCardState;
+  reviewPanel?: boolean;
 }) {
   const shared = useDecisions();
   const decide = onDecide ?? shared.onDecide;
@@ -43,6 +48,7 @@ export function ChangeCard({
   if (!card) return null;
   const { change, facts, kind } = card;
   const slot = state.agents[change.agent_id]?.slot;
+  const Decisions = reviewPanel ? PanelDecisions : CardDecisions;
   return (
     <aside aria-label="Change card" className="decision-card" style={agentSlotStyle(slot)}>
       <ReviewHeader
@@ -53,6 +59,12 @@ export function ChangeCard({
       />
       <div className="decision-card-body">
         <CardLead state={state} changeId={changeId} card={card} />
+        {reviewPanel && !!facts?.review_cards?.length && (
+          <p className="decision-muted">
+            {facts.review_cards.filter((card) => cardAnswer(card, answers) != null).length} of{" "}
+            {facts.review_cards.length} answered
+          </p>
+        )}
         <CardEvidence state={state} changeId={changeId} card={card} />
         {kind !== "unavailable" && <ComparisonMap state={state} change={change} facts={facts} />}
         <CardDiffs state={state} changeId={changeId} />
@@ -61,7 +73,10 @@ export function ChangeCard({
         <GrantChoice state={state} changeId={changeId} scopeOnly />
       )}
       {kind !== "merged" && (
-        <CardDecisions
+        <Decisions
+          changeId={changeId}
+          replayOf={replayOf ?? shared.replayOf}
+          unavailable={kind === "unavailable"}
           candidate={candidate}
           cards={facts?.review_cards ?? []}
           answers={answers}
@@ -170,5 +185,27 @@ function CardEvidence({ state, changeId, card }: CardContentProps) {
         </div>
       )}
     </>
+  );
+}
+
+function PanelDecisions({
+  onDecide,
+  ...props
+}: Parameters<typeof CardDecisions>[0] & {
+  changeId: string;
+  replayOf?: string;
+  unavailable?: boolean;
+}) {
+  return (
+    <ReviewDecisionBar
+      {...props}
+      onDecide={
+        onDecide
+          ? (_id, action, comment) => {
+              onDecide(action, comment);
+            }
+          : undefined
+      }
+    />
   );
 }

@@ -219,7 +219,7 @@ it("Escape returns to the review comment with text intact and no decision comman
     await page.getByRole("button", { name: /^Decisions:/ }).click();
     await page.getByRole("button", { name: /^Review change/ }).click();
     const comment = page.getByRole("textbox", {
-      name: "Comment (required for Request changes)",
+      name: "Comment for the agent",
       exact: true,
     });
     await comment.fill("Keep the comment and my focus.");

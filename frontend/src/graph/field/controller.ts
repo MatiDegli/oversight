@@ -365,7 +365,8 @@ class FieldRuntime implements FieldController {
               y: agent.rect.top + agent.rect.height / 2 - origin.top,
             }
           : { x: width, y: (target.y1 + target.y2) / 2 };
-        // Keep the card's original graph-box clamp; review departs from the actual rail letter.
+        // AgentCard carries data-slot; the folded rail letter deliberately omits it.
+        // Both expose data-agent-origin: clamp the card, depart from the actual rail letter.
         if (agent?.element.hasAttribute("data-slot")) {
           start.x = clamp(start.x, 0, width);
           start.y = clamp(start.y, 0, height);

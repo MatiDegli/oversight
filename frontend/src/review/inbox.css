@@ -239,18 +239,6 @@ button.decision-reject {
   border: 1px solid var(--page-border);
   margin-top: var(--spacing-lg);
 }
-.decision-agent {
-  display: inline-grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--slot-graphic);
-  border-radius: var(--radius-label);
-  color: var(--slot-text);
-  background: var(--slot-tint);
-  margin-right: var(--spacing-xs);
-  font-weight: 700;
-}
 .decision-card-body {
   padding: 0 var(--spacing-overlay);
 }
@@ -453,4 +441,14 @@ button.decision-reject {
 .grant-row button:disabled {
   color: var(--faint);
   cursor: not-allowed;
+}
+
+/* Override the shell's compact legacy decision spacing only for the shared review bar. */
+.review-decision-bar,
+.focus-body .review-decision-bar[aria-label="Decision"] {
+  padding: 12px 24px 10px;
+}
+.focus-body .review-decision-bar[aria-label="Decision"] textarea {
+  resize: none;
+  caret-color: var(--text);
 }
