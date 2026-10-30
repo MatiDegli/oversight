@@ -21,7 +21,8 @@ that these inputs measured no difference. It is not proof of unchanged behavior.
 At construction the probe excluded non-literal arguments, side effects, I/O and randomness. The
 key's reachability flags record eligibility under those restrictions, not a claim that a bounded
 input set detects a case. The product now also builds project objects from constructor and
-single-return fixture arguments, so a case flagged unreachable may be probed. Reports use the
+single-return fixture arguments, and follows method calls on variables assigned from a literal
+constructor call, so a case flagged unreachable may be probed. Reports use the
 measured unprobed facts, never these flags. Some cases require shop objects; two planted cases
 exercise I/O or randomness. Keep development examples separate during tuning and do not tune on
 bench labels.

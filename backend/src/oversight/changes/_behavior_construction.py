@@ -18,6 +18,14 @@ def construction_ast(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
             if any(isinstance(target, ast.Name) and target.id == "__init__" for target in targets):
                 return _whole_class(cls, deadline)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if any(
+                isinstance(dec, ast.Attribute)
+                and dec.attr in {"setter", "deleter"}
+                and (not isinstance(dec.value, ast.Name) or dec.value.id != node.name)
+                for dec in node.decorator_list
+            ):
+                # A renamed accessor cannot be reached by the property's name here.
+                return _whole_class(cls, deadline)
             methods.setdefault(node.name, []).append(node)
         elif not isinstance(node, ast.Pass) and not (
             isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)

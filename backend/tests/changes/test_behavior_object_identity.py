@@ -20,6 +20,17 @@ PRODUCT = """class Product:
     def normalize(self, value): return value
     def unrelated(self): return 9
 """
+RENAMED_SETTER = (
+    PRODUCT.replace("def value(self, value):", "def _set_value(self, value):")
+    + "    value = _set_value\n"
+)
+RENAMED_DELETER = (
+    PRODUCT.replace("self.value = value", "self._value = value; del self.value")
+    + """    @value.deleter
+    def _delete_value(self): self._value = 0
+    value = _delete_value
+"""
+)
 
 
 def inputs(before, after):
@@ -40,6 +51,20 @@ def inputs(before, after):
         (
             PRODUCT,
             PRODUCT.replace("self._value = self.normalize(value)", "self._value = value + 1"),
+        ),
+        (
+            RENAMED_SETTER,
+            RENAMED_SETTER.replace(
+                "self._value = self.normalize(value)", "self._value = value + 1"
+            ),
+        ),
+        (
+            RENAMED_SETTER,
+            RENAMED_SETTER.replace("return value\n", "return value + 1\n"),
+        ),
+        (
+            RENAMED_DELETER,
+            RENAMED_DELETER.replace("self._value = 0", "self._value = 1"),
         ),
         (
             PRODUCT,
@@ -66,6 +91,9 @@ def inputs(before, after):
     ids=[
         "initializer",
         "setter",
+        "renamed-setter",
+        "renamed-setter-transitive-method",
+        "renamed-deleter",
         "transitive-method",
         "assignment",
         "annotated-field",
