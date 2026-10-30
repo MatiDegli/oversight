@@ -233,9 +233,17 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
         "GrantUse",
         "GrantCreatedEvent",
         "GrantRevokedEvent",
+        "ModelAttemptFailed",
+        "ModelAttemptFailedEvent",
     }
     assert not set(baseline) - set(current)
     for name, definition in baseline.items():
+        if name == "AgentStep":
+            updated = deepcopy(current[name])
+            assert updated["properties"].pop("error_kind")["default"] is None
+            updated["required"].remove("error_kind")
+            assert updated == definition
+            continue
         if name in {"NodeBehaviorDiff", "MeasuredCaller"}:
             approved = (
                 "Inputs compared on both sides with equal typed inputs over shared parameters "

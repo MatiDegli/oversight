@@ -70,6 +70,7 @@ export type ServerEvent =
   | ChangeProposedEvent
   | ChangeResolvedEvent
   | UsageTickEvent
+  | ModelAttemptFailedEvent
   | ErrorReportEvent
   | ChangeAssessedEvent
   | MergeModeChangedEvent
@@ -321,6 +322,10 @@ export interface AgentStep {
    * Set for run_tests.
    */
   tests: SuiteResult | null;
+  /**
+   * Set only for malformed model tool calls; every other tool error stays null.
+   */
+  error_kind: ("unknown_tool" | "invalid_json" | "invalid_arguments") | null;
 }
 /**
  * A test run's result. Not "TestResult", which pytest would try to collect.
@@ -1713,6 +1718,53 @@ export interface UsageTick {
   plan_id: PlanId | null;
 }
 /**
+ * The server-owned model.attempt_failed envelope.
+ */
+export interface ModelAttemptFailedEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "model.attempt_failed";
+  payload: ModelAttemptFailed;
+}
+/**
+ * Emitted by the server once per failed attempt, before the retry wait and for the final
+ * failure; never written by the model. The card reads "Waiting for model (retry n/5)" from
+ * an attempt with wait_s set, until that agent's next agent.step, usage.tick or
+ * model.attempt_failed.
+ */
+export interface ModelAttemptFailed {
+  agent_id: AgentId;
+  change_id: ChangeId | null;
+  role: ("agent" | "review" | "plan" | "lead") | null;
+  model: NonEmptyText;
+  provider: "meta" | "baseten" | "fake";
+  /**
+   * The 1-based number of the attempt that failed.
+   */
+  attempt: number;
+  /**
+   * The retry policy limit, currently 5.
+   */
+  max_attempts: number;
+  cause: "rate_limited" | "server_error" | "connection" | "timeout" | "refused";
+  /**
+   * HTTP status when the provider answered.
+   */
+  status: number | null;
+  /**
+   * Provider Retry-After, when sent.
+   */
+  retry_after_s: number | null;
+  /**
+   * Wait before the next attempt; null when none follows.
+   */
+  wait_s: number | null;
+  final: ("attempts_used" | "not_retryable" | "deadline") | null;
+}
+/**
  * The new server merge mode.
  */
 export interface MergeModeChangedEvent {
@@ -2213,4 +2265,4 @@ export interface UpdatePlan {
   subtasks: [SubtaskDraft, SubtaskDraft];
 }
 
-export const CONTRACT_VERSION = "1.7.0";
+export const CONTRACT_VERSION = "1.8.0";

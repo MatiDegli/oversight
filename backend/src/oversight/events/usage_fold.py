@@ -169,6 +169,7 @@ def fold_usage(events: Sequence[ServerEvent]) -> UsageFold:
                 "run.started"
                 | "graph.snapshot"
                 | "graph.delta"
+                | "model.attempt_failed"
                 | "agent.step"
                 | "agent.focus"
                 | "change.assessed"
