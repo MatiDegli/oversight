@@ -3,7 +3,7 @@
 ## Status
 
 The tasks were approved on 2026-10-30 at 09:32 ART; the reporting rules on 2026-10-30 at
-10:10 ART. P1-P5 were approved on 2026-10-30 by 11:57 ART in the coordinator's session.
+10:10 ART. P1-P6 were approved on 2026-10-30 by 11:57 ART in the coordinator's session.
 Everything in this plan is fixed before the run. A rule added later is reported as
 added after the run started. Scope: [Three proofs](../additions.md#three-proofs) and
 [the paired-arm decision](../../DECISIONS.md#2026-10-29--proof-2-measures-correctness-with-hidden-checks-and-a-paired-arm).
@@ -55,7 +55,7 @@ Freeze all hidden checks before seeing agent output; keep checks outside the pro
 (`DECISIONS.md:1376-1378`). Agents have no network.
 
 Queue parallel pairs 1-2, 3-4, 5-6, 7-8, 9-10, 11-12 and 13-14. Task 15 runs after task 5;
-task 16 runs alone.
+task 16 runs alone. Queuing all tasks does not bypass these execution constraints.
 
 D3: a tests-only task (10, 12, 14 and 15) is correct when its new tests pass on the base
 code, fail on at least two of three seeded mutants written and frozen before the run, and
@@ -118,6 +118,12 @@ P4, review cost per change: The cost of all cross-review calls on a change, acro
 revisions, by item 10's attribution.
 
 Attribution source: [item 10's amended rules][item10].
+
+P6, measurement definitions: [queuing keeps the execution constraints](#repository-and-tasks);
+[per-check results and revision ids kept](#definitions-fixed-before-the-run);
+[questions keyed by decision identity](#what-the-report-measures);
+[agent-hours from elapsed run intervals](#what-the-report-measures);
+[parallelism as the concurrent-agent count over time, wall time apart](#what-the-report-measures).
 
 ## What the report measures
 

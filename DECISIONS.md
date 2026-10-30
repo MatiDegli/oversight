@@ -1938,7 +1938,7 @@ work in the maintainer's projects, rewritten for Oversight; no code was copied.
 ## 2026-10-30 — Proof 2's tasks and reporting rules are fixed before the run
 
 Tasks were approved at 09:32 ART and reporting rules at 10:10 ART on 2026-10-30.
-P1-P5 were approved by 11:57 ART; the [plan](docs/plans/proof-2.md) fixes the rules before the run.
+P1-P6 were approved by 11:57 ART; the [plan](docs/plans/proof-2.md) fixes the rules before the run.
 D1: 16 Boltons tasks, 12 issue-backed and four tests-only; parallel pairs 1-2 through 13-14,
 task 15 after 5, task 16 alone. D2: seven feature APIs and examples are frozen in tasks.json.
 D3: tests-only changes pass on base, kill at least two of three frozen mutants and change no production code.
@@ -1959,9 +1959,11 @@ E7: compare finish files/tests_run/tests with server diff/tests; omitted claims 
 Under 10 cases, counts only, never a percentage. Proof 2's US$25 cap includes the uncounted pilots.
 H1: same-model harness-pack pair runs within the bench's US$20 only after both free passes have at most 4/20
 question-not-available cases each, equal counts, and every case labelled unasked_difference whose tests pass in both passes flips between them.
-Bring the numbers before paying. L1: rework/re-splits/conflicts, zone overlaps, round-0 acceptance; L2: planning spend.
+Bring the numbers before paying. L1: rework/re-splits/conflicts, zone overlaps, round-0 acceptance
+against tasks the person started; L2: planning spend.
 L3 is future work. With the lead on main, measure L1-L2; otherwise, if hidden checks, item 8, E6 and item 10 are on main,
 the person queues the 16 tasks at once; starts count as their decisions and L1-L2 are not measured.
 P1: correct change; P2: fixed what was cited; P3: questions that were not needed; P4: review cost per change.
 P5: pilots 16 and 4 first, results excluded; the run then queues all 16, those two included; pilot costs remain within US$25.
+P6: queuing keeps the execution constraints; per-check results and revision ids kept; questions keyed by decision identity; agent-hours from elapsed run intervals; parallelism as the concurrent-agent count over time, wall time apart.
 Reason: freeze tasks, definitions and reporting before seeing results; later rules are marked added after run start.
