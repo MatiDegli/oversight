@@ -922,8 +922,9 @@ everything else steps back.
   this is one hop only, with no further traversal, for live edits and proposals alike.
 - Possible callers and bounds belong to the cone card's footer, never the review facts row:
   "+2 possible callers, not followed", "+12 omitted by depth". No question-mark icon or warning color.
-  An empty cone says "No exact callers"; append only a nonzero possible-caller count. With no
-  graph, show no possible-callers text. Bounds and possible callers stay independent of measurements.
+  An empty cone says "No exact callers"; with one possible caller, "No exact callers · 1 possible
+  caller, not followed". Append only a nonzero count. With no graph, show no possible-callers text.
+  Bounds and possible callers stay independent of measurements.
 - Each cone row is one line: function, measured word, then "Out of view" at the right for a
   function off camera or inside a folded module. Words are "differs" (text, 600), "same" (muted),
   "not measured" (faint), and "varied" (muted) when results changed between runs. Green never
@@ -950,7 +951,8 @@ with lossless soft wraps. One bound sentence qualifies the comparison summary be
 
 Opened only by the person, from a card, Decisions or a proposed change's node. The approved
 baseline is in [docs/sketches/review/](docs/sketches/review/README.md); it is not the final look.
-The shared anatomy serves choices and ordinary review; the graph stays visible and keeps positions.
+The desktop anatomy serves choices and ordinary review; phone overrides follow below.
+The graph stays visible and keeps positions.
 
 1. **Header:** matte background, letter badge, task as headline, status pill, close; then one
    provenance caption (agent, model, cost, step, worktree, base), then at most four decision chips
@@ -975,8 +977,8 @@ The shared anatomy serves choices and ordinary review; the graph stays visible a
    in Monaco rather than wrap. From level 2, a pending change's new side is editable while the
    agent is idle, in that agent's worktree.
    In a, with choices open, the diff starts closed as a 44px file row below Details, labeled
-   "Show diff", so the 1080px screen fits without scrolling. The 44px height comes from the
-   review.html's `.fr.closed` rule in the approved sketch; its open `.fr` row is 40px.
+   "Show diff", so the 1080px screen fits without scrolling. The approved sketch uses 44px for
+   the closed file row and 40px for the open file row.
    Further files start collapsed.
 5. **What was compared:** 14/600 title, then two to four muted 15px lines on 22px lines,
    numbers in text color and Next, 4px below the title. One faint sentence follows, 4px below:
@@ -1047,6 +1049,12 @@ not measured." In c: "3 of 9 callers measured; 6 were not.", "1 of 36 functions 
 
 **Phone, f and f-b (390×844).** One column, 16px gutters: 48px bar, one provenance strip,
 168px graph context, then scrolling evidence. The build supplies the real recording label once.
+The review header holds a 24px letter badge beside "Agent B · Muse Spark Open" in f or
+"Agent A · Muse Spark" in f-b: 14px text, agent name in its agent color at 600, model muted.
+Below it, the task headline wraps at 20/700 on 26px lines, 8px below the agent line, then the
+chips follow 12px below. There is no provenance caption, status pill or review close button.
+The agent note follows the lead, never above it; it sits below the initial viewport in both
+shots and remains in the scrolling evidence before "What was compared".
 The first three chips keep "1 file", "+2 −0" and "28 passed". Examples stack Before above After
 with a down arrow and Mono 15 soft-wrapped values. "What was compared" and "Show diff" become
 44px rows with one-line muted previews and chevrons. Dock buttons read "Approve" and "Reject"
@@ -1207,8 +1215,8 @@ with a short trail that fades behind it (about 100px: 28px bright, then 72px tha
 square of what is left, so no line
 stays lit), and arrives. The node's light, which held the level the change had from the decision, then fades as in
 Agent light (a rejection sends no pulse; its light fades from the decision). The travel is drawn above
-the graph, clipped by the field mask, and never moves the camera, opens a panel or takes focus
-from the review panel.
+the graph, clipped by the field mask, and never moves the camera, opens a panel or takes focus.
+When approval starts in review, focus stays in the review panel.
 The travel also lights the LED field: one point at the head and five behind it at 20px steps of
 actual path length, including corners and clamped at the start. Each contributes a gaussian
 `I = i * exp(-d² / (2r²))`, with `i = 0.95 * (1 - k/6)^1.4`, `k = 0..5`, and `r = 19px`.
