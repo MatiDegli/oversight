@@ -12,6 +12,10 @@ from oversight.changes._manager import ChangeManager
 from oversight.changes._mode import ModeController
 from oversight.changes._partition import CannotSplit, Split, partition_targets
 from oversight.changes._policy import PolicyInputs, SpendSnapshot
+from oversight.changes._queue import QUEUE_LIMIT, TERMINAL, queued
+from oversight.changes._queue import candidates as queue_candidates
+from oversight.changes._queue import transition as queue_transition
+from oversight.changes._queue_view import read_queue
 from oversight.changes._review_cards import ReviewCardLimits
 from oversight.changes._review_port import ReviewCapture, ReviewPort
 from oversight.changes._shortcut_detector import (
@@ -24,6 +28,8 @@ from oversight.changes._state import ChangeNotFound, Revision, WrongState
 from oversight.changes._view import build_change_view, read_agent_status, read_change_view
 
 __all__ = [
+    "QUEUE_LIMIT",
+    "TERMINAL",
     "BehaviorDiff",
     "BehaviorInput",
     "BehaviorInputs",
@@ -52,6 +58,10 @@ __all__ = [
     "build_change_view",
     "detect_shortcuts",
     "partition_targets",
+    "queue_candidates",
+    "queue_transition",
+    "queued",
     "read_agent_status",
     "read_change_view",
+    "read_queue",
 ]

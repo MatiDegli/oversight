@@ -16,6 +16,7 @@ import os
 import signal
 import sys
 from collections.abc import Callable
+from dataclasses import is_dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -204,7 +205,196 @@ def call(function: Callable[..., Any], literal: str, timeout_s: float) -> dict[s
     return result
 
 
-def probe(target: dict[str, Any], timeout_s: float) -> dict[str, Any]:
+def _literal_state(value: Any, seen: set[int] | None = None) -> None:
+    """Public state is a literal projection, never an object's repr or arbitrary fields."""
+    seen = set() if seen is None else seen
+    kind = cast(Any, type(value))
+    if value is None or kind in (bool, int, float, str, bytes):
+        return
+    if kind not in (list, tuple, dict) or id(value) in seen:
+        raise ValueError("nonliteral receiver state")
+    seen.add(id(value))
+    try:
+        items = (item for pair in value.items() for item in pair) if kind is dict else value
+        for item in items:
+            _literal_state(item, seen)
+    finally:
+        seen.remove(id(value))
+
+
+def _stored(receiver: object) -> dict[str, Any]:
+    try:
+        values = object.__getattribute__(receiver, "__dict__")
+    except AttributeError:
+        return {}
+    values = cast(dict[Any, Any], values)
+    if type(values) is not dict or any(type(key) is not str for key in values):
+        raise ValueError("unsupported receiver dictionary")
+    return cast(dict[str, Any], values)
+
+
+def _state(receiver: object, properties: list[str]) -> tuple[Any, Any]:
+    computed = [(name, getattr(receiver, name)) for name in sorted(properties)]
+    stored = [
+        (name, value)
+        for name, value in sorted(_stored(receiver).items())
+        if not name.startswith("_")
+    ]
+    state = (stored, computed)
+    _literal_state(state)
+    return state
+
+
+def _state_display(state: tuple[Any, Any]) -> dict[str, Any]:
+    return {
+        tag: [[name, encode(value)] for name, value in entries]
+        for tag, entries in zip(("stored", "properties"), state, strict=True)
+    }
+
+
+def _receiver_class(target: dict[str, Any], root: Path) -> type[Any]:
+    module = importlib.import_module(target["module"])
+    cls = getattr(module, target["receiver_class"])
+    if type(cls) is not type:
+        raise ValueError("receiver metaclass")
+    if not inspect.isclass(cls) or cls.__module__ != target["module"]:
+        raise ValueError("receiver is not a project class")
+    if cls.__qualname__ != target["receiver_class"] or cls.__bases__ != (object,):
+        raise ValueError("receiver is not a simple class")
+    if module.__file__ is None:
+        raise ValueError("receiver module has no file")
+    path = Path(module.__file__).resolve()
+    relative = path.relative_to(root.resolve())
+    if (
+        "tests" in relative.parts
+        or relative.name == "conftest.py"
+        or relative.name.startswith("test_")
+        or relative.name.endswith("_test.py")
+    ):
+        raise ValueError("test module receiver")
+    hooks = {
+        "__getattr__",
+        "__getattribute__",
+        "__setattr__",
+        "__delattr__",
+        "__slots__",
+        "__del__",
+        "__new__",
+    }
+    if is_dataclass(cls) and cls.__dict__["__dataclass_params__"].frozen:
+        # Frozen dataclasses generate these hooks and refuse user-defined versions.
+        hooks -= {"__setattr__", "__delattr__"}
+    if hooks.intersection(cls.__dict__):
+        raise ValueError("custom receiver hooks")
+    descriptor = inspect.getattr_static(cls, target["name"])
+    kind = target["method_kind"]
+    if kind in ("property", "setter"):
+        if not isinstance(descriptor, property) or (kind == "setter" and descriptor.fset is None):
+            raise ValueError("method descriptor mismatch")
+    elif kind != "method" or not inspect.isfunction(descriptor):
+        raise ValueError("method descriptor mismatch")
+    for name in target.get("properties", []):
+        if name.startswith("_") or not isinstance(inspect.getattr_static(cls, name), property):
+            raise ValueError("property allowlist mismatch")
+    return cls
+
+
+def _exception(error: BaseException) -> dict[str, Any]:
+    message = str(error)
+    full_class = f"{type(error).__module__}.{type(error).__qualname__}"
+    return {
+        "kind": "raised",
+        "class": class_name(error),
+        "message": message[:MAX_TEXT],
+        "fingerprint": fingerprint(("raised", full_class, message)),
+    }
+
+
+def _method_action(
+    receiver: object, cls: type[Any], target: dict[str, Any], invocation: str
+) -> Callable[[], Any]:
+    args, kwargs = ast.literal_eval(invocation)
+    name, kind = target["name"], target["method_kind"]
+    if kind in ("property", "setter"):
+        descriptor = inspect.getattr_static(cls, name)
+        accessor = descriptor.fget if kind == "property" else descriptor.fset
+        signature = inspect.signature(accessor)
+        parameters = list(signature.parameters.values())
+        if len(parameters) != (1 if kind == "property" else 2) or any(
+            parameter.kind
+            not in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            for parameter in parameters
+        ):
+            raise ValueError("property arguments")
+        binding = signature.bind(receiver, *args, **kwargs)
+        binding.apply_defaults()
+        if kind == "property":
+            return lambda: getattr(receiver, name)
+        value = list(binding.arguments.values())[1]
+        # Descriptor assignment preserves frozen dataclass semantics.
+        return lambda: setattr(receiver, name, value)
+    method = getattr(receiver, name)
+    binding = inspect.signature(method).bind(*args, **kwargs)
+    binding.apply_defaults()
+    args, kwargs = copy.deepcopy((binding.args, binding.kwargs))
+    return lambda: method(*args, **kwargs)
+
+
+def method_call(
+    target: dict[str, Any], literal: str, timeout_s: float, root: Path
+) -> dict[str, Any]:
+    def execute() -> dict[str, Any]:
+        # Construction, both fingerprints, invocation and getters share ONE call alarm.
+        cls = _receiver_class(target, root)
+        constructor, invocation = ast.literal_eval(literal)
+        args, kwargs = ast.literal_eval(constructor)
+        bound = inspect.signature(cls).bind(*args, **kwargs)
+        bound.apply_defaults()
+        args, kwargs = copy.deepcopy((bound.args, bound.kwargs))
+        receiver = cls(*args, **kwargs)  # Never clone or reuse an instance across inputs.
+        # Private initialization is part of the input, catching hidden nonce helpers.
+        # Only public POST state below can become a method behavior difference.
+        stored = _stored(receiver)
+        _literal_state(stored)
+        initial = fingerprint((stored, _state(receiver, target.get("properties", []))))
+        action = _method_action(receiver, cls, target, invocation)
+        try:
+            value = action()
+        except CallTimeout:
+            raise
+        except BaseException as error:
+            result = _exception(error)
+        else:
+            result = value_result(value)
+        state = _state(receiver, target.get("properties", []))
+        if result["kind"] not in ("value", "raised"):
+            return result
+        result["result_fingerprint"] = result["fingerprint"]
+        result["fingerprint"] = fingerprint((result["kind"], result["fingerprint"], state))
+        result["pre_fingerprint"] = initial
+        result["state"] = _state_display(state)
+        return result
+
+    try:
+        result = limited(execute, timeout_s)
+    except CallTimeout:
+        return {"kind": "timed_out"}
+    except BaseException as error:
+        return {"kind": "unrepresentable", "class": class_name(error)}
+    if len(canonical(result).encode()) > MAX_RESULT:
+        return {"kind": "unrepresentable", "value": ["cut", "encoded result size"]}
+    return result
+
+
+def probe(target: dict[str, Any], timeout_s: float, root: Path | None = None) -> dict[str, Any]:
+    if target.get("receiver_class") is not None:
+        return {
+            "problem": None,
+            "results": [
+                method_call(target, literal, timeout_s, root or Path.cwd())
+                for literal in target["calls"][:48]
+            ],
+        }
     try:
         function = limited(
             lambda: getattr(importlib.import_module(target["module"]), target["name"]), timeout_s
@@ -235,7 +425,7 @@ def main() -> None:
         handle.write("{")
         size = 2
         for index, target in enumerate(targets):
-            row = canonical(target["id"]) + ":" + canonical(probe(target, timeout_s))
+            row = canonical(target["id"]) + ":" + canonical(probe(target, timeout_s, root))
             if size + len(row) + 1 > MAX_FILE:
                 break
             handle.write(("," if index else "") + row)

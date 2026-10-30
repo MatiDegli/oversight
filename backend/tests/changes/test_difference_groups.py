@@ -358,3 +358,53 @@ async def test_grouping_uses_typed_kind_despite_exception_words_in_values(h, mon
         QUESTION + " Now raises ValueError, for 1 of 2 differing inputs.",
     }
     assert not problems(facts)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "choice,base", [("not_asked_for", QUESTION), ("cannot_tell", UNCERTAIN + ".")]
+)
+async def test_state_only_group_gets_its_own_card_without_changing_return_group(
+    h, monkeypatch, choice, base
+):
+    def state(number, returned=0):
+        row = value(returned)
+        return {
+            **row,
+            "fingerprint": f"result{returned}-state{number}",
+            "result_fingerprint": row["fingerprint"],
+            "state": {"stored": [["count", ["int", hex(number)]]], "properties": []},
+        }
+
+    function = await measure(
+        [(state(0), state(1)), (state(1), state(2)), (state(0), state(1, returned=1))]
+    )
+    _, client, _, facts = await publish(h, monkeypatch, [function], choice=choice)
+    assert len(client.calls) == len(facts.review_cards) == 2
+    assert {card.question for card in facts.review_cards} == {
+        base + " Leaves the object in a different state, for 2 of 3 differing inputs.",
+        base + " Returns a different value, for 1 of 3 differing inputs.",
+    }
+    assert all('"state"' in card.example.before for card in facts.review_cards)
+    assert not problems(facts)
+
+
+@pytest.mark.anyio
+async def test_state_only_kind_combines_equal_returns_and_equal_exceptions(h, monkeypatch):
+    def state(result, number):
+        return {
+            **result,
+            "fingerprint": result["fingerprint"] + f"-state{number}",
+            "result_fingerprint": result["fingerprint"],
+            "state": {"stored": [["count", ["int", hex(number)]]], "properties": []},
+        }
+
+    outcomes = [value(0), raised("ValueError"), raised("TypeError")]
+    function = await measure([(state(result, 0), state(result, 1)) for result in outcomes])
+    assert function.groups and len(function.groups) == 1 and function.groups[0].count == 3
+    _, client, _, facts = await publish(h, monkeypatch, [function])
+    assert len(client.calls) == len(facts.review_cards) == 1
+    assert facts.review_cards[0].question == (
+        QUESTION + " Leaves the object in a different state, for 3 of 3 differing inputs."
+    )
+    assert not problems(facts)

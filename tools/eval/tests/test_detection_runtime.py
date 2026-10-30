@@ -55,9 +55,13 @@ async def test_dev_patch_product_facts_and_disposable_cleanup(arm, tmp_path, mon
         assert (tmp_path / "attempt/events.sqlite").exists()
         if arm.behavior:
             assert result.facts[-1].behavior_diff is not None
-            assert any(
-                n.not_probed == "unsupported node kind" for n in result.facts[-1].behavior_diff
+            method = next(
+                n for n in result.facts[-1].behavior_diff if n.node_id == "shop.cart:Cart.remove"
             )
+            assert method.not_probed != "unsupported node kind"
+            # Method analysis now runs, but d04 still has no stable selected difference.
+            assert "no stable selected difference to classify" in result.unavailable
+            assert not result.decisions
             assert result.question and not result.let_through
         elif arm.profile == "none":
             assert result.let_through and not result.decisions and budget.sends == 0

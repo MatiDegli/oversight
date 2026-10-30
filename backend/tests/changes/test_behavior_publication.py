@@ -385,3 +385,89 @@ async def test_direct_and_caller_publications_capture_and_validate_separate_evid
     for field, message in (("behavior_diff", "behavior"), ("measured_cone", "caller")):
         with pytest.raises(ValueError, match=message):
             validate_change_facts(facts.model_copy(update={field: None}), evidence)
+
+
+def test_public_state_display_is_bounded_and_keeps_worker_metadata_private():
+    def result(number):
+        return {
+            "kind": "value",
+            "value": ["none"],
+            "fingerprint": str(number),
+            "pre_fingerprint": "private input identity",
+            "result_fingerprint": "same result",
+            "state": {
+                "stored": [["text", ["str", "a" * 2000 + str(number), 2001, "cut"]]],
+                "properties": [],
+            },
+        }
+
+    row = BehaviorRow(
+        "Box().change()",
+        result(0),
+        result(1),
+        False,
+        repeat_complete=True,
+        inputs_equal=True,
+        input_identity="input",
+    )
+    evidence = capture_behavior(
+        BehaviorDiff(1, (FunctionBehavior("sample:Box.change", 1, 1, (row,)),))
+    )
+    [function] = project_behavior(evidence, revision=1) or []
+    [display] = function.rows
+    assert "state" in json.loads(display.before)
+    assert len(display.before) <= MAX_RENDERED and len(display.after) <= MAX_RENDERED
+    assert all("fingerprint" not in text for text in (display.before, display.after))
+    assert evidence and evidence.functions[0].review_samples().samples[0].excluded is not None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("fault", ["prestate", "incomplete", "deadline"])
+async def test_method_inputs_count_only_after_receiver_prestate_is_reproduced(fault):
+    from test_behavior_methods import PLAIN, prepared
+
+    source = PLAIN.replace("amount: int = 0", "").replace("+= amount", "+= 0")
+    rec, generated, found = prepared(source)
+    assert generated, found[0].reason
+    [node_id] = generated
+
+    def result(value, pre="initial"):
+        return {
+            "kind": "value",
+            "value": ["int", hex(value)],
+            "fingerprint": str(value),
+            "result_fingerprint": str(value),
+            "pre_fingerprint": pre,
+            "state": {"stored": [], "properties": []},
+        }
+
+    def observation(value, pre="initial"):
+        return {node_id: BehaviorObservation((result(value, pre),))}
+
+    responses = [
+        observation(0),
+        observation(1),
+        TimeoutError()
+        if fault == "deadline"
+        else {node_id: BehaviorObservation(problem="unavailable")}
+        if fault == "incomplete"
+        else observation(0, "different"),
+        observation(1),
+    ]
+    run = AsyncMock(side_effect=responses)
+    args = (
+        cast(Any, SimpleNamespace(run_behavior=run)),
+        cast(Any, rec),
+        cast(Any, ["base", "head"]),
+        generated,
+        found,
+        time.monotonic() + 10,
+        set(),
+    )
+    if fault == "deadline":
+        with pytest.raises(TimeoutError):
+            await _compare(*args)
+    else:
+        await _compare(*args)
+    assert found[0].compared == found[0].differing == 0
+    assert not found[0].groups

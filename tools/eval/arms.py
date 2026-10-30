@@ -11,7 +11,7 @@ from tools.eval.paths import output_path as canonical_path
 from tools.eval.session import PROFILES
 from tools.eval.tasks import BenchError, digest
 
-from oversight.agents import PROMPT_VERSION
+from oversight.agents import prompt_version
 from oversight.app import LIMITS
 from oversight_contracts.events import RunStarted
 
@@ -44,12 +44,30 @@ class Arm(BaseModel):
             "model": PROFILES[self.profile][1],
             "reasoning": self.reasoning,
             "limits": (run.limits if run else LIMITS).model_dump(mode="json"),
-            "prompt_version": run.prompt_version if run else PROMPT_VERSION,
+            "prompt_version": run.prompt_version
+            if run
+            else prompt_version(self.harness_pack == "on"),
             "harness_pack": self.harness_pack,
         }
 
     def config_hash(self, run: RunStarted | None = None) -> str:
         return digest(json.dumps(self.configuration(run), sort_keys=True, separators=(",", ":")))
+
+
+def validate_pair(arms: list[Arm]) -> None:
+    for left in arms:
+        for right in arms:
+            if left.harness_pack == right.harness_pack:
+                continue
+            fields = [
+                f
+                for f in ("profile", "reasoning", "tariff")
+                if getattr(left, f) != getattr(right, f)
+            ]
+            if fields:
+                raise BenchError(
+                    f"pair {left.arm_id}/{right.arm_id} differs in: {', '.join(fields)}"
+                )
 
 
 def load_arms(path: Path, selected: list[str]) -> list[Arm]:
@@ -58,7 +76,9 @@ def load_arms(path: Path, selected: list[str]) -> list[Arm]:
         raise BenchError("arms must have unique names")
     if set(selected) - {a.arm_id for a in arms}:
         raise BenchError("unknown arm_id")
-    return [a for a in arms if not selected or a.arm_id in selected]
+    chosen = [a for a in arms if not selected or a.arm_id in selected]
+    validate_pair(chosen)
+    return chosen
 
 
 def output_path(out: Path, *, paid: bool) -> Path:

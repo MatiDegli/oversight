@@ -42,7 +42,7 @@ original-suite result, failing hidden suite, and passing reference solution agai
 From the clone root, with the existing locked dependencies installed:
 
 ```sh
-uv run --offline --frozen pytest tools/eval/tests
+uv run --offline --frozen pytest tools/eval/tests -q
 UV_OFFLINE=1 npm_config_offline=true PNPM_CONFIG_OFFLINE=true make check
 ```
 
@@ -63,9 +63,41 @@ are `"tariff": {"input": 0.1, "output": 0.2}` in USD per million tokens; complet
 includes reasoning. Baseten has **no assumed tariff** and requires positive explicit prices.
 No prices or keys are inferred by the evaluator from `.env`.
 
+Selected arms with different pack settings must share profile, reasoning and tariff; a refusal
+names the differing fields. A paid `pilot` or `plan`, including a resume, selecting any pack-on
+arm requires `--gate FIRST_LEDGER SECOND_LEDGER LABELS --labels-sha256 EXPECTED_HASH`.
+The two existing ledgers must be distinct and outside the paid directory. The bench recomputes
+detection's sensitivity and paid-run gate from those histories and the byte-pinned external labels,
+checking recorded scoring pins. It trusts no saved/printed gate report and offers no bypass.
+Each fake pass must cover all 20 labelled cases, have at most four unavailable questions and the
+same unavailable count; every unasked-difference case passing tests in both must flip. A refusal
+prints `failed_conditions`. Fake starts and pack-off-only starts need no gate. Gate-required starts
+refuse both `--cap-usd` above USD 20 and an existing ledger pinned above USD 20.
+
+Before any paid execution, inspect a provider-free reservation estimate:
+
+```sh
+uv run --offline --frozen python tools/eval/run.py estimate \
+  --arms tools/eval/arms.example.json --repetitions 3
+# Optionally include detection's dry-run JSON for this same ledger:
+# append --detection /tmp/detection-dry-run.json
+```
+
+`estimate` emits JSON with all selected attempts and their `allowance()` reservations, pending
+total, ledger spent/remaining and per-arm rate basis: explicit arm tariff or assumed default
+planning rates 0.1/0.2 USD per million. It needs no pilots, writes no ledger, starts no server and
+makes no model/network call. It is an **estimate, not a billing ceiling**. With `--detection`,
+a foreign ledger is refused; the combined figure is `ledger spent + pair pending +
+(detection estimated_total_usd - detection spent_usd)`, with whether it is within USD 20.
+Historical spend is counted once. Unknown-cost and unsettled-reservation counts are reported;
+if either is nonzero, `within_usd20` is `"unknown"`. Spent is then a lower bound and remaining an
+upper bound; estimated totals omit unmeasured charges. An explicit tariff below the reservation
+minimum is labeled "arm tariff, floored at the default-rate allowance".
+
 The CLI starts a dedicated Oversight process for every pending attempt. It passes
-`OVERSIGHT_HARNESS_PACK=on|off` in the child's environment even if the product currently ignores
-that setting. A process-local profile override applies the arm's reasoning setting to both the
+`OVERSIGHT_HARNESS_PACK=true|false` from the arm's `on|off` setting; both paid and fake
+children enable the actual product pack. Each arm plans its own packed/plain prompt version.
+A process-local profile override applies the arm's reasoning setting to both the
 advertisement and the product's model client; no product sources change. The child's actual
 advertised limits and prompt version must match the planned configuration. All model calls still
 originate inside Oversight. Only that child reads provider credentials from `.env`; the bench
@@ -74,13 +106,17 @@ never exports keys. No paid command below is authorized by its presence here.
 ```sh
 # After explicit approval of paid execution: one selected task per arm, one repetition.
 uv run --offline --frozen python tools/eval/run.py pilot \
-  --arms tools/eval/arms.example.json --task pricing-01 --seed 1742
+  --arms tools/eval/arms.example.json --task pricing-01 --seed 1742 \
+  --gate /tmp/pass-a/ledger.json /tmp/pass-b/ledger.json /tmp/labels.json \
+  --labels-sha256 "$LABELS_SHA256"
 # Offline projection from the pilot's durable costs; no process or provider is contacted.
 uv run --offline --frozen python tools/eval/run.py project \
   --arms tools/eval/arms.example.json --repetitions 3
 # Execute only if projected cumulative cost is within the cap (default USD 20).
 uv run --offline --frozen python tools/eval/run.py plan \
-  --arms tools/eval/arms.example.json --repetitions 3 --seed 1742
+  --arms tools/eval/arms.example.json --repetitions 3 --seed 1742 \
+  --gate /tmp/pass-a/ledger.json /tmp/pass-b/ledger.json /tmp/labels.json \
+  --labels-sha256 "$LABELS_SHA256"
 uv run --offline --frozen python tools/eval/run.py report
 ```
 
@@ -148,6 +184,17 @@ including profile, arm identity, repetition, turns (observed usage events), tool
 cost, wall time, outcome and original/hidden/policy checks. Missing costs or token counts remain
 `"unknown"`. `report` prints every attempt, per-repetition totals and per-arm aggregates, including
 **tasks solved** and mean tasks solved per observed repetition. Aggregation propagates unknowns.
+
+The report's `failure_table` groups stored event evidence for bench-plan arms by task and
+repetition: tool calls by tool/result, edit errors, failed test runs, finish calls with/without
+a passing test run since the last successful edit, and the first terminal agent status with its
+detail verbatim. A nonpassing test run clears the passing flag. Terminal states are
+`ready_for_review`, `halted`, `done` and `stopped`; `stopped` overrides an earlier terminal state,
+matching the attempt observer. Counts use event fields, never prose.
+It states "error kind: not measured" and omits `error_kind`. Cells without a counterpart in the
+opposite pack arm read "unpaired"; absent event evidence is marked unavailable. Only plan arm
+definitions (including tariff) establish counterparts; a manifest alone cannot establish a pair.
+Detection arms and their case IDs are excluded from this table.
 
 The durable ledger is written before results are materialized; reopening repairs missing/stale
 JSONL without duplicate rows. `manifest.json` retains each server advertisement, configuration,
