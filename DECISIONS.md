@@ -1859,8 +1859,7 @@ rule ever changes, the report must say it changed after seeing results. The orde
 with the scripted fake model to confirm the evidence changed, its numbers to the maintainer,
 then one paid run: one measurement at a time.
 
-Reason: missing evidence must be addressed before the bench can inform a model choice; the
-measurement order keeps each result available for the maintainer's next decision.
+Reason: arms 3 and 4 measured missing evidence, not a model choice; one measurement at a time.
 
 ## 2026-10-30 — B1: Omitted optional additions compare shared parameters
 
@@ -1872,20 +1871,15 @@ the two repeats stay strict. Public counts include only inputs with an identity.
 The contract's description of `compared_count` is to change accordingly; the schema shape and
 `CONTRACT_VERSION` stay unchanged. This work belongs to `changes/input-identity`.
 
-Reason: an omitted optional addition should not discard an input whose shared parameters can
-be compared, while differences in existing defaults or explicit arguments still require strict
-identity checks.
-
 ## 2026-10-30 — B2: Defaults may resolve a uniquely bound module literal
 
 At 23:31 ART on October 29, the maintainer decided that a default naming a module constant
 resolves when that constant is bound exactly once in the same module to a literal, read from
 the AST. No expression is ever evaluated. This narrows the opaque-default rule in
-"2026-10-29 — Behavior inputs follow unique module aliases and require opaque arguments";
-other nonliteral defaults remain opaque. This work belongs to `changes/input-identity`.
+"2026-10-29 — Behavior inputs follow unique module aliases and require opaque arguments".
+This work belongs to `changes/input-identity`.
 
-Reason: a uniquely bound module literal supplies a default without executing project code;
-treating it as opaque loses evidence that the AST can supply.
+Reason: read from the AST; no expression is ever evaluated.
 
 ## 2026-10-30 — B3: Classify one witness per outcome group within a function
 
