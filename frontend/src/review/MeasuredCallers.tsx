@@ -1,17 +1,25 @@
 import type { MeasuredCaller } from "@contracts";
 import type { State } from "../state";
+import { smallestExample } from "./reviewBodyEvidence";
 import { selectMeasuredCallers } from "./measuredCallers";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
-function CallerEvidence({ caller }: { caller: MeasuredCaller }) {
+function CallerEvidence({ caller, detailsOnly }: { caller: MeasuredCaller; detailsOnly: boolean }) {
+  const example =
+    detailsOnly && caller.outcome === "changed" && !caller.rows.some((r) => r.unstable)
+      ? smallestExample(caller.rows)
+      : undefined;
+  const samples = caller.rows.filter((row) => row !== example);
   return (
     <>
-      <p>
-        <span className="font-mono">{caller.compared_count}</span> invocations compared ·{" "}
-        <span className="font-mono">{caller.differing_count}</span> differing
-      </p>
+      {!detailsOnly && (
+        <p>
+          <span className="font-mono">{caller.compared_count}</span> invocations compared ·{" "}
+          <span className="font-mono">{caller.differing_count}</span> differing
+        </p>
+      )}
       <p>
         Unmatched before: <span className="font-mono">{caller.unmatched_before}</span> · Unmatched
         after: <span className="font-mono">{caller.unmatched_after}</span>
@@ -23,13 +31,13 @@ function CallerEvidence({ caller }: { caller: MeasuredCaller }) {
         <p key={index}>Observation problem: {reason}</p>
       ))}
       {caller.not_probed && <p>Not probed: {caller.not_probed}</p>}
-      {caller.rows.length > 0 && (
+      {samples.length > 0 && (
         <details>
           <summary className={`cursor-pointer rounded-label text-text ${focusRing}`}>
             Observed samples
           </summary>
           <ul className="flex flex-col gap-(--spacing-sm)">
-            {caller.rows.map((sample, index) => (
+            {samples.map((sample, index) => (
               <li key={index}>
                 {sample.unstable && <p className="text-text">Unstable observation</p>}
                 <dl>
@@ -56,7 +64,15 @@ function CallerEvidence({ caller }: { caller: MeasuredCaller }) {
 }
 
 /** Fits review context or an inbox card; the parent owns width, spacing and scrolling. */
-export function MeasuredCallers({ state, changeId }: { state: State; changeId: string }) {
+export function MeasuredCallers({
+  state,
+  changeId,
+  detailsOnly = false,
+}: {
+  state: State;
+  changeId: string;
+  detailsOnly?: boolean;
+}) {
   const view = selectMeasuredCallers(state, changeId);
   if (!view) return null;
   return (
@@ -81,14 +97,16 @@ export function MeasuredCallers({ state, changeId }: { state: State; changeId: s
                 <code className="font-mono">{row.name}</code> · Distance{" "}
                 <span className="font-mono">{row.distance}</span>
               </p>
-              <p className="font-semibold text-text">{row.label}</p>
+              {!detailsOnly && <p className="font-semibold text-text">{row.label}</p>}
               {row.availability && <p>{row.availability}</p>}
-              {row.evidence && <CallerEvidence caller={row.evidence} />}
+              {row.evidence && <CallerEvidence caller={row.evidence} detailsOnly={detailsOnly} />}
             </li>
           ))}
         </ul>
       )}
-      <p>Measurements cover observed invocations only; other callers may be affected.</p>
+      {!detailsOnly && (
+        <p>Measurements cover observed invocations only; other callers may be affected.</p>
+      )}
     </section>
   );
 }

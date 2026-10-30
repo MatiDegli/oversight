@@ -1,0 +1,216 @@
+.review-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-anchor: none;
+  padding: 24px;
+  scrollbar-color: var(--control-edge) var(--page);
+  container-type: inline-size;
+}
+.review-body > * + * {
+  margin-top: 24px;
+}
+.review-lead-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+}
+.review-lead-heading h3 {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.review-lead-heading > p,
+.review-agent-note > p:first-child {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+.review-body-d .review-lead-heading {
+  display: block;
+}
+.review-body-d .review-lead-heading > p {
+  margin-top: 4px;
+}
+.review-agent-note > p + p {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+.review-cross-note {
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+.review-cross-note > p + p {
+  margin-top: 4px;
+}
+.review-compared h3 {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+}
+.comparison-lines {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 22px;
+}
+.comparison-lines strong {
+  color: var(--text);
+  font-weight: 400;
+}
+.comparison-bound {
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 18px;
+}
+.review-details {
+  margin-top: 8px;
+}
+.review-details > details > summary {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  border-block: 1px solid var(--divider);
+}
+.review-details > details > summary::before {
+  content: "›";
+  margin-right: 8px;
+}
+.review-details > details[open] > summary::before {
+  transform: rotate(90deg);
+}
+.review-file-row {
+  height: 44px;
+  width: 100%;
+}
+.review-file-open > .review-file-row {
+  height: 40px;
+}
+.review-diff-viewport {
+  height: 260px;
+  min-height: 192px;
+}
+.review-body-d .review-diff-viewport {
+  height: max(400px, 45vh);
+}
+.review-merged {
+  padding: 16px 24px;
+  border-top: 1px solid var(--divider);
+  font-size: 15px;
+}
+.review-body .choice-question {
+  padding: 12px 0;
+}
+.review-body .choice-question h3 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+.review-body .choice-question:has(.answer-reset) h3 {
+  white-space: normal;
+  overflow: visible;
+  font-size: 14px;
+}
+.review-body .collapsed-example {
+  font-size: 13px;
+  line-height: 19px;
+}
+.review-body .answer-reset {
+  font-size: 14px;
+  font-weight: 600;
+}
+.review-body .example-pair {
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+}
+.review-body .example-pair > svg {
+  align-self: center;
+  justify-self: center;
+}
+.review-body .example-pair > div {
+  border-radius: 10px;
+  padding: 14px;
+}
+.review-body .example-pair > div > span {
+  font-size: 13px;
+  line-height: 18px;
+}
+.review-body .example-pair > div > code {
+  display: block;
+  font-size: 15px;
+  line-height: 21px;
+  white-space: pre-wrap;
+}
+.review-body .choice-example > code {
+  font-size: 14px;
+  line-height: 20px;
+  margin-bottom: 10px;
+  white-space: pre-wrap;
+}
+.review-body .decision-actions {
+  margin-top: 12px;
+  gap: 8px;
+}
+.review-body .decision-actions button {
+  flex: 1;
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 14px;
+}
+.differing-caller {
+  margin-top: 14px;
+}
+.differing-caller > p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.differing-caller > p > span:last-child {
+  color: var(--muted);
+  font-size: 13px;
+  margin-left: auto;
+}
+.differing-caller .choice-example {
+  margin-top: 10px;
+}
+.caller-distance {
+  border: 1px solid var(--control-edge);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+.same-callers {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 22px;
+}
+@container (width < 652px) {
+  .review-body .example-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review-body .example-pair > svg {
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+  .review-body .example-pair > div {
+    display: flex;
+    gap: 12px;
+    padding: 9px 12px;
+  }
+  .review-body .example-pair > div > span {
+    flex-shrink: 0;
+    margin-bottom: 0;
+  }
+  .review-body .decision-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

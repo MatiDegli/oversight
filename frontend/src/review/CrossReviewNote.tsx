@@ -22,10 +22,49 @@ const reasons: Record<string, string> = {
 };
 
 /** Advisory text only: no focus, commands, raw diagnostics or filesystem data. */
-export function CrossReviewNote({ change }: { change: ChangeState }) {
+export function CrossReviewNote({
+  change,
+  agentNote = false,
+  reviewerLabel,
+}: {
+  change: ChangeState;
+  agentNote?: boolean;
+  reviewerLabel?: string;
+}) {
   if (change.personActed) return null;
   const { crossReview: review, crossReviewRound: round, needsYou: note } = change;
   if (!review && !round && !note) return null;
+  if (agentNote && review) {
+    const blocking = review.findings.filter((f) => f.severity === "BLOCKING").length;
+    const notes = review.findings.length - blocking;
+    const model =
+      reviewerLabel ??
+      (review.reviewer_model === "meta-models/muse-spark-open-1026"
+        ? "Muse Spark Open"
+        : review.reviewer_model);
+    return (
+      <section aria-label="Cross-review" className="review-cross-note">
+        <p>{model} reviewed this change</p>
+        <p>
+          {!review.complete ||
+          review.verdict === "unknown" ||
+          review.findings.some((f) => f.severity === null)
+            ? "Review unavailable"
+            : blocking || review.verdict === "changes_requested"
+              ? "Changes requested"
+              : `Nothing blocking · ${String(notes)} note${notes === 1 ? "" : "s"}`}
+        </p>
+        {review.findings.map((finding, i) => (
+          <p key={i}>
+            {finding.path}
+            {finding.line ? `:${String(finding.line)}` : ""}
+            {finding.path ? " · " : ""}
+            {finding.text}
+          </p>
+        ))}
+      </section>
+    );
+  }
   return (
     <section
       aria-label="Cross-review"

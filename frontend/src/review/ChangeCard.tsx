@@ -4,11 +4,10 @@ import { EditorDiff } from "../editor";
 import { grantReasons, grantScopeWords, selectLiveDiff } from "../state";
 import type { State } from "../state";
 import { agentSlotStyle } from "../theme";
-import { AnswerChoices } from "./AnswerChoices";
+import { AnswerChoices, cardAnswer } from "./AnswerChoices";
 import { candidateKey, useAnswers } from "./answers";
 import { useDecisions } from "./DecisionContext";
 import { ReviewDecisionBar } from "./ReviewDecisionBar";
-import { cardAnswer } from "./AnswerChoices";
 import { CardDecisions } from "./CardDecisions";
 import { decisionView } from "./decisions";
 import type { ReviewPanelProps } from "./ReviewPanel";
@@ -141,7 +140,7 @@ function CardDiffs({ state, changeId }: { state: State; changeId: string }) {
   );
 }
 
-function CardEvidence({ state, changeId, card }: CardContentProps) {
+export function CardEvidence({ state, changeId, card }: CardContentProps) {
   const candidate = candidateKey(state, changeId);
   const answers = useAnswers((s) => s.drafts[candidate]) ?? {};
   const { change, facts, kind } = card;

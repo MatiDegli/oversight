@@ -130,11 +130,13 @@ export function ReviewFacts({
   state,
   proposal,
   scrollable = true,
+  panel = false,
 }: {
   state: State;
   proposal: ChangeProposed;
   /** The summary review shares one scroll region with the rest of its context. */
   scrollable?: boolean;
+  panel?: boolean;
 }) {
   const facts = factsForRevision(state, proposal);
   if (!facts)
@@ -143,7 +145,7 @@ export function ReviewFacts({
         <p className="text-sm text-muted">
           Facts incomplete: facts for this revision are unavailable. {behaviorNotRecorded}
         </p>
-        <MeasuredCallers state={state} changeId={proposal.change_id} />
+        <MeasuredCallers state={state} changeId={proposal.change_id} detailsOnly={panel} />
       </section>
     );
   const executions = facts.test_runs
@@ -155,16 +157,22 @@ export function ReviewFacts({
   return (
     <section
       aria-label="Review signals"
-      className="shrink-0 border-b border-page-border px-4.5 py-2.5 text-sm"
+      className={
+        panel
+          ? "review-details text-sm"
+          : "shrink-0 border-b border-page-border px-4.5 py-2.5 text-sm"
+      }
     >
-      <details open>
+      <details open={panel ? undefined : true}>
         <summary className="cursor-pointer rounded-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text">
-          Review signals · {facts.complete ? "Recorded facts" : "Incomplete"}
+          {panel
+            ? "Details"
+            : `Review signals · ${facts.complete ? "Recorded facts" : "Incomplete"}`}
         </summary>
         <div
           className={`mt-2 break-words text-muted${scrollable ? " max-h-48 overflow-y-auto" : ""}`}
         >
-          <p>Signals for your review. You decide.</p>
+          {!panel && <p>Signals for your review. You decide.</p>}
           <p>
             Size: {proposal.files.length} files, +{proposal.lines_added}/−{proposal.lines_removed}{" "}
             lines
@@ -199,12 +207,12 @@ export function ReviewFacts({
               </ul>
             )}
             <div className="mt-3.5">
-              <BehaviorDiff state={state} changeId={proposal.change_id} />
+              <BehaviorDiff state={state} changeId={proposal.change_id} detailsOnly={panel} />
               {facts.behavior_diff == null && <p>{behaviorNotRecorded}</p>}
             </div>
             {!facts.complete && <p>Incomplete: {facts.problems.join("; ")}</p>}
             <div className="pt-(--spacing-lg)">
-              <MeasuredCallers state={state} changeId={proposal.change_id} />
+              <MeasuredCallers state={state} changeId={proposal.change_id} detailsOnly={panel} />
             </div>
           </>
         </div>

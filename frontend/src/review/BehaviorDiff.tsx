@@ -2,7 +2,15 @@ import type { State } from "../state";
 import { selectBehaviorEvidence } from "./behaviorEvidence";
 
 /** Portable evidence block: its parent owns width, spacing and scrolling. */
-export function BehaviorDiff({ state, changeId }: { state: State; changeId: string }) {
+export function BehaviorDiff({
+  state,
+  changeId,
+  detailsOnly = false,
+}: {
+  state: State;
+  changeId: string;
+  detailsOnly?: boolean;
+}) {
   const nodes = selectBehaviorEvidence(state, changeId);
   if (nodes === null) return null;
   return (
@@ -16,21 +24,24 @@ export function BehaviorDiff({ state, changeId }: { state: State; changeId: stri
       ) : (
         <>
           <p>Up to eight samples per node; counts cover all compared inputs.</p>
-          <p>These bounded inputs do not establish equivalence.</p>
+          {!detailsOnly && <p>These bounded inputs do not establish equivalence.</p>}
           <ul className="flex min-w-0 flex-col gap-3.5">
             {nodes.map((node, index) => (
               <li key={`${node.node_id}:${String(index)}`} className="flex min-w-0 flex-col gap-2">
                 <p className="wrap-anywhere text-text">
                   <code className="font-mono">{node.label}</code> · {node.status}
                 </p>
-                <div className="flex flex-wrap gap-x-3.5 gap-y-1">
-                  <p>
-                    Inputs compared: <span className="font-mono">{node.compared_count}</span>
-                  </p>
-                  <p>
-                    Differences measured: <span className="font-mono">{node.differing_count}</span>
-                  </p>
-                </div>
+                {!detailsOnly && (
+                  <div className="flex flex-wrap gap-x-3.5 gap-y-1">
+                    <p>
+                      Inputs compared: <span className="font-mono">{node.compared_count}</span>
+                    </p>
+                    <p>
+                      Differences measured:{" "}
+                      <span className="font-mono">{node.differing_count}</span>
+                    </p>
+                  </div>
+                )}
                 {node.limitation !== null && (
                   <p className="whitespace-pre-wrap wrap-anywhere">{node.limitation}</p>
                 )}
