@@ -32,6 +32,9 @@ class BehaviorTarget:
     module: str
     name: str
     calls: tuple[str, ...]
+    receiver_class: str | None = None
+    method_kind: str | None = None
+    properties: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
