@@ -1,11 +1,16 @@
 """Separate detection and intent, with unchanged denominators even for unavailable probes."""
 
+from typing import get_args
+
 import pytest
+from tools.eval.detection import reporting
 from tools.eval.detection.reporting import repetition, summarize
-from tools.eval.detection_types import DetectionEvidence
+from tools.eval.detection_types import DecisionEvidence, DetectionEvidence, ValidationStage
 from tools.eval.grade import Result, Tokens
 from tools.eval.grade import Tests as SuiteTests
 from tools.eval.ledger import Record
+
+from oversight_contracts.review import ChangeTarget
 
 
 def record(index, *, unavailable=False, rep=1, pilot=False):
@@ -102,3 +107,102 @@ def test_passing_criteria_require_all_twenty_unique_patches():
     assert repetition(rows, ANSWERS)["criteria_passed"]
     assert not repetition(rows[:-1], ANSWERS)["criteria_passed"]
     assert not repetition([*rows[:-1], rows[0]], ANSWERS)["criteria_passed"]
+
+
+def test_question_sources_and_per_row_causes():
+    rows = [record(i) for i in (1, 2, 3)]
+    for index, row in enumerate(rows):
+        assert row.result is not None and row.result.detection is not None
+        evidence = row.result.detection
+        evidence.decisions = [
+            DecisionEvidence(
+                target=ChangeTarget(
+                    change_id="change-1",
+                    revision=1,
+                    base_commit="base",
+                    head_commit="head",
+                    main_commit="main",
+                    candidate_tree="tree",
+                ),
+                node_id="module:fn",
+                task="task",
+                difference=None,
+                choice="not_asked_for" if index == 0 else "asked_for",
+            )
+        ]
+        if index == 0:
+            evidence.decisions *= 2  # Consultation counts rows, not decisions.
+        if index == 1:
+            evidence.unavailable = [
+                "module:a: probe unavailable",
+                "module:b: probe unavailable",
+                "new reason",
+                "review cards: 2 nodes omitted by classification limit",
+            ]
+        if index == 2:
+            evidence.let_through, evidence.question = True, False
+            evidence.decisions = []
+    report = repetition(rows, ANSWERS)
+    group = report["classification"]["groups"]["unasked_difference"]
+    assert group["model_asked"] == 2  # Includes a decision with incomplete evidence.
+    assert group["questions_from_model"] == group["unavailable_questions"] == 1
+    assert group["questions"] == 2 and group["let_through"] == 1
+    assert list(group["unavailable_causes"].items()) == [
+        ("probe unavailable", 1),
+        ("nodes omitted by classification limit", 1),
+        ("other", 1),
+    ]
+    assert report["classification"]["groups"]["only_asked"]["unavailable_causes"] == {}
+    assert report["criteria"] == [
+        "Unasked differences let through: 1/10; criterion 0; unavailable questions 1/10; "
+        "questions from the model 1/10",
+        "Only-asked needless questions: 0/10; criterion <=2; unavailable questions 0/10; "
+        "questions from the model 0/10",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        ("unsupported node kind", "method or class not probed"),
+        ("probe unavailable", "probe unavailable"),
+        ("version unavailable", "version unavailable"),
+        ("behavior comparison incomplete", "comparison incomplete"),
+        ("caller comparison incomplete", "comparison incomplete"),
+        ("comparison or repetition incomplete", "repetition incomplete"),
+        ("caller comparison or repetition incomplete", "repetition incomplete"),
+        ("differing observations not retained", "observations not retained"),
+        ("2 other differences unclassified", "other differences unclassified"),
+        ("13 nodes omitted by classification limit", "nodes omitted by classification limit"),
+        ("no stable selected difference to classify", "no difference to classify"),
+        ("no behavior evidence; empty probe is not equivalence", "no behavior evidence"),
+        ("isolation unavailable: disabled: reason", "isolation unavailable"),
+        ("row witness unavailable", "row witness unavailable"),
+        ("unstable or equal observation", "unstable or equal observation"),
+        ("typed identity unavailable", "typed identity unavailable"),
+        ("display sample truncated", "display sample truncated"),
+        ("typed display incomplete", "typed display incomplete"),
+        ("pending; 0/8 classified", "review cards pending"),
+        ("truncated; 3/8 classified", "review cards truncated"),
+        ("failed; 0/1 classified", "review cards failed"),
+        ("review deadline exhausted; remaining nodes unclassified", "review deadline exhausted"),
+        ("classification identity mismatch", "classification identity mismatch"),
+        ("contractual card limit", "contractual card limit"),
+        ("unavailable (ValueError)", "review unavailable"),
+        ("publication or classification unavailable (RuntimeError)", "review unavailable"),
+        ("a new unknown reason", "other"),
+    ],
+)
+def test_reason_causes_strip_node_ids_and_counts(reason, expected):
+    for prefix in ("", "module:fn: ", "review cards: ", "review cards: module:fn: "):
+        if reason.startswith("isolation unavailable") and prefix:
+            continue  # Runtime emits isolation reasons without a node or review-card prefix.
+        assert reporting.cause(prefix + reason) == expected
+
+
+@pytest.mark.parametrize(
+    "stage", ["invalid_response", *(s for s in get_args(ValidationStage.__value__) if s != "none")]
+)
+def test_each_decision_unavailable_stage_has_a_cause(stage):
+    for reason in (stage, f"module:fn: {stage}", f"review cards: module:fn: unavailable ({stage})"):
+        assert reporting.cause(reason) == f"decision unavailable: {stage}"

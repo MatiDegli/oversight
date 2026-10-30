@@ -1,9 +1,80 @@
 """Predeclared 10/10 criteria; detection is reported separately from intent classification."""
 
+import re
+from collections import Counter
+
 from tools.eval.detection.config import ARMS, PROTOCOL, SUPERSEDED_ARMS
 from tools.eval.ledger import Record
 from tools.eval.report import metrics
 from tools.eval.tasks import BenchError
+
+# Insertion order is the report order. Match recorded strings, without backend imports.
+_CAUSES = {
+    "method or class not probed": r"unsupported node kind",
+    "probe unavailable": r"probe unavailable",
+    "version unavailable": r"version unavailable",
+    "comparison incomplete": r"(?:behavior|caller) comparison incomplete",
+    "repetition incomplete": r"(?:caller )?comparison or repetition incomplete",
+    "observations not retained": r"differing observations not retained",
+    "other differences unclassified": r"\d+ other differences unclassified",
+    "nodes omitted by classification limit": r"\d+ nodes omitted by classification limit",
+    "no difference to classify": r"no stable selected difference to classify",
+    "no behavior evidence": r"no behavior evidence; empty probe is not equivalence",
+    "isolation unavailable": r"isolation unavailable: .*",
+    "row witness unavailable": r"row witness unavailable",
+    "unstable or equal observation": r"unstable or equal observation",
+    "typed identity unavailable": r"typed identity unavailable",
+    "display sample truncated": r"display sample truncated",
+    "typed display incomplete": r"typed display incomplete",
+    **{
+        f"review cards {status}": rf"{status}; \d+/\d+ classified"
+        for status in ("pending", "truncated", "failed")
+    },
+    "review deadline exhausted": r"review deadline exhausted; remaining nodes unclassified",
+    "classification identity mismatch": r"classification identity mismatch",
+    "contractual card limit": r"contractual card limit",
+    **{
+        f"decision unavailable: {stage}": rf"(?:{stage}|unavailable \({stage}\))"
+        for stage in [
+            "invalid_response",
+            "model",
+            "finish_reason",
+            "tool_calls",
+            "empty_text",
+            "reply_length",
+            "json",
+            "duplicate_key",
+            "object",
+            "fields",
+            "choice",
+            "empty_choices",
+            "choice_count",
+            "message",
+            "refusal",
+            "legacy_tool_call",
+            "transport",
+            "deadline",
+            "profile",
+            "credentials",
+            "closed",
+            "budget_unconfigured",
+            "pricing_unconfigured",
+            "budget_blocked",
+            "ledger_unknown",
+            "ledger_unreliable",
+        ]
+    },
+    "review unavailable": r"(?:publication or classification )?unavailable \([A-Za-z_][\w.]*\)",
+}
+
+
+def cause(reason: str) -> str:
+    """Normalize one recorded unavailability reason; preserve unknown reasons as other."""
+    if not reason.startswith("isolation unavailable: "):
+        reason = reason.removeprefix("review cards: ").rsplit(": ", 1)[-1]
+    return next(
+        (name for name, pattern in _CAUSES.items() if re.fullmatch(pattern, reason)), "other"
+    )
 
 
 def repetition(records: list[Record], answers: dict[str, str]) -> dict:
@@ -17,12 +88,20 @@ def repetition(records: list[Record], answers: dict[str, str]) -> dict:
     groups = {}
     for answer in ("unasked_difference", "only_asked"):
         selected = [r for r in rows if answers.get(r.patch_id) == answer]
+        causes = Counter(
+            name for r in selected for name in {cause(reason) for reason in r.unavailable}
+        )
         groups[answer] = {
             "denominator": 10,
             "executed": len(selected),
             "let_through": sum(r.let_through for r in selected),
             "questions": sum(r.question for r in selected),
             "unavailable_questions": sum(r.question and bool(r.unavailable) for r in selected),
+            "model_asked": sum(bool(r.decisions) for r in selected),
+            "questions_from_model": sum(r.question and not r.unavailable for r in selected),
+            "unavailable_causes": {
+                name: causes[name] for name in (*_CAUSES, "other") if causes[name]
+            },
             "unprobed": sum(bool(r.unprobed) for r in selected),
             "observed_difference": sum(r.detected is True for r in selected),
             "not_collected": sum(r.detected is None for r in selected),
@@ -34,9 +113,11 @@ def repetition(records: list[Record], answers: dict[str, str]) -> dict:
         "criteria_passed": complete and missed["let_through"] == 0 and needless["questions"] <= 2,
         "criteria": [
             f"Unasked differences let through: {missed['let_through']}/10; criterion 0; "
-            f"unavailable questions {missed['unavailable_questions']}/10",
+            f"unavailable questions {missed['unavailable_questions']}/10; "
+            f"questions from the model {missed['questions_from_model']}/10",
             f"Only-asked needless questions: {needless['questions']}/10; criterion <=2; "
-            f"unavailable questions {needless['unavailable_questions']}/10",
+            f"unavailable questions {needless['unavailable_questions']}/10; "
+            f"questions from the model {needless['questions_from_model']}/10",
         ],
         "detection": {
             "groups": {
