@@ -23,7 +23,9 @@ from oversight.agents.client import (
     ModelReply,
     OpenAIClient,
     ToolSchema,
+    attempt_observer,
 )
+from oversight.events import EventPayload
 from oversight_contracts.examples import TaskExample
 from oversight_contracts.review import ChangeTarget, NodeBehaviorDiff
 
@@ -183,6 +185,7 @@ async def classify_difference(
     deadline: float,
     admission: Callable[[], Awaitable[None]],
     accounting: Callable[[ModelReply], Awaitable[None]],
+    publish: Callable[[EventPayload], Awaitable[object]] | None = None,
 ) -> DecisionOutcome:
     """One independent scope, total monotonic deadline and no format-repair calls.
 
@@ -201,7 +204,16 @@ async def classify_difference(
         except Exception as error:
             raise DecisionUnavailable("ledger_unreliable") from error
 
-    token = CALL_SCOPE.set(CallScope(deadline, record, "review", admission, all_attempts=True))
+    observer = (
+        attempt_observer(
+            publish, agent_id=input.agent_id, change_id=input.target.change_id, role="review"
+        )
+        if publish is not None
+        else None
+    )
+    token = CALL_SCOPE.set(
+        CallScope(deadline, record, "review", admission, all_attempts=True, attempt_failed=observer)
+    )
     reason: UnavailableReason
     try:
         if client.profile.provider != "baseten" or client.profile.model != MUSE_SPARK_OPEN.model:

@@ -21,6 +21,8 @@ from oversight.agents import (
 )
 from oversight.agents.client import CALL_SCOPE, CallScope
 
+from .test_attempt_events import ValidatingRecorder
+
 pytestmark = pytest.mark.anyio
 
 
@@ -38,7 +40,37 @@ async def call(model: DecisionClient, ticks: list[ModelReply], **kwargs: Any) ->
         deadline=kwargs.pop("deadline", asyncio.get_running_loop().time() + 30),
         admission=kwargs.pop("admission", allow),
         accounting=record,
+        publish=kwargs.pop("publish", None),
     )
+
+
+@pytest.mark.parametrize("terminal", [False, True])
+async def test_failed_decision_attempts_use_review_role_and_author_identity(terminal: bool) -> None:
+    recorder = ValidatingRecorder()
+    api = FakeApi(status(400) if terminal else status(503), ok(body()))
+    ticks: list[ModelReply] = []
+    sleeps: list[float] = []
+
+    async def sleep(delay: float) -> None:
+        [failure] = recorder.failures()
+        assert failure.wait_s == delay
+        sleeps.append(delay)
+
+    model = client(api, sleep=sleep, jitter=lambda: 1.0)
+    try:
+        outcome = await call(model, ticks, publish=recorder.publish)
+    finally:
+        await model.aclose()
+    [failure] = recorder.failures()
+    assert failure.agent_id == INPUT.agent_id and failure.change_id == INPUT.target.change_id
+    assert failure.role == "review" and failure.model == MUSE_SPARK_OPEN.id
+    assert failure.provider == "baseten" and failure.attempt == 1 and failure.max_attempts == 5
+    assert failure.wait_s == (None if terminal else 1)
+    assert failure.final == ("not_retryable" if terminal else None)
+    assert outcome.unavailable == ("transport" if terminal else None)
+    assert sleeps == ([] if terminal else [1])
+    assert len(ticks) == (1 if terminal else 2) and ticks[0].usage == Usage()
+    assert CALL_SCOPE.get() is None
 
 
 @pytest.mark.parametrize("choice", ["asked_for", "not_asked_for", "cannot_tell"])

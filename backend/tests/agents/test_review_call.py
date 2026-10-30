@@ -19,6 +19,7 @@ from oversight.agents import (
 )
 from oversight.agents.client import CALL_SCOPE, CallScope
 
+from .test_attempt_events import ValidatingRecorder
 from .test_client import COMPLETION
 from .test_reviewer import INPUTS, TARGET
 
@@ -231,3 +232,36 @@ async def test_connection_failure_records_unknown_then_response_once() -> None:
     await call(model, record)
     assert len(ticks) == 2 and ticks[0].usage == Usage()
     assert ticks[1].usage == Usage(700, 100, 600)
+
+
+@pytest.mark.parametrize("terminal", [False, True])
+async def test_failed_review_attempts_use_author_identity_and_own_profile(terminal: bool) -> None:
+    from .test_client import FakeApi, ok, status
+    from .test_client import client as http_client
+
+    recorder = ValidatingRecorder()
+    ticks: list[ModelReply] = []
+
+    async def record(reply: ModelReply) -> None:
+        ticks.append(reply)
+
+    api = FakeApi(
+        status(400) if terminal else status(429, {"retry-after": "2"}),
+        ok(completion().model_dump()),
+    )
+    sleeps: list[float] = []
+    model = http_client(api, sleeps)
+    try:
+        result = await call(model, record, agent_id="agent-7", publish=recorder.publish)
+    finally:
+        await model.aclose()
+    [failure] = recorder.failures()
+    assert failure.agent_id == "agent-7" and failure.change_id == TARGET.change_id
+    assert failure.role == "review" and failure.model == MUSE_SPARK.id
+    assert failure.provider == "meta" and failure.attempt == 1 and failure.max_attempts == 5
+    assert failure.wait_s == (None if terminal else 2)
+    assert failure.final == ("not_retryable" if terminal else None)
+    assert result.review.verdict == ("unknown" if terminal else "clean")
+    assert len(ticks) == (0 if terminal else 1)
+    assert sleeps == ([] if terminal else [2])
+    assert CALL_SCOPE.get() is None

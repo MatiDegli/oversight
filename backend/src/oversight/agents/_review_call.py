@@ -11,8 +11,10 @@ from oversight.agents.client import (
     ModelClient,
     ModelReply,
     ToolSchema,
+    attempt_observer,
 )
 from oversight.agents.reviewer import ReviewOutcome, review_candidate
+from oversight.events import EventPayload
 from oversight_contracts.events import ModelProfile
 from oversight_contracts.review import ChangeTarget
 
@@ -46,14 +48,23 @@ async def run_review_call(
     ready_time: float,
     record: Callable[[ModelReply], Awaitable[None]],
     author_reply_models: Sequence[str | None] = (),
+    agent_id: str | None = None,
+    publish: Callable[[EventPayload], Awaitable[object]] | None = None,
 ) -> ReviewOutcome:
     """One logical call, bounded by ready + 90 seconds, including all retry waits.
 
     The caller drains its durable accounting callback even after invalidation or cancellation.
     No author scope, callback or history is reused, including when called under an author scope.
     """
+    if (publish is None) != (agent_id is None):
+        raise ValueError("review attempt events require both publish and the author's agent_id")
     deadline = ready_time + 90.0
-    token = CALL_SCOPE.set(CallScope(deadline, record, role="review"))
+    observer = (
+        attempt_observer(publish, agent_id=agent_id, change_id=target.change_id, role="review")
+        if publish is not None and agent_id is not None
+        else None
+    )
+    token = CALL_SCOPE.set(CallScope(deadline, record, role="review", attempt_failed=observer))
     try:
         async with asyncio.timeout_at(deadline):
             # An already expired deadline must not enter the provider's request.
