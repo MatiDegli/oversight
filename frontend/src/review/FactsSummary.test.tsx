@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { applyEvent, createInitialState } from "../state";
+import { behaviorNotRecorded } from "./behaviorEvidence";
 import { FactsSummary } from "./FactsSummary";
 import { ReviewPanel } from "./ReviewPanel";
 
@@ -94,6 +95,7 @@ describe("recorded facts summary", () => {
     expect(renderToStaticMarkup(<FactsSummary facts={record} />)).toBe("");
     const html = panel(record ? [record] : []);
     expect(html).not.toContain(label);
+    expect(html.split(behaviorNotRecorded)).toHaveLength(2);
     // Caller evidence still needs the shared, bounded context without a summary.
     expect(html).toContain('aria-label="Review context"');
     for (const line of lines) expect(html).not.toContain(line);

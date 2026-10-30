@@ -6,8 +6,6 @@ import { behaviorNotRecorded } from "./behaviorEvidence";
 import { MeasuredCallers } from "./MeasuredCallers";
 import { factsForRevision } from "./factsForRevision";
 
-export { factsForRevision } from "./factsForRevision";
-
 /** The same neutral vocabulary as changes/_reviewfacts.py; no policy assessment. */
 export function detectorLine(facts: ChangeFacts): string {
   if (facts.problems.some((p) => p.startsWith("detector unknown:"))) {

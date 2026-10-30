@@ -1052,7 +1052,8 @@ not measured." In c: "3 of 9 callers measured; 6 were not.", "1 of 36 functions 
 The review header holds a 24px letter badge beside "Agent B · Muse Spark Open" in f or
 "Agent A · Muse Spark" in f-b: 14px text, agent name in its agent color at 600, model muted.
 Below it, the task headline wraps at 20/700 on 26px lines, 8px below the agent line, then the
-chips follow 12px below. There is no provenance caption, status pill or review close button.
+chips follow 12px below and wrap to at most two lines (three, then one). There is no provenance
+caption, status pill or review close button.
 The agent note follows the lead, never above it; it sits below the initial viewport in both
 shots and remains in the scrolling evidence before "What was compared".
 The first three chips keep "1 file", "+2 −0" and "28 passed". Examples stack Before above After

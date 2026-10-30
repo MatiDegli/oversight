@@ -2,7 +2,7 @@ import { selectDecisionInbox } from "../state";
 import type { ChangeState, DecisionInboxEntry, State } from "../state";
 import type { ChangeFacts } from "@contracts";
 import { possibleCallerNodes } from "../graph";
-import { factsForRevision } from "./ReviewFacts";
+import { factsForRevision } from "./factsForRevision";
 
 export function selectPossibleCallersWait(state: State, changeId: string) {
   const change = state.changes[changeId];

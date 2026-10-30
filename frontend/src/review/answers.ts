@@ -3,7 +3,7 @@ import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 import type { State } from "../state";
 import { cardAnswer, cardKey, type Answers } from "./AnswerChoices";
-import { factsForRevision } from "./ReviewFacts";
+import { factsForRevision } from "./factsForRevision";
 
 export const candidateKey = (state: State, id: string) => {
   const p = state.changes[id]?.proposal;

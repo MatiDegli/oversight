@@ -6,6 +6,7 @@ import { ChangeCard, eventTime } from "./ChangeCard";
 import { StandingGrants } from "./StandingGrants";
 import { Example } from "./AnswerChoices";
 import { selectChangeCard, selectInboxSummary, selectPossibleCallersWait } from "./inboxSelectors";
+import { factsForRevision } from "./factsForRevision";
 import { GrantChoice } from "./GrantChoice";
 import "./inbox.css";
 
@@ -20,12 +21,7 @@ function InboxRow({
 }) {
   const change = entry.changeId ? state.changes[entry.changeId] : undefined;
   const wait = entry.changeId ? selectPossibleCallersWait(state, entry.changeId) : null;
-  const facts = change?.proposal
-    ? state.changeFacts[change.change_id]?.findLast(
-        (f) =>
-          f.revision === change.proposal?.revision && f.head_commit === change.proposal.head_commit,
-      )
-    : undefined;
+  const facts = change?.proposal ? factsForRevision(state, change.proposal) : undefined;
   const question = entry.decisions.find((d) => d.kind === "review_card");
   const followMain = entry.decisions.find((d) => d.kind === "follow_main");
   const example =

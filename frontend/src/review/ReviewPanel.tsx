@@ -1,6 +1,5 @@
 import { ChangeCard } from "./ChangeCard";
 import { selectChangeCard } from "./inboxSelectors";
-import { agentLook } from "../theme";
 import type { ChangeResolved } from "@contracts";
 import { Check, ChevronDown, ChevronRight, GitMerge, MessageSquare, X } from "lucide-react";
 import { useState } from "react";
@@ -8,22 +7,14 @@ import { useState } from "react";
 import { EditorDiff, fileKey, ReviewEditor } from "../editor";
 import type { FileAccess } from "../editor";
 import { selectLiveDiff } from "../state";
-import type { ChangeState, State } from "../state";
+import type { State } from "../state";
 import { CrossReviewNote } from "./CrossReviewNote";
 import { decisionView } from "./decisions";
 import type { DecisionAction, DecisionAttempt, DecisionView } from "./decisions";
-import { ChangeFactsRow } from "./ChangeFactsRow";
+import { ReviewHeader } from "./ReviewHeader";
 import { FactsSummary } from "./FactsSummary";
-import { factsForRevision, ReviewFacts } from "./ReviewFacts";
-
-const statusWords: Record<ChangeState["status"], string> = {
-  editing: "Editing",
-  ready_for_review: "Ready for review",
-  revising: "Revising",
-  conflict: "Not merged",
-  approved: "Approved",
-  rejected: "Rejected",
-};
+import { ReviewFacts } from "./ReviewFacts";
+import { factsForRevision } from "./factsForRevision";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
@@ -285,7 +276,6 @@ function LegacyReviewPanel({
     selectLiveDiff(state, changeId, openPath) !== undefined &&
     (editing?.path !== openPath || editing.blocked);
   const stats = new Map(proposal?.files.map((file) => [file.path, file]));
-  const look = agent ? agentLook[agent.slot] : undefined;
   const context = (
     <>
       <FactsSummary facts={facts} />
@@ -305,42 +295,7 @@ function LegacyReviewPanel({
       aria-label="Review panel"
       className="flex w-[min(var(--review-panel-width),46vw)] shrink-0 flex-col border-r border-divider bg-page"
     >
-      <header className="flex shrink-0 flex-col gap-2.5 border-b border-page-border bg-page px-4.5 py-3.5">
-        <div className="flex items-center gap-2.5">
-          {agent && look && (
-            <span
-              role="img"
-              aria-label={`Agent ${agent.slot}`}
-              className={`grid size-6 shrink-0 place-items-center rounded-label text-(length:--badge-size) font-bold ${look.swatch}`}
-            >
-              {agent.slot}
-            </span>
-          )}
-          <h2
-            title={proposal?.task}
-            className="min-w-0 truncate text-(length:--headline-size) font-bold"
-          >
-            {proposal?.task ?? agent?.task ?? "Change"}
-          </h2>
-          {change && (
-            <span
-              className={`shrink-0 rounded-full px-2.5 py-0.5 text-sm ${look?.tint ?? "bg-raised text-text"}`}
-            >
-              {statusWords[change.status]}
-            </span>
-          )}
-          <button
-            type="button"
-            aria-label="Close review"
-            title="Close (Escape)"
-            onClick={onClose}
-            className={`ml-auto grid size-(--button-small-height) shrink-0 place-items-center rounded-control text-muted hover:bg-raised hover:text-text ${focusRing}`}
-          >
-            <X aria-hidden="true" className="size-4" />
-          </button>
-        </div>
-        {change && <ChangeFactsRow state={state} changeId={changeId} />}
-      </header>
+      <ReviewHeader state={state} changeId={changeId} onClose={onClose} />
       {hasContext ? (
         <section aria-label="Review context" className="min-h-0 overflow-y-auto">
           {context}

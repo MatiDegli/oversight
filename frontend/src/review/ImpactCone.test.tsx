@@ -147,9 +147,7 @@ describe("the recorded impact cone", () => {
       <ReviewPanel state={state} changeId="change-1" onClose={() => undefined} />,
     );
     expect(html).toContain('aria-label="Impact cone"');
-    expect(html.replace(/<[^>]*>/g, "")).toContain(
-      "9 functions possibly affected, up to distance 2",
-    );
+    expect(html.replace(/<[^>]*>/g, "")).toContain("9 possibly affected · up to distance 2");
   });
 });
 

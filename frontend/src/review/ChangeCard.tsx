@@ -1,5 +1,5 @@
 import { GitMerge, LockKeyhole } from "lucide-react";
-import { ChangeFactsRow } from "./ChangeFactsRow";
+import { ReviewHeader } from "./ReviewHeader";
 import { EditorDiff } from "../editor";
 import { grantReasons, grantScopeWords, selectLiveDiff } from "../state";
 import type { State } from "../state";
@@ -29,8 +29,10 @@ export function ChangeCard({
   changeId,
   attempt,
   onDecide,
+  onClose,
   card: projectedCard,
 }: Pick<ReviewPanelProps, "state" | "changeId" | "attempt" | "onDecide"> & {
+  onClose?: () => void;
   card?: ChangeCardState;
 }) {
   const shared = useDecisions();
@@ -43,8 +45,14 @@ export function ChangeCard({
   const slot = state.agents[change.agent_id]?.slot;
   return (
     <aside aria-label="Change card" className="decision-card" style={agentSlotStyle(slot)}>
-      <CardHeader state={state} changeId={changeId} card={card} />
+      <ReviewHeader
+        state={state}
+        changeId={changeId}
+        status={kind === "merged" ? "Merged" : undefined}
+        onClose={onClose}
+      />
       <div className="decision-card-body">
+        <CardLead state={state} changeId={changeId} card={card} />
         <CardEvidence state={state} changeId={changeId} card={card} />
         {kind !== "unavailable" && <ComparisonMap state={state} change={change} facts={facts} />}
         <CardDiffs state={state} changeId={changeId} />
@@ -73,20 +81,11 @@ export function ChangeCard({
 
 type CardContentProps = { state: State; changeId: string; card: ChangeCardState };
 
-function CardHeader({ state, changeId, card }: CardContentProps) {
+function CardLead({ card }: CardContentProps) {
   const { change, kind } = card;
-  const slot = state.agents[change.agent_id]?.slot;
   const questions = card.facts?.review_cards ?? [];
   return (
-    <header className="decision-card-header">
-      <p className="decision-muted">
-        <span className="decision-agent">{slot}</span> Agent {slot}{" "}
-        <span>
-          ·{" "}
-          {state.run?.models.find((model) => model.id === state.agents[change.agent_id]?.model)
-            ?.label ?? state.agents[change.agent_id]?.model}
-        </span>
-      </p>
+    <div>
       <h2>
         {kind === "merged"
           ? "Merged by rules"
@@ -99,8 +98,7 @@ function CardHeader({ state, changeId, card }: CardContentProps) {
       <p>
         Asked: {change.proposal?.task} · Done: {change.proposal?.summary}
       </p>
-      <ChangeFactsRow state={state} changeId={changeId} />
-    </header>
+    </div>
   );
 }
 

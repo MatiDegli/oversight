@@ -239,17 +239,6 @@ button.decision-reject {
   border: 1px solid var(--page-border);
   margin-top: var(--spacing-lg);
 }
-.decision-card-header {
-  padding: var(--spacing-overlay);
-  border-bottom: 1px solid var(--divider);
-  background: linear-gradient(var(--matte-top), var(--matte-bottom));
-}
-.decision-card-header h2 {
-  margin: var(--spacing-lg) 0;
-}
-.decision-card-header p + p {
-  margin-top: var(--spacing-sm);
-}
 .decision-agent {
   display: inline-grid;
   place-items: center;
