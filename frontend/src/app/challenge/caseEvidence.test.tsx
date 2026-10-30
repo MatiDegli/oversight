@@ -307,3 +307,36 @@ it("labels the final test result Proposal", () => {
   expect(html).toContain(">Proposal · passed");
   expect(html).not.toContain("Proposal result");
 });
+it.each([false, true])("includes executions in the test-run preview (with steps: %s)", (steps) => {
+  const execution = required(additions.find((event) => event.type === "tests.executed"));
+  if (execution.type !== "tests.executed") throw new Error("Missing execution");
+  const source = extended([
+    {
+      ...execution,
+      payload: { ...execution.payload, suite: { ...execution.payload.suite, passed: 32 } },
+    },
+  ]);
+  if (!steps)
+    source.events = source.events.filter(
+      (event) => event.type !== "agent.step" || event.payload.tool !== "run_tests",
+    );
+  const html = renderEvidence(source);
+  expect(html).toContain(
+    `Agent’s test runs · ${steps ? "3 runs" : "1 run"}, last 32 of 32 passed</span>`,
+  );
+  expect(html).not.toContain("Agent’s test runs · Not recorded");
+});
+it("preserves earlier facts and their incompleteness after a later complete record", () => {
+  const first = required(additions.find((event) => event.type === "change.facts_recorded"));
+  if (first.type !== "change.facts_recorded") throw new Error("Missing facts");
+  const latest = { ...facts, complete: true, problems: [], summary: ["Later complete record"] };
+  const source = extended([first, { ...first, payload: latest }]);
+  expect(caseEvidence(source, required(source.cases[0])).facts).toEqual({
+    status: "present",
+    value: [facts, latest],
+  });
+  const html = renderEvidence(source);
+  for (const text of ["Recorded behavior summary", "Probe incomplete", "Later complete record"])
+    expect(html).toContain(text);
+  expect(html).toContain("Review facts · Recorded · incomplete</span>");
+});

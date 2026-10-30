@@ -85,7 +85,7 @@ export function caseEvidence(practice: EvidencePractice, entry: PracticeCase) {
       { seq: proposalSeq, source: "proposal", step: null, tests: entry.proposal.tests },
     ]),
     executions: part(executions),
-    facts: part(facts.slice(-1)),
+    facts: part(facts),
     reviews: part(reviews),
     history: part(history),
   };

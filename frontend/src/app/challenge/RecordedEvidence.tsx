@@ -113,7 +113,7 @@ function History({ evidence }: { evidence: Evidence }) {
 export function RecordedEvidence({ practice, entry }: { practice: Practice; entry: PracticeCase }) {
   const evidence = caseEvidence(practice, entry);
   const tests = evidence.tests.status === "present" ? evidence.tests.value : [];
-  const runs = tests.filter((run) => run.source === "step");
+  const runs = tests.filter((run) => run.source !== "proposal");
   const last = runs.at(-1)?.tests;
   const history = evidence.history.status === "present" ? evidence.history.value : [];
   const resolution = history.filter((event) => event.type === "resolution").at(-1);
@@ -129,9 +129,9 @@ export function RecordedEvidence({ practice, entry }: { practice: Practice; entr
       label: "Review facts",
       preview:
         evidence.facts.status === "present"
-          ? evidence.facts.value[0].complete
-            ? "Recorded"
-            : "Recorded · incomplete"
+          ? evidence.facts.value.some((facts) => !facts.complete)
+            ? "Recorded · incomplete"
+            : "Recorded"
           : "Not recorded",
       content: <Facts evidence={evidence} />,
     },
