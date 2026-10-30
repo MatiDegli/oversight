@@ -104,6 +104,7 @@ from oversight_contracts.commands import (
     RejectPlan,
     RequestChanges,
     SaveFile,
+    SetMergeMode,
     StartAgent,
     TreeResponse,
     UpdatePlan,
@@ -124,6 +125,7 @@ from oversight_contracts.events import (
 )
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.plans import PlanZone
+from oversight_contracts.policy import MergeModeState
 from oversight_contracts.queue import QueuedTask
 
 _log = logging.getLogger(__name__)
@@ -334,6 +336,7 @@ class LiveRun:
         await self.store.start()
         await self.store.publish(
             RunStarted(
+                merge_mode=MergeModeState(),
                 run_id=self.run_id,
                 contract_version=CONTRACT_VERSION,
                 prompt_version=prompt_version(settings.harness_pack),
@@ -953,6 +956,16 @@ class LiveRun:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
         await self._manager.revoke_grant(grant_id)
+
+    def merge_mode(self) -> MergeModeState:
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        return self._manager.merge_mode()
+
+    async def set_merge_mode(self, request: SetMergeMode) -> MergeModeState:
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        return await self._manager.set_merge_mode(request)
 
     def reject(self, change_id: str, request: RejectChange) -> None:
         if self._manager is None:

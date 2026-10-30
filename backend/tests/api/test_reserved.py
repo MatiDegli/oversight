@@ -17,6 +17,8 @@ pytestmark = pytest.mark.anyio
 ROOT = Path(__file__).resolve().parents[3]
 ROUTES = [
     ("POST", "/dictation"),
+]
+MERGE_MODE = [
     ("GET", "/merge-mode"),
     ("PUT", "/merge-mode"),
 ]
@@ -34,7 +36,7 @@ PLAN_COMMANDS = [
     [
         (mode, method, path)
         for mode in ("live", "replay")
-        for method, path in ROUTES + (PLAN_COMMANDS if mode == "replay" else [])
+        for method, path in ROUTES + (PLAN_COMMANDS + MERGE_MODE if mode == "replay" else [])
     ],
 )
 async def test_reserved_routes_never_read_bodies_or_cause_effects(
