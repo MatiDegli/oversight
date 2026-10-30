@@ -29,6 +29,8 @@ export const score = (practice: Practice, attempt: Attempt) =>
   practice.cases.filter((item) => attempt.answers[item.changeId] === item.reference).length;
 const control =
   "rounded-control border border-control-edge px-4 py-2 text-sm enabled:hover:bg-raised disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
+const primary =
+  "inline-flex h-(--button-primary-height) items-center justify-center rounded-control bg-text px-4 text-(length:--label-size) font-semibold text-page hover:bg-text-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
 export interface PanelProps {
   practice: Practice;
@@ -83,7 +85,7 @@ function Findings({ practice, attempt, onRestart }: PanelProps) {
       ))}
       <p>{absenceNote}</p>
       <p>The graph retains the selected decision-time cone; recorded merges are shown here only.</p>
-      <button className={control} onClick={onRestart}>
+      <button className={primary} onClick={onRestart}>
         Try again
       </button>
     </>

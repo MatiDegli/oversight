@@ -13,6 +13,40 @@ const handlers = {
   onExit: vi.fn(),
 };
 
+it("makes desktop Try again primary and keeps Return to ordinary replay secondary", () => {
+  const html = renderToStaticMarkup(
+    <PracticePanel
+      practice={practice}
+      attempt={{ ...freshAttempt(), started: true, revealed: true }}
+      {...handlers}
+    />,
+  );
+  const classes = (label: string) => {
+    const match = html.match(new RegExp(`<button class="([^"]+)"[^>]*>${label}</button>`));
+    expect(match, label).not.toBeNull();
+    return match?.[1]?.split(" ") ?? [];
+  };
+  const retry = classes("Try again");
+  const exit = classes("Return to ordinary replay");
+  for (const primary of [
+    "h-(--button-primary-height)",
+    "bg-text",
+    "text-page",
+    "hover:bg-text-hover",
+    "text-(length:--label-size)",
+    "font-semibold",
+  ]) {
+    expect(retry).toContain(primary);
+    expect(exit).not.toContain(primary);
+  }
+  expect(exit).toContain("border-control-edge");
+  for (const button of [retry, exit]) {
+    expect(button).toContain("focus-visible:outline-2");
+    expect(button).toContain("focus-visible:outline-offset-2");
+    expect(button).toContain("focus-visible:outline-text");
+  }
+});
+
 it.each([
   [0, "Inventory.reserve, Agent B"],
   [1, "compute_price, Agent A"],
