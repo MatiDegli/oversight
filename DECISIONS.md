@@ -1627,4 +1627,8 @@ verbatim task and shared graph-count previews, and down chevrons; their content 
 The diff's disclosures keep their existing boxes. Consolidating the rows and tightening the
 summary-to-list gap keeps the collapsed last row above the dock on first view at both phone sizes,
 without a guessed dock-height padding. Desktop composition and typography remain unchanged.
-2026-10-29: Source profiles separate `pytest_options` from positional `pytest_targets`, so selected case reruns retain collection options while replacing only the targets (including Boltons doctests).
+
+## 2026-10-29 — Source profiles keep pytest options apart from targets
+
+Source profiles separate `pytest_options` from positional `pytest_targets`, so selected case
+reruns retain collection options while replacing only the targets (including Boltons doctests).
