@@ -258,9 +258,13 @@ async def test_group_questions_round_trip_answers_and_reject_forgery(h, monkeypa
         [
             current[0],
             current[0].model_copy(
-                update={"question": current[0].question.replace(QUESTION, UNCERTAIN)}
+                update={"question": current[0].question.replace(QUESTION, UNCERTAIN + ".")}
             ),
         ],
+    ):
+        with pytest.raises(ValueError, match="review card identity is invalid or duplicated"):
+            cards.validate(job, facts.model_copy(update={"review_cards": changed}))
+    for changed in (
         [current[0].model_copy(update={"question": QUESTION})],
         [current[0].model_copy(update={"question": current[1].question})],
     ):
