@@ -4,11 +4,13 @@ import ast
 import json
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 from oversight.workspace import run_process
 from oversight.workspace.behavior_run import WORKER as METHOD_WORKER
+from oversight.workspace.behavior_worker import _receiver_class
 
 WORKER = Path(__file__).parents[2] / "src/oversight/workspace/behavior_worker.py"
 
@@ -186,7 +188,9 @@ async def test_object_state_outside_dictionary_is_not_a_complete_identity(tmp_pa
     assert all(row["kind"] == "unrepresentable" for row in result["results"])
 
 
-async def invoke_method(tmp_path, source, *, module="sample", properties=(), calls=None):
+async def invoke_method(
+    tmp_path, source, *, module="sample", properties=(), calls=None, name="change", kind="method"
+):
     (tmp_path / (module + ".py")).write_text(source)
     request, report = tmp_path / "method-request.json", tmp_path / "method-report.json"
     literal = repr(("((), {})", "((), {})"))
@@ -196,9 +200,9 @@ async def invoke_method(tmp_path, source, *, module="sample", properties=(), cal
                 {
                     "id": "method",
                     "module": module,
-                    "name": "change",
+                    "name": name,
                     "receiver_class": "Box",
-                    "method_kind": "method",
+                    "method_kind": kind,
                     "properties": properties,
                     "calls": calls or [literal],
                 }
@@ -229,6 +233,118 @@ async def invoke_method(tmp_path, source, *, module="sample", properties=(), cal
 )
 async def test_worker_rechecks_project_class_allowlist(tmp_path, source, module):
     [row] = await invoke_method(tmp_path, source, module=module)
+    assert row["kind"] == "unrepresentable"
+
+
+def receiver_fixture(tmp_path, monkeypatch, source):
+    module = ModuleType("sample")
+    module.__file__ = str(tmp_path / "sample.py")
+    exec(source, module.__dict__)
+    monkeypatch.setitem(sys.modules, "sample", module)
+    target = {
+        "module": "sample",
+        "receiver_class": "Box",
+        "name": "change",
+        "method_kind": "method",
+    }
+    return module, target
+
+
+@pytest.mark.parametrize(
+    "source,overrides,reason",
+    [
+        (
+            "class Box:\n    def change(self): return 1\nBox.__module__ = 'other'\n",
+            {},
+            "receiver is not a project class",
+        ),
+        (
+            "class Other:\n    def change(self): return 1\nBox = Other\n",
+            {},
+            "receiver is not a simple class",
+        ),
+        (
+            "class Base: pass\nclass Box(Base):\n    def change(self): return 1\n",
+            {},
+            "receiver is not a simple class",
+        ),
+        (
+            "def f(self, name): return 0\nclass Box:\n    __getattr__ = f\n"
+            "    def change(self): return 1\n",
+            {},
+            "custom receiver hooks",
+        ),
+        (
+            "class Box:\n    def change(self): return 1\n",
+            {"method_kind": "setter"},
+            "method descriptor mismatch",
+        ),
+        (
+            "class Box:\n    value = 0\n    def __init__(self): self.value = 1\n"
+            "    def change(self): return 1\n",
+            {"properties": ["value"]},
+            "property allowlist mismatch",
+        ),
+    ],
+    ids=["module", "qualname", "bases", "body-hook", "descriptor", "property-allowlist"],
+)
+def test_receiver_refusals_are_independent(tmp_path, monkeypatch, source, overrides, reason):
+    _, target = receiver_fixture(tmp_path, monkeypatch, source)
+    with pytest.raises(ValueError, match=reason):
+        _receiver_class({**target, **overrides}, tmp_path)
+
+
+@pytest.mark.anyio
+async def test_metaclass_is_refused_before_reading_class_attributes(tmp_path, monkeypatch):
+    source = """reads = []
+class Meta(type):
+    def __getattribute__(cls, name):
+        reads.append(name)
+        return super().__getattribute__(name)
+class Box(metaclass=Meta):
+    def change(self): return 1
+"""
+    module, target = receiver_fixture(tmp_path, monkeypatch, source)
+    with pytest.raises(ValueError, match="receiver metaclass"):
+        _receiver_class(target, tmp_path)
+    assert module.reads == []
+    [row] = await invoke_method(tmp_path, source)
+    assert row["kind"] == "unrepresentable"
+
+
+@pytest.mark.anyio
+async def test_setter_defaulted_extra_is_setup_failure_not_project_raise(tmp_path):
+    source = """class Box:
+    @property
+    def value(self): return 0
+    @value.setter
+    def value(self, value: int): pass
+"""
+    calls = [repr(("((), {})", "((1,), {})"))]
+    [base] = await invoke_method(tmp_path, source, name="value", kind="setter", calls=calls)
+    [head] = await invoke_method(
+        tmp_path,
+        source.replace("value: int)", "value: int, extra=1)"),
+        name="value",
+        kind="setter",
+        calls=calls,
+    )
+    assert base["kind"] == "value"
+    assert head["kind"] == "unrepresentable"  # Never an artificial "Now raises" difference.
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kind", ["method", "property", "setter"])
+async def test_method_argument_errors_are_not_project_exceptions(tmp_path, kind):
+    source = "class Box:\n    def change(self, value): return value\n"
+    if kind == "property":
+        source = "class Box:\n    @property\n    def change(self, extra=1): return extra\n"
+    elif kind == "setter":
+        source = (
+            "class Box:\n    @property\n    def change(self): return 0\n"
+            "    @change.setter\n    def change(self, value): pass\n"
+        )
+    [row] = await invoke_method(tmp_path, source, kind=kind)
     assert row["kind"] == "unrepresentable"
 
 

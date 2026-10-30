@@ -254,6 +254,8 @@ def _state_display(state: tuple[Any, Any]) -> dict[str, Any]:
 def _receiver_class(target: dict[str, Any], root: Path) -> type[Any]:
     module = importlib.import_module(target["module"])
     cls = getattr(module, target["receiver_class"])
+    if type(cls) is not type:
+        raise ValueError("receiver metaclass")
     if not inspect.isclass(cls) or cls.__module__ != target["module"]:
         raise ValueError("receiver is not a project class")
     if cls.__qualname__ != target["receiver_class"] or cls.__bases__ != (object,):
@@ -298,6 +300,36 @@ def _exception(error: BaseException) -> dict[str, Any]:
     }
 
 
+def _method_action(
+    receiver: object, cls: type[Any], target: dict[str, Any], invocation: str
+) -> Callable[[], Any]:
+    args, kwargs = ast.literal_eval(invocation)
+    name, kind = target["name"], target["method_kind"]
+    if kind in ("property", "setter"):
+        descriptor = inspect.getattr_static(cls, name)
+        accessor = descriptor.fget if kind == "property" else descriptor.fset
+        signature = inspect.signature(accessor)
+        parameters = list(signature.parameters.values())
+        if len(parameters) != (1 if kind == "property" else 2) or any(
+            parameter.kind
+            not in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            for parameter in parameters
+        ):
+            raise ValueError("property arguments")
+        binding = signature.bind(receiver, *args, **kwargs)
+        binding.apply_defaults()
+        if kind == "property":
+            return lambda: getattr(receiver, name)
+        value = list(binding.arguments.values())[1]
+        # Descriptor assignment preserves frozen dataclass semantics.
+        return lambda: setattr(receiver, name, value)
+    method = getattr(receiver, name)
+    binding = inspect.signature(method).bind(*args, **kwargs)
+    binding.apply_defaults()
+    args, kwargs = copy.deepcopy((binding.args, binding.kwargs))
+    return lambda: method(*args, **kwargs)
+
+
 def method_call(
     target: dict[str, Any], literal: str, timeout_s: float, root: Path
 ) -> dict[str, Any]:
@@ -315,29 +347,9 @@ def method_call(
         stored = _stored(receiver)
         _literal_state(stored)
         initial = fingerprint((stored, _state(receiver, target.get("properties", []))))
-        args, kwargs = ast.literal_eval(invocation)
+        action = _method_action(receiver, cls, target, invocation)
         try:
-            if target["method_kind"] == "property":
-                if args or kwargs:
-                    raise ValueError("getter arguments")
-                value = getattr(receiver, target["name"])
-            elif target["method_kind"] == "setter":
-                descriptor = inspect.getattr_static(cls, target["name"])
-                setter = descriptor.fset
-                binding = inspect.signature(setter).bind(receiver, *args, **kwargs)
-                binding.apply_defaults()
-                values = list(binding.arguments.values())
-                if len(values) != 2:
-                    raise ValueError("setter arguments")
-                # Descriptor assignment preserves frozen dataclass semantics.
-                setattr(receiver, target["name"], values[1])
-                value = None
-            else:
-                method = getattr(receiver, target["name"])
-                binding = inspect.signature(method).bind(*args, **kwargs)
-                binding.apply_defaults()
-                args, kwargs = copy.deepcopy((binding.args, binding.kwargs))
-                value = method(*args, **kwargs)
+            value = action()
         except CallTimeout:
             raise
         except BaseException as error:

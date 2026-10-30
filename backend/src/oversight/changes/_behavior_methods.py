@@ -138,6 +138,18 @@ def _bound_signature(source: Source, node: Function) -> inspect.Signature:
     return signature.replace(parameters=params[1:])
 
 
+def _property_signature(source: Source, node: Function, kind: str) -> None:
+    params = list(_bound_signature(source, node).parameters.values())
+    if kind == "property" and params:
+        raise ValueError("unsupported getter signature")
+    if kind == "setter" and (
+        len(params) != 1
+        or params[0].kind
+        not in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    ):
+        raise ValueError("unsupported setter signature")
+
+
 def _field_annotation(source: Source, annotation: ast.expr) -> None:
     parents = {
         child: parent for parent in ast.walk(annotation) for child in ast.iter_child_nodes(parent)
@@ -222,6 +234,8 @@ def _properties(definitions: list[tuple[Source, ast.ClassDef, Function]]) -> tup
             nodes[1], include_attributes=False
         ):
             continue
+        for (source, _, _), node in zip(definitions, nodes, strict=True):
+            _property_signature(source, node, "property")
         if any(
             _function_reason(source, node)
             for (source, _, _), node in zip(definitions, nodes, strict=True)
@@ -316,6 +330,8 @@ def method_inputs(
                 raise ValueError("dunder method")
             if reason := _class_reason(source, cls) or _function_reason(source, node):
                 raise ValueError(reason)
+            if kind in ("property", "setter"):
+                _property_signature(source, node, kind)
             # Setters can run through ordinary attribute access, including construction/getters.
             for setter in cls.body:
                 if (

@@ -12,6 +12,7 @@ from typing import Any, cast
 import pytest
 
 from oversight.changes._behavior import BehaviorDiff, _compare, _prepare, targets
+from oversight.changes._behavior_inputs import BehaviorInput, BehaviorInputs
 from oversight.changes._behavior_publish import capture_behavior, project_behavior
 from oversight.workspace import BehaviorObservation
 from oversight.workspace.behavior_run import WORKER
@@ -490,3 +491,87 @@ def test_invalid_unrelated_python_file_does_not_hide_literal_method_inputs():
     rec.head_files["broken.py"] = "def broken(:"
     generated = _prepare(cast(Any, rec), found, time.monotonic() + 10)
     assert generated and found[0].reason is None
+
+
+@pytest.mark.parametrize("kind", ["property", "setter", "captured-property"])
+@pytest.mark.parametrize("side", ["base", "head"])
+def test_property_extra_parameters_are_refused_without_comparisons(kind, side):
+    source = """class Box:
+    def __init__(self, value=1): self._value = value
+    @property
+    def value(self): return self._value
+    @value.setter
+    def value(self, value: int): self._value = value
+    def change(self): return 0
+"""
+    dirty = source.replace(
+        "def value(self, value: int)" if kind == "setter" else "def value(self)",
+        "def value(self, value: int, extra=1)" if kind == "setter" else "def value(self, extra=1)",
+    )
+    if kind == "captured-property":
+        source = dirty  # Captured getters must be identical across sides.
+    _, generated, found = prepared(
+        dirty if side == "base" else source,
+        dirty if side == "head" else source,
+        qualified="Box.change"
+        if kind == "captured-property"
+        else "Box.value#2"
+        if kind == "setter"
+        else "Box.value",
+    )
+    assert not generated
+    assert found[0].reason == (
+        "unsupported setter signature" if kind == "setter" else "unsupported getter signature"
+    )
+    assert found[0].compared == found[0].differing == 0
+
+
+@pytest.mark.anyio
+async def test_tight_deadline_finishes_functions_before_method_work(monkeypatch):
+    from oversight.changes import _behavior
+
+    rec, inputs, found = prepared()
+    method_id = found[0].node_id
+    inputs[method_id] = BehaviorInputs(
+        inputs[method_id].inputs[:1], receiver_class="Box", method_kind="method"
+    )
+    function = SimpleNamespace(id="sample:f", path="sample.py", name="f")
+    rec.head.graph.nodes.append(function)
+    inputs[function.id] = BehaviorInputs((BehaviorInput("f()", "((), {})", "((), {})", "same"),))
+    found.append(_behavior.FunctionBehavior(function.id))  # Method sorts before function.
+    clock = [0.0]
+    monkeypatch.setattr(_behavior, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+
+    async def run(tree, requests, *, timeout_s):
+        if timeout_s < 0.2:
+            raise TimeoutError
+        clock[0] += 0.2
+        return {
+            target.id: BehaviorObservation(
+                tuple(
+                    {
+                        "kind": "value",
+                        "value": ["int", hex(tree)],
+                        "fingerprint": str(tree),
+                        "pre_fingerprint": "same",
+                    }
+                    for _ in target.calls
+                )
+            )
+            for target in requests
+        }
+
+    completed = set()
+    with pytest.raises(TimeoutError):
+        await _compare(
+            cast(Any, SimpleNamespace(run_behavior=run)),
+            cast(Any, rec),
+            cast(Any, [0, 1]),
+            inputs,
+            found,
+            0.9,
+            completed,
+        )
+    assert completed == {function.id}
+    assert found[1].compared == found[1].differing == 1
+    assert found[1].reason is None

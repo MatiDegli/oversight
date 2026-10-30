@@ -216,6 +216,26 @@ async def _compare(
     deadline: float,
     completed: set[str],
 ) -> None:
+    # Finish functions, including their repeats, before methods spend the shared budget.
+    for method in (False, True):
+        batch = {
+            node_id: generated
+            for node_id, generated in inputs.items()
+            if (generated.receiver_class is not None) == method
+        }
+        if batch:
+            await _compare_batch(workspace, rec, trees, batch, found, deadline, completed)
+
+
+async def _compare_batch(
+    workspace: Workspace,
+    rec: "ChangeRecord",
+    trees: list[Tree],
+    inputs: dict[str, BehaviorInputs],
+    found: list[FunctionBehavior],
+    deadline: float,
+    completed: set[str],
+) -> None:
     sides = [
         await workspace.run_behavior(
             tree, _requests(rec, inputs, side), timeout_s=_remaining(deadline)
