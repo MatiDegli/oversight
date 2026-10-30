@@ -602,7 +602,7 @@ Package 11's revision callers/siblings (`ee92691`) and package 12's Start an age
 Package 13 is Muse Voice Transcribe task dictation, last day only, never merge approval. Its
 separate audio-upload command/response was reserved in `649ff0d` as an endpoint answering 501
 until built; message/pause/resume reservations do not cover it. The dictation route still answers
-501 (`backend/src/oversight/api/commands.py:43`).
+501 (`backend/src/oversight/api/commands.py:47`).
 Package 14 is person-to-agent messages, pause/resume and replay timeline. Message/pause/resume routes are
 reserved and still 501 (`backend/src/oversight/api/commands.py:61`); playback already consumes ordered
 events. Reuse those interfaces/local controls without claiming messaging or seeking already works.
