@@ -39,7 +39,7 @@ from oversight.changes._answers import require_yes, validate_answers
 from oversight.changes._assessment import RulesScheduler
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
-from oversight.changes._mode import ModeController
+from oversight.changes._mode import ModeController, start_capability
 from oversight.changes._resolution_validation import validate_resolution_intent
 from oversight.changes._review_cards import DifferenceDecisions, ReviewCardLimits, ReviewCards
 from oversight.changes._review_port import ReviewCapture, ReviewPort
@@ -62,6 +62,7 @@ from oversight.events import Clock, EventPayload, StoredEvent, system_clock
 from oversight.graph import (
     WorkspaceGraph,
 )
+from oversight.settings import Settings
 from oversight.workspace import (
     SuiteRun,
     Tree,
@@ -95,7 +96,10 @@ class ChangeManager:
         run_id: str = "",
         monotonic: Callable[[], float] = time.monotonic,
         sleep_until: Callable[[float], Awaitable[None]] | None = None,
+        settings: Settings | None = None,
     ) -> None:
+        settings = settings or Settings()
+
         async def committed(payload: EventPayload) -> object:
             receipt = await publish(payload)
             if isinstance(receipt, StoredEvent):
@@ -119,7 +123,7 @@ class ChangeManager:
                 rules_admission=self._admit_rules,
                 rules_transaction=lambda rec, evidence: transaction.run(self._ctx, rec, evidence),
             ),
-            ModeController(),
+            ModeController(availability=lambda: start_capability(workspace, settings)),
             behavior_diff,
             measured_cone,
         )

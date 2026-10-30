@@ -130,7 +130,7 @@ async def test_authority_loss_at_every_await(
         assert rec(h).state == "ready"
         if guard != "revision":
             assert terminal_code(h) == (
-                "isolation_unavailable" if guard in {"C", "startup"} else "policy_invalid"
+                "isolation_unavailable" if guard == "C" else "policy_invalid"
             )
         else:
             assert not terminals(h)
@@ -176,9 +176,7 @@ async def test_authority_loss_at_every_await(
     assert not h.payloads(ChangeResolved) and await h.main_head() == h.base_commit
     assert rec(h).state == "ready"
     if guard != "revision":
-        assert terminal_code(h) == (
-            "isolation_unavailable" if guard in {"C", "startup"} else "policy_invalid"
-        )
+        assert terminal_code(h) == ("isolation_unavailable" if guard == "C" else "policy_invalid")
     else:
         assert not terminals(h)
     await assert_main_clean(h)

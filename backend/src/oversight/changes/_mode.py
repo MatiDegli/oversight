@@ -1,7 +1,7 @@
 """Confirmed merge mode, its CAS revision and outstanding event receipt.
 
 Lock order is main -> worktree/temporary -> mode -> Git lease. This path takes
-only its own mode lock; availability is a startup fact, never a probe or Git call.
+only its own mode lock; availability reads session facts, never a probe or Git call.
 """
 
 import asyncio
@@ -11,25 +11,53 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from oversight.changes._state import WrongState
+from oversight.slots import resolve_profile, resolve_slots
 from oversight_contracts.commands import SetMergeMode
 from oversight_contracts.policy import MergeModeState
 
 if TYPE_CHECKING:
     from oversight.changes._support import ChangeContext
+    from oversight.settings import Settings
+    from oversight.workspace import Workspace
+
+
+# Only the activation front may open this latch. No environment or setting controls it.
+RULES_ACTIVATION = False
+_CLOSED_REASON = "Rules mode is closed until Revert, protected paths and follow-main land"
 
 
 @dataclass(frozen=True)
 class StartCapability:
-    """Confirmed startup capability, supplied by the future isolation adapter."""
+    """Current session authority, read without launching or confirming isolation."""
 
     confirmed: bool
     reason: str
 
 
 def closed_start_capability() -> StartCapability:
-    return StartCapability(
-        False, "Isolated start capability is unavailable; launcher not connected"
-    )
+    return StartCapability(False, _CLOSED_REASON)
+
+
+def start_capability(workspace: "Workspace", settings: "Settings") -> StartCapability:
+    """Pure synchronous adapter; each read observes the workspace's monotonic latches."""
+    isolation = workspace.isolation
+    if not isolation.rules_available:
+        reason = (
+            "Rules authority is suspended until restart"
+            if isolation.available and isolation.rules_suspended
+            else "Network isolation C is unavailable for this session"
+        )
+        return StartCapability(False, reason)
+    if workspace.integrity.main_suspect:
+        return StartCapability(False, "Main's integrity is uncertain until restart")
+    if not settings.cross_review:
+        return StartCapability(False, "Cross-review is off")
+    reviewer = resolve_profile(settings.review_model)
+    if any(slot.profile.model == reviewer.model for slot in resolve_slots(settings).values()):
+        return StartCapability(False, "The reviewer model must differ from each author model")
+    if not RULES_ACTIVATION:
+        return closed_start_capability()
+    return StartCapability(True, "Rules prerequisites confirmed")
 
 
 class ModeController:
@@ -45,6 +73,7 @@ class ModeController:
         self._timeout_s = timeout_s
         self._receipt: asyncio.Task[None] | None = None
         self._suspended = False
+        self._loss_reported = False
 
     def snapshot(self) -> MergeModeState:
         """An independent copy of the last confirmed mode and revision."""
@@ -55,8 +84,14 @@ class ModeController:
         return self._suspended
 
     def capability(self) -> StartCapability:
-        """Read a synchronous startup fact; this port must never launch a probe."""
+        """Read current session facts; this port must never launch a probe."""
         return self._availability()
+
+    def report_loss(self, ctx: "ChangeContext", reason: str) -> None:
+        """One session notice, independent of each wait's Needs you receipt."""
+        if self._state.mode == "merge_when_safe" and not self._loss_reported:
+            self._loss_reported = True
+            ctx.spawn(ctx.report("server", f"Rules authority suspended: {reason}", fatal=False))
 
     @asynccontextmanager
     async def held(self) -> AsyncGenerator[None]:

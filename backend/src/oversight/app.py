@@ -366,6 +366,7 @@ class LiveRun:
             self._publish,
             main_graph=graph,
             main_snapshot=snapshot,
+            settings=settings,
             git_timeout_s=GIT_TIMEOUT_S,
             review=self,
             behavior_diff=self._settings.behavior_diff,

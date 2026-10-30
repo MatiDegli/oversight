@@ -15,7 +15,7 @@ pytestmark = pytest.mark.anyio
 
 
 def available(h: Harness, *, timeout_s: float = 5) -> ModeController:
-    """Only tests confirm the startup fact; the manager always builds a closed port."""
+    """Tests can inject open authority independently of the production activation latch."""
     mode = ModeController(
         availability=lambda: StartCapability(True, "Test startup confirmed"), timeout_s=timeout_s
     )
@@ -79,7 +79,7 @@ async def test_same_state_has_no_event_or_revision_change(h: Harness, mode: str)
 
 
 async def test_production_port_refuses_activation_with_visible_reason(h: Harness) -> None:
-    with pytest.raises(WrongState, match="start capability is unavailable; launcher not connected"):
+    with pytest.raises(WrongState, match="Network isolation C is unavailable for this session"):
         await select(h, "merge_when_safe", 0)
     assert h.manager.merge_mode() == MergeModeState()
     assert not h.manager.authority_suspended()
