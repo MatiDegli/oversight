@@ -197,9 +197,16 @@ for (const width of [1920, 1280])
               true,
             );
             const panel = page.getByRole("complementary", { name: "Review panel" });
-            expect(await panel.textContent()).toContain("+12 omitted by depth");
-            expect(await panel.textContent()).toContain("+3 omitted by the node limit");
-            expect(await panel.textContent()).toContain("+2 possible callers, not followed");
+            const header = panel.locator(".review-header");
+            expect(await header.getByRole("listitem").count()).toBe(4);
+            expect(await header.locator('[aria-label="Impact cone"]').textContent()).toBe(
+              "10 possibly affected · up to distance 2",
+            );
+            expect(await header.locator('[aria-label="Possible callers"]').count()).toBe(0);
+            expect(await header.locator(".lucide-circle-help").count()).toBe(0);
+            expect(await measured.textContent()).toContain(
+              "Static cone bounds: depth 3 · 40 nodes",
+            );
             expect(errors).toEqual([]);
           } finally {
             await page.close();

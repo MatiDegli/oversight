@@ -175,3 +175,58 @@ it.each(["dark", "day"])(
   },
   60_000,
 );
+
+// 960 CSS px exercises the space available at 200% zoom on the 1920px demo screen.
+it.each([1920, 1280, 960])("wraps long task and provenance at %i CSS px", async (width) => {
+  const page = await browser.newPage({ viewport: { width, height: 1080 } });
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url);
+    await page.waitForFunction(() => "mountHeader" in window);
+    for (const theme of ["dark", "day"])
+      for (const name of ["a", "b", "g"]) {
+        await page.evaluate(
+          ({ name, theme }) => {
+            document.documentElement.dataset.theme = theme;
+            (window as unknown as { mountHeader: (name: string) => void }).mountHeader(name);
+            // Constrain both review paths, including cards embedded in the inbox.
+            const host = document.body.firstElementChild as HTMLElement;
+            host.style.width = "min(880px, 46vw)";
+            const title = host.querySelector("header h2");
+            const code = host.querySelector("header code");
+            if (!title || !code) throw new Error("Missing header text");
+            title.textContent = `Review ${"calculate_order_total_".repeat(5)}`;
+            code.textContent = `worktree-${"long_identifier_".repeat(8)}`;
+          },
+          { name, theme },
+        );
+        await page.evaluate(() => document.fonts.ready);
+        const header = page.locator(".review-header");
+        const reading = await header.evaluate((element) => {
+          const title = element.querySelector("h2");
+          const caption = element.querySelector("p");
+          const code = caption?.querySelector("code");
+          if (!title || !caption || !code) throw new Error("Missing header text");
+          return {
+            overflow: element.scrollWidth > element.clientWidth,
+            titleHeight: title.getBoundingClientRect().height,
+            captionHeight: caption.getBoundingClientRect().height,
+            textFace: getComputedStyle(title).fontFamily,
+            codeFace: getComputedStyle(code).fontFamily,
+            codeSize: getComputedStyle(code).fontSize,
+          };
+        });
+        expect(reading.overflow, `${name} ${theme} at ${String(width)}`).toBe(false);
+        expect(reading.titleHeight).toBeGreaterThan(28);
+        expect(reading.captionHeight).toBeGreaterThan(20);
+        expect(reading.textFace).toContain("Atkinson Hyperlegible Next");
+        expect(reading.codeFace).toContain("Atkinson Hyperlegible Mono");
+        expect(reading.codeSize).toBe("13px");
+        const close = header.getByRole("button", { name: "Close review" });
+        await close.focus();
+        expect(await close.evaluate((element) => document.activeElement === element)).toBe(true);
+      }
+  } finally {
+    await page.close();
+  }
+});

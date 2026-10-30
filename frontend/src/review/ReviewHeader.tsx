@@ -40,7 +40,7 @@ export function ReviewHeader({
             {agent.slot}
           </span>
         )}
-        <h2 title={task} className="min-w-0 text-xl leading-7 font-bold">
+        <h2 title={task} className="min-w-0 wrap-anywhere text-xl leading-7 font-bold">
           {task}
         </h2>
         {change && (
@@ -58,7 +58,7 @@ export function ReviewHeader({
           </button>
         )}
       </div>
-      <p className="mt-1.5 text-[13px] leading-5 text-muted">
+      <p className="mt-1.5 wrap-anywhere text-[13px] leading-5 text-muted">
         {agent ? `Agent ${agent.slot}` : "Agent unknown"} · {card?.modelLabel ?? "Model unknown"} ·{" "}
         {card?.cost == null ? "cost unknown" : costText(card.cost)} ·{" "}
         {card ? `step ${String(card.step)} of ${String(card.maxSteps)}` : "steps unknown"} ·
