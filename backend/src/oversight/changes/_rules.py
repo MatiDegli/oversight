@@ -183,6 +183,7 @@ def availability(ctx: ChangeContext) -> tuple[str, str] | None:
 async def terminal(
     ctx: ChangeContext, reservation: RulesReservation, code: str, reason: str
 ) -> None:
+    availability(ctx)
     if code == "worktree_unverifiable":
         if reason.startswith("Rules preflight failed: code=integrity_invalid; reason="):
             code = "integrity_invalid"
