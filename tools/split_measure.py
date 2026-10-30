@@ -15,9 +15,10 @@ import random
 import re
 import tokenize
 from collections import Counter
-from dataclasses import asdict, dataclass
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from oversight.changes import CannotSplit, partition_targets
 from oversight.graph import WorkspaceGraph, graph_completeness
@@ -28,6 +29,14 @@ SEED = 20261030
 REPO = Path(__file__).resolve().parents[1]
 type Lines = dict[str, set[int]]
 type Report = dict[str, Any]
+type MappingKind = Literal["changed lines", "enclosing insertion", "enclosing fallback", "none"]
+TASK_MAPPINGS = ("without_fallback", "with_fallback")
+
+
+@dataclass
+class Changes:
+    lines: Lines = field(default_factory=dict[str, set[int]])
+    enclosures: Lines = field(default_factory=dict[str, set[int]])
 
 
 @dataclass(frozen=True)
@@ -36,6 +45,7 @@ class Task:
     targets: tuple[str, ...]
     changed_lines: dict[str, list[int]]
     reference: str
+    mapping_kind: MappingKind = "none"
 
 
 def _added_definitions(text: str, first: int, last: int) -> set[int]:
@@ -50,7 +60,7 @@ def _added_definitions(text: str, first: int, last: int) -> set[int]:
     return lines
 
 
-def changed_lines(before: str, after: str) -> set[int]:
+def changed_lines(before: str, after: str, enclosures: set[int] | None = None) -> set[int]:
     """Deleted/replaced base lines; an insertion maps only inside an existing span.
 
     Pure insertions use both surrounding lines, later requiring the same innermost
@@ -59,7 +69,10 @@ def changed_lines(before: str, after: str) -> set[int]:
     """
     old, new = before.splitlines(), after.splitlines()
     result: set[int] = set()
-    for tag, a, b, c, d in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+    opcodes = difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes()
+    if enclosures is not None:
+        enclosures.update(_insertion_enclosures(after, opcodes))
+    for tag, a, b, c, d in opcodes:
         if tag == "equal":
             continue
         if a < b:
@@ -71,29 +84,88 @@ def changed_lines(before: str, after: str) -> set[int]:
     return result
 
 
-def map_targets(graph: WorkspaceGraph, snapshot: GraphSnapshot, changes: Lines) -> Task:
-    """Resolve through the actual span index, retaining function/method identities only."""
+def _insertion_enclosures(
+    after: str, opcodes: Sequence[tuple[str, int, int, int, int]]
+) -> set[int]:
+    """Map inserted lines to existing syntactic owners; zero denotes the base module.
+
+    Map an owner's definition line through unchanged lines, then let the base span index
+    resolve it. New definitions cannot own their own insertion. AST containment handles
+    sibling definitions and EOF correctly, where adjacent base lines may belong elsewhere.
+    """
+    new_lines = after.splitlines()
+    inserted = {
+        line + 1
+        for tag, _, _, c, d in opcodes
+        if tag == "insert"
+        for line in range(c, d)
+        if new_lines[line].strip()
+    }
+    if not inserted:
+        return set()
+    base_lines = {
+        c + i + 1: a + i + 1 for tag, a, b, c, _ in opcodes if tag == "equal" for i in range(b - a)
+    }
+    owners = [
+        n
+        for n in ast.walk(ast.parse(after))
+        if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+        and n.lineno in base_lines
+    ]
+    result: set[int] = set()
+    for line in inserted:
+        enclosing = [
+            n
+            for n in owners
+            if min([n.lineno] + [d.lineno for d in n.decorator_list])
+            <= line
+            <= (n.end_lineno or n.lineno)
+        ]
+        owner = min(enclosing, key=lambda n: (n.end_lineno or n.lineno) - n.lineno, default=None)
+        result.add(base_lines[owner.lineno] if owner is not None else 0)
+    return result
+
+
+def map_targets(graph: WorkspaceGraph, snapshot: GraphSnapshot, changes: Changes) -> Task:
+    """Prefer changed function/method spans, then existing owners of pure insertions."""
     functions = {n.id for n in snapshot.nodes if n.kind in ("function", "method")}
-    targets: set[str] = set()
+    changed: set[str] = set()
+    inserted: set[str] = set()
     audit: dict[str, list[int]] = {}
-    for path, lines in sorted(changes.items()):
+    for path, lines in sorted(changes.lines.items()):
         accepted = {line for line in lines if line > 0}
-        for marker in (line for line in lines if line < 0):
-            right = -marker
-            if graph.node_at(path, right - 1) == graph.node_at(path, right):
-                accepted.update((right - 1, right))
-        audit[path] = sorted(accepted)
-        targets.update(
+        changed.update(
             node
             for line in accepted
             if (node := graph.node_at(path, line)) is not None and node in functions
         )
-    return Task("", tuple(sorted(targets)), audit, "")
+        for marker in (line for line in lines if line < 0):
+            right = -marker
+            node = graph.node_at(path, right)
+            if node in functions and graph.node_at(path, right - 1) == node:
+                accepted.update((right - 1, right))
+                inserted.add(node)
+        audit[path] = sorted(accepted)
+    targets = changed | inserted
+    kind: MappingKind = (
+        "changed lines" if changed else "enclosing insertion" if inserted else "none"
+    )
+    if not targets:
+        modules = {n.path: n.id for n in snapshot.nodes if n.kind == "module"}
+        targets = {
+            node
+            for path, lines in changes.enclosures.items()
+            for line in lines
+            if (node := modules.get(path) if line == 0 else graph.node_at(path, line)) is not None
+        }
+        if targets:
+            kind = "enclosing fallback"
+    return Task("", tuple(sorted(targets)), audit, "", kind)
 
 
-def patch_changes(root: Path, patch: str, unavailable: frozenset[str] = frozenset()) -> Lines:
+def patch_changes(root: Path, patch: str, unavailable: frozenset[str] = frozenset()) -> Changes:
     """Apply unified hunks in memory, verifying every context/deletion and hunk count."""
-    changes: Lines = {}
+    changes = Changes()
     path: str | None = None
     lines = patch.splitlines(keepends=True)
     cursor = 0
@@ -132,7 +204,11 @@ def patch_changes(root: Path, patch: str, unavailable: frozenset[str] = frozense
         # Use the full file so inserted definitions can be distinguished from edits
         # inside an existing function; the original hunk offsets remain base-side.
         modified = base[:offset] + new + base[offset + old_count :]
-        changes.setdefault(path, set()).update(changed_lines("".join(base), "".join(modified)))
+        changes.lines.setdefault(path, set()).update(
+            changed_lines(
+                "".join(base), "".join(modified), changes.enclosures.setdefault(path, set())
+            )
+        )
     return changes
 
 
@@ -158,7 +234,7 @@ def _edits(text: str, edits: list[Report]) -> str:
 
 def fixture_changes(
     root: Path, task: Report, data_dir: Path, unavailable: frozenset[str] = frozenset()
-) -> Lines:
+) -> Changes:
     """References apply to seeded bases. Project changed lines back to the scanned base."""
     reference = json.loads((data_dir / task["reference_solution"]).read_text())
     seeds: list[Report] = (
@@ -166,24 +242,30 @@ def fixture_changes(
         if task.get("seeded_defect")
         else []
     )
-    result: Lines = {}
+    result = Changes()
     for path in sorted({e["path"] for e in reference}):
         if path in unavailable:
             continue
         original = _source_text(root, path)
         seeded = _edits(original, [e for e in seeds if e["path"] == path])
         fixed = _edits(seeded, [e for e in reference if e["path"] == path])
-        affected = changed_lines(seeded, fixed)
+        enclosures: set[int] = set()
+        affected = changed_lines(seeded, fixed, enclosures)
+        projected_enclosures = {0} if 0 in enclosures else set[int]()
         projected: set[int] = set()
         for tag, a, b, c, d in difflib.SequenceMatcher(
             None, original.splitlines(), seeded.splitlines(), autojunk=False
         ).get_opcodes():
+            projected_enclosures.update(
+                a + line - c for line in enclosures if tag == "equal" and c < line <= d
+            )
             for line in affected:
                 if c < line <= d:
                     projected.update([a + line - c] if tag == "equal" else range(a + 1, b + 1))
                 elif line < 0 and c < -line <= d and tag == "equal":
                     projected.add(-(a - line - c))
-        result[path] = projected
+        result.lines[path] = projected
+        result.enclosures[path] = projected_enclosures
     return result
 
 
@@ -208,9 +290,9 @@ def load_tasks(
             lines = fixture_changes(root, task, tasks_file.parent, unavailable)
         else:
             # Proof 2's standalone reference tests are additions, never production targets.
-            lines = {}
+            lines = Changes()
         mapped = map_targets(graph, snapshot, lines)
-        tasks.append(Task(task["id"], mapped.targets, mapped.changed_lines, reference.name))
+        tasks.append(replace(mapped, id=task["id"], reference=reference.name))
     return tasks, hashes
 
 
@@ -310,9 +392,14 @@ def measure_repository(root: Path, commit: str, tasks_file: Path, *, sample: boo
     if not gaps and scanned_version != snapshot.version:
         raise ValueError("source changed during measurement; rerun on an unchanged checkout")
     tasks, hashes = load_tasks(root, graph, snapshot, tasks_file, frozenset(gaps))
-    eligible = [t for t in tasks if t.targets]
-    pairs = list(itertools.combinations(eligible, 2))
-    groups = {"tasks": pairs}
+    groups = {
+        "tasks_without_fallback": list(
+            itertools.combinations(
+                [t for t in tasks if t.targets and t.mapping_kind != "enclosing fallback"], 2
+            )
+        ),
+        "tasks_with_fallback": list(itertools.combinations([t for t in tasks if t.targets], 2)),
+    }
     if sample:
         groups["sample"] = sample_pairs(snapshot)
     unimportable = [f.path for f in completeness if f.status == "unimportable"]
@@ -353,9 +440,20 @@ def measure_repository(root: Path, commit: str, tasks_file: Path, *, sample: boo
         "snapshot_sha256": hashlib.sha256(snapshot.model_dump_json().encode()).hexdigest(),
         "files": [asdict(f) for f in completeness],
         "reference_hashes": hashes,
-        "targets": [asdict(t) | {"excluded": not t.targets} for t in tasks],
+        "targets": [
+            asdict(t)
+            | {
+                "excluded_without_fallback": not t.targets
+                or t.mapping_kind == "enclosing fallback",
+                "excluded_with_fallback": not t.targets,
+            }
+            for t in tasks
+        ],
         "nominal_task_pairs": len(tasks) * (len(tasks) - 1) // 2,
-        "excluded_task_pairs": len(tasks) * (len(tasks) - 1) // 2 - len(pairs),
+        "eligible_task_pairs": {m: len(groups[f"tasks_{m}"]) for m in TASK_MAPPINGS},
+        "excluded_task_pairs": {
+            m: len(tasks) * (len(tasks) - 1) // 2 - len(groups[f"tasks_{m}"]) for m in TASK_MAPPINGS
+        },
         "unimportable_files": unimportable,
         "policies": policies,
     }
@@ -364,11 +462,13 @@ def measure_repository(root: Path, commit: str, tasks_file: Path, *, sample: boo
 def build_report(boltons: Report, demo: Report, tool_commit: str) -> Report:
     rules: Report = {}
     for policy in ("count_unimportable", "ignore_unimportable"):
-        b = boltons["policies"][policy]["variants"]["call-plus-import"]["tasks"]
-        d = demo["policies"][policy]["variants"]["call-plus-import"]["tasks"]
-        rules[policy] = bool(
-            b["denominator"] and b["split"] * 5 >= b["denominator"] and d["split"] >= 1
-        )
+        rules[policy] = {}
+        for mapping in TASK_MAPPINGS:
+            b = boltons["policies"][policy]["variants"]["call-plus-import"][f"tasks_{mapping}"]
+            d = demo["policies"][policy]["variants"]["call-plus-import"][f"tasks_{mapping}"]
+            rules[policy][mapping] = bool(
+                b["denominator"] and b["split"] * 5 >= b["denominator"] and d["split"] >= 1
+            )
     return {
         "seed": SEED,
         "tool_commit": tool_commit,
@@ -379,7 +479,10 @@ def build_report(boltons: Report, demo: Report, tool_commit: str) -> Report:
                 "At least 1 in 5 Boltons task pairs split under call-plus-import, "
                 "and at least 1 demo pair splits."
             ),
-            "denominator": "Eligible task pairs only; no-target tasks are excluded.",
+            "denominator": (
+                "Eligible task pairs, reported separately without fallback (primary) "
+                "and with fallback tasks; no-target tasks are always excluded."
+            ),
             "passes": rules,
         },
         "repositories": {"boltons": boltons, "demo": demo},
@@ -397,20 +500,23 @@ def markdown(report: Report) -> str:
         "",
         f"Rule results: `{json.dumps(report['suggested_rule']['passes'], sort_keys=True)}`.",
         "",
+        "Without fallback is the primary mapping; "
+        "with fallback additionally includes insertion owners. "
         "Denominators exclude tasks without targets. "
         "Refusal histograms count diagnostics, not pairs.",
     ]
     for name, repo in report["repositories"].items():
         lines += [
             "",
-            f"## {name} ({repo['commit']})",
+            f"## {name} ({repo.get('input_identity') or repo['commit']})",
             "",
             f"Nominal task pairs: {repo['nominal_task_pairs']}; "
-            f"excluded: {repo['excluded_task_pairs']}.",
+            f"eligible: {repo['eligible_task_pairs']}; excluded: {repo['excluded_task_pairs']}.",
             "",
-            "| Policy | Complete | Gaps |",
-            "| --- | --- | --- |",
         ]
+        if "content_sha256" in repo:
+            lines += [f"{repo['content_hash_label']}: `{repo['content_sha256']}`.", ""]
+        lines += ["| Policy | Complete | Gaps |", "| --- | --- | --- |"]
         for policy, result in repo["policies"].items():
             lines.append(
                 f"| {policy} | {result['complete']} | {', '.join(result['gap_files']) or 'none'} |"
@@ -426,13 +532,21 @@ def markdown(report: Report) -> str:
                     share = f"{counts['share']:.1%}" if counts["share"] is not None else "n/a"
                     lines.append(
                         f"| {policy} | {variant} | {group} | "
-                        f"{counts['split']}/{counts['denominator']} | {share} | "
+                        f"{counts['split']}/{counts['denominator']} | "
+                        f"{share} ({counts['denominator']} eligible pairs) | "
                         f"{json.dumps(counts['refusals'], sort_keys=True)} |"
                     )
-        lines += ["", "| Task | Targets | Base lines |", "| --- | --- | --- |"]
+        lines += [
+            "",
+            "| Task | Mapping kind | Targets | Without fallback | With fallback | Base lines |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
         for task in repo["targets"]:
             lines.append(
-                f"| {task['id']} | {', '.join(task['targets']) or 'none (excluded)'} | "
+                f"| {task['id']} | {task['mapping_kind']} | "
+                f"{', '.join(task['targets']) or 'none'} | "
+                f"{'excluded' if task['excluded_without_fallback'] else 'included'} | "
+                f"{'excluded' if task['excluded_with_fallback'] else 'included'} | "
                 f"{json.dumps(task['changed_lines'], sort_keys=True)} |"
             )
     return "\n".join(lines) + "\n"
@@ -449,6 +563,26 @@ async def _git(root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+async def demo_identity(root: Path) -> Report:
+    """The demo is plain files in a parent checkout, with its own content fingerprint."""
+    parent = Path(await _git(root, "rev-parse", "--show-toplevel"))
+    commit = await _git(parent, "rev-parse", "HEAD")
+    if await _git(parent, "status", "--porcelain", "--untracked-files=all"):
+        raise ValueError("demo-repo/ requires a clean parent checkout")
+    paths = (await _git(root, "ls-files", "-z", "--", ".")).split("\0")
+    hashes = {path: _hash(_source_path(root, path)) for path in sorted(paths) if path}
+    content = hashlib.sha256(
+        "".join(f"{path}\0{digest}\n" for path, digest in hashes.items()).encode()
+    )
+    return {
+        "input_identity": f"{root.relative_to(parent).as_posix()}/ at {commit}",
+        "parent_commit": commit,
+        "content_sha256": content.hexdigest(),
+        "content_hash_label": "Demo file content SHA-256 (sorted tracked path/hash manifest)",
+        "content_file_hashes": hashes,
+    }
+
+
 async def run(args: argparse.Namespace) -> None:
     root = args.boltons_root.resolve()
     commit = await _git(root, "rev-parse", "HEAD")
@@ -459,16 +593,19 @@ async def run(args: argparse.Namespace) -> None:
             "Boltons must be a clean checkout of the pinned commit; this tool never fetches"
         )
     own_commit = await _git(REPO, "rev-parse", "HEAD")
+    demo_input = await demo_identity(args.demo_root.resolve())
     boltons = await asyncio.to_thread(
         measure_repository, root, commit, REPO / "tools/eval/proof2/tasks.json", sample=True
     )
     demo = await asyncio.to_thread(
         measure_repository,
         args.demo_root.resolve(),
-        await _git(args.demo_root.resolve(), "rev-parse", "HEAD"),
+        demo_input["parent_commit"],
         REPO / "tools/eval/tasks.json",
         sample=False,
     )
+    demo.pop("commit")  # This commit belongs to the parent, not to a demo Git repository.
+    demo.update(demo_input)
     report = build_report(boltons, demo, own_commit)
     summary = markdown(report)
     args.output_dir.mkdir(parents=True, exist_ok=True)

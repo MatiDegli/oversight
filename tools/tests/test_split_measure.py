@@ -2,6 +2,7 @@
 
 import argparse
 import difflib
+import hashlib
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -87,27 +88,35 @@ def test_patch_targets_use_base_spans_methods_and_decorators(tmp_path: Path):
     changes = measure.patch_changes(tmp_path, patch)
     mapped = measure.map_targets(graph, snapshot, changes)
     assert mapped.targets == ("a:C.m", "a:f")
+    assert mapped.mapping_kind == "changed lines"
     assert mapped.changed_lines == {"a.py": [1, 7]}
     assert (tmp_path / "a.py").read_text() == before
 
 
-def test_insertion_inside_a_function_maps_but_added_definitions_and_context_do_not(tmp_path: Path):
+def test_insertions_keep_primary_targets_and_label_added_definition_fallbacks(tmp_path: Path):
     before = "def f():\n    return 1\n\ndef g():\n    return 2\n"
     graph, snapshot = scan(tmp_path, {"a.py": before})
-    for after, expected in (
-        (before.replace("    return 1", "    value = 1\n    return 1"), ("a:f",)),
-        (before.replace("\ndef g", "\ndef new():\n    pass\n\ndef g"), ()),
-        (before + "\ndef new():\n    pass\n", ()),
+    for after, expected, kind in (
+        (
+            before.replace("    return 1", "    value = 1\n    return 1"),
+            ("a:f",),
+            "enclosing insertion",
+        ),
+        (
+            before.replace("\ndef g", "\ndef new():\n    pass\n\ndef g"),
+            ("a",),
+            "enclosing fallback",
+        ),
+        (before + "\ndef new():\n    pass\n", ("a",), "enclosing fallback"),
     ):
         patch = "".join(
             difflib.unified_diff(
                 before.splitlines(True), after.splitlines(True), fromfile="a/a.py", tofile="b/a.py"
             )
         )
-        assert (
-            measure.map_targets(graph, snapshot, measure.patch_changes(tmp_path, patch)).targets
-            == expected
-        )
+        mapped = measure.map_targets(graph, snapshot, measure.patch_changes(tmp_path, patch))
+        assert mapped.targets == expected
+        assert mapped.mapping_kind == kind
 
 
 def test_bad_reference_context_fails_closed_and_paths_cannot_escape(tmp_path: Path):
@@ -148,12 +157,14 @@ def test_demo_reference_targets_and_28_pairs_are_auditable():
         "inventory-07": ("shop.inventory:Inventory.reserve",),
         "inventory-08": ("shop.inventory:Inventory.reserve",),
     }
-    assert report["nominal_task_pairs"] == 28 and report["excluded_task_pairs"] == 0
+    assert report["nominal_task_pairs"] == 28
+    assert report["excluded_task_pairs"] == {m: 0 for m in measure.TASK_MAPPINGS}
     assert all(t["changed_lines"] for t in report["targets"])
     for policy in report["policies"].values():
         assert policy["complete"]
         for variant in policy["variants"].values():
-            assert variant["tasks"]["denominator"] == 28
+            assert variant["tasks_without_fallback"]["denominator"] == 28
+            assert variant["tasks_with_fallback"]["denominator"] == 28
     summary = measure.markdown(measure.build_report(report, report, COMMIT))
     assert "pending the maintainer's approval" in summary
     assert "shop.inventory:Inventory.reserve" in summary
@@ -197,11 +208,21 @@ def synthetic_report(tmp_path: Path, monkeypatch, *, gap="", unimportable=False)
 def test_no_target_task_is_reported_and_excluded(tmp_path: Path, monkeypatch):
     report = synthetic_report(tmp_path, monkeypatch)
     assert report["nominal_task_pairs"] == 3
-    assert report["excluded_task_pairs"] == 2
-    assert report["targets"][-1]["excluded"]
+    assert report["excluded_task_pairs"] == {m: 2 for m in measure.TASK_MAPPINGS}
+    assert report["targets"][-1]["excluded_without_fallback"]
+    assert report["targets"][-1]["mapping_kind"] == "none"
     for policy in report["policies"].values():
         for variant in policy["variants"].values():
-            assert variant["tasks"]["split"] == variant["tasks"]["denominator"] == 1
+            assert (
+                variant["tasks_without_fallback"]["split"]
+                == variant["tasks_without_fallback"]["denominator"]
+                == 1
+            )
+            assert (
+                variant["tasks_with_fallback"]["split"]
+                == variant["tasks_with_fallback"]["denominator"]
+                == 1
+            )
 
 
 def test_incomplete_tree_never_splits(tmp_path: Path, monkeypatch):
@@ -221,8 +242,18 @@ def test_unimportable_paths_have_two_explicit_verdicts(tmp_path: Path, monkeypat
     assert not report["policies"]["count_unimportable"]["complete"]
     assert report["policies"]["ignore_unimportable"]["complete"]
     for variant in ("call-only", "call-plus-import"):
-        assert report["policies"]["count_unimportable"]["variants"][variant]["tasks"]["split"] == 0
-        assert report["policies"]["ignore_unimportable"]["variants"][variant]["tasks"]["split"] == 1
+        assert (
+            report["policies"]["count_unimportable"]["variants"][variant]["tasks_without_fallback"][
+                "split"
+            ]
+            == 0
+        )
+        assert (
+            report["policies"]["ignore_unimportable"]["variants"][variant][
+                "tasks_without_fallback"
+            ]["split"]
+            == 1
+        )
 
 
 @pytest.mark.anyio
@@ -231,23 +262,36 @@ async def test_cli_writes_json_and_markdown_without_network(tmp_path: Path, monk
     calls = []
 
     async def fake_git(root, *args):
-        calls.append(args)
+        calls.append((root, args))
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(tmp_path)
+        if args[0] == "ls-files":
+            return "a.py\0b.py\0"
         return "" if args[0] == "status" else measure.BOLTONS.commit
 
     monkeypatch.setattr(measure, "_git", fake_git)
-    monkeypatch.setattr(measure, "measure_repository", lambda *args, **kwargs: report)
+    monkeypatch.setattr(
+        measure, "measure_repository", lambda *args, **kwargs: json.loads(json.dumps(report))
+    )
     output = tmp_path / "output"
     await measure.run(
-        argparse.Namespace(boltons_root=tmp_path, demo_root=tmp_path, output_dir=output)
+        argparse.Namespace(boltons_root=tmp_path, demo_root=tmp_path / "source", output_dir=output)
     )
     saved = json.loads((output / "report.json").read_text())
     assert saved["seed"] == measure.SEED
     assert saved["suggested_rule"]["passes"] == {
-        "count_unimportable": True,
-        "ignore_unimportable": True,
+        "count_unimportable": {m: True for m in measure.TASK_MAPPINGS},
+        "ignore_unimportable": {m: True for m in measure.TASK_MAPPINGS},
     }
     assert (output / "summary.md").read_text() == capsys.readouterr().out.rstrip() + "\n"
-    assert all(call[0] in ("rev-parse", "status") for call in calls)
+    assert all(args[0] in ("rev-parse", "status", "ls-files") for _, args in calls)
+    demo = saved["repositories"]["demo"]
+    assert "commit" not in demo
+    assert demo["parent_commit"] == measure.BOLTONS.commit
+    assert demo["input_identity"] == f"source/ at {measure.BOLTONS.commit}"
+    assert "content" in demo["content_hash_label"].lower()
+    assert demo["content_sha256"] in (output / "summary.md").read_text()
+    assert (tmp_path, ("status", "--porcelain", "--untracked-files=all")) in calls
 
 
 @pytest.mark.anyio
@@ -287,9 +331,14 @@ def test_unparsed_reference_file_is_reported_without_trying_to_map_its_lines(
     source = tmp_path / "source"
     (source / "a.py").write_bytes(contents)
     report = measure.measure_repository(source, COMMIT, tmp_path / "data/tasks.json", sample=False)
-    assert report["targets"][0]["excluded"]
+    assert report["targets"][0]["excluded_without_fallback"]
     assert report["policies"]["ignore_unimportable"]["gap_files"] == ["a.py"]
-    assert report["policies"]["ignore_unimportable"]["variants"]["call-only"]["tasks"]["split"] == 0
+    assert (
+        report["policies"]["ignore_unimportable"]["variants"]["call-only"][
+            "tasks_without_fallback"
+        ]["split"]
+        == 0
+    )
 
 
 def test_suggested_rule_uses_task_pairs_and_the_inclusive_one_in_five_boundary():
@@ -299,7 +348,10 @@ def test_suggested_rule_uses_task_pairs_and_the_inclusive_one_in_five_boundary()
                 policy: {
                     "variants": {
                         "call-plus-import": {
-                            "tasks": {"split": split, "denominator": denominator},
+                            **{
+                                f"tasks_{m}": {"split": split, "denominator": denominator}
+                                for m in measure.TASK_MAPPINGS
+                            },
                             "sample": {"split": 1000, "denominator": 1000},
                         }
                     }
@@ -315,5 +367,166 @@ def test_suggested_rule_uses_task_pairs_and_the_inclusive_one_in_five_boundary()
         (repository(0, 0), repository(1, 28), False),
     ):
         rule = measure.build_report(b, d, COMMIT)["suggested_rule"]
-        assert all(passed == expected for passed in rule["passes"].values())
+        assert all(
+            passed == expected for policy in rule["passes"].values() for passed in policy.values()
+        )
         assert rule["label"] == "suggested rule, pending the maintainer's approval"
+
+
+@pytest.mark.parametrize(
+    "last_member", ["    value = 1\n", "    def existing(self):\n        return 1\n"]
+)
+def test_added_class_member_and_module_function_use_fallback_denominators(
+    tmp_path: Path, monkeypatch, last_member
+):
+    report = synthetic_report(tmp_path, monkeypatch)
+    root, data = tmp_path / "source", tmp_path / "data"
+    additions = {
+        "class_addition": (
+            "c.py",
+            "class C:\n" + last_member,
+            "\n    def added(self):\n        return 2\n",
+            "c:C",
+        ),
+        "module_addition": (
+            "d.py",
+            "def existing():\n    return 1\n",
+            "\ndef added():\n    return 2\n",
+            "d",
+        ),
+    }
+    tasks = json.loads((data / "tasks.json").read_text())
+    for task_id, (path, before, addition, _) in additions.items():
+        (root / path).write_text(before)
+        patch = "".join(
+            difflib.unified_diff(
+                before.splitlines(True),
+                (before + addition).splitlines(True),
+                fromfile=f"a/{path}",
+                tofile=f"b/{path}",
+            )
+        )
+        (data / f"{task_id}.patch").write_text(patch)
+        tasks.append({"id": task_id, "reference": f"{task_id}.patch"})
+    (data / "tasks.json").write_text(json.dumps(tasks))
+    report = measure.measure_repository(root, COMMIT, data / "tasks.json", sample=False)
+    targets = {t["id"]: t for t in report["targets"]}
+    for task_id, (_, _, _, expected) in additions.items():
+        assert targets[task_id]["targets"] == (expected,)
+        assert targets[task_id]["mapping_kind"] == "enclosing fallback"
+        assert targets[task_id]["excluded_without_fallback"]
+        assert not targets[task_id]["excluded_with_fallback"]
+    assert report["eligible_task_pairs"] == {"without_fallback": 1, "with_fallback": 6}
+    assert report["excluded_task_pairs"] == {"without_fallback": 9, "with_fallback": 4}
+    for policy in report["policies"].values():
+        for variant in policy["variants"].values():
+            for mapping, expected in (("without_fallback", 1), ("with_fallback", 6)):
+                assert variant[f"tasks_{mapping}"]["denominator"] == expected
+                assert variant[f"tasks_{mapping}"]["split"] == expected
+    summary = measure.markdown(measure.build_report(report, report, COMMIT))
+    assert "100.0% (1 eligible pairs)" in summary
+    assert "100.0% (6 eligible pairs)" in summary
+    assert "| class_addition | enclosing fallback | c:C | excluded | included |" in summary
+    assert "| module_addition | enclosing fallback | d | excluded | included |" in summary
+
+
+def test_nested_added_definition_falls_back_to_existing_method_and_refusals_stay_refusals(
+    tmp_path: Path,
+):
+    before = "class C:\n    def m(self):\n        return 1\n"
+    after = before.replace(
+        "        return 1", "        def inner():\n            pass\n        return 1"
+    )
+    graph, snapshot = scan(tmp_path, {"a.py": before})
+    patch = "".join(
+        difflib.unified_diff(
+            before.splitlines(True), after.splitlines(True), fromfile="a/a.py", tofile="b/a.py"
+        )
+    )
+    mapped = measure.map_targets(graph, snapshot, measure.patch_changes(tmp_path, patch))
+    assert mapped.targets == ("a:C.m",) and mapped.mapping_kind == "enclosing fallback"
+    refused = evaluate(snapshot, "a:C", "a")
+    assert refused["verdict"] == "no split possible"
+    assert refused["diagnostics"][0]["code"] == "coupled_targets"
+
+
+async def committed_demo(parent: Path) -> tuple[Path, str]:
+    root = parent / "demo-repo"
+    root.mkdir()
+    (root / "README.md").write_text("Plain demo files.\n")
+    (root / "module.py").write_text("def f(): return 1\n")
+    await measure._git(parent, "init", "-q")
+    await measure._git(parent, "add", "--", "demo-repo")
+    await measure._git(
+        parent,
+        "-c",
+        "user.name=Split test",
+        "-c",
+        "user.email=split@example.invalid",
+        "commit",
+        "-qm",
+        "Test parent commit",
+    )
+    return root, await measure._git(parent, "rev-parse", "HEAD")
+
+
+@pytest.mark.anyio
+async def test_demo_identity_labels_parent_commit_and_hashes_all_tracked_input_files(
+    tmp_path: Path,
+):
+    root, commit = await committed_demo(tmp_path)
+    identity = await measure.demo_identity(root)
+    hashes = {
+        name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+        for name in ("README.md", "module.py")
+    }
+    expected = hashlib.sha256(
+        "".join(f"{p}\0{h}\n" for p, h in hashes.items()).encode()
+    ).hexdigest()
+    assert identity["input_identity"] == f"demo-repo/ at {commit}"
+    assert identity["parent_commit"] == commit and "commit" not in identity
+    assert identity["content_file_hashes"] == hashes
+    assert identity["content_sha256"] == expected
+    assert identity == await measure.demo_identity(root)
+    (root / "README.md").write_text("Changed demo documentation.\n")
+    await measure._git(tmp_path, "add", "--", "demo-repo/README.md")
+    await measure._git(
+        tmp_path,
+        "-c",
+        "user.name=Split test",
+        "-c",
+        "user.email=split@example.invalid",
+        "commit",
+        "-qm",
+        "Test changed demo content",
+    )
+    assert (await measure.demo_identity(root))["content_sha256"] != expected
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("dirty_path", ["demo-repo/README.md", "untracked.txt"])
+async def test_demo_identity_rejects_dirty_parent_trees(tmp_path: Path, dirty_path):
+    root, _ = await committed_demo(tmp_path)
+    (tmp_path / dirty_path).write_text("Dirty parent tree.\n")
+    with pytest.raises(ValueError, match="clean parent checkout"):
+        await measure.demo_identity(root)
+
+
+@pytest.mark.anyio
+async def test_cli_checks_demo_parent_before_measuring_either_input(tmp_path: Path, monkeypatch):
+    async def fake_git(root, *args):
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(tmp_path)
+        if args[0] == "status":
+            return " M demo-repo/README.md" if root == tmp_path else ""
+        return measure.BOLTONS.commit
+
+    def never_measure(*args, **kwargs):
+        pytest.fail("dirty demo parent must be rejected before measuring")
+
+    monkeypatch.setattr(measure, "_git", fake_git)
+    monkeypatch.setattr(measure, "measure_repository", never_measure)
+    with pytest.raises(ValueError, match="clean parent checkout"):
+        await measure.run(
+            argparse.Namespace(boltons_root=tmp_path / "boltons", demo_root=tmp_path / "demo-repo")
+        )
