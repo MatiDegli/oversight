@@ -64,6 +64,17 @@ Per arm and model repetition, report these fixed criteria with denominators of t
   incomplete selection or no stable selected difference also wait for the person and count as
   questions. Each criterion line includes its unavailable-question count.
 
+The report splits question sources using recorded results only, without model calls:
+each question has exactly one source, in order: `questions_from_tests` when tests fail,
+`questions_from_evidence` when tests pass but evidence is unavailable, and `questions_from_model`
+when tests pass with no unavailable evidence. These three counts sum to `questions`; a question
+on the tests-only arm comes from failing tests. `model_asked` counts patches with at least one
+recorded decision; `unavailable_questions` counts questions with any unavailability, even when
+tests failed or a decision was recorded. `unavailable_causes` counts patches with each cause once,
+regardless of repeated reasons or nodes, in a fixed order (absent causes are omitted; unknown
+reasons count as `other`). Causes can overlap, so their counts need not sum to the question count.
+Both criterion lines append the three source counts; criteria and denominators remain unchanged.
+
 Unprobed cases remain in both denominators and are listed separately. An empty probe never means
 equivalence. Detection reports observed differences separately from intent choices; finding any
 difference does not establish that the labeled unasked difference was detected. Tests-only and
