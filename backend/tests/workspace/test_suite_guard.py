@@ -77,7 +77,8 @@ async def test_profile_targets_and_recording_keep_guard_and_selected_case_argv(
     from oversight.workspace import CallTarget, Workspace
     from oversight.workspace.suite import run_suite
 
-    profile_targets = ("--doctest-modules", "shop", "tests")
+    profile_targets = ("shop", "tests")
+    profile_options = ("--doctest-modules",)
     targets = (CallTarget("shop.mod:value", "shop/mod.py", "value", 1, 2),)
     workspace = Workspace(
         tmp_path / ".runtime",
@@ -85,12 +86,14 @@ async def test_profile_targets_and_recording_keep_guard_and_selected_case_argv(
         pytest_pin="9.1.1",
         demo_python=Path(sys.executable),
         pytest_targets=profile_targets,
+        pytest_options=profile_options,
     )
     argv_seen = []
 
     async def guarded_run(**kwargs: Any):
         assert workspace.operations.holds(main=True)
         assert kwargs["pytest_targets"] == profile_targets
+        assert kwargs["pytest_options"] == profile_options
         assert kwargs["measured_targets"] == targets
         isolated_spawn = kwargs["spawn"]
 
@@ -118,7 +121,10 @@ async def test_profile_targets_and_recording_keep_guard_and_selected_case_argv(
         assert run.problems == () and run.tested_commit is not None and run.tested_tree is not None
         assert run.measured is not None and run.measured.complete and len(run.measured.calls) == 1
         [argv] = argv_seen
-        assert argv[12:] == (("--", *case_ids) if case_ids else profile_targets)
+        assert argv[12:] == (
+            *profile_options,
+            *(("--", *case_ids) if case_ids else profile_targets),
+        )
         assert not list(workspace.tmp_dir.glob("*.calls*"))
     finally:
         workspace.release_runtime()

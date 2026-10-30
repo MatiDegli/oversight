@@ -226,6 +226,7 @@ class Workspace:
         pytest_pin: str,
         demo_python: Path | None = None,
         pytest_targets: tuple[str, ...] = (),
+        pytest_options: tuple[str, ...] = (),
     ) -> None:
         validate_runtime_root(runtime_root)
         if not shutil.rmtree.avoids_symlink_attacks:
@@ -234,6 +235,7 @@ class Workspace:
         self._template = template
         self._pytest_pin = pytest_pin
         self._pytest_targets = pytest_targets
+        self._pytest_options = pytest_options
         self._demo_python = demo_python or runtime_root / "demo-venv" / "bin" / "python"
         self._demo_python_given = demo_python is not None
         self._locks = Locks()
@@ -647,6 +649,7 @@ class Workspace:
                     timeout_s=timeout_s,
                     case_ids=case_ids,
                     pytest_targets=self._pytest_targets,
+                    pytest_options=self._pytest_options,
                     spawn=runner,
                     measured_targets=measured_targets,
                 )
