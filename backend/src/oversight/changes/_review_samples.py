@@ -9,9 +9,12 @@ from oversight_contracts.review import BehaviorDiffRow
 class OutcomeKind:
     before_exception: str | None = None
     after_exception: str | None = None
+    state_only: bool = False
 
     @property
     def description(self) -> str:
+        if self.state_only:
+            return "Leaves the object in a different state"
         if self.before_exception is None:
             return (
                 "Returns a different value"

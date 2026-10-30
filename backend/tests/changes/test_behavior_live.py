@@ -99,7 +99,9 @@ async def test_boundary_change_has_named_differing_rows_and_private_reasons(tmp_
         assert any("quantity=10" in row.call for row in price.rows)
         assert all(not row.unstable for row in price.rows)
         assert len(price.rows) <= 8
-        assert by_id["shop.cart:Cart.total"].reason == "method or class (not probed yet)"
+        assert by_id["shop.cart:Cart.total"].reason is None
+        assert by_id["shop.cart:Cart.total"].compared > 0
+        assert by_id["shop.cart:Cart.total"].differing == 0
         assert by_id["shop.pricing:added"].reason == "added (no base version)"
         facts = next(e.payload for e in s.events() if e.type == "change.facts_recorded")
         assert facts.behavior_diff is not None
@@ -107,7 +109,7 @@ async def test_boundary_change_has_named_differing_rows_and_private_reasons(tmp_
         assert public[price.node_id].differing_count == price.differing
         assert any("quantity=10" in row.inputs for row in public[price.node_id].rows)
         assert all(row.before.startswith('{"kind":"value"') for row in public[price.node_id].rows)
-        assert public["shop.cart:Cart.total"].not_probed == "unsupported node kind"
+        assert public["shop.cart:Cart.total"].not_probed is None
         assert public["shop.pricing:added"].not_probed == "version unavailable"
         for event in s.events():
             if event.type == "change.facts_recorded":
