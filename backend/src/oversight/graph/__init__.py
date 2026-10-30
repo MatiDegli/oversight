@@ -5,6 +5,7 @@ is synchronous and runs no process: callers run the slow ones in a thread.
 """
 
 from oversight.graph._change import change_graph
+from oversight.graph._completeness import FileCompleteness, graph_completeness
 from oversight.graph._delta import DeltaCause, graph_delta
 from oversight.graph._impact import (
     NodeNotFoundError,
@@ -21,12 +22,14 @@ from oversight.graph._workspace import WorkspaceGraph
 __all__ = [
     "CodeVersion",
     "DeltaCause",
+    "FileCompleteness",
     "NodeNotFoundError",
     "TestReach",
     "WorkspaceGraph",
     "call_graph_test_reach",
     "change_cone",
     "change_graph",
+    "graph_completeness",
     "graph_delta",
     "impact_cone",
     "node_cone",

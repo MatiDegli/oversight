@@ -10,6 +10,7 @@ from oversight.changes._behavior_inputs import BehaviorInput, BehaviorInputs, be
 from oversight.changes._grants import GrantNotFound, InvalidGrant
 from oversight.changes._manager import ChangeManager
 from oversight.changes._mode import ModeController
+from oversight.changes._partition import CannotSplit, Split, partition_targets
 from oversight.changes._policy import PolicyInputs, SpendSnapshot
 from oversight.changes._queue import QUEUE_LIMIT, TERMINAL, queued
 from oversight.changes._queue import candidates as queue_candidates
@@ -33,6 +34,7 @@ __all__ = [
     "BehaviorInput",
     "BehaviorInputs",
     "BehaviorRow",
+    "CannotSplit",
     "ChangeManager",
     "ChangeNotFound",
     "DetectionResult",
@@ -50,10 +52,12 @@ __all__ = [
     "RulesEvidence",
     "ShortcutKind",
     "SpendSnapshot",
+    "Split",
     "WrongState",
     "behavior_inputs",
     "build_change_view",
     "detect_shortcuts",
+    "partition_targets",
     "queue_candidates",
     "queue_transition",
     "queued",
