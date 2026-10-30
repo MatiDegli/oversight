@@ -127,8 +127,10 @@ async function checkGeometry(page: Page) {
       diffHeight: diff.getBoundingClientRect().height,
       contextHeight: context.clientHeight,
       overflow: context.scrollWidth > context.clientWidth,
-      nested: [...context.querySelectorAll("*")].some((child) =>
-        /auto|scroll/.test(getComputedStyle(child).overflowY),
+      nested: [...context.querySelectorAll("*")].some(
+        (child) =>
+          !child.closest(".monaco-diff-editor") &&
+          /auto|scroll/.test(getComputedStyle(child).overflowY),
       ),
       measuredOverflow: measured.scrollWidth > measured.clientWidth,
     };
@@ -159,43 +161,53 @@ for (const width of [1920, 1280])
           page.on("pageerror", (error) => errors.push(error.message));
           try {
             await mount(page, theme);
-            const comment = page.getByRole("textbox", { name: "Comment" });
+            const comment = page.getByRole("textbox", { name: "Comment for the agent" });
             await comment.fill("Keep my review comment");
             await publish(page, cases.indexOf(label), summary);
             const measured = page.getByRole("region", {
               name: "Measured callers · Possibly affected",
               exact: true,
             });
-            await measured.waitFor();
             expect(await comment.evaluate((element) => document.activeElement === element)).toBe(
               true,
             );
             expect(await comment.inputValue()).toBe("Keep my review comment");
-            expect(await measured.textContent()).toContain(
-              label === "available"
-                ? "Comparisons available"
-                : label === "partial"
-                  ? "Partial measurements"
-                  : label === "unavailable"
-                    ? "Recording unavailable: suite stopped"
-                    : "Caller measurements not recorded for this revision",
-            );
-            await checkGeometry(page);
-            await measured.evaluate((element) => {
-              const context = element.closest('[aria-label="Review context"]');
-              if (context)
-                context.scrollTop +=
-                  element.getBoundingClientRect().top - context.getBoundingClientRect().top;
-            });
+            if (label !== "absent") await page.getByText("Details", { exact: true }).click();
+            else {
+              expect(await page.getByText("Nothing was compared for this change.").count()).toBe(1);
+              expect(await measured.count()).toBe(0);
+            }
+            if (label !== "absent")
+              expect(await measured.textContent()).toContain(
+                label === "available"
+                  ? "Comparisons available"
+                  : label === "partial"
+                    ? "Partial measurements"
+                    : label === "unavailable"
+                      ? "Recording unavailable: suite stopped"
+                      : "Caller measurements not recorded for this revision",
+              );
+            if (label !== "absent") await checkGeometry(page);
+            if (label !== "absent")
+              await measured.evaluate((element) => {
+                const context = element.closest('[aria-label="Review context"]');
+                if (context)
+                  context.scrollTop +=
+                    element.getBoundingClientRect().top - context.getBoundingClientRect().top;
+              });
             if (process.env.MEASURED_SHOTS === "1")
               await page.screenshot({
                 path: `${shots}review-${theme}-${label}-${String(width)}-${summary ? "summary" : "no-summary"}.png`,
               });
+            await comment.focus();
             await publish(page, 1, summary, true);
-            await checkGeometry(page);
             expect(await comment.evaluate((element) => document.activeElement === element)).toBe(
               true,
             );
+            const details = page.locator(".review-details > details");
+            if ((await details.getAttribute("open")) === null)
+              await details.locator(":scope > summary").click();
+            await checkGeometry(page);
             const panel = page.getByRole("complementary", { name: "Review panel" });
             const header = panel.locator(".review-header");
             expect(await header.getByRole("listitem").count()).toBe(4);
@@ -204,9 +216,10 @@ for (const width of [1920, 1280])
             );
             expect(await header.locator('[aria-label="Possible callers"]').count()).toBe(0);
             expect(await header.locator(".lucide-circle-help").count()).toBe(0);
-            expect(await measured.textContent()).toContain(
-              "Static cone bounds: depth 3 · 40 nodes",
-            );
+            if (label !== "absent")
+              expect(await measured.textContent()).toContain(
+                "Static cone bounds: depth 3 · 40 nodes",
+              );
             expect(errors).toEqual([]);
           } finally {
             await page.close();

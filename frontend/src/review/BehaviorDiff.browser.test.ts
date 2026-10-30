@@ -108,23 +108,16 @@ it.each(cases)(
         });
       const before = await geometry();
       expect(before.diff.height).toBeGreaterThanOrEqual(192);
-      expect(before.diff.y + before.diff.height).toBeLessThanOrEqual(before.decisions.y);
+      // Diff and evidence now share the context scroll; decisions stay pinned.
       expect(before.decisions.y + before.decisions.height).toBeLessThanOrEqual(height);
       expect(before.overflow).toBe(false);
       expect(before.panel.width).toBeLessThanOrEqual(width / 2);
       const behavior = panel.getByRole("region", { name: "Behavior diff", exact: true });
       if (kind === "absent") {
         expect(await behavior.count()).toBe(0);
-        expect(await panel.textContent()).toContain(
-          "Behavior evidence was not recorded for this revision.",
-        );
-        await panel
-          .getByText("Behavior evidence was not recorded for this revision.", { exact: true })
-          .scrollIntoViewIfNeeded();
+        expect(await panel.textContent()).toContain("Nothing was compared for this change.");
       } else {
-        expect(await behavior.textContent()).toContain(
-          "These bounded inputs do not establish equivalence.",
-        );
+        await panel.getByText("Details", { exact: true }).click();
         expect(await behavior.textContent()).not.toMatch(/Same.result/);
         expect(await behavior.locator("details[open]").count()).toBe(0);
         if (kind === "mixed") {
@@ -196,6 +189,9 @@ it.each(cases)(
         },
       );
       expect(await close.evaluate((element) => document.activeElement === element)).toBe(true);
+      const details = panel.locator(".review-details > details");
+      if ((await details.getAttribute("open")) === null)
+        await details.locator(":scope > summary").click();
       const samples = panel.getByRole("region", { name: "Behavior diff", exact: true });
       await samples.locator("summary").click();
       expect(await samples.locator("dd").first().textContent()).toBe(
@@ -213,7 +209,8 @@ it.each(cases)(
       expect(after.close).toEqual(before.close);
       expect(after.decisions).toEqual(before.decisions);
       expect(after.diff.height).toBeGreaterThanOrEqual(192);
-      expect(after.diff.y + after.diff.height).toBeLessThanOrEqual(after.decisions.y);
+      expect(after.diff.height).toBe(260);
+      if (kind === "absent") expect(before.diff.height).toBeGreaterThanOrEqual(400);
       expect(after.overflow).toBe(false);
       expect(errors).toEqual([]);
     } finally {

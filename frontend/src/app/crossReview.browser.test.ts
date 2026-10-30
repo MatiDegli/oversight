@@ -61,7 +61,8 @@ it("keeps watch and typing focus, then invalidates the note on the person's deci
         },
       });
     });
-    await browserExpect(note).toContainText("Needs you");
+    await browserExpect(note).toContainText("fake-scripted-b reviewed this change");
+    await browserExpect(note).toContainText("Review unavailable");
     await browserExpect(comment).toBeFocused();
     await page.keyboard.press("Control+Enter");
     await browserExpect(note).toBeVisible();

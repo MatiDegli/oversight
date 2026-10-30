@@ -6,7 +6,10 @@ import { ReviewDecisionBar } from "./ReviewDecisionBar";
 import { ReviewPanel } from "./ReviewPanel";
 import { headerCases, headerState } from "./ReviewHeader.fixture";
 
-vi.mock("../editor", () => ({ EditorDiff: () => <div>Inline diff</div> }));
+vi.mock("../editor", async () => ({
+  fileKey: (await import("../editor/fileKey")).fileKey,
+  EditorDiff: () => <div>Inline diff</div>,
+}));
 const button = (html: string, name: string) =>
   html.match(new RegExp(`<button[^>]*>(?:(?!</button>).)*${name}</button>`))?.[0] ?? "";
 const cards = headerState("a").changeFacts["change-3"]?.at(-1)?.review_cards ?? [];
@@ -96,4 +99,24 @@ it("preserves read-only replay comments for cards and omits them in ordinary rep
     expect(html.includes("<textarea")).toBe(questions.length > 0);
     if (questions.length) expect(html).toContain('readOnly=""');
   }
+});
+
+it("uses the recorded read-only diff after a rules merge even with live file access", () => {
+  const html = renderToStaticMarkup(
+    <ReviewPanel
+      state={headerState("merged")}
+      changeId="change-1"
+      onClose={vi.fn()}
+      files={{
+        drafts: new Map(),
+        inFlightSaves: new Map(),
+        saved: new Map(),
+        readFile: vi.fn(),
+        saveFile: vi.fn(),
+      }}
+    />,
+  );
+  expect(html).toContain("Merged into main");
+  expect(html).not.toContain("Editable review file");
+  expect(html).not.toContain("review-decision-bar");
 });

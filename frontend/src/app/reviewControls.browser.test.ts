@@ -5,8 +5,11 @@ import { expect, it } from "vitest";
 import { panel, withPage } from "./review.browser.support";
 
 const modifiedInput = (page: Page) =>
-  panel(page).locator(".editor.modified :is(.native-edit-context, textarea.inputarea)");
-const reviewFile = (page: Page) => panel(page).getByLabel("Editable review file");
+  panel(page).locator(
+    ".review-diff-viewport:not([hidden]) .editor.modified :is(.native-edit-context, textarea.inputarea)",
+  );
+const reviewFile = (page: Page) =>
+  panel(page).locator(".review-diff-viewport:not([hidden])").getByLabel("Editable review file");
 async function open(page: Page) {
   await page.getByRole("button", { name: "Review change" }).click();
   await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "clean");
@@ -460,3 +463,27 @@ it.each([
   },
   30_000,
 );
+
+it("keeps dirty review edits blocking decisions while the diff is collapsed", async () => {
+  await withPage(false, async (page) => {
+    await open(page);
+    await typeEdit(page, "\n# person draft\n");
+    const review = panel(page);
+    await review.getByRole("textbox", { name: /Comment/ }).fill("Keep my draft");
+    await review.getByRole("button", { name: /shop\/pricing.py/ }).click();
+    await browserExpect(review.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
+    await browserExpect(
+      review.getByRole("button", { name: "Request changes", exact: true }),
+    ).toBeDisabled();
+    await review.getByRole("button", { name: /shop\/pricing.py/ }).click();
+    await browserExpect(review.getByLabel("Editable review file")).toHaveAttribute(
+      "data-state",
+      "dirty",
+    );
+    await review.getByRole("button", { name: "Discard edits", exact: true }).click();
+    await browserExpect(review.getByRole("button", { name: "Approve and merge" })).toBeEnabled();
+    await browserExpect(
+      review.getByRole("button", { name: "Request changes", exact: true }),
+    ).toBeEnabled();
+  });
+});

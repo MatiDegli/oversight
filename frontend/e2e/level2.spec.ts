@@ -179,6 +179,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
         .getByText("Editable · Inline diff"),
     ).toBeVisible();
     const signals = review.getByRole("region", { name: "Review signals" });
+    await signals.getByText("Details", { exact: true }).click();
     await expect(signals).toContainText("Tests in this change: 0 recorded test changes");
     await expect(signals).not.toContainText("added_tests producer unavailable (package 4)");
     await expect(signals.getByRole("list", { name: "Added test signals" })).toContainText(
@@ -187,7 +188,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await expect(signals).toContainText("(base_probe): passed");
     await expect(signals).toContainText("(head_probe): passed");
     await expect(signals).toContainText("run_findings producer unavailable (package 5)");
-    await expect(signals).toContainText("Signals for your review. You decide.");
+    await expect(signals.locator("details").first()).toHaveAttribute("open", "");
     await expect(signals).toContainText("(agent): passed");
     await expect(signals).toContainText("(proposal): passed");
     await expect(signals).toContainText(`Size: ${String(proposal.files.length)} files`);
