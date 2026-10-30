@@ -2,6 +2,7 @@ import type { ChangeFacts, CrossReview, ServerEvent } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { parseEvent } from "../../transport";
+import { RecordedEvidence } from "./RecordedEvidence";
 import { caseEvidence } from "./caseEvidence";
 import { manifest, validateManifest } from "./manifest";
 import { recording } from "./recording.fixture";
@@ -246,3 +247,63 @@ it.each([PhonePractice, PracticePanel])(
     }
   },
 );
+
+function renderEvidence(source = practice) {
+  return renderToStaticMarkup(
+    <RecordedEvidence practice={source} entry={required(source.cases[0])} />,
+  );
+}
+it("renders execution phases with spaces and preserves the verdict wording", () => {
+  const source = extended(
+    additions.map((event) =>
+      event.type === "tests.executed"
+        ? { ...event, payload: { ...event.payload, phase: "base_probe" } }
+        : event,
+    ),
+  );
+  const html = renderEvidence(source);
+  expect(html).toContain("Execution · base probe");
+  expect(html).not.toContain("base_probe");
+  expect(html).toContain("changes requested");
+});
+it("renders review severities in sentence case without changing finding text", () => {
+  const text = "Check BLOCKING and base_probe exactly as recorded";
+  const source = extended(
+    additions.map((event) =>
+      event.type === "change.reviewed"
+        ? {
+            ...event,
+            payload: {
+              ...event.payload,
+              findings: (["BLOCKING", "SHOULD-FIX", "NIT"] as const).map((severity) => ({
+                severity,
+                text,
+                path: null,
+                line: null,
+                node_id: null,
+              })),
+            },
+          }
+        : event,
+    ),
+  );
+  const html = renderEvidence(source);
+  for (const severity of ["Blocking", "Should-fix", "Nit"])
+    expect(html).toContain(`${severity} · ${text}`);
+});
+it("shows the tested-head caveat only when agent steps are recorded", () => {
+  const caveat =
+    "Agent steps belong to this proposal round; their exact tested heads were not recorded.";
+  expect(renderEvidence()).toContain(caveat);
+  const source = extended();
+  source.events = source.events.filter(
+    (event) => event.type !== "agent.step" || event.payload.tool !== "run_tests",
+  );
+  expect(renderEvidence(source)).toContain("Execution · proposal");
+  expect(renderEvidence(source)).not.toContain(caveat);
+});
+it("labels the final test result Proposal", () => {
+  const html = renderEvidence();
+  expect(html).toContain(">Proposal · passed");
+  expect(html).not.toContain("Proposal result");
+});

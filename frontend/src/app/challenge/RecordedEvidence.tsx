@@ -5,19 +5,22 @@ import { caseEvidence, resolutionText } from "./caseEvidence";
 import "./recordedEvidence.css";
 
 type Evidence = ReturnType<typeof caseEvidence>;
+const words = (value: string) => value.replaceAll("_", " ");
+const severityLabels = { BLOCKING: "Blocking", "SHOULD-FIX": "Should-fix", NIT: "Nit" };
 export const absenceNote =
   "Missing evidence does not establish a clean review, behavior or safety.";
 function TestRuns({ evidence }: { evidence: Evidence }) {
+  const runs = evidence.tests.status === "present" ? evidence.tests.value : [];
   return (
     <>
-      {evidence.tests.status === "present" &&
-        evidence.tests.value.map((run, i) => (
+      <div className="evidence-runs">
+        {runs.map((run, i) => (
           <p key={i}>
             {run.source === "step"
               ? `Step ${String(run.step)}`
               : run.source === "proposal"
-                ? "Proposal result"
-                : `Execution · ${run.phase ?? "unknown phase"}`}{" "}
+                ? "Proposal"
+                : `Execution · ${words(run.phase ?? "unknown phase")}`}{" "}
             · {run.tests.outcome} · {run.tests.passed} passed · {run.tests.failed} failed ·{" "}
             {run.tests.skipped} skipped · {run.tests.duration_ms} ms
             {run.tests.failed_tests.length > 0 && (
@@ -25,10 +28,15 @@ function TestRuns({ evidence }: { evidence: Evidence }) {
             )}
           </p>
         ))}
+      </div>
       {evidence.executions.status === "absent" && (
         <p>Test execution records: Not recorded for this revision and head.</p>
       )}
-      <p>Agent steps belong to this proposal round; their exact tested heads were not recorded.</p>
+      {runs.some((run) => run.source === "step") && (
+        <p>
+          Agent steps belong to this proposal round; their exact tested heads were not recorded.
+        </p>
+      )}
     </>
   );
 }
@@ -61,12 +69,12 @@ function Reviews({ evidence }: { evidence: Evidence }) {
   return evidence.reviews.value.map((review, i) => (
     <div key={i}>
       <p>
-        {review.reviewer_model} · {review.reviewer_provider} · {review.verdict.replaceAll("_", " ")}{" "}
-        · {review.complete ? "complete" : "incomplete"}
+        {review.reviewer_model} · {review.reviewer_provider} · {words(review.verdict)} ·{" "}
+        {review.complete ? "complete" : "incomplete"}
       </p>
       {review.findings.map((finding, j) => (
         <p key={j}>
-          {finding.severity ?? "Unclassified"} · {finding.text}
+          {finding.severity ? severityLabels[finding.severity] : "Unclassified"} · {finding.text}
           {finding.path
             ? ` · ${finding.path}${finding.line ? `:${String(finding.line)}` : ""}`
             : ""}

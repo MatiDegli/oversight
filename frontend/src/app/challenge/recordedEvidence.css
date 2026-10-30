@@ -53,3 +53,12 @@
 .evidence-hash {
   font-family: var(--code-font);
 }
+.evidence-runs {
+  line-height: 20px;
+}
+.evidence-runs p + p {
+  margin-top: 0;
+}
+.evidence-runs + p {
+  margin-top: 6px;
+}
