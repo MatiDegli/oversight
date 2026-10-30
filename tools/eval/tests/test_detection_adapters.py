@@ -228,7 +228,7 @@ async def test_inflight_timeout_retains_unknown_receipt(budget, monkeypatch):
 
     async def handle(request: httpx.Request) -> httpx.Response:
         entered.set()
-        clock.setattr(loop, "time", lambda: deadline + 1)
+        monkeypatch.setattr(loop, "time", lambda: deadline + 1)
         await asyncio.Event().wait()
         raise AssertionError("timed out transport resumed")
 
@@ -241,13 +241,13 @@ async def test_inflight_timeout_retains_unknown_receipt(budget, monkeypatch):
     )
     try:
         # Admission cannot exhaust the deadline; only the in-flight handler advances time.
-        with monkeypatch.context() as clock:
-            clock.setattr(loop, "time", lambda: start)
-            result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
-                INPUT, deadline=deadline
-            )
+        monkeypatch.setattr(loop, "time", lambda: start)
+        result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
+            INPUT, deadline=deadline
+        )
         assert entered.is_set(), "request was never sent: transport handler was not entered"
         assert result.unavailable == "deadline"
         assert budget.receipts == 1 and budget.record.unknown
     finally:
+        monkeypatch.undo()
         await sdk.aclose()
