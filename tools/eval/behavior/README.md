@@ -18,10 +18,13 @@ miss, even when it could not be probed. Keep every unprobed case in the original
 report their count and reasons rather than removing them. An empty probe result means only
 that these inputs measured no difference. It is not proof of unchanged behavior.
 
-The decided probe excludes non-literal arguments, side effects, I/O and randomness. The key's
-reachability flags mean eligibility under those restrictions, not a claim that a bounded input
-set actually detects a case. Some cases require shop objects; two planted cases exercise I/O or
-randomness. Keep development examples separate during tuning and do not tune on bench labels.
+At construction the probe excluded non-literal arguments, side effects, I/O and randomness. The
+key's reachability flags record eligibility under those restrictions, not a claim that a bounded
+input set detects a case. The product now also builds project objects from constructor and
+single-return fixture arguments, so a case flagged unreachable may be probed. Reports use the
+measured unprobed facts, never these flags. Some cases require shop objects; two planted cases
+exercise I/O or randomness. Keep development examples separate during tuning and do not tune on
+bench labels.
 
 The maintainer must label expected behavior from the task and diff **before anyone sees any
 detector output**. Construction intent is in `construction-key.json`, separately from the public
