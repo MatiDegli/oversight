@@ -9,6 +9,7 @@ import { initialView, openChange, openReview } from "./view";
 import type { View } from "./view";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
+import recordedLog from "../../../fixtures/events/recorded-demo.jsonl?raw";
 import twoAgents from "../../../fixtures/events/scripted-level2.jsonl?raw";
 
 const CHANGED = "shop.pricing:compute_price";
@@ -20,6 +21,7 @@ const parse = (raw: string) =>
     .map((line) => JSON.parse(line) as ServerEvent);
 const events = parse(log);
 const both = parse(twoAgents);
+const recorded = parse(recordedLog);
 
 const host = document.createElement("div");
 host.style.height = "100vh";
@@ -67,6 +69,8 @@ function show(state: ReturnType<typeof stateAt>, view: View) {
   flushSync(() => {
     root.render(
       <Frame
+        replayOf={run === recorded ? "real recorded run" : undefined}
+        replayLabel={run === recorded ? "Recorded run · Oct 27, 2026" : undefined}
         state={state}
         view={view}
         onNodeTap={() => undefined}
@@ -97,6 +101,25 @@ export const fieldTest = {
     stateStore.setState({ state });
     shown = viewOf(scene);
     show(state, shown);
+  },
+  /** The real recording has its first merge at 64, rather than 21 in the hand-written fixture. */
+  mountRecording(seq: number) {
+    run = recorded;
+    const state = stateAt(seq, run);
+    stateStore.setState({ state });
+    shown = initialView;
+    show(state, shown);
+  },
+  /** Plays existing events with their original timestamp gaps; no invented events or retiming. */
+  async playTo(seq: number) {
+    const initial = stateStore.getState().state;
+    const origin = Date.parse(initial.clock ?? "");
+    const started = performance.now();
+    for (const event of run.filter((event) => event.seq > initial.lastSeq && event.seq <= seq)) {
+      const remaining = Date.parse(event.ts) - origin - (performance.now() - started);
+      if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+      this.advance(event.seq);
+    }
   },
   /** Applies the recorded events up to `seq`, as live ones would: same screen, field still mounted. */
   advance(seq: number) {

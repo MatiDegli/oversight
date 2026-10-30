@@ -815,6 +815,7 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     // The change waits on an open entry: its steady light is on before the decision.
     expect(await lifeOf(page)).toMatchObject({ pulses: 0, lights: 0 });
     const waiting = await lightMass(page);
+    const waitingNode = (await look(page)).near?.level;
     expect(waiting).toBeGreaterThan(50);
     expect((await fieldPixels(page)).warm).toBeGreaterThan(200);
     await page.evaluate(() => {
@@ -846,10 +847,10 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     expect(mid.stroke?.toLowerCase()).toBe(mid.color.toLowerCase());
     expect(mid.pointer).toBe("none");
     expect(mid.head.every((value) => Number.isFinite(Number(value)))).toBe(true);
-    // The light holds its level through the travel: no dip when the entry closes, no flare either.
+    // The destination keeps its waiting level; the travelling gaussian adds its own LED patch.
+    expect((await look(page)).near?.level).toBe(waitingNode);
     const travelling = await lightMass(page);
-    expect(travelling).toBeGreaterThan(waiting * 0.9);
-    expect(travelling).toBeLessThan(waiting * 1.1);
+    expect(travelling).toBeGreaterThan(waiting * 1.1);
     // Never moves the camera, the focus or a node.
     expect([await camera(), await nodeCenters()]).toEqual(still);
     // The pulse arrives at the node, and its trail fades; then the node's light is up and warm.
@@ -874,6 +875,57 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     expect([await camera(), await nodeCenters()]).toEqual(still);
   });
 }, 120_000);
+
+it.each(["dark", "day"] as const)(
+  "lights square LEDs around the travelling head in %s, excluding drawn masks",
+  async (theme) => {
+    await withPage(
+      { scene: "waiting", clock: true, ...(theme === "day" ? { theme } : {}) },
+      async (page) => {
+        await page.evaluate(() => {
+          window.fieldTest.advance(23);
+        });
+        await page.clock.runFor(250 + 725 - 170);
+        const patch = await page.evaluate(() => {
+          const head = document.querySelector("[data-field-travel] circle");
+          const probe = window.fieldTest.elements().field.oversightField;
+          if (!head || !probe) throw new Error("Missing travelling head");
+          const x = Number(head.getAttribute("cx"));
+          const y = Number(head.getAttribute("cy"));
+          let lit = 0;
+          let orange = 0;
+          for (let cy = Math.floor((y - 19) / 7) * 7 + 3.5; cy < y + 19; cy += 7)
+            for (let cx = Math.floor((x - 19) / 7) * 7 + 3.5; cx < x + 19; cx += 7) {
+              const lamp = probe.lamp(cx, cy);
+              if (lamp && lamp.level > 0) {
+                lit++;
+                if (lamp.color[0] > lamp.color[2]) orange++;
+              }
+            }
+          const bounds = window.fieldTest.elements().field.getBoundingClientRect();
+          const mask = document.createElement("div");
+          mask.dataset.fieldMask = "pulse-test";
+          mask.style.cssText = `position:fixed;pointer-events:none;left:${String(bounds.left + x - 10)}px;top:${String(bounds.top + y - 10)}px;width:21px;height:21px`;
+          document.querySelector(".shell-frame")?.append(mask);
+          return { x, y, lit, orange };
+        });
+        expect(patch.lit).toBeGreaterThan(10);
+        expect(patch.orange).toBe(patch.lit);
+        const masked = await page.evaluate(({ x, y }) => {
+          const probe = window.fieldTest.elements().field.oversightField;
+          const pixel = probe?.pixel(x, y);
+          return { pixel, lamp: probe?.lamp(x, y)?.level };
+        }, patch);
+        expect(masked.lamp).toBe(0);
+        expect(masked.pixel?.[3]).toBe(0);
+        await page.evaluate(() =>
+          document.querySelector('[data-field-mask="pulse-test"]')?.remove(),
+        );
+      },
+    );
+  },
+  60_000,
+);
 
 it("has no travel under reduced motion: the light stays where it was and fades as long", async () => {
   await withPage({ scene: "waiting", reducedMotion: "reduce", clock: true }, async (page) => {
@@ -1136,11 +1188,17 @@ function lampHistogram(page: Page) {
 }
 
 /** Renders the approved interactive reference at 1920 by 1080, still, in a state and a theme. */
-async function referenceShot(state: "rest" | "watch", theme: "dark" | "day", out: string) {
+async function referenceShot(
+  state: "rest" | "watch" | "merge",
+  theme: "dark" | "day",
+  out: string,
+) {
   if (!browser) throw new Error("Browser was not started");
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   try {
-    await page.goto(`file://${referenceFile}?theme=${theme}&freeze=1#${state}`);
+    await page.goto(
+      `file://${referenceFile}?theme=${theme}&${state === "merge" ? "freeze=merge&t=0.975" : "freeze=1"}#${state === "merge" ? "rest" : state}`,
+    );
     await page.waitForFunction(
       () => typeof (window as unknown as { __ft?: number }).__ft === "number",
     );
@@ -1151,7 +1209,7 @@ async function referenceShot(state: "rest" | "watch", theme: "dark" | "day", out
 }
 
 const viewport = { width: 1920, height: 1080 };
-const shots = fileURLToPath(new URL("../../../.shots/life-look/r4/", import.meta.url));
+const shots = fileURLToPath(new URL("../../../.shots/life-look/r6/", import.meta.url));
 const sketches = fileURLToPath(new URL("../../../docs/sketches/life/", import.meta.url));
 
 function busyScene(
@@ -1238,16 +1296,28 @@ it.runIf(captureShots)(
         await busyScene(scene, theme, (page) =>
           shoot(page, `busy-${scene === "both" ? "both-" : ""}${theme}`),
         );
-    await withPage({ scene: "waiting", viewport, clock: true }, async (page) => {
-      await page.evaluate(() => {
-        window.fieldTest.advance(21);
-      });
-      await page.clock.runFor(250 + 725);
-      await shoot(page, "merge-mid");
-    });
+    for (const theme of ["dark", "day"] as const) {
+      await withPage(
+        { scene: "waiting", viewport, clock: true, ...(theme === "day" ? { theme } : {}) },
+        async (page) => {
+          // Events 22 and 23 are 160ms and 170ms after the merge: carry their actual age.
+          await page.evaluate(() => {
+            window.fieldTest.advance(23);
+          });
+          await page.clock.runFor(250 + 725 - 170);
+          await shoot(page, `merge-mid-${theme}`);
+        },
+      );
+    }
     await pair(`${sketches}rest-contour.png`, [60, 200], "rest-dark", [560, 400], "rest-dark");
     await pair(`${sketches}rest-day.png`, [60, 200], "rest-day", [560, 400], "rest-day");
-    await pair(`${sketches}merge-mid.png`, [480, 200], "merge-mid", [560, 200], "merge-mid");
+    await pair(
+      `${sketches}merge-mid.png`,
+      [480, 200],
+      "merge-mid-dark",
+      [560, 200],
+      "merge-mid-dark",
+    );
   },
   240_000,
 );
@@ -1259,7 +1329,15 @@ it.runIf(captureShots && existsSync(referenceFile))(
     await referenceShot("rest", "day", `${shots}reference-rest-day.png`);
     await referenceShot("watch", "dark", `${shots}reference-busy-dark.png`);
     await referenceShot("watch", "day", `${shots}reference-busy-day.png`);
-    for (const theme of ["dark", "day"]) {
+    for (const theme of ["dark", "day"] as const) {
+      await referenceShot("merge", theme, `${shots}reference-merge-mid-${theme}.png`);
+      await pair(
+        `${shots}reference-merge-mid-${theme}.png`,
+        [480, 200],
+        `merge-mid-${theme}`,
+        [560, 200],
+        `reference-merge-mid-${theme}`,
+      );
       const sketch = `${shots}reference-busy-${theme}.png`;
       await pair(sketch, BUSY_AT.sketch, `busy-${theme}`, BUSY_AT.shot, `busy-${theme}`);
       // Both agents: each gets its own window because the product's lights sit further apart.

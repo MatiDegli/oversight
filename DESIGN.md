@@ -1074,7 +1074,14 @@ card, runs along the graph's edges to the merged node with a short trail that fa
 stays lit), and arrives. The node's light, which held the level the change had from the decision, then fades as in
 Agent light (a rejection sends no pulse; its light fades from the decision). The travel is drawn above
 the graph, clipped by the field mask, and never moves the camera, opens a panel or takes focus.
-Under reduced motion there is no travel: the light is there at once and fades over the same time.
+The travel also lights the LED field: one point at the head and five behind it at 20px steps of
+actual path length, including corners and clamped at the start. Each contributes a gaussian
+`I = i * exp(-d² / (2r²))`, with `i = 0.95 * (1 - k/6)^1.4`, `k = 0..5`, and `r = 19px`.
+At most 12 points enter the common light and color sums before the four-level 8×8 dither and
+per-level agent-color ramp; only cells within three radii are visited. The LEDs keep their 7px
+square grid and use the drawn lamp masks (overlays and header bands); the SVG is unchanged.
+Points stop at arrival; the SVG trail still fades as before. No new idle animation is scheduled.
+Under reduced motion there is no travel or point light: the node light is there at once and fades over the same time.
 
 **What is out of the life layer** (maintainer, 2026-10-29): click waves, a hover flashlight,
 borders that follow the pointer, button flashes, a boot sweep (at most a 0.5s fade-in) and

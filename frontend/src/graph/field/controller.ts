@@ -26,6 +26,7 @@ import {
   terrainConfig,
 } from "./terrain";
 import type { Contours, Heights, Hill, TerrainConfig, TerrainModule } from "./terrain";
+import { pulseLights } from "./pulseLights";
 import { approachPath, TravelLayer } from "./travel";
 import { FieldTransition } from "./transition";
 import { sameLights } from "./lights";
@@ -270,19 +271,20 @@ class FieldRuntime implements FieldController {
       const masks = this.source.headers ? [...this.masks, ...this.source.headers()] : this.masks;
       this.drawnMasks = masks;
       const time = this.reducedMotion ? null : (this.frozen ?? now / 1000);
+      const points = this.drawPulses(now, width, height);
       this.grid = this.lamps(
         this.source.zoom ? signalConfig(config, this.source.zoom()) : config,
         width,
         height,
         placed,
         time,
+        points,
       );
       const contours = this.contours(this.grid, width, height, time);
       this.renderer.draw(this.grid, this.look, masks, contours);
       // A marker is a letter above the graph, as the sketch's DOM marker is: only the overlays clip it,
       // never a frame header or a folded card it sits on.
       this.markerLayer.draw(lights, boxes, this.masks, width, height);
-      this.drawPulses(now, width, height);
       this.paintedAt = now;
       this.draws += 1;
     } catch (error) {
@@ -370,6 +372,7 @@ class FieldRuntime implements FieldController {
       }
     }
     this.travelLayer.draw(pulses, paths, this.masks, width, height, this.afterlight);
+    return pulseLights(pulses, paths, this.theme);
   }
 
   private slowInterval() {

@@ -278,6 +278,13 @@ const baseThemes = {
     "merge-trail-faint": "72px",
     "merge-trail-fade": "350ms",
     "merge-pulse-width": "1.6px",
+    // Gaussian LEDs carried by each travelling head, shared by both themes.
+    "pulse-light-count": 6,
+    "pulse-light-spacing": "20px",
+    "pulse-light-intensity": 0.95,
+    "pulse-light-curve": 1.4,
+    "pulse-light-radius": "19px",
+    "pulse-light-limit": 12,
 
     // Monaco-only syntax and code highlights: intentionally absent from CSS.
     "syntax-plain": "#d8d7d0",

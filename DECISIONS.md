@@ -1549,7 +1549,15 @@ tests scan, rolling numbers, top-edge light, focus glow and button press are par
 4. **In, part 1:** the merge travels: a pulse leaves the agent's rail card, runs along the graph's
    edges to its node with a short fading trail, then the node's light fades as in point 1, with a
    soft falloff and never a hard or blocky edge (merge-mid.png's hard top edge is a known flaw).
-   It never moves the camera or takes focus. Reduced motion: no travel; the light appears and fades.
+   The maintainer clarified on 2026-10-29 at about 21:17 ART that the travel also lights the LED
+   field, as in the sketch: six points, the head plus five every 20px behind it along the actual
+   path (corners included, clamped at the start), with intensity `0.95 * (1 - k/6)^1.4` for
+   `k = 0..5` and radius 19px. At most 12 points contribute `i * exp(-d² / (2r²))` before the
+   common four-level 8×8 dither and agent-color ramp; only cells within three radii are touched.
+   These keep the same 7px square LEDs and drawn lamp masks (overlays and header bands). The SVG
+   line and head stay as they were; points end at arrival, and add no idle animation. Other
+   milestone emitters are deferred. It never moves the camera or takes focus. Reduced motion:
+   no travel or point lights; the node light appears and fades.
 5. **Build:** one WebGL2 canvas draws the lamps and the contours; the heights are computed on the
    CPU at a coarse grid and sampled by the shader, so the contour cost does not grow with the graph.
    Without WebGL2 the graph keeps plain ground and no contours. Text keeps 4.5:1 and never sits on

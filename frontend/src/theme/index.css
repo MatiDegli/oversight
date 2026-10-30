@@ -339,6 +339,12 @@
   --merge-trail-faint: 72px;
   --merge-trail-fade: 350ms;
   --merge-pulse-width: 1.6px;
+  --pulse-light-count: 6;
+  --pulse-light-spacing: 20px;
+  --pulse-light-intensity: 0.95;
+  --pulse-light-curve: 1.4;
+  --pulse-light-radius: 19px;
+  --pulse-light-limit: 12;
 }
 
 /* Register only the design radii; remove Tailwind's default radii. */

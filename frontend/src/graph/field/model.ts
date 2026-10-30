@@ -2,6 +2,7 @@
 // the lit nodes' boxes, and which of four levels its lamp shows after an 8 by 8 ordered dither. The
 // canvas only draws the result, so everything DESIGN.md's "Dot field and rings" says about light is
 // tested here without a GPU. Every number comes from a theme token.
+import type { PulseLight } from "./pulseLights";
 import { lightBoxKey } from "./marker";
 import type { FieldLight, FieldMode, LightSource } from "./lights";
 import { breathing, motionOf, ringFade, ringRadiusAt } from "./motion";
@@ -73,6 +74,7 @@ export interface FieldConfig {
   /** The most lights mixed at once. */
   limit: number;
   lampOff: Rgb;
+  colors: Record<LightSource, string>;
   profile: LightProfile;
   motion: Motion;
 }
@@ -121,6 +123,7 @@ export function fieldConfig(theme: FieldTheme, mode: FieldMode): FieldConfig {
     farShare: theme["light-far-weight"],
     limit: theme["light-source-limit"],
     lampOff: parseHex(theme["lamp-off"]),
+    colors: theme,
     profile: {
       near: px(theme["signal-light-near"]),
       far: px(theme["signal-light-far"]),
@@ -358,6 +361,38 @@ function addLight(
   }
 }
 
+/** Adds a point gaussian only within three radii, before the common dither and color ramp. */
+function addPointLight(
+  config: FieldConfig,
+  cols: number,
+  rows: number,
+  light: PulseLight,
+  work: Accumulated,
+) {
+  const { x, y, radius } = light;
+  if (radius <= 0 || light.intensity <= 0) return;
+  const reach = 3 * radius;
+  const c0 = Math.max(0, Math.floor((x - reach) / config.cell));
+  const c1 = Math.min(cols - 1, Math.floor((x + reach) / config.cell));
+  const r0 = Math.max(0, Math.floor((y - reach) / config.cell));
+  const r1 = Math.min(rows - 1, Math.floor((y + reach) / config.cell));
+  const [red, green, blue] = parseHex(config.colors[light.source]);
+  for (let row = r0; row <= r1; row++) {
+    const dy = (row + 0.5) * config.cell - y;
+    for (let col = c0; col <= c1; col++) {
+      const dx = (col + 0.5) * config.cell - x;
+      const squared = dx * dx + dy * dy;
+      if (squared > reach * reach) continue;
+      const intensity = light.intensity * Math.exp(-squared / (2 * radius * radius));
+      const at = row * cols + col;
+      work.sum[at] = (work.sum[at] ?? 0) + intensity;
+      work.red[at] = (work.red[at] ?? 0) + intensity * red;
+      work.green[at] = (work.green[at] ?? 0) + intensity * green;
+      work.blue[at] = (work.blue[at] ?? 0) + intensity * blue;
+    }
+  }
+}
+
 /**
  * Makes the function that lights the cells. It keeps its working arrays between calls, and the
  * grid it returns is one of them: it is valid until the next call.
@@ -378,6 +413,7 @@ export function createLampField() {
     height: number,
     lights: readonly PlacedLight[],
     time: number | null,
+    points: readonly PulseLight[] = [],
   ): LampGrid {
     const cols = Math.max(1, Math.ceil(width / config.cell));
     const rows = Math.max(1, Math.ceil(height / config.cell));
@@ -416,6 +452,7 @@ export function createLampField() {
       addLight(config, cols, rows, one, time, work);
     }
     decays = retained;
+    for (const light of points) addPointLight(config, cols, rows, light, work);
     shadeLamps(config, cols, rows, work, work.data, work.glow);
     return { cols, rows, data: work.data, glow: work.glow };
   };

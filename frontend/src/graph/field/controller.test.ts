@@ -589,6 +589,43 @@ describe("a merge's pulse and light", () => {
     controller.dispose();
   });
 
+  it.each(["agent-a", "agent-b"] as const)(
+    "lights the travelling head's LEDs in %s, under the drawn masks",
+    async (team) => {
+      const real = await vi.importActual<typeof import("./model")>("./model");
+      vi.mocked(createLampField).mockReturnValue(real.createLampField());
+      Object.assign(canvas, { clientWidth: 700, clientHeight: 300 });
+      let headers: { x1: number; y1: number; x2: number; y2: number }[] = [];
+      const wide = {
+        ...source,
+        boxes: () => new Map([["a", { x1: 50, y1: 120, x2: 60, y2: 140 }]]),
+        headers: () => headers,
+      } as unknown as BoxSource;
+      const controller = createFieldController(canvas, wide);
+      controller.update({ mode: "watch", lights: [], merges: [] });
+      controller.update({ ...live, merges: [{ ...merge, source: team }] });
+      advance(look.delay + look.travel / 2);
+      // The path runs from x=700 to x=60: eased halfway is x=140, far from the target's light.
+      const lamp = canvas.oversightField?.lamp(143.5, 129.5);
+      expect(lamp?.level).toBeGreaterThan(0);
+      const color = lamp?.color ?? [0, 0, 0];
+      if (team === "agent-a") expect(color[0]).toBeGreaterThan(color[2]);
+      else expect(color[2]).toBeGreaterThan(color[0]);
+      headers = [{ x1: 133, y1: 119, x2: 154, y2: 140 }];
+      controller.redraw();
+      expect(canvas.oversightField?.lamp(143.5, 129.5)?.level).toBe(0);
+      expect(renderer.draw.mock.calls.at(-1)?.[2]).toEqual(headers);
+      // Switching motion off mid-flight clears the emitter and the SVG immediately.
+      media.matches = true;
+      media.dispatchEvent(new Event("change"));
+      expect(canvas.oversightField?.life().pulses).toBe(0);
+      headers = [];
+      controller.redraw();
+      expect(canvas.oversightField?.lamp(143.5, 129.5)?.level).toBe(0);
+      controller.dispose();
+    },
+  );
+
   it("has no pulse under reduced motion: the light is whole at once and fades as long", () => {
     media.matches = true;
     const controller = createFieldController(canvas, source);
