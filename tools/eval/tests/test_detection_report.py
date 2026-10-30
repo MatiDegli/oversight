@@ -13,10 +13,13 @@ from tools.eval.ledger import Record
 from oversight_contracts.review import ChangeTarget
 
 
-def record(index, *, unavailable=False, rep=1, pilot=False):
+def record(index, *, unavailable=False, rep=1, pilot=False, profile="baseten"):
     patch_id = f"b{index:02}"
     identity: dict = dict(
-        arm_id="detect-4-v3", repetition=rep, config_hash="config", attempt_id=f"a{index}-{rep}"
+        arm_id="detect-1" if profile == "none" else "detect-4-v3",
+        repetition=rep,
+        config_hash="config",
+        attempt_id=f"a{index}-{rep}",
     )
     evidence = DetectionEvidence(
         patch_id=patch_id,
@@ -34,7 +37,7 @@ def record(index, *, unavailable=False, rep=1, pilot=False):
     )
     result = Result(
         **identity,
-        profile="baseten",
+        profile=profile,
         task_id="behavior:" + patch_id,
         agent_model="fake",
         outcome="stopped",
@@ -47,7 +50,7 @@ def record(index, *, unavailable=False, rep=1, pilot=False):
     )
     return Record(
         **identity,
-        profile="baseten",
+        profile=profile,
         task_id=result.task_id,
         task_hash="patch",
         run_id="run",
@@ -146,6 +149,7 @@ def test_question_sources_and_per_row_causes():
     group = report["classification"]["groups"]["unasked_difference"]
     assert group["model_asked"] == 2  # Includes a decision with incomplete evidence.
     assert group["questions_from_model"] == group["unavailable_questions"] == 1
+    assert group["questions_from_evidence"] == 1 and group["questions_from_tests"] == 0
     assert group["questions"] == 2 and group["let_through"] == 1
     assert list(group["unavailable_causes"].items()) == [
         ("probe unavailable", 1),
@@ -155,10 +159,45 @@ def test_question_sources_and_per_row_causes():
     assert report["classification"]["groups"]["only_asked"]["unavailable_causes"] == {}
     assert report["criteria"] == [
         "Unasked differences let through: 1/10; criterion 0; unavailable questions 1/10; "
-        "questions from the model 1/10",
+        "questions from failing tests 0/10, missing evidence 1/10, the model 1/10",
         "Only-asked needless questions: 0/10; criterion <=2; unavailable questions 0/10; "
-        "questions from the model 0/10",
+        "questions from failing tests 0/10, missing evidence 0/10, the model 0/10",
     ]
+
+
+@pytest.mark.parametrize("failed_tests_unavailable", [False, True])
+def test_question_sources_partition_each_group_with_tests_only(failed_tests_unavailable):
+    rows = [
+        record(i, profile="none" if i % 10 == 1 else "baseten")
+        for i in (1, 2, 3, 4, 11, 12, 13, 14)
+    ]
+    for index, row in enumerate(rows):
+        assert row.result is not None and row.result.detection is not None
+        evidence = row.result.detection
+        if index % 4 == 0:
+            evidence.tests_passed = False
+            row.result.test_result.baseline = "failed"
+        if index % 4 == 1 or (index % 4 == 0 and failed_tests_unavailable):
+            evidence.unavailable = ["probe unavailable"]
+        if index % 4 == 3:
+            evidence.question, evidence.let_through = False, True
+    for group in repetition(rows, ANSWERS)["classification"]["groups"].values():
+        sources = [group[f"questions_from_{source}"] for source in ("tests", "evidence", "model")]
+        assert sources == [1, 1, 1]
+        assert sum(sources) == group["questions"] == 3
+        assert group["unavailable_questions"] == 1 + failed_tests_unavailable
+        assert group["model_asked"] == 0
+        assert group["unavailable_causes"] == {"probe unavailable": 1 + failed_tests_unavailable}
+
+
+def test_review_timeout_is_distinct_from_decision_timeout():
+    assert reporting.cause("review cards: module:fn: deadline") == "review deadline"
+    for reason in (
+        "deadline",
+        "module:fn: deadline",
+        "review cards: module:fn: unavailable (deadline)",
+    ):
+        assert reporting.cause(reason) == "decision unavailable: deadline"
 
 
 @pytest.mark.parametrize(

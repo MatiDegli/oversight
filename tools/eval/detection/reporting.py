@@ -4,6 +4,7 @@ import re
 from collections import Counter
 
 from tools.eval.detection.config import ARMS, PROTOCOL, SUPERSEDED_ARMS
+from tools.eval.detection_types import DetectionEvidence
 from tools.eval.ledger import Record
 from tools.eval.report import metrics
 from tools.eval.tasks import BenchError
@@ -30,6 +31,7 @@ _CAUSES = {
         f"review cards {status}": rf"{status}; \d+/\d+ classified"
         for status in ("pending", "truncated", "failed")
     },
+    "review deadline": r"review cards: .+: deadline",
     "review deadline exhausted": r"review deadline exhausted; remaining nodes unclassified",
     "classification identity mismatch": r"classification identity mismatch",
     "contractual card limit": r"contractual card limit",
@@ -70,10 +72,32 @@ _CAUSES = {
 
 def cause(reason: str) -> str:
     """Normalize one recorded unavailability reason; preserve unknown reasons as other."""
+    if re.fullmatch(_CAUSES["review deadline"], reason):
+        return "review deadline"
     if not reason.startswith("isolation unavailable: "):
         reason = reason.removeprefix("review cards: ").rsplit(": ", 1)[-1]
     return next(
         (name for name, pattern in _CAUSES.items() if re.fullmatch(pattern, reason)), "other"
+    )
+
+
+def _question_sources(rows: list[DetectionEvidence]) -> dict[str, int]:
+    return {
+        "questions_from_tests": sum(r.question and not r.tests_passed for r in rows),
+        "questions_from_evidence": sum(
+            r.question and r.tests_passed and bool(r.unavailable) for r in rows
+        ),
+        "questions_from_model": sum(
+            r.question and r.tests_passed and not r.unavailable for r in rows
+        ),
+    }
+
+
+def _question_suffix(group: dict) -> str:
+    return (
+        f"; questions from failing tests {group['questions_from_tests']}/10, "
+        f"missing evidence {group['questions_from_evidence']}/10, "
+        f"the model {group['questions_from_model']}/10"
     )
 
 
@@ -98,7 +122,7 @@ def repetition(records: list[Record], answers: dict[str, str]) -> dict:
             "questions": sum(r.question for r in selected),
             "unavailable_questions": sum(r.question and bool(r.unavailable) for r in selected),
             "model_asked": sum(bool(r.decisions) for r in selected),
-            "questions_from_model": sum(r.question and not r.unavailable for r in selected),
+            **_question_sources(selected),
             "unavailable_causes": {
                 name: causes[name] for name in (*_CAUSES, "other") if causes[name]
             },
@@ -113,11 +137,11 @@ def repetition(records: list[Record], answers: dict[str, str]) -> dict:
         "criteria_passed": complete and missed["let_through"] == 0 and needless["questions"] <= 2,
         "criteria": [
             f"Unasked differences let through: {missed['let_through']}/10; criterion 0; "
-            f"unavailable questions {missed['unavailable_questions']}/10; "
-            f"questions from the model {missed['questions_from_model']}/10",
+            f"unavailable questions {missed['unavailable_questions']}/10"
+            + _question_suffix(missed),
             f"Only-asked needless questions: {needless['questions']}/10; criterion <=2; "
-            f"unavailable questions {needless['unavailable_questions']}/10; "
-            f"questions from the model {needless['questions_from_model']}/10",
+            f"unavailable questions {needless['unavailable_questions']}/10"
+            + _question_suffix(needless),
         ],
         "detection": {
             "groups": {
