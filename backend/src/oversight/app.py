@@ -50,7 +50,14 @@ from oversight.api import (
     create_router,
     install_error_handlers,
 )
-from oversight.changes import ChangeManager, ReviewCapture, ReviewCardLimits, Revision, WrongState
+from oversight.changes import (
+    ChangeManager,
+    ChangeNotFound,
+    ReviewCapture,
+    ReviewCardLimits,
+    Revision,
+    WrongState,
+)
 from oversight.events import (
     EventPayload,
     EventStore,
@@ -106,6 +113,7 @@ from oversight_contracts.events import (
     SlotInfo,
     UsageTick,
 )
+from oversight_contracts.graph import GraphSnapshot
 
 _log = logging.getLogger(__name__)
 
@@ -902,6 +910,11 @@ class LiveRun:
             raise ApiError("internal", "the run has not started")
         return await self._manager.read_file(agent_id, path)
 
+    def change_graph(self, change_id: str) -> GraphSnapshot:
+        if self._manager is None:
+            raise ChangeNotFound(change_id)
+        return self._manager.change_graph(change_id)
+
     async def get_tree(self, agent_id: str | None) -> TreeResponse:
         tree = self.workspace.main
         if agent_id is not None:
@@ -990,6 +1003,7 @@ def _live_app(
             "live",
             live,
             missing_settings=missing_settings(settings, offered_profiles(settings)),
+            change_graph=live.change_graph,
         )
     )
     if settings.frontend_dist is not None:
@@ -1056,5 +1070,6 @@ def _replay_app(settings: Settings, replay: ReplayConfig) -> FastAPI:
                 await store.close()
 
     app = FastAPI(title="Oversight (replay)", lifespan=lifespan)
+    app.state.store = store
     app.include_router(create_router(store, "replay"))
     return app

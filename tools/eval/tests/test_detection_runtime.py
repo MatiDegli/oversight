@@ -69,9 +69,12 @@ async def test_dev_patch_product_facts_and_disposable_cleanup(arm, tmp_path, mon
 
 
 @pytest.mark.anyio
-async def test_dev_actual_bounded_probe_or_real_isolation_unavailability(tmp_path):
+@pytest.mark.parametrize("patch_id, calls_model", [("d01", True), ("d02", False)])
+async def test_dev_actual_bounded_probe_or_real_isolation_unavailability(
+    tmp_path, patch_id, calls_model
+):
     arm = ARMS[3]
-    patch = next(p for p in load_patches() if p.id == "d01")
+    patch = next(p for p in load_patches() if p.id == patch_id)
     rates = {p: Tariff(input=0, output=0) for p in ("meta", "baseten")}
     config = arm.configuration(True, rates)
     ledger = Ledger(tmp_path / "results.jsonl", 20, None, multi_tariff=True)
@@ -86,7 +89,15 @@ async def test_dev_actual_bounded_probe_or_real_isolation_unavailability(tmp_pat
         assert nodes
         assert any(n.compared_count > 0 or n.not_probed for n in nodes)
         assert result.question
+        if any(reason.startswith("isolation unavailable:") for reason in result.unavailable):
+            pytest.skip("real isolation unavailable; model reachability cannot be measured")
+        assert bool(budget.sends) is calls_model
+        assert bool(result.decisions) is calls_model
+        if not calls_model:
+            assert result.unavailable == ["no stable selected difference to classify"]
+            assert budget.sends == budget.receipts == 0
         for decision in result.decisions:
+            assert decision.diagnostics is not None
             assert decision.difference is not None
             assert decision.difference.differing_count == 1
             assert len(decision.difference.rows) == 1

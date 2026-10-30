@@ -1,4 +1,4 @@
-import { selectSignalLights } from "../graph";
+import { selectMerges, selectModules, selectSignalLights } from "../graph";
 import type { FieldInput, FieldScope } from "../graph";
 import type { State } from "../state";
 import { litNodeIds } from "./view";
@@ -20,8 +20,14 @@ export function fieldScope(state: State, view: View): FieldScope {
   return { mode: "watch" };
 }
 
-/** The mode and the agent signals, independently of the graph's cone. */
+/**
+ * The mode and the agent signals, independently of the graph's cone, plus what the life layer
+ * reads from the state: the merges that travel and light their node, and the modules the rest
+ * contours rise over.
+ */
 export const fieldInput = (state: State, view: View): FieldInput => ({
   mode: fieldScope(state, view).mode,
   lights: selectSignalLights(state, state.lastReads),
+  merges: selectMerges(state),
+  modules: selectModules(state.graph),
 });

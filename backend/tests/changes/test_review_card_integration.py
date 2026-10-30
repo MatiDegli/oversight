@@ -78,7 +78,14 @@ async def test_measured_callers_and_edited_nodes_replay_from_sqlite_without_work
         refs = []
         for card in final.payload.review_cards:
             assert card.evidence_seq == first.seq
-            assert card.question == "Oversight could not tell whether this was asked for"
+            question = "Oversight could not tell whether this was asked for"
+            if card.node_id in direct:
+                node = next(n for n in first.payload.behavior_diff if n.node_id == card.node_id)
+                question += (
+                    f". Returns a different value, for {node.differing_count} "
+                    f"of {node.differing_count} differing inputs."
+                )
+            assert card.question == question
             ref = ReviewCardDecisionRef(
                 kind="review_card",
                 change_id=final.payload.change_id,

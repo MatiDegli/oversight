@@ -326,6 +326,7 @@ async def test_published_measurements_reject_forged_projection_revision_and_exec
         summary_evidence=capture_summary(rec, added_test_ids=()),
         measured=rec.measured_cones[target.revision],
         impact=impact,
+        reach=facts.reach,
     )
     validate_change_facts(facts, captured)
     assert facts.summary == build_change_facts(replace(captured, measured=None)).summary

@@ -818,7 +818,7 @@
         },
         "compared_count": {
           "default": 0,
-          "description": "Inputs compared on both sides with equal typed inputs.",
+          "description": "Inputs compared on both sides with equal typed inputs over shared parameters when\nomitted candidate-only parameters have literal or resolved constant defaults.",
           "minimum": 0,
           "title": "Compared Count",
           "type": "integer"
@@ -915,7 +915,7 @@
         },
         "compared_count": {
           "default": 0,
-          "description": "Inputs compared on both sides with equal typed inputs.",
+          "description": "Inputs compared on both sides with equal typed inputs over shared parameters when\nomitted candidate-only parameters have literal or resolved constant defaults.",
           "minimum": 0,
           "title": "Compared Count",
           "type": "integer"

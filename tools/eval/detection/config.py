@@ -95,16 +95,16 @@ ARMS = (
     Arm("detect-1", "none", "tests-only"),
     Arm("detect-2-v2", "meta", "task/diff", completion_limit()),
     Arm("detect-3-v2", "meta", "behavior-Spark", completion_limit()),
-    Arm("detect-4-v2", "baseten", "behavior-Spark-Open", completion_limit()),
+    Arm("detect-4-v3", "baseten", "behavior-Spark-Open", completion_limit()),
 )
 
 
-SUPERSEDED_ARMS = {"detect-2", "detect-3", "detect-4"}
+SUPERSEDED_ARMS = {"detect-2", "detect-3", "detect-4", "detect-4-v2"}
 PILOT_PATCHES = {
     "tests-only": "d01",
     "task/diff": "d02",
     "behavior-Spark": "d01",
-    "behavior-Spark-Open": "d02",
+    "behavior-Spark-Open": "d01",
 }
 
 

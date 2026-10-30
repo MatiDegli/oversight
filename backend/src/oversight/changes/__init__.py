@@ -20,6 +20,7 @@ from oversight.changes._shortcut_detector import (
     detect_shortcuts,
 )
 from oversight.changes._state import ChangeNotFound, Revision, WrongState
+from oversight.changes._view import build_change_view, read_agent_status, read_change_view
 
 __all__ = [
     "BehaviorDiff",
@@ -45,5 +46,8 @@ __all__ = [
     "SpendSnapshot",
     "WrongState",
     "behavior_inputs",
+    "build_change_view",
     "detect_shortcuts",
+    "read_agent_status",
+    "read_change_view",
 ]

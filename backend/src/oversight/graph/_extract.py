@@ -467,7 +467,7 @@ class _Facts:
 
     def _enter_class(self, cls: ast.ClassDef) -> None:
         node_id = self.nodes.ids.get(id(cls))
-        bases = tuple(ref for b in cls.bases if (ref := self._ref(b)) is not None)
+        bases = tuple(ref for b in cls.bases if (ref := self._base_ref(b)) is not None)
         scope = _Scope("class", class_id=node_id)
         self.stack.append(scope)
         self.owners.append(node_id or self.owners[-1])
@@ -478,6 +478,12 @@ class _Facts:
             bindings = {name: tuple(b) for name, b in scope.bindings.items()}
             assigned = frozenset(self.assigned.get(node_id, ()))
             self.classes[node_id] = ClassFacts(bindings=bindings, bases=bases, assigned=assigned)
+
+    def _base_ref(self, expr: ast.expr) -> CallRef | None:
+        """A base is evaluated in the enclosing scope; `Base[T]` names the class `Base`."""
+        if isinstance(expr, ast.Subscript):
+            expr = expr.value
+        return self._ref(expr) if isinstance(expr, ast.Name | ast.Attribute) else None
 
     def _class_body(self, scope: _Scope, body: list[ast.stmt]) -> None:
         """Visit a class body in order, binding each statement's names after it runs: unlike a

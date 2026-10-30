@@ -142,13 +142,13 @@ def test_pilot_mapping_and_inputs_follow_roles_not_ids(monkeypatch):
         ("tests-only", "d01"),
         ("task/diff", "d02"),
         ("behavior-Spark", "d01"),
-        ("behavior-Spark-Open", "d02"),
+        ("behavior-Spark-Open", "d01"),
     ]
     task_config = jobs[1][2]
     assert task_config["input_fields"] == ["target", "task", "diff", "behavior_evidence"]
     assert task_config["no_behavior"]
     assert not jobs[0][1].behavior and all(j[1].behavior for j in jobs[2:])
-    assert [a.id for a in ARMS] == ["detect-1", "detect-2-v2", "detect-3-v2", "detect-4-v2"]
+    assert [a.id for a in ARMS] == ["detect-1", "detect-2-v2", "detect-3-v2", "detect-4-v3"]
 
 
 @pytest.mark.anyio
@@ -166,7 +166,7 @@ async def test_superseded_pilots_remain_charged_and_v2_is_immutable(tmp_path, mo
             if r.arm_id == "detect-1":
                 continue
             identity = {
-                "arm_id": r.arm_id.removesuffix("-v2"),
+                "arm_id": r.arm_id.split("-v")[0],
                 "config_hash": "old-config",
                 "attempt_id": "old-" + r.attempt_id,
             }
@@ -199,7 +199,7 @@ async def test_superseded_pilots_remain_charged_and_v2_is_immutable(tmp_path, mo
             "detect-1": 0,
             "detect-2-v2": 0.073536,
             "detect-3-v2": 0.073536,
-            "detect-4-v2": 0.155072,
+            "detect-4-v3": 0.155072,
         }
         assert estimate["worst_case_per_job_usd"] == pytest.approx(worst)
         assert estimate["pilot_per_job_usd"] == {a.id: 0 for a in ARMS}

@@ -438,7 +438,7 @@ def test_calls_through_a_class_name_look_up_its_bases(tmp_path: Path) -> None:
     assert summary(snap, "m:use") == {"m:Base.label": "exact"}
 
 
-def test_edges_are_only_imports_and_calls_and_merge_by_strength(tmp_path: Path) -> None:
+def test_edges_include_inheritance_and_merge_calls_by_strength(tmp_path: Path) -> None:
     _, snap = scan(
         tmp_path,
         {
@@ -453,7 +453,7 @@ def test_edges_are_only_imports_and_calls_and_merge_by_strength(tmp_path: Path) 
             """,
         },
     )
-    assert {e.kind for e in snap.edges} == {"imports", "calls"}
+    assert {e.kind for e in snap.edges} == {"imports", "calls", "inherits"}
     assert summary(snap, "b:Child.go") == {"a:Base.run": "exact"}
 
 

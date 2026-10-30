@@ -383,7 +383,7 @@ def test_shape_facts_allow_file_observations_without_a_node() -> None:
 
 async def recorded_event_paths(root: Path, *, env: dict[str, str] | None = None) -> list[Path]:
     result = await run_process(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.jsonl"],
+        ["git", "ls-files", "-z", "--cached", "--", "*.jsonl"],
         cwd=root,
         timeout_s=10,
         env=env,
@@ -397,27 +397,31 @@ async def recorded_event_paths(root: Path, *, env: dict[str, str] | None = None)
 
 
 @pytest.mark.anyio
-async def test_recorded_event_discovery_respects_git_ignore(tmp_path: Path) -> None:
+@pytest.mark.parametrize("tracked_name", ["tracked log.jsonl", "tracked\nlog.jsonl"])
+async def test_recorded_event_discovery_reads_tracked_files_only(
+    tmp_path: Path, tracked_name: str
+) -> None:
     result = await run_process(["git", "init", "--quiet"], cwd=tmp_path, timeout_s=10)
     assert result.returncode == 0, result.stdout + result.stderr
     (tmp_path / ".gitignore").write_text(".eval-output/\n.shots/\n")
-    tracked = tmp_path / ".shots" / "tracked log.jsonl"
+    tracked = tmp_path / ".shots" / tracked_name
     tracked.parent.mkdir()
     tracked.write_text("{}\n")
     result = await run_process(
         ["git", "add", "--force", "--", str(tracked)], cwd=tmp_path, timeout_s=10
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    untracked = tmp_path / "fixtures" / "new\nlog.jsonl"
-    untracked.parent.mkdir()
-    untracked.write_text("{}\n")
+    for name in ("fixtures/scratch.jsonl", "fixtures/new\nlog.jsonl"):
+        untracked = tmp_path / name
+        untracked.parent.mkdir(parents=True, exist_ok=True)
+        untracked.write_text("{}\n")
     for name in (".eval-output/bench/results.jsonl", ".shots/scan-log.jsonl"):
         ignored = tmp_path / name
         ignored.parent.mkdir(parents=True, exist_ok=True)
         ignored.write_text("{}\n")
     (tmp_path / "other.txt").write_text("not an event log")
 
-    assert set(await recorded_event_paths(tmp_path)) == {tracked, untracked}
+    assert set(await recorded_event_paths(tmp_path)) == {tracked}
 
 
 @pytest.mark.anyio

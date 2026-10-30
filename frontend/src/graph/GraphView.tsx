@@ -442,7 +442,13 @@ export function GraphView({
   // everything the graph draws is painted over it.
   return (
     <div className="relative h-full w-full bg-ground">
-      <DotField source={boxes} mode={field.mode} lights={field.lights} />
+      <DotField
+        source={boxes}
+        mode={field.mode}
+        lights={field.lights}
+        merges={field.merges}
+        modules={field.modules}
+      />
       <div
         ref={container}
         className="relative h-full w-full"

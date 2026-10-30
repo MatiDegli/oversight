@@ -18,7 +18,7 @@ from tools.eval.detection.config import (
 )
 from tools.eval.detection.engine import CANONICAL_OUTPUT, run_plan
 from tools.eval.detection.labels import load_labels
-from tools.eval.detection.reporting import summarize, superseded_pilots
+from tools.eval.detection.reporting import paid_run_gate, sensitivity, summarize, superseded_pilots
 from tools.eval.grade import Tariff
 from tools.eval.ledger import Ledger, State
 from tools.eval.paths import output_path
@@ -76,7 +76,10 @@ def provider_factory(env_file: Path):
 def parser_for() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "command", nargs="?", choices=["dry-run", "pilot", "run", "report"], default="dry-run"
+        "command",
+        nargs="?",
+        choices=["dry-run", "pilot", "run", "report", "sensitivity"],
+        default="dry-run",
     )
     parser.add_argument("--labels", type=Path)
     parser.add_argument("--labels-sha256")
@@ -86,6 +89,7 @@ def parser_for() -> argparse.ArgumentParser:
         "--fake-choice", choices=["asked_for", "not_asked_for", "cannot_tell", "unavailable"]
     )
     parser.add_argument("--out", type=Path, default=CANONICAL_OUTPUT)
+    parser.add_argument("--against", type=Path)
     parser.add_argument("--cap-usd", type=float, default=20)
     parser.add_argument("--meta-input-usd", type=float)
     parser.add_argument("--meta-output-usd", type=float)
@@ -102,16 +106,20 @@ def parser_for() -> argparse.ArgumentParser:
 
 
 def validated_labels(args):
-    if args.command not in {"run", "report"}:
+    if args.command not in {"run", "report", "sensitivity"}:
         return None
     if args.labels is None or args.labels_sha256 is None:
         raise BenchError("--labels and --labels-sha256 are required for scored execution")
     labels = load_labels(args.labels, args.labels_sha256)
-    forbidden = [args.out, args.out.parent / "ledger.json", args.out.parent / "ledger.lock"]
-    if args.labels.resolve() in {
-        p.resolve() for p in forbidden
-    } or args.labels.resolve().is_relative_to((args.out.parent / "detection").resolve()):
-        raise BenchError("labels must be outside writable accounting paths")
+    outputs = [args.out]
+    if args.command == "sensitivity" and args.against is not None:
+        outputs.append(args.against)
+    for out in outputs:
+        forbidden = [out, out.parent / "ledger.json", out.parent / "ledger.lock"]
+        if args.labels.resolve() in {
+            p.resolve() for p in forbidden
+        } or args.labels.resolve().is_relative_to((out.parent / "detection").resolve()):
+            raise BenchError("labels must be outside writable accounting paths")
     return labels
 
 
@@ -179,6 +187,30 @@ def execute(args, labels, rates, assumptions):
         ledger.close()
 
 
+def compare_passes(args, labels) -> dict:
+    if args.against is None:
+        raise BenchError("sensitivity requires --against for the second ledger")
+    states = [history(out, args.cap_usd, ready=False) for out in (args.out, args.against)]
+    for state in states:
+        if state is None:
+            raise BenchError("sensitivity needs two existing ledgers")
+        pins = [
+            r.result.detection.labels_sha256
+            for r in state.records
+            if not r.pilot and r.result and r.result.detection
+        ] + [
+            p.get("labels_sha256")
+            for p in state.plans.values()
+            if p.get("kind") == "detection" and not p.get("pilot")
+        ]
+        if any(pin != labels.sha256 for pin in pins):
+            raise BenchError("sensitivity labels pin differs from recorded scoring inputs")
+    first, second = states
+    assert first is not None and second is not None
+    result = sensitivity(first.records, second.records, labels.answers)
+    return result | paid_run_gate(result)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser_for().parse_args(argv)
     try:
@@ -186,7 +218,9 @@ def main(argv: list[str] | None = None) -> int:
         labels = validated_labels(args)
         if args.fake and args.paid:
             raise BenchError("--fake and --paid are mutually exclusive")
-        if args.command == "report":
+        if args.command == "sensitivity":
+            result = compare_passes(args, labels)
+        elif args.command == "report":
             state = history(args.out, args.cap_usd, ready=False)
             if state is None:
                 raise BenchError("report needs an existing ledger")
