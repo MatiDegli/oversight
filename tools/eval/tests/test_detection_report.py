@@ -9,6 +9,7 @@ from tools.eval.detection_types import DecisionEvidence, DetectionEvidence, Vali
 from tools.eval.grade import Result, Tokens
 from tools.eval.grade import Tests as SuiteTests
 from tools.eval.ledger import Record
+from tools.eval.tasks import BenchError
 
 from oversight_contracts.review import ChangeTarget
 
@@ -245,3 +246,100 @@ def test_reason_causes_strip_node_ids_and_counts(reason, expected):
 def test_each_decision_unavailable_stage_has_a_cause(stage):
     for reason in (stage, f"module:fn: {stage}", f"review cards: module:fn: unavailable ({stage})"):
         assert reporting.cause(reason) == f"decision unavailable: {stage}"
+
+
+def fake_pass(choice, unavailable=4):
+    rows = []
+    for arm in ("detect-3-v2", "detect-4-v3"):
+        for i in range(1, 21):
+            row = record(i, unavailable=i > 20 - unavailable)
+            row = row.model_copy(update={"arm_id": arm})
+            assert row.result is not None and row.result.detection is not None
+            evidence = row.result.detection
+            evidence.configuration = {"fake": True, "fake_choice": choice}
+            evidence.let_through = choice == "asked_for" and not evidence.unavailable
+            evidence.question = not evidence.let_through
+            rows.append(row)
+    return rows
+
+
+def test_sensitivity_pairs_by_arm_repetition_patch_and_ignores_pilots():
+    first, second = fake_pass("asked_for"), fake_pass("not_asked_for")
+    second.pop()
+    second.reverse()
+    first.append(record(1, pilot=True))
+    first.append(first[0].model_copy(update={"repetition": 2}))
+    before = [r.model_dump_json() for r in first + second]
+    result = reporting.sensitivity(first, second, ANSWERS)
+    assert [r.model_dump_json() for r in first + second] == before
+    assert result["fake_choices"] == {"first": "asked_for", "second": "not_asked_for"}
+    reps = result["arms"]["detect-4-v3"]["repetitions"]
+    assert reps["1"]["groups"] == {
+        "unasked_difference": {"paired": 10, "model_sensitive": 10, "unpaired": []},
+        "only_asked": {"paired": 9, "model_sensitive": 6, "unpaired": ["b20"]},
+    }
+    assert result["arms"]["detect-3-v2"]["repetitions"]["2"]["groups"]["unasked_difference"] == {
+        "paired": 0,
+        "model_sensitive": 0,
+        "unpaired": ["b01"],
+    }
+    assert not reporting.paid_run_gate(result)["paid_run_allowed"]
+
+
+@pytest.mark.parametrize("defect", ["same", "paid", "mixed", "duplicate"])
+def test_sensitivity_refuses_invalid_fake_passes(defect):
+    first, second = fake_pass("asked_for"), fake_pass("not_asked_for")
+    if defect == "same":
+        second = fake_pass("asked_for")
+    elif defect == "paid":
+        second[0].result.detection.configuration["fake"] = False
+    elif defect == "mixed":
+        second[0].result.detection.configuration["fake_choice"] = "cannot_tell"
+    else:
+        second.append(second[0])
+    with pytest.raises(BenchError, match=r"fake|duplicate"):
+        reporting.sensitivity(first, second, ANSWERS)
+
+
+@pytest.mark.parametrize(
+    ("unavailable", "defect", "allowed"),
+    [
+        (4, "none", True),
+        (5, "none", False),
+        (4, "no_flip", False),
+        (4, "failed_first", True),
+        (4, "failed_second", True),
+        (4, "unequal", False),
+    ],
+)
+def test_paid_run_gate_fixed_threshold(unavailable, defect, allowed):
+    first, second = fake_pass("asked_for", unavailable), fake_pass("not_asked_for", unavailable)
+    if defect in {"no_flip", "failed_first", "failed_second"}:
+        first[0].result.detection.let_through = False
+        if defect.startswith("failed"):
+            rows = first if defect == "failed_first" else second
+            rows[0].result.detection.tests_passed = False
+    if defect == "unequal":
+        second[-1].result.detection.unavailable = []
+    for rows in (first, second):
+        dev = rows[0].model_copy(deep=True)
+        dev.result.detection.patch_id = "d01"
+        rows.extend([dev, record(1, unavailable=True, pilot=True)])
+    result = reporting.sensitivity(first, second, ANSWERS | {"d01": "unasked_difference"})
+    gate = reporting.paid_run_gate(result)
+    assert gate["paid_run_allowed"] is allowed
+    assert bool(gate["failed_conditions"]) is not allowed
+    report = result["arms"]["detect-4-v3"]["repetitions"]["1"]["passes"]
+    for name, count in (("first", unavailable), ("second", unavailable - (defect == "unequal"))):
+        assert report[name]["unavailable_questions"] == {
+            "count": count,
+            "ids": [
+                f"b{i:02}"
+                for i in range(21 - unavailable, 21)
+                if name == "first" or defect != "unequal" or i != 20
+            ],
+        }
+        assert report[name]["flips"]["count"] == 20 - unavailable
+        assert report[name]["evidence_alone"]["count"] == unavailable
+    if defect == "no_flip":
+        assert any("b01" in reason for reason in gate["failed_conditions"])

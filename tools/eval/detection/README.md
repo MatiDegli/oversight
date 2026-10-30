@@ -111,6 +111,13 @@ uses the same flags plus the external label path and pin. Tests-only runs once p
 execution. Resuming skips completed identities and never retries an interrupted reservation.
 Fake outcomes test plumbing and must never be presented as provider measurements.
 
+Run the fake measurement in two sequential passes, `--fake --fake-choice asked_for` and
+`--fake --fake-choice not_asked_for`, with separate output directories. Compare their recorded
+ledgers using `sensitivity --out FIRST/results.jsonl --against SECOND/results.jsonl` with the
+same `--labels` and `--labels-sha256` pin as `report`: `model_sensitive` counts paired non-pilot
+cases whose `let_through` flips. This read-only comparison spends nothing, makes no model call,
+and reports the maintainer's fixed paid-run gate and failures without starting a run.
+
 ## Future paid gate and durable accounting
 
 Paid execution additionally requires `--paid`, finite positive Meta and Baseten tariffs,
