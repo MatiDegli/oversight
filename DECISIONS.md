@@ -2045,3 +2045,42 @@ remain within US$25. P6: queuing keeps the execution constraints; per-check resu
 questions keyed by decision identity; agent-hours from elapsed run intervals; parallelism as the
 concurrent-agent count over time, wall time apart. Reason: freeze tasks, definitions and reporting before
 seeing results; later rules are marked added after run start.
+## 2026-10-30 — Merge authority: the person's approval or rules they set
+
+The maintainer set PRODUCT.md's success sentence, which item 8 of docs/additions.md required before rules mode
+can be enabled: "A change reaches main only with your approval or by meeting rules you set; its review then
+shows the rules and grants that let it in, and Revert undoes it in one step when it applies cleanly." It
+replaces "nothing reaches main without their decision" in Product Purpose, and the first product principle
+now names the same two authorities. README.md keeps "Nothing reaches main without the person's approval"
+while rules mode stays closed by default, and changes when the mode can be enabled.
+
+Reason: rules mode merges a change without a separate approval, so a product statement that requires the
+person's decision for every merge would contradict it. Naming both authorities, with a review that shows what
+let the change in and a Revert that undoes it, keeps the person in control.
+
+## 2026-10-30 — Order after contracts 1.8.0, and when plans split
+
+The maintainer set the order of the next fronts:
+
+- Contracts 1.8.0 first, with two plan passes in parallel: item 11 (queue, dispatcher and one-subtask plans
+  first; completeness, partition and targets second) and the lead.
+- Then 11a (queue, dispatcher and plan service with one-subtask plans) and the producer of
+  `model.attempt_failed`.
+- Then the lead, which depends on 11a and item 8, not on 11b or the plan view.
+- 11b (completeness evidence and the partition) runs only if a free measurement on Boltons and the demo
+  repository, under the completeness rule below, shows that splits actually happen; otherwise it waits until
+  after proof 2. The plan view follows 11a and does not block proof 2.
+- While the partitioner has two zones, plans use one or two subtasks; six is for the lead.
+- Item 8 continues with the merge mode's isolated start capability, closed by default today, and the
+  merge-mode routes.
+- No other contract change before proof 2 unless a front cannot work without it.
+
+Completeness is conservative. The graph counts as complete only if every Python file the graph scan finds
+was parsed, with none skipped for size, syntax or encoding. The scan's own exclusions (hidden directories,
+`__pycache__`, symbolic links, a module shadowed by its package) are not gaps. An unresolved possible call
+between two zones counts as a conflict, and any doubt falls back to one agent. The partitioner may stay at two
+zones first.
+
+Reason: one-subtask plans and the queue give the lead a path to proof 2 that does not wait on splitting, and
+splitting is built only if it happens on the repositories proof 2 uses. A wrong split costs a conflict the
+person has to resolve, so doubt falls back to one agent.

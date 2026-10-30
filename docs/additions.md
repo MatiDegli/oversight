@@ -341,7 +341,8 @@ Ask me still waits on every change. Optional rules mode merges only with complet
 evidence, recorded reasons and clean one-click Revert. The server retests a moved base; failures
 or conflicts become Needs you. Models can add reasons to wait, never waive a deterministic rule.
 
-Before enabling rules mode, `PRODUCT.md` needs a maintainer-approved success sentence covering the person's decision or a rule they set as the authority for every merge.
+`PRODUCT.md`'s success sentence, set by the maintainer on 2026-10-30, names the person's approval or a rule
+they set as the authority for every merge; rules mode stays closed by default until its remaining pieces land.
 
 Main has policy profiles, the P2b-1 scheduler (`9f70622`), reservation (`5dac67c`), merge transaction
 (`73b4f65`) and final race barriers (`7aec7d5`). Reservation and the transaction are wired through
