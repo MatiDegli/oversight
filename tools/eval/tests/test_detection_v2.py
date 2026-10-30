@@ -14,10 +14,10 @@ from tools.eval.detection import __main__ as cli
 from tools.eval.detection.accounting import pilot_projection
 from tools.eval.detection.adapters import Adapter
 from tools.eval.detection.config import ARMS, Assumptions, fingerprint, projection
-from tools.eval.detection.diagnostics import DetectionClient
 from tools.eval.detection.engine import jobs_for, run_plan
 from tools.eval.detection.product_limits import completion_limit
 from tools.eval.detection.reporting import summarize
+from tools.eval.detection.transport import TransportClient
 from tools.eval.grade import Tariff
 from tools.eval.ledger import Ledger
 from tools.eval.tasks import BenchError
@@ -97,7 +97,7 @@ async def test_product_allowance_is_hashed_and_sent(budget, monkeypatch, arm):
         },
     )
     api = FakeApi(ok(body(model=config["model"])))
-    real_client = DetectionClient
+    real_client = TransportClient
 
     def simulated_client(*args, **kwargs):
         return real_client(
@@ -106,8 +106,9 @@ async def test_product_allowance_is_hashed_and_sent(budget, monkeypatch, arm):
             http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(api.handle)),
         )
 
-    monkeypatch.setattr("tools.eval.detection.diagnostics.DetectionClient", simulated_client)
+    monkeypatch.setattr("tools.eval.detection.transport.TransportClient", simulated_client)
     sdk = cli.provider_factory(Path("/unused/.env"))(arm)
+    sdk.budget = budget
     try:
         adapter = Adapter(arm, budget, client=sdk)
         if arm.behavior:
@@ -264,8 +265,9 @@ def test_dry_projection_prints_both_bounds_and_uses_larger():
 async def test_sdk_timeout_is_deadline(budget, attempts):
     request = httpx.Request("POST", "https://decision.test/v1/chat/completions")
     api = FakeApi(openai.APITimeoutError(request=request))
-    sdk = DetectionClient(
+    sdk = TransportClient(
         MUSE_SPARK_OPEN,
+        budget=budget,
         base_url="https://decision.test/v1",
         api_key="test",
         max_output_tokens=completion_limit(),
