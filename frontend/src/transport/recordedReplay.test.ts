@@ -24,6 +24,7 @@ afterEach(() => {
 });
 
 describe("recorded replay build gate", () => {
+  // These tests start uv and the Python validator process.
   it("refuses a corrupt copy with the validator's RecordError reason", () => {
     const path = join(tempDir(), "corrupt.jsonl");
     copyFileSync(recording, path);
@@ -33,7 +34,7 @@ describe("recorded replay build gate", () => {
     expect(() => loadRecordedReplay(path)).toThrow(
       `Recorded replay refused: recorded replay refused: invalid event at line 1; ${advice}`,
     );
-  });
+  }, 20_000);
 
   it("reports ENOENT for an injected missing interpreter without changing PATH", () => {
     const missing = join(tempDir(), "missing-uv");
@@ -70,7 +71,7 @@ describe("recorded replay build gate", () => {
     expect(loaded.endsWith(";")).toBe(true);
     const bundled = JSON.parse(loaded.slice("export default ".length, -1)) as { text: string };
     expect(bundled.text === readFileSync(recording, "utf8")).toBe(true);
-  });
+  }, 20_000);
 
   it.each([
     { failure: { code: "ETIMEDOUT", signal: "SIGTERM" }, reason: "ETIMEDOUT" },
