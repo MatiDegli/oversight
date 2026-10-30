@@ -22,7 +22,6 @@ prompts, and feature APIs and examples belong in tools/eval/proof2/tasks.json, n
 The check and validate commands and hidden checks belong in tools/eval/proof2/; the first
 front is tools/proof2-checks-1, followed by the bug and tests-only checks front.
 
-Task ids in tools/eval/proof2/tasks.json are p01 to p16, in the order below.
 Issue numbers refer to Boltons' GitHub issues.
 
 | Task | Kind | Area (Boltons module) | Issue | Open upstream PR |
@@ -45,20 +44,21 @@ Issue numbers refer to Boltons' GitHub issues.
 | 16 | feature | typeutils | #289 | none |
 
 D2: the seven features (4, 5, 6, 9, 11, 13 and 16) use the agreed API and examples frozen in
-that manifest. Freeze all hidden checks and seeded mutants before seeing agent output; keep
-checks outside the product workspace. Agents have no network.
+that manifest.
+
+Freeze all hidden checks before seeing agent output; keep checks outside the product workspace
+(`DECISIONS.md:1376-1378`). Agents have no network.
 
 Queue parallel pairs 1-2, 3-4, 5-6, 7-8, 9-10, 11-12 and 13-14. Task 15 runs after task 5;
 task 16 runs alone. Queuing all tasks does not bypass these execution constraints.
 
-D3: a tests-only task (10, 12, 14 and 15) is correct only when its new tests pass on the base
+D3: a tests-only task (10, 12, 14 and 15) is correct when its new tests pass on the base
 code, fail on at least two of three seeded mutants written and frozen before the run, and
 make no production code changes.
 
 D4: tasks with open upstream PRs stay: 1 (#613), 2 (#614), 3 (#676), 7 (#662), 8 (#661) and
 13 (#687). The run stays pinned at d31d821; hidden checks come from the issue, never the PR.
-Replace a task only if its issue is resolved before the run; freeze and record the replacement
-before starting, without consulting agent output.
+Replace a task only if its issue is resolved before the run.
 
 ## How the run goes
 
@@ -99,8 +99,7 @@ A cited finding with no location is counted apart, as not locatable. Hidden chec
 
 New regression has two separate counts: a hidden check that passes at the task's base commit
 and fails at this revision, and one that passed at the previous reviewed revision and fails at
-this one. Run hidden checks on every reviewed revision. No previous reviewed revision means
-the second comparison is unavailable, not zero. Preserve per-check results and revision ids.
+this one. Run hidden checks on every reviewed revision. Preserve per-check results and revision ids.
 
 P3, questions that were not needed: A question was not needed when two things hold:
 
@@ -115,17 +114,26 @@ revisions, by item 10's attribution.
 
 ## What the report measures
 
+Report every result as a count with its n. A percentage appears only for 10 or more cases.
+
 **E1.** When cross-review passes, sends back or stops a change, how often is it right?
-Report all four cells of clean/changes_requested by hidden-check pass/fail per change and reviewed revision; unknown verdicts against both outcomes separately; P4 review cost.
-Source: hidden checks and change.reviewed (`contracts/src/oversight_contracts/events.py:584-589`); verdicts: `contracts/src/oversight_contracts/review.py:76`.
+Report all four cells of clean/changes_requested by hidden-check pass/fail per change and reviewed
+revision; unknown verdicts against both outcomes separately; P4 review cost.
+Source: hidden checks and change.reviewed (`contracts/src/oversight_contracts/events.py:584-589`);
+verdicts: `contracts/src/oversight_contracts/review.py:76`.
 
 **E2.** Does the next round fix the cited problem without a new regression?
-Report rounds, P2 fixes and not-locatable findings, both regression counts, and hidden checks per round.
-Source: E1 reviews, revision diffs, hidden checks, and revision requests' review_seq (`contracts/src/oversight_contracts/events.py:291-294`).
+Report rounds, P2 fixes and not-locatable findings, both regression counts, and hidden checks per
+round.
+Source: E1 reviews, revision diffs, hidden checks, and revision requests' review_seq
+(`contracts/src/oversight_contracts/events.py:291-294`).
 
-**E3.** Among patches with passing tests, how many change behavior nobody asked for, and of what kind?
+**E3.** Among patches with passing tests, how many change behavior nobody asked for, and of what
+kind?
 Report proof 3's counts and measurable denominator, split by difference kind below.
-Source: task specification and change.facts_recorded behavior_diff (`contracts/src/oversight_contracts/events.py:593-598`; `contracts/src/oversight_contracts/review.py:401-402`).
+Source: task specification and change.facts_recorded behavior_diff
+(`contracts/src/oversight_contracts/events.py:593-598`;
+`contracts/src/oversight_contracts/review.py:401-402`).
 
 **E4.** Why does the person get asked? Report questions per accepted change, split by the
 three causes below; apply P3 and count grants separately. Source: originating inbox entries,
@@ -150,8 +158,10 @@ causes, not runtime availability.
 
 **E5.** What does a correct change cost with Oversight versus merging the first green patch?
 Report both arms' cost and wall time per correct change, by role, including failed and rejected
-work; report agent-hours and parallelism. This is the headline: overhead paid versus regressions stopped.
-Source: item 10 attribution, usage.tick roles (`contracts/src/oversight_contracts/events.py:376-395`),
+work; report agent-hours and parallelism. This is the headline: overhead paid versus regressions
+stopped.
+Source: item 10 attribution, usage.tick roles
+(`contracts/src/oversight_contracts/events.py:376-395`),
 revision and merge timestamps, and hidden checks. Agent-hours sum agent elapsed run intervals;
 parallelism reports the concurrent-agent count over time, with wall time measured separately.
 Price source: Meta's official pricing page. The repository stores only the extracted table,
@@ -160,11 +170,16 @@ That table is item 10's future work. Baseten is a lower bound; unknown costs sta
 
 **E6.** How reliable is each model as an agent backend? Per model and host, count 429 and
 capacity errors per agent-hour, retries, halts after retries, and malformed tool calls.
-Source: future contracts 1.8.0 events model.attempt_failed and agent.step.error_kind; these are not on main 37cbe9e and must land before the run.
+Source: future contracts 1.8.0 events model.attempt_failed and agent.step.error_kind; these are not
+on main 37cbe9e and must land before the run.
 
 **E7.** Does the server's evidence agree when the agent says it is done?
-Compare files, tests_run and tests with the server's diff and test run; count agreement, disagreement and omitted claims separately per field. Never parse prose with a model; declarations are agent claims, never evidence.
-Source: FinishDeclaration (`contracts/src/oversight_contracts/review.py:113-121`), facts (`contracts/src/oversight_contracts/review.py:376-381`), Git diffs and tests.executed (`contracts/src/oversight_contracts/events.py:602-607`).
+Compare files, tests_run and tests with the server's diff and test run; count agreement,
+disagreement and omitted claims separately per field. Never parse prose with a model; declarations
+are agent claims, never evidence.
+Source: FinishDeclaration (`contracts/src/oversight_contracts/review.py:113-121`), facts
+(`contracts/src/oversight_contracts/review.py:376-381`), Git diffs and tests.executed
+(`contracts/src/oversight_contracts/events.py:602-607`).
 
 ## Proof 3 inside this run
 
@@ -182,23 +197,26 @@ Do not repeat the run to improve the result.
 Which harness changes remove which failures? Compare harness_pack on and off with the same
 model, reasoning and limits in the bench's paid run, within its US$20 cap, outside proof 2's
 US$25. Configuration: `tools/eval/arms.py:19-24`. The gate is paid_run_gate in
-`tools/eval/detection/reporting.py:363-387`, using two free fake-model passes over all 20 labelled cases:
+`tools/eval/detection/reporting.py:363-387`, using two free fake-model passes over all 20 labelled
+cases:
 
 - in each pass, at most four cases end as "question not available";
 - both passes have the same count;
 - every case labelled unasked_difference whose tests pass in both passes flips between them.
 
 Bring the numbers to the maintainer before any paid call. Passing the gate does not itself
-start or authorize a paid run. H1 reports bench failures by arm, not proof 2 hidden-check outcomes.
+start or authorize a paid run.
 
 ## The lead (L1-L3)
 
 L1 asks whether the plan holds: count subtasks redone, re-split or in conflict; zone overlaps;
 and acceptance at round 0, against tasks the person started. Source: the future lead's plan and
 execution history; plan.updated, queue.updated and lead.status have contract envelopes at
-`contracts/src/oversight_contracts/events.py:577-581` and `contracts/src/oversight_contracts/events.py:620-635`.
+`contracts/src/oversight_contracts/events.py:577-581` and
+`contracts/src/oversight_contracts/events.py:620-635`.
 L2 asks what share of spend goes to planning: lead calls against execution calls, by item 10's
-attribution. Keep the disjoint agent/review/plan/lead roles (`contracts/src/oversight_contracts/review.py:332-344`).
+attribution. Keep the disjoint agent/review/plan/lead roles
+(`contracts/src/oversight_contracts/review.py:332-344`).
 Without the lead, report L1-L2 as not measured, and count the 16 person-queued starts as decisions.
 L3, whether the lead cuts the person's decisions, is future work.
 
