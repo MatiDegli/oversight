@@ -45,6 +45,7 @@ class Budget:
         self.usage = Usage(tariff)
         self.receipts = 0
         self.sends = 0
+        self.admitted = 0
 
     async def admission(self) -> None:
         if any(r.unknown for r in self.ledger.state.records):
@@ -58,12 +59,17 @@ class Budget:
             or self.ledger.spent + self.per_send > self.ledger.state.cap_usd
         ):
             raise DecisionUnavailable("budget_blocked")
+        self.admitted += 1
+        self.persist()
+
+    def sent(self) -> None:
         self.sends += 1
         self.persist()
 
     def persist(self) -> None:
         self.ledger.state.plans.setdefault("detection-receipts", {})[self.record.attempt_id] = {
-            "admitted": self.sends,
+            "admitted": self.admitted,
+            "sends": self.sends,
             "receipts": self.receipts,
         }
         self.ledger.save()

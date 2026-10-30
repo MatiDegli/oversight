@@ -108,6 +108,7 @@ async def test_product_allowance_is_hashed_and_sent(budget, monkeypatch, arm):
 
     monkeypatch.setattr("tools.eval.detection.diagnostics.DetectionClient", simulated_client)
     sdk = cli.provider_factory(Path("/unused/.env"))(arm)
+    sdk.budget = budget
     try:
         adapter = Adapter(arm, budget, client=sdk)
         if arm.behavior:
@@ -266,6 +267,7 @@ async def test_sdk_timeout_is_deadline(budget, attempts):
     api = FakeApi(openai.APITimeoutError(request=request))
     sdk = DetectionClient(
         MUSE_SPARK_OPEN,
+        budget=budget,
         base_url="https://decision.test/v1",
         api_key="test",
         max_output_tokens=completion_limit(),

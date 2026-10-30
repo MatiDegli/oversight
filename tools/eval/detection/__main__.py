@@ -46,7 +46,6 @@ def provider_factory(env_file: Path):
         META_BASE_URL,
         MUSE_SPARK,
         MUSE_SPARK_OPEN,
-        DecisionClient,
     )
     from oversight.settings import read_env_file
 
@@ -54,7 +53,7 @@ def provider_factory(env_file: Path):
 
     from tools.eval.detection.diagnostics import DetectionClient
 
-    def create(arm: Arm) -> DecisionClient:
+    def create(arm: Arm) -> DetectionClient:
         profile, url, key = (
             (MUSE_SPARK, META_BASE_URL, "META_API_KEY")
             if arm.profile == "meta"

@@ -6,9 +6,10 @@ from dataclasses import dataclass, field
 
 import openai
 from openai.types.chat import ChatCompletion
+from tools.eval.detection.accounting import Budget
 from tools.eval.detection_types import CallDiagnostics, ValidationStage
 
-from oversight.agents import DecisionClient, ModelReply
+from oversight.agents import DecisionClient, DecisionUnavailable, ModelReply
 from oversight.agents.client import EmptyChoicesError, reply_of, usage_of
 from oversight.agents.decision import CHOICES
 
@@ -66,7 +67,14 @@ CURRENT_TRACE: ContextVar[Trace | None] = ContextVar("detection_trace", default=
 class DetectionClient(DecisionClient):
     """Retain only bounded metadata before SDK envelope checks; no response persistence."""
 
+    def __init__(self, *args, budget: Budget | None = None, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.budget = budget
+
     async def _completion(self, params: dict[str, object]) -> ChatCompletion:
+        if self.budget is None:
+            raise DecisionUnavailable("budget_unconfigured")
+        self.budget.sent()  # Durable before the first await can enter the transport.
         try:
             completion = await super()._completion(params)
         except openai.APITimeoutError as error:
