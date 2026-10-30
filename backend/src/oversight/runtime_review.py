@@ -174,6 +174,8 @@ async def review(
                 author_reply_models=models,
                 ready_time=ready_time,
                 record=accounting.record,
+                agent_id=proposal.agent_id,
+                publish=live._publish,
             )
         else:
             outcome = await live._reviewer(

@@ -22,6 +22,7 @@ import httpx2 as httpx
 import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
+from oversight.agents._attempts import FailedAttempt, notify_failed_attempt
 from oversight.agents._trace_http import exchange_span, request_ready
 from oversight.telemetry import CURRENT, annotate, response_fields, span
 from oversight_contracts.events import ModelProfile
@@ -132,6 +133,8 @@ class CallScope:
     """Decision-only admission, immediately before every send, after retry waits."""
     all_attempts: bool = False
     """Decision scopes own every receipt; ordinary author/reviewer accounting stays unchanged."""
+    attempt_failed: Callable[[FailedAttempt], Awaitable[None]] | None = None
+    """Best-effort notification; cancellation still belongs to the caller."""
 
 
 CALL_SCOPE: ContextVar[CallScope | None] = ContextVar("agent_model_call", default=None)
@@ -350,16 +353,36 @@ class OpenAIClient:
                 ):
                     await self._unanswered()
                 attempt += 1
+                retry_after_s = _retry_after(error)
                 if not _retryable(error) or attempt >= self._retry.max_attempts:
+                    await self._failed_attempt(
+                        error,
+                        attempt,
+                        retry_after_s=retry_after_s,
+                        wait_s=None,
+                        final="attempts_used"
+                        if attempt >= self._retry.max_attempts
+                        else "not_retryable",
+                    )
                     raise ModelAPIError(_describe(error, attempt)) from error
-                delay = self._retry.delay(attempt - 1, self._jitter(), _retry_after(error))
+                delay = self._retry.delay(attempt - 1, self._jitter(), retry_after_s)
                 scope = CALL_SCOPE.get()
                 if scope is not None and scope.deadline is not None:
                     remaining = scope.deadline - asyncio.get_running_loop().time()
                     if delay > remaining:
+                        await self._failed_attempt(
+                            error,
+                            attempt,
+                            retry_after_s=retry_after_s,
+                            wait_s=None,
+                            final="deadline",
+                        )
                         raise ModelAPIError(
                             f"model API retry wait of {delay:g} s exceeds the task deadline"
                         ) from error
+                await self._failed_attempt(
+                    error, attempt, retry_after_s=retry_after_s, wait_s=delay, final=None
+                )
                 with span("retry_sleep"):
                     await self._sleep(delay)
                 continue
@@ -374,6 +397,29 @@ class OpenAIClient:
                     await scope.record(ModelReply(None, [], usage_of(completion), completion.model))
             with span("reply_decoding"):
                 return reply_of(completion)
+
+    async def _failed_attempt(
+        self,
+        error: openai.APIError,
+        attempt: int,
+        *,
+        retry_after_s: float | None,
+        wait_s: float | None,
+        final: Literal["attempts_used", "not_retryable", "deadline"] | None,
+    ) -> None:
+        scope = CALL_SCOPE.get()
+        if scope is None or scope.attempt_failed is None:
+            return
+        await notify_failed_attempt(
+            scope.attempt_failed,
+            error,
+            profile=self.profile,
+            attempt=attempt,
+            max_attempts=self._retry.max_attempts,
+            retry_after_s=retry_after_s,
+            wait_s=wait_s,
+            final=final,
+        )
 
     async def _decision_attempt(
         self, params: dict[str, object], scope: CallScope
