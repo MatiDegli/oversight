@@ -42,7 +42,6 @@ def test_word_compatibility_and_length_errors():
     for text, limit, suffix, expected in cases:
         assert s.ellipsize(text, limit, ellipsis=suffix) == expected
         assert s.ellipsize(text, limit, ellipsis=suffix, by="word") == expected
-    for mode in ("word", "char"):
-        for limit in (-2, 0, 3):
-            with pytest.raises(ValueError):
-                s.ellipsize("", limit, ellipsis="...", by=mode)
+    for limit in (-2, 0, 3):
+        with pytest.raises(ValueError):
+            s.ellipsize("", limit, ellipsis="...", by="word")

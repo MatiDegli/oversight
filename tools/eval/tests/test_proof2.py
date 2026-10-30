@@ -5,6 +5,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
 from tools.eval.proof2 import __main__ as cli
@@ -98,6 +99,65 @@ def test_check_copies_and_reports(synthetic):
     assert result["duration"] >= 0 and result["exit_code"] == 1
     assert snapshot(tree) == before
     assert not list(assets.glob(".proof2-*"))
+
+
+@pytest.mark.parametrize("short_circuit", [True, False])
+def test_character_check_accepts_both_length_validation_orders(synthetic, short_circuit):
+    assets, tree = synthetic
+    frozen = Path(r.__file__).with_name("checks") / "check_p04.py"
+    (assets / "checks/check_p04.py").write_text(frozen.read_text())
+    (tree / "boltons/strutils.py").write_text(
+        f"SHORT_CIRCUIT = {short_circuit!r}\n"
+        + dedent("""\
+        def ellipsize(text, max_len=160, *, ellipsis="…", by="word"):
+            if by not in ("word", "char"):
+                raise ValueError("invalid mode")
+            if SHORT_CIRCUIT and by == "char" and len(text) <= max_len:
+                return text
+            if max_len <= len(ellipsis):
+                raise ValueError("invalid length")
+            if len(text) <= max_len:
+                return text
+            limit = max_len - len(ellipsis)
+            if by == "char":
+                return text[:limit] + ellipsis
+            cut = text.rfind(" ", 0, limit + 1)
+            if cut <= 0:
+                cut = limit
+            return text[:cut].rstrip(" .,;:!?") + ellipsis
+        """)
+    )
+    result = asyncio.run(r.check("p04", tree))
+    assert result["exit_code"] == 0, result
+    assert result["passed"] > 0
+
+
+def test_range_check_accepts_unpack_type_error(synthetic):
+    _, tree = synthetic
+    frozen = Path(r.__file__).with_name("checks") / "check_p05.py"
+    hidden = tree / "_proof2_checks"
+    hidden.mkdir()
+    (hidden / frozen.name).write_text(frozen.read_text())
+    (tree / "boltons/mathutils.py").write_text(
+        dedent("""\
+        def range_union(ranges):
+            for pair in ranges:
+                start, end = pair
+                try:
+                    invalid = start > end
+                except TypeError as exc:
+                    raise ValueError("invalid endpoints") from exc
+                if invalid:
+                    raise ValueError("reversed range")
+
+        range_intersection = range_union
+        """)
+    )
+    result = asyncio.run(
+        r.suite(tree, ["_proof2_checks/check_p05.py::test_invalid_range_is_not_skipped"])
+    )
+    assert result["exit_code"] == 0, result
+    assert result["passed"] > 0
 
 
 @pytest.mark.parametrize("problem", ["unknown", "no_checks", "missing", "not_boltons", "symlink"])
