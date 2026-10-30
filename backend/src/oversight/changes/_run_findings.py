@@ -200,7 +200,8 @@ def project_run_findings(
             detected = detect_shortcuts([(fact.path, before, after)], grouped=False)
             if detected.status == "unknown":
                 problems.add(f"run rule unknown: edit {seq} source analysis incomplete")
-                continue
+                if kind != "loosened":
+                    continue
             text = before if kind == "removed" else after
             if not any(
                 f.kind == ShortcutKind(fact.kind)

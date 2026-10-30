@@ -360,3 +360,48 @@ async def test_published_facts_validate_with_absence_witnesses(h: Harness, kind:
     )
     assert not any("run rule unknown:" in p for p in facts.problems)
     assert not any("pass" in p.lower() for p in facts.problems)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kind", ["loosened", "removed", "skipped"])
+async def test_mixed_analysis_preserves_only_independent_loosened_witness(
+    h: Harness, kind: Literal["loosened", "removed", "skipped"]
+) -> None:
+    from oversight.changes._shortcut_detector import ShortcutKind, detect_shortcuts
+
+    tree = await h.open(1)
+    original = (await tree.read_text(TESTS)).content
+    before = (
+        "import pytest\n" + original + "\n\ndef parameter_values():\n    return [1, 2]\n\n"
+        "CASES = parameter_values()\n\n"
+        '@pytest.mark.parametrize("n", CASES)\n'
+        "def test_other(n):\n    assert n > 0\n"
+    )
+    assert await h.edit(1, TESTS, original, before)
+    assert await h.edit(1, "shop/mod.py", "return 1", "return 0")
+    initial = await h.workspace.run_tests(tree, timeout_s=60)
+    assert initial.result.failed_tests == [ID]
+    await h.manager.tests_executed("agent-1", initial)
+    body = "def test_value() -> None:\n    assert value() > 0\n"
+    replacement = {
+        "loosened": body.replace(" > 0", " >= 0"),
+        "removed": "",
+        "skipped": '@pytest.mark.skip(reason="review")\n' + body,
+    }[kind]
+    detected = detect_shortcuts([(TESTS, before, before.replace(body, replacement))], grouped=False)
+    assert detected.status == "unknown"
+    expected = {
+        "loosened": ShortcutKind.ASSERTION_LOOSENED,
+        "removed": ShortcutKind.TEST_REMOVED,
+        "skipped": ShortcutKind.SKIP_ADDED,
+    }[kind]
+    assert any(f.kind == expected for f in detected)
+    assert await h.edit(1, TESTS, body, replacement)
+    assert await h.finish(1)
+    [facts] = h.payloads(ChangeFacts)
+    assert [f.kind for f in facts.run_findings] == (["loosened"] if kind == "loosened" else [])
+    assert any(
+        p.startswith("run rule unknown: edit ") and p.endswith("source analysis incomplete")
+        for p in facts.problems
+    )
+    assert not facts.complete
