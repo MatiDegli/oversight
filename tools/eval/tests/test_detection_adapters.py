@@ -220,8 +220,15 @@ async def test_retry_rechecks_admission_and_has_one_receipt_per_send(budget):
 
 
 @pytest.mark.anyio
-async def test_inflight_timeout_retains_unknown_receipt(budget):
+async def test_inflight_timeout_retains_unknown_receipt(budget, monkeypatch):
+    entered = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    deadline = start + 3600
+
     async def handle(request: httpx.Request) -> httpx.Response:
+        entered.set()
+        clock.setattr(loop, "time", lambda: deadline + 1)
         await asyncio.Event().wait()
         raise AssertionError("timed out transport resumed")
 
@@ -233,9 +240,13 @@ async def test_inflight_timeout_retains_unknown_receipt(budget):
         http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(handle)),
     )
     try:
-        result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
-            INPUT, deadline=asyncio.get_running_loop().time() + 0.1
-        )
+        # Admission cannot exhaust the deadline; only the in-flight handler advances time.
+        with monkeypatch.context() as clock:
+            clock.setattr(loop, "time", lambda: start)
+            result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
+                INPUT, deadline=deadline
+            )
+        assert entered.is_set(), "request was never sent: transport handler was not entered"
         assert result.unavailable == "deadline"
         assert budget.receipts == 1 and budget.record.unknown
     finally:
