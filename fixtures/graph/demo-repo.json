@@ -2326,6 +2326,14 @@
       "dst": "shop.pricing",
       "confidence": "exact",
       "reason": null
+    },
+    {
+      "id": "inherits:shop.models:PremiumCustomer->shop.models:Customer",
+      "kind": "inherits",
+      "src": "shop.models:PremiumCustomer",
+      "dst": "shop.models:Customer",
+      "confidence": "exact",
+      "reason": null
     }
   ],
   "parse_errors": [],
