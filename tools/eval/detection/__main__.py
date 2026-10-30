@@ -111,11 +111,15 @@ def validated_labels(args):
     if args.labels is None or args.labels_sha256 is None:
         raise BenchError("--labels and --labels-sha256 are required for scored execution")
     labels = load_labels(args.labels, args.labels_sha256)
-    forbidden = [args.out, args.out.parent / "ledger.json", args.out.parent / "ledger.lock"]
-    if args.labels.resolve() in {
-        p.resolve() for p in forbidden
-    } or args.labels.resolve().is_relative_to((args.out.parent / "detection").resolve()):
-        raise BenchError("labels must be outside writable accounting paths")
+    outputs = [args.out]
+    if args.command == "sensitivity" and args.against is not None:
+        outputs.append(args.against)
+    for out in outputs:
+        forbidden = [out, out.parent / "ledger.json", out.parent / "ledger.lock"]
+        if args.labels.resolve() in {
+            p.resolve() for p in forbidden
+        } or args.labels.resolve().is_relative_to((out.parent / "detection").resolve()):
+            raise BenchError("labels must be outside writable accounting paths")
     return labels
 
 

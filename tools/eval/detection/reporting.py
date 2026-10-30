@@ -254,11 +254,28 @@ def superseded_pilots(records: list[Record]) -> list[dict]:
     ]
 
 
-def _fake_cases(records: list[Record]) -> tuple[str, dict]:
-    cases, choices = {}, set()
+def _fake_cases(records: list[Record]) -> tuple[str, dict, list[dict]]:
+    cases, choices, excluded = {}, set(), []
     for record in records:
         evidence = record.result.detection if record.result else None
-        if record.pilot or evidence is None or record.arm_id not in {a.id for a in ARMS}:
+        if record.pilot or record.arm_id not in {a.id for a in ARMS}:
+            continue
+        if evidence is None or evidence.patch_id not in {f"b{i:02}" for i in range(1, 21)}:
+            excluded.append(
+                {
+                    "arm_id": record.arm_id,
+                    "repetition": record.repetition,
+                    "task_id": record.task_id,
+                    "status": record.status,
+                    "patch_id": evidence.patch_id if evidence else None,
+                    "reason": "no result"
+                    if record.result is None
+                    else "no detection result"
+                    if evidence is None
+                    else "outside labelled cases b01-b20",
+                }
+            )
+        if evidence is None:
             continue
         config = evidence.configuration
         if config.get("fake") is not True or config.get("fake_choice") not in {
@@ -277,7 +294,7 @@ def _fake_cases(records: list[Record]) -> tuple[str, dict]:
         cases[key] = evidence
     if len(choices) != 1:
         raise BenchError("each fake ledger must record exactly one fake choice")
-    return next(iter(choices)), cases
+    return next(iter(choices)), cases, excluded
 
 
 def _case_count(ids) -> dict:
@@ -287,8 +304,8 @@ def _case_count(ids) -> dict:
 
 def sensitivity(first: list[Record], second: list[Record], answers: dict[str, str]) -> dict:
     """Compare recorded fake choices by case identity, without I/O or model calls."""
-    first_choice, left = _fake_cases(first)
-    second_choice, right = _fake_cases(second)
+    first_choice, left, first_excluded = _fake_cases(first)
+    second_choice, right, second_excluded = _fake_cases(second)
     if first_choice == second_choice:
         raise BenchError("sensitivity requires different fake choices")
     arms = {}
@@ -336,12 +353,18 @@ def sensitivity(first: list[Record], second: list[Record], answers: dict[str, st
                 ),
             }
         arms[arm.id] = {"repetitions": repetitions}
-    return {"fake_choices": {"first": first_choice, "second": second_choice}, "arms": arms}
+    return {
+        "fake_choices": {"first": first_choice, "second": second_choice},
+        "arms": arms,
+        "excluded_records": {"first": first_excluded, "second": second_excluded},
+    }
 
 
 def paid_run_gate(result: dict) -> dict:
     """Apply the maintainer's threshold fixed on 2026-10-30; authorize no execution."""
     failures = []
+    if set(result["fake_choices"].values()) != {"asked_for", "not_asked_for"}:
+        failures.append("paid run requires fake choices asked_for and not_asked_for")
     expected = {f"b{i:02}" for i in range(1, 21)}
     for arm in (a for a in ARMS if a.behavior):
         for rep, report in result["arms"][arm.id]["repetitions"].items():

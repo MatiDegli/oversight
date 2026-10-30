@@ -248,9 +248,9 @@ def test_each_decision_unavailable_stage_has_a_cause(stage):
         assert reporting.cause(reason) == f"decision unavailable: {stage}"
 
 
-def fake_pass(choice, unavailable=4):
+def fake_pass(choice, unavailable=4, *, arms=("detect-3-v2", "detect-4-v3")):
     rows = []
-    for arm in ("detect-3-v2", "detect-4-v3"):
+    for arm in arms:
         for i in range(1, 21):
             row = record(i, unavailable=i > 20 - unavailable)
             row = row.model_copy(update={"arm_id": arm})
@@ -343,3 +343,94 @@ def test_paid_run_gate_fixed_threshold(unavailable, defect, allowed):
         assert report[name]["evidence_alone"]["count"] == unavailable
     if defect == "no_flip":
         assert any("b01" in reason for reason in gate["failed_conditions"])
+
+
+@pytest.mark.parametrize(
+    ("choices", "allowed"),
+    [
+        (("asked_for", "not_asked_for"), True),
+        (("asked_for", "cannot_tell"), False),
+        (("asked_for", "unavailable"), False),
+        (("not_asked_for", "cannot_tell"), False),
+        (("not_asked_for", "unavailable"), False),
+        (("cannot_tell", "unavailable"), False),
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+def test_paid_run_gate_requires_maintainer_fake_choices(choices, allowed, reverse):
+    first, second = fake_pass("asked_for"), fake_pass("not_asked_for")
+    # Preserve otherwise-passing evidence to isolate the recorded-choice condition.
+    for rows, choice in zip((first, second), choices, strict=True):
+        for row in rows:
+            row.result.detection.configuration["fake_choice"] = choice
+    if reverse:
+        first, second = second, first
+    gate = reporting.paid_run_gate(reporting.sensitivity(first, second, ANSWERS))
+    assert gate["paid_run_allowed"] is allowed
+    if not allowed:
+        assert len(gate["failed_conditions"]) == 1
+        assert "asked_for and not_asked_for" in gate["failed_conditions"][0]
+
+
+@pytest.mark.parametrize("arm", ["detect-1", "detect-2-v2"])
+def test_paid_run_gate_ignores_non_behavior_unavailable_questions(arm):
+    first, second = fake_pass("asked_for"), fake_pass("not_asked_for")
+    first.extend(fake_pass("asked_for", 5, arms=(arm,)))
+    second.extend(fake_pass("not_asked_for", 5, arms=(arm,)))
+    result = reporting.sensitivity(first, second, ANSWERS)
+    for run in result["arms"][arm]["repetitions"]["1"]["passes"].values():
+        assert run["unavailable_questions"]["count"] == 5
+    assert reporting.paid_run_gate(result) == {
+        "paid_run_allowed": True,
+        "failed_conditions": [],
+    }
+
+
+def test_paid_run_gate_refuses_detect_4_only_defect():
+    first, second = fake_pass("asked_for"), fake_pass("not_asked_for")
+    row = next(row for row in first if row.arm_id == "detect-4-v3")
+    row.result.detection.let_through = False
+    gate = reporting.paid_run_gate(reporting.sensitivity(first, second, ANSWERS))
+    assert gate["paid_run_allowed"] is False
+    assert len(gate["failed_conditions"]) == 1
+    assert "detect-4-v3 repetition 1" in gate["failed_conditions"][0]
+    assert "b01" in gate["failed_conditions"][0]
+
+
+@pytest.mark.parametrize("side", ["first", "second"])
+@pytest.mark.parametrize(
+    ("defect", "reason"),
+    [
+        ("no_result", "no result"),
+        ("no_detection", "no detection result"),
+        ("patch_id", "outside labelled cases b01-b20"),
+    ],
+)
+def test_sensitivity_lists_excluded_records_with_reasons(side, defect, reason):
+    first, second = fake_pass("asked_for"), fake_pass("not_asked_for")
+    rows = first if side == "first" else second
+    row = rows[0]
+    if defect == "no_result":
+        row.result = None
+        row.status = "reserved"
+    elif defect == "no_detection":
+        row.result.detection = None
+    else:
+        row.result.detection.patch_id = "d01"
+    before = [r.model_dump_json() for r in first + second]
+    result = reporting.sensitivity(first, second, ANSWERS)
+    assert result["excluded_records"][side] == [
+        {
+            "arm_id": row.arm_id,
+            "repetition": row.repetition,
+            "task_id": row.task_id,
+            "status": row.status,
+            "patch_id": "d01" if defect == "patch_id" else None,
+            "reason": reason,
+        }
+    ]
+    assert result["excluded_records"]["second" if side == "first" else "first"] == []
+    group = result["arms"]["detect-3-v2"]["repetitions"]["1"]["groups"]["unasked_difference"]
+    assert group["unpaired"] == ["b01"]
+    assert not reporting.paid_run_gate(result)["paid_run_allowed"]
+    assert [r.model_dump_json() for r in first + second] == before
