@@ -387,6 +387,7 @@ class LiveRun:
         failure: BaseException | None = None
         steps = (
             self.dispatcher.close,
+            self.plans.close,
             self._close_review_cards,
             self.difference_decisions.close,
             self._drain_reviews,

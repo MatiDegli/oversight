@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from live_helpers import DEADLINE_S, GatedModel, error_code, is_type, live_server, live_settings
+from live_helpers import DEADLINE_S, GatedModel, error_code, is_type, live_settings
+from plan_helpers import plan_server as live_server
 
 from oversight.api import ApiError
 from oversight.changes import ChangeManager

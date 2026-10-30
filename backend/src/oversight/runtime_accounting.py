@@ -68,6 +68,65 @@ class ReviewLedgerFailure(Exception):
     """This review's paid attempt could not be recorded; no author state is implicated."""
 
 
+class PlanAccounting:
+    """A planner receipt belongs to its plan, never to an author or a slot's provider."""
+
+    def __init__(self, live: LiveRun, plan_id: str, profile: ModelProfile, agent_id: str) -> None:
+        self.live, self.plan_id, self.profile, self.agent_id = live, plan_id, profile, agent_id
+        self.failure: str | None = None
+
+    async def record(self, reply: ModelReply) -> None:
+        await durable(self._record(reply))
+
+    async def _record(self, reply: ModelReply) -> None:
+        live = self.live
+        metered = self.profile.provider == "meta"
+        price = live._price_for(self.profile)
+        cost = price.cost(reply.usage) if price is not None else None
+        spent = live._usage.record(cost) if metered else live._usage.spent_usd
+        tick = UsageTick(
+            agent_id=self.agent_id,
+            plan_id=self.plan_id,
+            change_id=None,
+            role="plan",
+            model=reply.model,
+            input_tokens=reply.usage.input_tokens,
+            output_tokens=reply.usage.output_tokens,
+            cached_tokens=reply.usage.cached_tokens,
+            cost_usd=cost,
+            spent_usd=spent,
+            budget_usd=live._usage.budget_usd,
+            brake=live._usage.brake if metered else "ok",
+        )
+        validate_usage_tick(tick)
+        if metered:
+            try:
+                await write_tick(live, tick)
+            except (asyncio.CancelledError, LedgerError, OSError) as error:
+                cause = error.__cause__ if isinstance(error, asyncio.CancelledError) else error
+                if not isinstance(cause, LedgerError | OSError):
+                    raise
+                live._ledger_lost = True
+                self.failure = f"Plan {self.plan_id} ledger write failed ({type(cause).__name__})."
+                raise LedgerError(self.failure) from cause
+        # The planner has no agent record: _publish would use the wrong provider ownership.
+        receipt = await live.store.publish(tick)
+        if live._manager is not None:
+            live._manager.usage_recorded(receipt)
+
+    async def report_failure(self) -> None:
+        assert self.failure is not None
+        reason = (
+            f"Plan {self.plan_id}; model={self.profile.model}; provider={self.profile.provider}. "
+            f"{self.failure} "
+            "Stop the server and settle with Meta's console total before the next run: "
+            "uv run python -m oversight ledger settle --spent-usd X."
+        )
+        await self.live._finish(
+            self.live._report("server", reason, agent_id=self.agent_id, fatal=True)
+        )
+
+
 class BasetenDecisionAccounting:
     """A separate, persistent decision-call balance, never the Meta credits ledger.
 

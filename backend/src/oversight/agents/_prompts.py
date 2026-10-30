@@ -39,14 +39,24 @@ changed since you last saw it. Make the requested changes, run the tests, and ca
 a short note for the reviewer."""
 
 
+PLAN_PROMPT = """Write the single subtask for the person's task in a small Python repository.
+The next user message is the person's task verbatim. The final message lists main's modules
+and top-level names at the plan's graph version; any truncation is stated there.
+Preserve the person's intent and constraints. Do not split the task or invent requirements.
+Return exactly one JSON object with exactly one key: {"task": "the subtask text"}.
+The task must be nonempty and at most 4,000 characters. No tools, markdown or other text.
+The server computes all plan metadata, zones, dependencies and assignments."""
+
+
 def prompt_version(harness_pack: bool = False) -> str:
-    """A hash of the selected system prompt, revision prompt and tool schemas."""
+    """A hash of the selected system prompt, revision and plan prompts, and tool schemas."""
     return (
         "agent-v1-"
         + hashlib.sha256(
             (
                 system_prompt(harness_pack)
                 + REVISION_PROMPT
+                + PLAN_PROMPT
                 + json.dumps(TOOL_SCHEMAS, sort_keys=True)
             ).encode()
         ).hexdigest()[:12]
