@@ -182,7 +182,7 @@ describe("graph mapping", () => {
     const graph = render(initial());
     const module = graph.getElementById("billing");
     expect(module.style("background-color")).toBe(rgb(theme.panel));
-    expect(Number(module.style("background-opacity"))).toBe(1);
+    expect(Number(module.style("background-opacity"))).toBe(theme["module-opacity"]);
     expect(module.style("color")).toBe(rgb(theme["module-label"]));
     expect(module.style("font-family")).toBe(theme["text-font"]);
     module.addClass("dimmed");

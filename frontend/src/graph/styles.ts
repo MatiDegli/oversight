@@ -208,7 +208,8 @@ export function graphStyles(
       },
     },
     {
-      selector: "node.module",
+      // A folded card masks links behind its text; an open body's fill lets the field through.
+      selector: "node.module:childless",
       style: { "background-opacity": 1 },
     },
     {
