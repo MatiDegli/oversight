@@ -1,6 +1,9 @@
 """Every rejected envelope has bounded, text-free evidence, using simulated HTTP only."""
 
+import ast
 import asyncio
+import inspect
+import textwrap
 from copy import deepcopy
 
 import httpx2 as httpx
@@ -13,12 +16,52 @@ from decision_client_helpers import (  # pyright: ignore[reportMissingImports]
     ok,
     status,
 )
+from tools.eval.detection import adapters, diagnostics
 from tools.eval.detection.adapters import Adapter
 from tools.eval.detection.config import ARMS
 from tools.eval.detection.diagnostics import DetectionClient
 from tools.eval.tests.test_detection_adapters import budget as budget
 
-from oversight.agents import MUSE_SPARK, MUSE_SPARK_OPEN, RetryPolicy
+from oversight.agents import MUSE_SPARK, MUSE_SPARK_OPEN, RetryPolicy, decision
+
+
+def test_diagnostic_mirrors_match_both_validator_sources():
+    assert (
+        diagnostics.CHOICES
+        == adapters.CHOICES
+        == decision.CHOICES
+        == (
+            "asked_for",
+            "not_asked_for",
+            "cannot_tell",
+        )
+    )
+    for validator in (diagnostics.validation_stage, Adapter.spark, decision._choice):
+        tree = ast.parse(textwrap.dedent(inspect.getsource(validator)))
+        comparisons = [node for node in ast.walk(tree) if isinstance(node, ast.Compare)]
+        limits = [
+            ast.literal_eval(node.comparators[0])
+            for node in comparisons
+            if ast.unparse(node.left) == "len(reply.text)" and isinstance(node.ops[0], ast.Gt)
+        ]
+        assert limits == [512], validator.__qualname__
+        fields = [
+            ast.literal_eval(node.comparators[0])
+            for node in comparisons
+            if ast.unparse(node.left) in {"set(data)", "set(fields)"}
+            and isinstance(node.ops[0], ast.NotEq)
+        ]
+        assert fields == [{"choice"}], validator.__qualname__
+        choices = [
+            ast.unparse(node.left)
+            for node in comparisons
+            if ast.unparse(node.comparators[0]) == "CHOICES" and isinstance(node.ops[0], ast.NotIn)
+        ]
+        assert choices in (["data['choice']"], ["fields['choice']"])
+        assert any(
+            isinstance(node, ast.Call) and ast.unparse(node) == "isinstance(data, dict)"
+            for node in ast.walk(tree)
+        ), validator.__qualname__
 
 
 def response(stage, model):

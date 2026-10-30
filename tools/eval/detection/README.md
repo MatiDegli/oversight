@@ -11,7 +11,7 @@ No paid run or provider probe was performed while implementing this runner.
 | detect-1 (tests-only) | Original tests | None; passing tests let the patch through |
 | detect-2-v2 (task/diff) | Task, diff, explicit statement that behavior evidence was not collected | Muse Spark |
 | detect-3-v2 (behavior-Spark) | Product-selected task, target, stable measured difference, confirmed examples | Muse Spark |
-| detect-4-v2 (behavior-Spark-Open) | Same product-selected inputs as detect-3-v2 | Muse Spark Open |
+| detect-4-v3 (behavior-Spark-Open) | Same product-selected inputs as detect-3-v2 | Muse Spark Open |
 
 **Arms 2 and 3 use the D6 decision prompt and strict schema on Muse Spark, not product
 cross-review.** Cross-review asks about defects and rejects same-model author/reviewer pairs.
@@ -24,8 +24,8 @@ fail-closed AST read extracts its single positive literal without constructing a
 sends exactly the product's allowance. The independent **512-character reply validator** and
 all strict schema checks remain unchanged. The deadlines and eight-classification limit come
 from imported `ReviewCardLimits` defaults (30 seconds per call, 120 seconds total); the same
-arm limits feed configuration and runtime. Measured cone and automatic cross-review are off. `asked_for` is an experimental let-through classification,
-never an approval or merge command.
+arm limits feed configuration and runtime. Measured cone and automatic cross-review are off.
+`asked_for` is an experimental let-through classification, never an approval or merge command.
 
 `config.system_prompt` uses the public product `D6_SYSTEM_PROMPT` constant. The Spark adapter inherits
 `DecisionClient.params`, including its strict schema, without copying it. A simulated-HTTP parity
@@ -88,9 +88,11 @@ uv run --offline --frozen python -m tools.eval.detection \
 `pilot --fake --fake-choice asked_for --out /tmp/detection-fake/results.jsonl` explicitly selects
 simulated outcomes. Supply the same token/call arguments and `--demo-python` explicitly; test
 interpreters are permitted only for fake execution. Fake output must be outside the paid directory.
-The pilot assigns d01, d02, d01 and d02 to the current arms 1–4 respectively, one repetition
-each. The behavior pilots target top-level functions (`shipping` and `price_breaks`); methods
-are unsupported by D9 and would prove no model call. Frozen patches, ordering, manifest and
+The pilot assigns d01, d02, d01 and d01 to the current arms 1–4 respectively, one repetition
+each. Both behavior pilots use d01's top-level `shipping_cost`, whose stable measured difference
+reaches classification. In d02, `price_breaks` adds an opt-in parameter defaulting to zero;
+default calls have no behavior difference, so a behavior pilot sends no model call. Methods
+are unsupported by D9 and would also prove no model call. Frozen patches, ordering, manifest and
 labels remain unchanged. Bench b09 (`Inventory.reserve`), b14 (`Customer.email` setter),
 b17 (`Cart.add`) and b19 (`Product.label`) stay unprobed questions in the denominators. Then `run`
 uses the same flags plus the external label path and pin. Tests-only runs once per bench patch;
@@ -124,17 +126,23 @@ uses the larger bound, adds all cumulative historical charges, and checks the re
 before execution and every attempt. Each send also reserves the configured completion allowance.
 Dry-run prints declared, pilot (null if absent), worst-case and admitted per-job costs per arm.
 With the illustrative command above, the worst cases are $0 for detect-1, $0.073536 each for
-2-v2/3-v2, and $0.155072 for 4-v2; with no history the projection is $6.345024. Forty calls
+2-v2/3-v2, and $0.155072 for 4-v3; with no history the projection is $6.345024. Forty calls
 with those tariffs instead project $31.725120 and refuse the $20 cap. Reduce repetitions
 before dropping arms when the projection exceeds the shared cap.
 
 Model-arm configuration changes require **new arm IDs and fresh pilots**; changed configurations
-under an existing v2 ID refuse. Roles, rather than literal IDs, select task/diff versus behavior.
-The v2 arms replace detect-2/3/4 because 512 tokens could truncate reasoning and their method
-pilots proved no classification. Reports show current arms and list old pilots and their costs
-as `superseded`; old records, charges, unknown costs and reservations remain in shared accounting.
-Detect-1 keeps its exact v1 configuration and fingerprint from main 0e5305a; v2-only fields never
-enter its identity, so its completed pilot is reused.
+under an existing ID refuse. Roles, rather than literal IDs, select task/diff versus behavior.
+The v2 arms replaced detect-2/3/4 because 512 tokens could truncate reasoning and their method
+pilots proved no classification. Detect-4-v3 supersedes detect-4-v2: its d02 pilot recorded
+`no stable selected difference to classify`, zero tokens and zero cost, then refused because
+it sent no model call. Exactly one pilot record per arm is required, so that durable entry
+cannot be retried on d01 under the same ID. The new ID changes the arm's prompt-template hash
+and configuration fingerprint; all other configuration fields, including the system prompt
+hash, stay identical. Reports list detect-4-v2 and the older pilots and their costs as
+`superseded`; old records, charges, unknown costs and reservations remain in shared accounting.
+Detect-1, detect-2-v2 and detect-3-v2 keep their exact configurations and fingerprints from
+main 70d5d50, so their completed pilots are reused. Tests-only retains its v1 identity;
+v2-only fields never enter it. The accounting gate still refuses configuration drift before spend.
 
 Each send/retry checks admission against the reservation and remaining shared cap. Receipts are
 durable before another send; missing usage remains unknown and stops further work. Cancellation,
