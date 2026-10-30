@@ -90,7 +90,7 @@ export function caseEvidence(practice: EvidencePractice, entry: PracticeCase) {
     history: part(history),
   };
 }
-export function resolutionText(value: ChangeResolved) {
+export function resolutionText(value: ChangeResolved, includeMissing = true) {
   const decision = {
     approved: "Approved",
     rejected: "Rejected",
@@ -102,5 +102,5 @@ export function resolutionText(value: ChangeResolved) {
     cross_review: "by cross-review",
     lead_agent: "by lead agent",
   };
-  return `${decision}${value.decided_by ? ` ${who[value.decided_by]}` : ""}${value.merge ? `, ${value.merge}${value.merge_commit ? ` ${value.merge_commit.slice(0, 7)}` : ""}` : ""}${value.decided_by ? "" : " · decision maker not recorded"}`;
+  return `${decision}${value.decided_by ? ` ${who[value.decided_by]}` : ""}${value.merge ? `, ${value.merge}${value.merge_commit ? ` ${value.merge_commit.slice(0, 7)}` : ""}` : ""}${value.decided_by || !includeMissing ? "" : ", decision maker not recorded"}`;
 }

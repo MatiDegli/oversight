@@ -232,7 +232,7 @@ it.each([PhonePractice, PracticePanel])(
           attempt={{ ...freshAttempt(), started: true, revealed: true }}
         />,
       );
-      for (const label of ["Agent’s test runs", "Review facts", "Cross-review", "Review history"])
+      for (const label of ["Agent’s test runs", /review facts/i, /cross-review/i, "Review history"])
         expect(html.split(label).length - 1).toBeGreaterThanOrEqual(2);
       expect(html).toContain(
         "Missing evidence does not establish a clean review, behavior or safety.",
@@ -262,7 +262,7 @@ it("renders execution phases with spaces and preserves the verdict wording", () 
     ),
   );
   const html = renderEvidence(source);
-  expect(html).toContain("Execution · base probe");
+  expect(html).toContain("Execution (base probe)");
   expect(html).not.toContain("base_probe");
   expect(html).toContain("changes requested");
 });
@@ -289,22 +289,22 @@ it("renders review severities in sentence case without changing finding text", (
   );
   const html = renderEvidence(source);
   for (const severity of ["Blocking", "Should-fix", "Nit"])
-    expect(html).toContain(`${severity} · ${text}`);
+    expect(html).toContain(`${severity}: ${text}`);
 });
 it("shows the tested-head caveat only when agent steps are recorded", () => {
   const caveat =
-    "Agent steps belong to this proposal round; their exact tested heads were not recorded.";
+    "Agent steps belong to this proposal round; their exact tested heads and test execution records were not recorded.";
   expect(renderEvidence()).toContain(caveat);
   const source = extended();
   source.events = source.events.filter(
     (event) => event.type !== "agent.step" || event.payload.tool !== "run_tests",
   );
-  expect(renderEvidence(source)).toContain("Execution · proposal");
+  expect(renderEvidence(source)).toContain("Execution (proposal)");
   expect(renderEvidence(source)).not.toContain(caveat);
 });
 it("labels the final test result Proposal", () => {
   const html = renderEvidence();
-  expect(html).toContain(">Proposal · passed");
+  expect(html).toContain(">Proposal: passed");
   expect(html).not.toContain("Proposal result");
 });
 it.each([false, true])("includes executions in the test-run preview (with steps: %s)", (steps) => {
@@ -321,9 +321,9 @@ it.each([false, true])("includes executions in the test-run preview (with steps:
     );
   const html = renderEvidence(source);
   expect(html).toContain(
-    `Agent’s test runs · ${steps ? "3 runs" : "1 run"}, last 32 of 32 passed</span>`,
+    `Agent’s test runs</span> <span class="evidence-preview">${steps ? "3 runs" : "1 run"}, last 32 of 32 passed</span>`,
   );
-  expect(html).not.toContain("Agent’s test runs · Not recorded");
+  expect(html).not.toContain("Not recorded for this revision: agent’s test runs");
 });
 it("preserves earlier facts and their incompleteness after a later complete record", () => {
   const first = required(additions.find((event) => event.type === "change.facts_recorded"));
@@ -336,5 +336,35 @@ it("preserves earlier facts and their incompleteness after a later complete reco
   const html = renderEvidence(source);
   for (const text of ["Recorded behavior summary", "Probe incomplete", "Later complete record"])
     expect(html).toContain(text);
-  expect(html).toContain("Review facts · Recorded · incomplete</span>");
+  expect(html).toContain(
+    'Review facts</span> <span class="evidence-preview">Recorded, incomplete</span>',
+  );
+});
+
+it("names three absent kinds in one line and gives them no rows", () => {
+  const source = structuredClone(practice);
+  source.events = source.events.filter(
+    (event) => event.type !== "change.proposed" && event.type !== "change.resolved",
+  );
+  const html = renderEvidence(source);
+  expect(html.match(/<summary>/g)).toHaveLength(1);
+  expect(html).toContain(
+    "Not recorded for this revision: review facts, cross-review and review history.",
+  );
+});
+it("omits the kind-absence line when every kind is recorded", () => {
+  const html = renderEvidence(extended());
+  expect(html.match(/<summary>/g)).toHaveLength(4);
+  expect(html).toContain("<span>Review facts</span>");
+  expect(html).not.toContain("Not recorded for this revision:");
+});
+it("leaves only the heading and one absence sentence when all kinds are absent", () => {
+  const source = structuredClone(practice);
+  source.events = [];
+  const html = renderEvidence(source);
+  expect(html).not.toContain("<summary>");
+  expect(html).not.toContain('class="evidence-rows"');
+  expect(html).toContain(
+    "Not recorded for this revision: agent’s test runs, review facts, cross-review and review history.",
+  );
 });

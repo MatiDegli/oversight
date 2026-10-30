@@ -1,3 +1,4 @@
+import { impactText, omittedText, sentenceList } from "./evidenceCopy";
 import { RecordedEvidence, absenceNote } from "./RecordedEvidence";
 import type { EvidencePractice as Practice } from "./caseEvidence";
 import { usePhonePractice } from "./usePhonePractice";
@@ -46,7 +47,11 @@ export const caseTitle = (task: string) => task.trim().split(/\s+/)[0] ?? "Chang
 function Findings({ practice, attempt, onRestart }: PanelProps) {
   return (
     <>
-      <p role="status">Matches with recorded decisions: {score(practice, attempt)}/2.</p>
+      <p role="status">
+        {score(practice, attempt)
+          ? `Matches with recorded decisions: ${String(score(practice, attempt))}/2.`
+          : "None of your decisions matched the recording."}
+      </p>
       {practice.cases.map((entry) => (
         <section
           key={entry.changeId}
@@ -56,18 +61,23 @@ function Findings({ practice, attempt, onRestart }: PanelProps) {
           <h2 className="font-semibold">{caseTitle(entry.proposal.task)}</h2>
           <p>Your practice answer: {attempt.answers[entry.changeId]}</p>
           <p>
-            Recorded decision: {entry.reference} ·{" "}
-            {entry.resolution.merge === "merged" ? "merged into main" : "not merged"} ·{" "}
-            <span className="font-mono">{entry.resolution.merge_commit?.slice(0, 7)}</span>
+            Recorded decision: {entry.reference},{" "}
+            {entry.resolution.merge === "merged" ? "merged into main" : "not merged"}
+            {entry.resolution.merge_commit && (
+              <>
+                {" "}
+                at <span className="font-mono">{entry.resolution.merge_commit.slice(0, 7)}</span>
+              </>
+            )}
+            .
           </p>
           <p>
-            {entry.proposal.tests.passed} passing tests · {entry.proposal.impact.entries.length}{" "}
-            possibly affected entries
+            {entry.proposal.tests.passed
+              ? `${String(entry.proposal.tests.passed)} passing tests. `
+              : "No passing tests were recorded. "}
+            {impactText(entry.proposal.impact.entries.length)}.
           </p>
-          <p>
-            +{entry.proposal.impact.omitted_by_depth} omitted by depth · +
-            {entry.proposal.impact.omitted_by_limit} omitted by limit
-          </p>
+          {omittedText(entry.proposal.impact) && <p>{omittedText(entry.proposal.impact)}</p>}
           <RecordedEvidence practice={practice} entry={entry} />
         </section>
       ))}
@@ -88,7 +98,7 @@ function Decision({ practice, attempt, onAnswer, onNext, onReveal }: PanelProps)
   return (
     <>
       <h2 className="font-semibold">
-        {caseTitle(proposal.task)} · Agent{" "}
+        {caseTitle(proposal.task)}, Agent{" "}
         {practice.cut.agents[proposal.agent_id]?.slot ?? "unavailable"}
       </h2>
       <section aria-label="Task">
@@ -100,16 +110,21 @@ function Decision({ practice, attempt, onAnswer, onNext, onReveal }: PanelProps)
         <p>{proposal.summary}</p>
       </section>
       <p>
-        {proposal.files.length} files · +{proposal.lines_added} −{proposal.lines_removed} lines ·{" "}
-        {proposal.tests.passed} passing tests · Revision {proposal.revision}
+        {sentenceList([
+          ...(proposal.files.length ? [`${String(proposal.files.length)} files`] : []),
+          ...(proposal.lines_added ? [`${String(proposal.lines_added)} lines added`] : []),
+          ...(proposal.lines_removed ? [`${String(proposal.lines_removed)} lines removed`] : []),
+          ...(proposal.tests.passed ? [`${String(proposal.tests.passed)} passing tests`] : []),
+          `revision ${String(proposal.revision)}`,
+        ])}
+        .
       </p>
       <p className="text-sm text-muted">{proposal.files.map((file) => file.path).join(" · ")}</p>
-      <p className="font-mono text-sm break-all">Head {proposal.head_commit}</p>
-      <p>
-        {proposal.impact.entries.length} possibly affected entries · +
-        {proposal.impact.omitted_by_depth} omitted by depth · +{proposal.impact.omitted_by_limit}{" "}
-        omitted by limit
+      <p className="text-sm break-all">
+        Head <span className="font-mono">{proposal.head_commit}</span>
       </p>
+      <p>{impactText(proposal.impact.entries.length)}.</p>
+      {omittedText(proposal.impact) && <p>{omittedText(proposal.impact)}</p>}
       <p id="practice-only">
         These buttons save a practice answer only. Approve requires a pointer click.
       </p>
@@ -171,8 +186,8 @@ export function PracticePanel(props: PanelProps) {
         {!attempt.started ? (
           <>
             <p>
-              Two-change practice · Two proposals from a real recorded run, frozen before either
-              decision.
+              This two-change practice uses two proposals from a real recorded run, frozen before
+              either decision.
             </p>
             <p>
               Choose Approve or Reject for each change. Answers stay in this attempt only. After
@@ -196,7 +211,7 @@ export function PracticePanel(props: PanelProps) {
         </button>
       </div>
       <p className="practice-phone-note mt-5 text-sm text-muted">
-        Read-only inspection tabs are omitted in the phone layout. Use a wider window to inspect
+        Read-only inspection tabs are not shown in the phone layout. Use a wider window to inspect
         files and diffs.
       </p>
     </section>

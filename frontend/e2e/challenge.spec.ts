@@ -104,10 +104,10 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   await expect(panel).toContainText("Matches with recorded decisions: 1/2.");
   const inventory = panel.getByRole("region", { name: "Findings for change-2" });
   await expect(inventory).toContainText("Your practice answer: Reject");
-  await expect(inventory).toContainText("Recorded decision: Approve · merged into main");
-  await expect(inventory).toContainText("29 passing tests · 0 possibly affected entries");
+  await expect(inventory).toContainText("Recorded decision: Approve, merged into main");
+  await expect(inventory).toContainText("29 passing tests. No possibly affected entries");
   await expect(panel.getByRole("region", { name: "Findings for change-1" })).toContainText(
-    "32 passing tests · 9 possibly affected entries",
+    "32 passing tests. 9 possibly affected entries",
   );
   await expect(panel).toContainText(
     "Missing evidence does not establish a clean review, behavior or safety.",
@@ -330,7 +330,7 @@ async function firstPhoneDecision(page: Page, width: number) {
     "New exact call",
   );
   await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
-    "0 possibly affected",
+    "No possibly affected entries",
   );
   await phoneCapture(page, width, "decision-1");
   await checkDiff(page, width, "decision-1");

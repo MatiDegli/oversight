@@ -1,3 +1,4 @@
+import { omittedText } from "./evidenceCopy";
 import { Check, X, ArrowRight, ChevronDown, Files } from "lucide-react";
 import { useState } from "react";
 import { AgentLine } from "./PhoneGraph";
@@ -22,18 +23,14 @@ function Impact({ entry }: { entry: PracticeCase }) {
     <Disclosure label="Possibly affected" variant="decision" preview={preview}>
       <div className="pp-impact">
         <p>
-          Exact calls only · Depth limit {impact.max_depth} · Node limit {impact.max_nodes}
+          Exact calls only, depth limit {impact.max_depth} and node limit {impact.max_nodes}.
         </p>
         {impact.entries.map((node) => (
           <p key={node.node_id}>
             {node.distance} {node.node_id.split(":")[1]}
           </p>
         ))}
-        <p>
-          {impact.omitted_by_depth || impact.omitted_by_limit
-            ? `+${String(impact.omitted_by_depth)} omitted by depth · +${String(impact.omitted_by_limit)} omitted by node limit.`
-            : "No entries omitted by depth or node limit."}
-        </p>
+        {omittedText(impact) && <p>{omittedText(impact)}</p>}
       </div>
     </Disclosure>
   );
@@ -50,10 +47,12 @@ function Facts({
   const proposal = entry.proposal;
   return (
     <div className="pp-facts">
-      <span className="pp-chip">
-        <Files size={14} />
-        {proposal.files.length} files
-      </span>
+      {proposal.files.length > 0 && (
+        <span className="pp-chip">
+          <Files size={14} />
+          {proposal.files.length} files
+        </span>
+      )}
       <button
         className="pp-chip pp-diff-toggle"
         onClick={onToggle}
@@ -61,17 +60,22 @@ function Facts({
         aria-controls="phone-recorded-diff"
       >
         <span>
-          <span className="pp-positive">+{proposal.lines_added}</span>{" "}
-          <span className="pp-negative">−{proposal.lines_removed}</span> lines
+          {proposal.lines_added > 0 && <span className="pp-positive">+{proposal.lines_added}</span>}{" "}
+          {proposal.lines_removed > 0 && (
+            <span className="pp-negative">−{proposal.lines_removed}</span>
+          )}{" "}
+          lines
         </span>
         <span>
           {open ? "Hide diff" : "Show diff"} <ChevronDown size={14} />
         </span>
       </button>
-      <span className="pp-chip pp-positive">
-        <Check size={14} />
-        {proposal.tests.passed} passed
-      </span>
+      {proposal.tests.passed > 0 && (
+        <span className="pp-chip pp-positive">
+          <Check size={14} />
+          {proposal.tests.passed} passed
+        </span>
+      )}
     </div>
   );
 }

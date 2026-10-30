@@ -2,6 +2,7 @@ import { ChevronDown } from "lucide-react";
 import type { EvidencePractice as Practice } from "./caseEvidence";
 import type { PracticeCase } from "./phoneEvidence";
 import { caseEvidence, resolutionText } from "./caseEvidence";
+import { sentenceList } from "./evidenceCopy";
 import "./recordedEvidence.css";
 
 type Evidence = ReturnType<typeof caseEvidence>;
@@ -11,6 +12,7 @@ export const absenceNote =
   "Missing evidence does not establish a clean review, behavior or safety.";
 function TestRuns({ evidence }: { evidence: Evidence }) {
   const runs = evidence.tests.status === "present" ? evidence.tests.value : [];
+  const steps = runs.some((run) => run.source === "step");
   return (
     <>
       <div className="evidence-runs">
@@ -20,64 +22,102 @@ function TestRuns({ evidence }: { evidence: Evidence }) {
               ? `Step ${String(run.step)}`
               : run.source === "proposal"
                 ? "Proposal"
-                : `Execution · ${words(run.phase ?? "unknown phase")}`}{" "}
-            · {run.tests.outcome} · {run.tests.passed} passed · {run.tests.failed} failed ·{" "}
-            {run.tests.skipped} skipped · {run.tests.duration_ms} ms
+                : `Execution (${words(run.phase ?? "unknown phase")})`}
+            : {run.tests.outcome}, {run.tests.passed} passed
+            {run.tests.failed ? `, ${String(run.tests.failed)} failed` : ""}
+            {run.tests.skipped ? `, ${String(run.tests.skipped)} skipped` : ""}, in{" "}
+            {run.tests.duration_ms} ms.
             {run.tests.failed_tests.length > 0 && (
-              <span> · {run.tests.failed_tests.join(", ")}</span>
+              <span> Failed tests: {run.tests.failed_tests.join(", ")}.</span>
             )}
           </p>
         ))}
       </div>
-      {evidence.executions.status === "absent" && (
-        <p>Test execution records: Not recorded for this revision and head.</p>
-      )}
-      {runs.some((run) => run.source === "step") && (
+      {steps ? (
         <p>
-          Agent steps belong to this proposal round; their exact tested heads were not recorded.
+          Agent steps belong to this proposal round; their exact tested heads
+          {evidence.executions.status === "absent" ? " and test execution records" : ""} were not
+          recorded.
         </p>
+      ) : (
+        evidence.executions.status === "absent" && (
+          <p>Test execution records were not recorded for this revision and head.</p>
+        )
       )}
     </>
   );
 }
 function Facts({ evidence }: { evidence: Evidence }) {
-  if (evidence.facts.status === "absent")
-    return <p>Review facts were not recorded for this revision and head.</p>;
-  return evidence.facts.value.map((facts, i) => (
-    <div key={i}>
-      {facts.summary?.map((line, j) => (
-        <p key={j}>{line}</p>
-      ))}
-      <p>
-        {facts.edited_paths.length} edited paths · {facts.integrity.length} integrity observations ·{" "}
-        {facts.added_tests.length} added-test probes
-      </p>
-      <p>
-        Behavior comparisons:{" "}
-        {facts.behavior_diff === null ? "Not recorded" : facts.behavior_diff.length}. Measured
-        callers: {facts.measured_cone === null ? "Not recorded" : facts.measured_cone.length}.
-      </p>
-      {facts.problems.map((problem, j) => (
-        <p key={j}>{problem}</p>
-      ))}
-    </div>
-  ));
+  if (evidence.facts.status === "absent") return null;
+  const records = evidence.facts.value;
+  const missing = records.flatMap((facts, i) => {
+    const record = records.length > 1 ? ` in record ${String(i + 1)}` : "";
+    return [
+      ...(facts.behavior_diff === null ? [`behavior comparisons${record}`] : []),
+      ...(facts.measured_cone === null ? [`measured callers${record}`] : []),
+    ];
+  });
+  return (
+    <>
+      {records.map((facts, i) => {
+        const counts = [
+          ...(facts.edited_paths.length
+            ? [`${String(facts.edited_paths.length)} edited paths`]
+            : []),
+          ...(facts.integrity.length
+            ? [`${String(facts.integrity.length)} integrity observations`]
+            : []),
+          ...(facts.added_tests.length
+            ? [`${String(facts.added_tests.length)} added-test probes`]
+            : []),
+          ...(facts.behavior_diff?.length
+            ? [`${String(facts.behavior_diff.length)} behavior comparisons`]
+            : []),
+          ...(facts.measured_cone?.length
+            ? [`${String(facts.measured_cone.length)} measured callers`]
+            : []),
+        ];
+        return (
+          <div key={i}>
+            {facts.summary?.map((line, j) => (
+              <p key={j}>{line}</p>
+            ))}
+            {counts.length > 0 && <p>{sentenceList(counts)} were recorded.</p>}
+            {facts.behavior_diff?.length === 0 && (
+              <p>The recorded behavior comparison list is empty.</p>
+            )}
+            {facts.measured_cone?.length === 0 && <p>The recorded caller list is empty.</p>}
+            {facts.problems.map((problem, j) => (
+              <p key={j}>{problem}</p>
+            ))}
+          </div>
+        );
+      })}
+      {missing.length > 0 && <p>Not recorded: {sentenceList(missing)}.</p>}
+    </>
+  );
 }
 function Reviews({ evidence }: { evidence: Evidence }) {
-  if (evidence.reviews.status === "absent")
-    return <p>Cross-review was not recorded for this revision and head.</p>;
+  if (evidence.reviews.status === "absent") return null;
   return evidence.reviews.value.map((review, i) => (
     <div key={i}>
       <p>
-        {review.reviewer_model} · {review.reviewer_provider} · {words(review.verdict)} ·{" "}
-        {review.complete ? "complete" : "incomplete"}
+        {review.reviewer_model} ({review.reviewer_provider}) recorded a {words(review.verdict)}{" "}
+        review, {review.complete ? "complete" : "incomplete"}.
       </p>
       {review.findings.map((finding, j) => (
         <p key={j}>
-          {finding.severity ? severityLabels[finding.severity] : "Unclassified"} · {finding.text}
-          {finding.path
-            ? ` · ${finding.path}${finding.line ? `:${String(finding.line)}` : ""}`
-            : ""}
+          {finding.severity ? severityLabels[finding.severity] : "Unclassified"}: {finding.text}
+          {finding.path && (
+            <>
+              {" "}
+              in{" "}
+              <code>
+                {finding.path}
+                {finding.line ? `:${String(finding.line)}` : ""}
+              </code>
+            </>
+          )}
         </p>
       ))}
       {review.problems.map((problem, j) => (
@@ -87,85 +127,121 @@ function Reviews({ evidence }: { evidence: Evidence }) {
   ));
 }
 function History({ evidence }: { evidence: Evidence }) {
-  if (evidence.history.status === "absent") return <p>Review history was not recorded.</p>;
-  return evidence.history.value.map((event) => (
-    <div key={event.seq}>
-      <p>
-        Revision {event.value.revision} ·{" "}
-        {event.type === "proposal" ? "Proposed" : resolutionText(event.value)}
-      </p>
-      {event.type === "resolution" && (
-        <>
-          <p>{event.value.comment ? `Comment: ${event.value.comment}` : "Comment: Not recorded"}</p>
-          {event.value.merge_commit && (
-            <p className="evidence-hash">Merge commit: {event.value.merge_commit}</p>
+  if (evidence.history.status === "absent") return null;
+  const missing = evidence.history.value.flatMap((event) =>
+    event.type === "resolution"
+      ? [
+          ...(!event.value.decided_by
+            ? [`decision maker for revision ${String(event.value.revision)}`]
+            : []),
+          ...(event.value.comment === null
+            ? [`comment for revision ${String(event.value.revision)}`]
+            : []),
+        ]
+      : [],
+  );
+  return (
+    <>
+      {evidence.history.value.map((event) => (
+        <div key={event.seq}>
+          <p>
+            {event.value.revision
+              ? `Revision ${String(event.value.revision)}`
+              : "Before the first proposal"}
+            : {event.type === "proposal" ? "Proposed" : resolutionText(event.value, false)}.
+          </p>
+          {event.type === "resolution" && (
+            <>
+              {event.value.comment !== null && <p>Comment: {event.value.comment}</p>}
+              {event.value.merge_commit && (
+                <p>
+                  Merge commit: <code className="evidence-hash">{event.value.merge_commit}</code>
+                </p>
+              )}
+              {event.value.conflict && (
+                <p>
+                  Conflict ({event.value.conflict.kind})
+                  {event.value.conflict.paths.length > 0
+                    ? ` in ${event.value.conflict.paths.join(", ")}`
+                    : ""}
+                  .
+                </p>
+              )}
+            </>
           )}
-          {event.value.conflict && (
-            <p>
-              Conflict · {event.value.conflict.kind} · {event.value.conflict.paths.join(", ")}
-            </p>
-          )}
-        </>
-      )}
-    </div>
-  ));
+        </div>
+      ))}
+      {missing.length > 0 && <p>Not recorded: {sentenceList(missing)}.</p>}
+    </>
+  );
 }
 export function RecordedEvidence({ practice, entry }: { practice: Practice; entry: PracticeCase }) {
   const evidence = caseEvidence(practice, entry);
-  const tests = evidence.tests.status === "present" ? evidence.tests.value : [];
-  const runs = tests.filter((run) => run.source !== "proposal");
+  const runs =
+    evidence.tests.status === "present"
+      ? evidence.tests.value.filter((run) => run.source !== "proposal")
+      : [];
   const last = runs.at(-1)?.tests;
   const history = evidence.history.status === "present" ? evidence.history.value : [];
   const resolution = history.filter((event) => event.type === "resolution").at(-1);
   const rows = [
     {
       label: "Agent’s test runs",
+      present: runs.length > 0,
       preview: last
-        ? `${String(runs.length)} ${runs.length === 1 ? "run" : "runs"}, last ${String(last.passed)} of ${String(last.passed + last.failed)} ${last.outcome}`
-        : "Not recorded",
+        ? `${String(runs.length)} ${runs.length === 1 ? "run" : "runs"}, last ${last.passed ? `${String(last.passed)} of ${String(last.passed + last.failed)} ` : ""}${last.outcome}`
+        : "Recorded",
       content: <TestRuns evidence={evidence} />,
     },
     {
       label: "Review facts",
+      present: evidence.facts.status === "present",
       preview:
-        evidence.facts.status === "present"
-          ? evidence.facts.value.some((facts) => !facts.complete)
-            ? "Recorded · incomplete"
-            : "Recorded"
-          : "Not recorded",
+        evidence.facts.status === "present" && evidence.facts.value.some((facts) => !facts.complete)
+          ? "Recorded, incomplete"
+          : "Recorded",
       content: <Facts evidence={evidence} />,
     },
     {
       label: "Cross-review",
+      present: evidence.reviews.status === "present",
       preview:
         evidence.reviews.status === "present"
           ? `${String(evidence.reviews.value.length)} recorded`
-          : "Not recorded",
+          : "Recorded",
       content: <Reviews evidence={evidence} />,
     },
     {
       label: "Review history",
+      present: evidence.history.status === "present",
       preview:
-        resolution?.type === "resolution" ? resolutionText(resolution.value) : "Not recorded",
+        resolution?.type === "resolution" ? resolutionText(resolution.value) : "Proposal recorded",
       content: <History evidence={evidence} />,
     },
   ];
+  const recorded = rows.filter((row) => row.present);
+  const absent = rows.filter((row) => !row.present).map((row) => row.label.toLowerCase());
   return (
     <div className="recorded-evidence">
       <h3>Recorded evidence</h3>
-      <div className="evidence-rows">
-        {rows.map((row) => (
-          <details className="evidence-row" key={row.label}>
-            <summary>
-              <span>
-                {row.label} · {row.preview}
-              </span>
-              <ChevronDown size={14} />
-            </summary>
-            <div className="evidence-content">{row.content}</div>
-          </details>
-        ))}
-      </div>
+      {recorded.length > 0 && (
+        <div className="evidence-rows">
+          {recorded.map((row) => (
+            <details className="evidence-row" key={row.label}>
+              <summary>
+                <span>
+                  <span>{row.label}</span> <span className="evidence-preview">{row.preview}</span>
+                </span>
+                <ChevronDown size={14} />
+              </summary>
+              <div className="evidence-content">{row.content}</div>
+            </details>
+          ))}
+        </div>
+      )}
+      {absent.length > 0 && (
+        <p className="evidence-absence">Not recorded for this revision: {sentenceList(absent)}.</p>
+      )}
     </div>
   );
 }

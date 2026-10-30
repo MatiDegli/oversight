@@ -68,3 +68,10 @@
     line-height: 20px;
   }
 }
+.evidence-preview,
+.evidence-absence {
+  color: var(--muted);
+}
+.evidence-absence {
+  margin-top: 6px;
+}
