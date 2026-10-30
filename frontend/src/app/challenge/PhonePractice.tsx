@@ -3,6 +3,7 @@ import "./phoneGraph.css";
 import { AgentLetter, AgentLine, PhoneGraph } from "./PhoneGraph";
 import { caseSlot, nodeName } from "./phoneEvidence";
 import { PhoneDecision } from "./PhoneDecision";
+import { RecordedEvidence, absenceNote } from "./RecordedEvidence";
 import { score } from "./PracticePanel";
 import type { PanelProps } from "./PracticePanel";
 
@@ -83,12 +84,13 @@ function RecordedDecisions({ practice, attempt, onFinish }: PanelProps & { onFin
                 </span>
                 <span>{entry.proposal.impact.entries.length} possibly affected</span>
               </p>
+              <RecordedEvidence practice={practice} entry={entry} />
             </section>
           );
         })}
         <p className="pp-reveal-note">
           <Info size={18} />
-          No review rationale was recorded.
+          {absenceNote}
         </p>
       </main>
       <footer className="pp-dock">

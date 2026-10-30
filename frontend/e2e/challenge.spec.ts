@@ -110,7 +110,7 @@ test("actual static two-change practice: local decisions, frozen shell and hones
     "32 passing tests · 9 possibly affected entries",
   );
   await expect(panel).toContainText(
-    "Detailed review facts, cross-review and behavior evidence were not recorded.",
+    "Missing evidence does not establish a clean review, behavior or safety.",
   );
   await expect(
     panel.getByText(/Behavioral example|Measured result|Clean review|Safe to merge/),

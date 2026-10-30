@@ -30,12 +30,15 @@ it("withholds historical findings until reveal; uses only recorded proposal fact
   expect(revealed).toContain("Matches with recorded decisions: 1/2.");
   expect(revealed).toContain("Your practice answer: Reject");
   expect(revealed).toContain("Recorded decision: Approve");
+  for (const label of ["Agent’s test runs", "Review facts", "Cross-review", "Review history"])
+    expect(revealed.split(label).length - 1).toBeGreaterThanOrEqual(2);
+  expect(revealed).toContain("2 runs, last 29 of 29 passed");
   expect(revealed).toContain("29 passing tests");
   expect(revealed).toContain("32 passing tests");
   expect(revealed).toContain("0 possibly affected entries");
   expect(revealed).toContain("9 possibly affected entries");
   expect(revealed).toContain(
-    "Detailed review facts, cross-review and behavior evidence were not recorded.",
+    "Missing evidence does not establish a clean review, behavior or safety.",
   );
   expect(revealed).not.toMatch(/Behavioral example|Measured result|Clean review|Safe to merge/);
   expect(Object.values(handlers).every((handler) => handler.mock.calls.length === 0)).toBe(true);

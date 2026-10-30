@@ -287,3 +287,48 @@ it.each([
     });
   },
 );
+
+it.each([
+  [390, 844],
+  [430, 932],
+])(
+  "keeps the first reveal comparison clear of the dock at %ix%i and expands evidence in place",
+  async (width, height) => {
+    await visit(0, "/", async (page) => {
+      await page.setViewportSize({ width, height });
+      await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+      await page.getByRole("button", { name: "Start practice", exact: true }).click();
+      await page.getByRole("button", { name: "Approve", exact: true }).click();
+      await page.getByRole("button", { name: "Next", exact: true }).click();
+      await page.getByRole("button", { name: "Reject", exact: true }).click();
+      await page.getByRole("button", { name: "Show findings", exact: true }).click();
+      await page.evaluate(() => document.fonts.ready);
+      for (const theme of ["dark", "day"]) {
+        await page.evaluate((theme) => {
+          document.documentElement.dataset.theme = theme;
+        }, theme);
+        const comparison = await page.locator(".pp-comparison").first().boundingBox();
+        const dock = await page.locator(".pp-dock").boundingBox();
+        if (!comparison || !dock) throw new Error("Missing comparison or dock");
+        expect(comparison.y + comparison.height).toBeLessThan(dock.y);
+        const rows = page.locator(".pp-result").first().locator(".evidence-row");
+        await check(rows).toHaveCount(4);
+        await check(rows.first()).not.toHaveAttribute("open");
+        const summary = rows.first().locator("summary");
+        expect((await summary.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+        await check(summary).toContainText("2 runs, last 29 of 29 passed");
+        await summary.click();
+        await check(rows.first()).toHaveAttribute("open");
+        await check(rows.first()).toContainText(
+          "Step 10 · passed · 29 passed · 0 failed · 0 skipped · 236 ms",
+        );
+        await check(summary).toBeFocused();
+        expect(await page.locator(".pp-dock").boundingBox()).toEqual(dock);
+        await summary.click();
+        await page.locator(".pp-main").evaluate((element) => {
+          element.scrollTop = 0;
+        });
+      }
+    });
+  },
+);

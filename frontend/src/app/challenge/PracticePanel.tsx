@@ -1,4 +1,5 @@
-import type { Practice } from "./manifest";
+import { RecordedEvidence, absenceNote } from "./RecordedEvidence";
+import type { EvidencePractice as Practice } from "./caseEvidence";
 import { usePhonePractice } from "./usePhonePractice";
 import { PhonePractice } from "./PhonePractice";
 
@@ -67,12 +68,10 @@ function Findings({ practice, attempt, onRestart }: PanelProps) {
             +{entry.proposal.impact.omitted_by_depth} omitted by depth · +
             {entry.proposal.impact.omitted_by_limit} omitted by limit
           </p>
+          <RecordedEvidence practice={practice} entry={entry} />
         </section>
       ))}
-      <p>
-        Detailed review facts, cross-review and behavior evidence were not recorded. Their absence
-        does not establish clean reviews, behavior changes, measurement or safety.
-      </p>
+      <p>{absenceNote}</p>
       <p>The graph retains the selected decision-time cone; recorded merges are shown here only.</p>
       <button className={control} onClick={onRestart}>
         Try again

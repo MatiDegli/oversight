@@ -170,6 +170,10 @@ it("reveals both solid merged pieces only with recorded decisions", () => {
     />,
   );
   expect(html).toContain("Recorded decisions");
+  for (const label of ["Agent’s test runs", "Review facts", "Cross-review", "Review history"])
+    expect(html.split(label).length - 1).toBeGreaterThanOrEqual(2);
+  expect(html).toContain("2 runs, last 29 of 29 passed");
+  expect(html).toContain("Review facts · Not recorded");
   expect(html).toContain("Both merged");
   expect(html).toContain("Same decision");
   expect(html).toContain("Different decision");
