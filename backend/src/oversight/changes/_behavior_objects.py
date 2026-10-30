@@ -2,18 +2,19 @@
 
 import ast
 from dataclasses import dataclass
-from pathlib import PurePosixPath
 from typing import Any
 
 from oversight.changes._behavior_aliases import _AliasBindings, module_aliases  # pyright: ignore[reportPrivateUsage]
+from oversight.changes._behavior_construction import construction_ast
+from oversight.changes._behavior_fixtures import fixture
 from oversight.changes._behavior_inputs import (
     _literal,  # pyright: ignore[reportPrivateUsage]
     _resolved,  # pyright: ignore[reportPrivateUsage]
     literal_text,
-    module_name,
 )
+from oversight.changes._behavior_sources import Sources
 from oversight.changes._review_identity import bound_inputs
-from oversight.changes._shortcuts_common import Source, is_test_file
+from oversight.changes._shortcuts_common import Source, check_deadline, is_test_file
 
 TAG = "oversight.object_arguments.v1"
 
@@ -26,7 +27,7 @@ class Constructor:
     kwargs: dict[str, Any]
 
 
-def class_signature(files: dict[str, str], module: str, name: str, deadline: float):
+def class_signature(cache: Sources, module: str, name: str):
     # Receivers and arguments must retain exactly the same static class checks.
     from oversight.changes._behavior_methods import (
         _class_reason,  # pyright: ignore[reportPrivateUsage]
@@ -35,11 +36,14 @@ def class_signature(files: dict[str, str], module: str, name: str, deadline: flo
         _function_reason,  # pyright: ignore[reportPrivateUsage]
     )
 
-    matches = [path for path in files if path.endswith(".py") and module_name(path) == module]
+    key = (module, name)
+    if key in cache.constructors:
+        return cache.constructors[key][0]
+    matches = cache.modules.get(module, [])
     if len(matches) != 1 or is_test_file(matches[0]):
         raise ValueError("argument is not a project class")
-    source = Source(files[matches[0]], deadline)
-    classes = [n for n in source.tree.body if isinstance(n, ast.ClassDef) and n.name == name]
+    source = cache.get(matches[0])
+    classes = [node for _, node in cache.classes.get(module, []) if node.name == name]
     if len(classes) != 1:
         raise ValueError("ambiguous argument class")
     cls = classes[0]
@@ -52,30 +56,24 @@ def class_signature(files: dict[str, str], module: str, name: str, deadline: flo
             and (reason := _function_reason(source, node))
         ):
             raise ValueError(reason)
-    return _constructor(source, cls)
+    signature = _constructor(source, cls)
+    cache.constructors[key] = (signature, construction_ast(cls, cache.deadline))
+    return signature
 
 
-def constructor(source: Source, path: str, node: ast.Call, files: dict[str, str]) -> Constructor:
+def constructor(source: Source, path: str, node: ast.Call, cache: Sources) -> Constructor:
     aliases = module_aliases(source)
     matches: list[tuple[str, str]] = []
-    for candidate, text in files.items():
-        if not candidate.endswith(".py") or is_test_file(candidate):
-            continue
-        try:
-            other = Source(text, source.deadline)
-        except (SyntaxError, ValueError, RecursionError):
-            continue
-        module = module_name(candidate)
-        for cls in other.tree.body:
-            if isinstance(cls, ast.ClassDef) and _resolved(
-                source, node, path, module, cls.name, aliases
-            ):
+    for module, classes in cache.classes.items():
+        for _, cls in classes:
+            check_deadline(cache.deadline)
+            if _resolved(source, node, path, module, cls.name, aliases):
                 matches.append((module, cls.name))
     if len(matches) != 1:
         raise ValueError("unresolved argument constructor")
     args, kwargs = literal_arguments(node)
     module, name = matches[0]
-    class_signature(files, module, name, source.deadline).bind(*args, **kwargs)
+    class_signature(cache, module, name).bind(*args, **kwargs)
     return Constructor(module, name, args, kwargs)
 
 
@@ -89,96 +87,18 @@ def literal_arguments(call: ast.Call) -> tuple[tuple[Any, ...], dict[str, Any]]:
     return args, kwargs
 
 
-def _fixture(source: Source, path: str, node: ast.Name, files: dict[str, str]) -> Constructor:
-    if not is_test_file(path):
-        raise ValueError("fixture outside test")
-    parents = {
-        child: parent for parent in ast.walk(source.tree) for child in ast.iter_child_nodes(parent)
-    }
-    parent: ast.AST = node
-    while parent in parents and not isinstance(
-        parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
-    ):
-        if isinstance(parent, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)) and any(
-            isinstance(target, ast.Name) and target.id == node.id
-            for generator in parent.generators
-            for target in ast.walk(generator.target)
-        ):
-            raise ValueError("shadowed fixture parameter")
-        parent = parents[parent]
-    if not isinstance(parent, ast.FunctionDef) or parent not in source.tests.values():
-        raise ValueError("not a test parameter")
-    parameters = [*parent.args.posonlyargs, *parent.args.args, *parent.args.kwonlyargs]
-    if node.id not in {arg.arg for arg in parameters}:
-        raise ValueError("not a test parameter")
-    bindings = _AliasBindings(source.deadline)
-    for stmt in parent.body:
-        bindings.visit(stmt)
-    if node.id in bindings.names or bindings.star_import or node.id not in source.scopes[node]:
-        raise ValueError("rebound fixture parameter")
-    directory = PurePosixPath(path).parent
-    candidates = [path, *(str(p / "conftest.py") for p in (directory, *directory.parents))]
-    for candidate in dict.fromkeys(candidates):
-        if candidate not in files:
-            continue
-        fixture_source = Source(files[candidate], source.deadline)
-        found = [
-            n
-            for n in fixture_source.tree.body
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == node.id
-        ]
-        bindings = _AliasBindings(source.deadline)
-        bindings.visit(fixture_source.tree)
-        if not found:
-            if node.id in bindings.names or bindings.star_import:
-                raise ValueError("unresolved local fixture")
-            continue
-        if len(found) != 1 or not isinstance(found[0], ast.FunctionDef):
-            raise ValueError("ambiguous or async fixture")
-        if bindings.counts[node.id] != 1 or bindings.star_import:
-            raise ValueError("rebound fixture")
-        fixture = found[0]
-        value = _fixture_return(fixture_source, fixture)
-        return constructor(fixture_source, candidate, value, files)
-    raise ValueError("unresolved fixture")
+def arguments(source: Source, path: str, call: ast.Call, files: dict[str, str] | Sources):
+    cache = files if isinstance(files, Sources) else Sources(files, source.deadline)
 
-
-def _fixture_return(source: Source, fixture: ast.FunctionDef) -> ast.Call:
-    if len(fixture.decorator_list) != 1:
-        raise ValueError("unsupported fixture decorator")
-    dec = fixture.decorator_list[0]
-    func = dec.func if isinstance(dec, ast.Call) else dec
-    if source.resolve(func) != "pytest.fixture":
-        raise ValueError("not a pytest fixture")
-    if isinstance(dec, ast.Call) and (
-        dec.args or any(k.arg not in {"scope", "autouse", "ids"} for k in dec.keywords)
-    ):
-        raise ValueError("parameterized or renamed fixture")
-    if (
-        fixture.args.posonlyargs
-        or fixture.args.args
-        or fixture.args.kwonlyargs
-        or fixture.args.vararg
-        or fixture.args.kwarg
-    ):
-        raise ValueError("fixture dependencies")
-    if len(fixture.body) != 1 or not isinstance(fixture.body[0], ast.Return):
-        raise ValueError("fixture body")
-    value = fixture.body[0].value
-    if not isinstance(value, ast.Call):
-        raise ValueError("fixture is not a constructor")
-    return value
-
-
-def arguments(source: Source, path: str, call: ast.Call, files: dict[str, str]):
     def value(node: ast.expr):
+        check_deadline(cache.deadline)
         try:
             return _literal(node)
         except (ValueError, TypeError):
             if isinstance(node, ast.Call):
-                return constructor(source, path, node, files)
+                return constructor(source, path, node, cache)
             if isinstance(node, ast.Name):
-                return _fixture(source, path, node, files)
+                return fixture(source, path, node, cache)
             raise ValueError("unsupported object argument") from None
 
     if any(kw.arg is None for kw in call.keywords):
@@ -215,11 +135,31 @@ def invocation(values: tuple[tuple[Any, ...], dict[str, Any]]) -> str:
     )
 
 
-def input_identity(named: dict[str, Any], files: dict[str, str], deadline: float) -> str | None:
+def invocation_values(text: str) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    values = ast.literal_eval(text)
+    if len(values) == 2:
+        return values
+    tag, args, kwargs = values
+    if tag != TAG:
+        raise ValueError("unsupported argument encoding")
+
+    def value(data: Any) -> Any:
+        if data[0] == "constructor":
+            return Constructor(*data[1:])
+        return data[1]
+
+    return tuple(value(arg) for arg in args), {key: value(arg) for key, arg in kwargs.items()}
+
+
+def input_identity(
+    named: dict[str, Any], files: dict[str, str] | Sources, deadline: float
+) -> str | None:
+    cache = files if isinstance(files, Sources) else Sources(files, deadline)
     data: dict[str, Any] = {}
     for key, value in named.items():
+        check_deadline(cache.deadline)
         if isinstance(value, Constructor):
-            sig = class_signature(files, value.module, value.name, deadline)
+            sig = class_signature(cache, value.module, value.name)
             bound = sig.bind(*value.args, **value.kwargs)
             bound.apply_defaults()
             effective = bound_inputs(dict(bound.arguments))
@@ -232,6 +172,7 @@ def input_identity(named: dict[str, Any], files: dict[str, str], deadline: float
                 value.args,
                 value.kwargs,
                 effective,
+                cache.constructors[(value.module, value.name)][1],
             )
         else:
             data[key] = ("literal", value)
@@ -242,13 +183,14 @@ def input_identity(named: dict[str, Any], files: dict[str, str], deadline: float
     return bound_inputs(named)
 
 
-def method_arguments(module: str, cls: str, name: str, files: dict[str, str], deadline: float):
+def method_arguments(module: str, cls: str, name: str, cache: Sources):
     found: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
-    for path, text in sorted(files.items()):
+    for path in sorted(cache.files):
+        check_deadline(cache.deadline)
         if not path.endswith(".py"):
             continue
         try:
-            source = Source(text, deadline)
+            source = cache.get(path)
             aliases = module_aliases(source)
             for node in ast.walk(source.tree):
                 if (
@@ -259,12 +201,12 @@ def method_arguments(module: str, cls: str, name: str, files: dict[str, str], de
                     continue
                 receiver = node.func.value
                 if isinstance(receiver, ast.Name):
-                    receiver = _assigned_receiver(source, node, receiver.id)
+                    receiver = _assigned_receiver(source, node, receiver.id, cache)
                 if isinstance(receiver, ast.Call) and _resolved(
                     source, receiver, path, module, cls, aliases
                 ):
                     try:
-                        found.append(arguments(source, path, node, files))
+                        found.append(arguments(source, path, node, cache))
                     except (ValueError, TypeError, SyntaxError, RecursionError):
                         continue
         except (ValueError, TypeError, SyntaxError, RecursionError):
@@ -272,10 +214,10 @@ def method_arguments(module: str, cls: str, name: str, files: dict[str, str], de
     return found
 
 
-def _assigned_receiver(source: Source, call: ast.Call, name: str) -> ast.expr | None:
-    parents = {
-        child: parent for parent in ast.walk(source.tree) for child in ast.iter_child_nodes(parent)
-    }
+def _assigned_receiver(
+    source: Source, call: ast.Call, name: str, cache: Sources
+) -> ast.expr | None:
+    parents = cache.parents(source)
     scope: ast.AST = call
     while scope in parents:
         scope = parents[scope]

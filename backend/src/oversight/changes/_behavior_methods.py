@@ -17,7 +17,8 @@ from oversight.changes._behavior_inputs import (
     literal_text,
     module_name,
 )
-from oversight.changes._behavior_objects import display, method_arguments
+from oversight.changes._behavior_objects import display, invocation_values, method_arguments
+from oversight.changes._behavior_sources import Sources
 from oversight.changes._review_identity import bound_inputs, canonical
 from oversight.changes._shortcuts_common import Source, is_test_file, walk_local
 
@@ -52,7 +53,7 @@ def _decorator(node: Function) -> str:
 
 
 def _definition(
-    files: dict[str, str], module: str, qualified: str
+    cache: Sources, module: str, qualified: str
 ) -> tuple[Source, ast.ClassDef, Function]:
     name, marker, suffix = qualified.partition("#")
     ordinal = int(suffix) if marker else 1
@@ -60,12 +61,12 @@ def _definition(
     if len(parts) != 2:
         raise ValueError("nested class")
     found: list[tuple[Source, ast.ClassDef, Function]] = []
-    for path, text in files.items():
+    for path in cache.files:
         if not path.endswith(".py") or module_name(path) != module:
             continue
         if is_test_file(path):
             raise ValueError("test module")
-        source = Source(text)
+        source = cache.get(path)
         classes = [
             n for n in source.tree.body if isinstance(n, ast.ClassDef) and n.name == parts[0]
         ]
@@ -246,26 +247,24 @@ def _properties(definitions: list[tuple[Source, ast.ClassDef, Function]]) -> tup
     return tuple(names)
 
 
-def _receivers(module: str, cls: str, files: dict[str, str], deadline: float):
+def _receivers(module: str, cls: str, cache: Sources):
     eligible = {
         path: text
-        for path, text in files.items()
+        for path, text in cache.files.items()
         if is_test_file(path) or (path.endswith(".py") and module_name(path) == module)
     }
-    return calls(eligible, module, cls, deadline)
+    return calls(eligible, module, cls, cache.deadline, cache=cache)
 
 
 def _receiver_inputs(
     module: str,
     cls: str,
-    base: dict[str, str],
-    head: dict[str, str],
+    caches: list[Sources],
     signatures: list[inspect.Signature],
-    deadline: float,
 ):
     found: dict[str, tuple[str, str | None]] = {}
-    for files in (base, head):
-        for args, kwargs in _receivers(module, cls, files, deadline):
+    for cache in caches:
+        for args, kwargs in _receivers(module, cls, cache):
             literal = literal_text((args, kwargs))
             if literal in found:
                 continue
@@ -291,8 +290,9 @@ def method_inputs(
     *,
     deadline: float = float("inf"),
 ) -> BehaviorInputs:
+    caches = [Sources(files, deadline) for files in (base, head)]
     try:
-        definitions = [_definition(files, module, qualified) for files in (base, head)]
+        definitions = [_definition(cache, module, qualified) for cache in caches]
         kinds = [_decorator(node) for _, _, node in definitions]
         if kinds[0] != kinds[1]:
             raise ValueError("method target mismatch")
@@ -322,12 +322,12 @@ def method_inputs(
             v for source, _, _ in definitions for v in _literals(source.tree) if type(v) is int
         ]
         cls, name = definitions[0][1].name, nodes[0].name
-        receivers = _receiver_inputs(module, cls, base, head, constructors, deadline)
+        receivers = _receiver_inputs(module, cls, caches, constructors)
         if not receivers:
             raise ValueError("no literal constructor receivers")
-        observed = [method_arguments(module, cls, name, files, deadline) for files in (base, head)]
+        observed = [method_arguments(module, cls, name, cache) for cache in caches]
         generated = generate(
-            module, name, base, head, nodes, signatures, integers, deadline, observed
+            module, name, base, head, nodes, signatures, integers, deadline, observed, caches
         )
         return replace(
             generated,
@@ -361,7 +361,7 @@ def _combine_receivers(
             if kind == "property":
                 call = f"{receiver_text}.{name}"
             elif kind == "setter":
-                args, kwargs = ast.literal_eval(sample.before)
+                args, kwargs = invocation_values(sample.before)
                 values = [*args, *kwargs.values()]
                 if len(values) != 1:
                     continue

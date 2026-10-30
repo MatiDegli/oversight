@@ -3,7 +3,6 @@
 import ast
 import json
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -288,10 +287,31 @@ def test_worker_class_mismatch_has_fixed_reason(tmp_path, monkeypatch):
         _arguments(generated.inputs[0].before, tmp_path)
 
 
-def test_object_discovery_obeys_deadline():
-    files, _ = prepared()
+def test_object_discovery_obeys_deadline(monkeypatch):
+    from oversight.changes import _behavior_objects as objects
+
+    original = objects.constructor
+    completed_first = False
+
+    def first_candidate(*args, **kwargs):
+        nonlocal completed_first
+        result = original(*args, **kwargs)
+        completed_first = True
+        return result
+
+    def check(_deadline):
+        if completed_first:
+            raise TimeoutError("analysis timeout")
+
+    monkeypatch.setattr(objects, "constructor", first_candidate)
+    monkeypatch.setattr(objects, "check_deadline", check, raising=False)
+    files = {
+        "sample.py": PRODUCT + "def f(first, second): return first.price\n",
+        "tests/test_sample.py": "from sample import f, Product\nf(Product('W'), Product('G'))",
+    }
     with pytest.raises(TimeoutError):
-        behavior_inputs("sample", "f", files, files, deadline=time.monotonic() - 1)
+        behavior_inputs("sample", "f", files, files)
+    assert completed_first
 
 
 def test_object_and_literal_protocol_lookalikes_never_share_an_identity():

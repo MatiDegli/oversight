@@ -1,11 +1,13 @@
 """AST-only finite inputs. No imports, evaluation of expressions, or model requests."""
 
+from __future__ import annotations
+
 import ast
 import inspect
 import time
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from oversight.changes._behavior_aliases import (
     _AliasBindings,  # pyright: ignore[reportPrivateUsage]
@@ -13,6 +15,9 @@ from oversight.changes._behavior_aliases import (
     shadowed,
 )
 from oversight.changes._shortcuts_common import Source, walk_local
+
+if TYPE_CHECKING:
+    from oversight.changes._behavior_sources import Sources
 
 MAX_INPUTS = 48
 MAX_LITERAL = 4096
@@ -196,16 +201,26 @@ def _resolved(
     return not shadowed(source, call, name)
 
 
-def calls(files: dict[str, str], module: str, name: str, deadline: float, *, objects: bool = False):
+def calls(
+    files: dict[str, str],
+    module: str,
+    name: str,
+    deadline: float,
+    *,
+    objects: bool = False,
+    cache: Sources | None = None,
+):
     from oversight.changes._behavior_objects import arguments, literal_arguments
+    from oversight.changes._behavior_sources import Sources
 
-    for path, text in sorted(files.items()):
+    cache = cache if cache is not None else Sources(files, deadline)
+    for path in sorted(files):
         if time.monotonic() >= deadline:
             raise TimeoutError
         if not path.endswith(".py"):
             continue
         try:
-            source = Source(text, deadline)
+            source = cache.get(path)
             aliases = module_aliases(source)
         except (SyntaxError, ValueError, RecursionError):
             continue
@@ -217,16 +232,16 @@ def calls(files: dict[str, str], module: str, name: str, deadline: float, *, obj
             if not _resolved(source, call, path, module, name, aliases):
                 continue
             try:
-                yield arguments(source, path, call, files) if objects else literal_arguments(call)
+                yield arguments(source, path, call, cache) if objects else literal_arguments(call)
             except (ValueError, TypeError, SyntaxError, RecursionError):
                 continue
 
 
-def _definition(files: dict[str, str], module: str, name: str):
+def _definition(cache: Sources, module: str, name: str):
     found: list[tuple[Source, ast.FunctionDef | ast.AsyncFunctionDef]] = []
-    for path, text in files.items():
+    for path in cache.files:
         if path.endswith(".py") and module_name(path) == module:
-            source = Source(text)
+            source = cache.get(path)
             found.extend(
                 (source, n)
                 for n in source.tree.body
@@ -319,8 +334,11 @@ def behavior_inputs(
     *,
     deadline: float = float("inf"),
 ) -> BehaviorInputs:
+    from oversight.changes._behavior_sources import Sources
+
+    caches = [Sources(files, deadline) for files in (base, head)]
     try:
-        definitions = [_definition(files, module, name) for files in (base, head)]
+        definitions = [_definition(cache, module, name) for cache in caches]
         nodes = [node for _, node in definitions]
         if any(
             isinstance(n, ast.AsyncFunctionDef)
@@ -342,7 +360,7 @@ def behavior_inputs(
         return BehaviorInputs(reason="unsupported signature")
     from oversight.changes._behavior_generation import generate
 
-    return generate(module, name, base, head, nodes, signatures, integers, deadline)
+    return generate(module, name, base, head, nodes, signatures, integers, deadline, caches=caches)
 
 
 def _literals(node: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef) -> list[Any]:

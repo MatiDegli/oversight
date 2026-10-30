@@ -18,6 +18,7 @@ from oversight.changes._behavior_inputs import (
     literal_text,
 )
 from oversight.changes._behavior_objects import display, input_identity, invocation
+from oversight.changes._behavior_sources import Sources
 
 
 def generate(
@@ -30,7 +31,9 @@ def generate(
     integers: list[int],
     deadline: float,
     observed: list[list[tuple[tuple[Any, ...], dict[str, Any]]]] | None = None,
+    caches: list[Sources] | None = None,
 ) -> BehaviorInputs:
+    caches = caches if caches is not None else [Sources(files, deadline) for files in (base, head)]
     inputs: list[BehaviorInput] = []
     seen: set[str] = set()
     skipped = 0
@@ -60,16 +63,16 @@ def generate(
         ):
             return
         seen.add(key)
-        sample = _sample(name, named, signatures, before, after, base, head, deadline)
+        sample = _sample(name, named, signatures, before, after, caches, deadline)
         if sample is not None:
             inputs.append(sample)
             seeds.append(named)
 
-    for side, (files, sig) in enumerate(zip((base, head), signatures, strict=True)):
+    for side, (cache, sig) in enumerate(zip(caches, signatures, strict=True)):
         observed_calls = (
             observed[side]
             if observed is not None
-            else calls(files, module, name, deadline, objects=True)
+            else calls(cache.files, module, name, deadline, objects=True, cache=cache)
         )
         for args, kwargs in observed_calls:
             try:
@@ -100,13 +103,12 @@ def _sample(
     signatures: list[inspect.Signature],
     before: tuple[tuple[Any, ...], dict[str, Any]],
     after: tuple[tuple[Any, ...], dict[str, Any]],
-    base: dict[str, str],
-    head: dict[str, str],
+    caches: list[Sources],
     deadline: float,
 ) -> BehaviorInput | None:
     rendered = ", ".join(f"{key}={display(value)}" for key, value in named.items())
     identities: list[str | None] = []
-    for sig, (args, kwargs), files in zip(signatures, (before, after), (base, head), strict=True):
+    for sig, (args, kwargs), cache in zip(signatures, (before, after), caches, strict=True):
         effective = sig.bind(*args, **kwargs)
         effective.apply_defaults()
         # Removed parameters and changed shared defaults must stay unequal.
@@ -116,7 +118,7 @@ def _sample(
             if key in signatures[0].parameters
         }
         try:
-            identities.append(input_identity(arguments, files, deadline))
+            identities.append(input_identity(arguments, cache, deadline))
         except (ValueError, TypeError, SyntaxError, RecursionError):
             return None
     return BehaviorInput(
