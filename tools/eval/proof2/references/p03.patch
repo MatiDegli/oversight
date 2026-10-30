@@ -1,0 +1,40 @@
+--- a/boltons/socketutils.py
++++ b/boltons/socketutils.py
+@@ -66,6 +66,7 @@
+ 
+ import time
+ import socket
++import operator
+ 
+ try:
+     from threading import RLock
+@@ -214,6 +215,9 @@
+         calls to recv will raise :exc:`socket.error`.
+ 
+         """
++        size = operator.index(size)
++        if size < 0:
++            raise ValueError('size must be non-negative')
+         with self._recv_lock:
+             if timeout is _UNSET:
+                 timeout = self.timeout
+@@ -250,6 +254,9 @@
+         :exc:`Timeout` will be raised. If the connection is closed, a
+         :exc:`ConnectionClosed` will be raised.
+         """
++        size = operator.index(size)
++        if size < 0:
++            raise ValueError('size must be non-negative')
+         with self._recv_lock:
+             if len(self.rbuf) >= size:
+                 return self.rbuf[:size]
+@@ -378,6 +385,9 @@
+         :exc:`Timeout` will be raised. If the connection is closed, a
+         :exc:`ConnectionClosed` will be raised.
+         """
++        size = operator.index(size)
++        if size < 0:
++            raise ValueError('size must be non-negative')
+         with self._recv_lock:
+             if size == 0:
+                 return b''

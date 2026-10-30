@@ -14,12 +14,13 @@ def main() -> int:
     checker = commands.add_parser("check")
     checker.add_argument("--task", required=True)
     checker.add_argument("--tree", type=Path, required=True)
+    checker.add_argument("--base", type=Path)
     validator = commands.add_parser("validate")
     validator.add_argument("--source", type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == "check":
-            result = asyncio.run(check(args.task, args.tree))
+            result = asyncio.run(check(args.task, args.tree, base=args.base))
             print(json.dumps(result))
             return int(result["exit_code"] != 0)
         results = asyncio.run(validate(args.source))
