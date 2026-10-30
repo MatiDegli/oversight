@@ -94,8 +94,8 @@ describe("recorded facts summary", () => {
     expect(renderToStaticMarkup(<FactsSummary facts={record} />)).toBe("");
     const html = panel(record ? [record] : []);
     expect(html).not.toContain(label);
-    if (record) expect(html).toContain('aria-label="Review context"');
-    else expect(html).not.toContain('aria-label="Review context"');
+    // Caller evidence still needs the shared, bounded context without a summary.
+    expect(html).toContain('aria-label="Review context"');
     for (const line of lines) expect(html).not.toContain(line);
   });
 

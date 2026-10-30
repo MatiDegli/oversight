@@ -922,6 +922,30 @@ everything else steps back.
 - In level 1, before the cone exists, review dims everything except the change's nodes.
 - The cone changes node and edge emphasis; it adds no light source to the LED field.
 
+### Measured callers within Signal
+
+Review context keeps the static cone card beside the focus panel. A neutral section headed
+“Measured callers · Possibly affected” joins the current proposal's facts to its retained static
+entries, in distance order. It fits any parent without its own width, outer margin or scroll
+region; the review context owns scrolling and preserves the diff and decision area, with or
+without a server summary. Events update evidence in place without moving focus.
+
+Caller outcomes read “Result change measured”, “No difference measured on these inputs”, or
+“Possible, no change measured”. Availability is separate: completed caller comparisons are
+available; incomplete comparisons read “Partial measurements”, preserving stable differences;
+zero admitted comparisons read “Measurements unavailable”, with published reasons. Counts are
+invocations, never numbers of callers or display samples. Unmatched before/after counts and
+recording diagnostics stay visible. Overall review-facts completeness does not classify a caller.
+
+Next carries headings and explanations; Mono carries caller code, counts and escaped samples.
+Use existing title/data roles and spacing tokens, neutral text/muted colors, and visible focus.
+Samples disclose Inputs, Before, After and “Unstable observation” in initially closed details.
+Absent evidence says “Caller measurements not recorded for this revision”; an explicit empty
+array says “No caller measurements in this cone”. Static entries without observations remain
+possible. Always retain: “Measurements cover observed invocations only; other callers may be
+affected.” Equality on observed inputs establishes neither equivalence nor coverage; the cone's
+bounds, omissions and possible-callers wording remain independent of measurements.
+
 ### Review panel with the matte header (signature component)
 
 Opened only by the person: from "Review change" on a card, the decisions chip, or a node whose

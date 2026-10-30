@@ -3,6 +3,7 @@ import type { AddedTestProbe, ChangeFacts, ChangeProposed, SuiteExecution } from
 import type { State } from "../state";
 import { BehaviorDiff } from "./BehaviorDiff";
 import { behaviorNotRecorded } from "./behaviorEvidence";
+import { MeasuredCallers } from "./MeasuredCallers";
 import { factsForRevision } from "./factsForRevision";
 
 export { factsForRevision } from "./factsForRevision";
@@ -138,14 +139,15 @@ export function ReviewFacts({
   scrollable?: boolean;
 }) {
   const facts = factsForRevision(state, proposal);
-  if (!facts) {
+  if (!facts)
     return (
-      <span>
-        {" "}
-        · Facts incomplete: facts for this revision are unavailable. {behaviorNotRecorded}
-      </span>
+      <section className="border-b border-page-border px-4.5 py-2.5">
+        <p className="text-sm text-muted">
+          Facts incomplete: facts for this revision are unavailable. {behaviorNotRecorded}
+        </p>
+        <MeasuredCallers state={state} changeId={proposal.change_id} />
+      </section>
     );
-  }
   const executions = facts.test_runs
     .map((seq) => state.testExecutions[seq])
     .filter(
@@ -203,6 +205,9 @@ export function ReviewFacts({
               {facts.behavior_diff == null && <p>{behaviorNotRecorded}</p>}
             </div>
             {!facts.complete && <p>Incomplete: {facts.problems.join("; ")}</p>}
+            <div className="pt-(--spacing-lg)">
+              <MeasuredCallers state={state} changeId={proposal.change_id} />
+            </div>
           </>
         </div>
       </details>

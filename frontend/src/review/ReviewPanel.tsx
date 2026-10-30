@@ -262,7 +262,7 @@ function LegacyReviewPanel({
   const change = state.changes[changeId];
   const proposal = change?.proposal ?? null;
   const facts = proposal === null ? undefined : factsForRevision(state, proposal);
-  const hasFacts = facts !== undefined;
+  const hasContext = proposal !== null;
   const agent = change ? state.agents[change.agent_id] : undefined;
   const files = proposal?.files.map((file) => file.path) ?? Object.keys(change?.files ?? {});
   const [editing, setEditing] = useState<{
@@ -292,9 +292,7 @@ function LegacyReviewPanel({
       {change && (!attempt || attempt.revision !== proposal?.revision) && (
         <CrossReviewNote change={change} />
       )}
-      {proposal && hasFacts && (
-        <ReviewFacts state={state} proposal={proposal} scrollable={!hasFacts} />
-      )}
+      {proposal && <ReviewFacts state={state} proposal={proposal} scrollable={false} />}
     </>
   );
   const report = (
@@ -342,13 +340,8 @@ function LegacyReviewPanel({
           </button>
         </div>
         {change && <ChangeFactsRow state={state} changeId={changeId} />}
-        {proposal && !hasFacts && (
-          <p className="text-(length:--data-size) text-muted">
-            <ReviewFacts state={state} proposal={proposal} />
-          </p>
-        )}
       </header>
-      {hasFacts ? (
+      {hasContext ? (
         <section aria-label="Review context" className="min-h-0 overflow-y-auto">
           {context}
           {report}
@@ -356,8 +349,8 @@ function LegacyReviewPanel({
       ) : (
         context
       )}
-      <div className={`flex flex-1 flex-col ${hasFacts ? "min-h-min" : "min-h-0"}`}>
-        {!hasFacts && report}
+      <div className={`flex flex-1 flex-col ${hasContext ? "min-h-min" : "min-h-0"}`}>
+        {!hasContext && report}
         {files.map((path) => {
           const open = path === openPath;
           const stat = stats.get(path);
@@ -366,7 +359,7 @@ function LegacyReviewPanel({
             <section
               key={path}
               aria-label={`Diff of ${path}`}
-              className={`flex flex-col border-b border-page-border ${open ? (hasFacts ? "min-h-min flex-1" : "min-h-0 flex-1") : ""}`}
+              className={`flex flex-col border-b border-page-border ${open ? (hasContext ? "min-h-min flex-1" : "min-h-0 flex-1") : ""}`}
             >
               <button
                 type="button"

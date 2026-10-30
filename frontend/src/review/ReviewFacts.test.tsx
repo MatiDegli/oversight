@@ -163,7 +163,7 @@ describe("review evidence", () => {
     };
     const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
     expect(html).toContain("facts for this revision are unavailable");
-    expect(html).not.toContain("<section"); // Historical logs keep the editor's existing height.
+    expect(html).toContain("Caller measurements not recorded for this revision");
   });
 
   it("preserves detector unknown, parse errors and neutral observations", () => {
