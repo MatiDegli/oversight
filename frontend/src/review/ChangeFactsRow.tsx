@@ -37,11 +37,7 @@ function Fact({
   return (
     <li
       aria-label={label}
-      className={
-        review
-          ? `${chip} h-[30px] rounded-[7px] py-0 text-sm font-semibold [&_.font-mono]:font-sans`
-          : chip
-      }
+      className={review ? `${chip} h-[30px] rounded-[7px] py-0 text-sm font-semibold` : chip}
     >
       {symbol}
       <span className="min-w-0 break-words">{children}</span>
@@ -112,19 +108,27 @@ export function ChangeFactsRow({
     return (
       <ul aria-label="Facts" className="flex flex-wrap items-center gap-2 text-text">
         <Fact review label="Files" symbol={<FileCode aria-hidden="true" className={icon} />}>
-          {fileCount} {fileCount === 1 ? "file" : "files"}
+          <span className="font-mono">{fileCount}</span> {fileCount === 1 ? "file" : "files"}
         </Fact>
         <Fact review label="Lines" symbol={<ListChecks aria-hidden="true" className={icon} />}>
-          <span className="text-added">+{proposal?.lines_added ?? change.lines_added}</span>{" "}
-          <span className="text-removed">−{proposal?.lines_removed ?? change.lines_removed}</span>
+          <span className="font-mono text-added">
+            +{proposal?.lines_added ?? change.lines_added}
+          </span>{" "}
+          <span className="font-mono text-removed">
+            −{proposal?.lines_removed ?? change.lines_removed}
+          </span>
         </Fact>
         <TestsFact review tests={proposal?.tests ?? lastTests?.suite} />
         <Fact review label="Impact cone" symbol={<ScanEye aria-hidden="true" className={icon} />}>
-          {!cone
-            ? "Possibly affected: unknown"
-            : cone.entries.length === 0
-              ? "No exact callers"
-              : `${String(cone.entries.length)} possibly affected · up to distance ${String(Math.max(...cone.entries.map((entry) => entry.distance)))}`}
+          <DataWords
+            text={
+              !cone
+                ? "Possibly affected: unknown"
+                : cone.entries.length === 0
+                  ? "No exact callers"
+                  : `${String(cone.entries.length)} possibly affected · up to distance ${String(Math.max(...cone.entries.map((entry) => entry.distance)))}`
+            }
+          />
         </Fact>
       </ul>
     );

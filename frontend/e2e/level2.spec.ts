@@ -227,7 +227,9 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     expect((await appearance(page, "node.dimmed:childless")).every((n) => n.opacity < 1)).toBe(
       true,
     );
-    await expect(review).toContainText(/function(?:s)? possibly affected/);
+    await expect(review.getByLabel("Impact cone", { exact: true })).toHaveText(
+      "1 possibly affected · up to distance 1",
+    );
     await expect(approve).toBeEnabled();
     await expect(review.getByRole("button", { name: "Reject", exact: true })).toBeEnabled();
     await expect(request).toBeDisabled();
