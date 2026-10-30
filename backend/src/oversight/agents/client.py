@@ -7,7 +7,6 @@ Usage the API does not report stays `None`, never 0.
 """
 
 import asyncio
-import logging
 import math
 import random
 from collections.abc import Awaitable, Callable, Sequence
@@ -15,7 +14,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any, Literal, Protocol, TypedDict, cast
+from typing import Any, Literal, Protocol, cast
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -23,42 +22,10 @@ import httpx2 as httpx
 import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
+from oversight.agents._attempts import FailedAttempt, notify_failed_attempt
 from oversight.agents._trace_http import exchange_span, request_ready
-from oversight.events import EventPayload
 from oversight.telemetry import CURRENT, annotate, response_fields, span
-from oversight_contracts.events import ModelAttemptFailed, ModelProfile
-
-logger = logging.getLogger(__name__)
-
-
-class FailedAttempt(TypedDict):
-    model: str
-    provider: Literal["meta", "baseten", "fake"]
-    attempt: int
-    max_attempts: int
-    cause: Literal["timeout", "connection", "rate_limited", "server_error", "refused"]
-    status: int | None
-    retry_after_s: float | None
-    wait_s: float | None
-    final: Literal["attempts_used", "not_retryable", "deadline"] | None
-
-
-def attempt_observer(
-    publish: Callable[[EventPayload], Awaitable[object]],
-    *,
-    agent_id: str,
-    change_id: str | None = None,
-    role: Literal["agent", "review"] = "agent",
-) -> Callable[[FailedAttempt], Awaitable[None]]:
-    """Bind caller identity without exposing publication through ModelClient."""
-
-    async def observe(failure: FailedAttempt) -> None:
-        await publish(
-            ModelAttemptFailed(agent_id=agent_id, change_id=change_id, role=role, **failure)
-        )
-
-    return observe
-
+from oversight_contracts.events import ModelProfile
 
 type Message = dict[str, object]
 """One Chat Completions message, as JSON."""
@@ -443,40 +410,16 @@ class OpenAIClient:
         scope = CALL_SCOPE.get()
         if scope is None or scope.attempt_failed is None:
             return
-        cause: Literal["timeout", "connection", "rate_limited", "server_error", "refused"]
-        status: int | None = None
-        if isinstance(error, openai.APITimeoutError):
-            cause = "timeout"
-        elif isinstance(error, openai.APIConnectionError):
-            cause = "connection"
-        elif isinstance(error, openai.APIStatusError):
-            status = error.status_code
-            cause = (
-                "rate_limited"
-                if status == 429
-                else "server_error"
-                if 500 <= status <= 599
-                else "refused"
-            )
-        else:
-            logger.warning("Model attempt has no transport or HTTP failure classification")
-            return
-        try:
-            await scope.attempt_failed(
-                FailedAttempt(
-                    model=self.profile.id,
-                    provider=self.profile.provider,
-                    attempt=attempt,
-                    max_attempts=self._retry.max_attempts,
-                    cause=cause,
-                    status=status,
-                    retry_after_s=retry_after_s,
-                    wait_s=wait_s,
-                    final=final,
-                )
-            )
-        except Exception:
-            logger.exception("Could not publish failed model attempt")
+        await notify_failed_attempt(
+            scope.attempt_failed,
+            error,
+            profile=self.profile,
+            attempt=attempt,
+            max_attempts=self._retry.max_attempts,
+            retry_after_s=retry_after_s,
+            wait_s=wait_s,
+            final=final,
+        )
 
     async def _decision_attempt(
         self, params: dict[str, object], scope: CallScope

@@ -13,6 +13,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Final, Literal, cast
 
+from oversight.agents._attempts import attempt_observer
 from oversight.agents.client import (
     CALL_SCOPE,
     MUSE_SPARK_OPEN,
@@ -23,7 +24,6 @@ from oversight.agents.client import (
     ModelReply,
     OpenAIClient,
     ToolSchema,
-    attempt_observer,
 )
 from oversight.events import EventPayload
 from oversight_contracts.examples import TaskExample

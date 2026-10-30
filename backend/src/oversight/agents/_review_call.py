@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 
+from oversight.agents._attempts import attempt_observer
 from oversight.agents._crossreview import Inputs
 from oversight.agents.client import (
     CALL_SCOPE,
@@ -11,7 +12,6 @@ from oversight.agents.client import (
     ModelClient,
     ModelReply,
     ToolSchema,
-    attempt_observer,
 )
 from oversight.agents.reviewer import ReviewOutcome, review_candidate
 from oversight.events import EventPayload

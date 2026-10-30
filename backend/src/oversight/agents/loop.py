@@ -14,6 +14,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Literal, cast
 
+from oversight.agents._attempts import attempt_observer
 from oversight.agents._lifecycle import close_model
 from oversight.agents._prompts import PROMPT_VERSION as PROMPT_VERSION
 from oversight.agents._prompts import REVISION_PROMPT as REVISION_PROMPT
@@ -29,7 +30,6 @@ from oversight.agents.client import (
     ModelAPIError,
     ModelClient,
     ModelReply,
-    attempt_observer,
     require_verified,
 )
 from oversight.agents.sink import ChangeSink
@@ -283,16 +283,11 @@ class AgentRun:
                     raise _RootLost(f"The worktree cannot be used: {reason}.") from error
                 if first_status == "starting":
                     await self._status("working")
+                observer = attempt_observer(
+                    self._publish, agent_id=self._task.agent_id, change_id=self._task.change_id
+                )
                 token = CALL_SCOPE.set(
-                    CallScope(
-                        deadline.when(),
-                        self._usage,
-                        attempt_failed=attempt_observer(
-                            self._publish,
-                            agent_id=self._task.agent_id,
-                            change_id=self._task.change_id,
-                        ),
-                    )
+                    CallScope(deadline.when(), self._usage, attempt_failed=observer)
                 )
                 try:
                     summary = await self._loop(messages)
