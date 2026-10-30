@@ -468,7 +468,8 @@ export function graphStyles(
       },
     },
     {
-      selector: "node.module.folded, node.module.edge-shield",
+      // Only childless cards shield lifted lines; open frames must stay below their rows.
+      selector: "node.module.folded, node.module:childless.edge-shield",
       style: { "background-opacity": 1, "z-index": 5, "z-compound-depth": "top" },
     },
     {

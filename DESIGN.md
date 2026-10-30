@@ -900,7 +900,9 @@ Hover requests clear on pointer leave; selection requests clear with selection; 
 clear with the displayed cone. Requests combine, so a call remains while another includes it.
 An edge under the pointer immediately lifts above the other paths in neutral edge-hover, including
 its existing arrow and aggregate count. It changes no width, route, node, camera or focus and
-introduces no animation. Cards and opaque graph text plates mask straight lines beneath them.
+introduces no animation. Folded cards and opaque graph text plates mask straight lines beneath them.
+Open frames retain their translucent body fill and stay below their rows during edge hover;
+straight lines can show through that fill.
 
 **Letter badges.** Agents are a letter and a color, nothing more: no avatars, beads or mascots. On
 a node: a 26px rounded square at the right end of the row, on the name's line, with A or B in badge

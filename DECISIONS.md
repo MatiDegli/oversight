@@ -1433,8 +1433,9 @@ and models). Open views keep only exact calls at rest, even on agent-lit nodes. 
 and displayed cones reveal possible calls without filtering; cones still follow exact calls only.
 
 This replaces bundling every call into routed module links and drawing all cross-file calls in
-open modules, the source of parallel gutter lines. Cards and graph text plates occlude straight
-lines; this deliberately departs from the Modules sketch's lines across text. Labels disclose exact
+open modules, the source of parallel gutter lines. Folded cards and graph text plates occlude straight
+lines; open frames retain their translucent body fill, so lines can show through it beneath the rows.
+This deliberately departs from the Modules sketch's lines across text. Labels disclose exact
 and possible counts on demand. Pointer hover lifts the existing path and arrow in a neutral token,
 with no motion, width change, camera move or focus transfer. A hidden line supplies no marker route.
 Fixture checks read the optional offline export at `.runtime/graphs/boltons-d31d821.snapshot.json`
