@@ -10,18 +10,22 @@ type Function = ast.FunctionDef | ast.AsyncFunctionDef
 def construction_ast(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
     methods: dict[str, list[Function]] = {}
     bindings: set[str] = set()
+    assignments: set[str] = set()
     selected: set[ast.AST] = set(cls.decorator_list)
     for node in cls.body:
         check_deadline(deadline)
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             selected.add(node)
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            bindings.update(
+            names = {
                 name.id
                 for target in targets
                 for name in ast.walk(target)
                 if isinstance(name, ast.Name) and isinstance(name.ctx, ast.Store)
-            )
+            }
+            bindings.update(names)
+            if isinstance(node, ast.Assign):
+                assignments.update(names)
             if "__init__" in bindings:
                 return _whole_class(cls, deadline)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -42,12 +46,19 @@ def construction_ast(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
     pending = list(methods.get("__init__", []))
     if not pending and cls.decorator_list:
         # A generated dataclass initializer writes each annotated field on self.
-        pending = [
-            method
-            for field in cls.body
-            if isinstance(field, ast.AnnAssign) and isinstance(field.target, ast.Name)
-            for method in methods.get(field.target.id, [])
-        ]
+        for field in cls.body:
+            check_deadline(deadline)
+            if not isinstance(field, ast.AnnAssign) or not isinstance(field.target, ast.Name):
+                continue
+            if field.target.id in assignments:
+                # Assigned descriptors can invoke accessors with unrelated names.
+                return _whole_class(cls, deadline)
+            if field.value is not None:
+                try:
+                    ast.literal_eval(field.value)
+                except (ValueError, TypeError):
+                    return _whole_class(cls, deadline)
+            pending.extend(methods.get(field.target.id, []))
     while pending:
         check_deadline(deadline)
         method = pending.pop()

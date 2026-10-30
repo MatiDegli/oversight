@@ -50,6 +50,19 @@ READ_PROPERTY = (
     )
     + "    def snapshot(self): return self.value\n"
 )
+DATACLASS_PROPERTY = "from dataclasses import dataclass\n@dataclass\n" + (
+    ASSIGNED_PROPERTY.replace(
+        "    def __init__(self, value): self.value = value\n", "    value: int\n"
+    )
+)
+DATACLASS_SETTER = "from dataclasses import dataclass\n@dataclass\n" + (
+    ASSIGNED_SETTER.replace(
+        "    def __init__(self, value): self.value = value\n", "    value: int\n"
+    )
+)
+DATACLASS_DEFAULT = DATACLASS_PROPERTY.replace("    value: int\n", "").replace(
+    "    value = property(_get, _set)", "    _p = property(_get, _set)\n    value: int = _p"
+)
 
 
 def inputs(before, after):
@@ -114,6 +127,10 @@ def inputs(before, after):
                 ),
             )
         ],
+        *[
+            (bound, bound.replace("self._value = self.normalize(value)", "self._value = value + 1"))
+            for bound in (DATACLASS_PROPERTY, DATACLASS_SETTER, DATACLASS_DEFAULT)
+        ],
         (
             PRODUCT,
             PRODUCT.replace(
@@ -148,6 +165,9 @@ def inputs(before, after):
         "assigned-property-transitive-getter",
         "annotated-property-setter",
         "unpacked-property-setter",
+        "dataclass-assigned-property-setter",
+        "dataclass-assigned-setter",
+        "dataclass-nonliteral-field-default",
         "transitive-method",
         "assignment",
         "annotated-field",
@@ -192,8 +212,19 @@ async def test_changed_construction_is_not_measured(before, after):
     assert worker.await_count == 2  # Unequal inputs do not spend any repeat calls.
 
 
-def test_unrelated_method_and_line_numbers_do_not_change_construction_identity():
-    generated = inputs(PRODUCT, "\n\n" + PRODUCT.replace("return 9", "return 10"))
+@pytest.mark.parametrize(
+    "product",
+    [
+        PRODUCT,
+        "from dataclasses import dataclass\n@dataclass\nclass Product:\n"
+        "    value: int\n    def unrelated(self): return 9\n",
+        "from dataclasses import dataclass\n@dataclass\nclass Product:\n"
+        "    value: int = 0\n    def unrelated(self): return 9\n",
+    ],
+    ids=["explicit-initializer", "dataclass-required-field", "dataclass-literal-default"],
+)
+def test_unrelated_method_and_line_numbers_do_not_change_construction_identity(product):
+    generated = inputs(product, "\n\n" + product.replace("return 9", "return 10"))
     assert generated.inputs and all(
         sample.input_identity is not None for sample in generated.inputs
     )
