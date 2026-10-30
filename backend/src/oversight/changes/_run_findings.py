@@ -1,19 +1,27 @@
-"""Bounded assertion-only bridge: committed receipts, successive sources, explicit passes."""
+"""Committed temporal witnesses for assertion edits, test removals and skips."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import TypeAdapter
 
 from oversight.changes._runrule import Edit, RunTrace, TestRun, Weakening, evaluate
 from oversight.changes._shortcut_detector import ShortcutKind, detect_shortcuts
 from oversight.changes._shortcuts_common import Source
+from oversight.changes._shortcuts_skips import DECORATOR_SKIP, module_markers
 from oversight.events import StoredEvent
 from oversight_contracts.events import ChangeUpdated, ServerEvent, SuiteExecution
 from oversight_contracts.policy import EvidenceRef
 from oversight_contracts.review import ChangeTarget, IntegrityFact, RunRuleFinding
 
 EVENT = TypeAdapter(ServerEvent)
+type FindingKind = Literal["loosened", "removed", "skipped"]
+KINDS: dict[str, FindingKind] = {
+    "assertion_loosened": "loosened",
+    "test_removed": "removed",
+    "skip_added": "skipped",
+}
 
 
 @dataclass(frozen=True)
@@ -61,7 +69,7 @@ def _event(stored: StoredEvent, target: ChangeTarget, agent_id: str) -> ServerEv
     return event
 
 
-def _supports(path: str, text: str, line: int, test_id: str) -> bool:
+def _supports(path: str, text: str, line: int, test_id: str, *, skip: bool = False) -> bool:
     """Resolve a detector line to exactly one definition, retaining class/parameter identity."""
     source = Source(text)
     enclosing = [
@@ -71,6 +79,25 @@ def _supports(path: str, text: str, line: int, test_id: str) -> bool:
         <= line
         <= (node.end_lineno or node.lineno)
     ]
+    if skip and not enclosing:
+        classes = [
+            qual
+            for qual, node in source.classes.items()
+            if any(
+                d.lineno == line and source.resolve(d) in DECORATOR_SKIP
+                for d in node.decorator_list
+            )
+        ]
+        if len(classes) == 1:
+            enclosing = [qual for qual in source.tests if qual.startswith(classes[0] + ".")]
+        elif any(marker_line == line for _, marker_line in module_markers(source)):
+            enclosing = list(source.tests)
+        # A shared marker can affect several independently resolved test ids.
+        enclosing = [
+            qual
+            for qual in enclosing
+            if "::".join([path, *qual.split(".")]) == test_id.split("[", 1)[0]
+        ]
     return (
         len(enclosing) == 1
         and "#" not in enclosing[0]
@@ -78,22 +105,24 @@ def _supports(path: str, text: str, line: int, test_id: str) -> bool:
     )
 
 
-def _run(seq: int, execution: SuiteExecution, test_id: str) -> TestRun:
+def _run(seq: int, execution: SuiteExecution, test_id: str, kind: FindingKind) -> TestRun:
     suite = execution.suite
     cases = {c.test_id: c.outcome for c in suite.cases or ()}
-    # The core proves absence; for this bridge absence is complete only with an
-    # explicit pass. A listed failure remains known in an incomplete report.
+    # Only loosened assertions require an explicit per-case pass. Removals and
+    # skips establish absence of failure from a complete later execution.
     failed = tuple(suite.failed_tests)
     observed_failure = cases.get(test_id) == "failed" and test_id in failed
     return TestRun(
         seq,
         seq,
-        failed if observed_failure else tuple(i for i in failed if i != test_id),
+        failed
+        if kind != "loosened" or observed_failure
+        else tuple(i for i in failed if i != test_id),
         suite.failed,
         suite.outcome in {"passed", "failed"}
         and suite.cases_complete is True
         and suite.failed == len(failed) == len(set(failed))
-        and cases.get(test_id) == "passed",
+        and (kind != "loosened" or cases.get(test_id) == "passed"),
     )
 
 
@@ -156,10 +185,12 @@ def project_run_findings(
         )
     }
     for index, fact in enumerate(facts):
-        if fact.kind != "assertion_loosened":
+        kind = KINDS.get(fact.kind)
+        if kind is None:
             continue
         if fact.test_id is None:
-            problems.add("run rule unknown: unresolved assertion identity")
+            identity = "assertion" if kind == "loosened" else "test"
+            problems.add(f"run rule unknown: unresolved {identity} identity")
             continue
         witnessed = False
         for seq, edit, before in sorted(edits):
@@ -169,9 +200,11 @@ def project_run_findings(
             detected = detect_shortcuts([(fact.path, before, after)], grouped=False)
             if detected.status == "unknown":
                 problems.add(f"run rule unknown: edit {seq} source analysis incomplete")
+                continue
+            text = before if kind == "removed" else after
             if not any(
-                f.kind == ShortcutKind.ASSERTION_LOOSENED
-                and _supports(f.path, after, f.line, fact.test_id)
+                f.kind == ShortcutKind(fact.kind)
+                and _supports(f.path, text, f.line, fact.test_id, skip=kind == "skipped")
                 for f in detected
             ):
                 continue
@@ -181,10 +214,10 @@ def project_run_findings(
                 # parametrization edits. Other source versions cannot witness this edit.
                 expected = before if run_seq < seq else after
                 if sources.get(fact.path) == expected:
-                    entries.append(_run(run_seq, execution, fact.test_id))
+                    entries.append(_run(run_seq, execution, fact.test_id, kind))
             result = evaluate(
                 RunTrace(agent_id, (*entries, Edit(seq, fact.path))),
-                [Weakening(kind="loosened", test_id=fact.test_id)],
+                [Weakening(kind=kind, test_id=fact.test_id)],
             )
             if result.status == "unknown":
                 problems.add(f"run rule unknown: incomplete comparison for {fact.test_id}")
@@ -193,7 +226,7 @@ def project_run_findings(
                 findings.setdefault(
                     fact.test_id,
                     RunRuleFinding(
-                        kind="loosened",
+                        kind=kind,
                         test_id=fact.test_id,
                         fact_index=index,
                         failed_seq=found.failing_run.seq,
@@ -202,7 +235,8 @@ def project_run_findings(
                     ),
                 )
         if not witnessed:
-            problems.add(f"run rule unknown: no passing assertion witness for {fact.test_id}")
+            witness = "passing assertion" if kind == "loosened" else "absence-of-failure"
+            problems.add(f"run rule unknown: no {witness} witness for {fact.test_id}")
     for finding in findings.values():
         fact = facts[finding.fact_index]
         fact.evidence.append(EvidenceRef(event_seq=finding.edited_seq, path=fact.path))
