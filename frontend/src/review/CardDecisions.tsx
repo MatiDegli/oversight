@@ -6,6 +6,12 @@ import type { Answers } from "./AnswerChoices";
 import { cardAnswer, cardKey } from "./AnswerChoices";
 import type { DecisionAction, DecisionView } from "./decisions";
 
+const pendingWords: Record<DecisionAction, string> = {
+  approve: "Approving: waiting for the merge result.",
+  reject: "Rejecting: waiting for the server.",
+  "request-changes": "Requesting changes: waiting for the agent.",
+};
+
 export function DecisionFeedback({ view }: { view: DecisionView }) {
   const { replayOf } = useDecisions();
   const failure = view.kind === "open" || view.kind === "conflict" ? view.failure : null;
@@ -13,11 +19,7 @@ export function DecisionFeedback({ view }: { view: DecisionView }) {
     <>
       <p role="status" className="decision-muted">
         {view.kind === "pending"
-          ? view.action === "approve"
-            ? "Approving: waiting for the merge result."
-            : view.action === "reject"
-              ? "Rejecting: waiting for the server."
-              : "Requesting changes: waiting for the agent."
+          ? pendingWords[view.action]
           : view.kind === "recorded"
             ? replayDecisionWords(replayOf)
             : view.kind === "revising"

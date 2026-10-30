@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { ChevronDown } from "lucide-react";
+import type { GrantScope } from "@contracts";
 import type { State } from "../state";
 import { candidateKey, currentCards, answeredCards, useAnswers } from "./answers";
 import { useDecisions } from "./DecisionContext";
@@ -85,9 +86,15 @@ export function GrantChoice({
   );
 }
 
-function chooseScope(state: State, changeId: string, kind: "module" | "run") {
-  const value =
-    kind === "module" ? selectPossibleCallersWait(state, changeId)?.module?.id : state.run?.run_id;
+function chooseScope(state: State, changeId: string, kind: GrantScope["kind"]) {
+  const values: Record<GrantScope["kind"], () => string | undefined> = {
+    module: () => selectPossibleCallersWait(state, changeId)?.module?.id,
+    run: () => state.run?.run_id,
+    // Possible-callers grants only support module and run scopes.
+    path: () => undefined,
+    agent: () => undefined,
+  };
+  const value = values[kind]();
   if (value)
     useAnswers.getState().grant(candidateKey(state, changeId), {
       reason: "possible_callers",

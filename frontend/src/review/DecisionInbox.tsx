@@ -5,7 +5,7 @@ import { selectDecisionInbox, selectActiveGrants } from "../state";
 import { ChangeCard, eventTime } from "./ChangeCard";
 import { StandingGrants } from "./StandingGrants";
 import { Example } from "./AnswerChoices";
-import { selectInboxSummary, selectPossibleCallersWait } from "./inboxSelectors";
+import { selectChangeCard, selectInboxSummary, selectPossibleCallersWait } from "./inboxSelectors";
 import { GrantChoice } from "./GrantChoice";
 import "./inbox.css";
 
@@ -27,6 +27,7 @@ function InboxRow({
       )
     : undefined;
   const question = entry.decisions.find((d) => d.kind === "review_card");
+  const followMain = entry.decisions.find((d) => d.kind === "follow_main");
   const example =
     question?.example.source === "review_card"
       ? question.example.value
@@ -41,13 +42,15 @@ function InboxRow({
         <span className="decision-muted">{entry.age}</span>
       </div>
       <h3>
-        {wait
-          ? "Possible callers need your decision"
-          : question
-            ? "Choices need you"
-            : (entry.decisions.find((d) => d.kind !== "change")?.reason ??
-              change?.proposal?.task ??
-              "Decision needs you")}
+        {followMain
+          ? followMain.reason
+          : wait
+            ? "Possible callers need your decision"
+            : question
+              ? "Choices need you"
+              : (entry.decisions.find((d) => d.kind !== "change")?.reason ??
+                change?.proposal?.task ??
+                "Decision needs you")}
       </h3>
       <p>{change?.proposal?.summary ?? entry.decisions[0]?.reason}</p>
       {example && <Example row={example} slot={slot ?? undefined} />}
@@ -70,6 +73,8 @@ function InboxAnswer({ state, entry }: { state: State; entry: DecisionInboxEntry
   const change = entry.changeId ? state.changes[entry.changeId] : undefined;
   const wait = entry.changeId ? selectPossibleCallersWait(state, entry.changeId) : null;
   const question = entry.decisions.find((d) => d.kind === "review_card");
+  const card = change ? selectChangeCard(state, change.change_id) : null;
+  if (entry.decisions.some((d) => d.kind === "follow_main")) return null;
   return (
     <>
       {wait ? (
@@ -94,7 +99,7 @@ function InboxAnswer({ state, entry }: { state: State; entry: DecisionInboxEntry
               changeId={change?.change_id ?? ""}
             />
           )}
-          {question && (
+          {question && card && (
             <details className="inbox-answer">
               <summary>Answer this change before approving</summary>
               <ChangeCard state={state} changeId={change?.change_id ?? ""} />
@@ -112,7 +117,7 @@ function InboxAnswer({ state, entry }: { state: State; entry: DecisionInboxEntry
                 ))}
             </ul>
           )}
-          {change && (
+          {change && card && (
             <details className="inbox-answer">
               <summary>Answer this change</summary>
               <ChangeCard
