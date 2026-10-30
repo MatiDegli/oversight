@@ -6,7 +6,7 @@ Other modules import only what this file exports; everything else here is intern
 from oversight.agents._crossreview import ConeEntry
 from oversight.agents._crossreview import Inputs as ReviewInputs
 from oversight.agents._crossreview import TestResult as ReviewTests
-from oversight.agents._lifecycle import TaskClients
+from oversight.agents._lifecycle import TaskClients, close_model
 from oversight.agents._plan_call import run_plan_call
 from oversight.agents._prompts import prompt_version, system_prompt
 from oversight.agents._review_call import run_review_call
@@ -128,6 +128,7 @@ __all__ = [
     "Usage",
     "UsageLedger",
     "classify_difference",
+    "close_model",
     "load_script",
     "parse_script",
     "prompt_version",

@@ -114,6 +114,18 @@ class PlanAccounting:
         if live._manager is not None:
             live._manager.usage_recorded(receipt)
 
+    async def report_failure(self) -> None:
+        assert self.failure is not None
+        reason = (
+            f"Plan {self.plan_id}; model={self.profile.model}; provider={self.profile.provider}. "
+            f"{self.failure} "
+            "Stop the server and settle with Meta's console total before the next run: "
+            "uv run python -m oversight ledger settle --spent-usd X."
+        )
+        await self.live._finish(
+            self.live._report("server", reason, agent_id=self.agent_id, fatal=True)
+        )
+
 
 class BasetenDecisionAccounting:
     """A separate, persistent decision-call balance, never the Meta credits ledger.

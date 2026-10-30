@@ -88,27 +88,32 @@ async def run_plan_call(
                     [],
                 )
                 await record(reply)
-            if reply.tool_calls or reply.finish_reason == "length":
-                raise ValueError("unexpected tools or truncated output")
-            if reply.model is not None and reply.model != client.profile.model:
-                raise ValueError("reported model differs from its profile")
-            parsed = _Task.model_validate(
-                json.loads(
-                    reply.text or "",
-                    object_pairs_hook=_unique_object,
-                    parse_constant=_invalid_constant,
+            try:
+                if reply.tool_calls or reply.finish_reason == "length":
+                    raise ValueError("unexpected tools or truncated output")
+                if reply.model is not None and reply.model != client.profile.model:
+                    raise ValueError("reported model differs from its profile")
+                parsed = _Task.model_validate(
+                    json.loads(
+                        reply.text or "",
+                        object_pairs_hook=_unique_object,
+                        parse_constant=_invalid_constant,
+                    )
                 )
-            )
-            if not parsed.task.strip():
-                raise ValueError("empty subtask")
+                if not parsed.task.strip():
+                    raise ValueError("empty subtask")
+            except ValueError:
+                return PlanOutcome(
+                    task,
+                    "Verbatim fallback: the model reply was invalid "
+                    "(expected only a nonempty task up to 4,000 chars).",
+                )
             return PlanOutcome(parsed.task, "The model wrote the subtask text.")
         except TimeoutError:
             reason = "the model call exceeded its 90-second bound"
         except EmptyChoicesError:
             # The SDK client already records this response through the scope callback.
             reason = "the model returned no choices"
-        except ValueError:
-            reason = "the model reply was invalid (expected only a nonempty task up to 4,000 chars)"
         except Exception as error:
             reason = f"the model call failed ({type(error).__name__})"
         return PlanOutcome(task, f"Verbatim fallback: {reason}.")

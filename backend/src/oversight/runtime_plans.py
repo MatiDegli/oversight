@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from oversight.agents import MUSE_SPARK, run_plan_call
+from oversight.agents import MUSE_SPARK, ModelClient, close_model, run_plan_call
 from oversight.api import ApiError
 from oversight.changes import WrongState, plan_core
 from oversight.runtime_accounting import PlanAccounting, durable
@@ -84,16 +84,22 @@ class PlanService:
         await durable(self.save(plan))
         accounting = PlanAccounting(self.live, plan.plan_id, profile, planner_id)
         ready_time = asyncio.get_running_loop().time()
-        # Client construction uses the same injectable factory as author starts.
-        outcome = await run_plan_call(
-            lambda: self.live._client_factory(profile, "A"),
-            plan.task,
-            snapshot,
-            ready_time=ready_time,
-            record=accounting.record,
-        )
+        client: ModelClient | None = None
+
+        def make_client() -> ModelClient:
+            nonlocal client
+            client = self.live._client_factory(profile, "A")
+            return client
+
+        try:
+            outcome = await run_plan_call(
+                make_client, plan.task, snapshot, ready_time=ready_time, record=accounting.record
+            )
+        finally:
+            if client is not None:
+                await self.live._finish(close_model(client))
         if accounting.failure is not None:
-            await self.live._finish(self.live._report("server", accounting.failure))
+            await accounting.report_failure()
         if self.live._closing:
             return PlanCreated(plan_id=plan.plan_id)
         draft = SubtaskDraft(task=outcome.task, zone=plan_core.whole_graph(snapshot))

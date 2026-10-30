@@ -248,6 +248,38 @@ async def test_invalid_tools_truncation_and_model_identity() -> None:
     assert len(replies) == 3
 
 
+@pytest.mark.parametrize("failure", ["factory", "record"])
+async def test_non_reply_value_error_reports_a_call_failure(failure: str) -> None:
+    calls = 0
+
+    class Fake:
+        profile = MUSE_SPARK
+
+        async def complete(self, messages: Any, tools: Any) -> ModelReply:
+            nonlocal calls
+            calls += 1
+            return ModelReply('{"task":"Valid model subtask"}', [])
+
+    def factory() -> Fake:
+        if failure == "factory":
+            raise ValueError("invalid client setup")
+        return Fake()
+
+    async def record(reply: ModelReply) -> None:
+        raise ValueError("invalid usage tick")
+
+    outcome = await run_plan_call(
+        factory,
+        TASK,
+        snapshot(),
+        ready_time=asyncio.get_running_loop().time(),
+        record=record,
+    )
+    assert outcome.task == TASK
+    assert outcome.detail == "Verbatim fallback: the model call failed (ValueError)."
+    assert calls == (0 if failure == "factory" else 1)
+
+
 def test_context_contains_only_top_level_names_and_states_truncation() -> None:
     graph = snapshot()
     context = graph_context(graph)

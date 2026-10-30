@@ -12,7 +12,6 @@ from typing import Any
 import pytest
 from live_helpers import (
     DEADLINE_S,
-    GatedModel,
     error_code,
     live_server,
     live_settings,
@@ -24,7 +23,7 @@ from oversight.app import LiveRun
 from oversight_contracts.commands import CreatePlan
 from oversight_contracts.events import UsageTick
 
-from .test_plan_call import TASK, PlanModel, create
+from .test_plan_call import TASK, ClosableGatedModel, PlanModel, create
 
 pytestmark = pytest.mark.anyio
 
@@ -100,20 +99,25 @@ async def test_failed_ledger_closes_meta_admission_and_preserves_fallback(
         assert plan.detail and "LedgerError" in plan.detail
         assert s.live._ledger_lost and s.live.brake_reason() is not None
         assert not any(e.type == "usage.tick" for e in s.events())
-        assert any(e.type == "error" and plan.plan_id in e.payload.message for e in s.events())
+        [error] = [e.payload for e in s.events() if e.type == "error"]
+        assert error.fatal and error.agent_id == "agent-1" and error.change_id is None
+        assert plan.plan_id in error.message and "model=" + MUSE_SPARK.model in error.message
+        assert "provider=meta" in error.message and "Stop the server" in error.message
+        assert "settle with Meta's console total before the next run" in error.message
+        assert "uv run python -m oversight ledger settle --spent-usd X" in error.message
         for path in ("/plans", "/agents"):
             assert error_code(await s.client.post(path, json={"task": TASK})) == (
                 403,
                 "spend_brake",
             )
-        assert len(models) == 1 and not s.live._ledger_lost_agents
+        assert len(models) == 1 and models[0].closed and not s.live._ledger_lost_agents
 
 
 async def test_timeout_proposes_verbatim_subtask_through_the_http_entry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    held = GatedModel()
+    held = ClosableGatedModel()
     limits: list[asyncio.Timeout] = []
 
     def timeout_at(deadline: float) -> asyncio.Timeout:
@@ -142,11 +146,12 @@ async def test_timeout_proposes_verbatim_subtask_through_the_http_entry(
         plan = await pending
         assert plan.subtasks and plan.subtasks[0].task == TASK
         assert plan.detail and "90-second" in plan.detail and held.cancelled.is_set()
+        assert held.closed
         assert not any(e.type == "queue.updated" for e in s.events())
 
 
 async def test_shutdown_cancels_held_call_and_lists_the_planning_plan(tmp_path: Path) -> None:
-    held = GatedModel()
+    held = ClosableGatedModel()
     live = LiveRun(live_settings(tmp_path), lambda _p, _s: held)
     async with asyncio.timeout(DEADLINE_S):
         await live.startup()
@@ -156,6 +161,7 @@ async def test_shutdown_cancels_held_call_and_lists_the_planning_plan(tmp_path: 
             await live.shutdown()
             result = await asyncio.gather(pending, return_exceptions=True)
             assert isinstance(result[0], asyncio.CancelledError) and held.cancelled.is_set()
+            assert held.closed
             assert live.plans.get("plan-1").state == "planning"
             events = [json.loads(event.envelope) for event in live.store._events]
             assert any(e["type"] == "error" and "plan-1" in e["payload"]["message"] for e in events)

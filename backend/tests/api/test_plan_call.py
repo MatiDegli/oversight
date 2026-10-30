@@ -36,6 +36,10 @@ class PlanModel:
     usage: Usage = field(default_factory=Usage)
     calls: list[list[Message]] = field(default_factory=list)
     error: Exception | None = None
+    closed: bool = False
+
+    async def aclose(self) -> None:
+        self.closed = True
 
     async def complete(
         self, messages: Sequence[Message], tools: Sequence[ToolSchema]
@@ -47,6 +51,14 @@ class PlanModel:
         if self.error is not None:
             raise self.error
         return ModelReply(self.text, [], self.usage, self.profile.model)
+
+
+@dataclass
+class ClosableGatedModel(GatedModel):
+    closed: bool = False
+
+    async def aclose(self) -> None:
+        self.closed = True
 
 
 async def create(s: Any) -> Plan:
@@ -82,6 +94,7 @@ async def test_post_makes_exactly_one_logical_call_and_does_not_queue(
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path), factory) as s:
         plan = await create(s)
         assert len(models) == 1 and len(models[0].calls) == 1
+        assert models[0].closed
         assert models[0].calls[0][1]["content"] == TASK
         assert plan.detail and reason in plan.detail
         assert plan.task == TASK and plan.state == "proposed" and plan.revision == 2
@@ -103,6 +116,7 @@ async def test_post_makes_exactly_one_logical_call_and_does_not_queue(
         second = await create(s)
         assert second.plan_id != plan.plan_id and len(models) == 2
         assert all(len(model.calls) == 1 for model in models)
+        assert all(model.closed for model in models)
 
 
 @pytest.mark.parametrize("refusal", ["setup", "brake"])
