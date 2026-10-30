@@ -1940,6 +1940,11 @@ belongs to `changes/methods-1`.
 Reason: showing the difference only in rows, without a card, leaves it unclassified and counted
 as unavailable; that alternative was rejected.
 
+## 2026-10-30 — Only the level 2 replay test gets Playwright's slow allowance
+
+Reason: real-time replay takes about 50-59 s on fast runners and 80-95 s on slow ones, leaving no margin against the 90 s timeout; only this test is marked slow.
+The timeout in `playwright.config.ts` and `make e2e`'s 600 s cap are unchanged.
+
 ## 2026-10-30 — Bench method scope supersedes D9's level 3 deferral
 
 The maintainer includes methods in the bench evidence fix scope. This supersedes
