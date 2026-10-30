@@ -125,10 +125,41 @@ export function foldElements(
         id,
         source,
         target,
-        ...(aggregate ? { callCount: (previous?.data.callCount ?? 0) + 1 } : {}),
+        ...(edge.data.kind === "calls"
+          ? {
+              exactCount:
+                (previous?.data.exactCount ?? 0) +
+                Number(edge.classes.split(" ").includes("exact")),
+              possibleCount:
+                (previous?.data.possibleCount ?? 0) +
+                Number(edge.classes.split(" ").includes("possible")),
+              restPossible: !!(previous?.data.restPossible || edge.data.restPossible),
+            }
+          : {}),
       },
       classes: [...classes].join(" "),
     });
+  }
+  const exactPairs = new Set(
+    [...merged.values()]
+      .filter((e) => e.data.exactCount)
+      .map((e) => [e.data.source, e.data.target].sort().join(">")),
+  );
+  const faintPairs = new Set<string>();
+  for (const edge of merged.values()) {
+    if (edge.data.kind !== "calls") continue;
+    const classes = new Set(edge.classes.split(" "));
+    const exact = edge.data.exactCount ?? 0;
+    if (classes.has("aggregate")) edge.data.callCount = exact || edge.data.possibleCount;
+    classes.delete(exact ? "possible" : "exact");
+    if (!exact && classes.has("aggregate")) {
+      const pair = [edge.data.source, edge.data.target].sort().join(">");
+      if (edge.data.restPossible && !exactPairs.has(pair) && !faintPairs.has(pair)) {
+        classes.add("faint");
+        faintPairs.add(pair);
+      }
+    }
+    edge.classes = [...classes].join(" ");
   }
   return { elements: [...result, ...merged.values()], visible };
 }

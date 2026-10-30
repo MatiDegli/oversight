@@ -253,7 +253,7 @@ function writeRoutes(cy: Core, edges: EdgeCollection, routes: ReadonlyMap<string
   cy.batch(() => {
     for (const edge of edges) {
       const route = routes.get(edge.id());
-      const unroutable = !route && !edge.hasClass("imports");
+      const unroutable = !route && !edge.is(".imports, .possible");
       if (edge.hasClass("unroutable") !== unroutable) edge.toggleClass("unroutable", unroutable);
       if (!sameRoute(edge.data("route") as Route | undefined, route)) {
         // A rerouted edge may have left a stationary pointer; wait for a fresh pointer entry.
@@ -320,7 +320,7 @@ export function applyRoutes(cy: Core, theme: RouteTheme): void {
   const calls = cy
     .edges()
     .toArray()
-    .filter((edge) => !edge.hasClass("imports"))
+    .filter((edge) => !edge.is(".imports, .possible"))
     .map((edge) => ({ id: edge.id(), source: edge.source().id(), target: edge.target().id() }));
   const routes = routeEdges(boxes, calls, tuningFrom(theme));
   const edges = cy.edges();

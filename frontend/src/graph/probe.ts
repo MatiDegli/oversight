@@ -41,6 +41,7 @@ export interface GraphProbe {
     source: string;
     target: string;
     count: number;
+    possible: boolean;
     visible: boolean;
     points: { x: number; y: number }[];
   }[];
@@ -109,6 +110,7 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
           source: edge.source().id(),
           target: edge.target().id(),
           count: (edge.data("callCount") as number | undefined) ?? 1,
+          possible: edge.hasClass("possible"),
           visible: edge.style("display") !== "none",
           points: route
             ? [
@@ -119,7 +121,9 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
                 })),
                 end,
               ]
-            : [],
+            : edge.hasClass("possible")
+              ? [edge.sourceEndpoint(), edge.targetEndpoint()].filter(Boolean)
+              : [],
         };
       }),
     zoom: () => cy.zoom(),

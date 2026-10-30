@@ -26,6 +26,8 @@ colors:
   node-hover: "#6b6e77"
   edge: "#6a6a65"
   edge-possible: "#5f5f5b"
+  edge-faint: "#29292c"
+  edge-hover: "#f0f0eb"
   lit-edge: "#d6d3cb"
   work-light: "#8c8c88"
   agent-a: "#ff5c1f"
@@ -101,6 +103,8 @@ colors:
   day-node-hover: "#8d8c86"
   day-edge: "#6e6d67"
   day-edge-possible: "#85847e"
+  day-edge-faint: "#d2d1cb"
+  day-edge-hover: "#353530"
   day-lit-edge: "#3a3936"
   day-work-light: "#6b6a64"
   day-agent-a: "#b23c0a"
@@ -353,7 +357,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Exact call edge | `#4a4a46`, 2.4:1 on black | edge; v4 ratios below | quality floor: meaningful graphics at 3:1 |
 | Possible call edge | `#3a3a37`, 1.8:1 | edge-possible; v4 ratios below | it stays thinner and grey; a surface below 3:1 needs a maintainer decision |
 | Call edge no agent is at (watch) | full strength | quiet-edge, 0.45 opacity, until an agent reads, edits or changes a node it touches, or the person selects one | the demo graph has 47 edges across its frames; stepping back the ones nobody is at lets the others read. Context, like the dimmed nodes of review: the full edge returns on selection |
-| Edge draw order | not specified | frames, then edges, then leaf nodes; a frame's header is part of its frame, so an edge can still cross it | keeps a line from crossing a node's name without hiding the edges behind the frames' fill |
+| Edge draw order | Modules lines can cross text | faint lines below opaque cards and graph text plates; routed calls above frames and below rows, hovered paths lifted | our lines never cross titles, counts, headers or legend text |
 | Task box keyboard hint | none | "Ctrl+Enter to start" under the box | the hint is how the keyboard starts an agent; a hint belongs next to what it starts |
 | Search, history and settings in the top bar | drawn | left out until each feature is built | a control that looks present and does nothing is worse than no control |
 | Input border | `#222222` to `#262626` | control-edge `#62625e`, 3.25:1 on field | quality floor: a control's boundary at 3:1 |
@@ -714,8 +718,10 @@ Agent and model-slot cards add their 2px agent-colored top line. Divider separat
 border encloses cards and controls where decorative. Neither replaces control-edge or the focus
 ring when a boundary carries meaning.
 
-Graph overlays keep their shell or panel backing at 90 to 94% opacity and frost the graph beneath
-with a 12px backdrop blur. Their field mask keeps moving light out of the overlay. The review
+The graph heading, legend, zoom controls and Modules/Functions/Details control (including zoom
+percentage) use fully opaque `panel` plates to mask lines behind their text.
+Other graph overlays keep their shell or panel backing at 90 to 94% opacity and frost the graph
+beneath with a 12px backdrop blur. Their field mask keeps moving light out of the overlay. The review
 header retains its matte still grain. Every gradient end, highlight, shadow and overlay color is
 a theme token under `data-theme`, including what Cytoscape, Monaco and the field canvas receive.
 
@@ -867,21 +873,36 @@ node ("read", "editing", "changed", "new"):
 - **Precedence:** editing over changed or new over read. A pending node the agent reads again stays
   dashed and keeps the word "changed".
 - **Selected:** the node whose diff or file the left panel shows gets a 2px ring in text.
-- **Possible call edge (level 3):** 0.9px in edge-possible, never dashed. "Thin, grey, never
+- **Possible call edge:** 0.9px in edge-possible, never dashed. "Thin, grey, never
   dashed" wins over every other edge rule: inside the cone it keeps its width and color at full
   opacity, and a possible call that a change adds is not dashed (its node already is).
 
-**Call visibility.** At rest, only module-to-module edges show. Hovering or selecting a node
-reveals both incoming and outgoing calls incident to that node. For each cone, reveal only calls
-where both endpoints are in the union of that change's nodes and its cone. This applies to every
-working or revising agent's cone, and in review or live diff to the displayed change's cone even
-when its agent is idle. The visible set is the union of these requests; a call appears once.
-Calls inside one file stay hidden. A call with a folded endpoint stays aggregated under the
-folding rule below.
+**Call visibility.** At every detail level (Modules, Functions and Details), resting cross-file
+links show exact calls. When either module is folded, exact calls aggregate by directed module
+pair; with both modules open they draw between the visible function or folded class rows. Exact
+calls retain their taxi routes, weights and arrows, and quiet-edge until a person or agent lights
+them. Calls within one module stay hidden at rest.
 
-Hover edges hide on pointer leave; selection edges hide when selection clears or changes.
-Agent cone edges hide when the agent stops working or revising; displayed cone edges hide when
-its panel closes or shows another change. An edge stays visible while another request includes it.
+A module pair with no exact call in either direction may also show one faint, straight, neutral
+1px line without an arrow. It appears only if a possible call survives the built-in name filter;
+opposite directions share one resting line. No possible function call returns merely because an
+agent reads, edits or changes its endpoint. Opening modules, including automatic agent openings,
+Functions and Details all keep this rule.
+
+Hovering or selecting a node reveals its incoming and outgoing calls; a module includes its rows,
+and a row also reveals its module's aggregates. Possible calls reveal without the name filter,
+as thin, solid gray straight lines with direction arrows. A displayed
+cone reveals calls with both endpoints in its seeds and entries; possible lines do not extend the
+cone, which follows exact calls only. Review and live diff use the displayed cone. Pending edges
+and agent lighting retain their rules; possible calls always stay solid and gray.
+
+Hover requests clear on pointer leave; selection requests clear with selection; cone requests
+clear with the displayed cone. Requests combine, so a call remains while another includes it.
+An edge under the pointer immediately lifts above the other paths in neutral edge-hover, including
+its existing arrow and aggregate count. It changes no width, route, node, camera or focus and
+introduces no animation. Folded cards and opaque graph text plates mask straight lines beneath them.
+Open frames retain their translucent body fill and stay below their rows during edge hover;
+straight lines can show through that fill.
 
 **Letter badges.** Agents are a letter and a color, nothing more: no avatars, beads or mascots. On
 a node: a 26px rounded square at the right end of the row, on the name's line, with A or B in badge
@@ -1101,12 +1122,20 @@ glow on keyboard focus beside the focus ring, and buttons that press down 1 to 2
 Classes and modules fold. At start, every module is one folded card, such as
 "pricing.py · 6 functions". A module opens when an agent reads or edits inside it. Clicking a
 module's header toggles it open or folded, including after an agent opened it.
-Cross-file calls aggregate whenever either endpoint module is folded: one edge per directed
-module pair. Its count appears on the hovered edge and on the selected node's aggregate edges,
-never at rest. Labels appear and disappear immediately, without motion, delay, focus or camera
-changes. The count includes only calls in that direction;
-A → B and B → A keep separate arrows and counts. The aggregate attaches to each module's card
-or open frame, so this also applies when only one module is folded.
+Cross-file calls aggregate whenever either endpoint module is folded. A directed pair containing
+exact calls retains one routed arrow and counts only its exact calls as ×E. On edge hover or node
+selection the label is “×E”, “×E · P possible” for mixed confidence, or “×P possible” for a
+possible-only line. Counts retain all underlying calls, including filtered names; labels stay off
+at rest and appear immediately, without motion, delay, focus or camera changes.
+
+A possible-only pair has no resting line when its reverse contains an exact call. Otherwise one
+faint straight line per unordered module pair survives if any callee name is absent from the sorted
+Python 3.12 dir() union of dict, list, set, frozenset, str, bytes, tuple and the public io classes.
+The committed generation command lives beside builtinNames.ts. This filter affects only resting
+drawing: it never removes graph data, counts, hover/selection calls or cone members. Lines meet the
+two cards' borders and pass below opaque cards and their text, never through titles or counts.
+The legend's faint straight swatch reads “Possible call, matched by name”. Hover lift uses the
+neutral edge-hover token; edge-faint and edge-hover exist in both theme sets.
 
 Classes start as one header row with their method count. A click toggles the class; a fresh change
 adding or modifying a method opens it, and the person can fold it again. Reading a hidden method

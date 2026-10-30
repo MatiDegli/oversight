@@ -107,7 +107,7 @@ async function toggle(page: Page, id: string) {
 function clearRoutes(r: Awaited<ReturnType<typeof read>>) {
   const gutters = new Map<number, Set<number>>();
   for (const edge of r.routes) {
-    if (edge.source.split(":")[0] === edge.target.split(":")[0]) expect(edge.visible).toBe(false);
+    if (edge.possible) continue; // Straight context lines pass underneath opaque cards.
     const frame = r.modules.find((n) => n.id === edge.target.split(":")[0]);
     const tap = edge.points.at(-2);
     if (frame && tap && edge.points.length > 2 && tap.x < frame.x1) {

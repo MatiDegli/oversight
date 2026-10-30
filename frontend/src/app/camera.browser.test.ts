@@ -257,9 +257,8 @@ function panelFrame(page: Page) {
 
 function emptyCanvasPoint(page: Page) {
   return page.evaluate(() => {
-    const probe = document.querySelector<GraphProbeHost>(
-      '[aria-label="Repository graph"]',
-    )?.oversightGraph;
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const probe = host?.oversightGraph;
     if (!probe) throw new Error("Missing graph");
     const { width, height } = probe.metrics().viewport;
     const zoom = probe.zoom();
@@ -274,6 +273,12 @@ function emptyCanvasPoint(page: Page) {
               x <= b.x2 * zoom + pan.x + 5 &&
               y >= b.y1 * zoom + pan.y - 5 &&
               y <= b.y2 * zoom + pan.y + 5,
+          ) &&
+          host.contains(
+            document.elementFromPoint(
+              host.getBoundingClientRect().left + x,
+              host.getBoundingClientRect().top + y,
+            ),
           )
         )
           return { x, y };

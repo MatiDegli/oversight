@@ -41,7 +41,7 @@ for (const expanded of [
       settle(cy);
       const frames = cy.nodes(".module, .class").toArray();
       const trunks = new Map<string, Set<string>>();
-      for (const edge of cy.edges(".calls")) {
+      for (const edge of cy.edges(".calls").not(".possible")) {
         if (edge.source().id() === edge.target().id()) continue;
         const route = edge.data("route") as Route | undefined;
         expect(route, edge.id()).toBeDefined();
