@@ -78,7 +78,8 @@ missing measurements or unresolved removals.
 
 1.7.0 had been reserved for safe creation, nullable `SaveFile.base_hash`, zones and inventory. On
 2026-10-29 the maintainer moved that bundle to 1.8.0, so grants ship first as 1.7.0 and no
-version string names two schemas.
+version string names two schemas. On 2026-10-30 the maintainer moved that bundle again to 1.9.0,
+when failed model attempts (E6) and dependency plans (P1–P5) took 1.8.0 (`bb9dc43`).
 
 - `GrantReason = Literal["possible_callers", "protected_path"]`; `GrantScope`: `kind`
   (`module`, `path`, `agent`, `run`), `value`, `expires` (`run`, `session`).
