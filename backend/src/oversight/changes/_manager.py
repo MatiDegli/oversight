@@ -283,6 +283,18 @@ class ChangeManager:
         A scan or publish that raises sends an `error`, keeps `snapshot` and re-raises."""
         return await files.rescan(self._ctx)
 
+    def check_control(self, agent_id: AgentId) -> None:
+        """Admit human run controls only while working; no records or git locks escape.
+
+        The run's own control separately refuses finalization and checks pending pauses.
+        Pausing holds the slot/worktree and leaves this manager state unchanged.
+        """
+        rec = self._ctx.state.agents.get(agent_id)
+        if rec is None:
+            raise ChangeNotFound(agent_id)
+        if self._ctx.state.closing or rec.state != "working":
+            raise WrongState(f"{agent_id} cannot take run controls while {rec.state}")
+
     def _take(
         self, change_id: ChangeId, allowed: frozenset[State], verb: str, *, person: bool = True
     ) -> ChangeRecord:

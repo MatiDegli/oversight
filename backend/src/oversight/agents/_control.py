@@ -40,6 +40,10 @@ class RunControl:
         return self._paused
 
     @property
+    def pause_requested(self) -> bool:
+        return self._pause_requested
+
+    @property
     def pending_messages(self) -> bool:
         return bool(self._inbox)
 
@@ -95,6 +99,8 @@ class RunControl:
         status: Callable[[AgentState], Awaitable[None]],
         active: AgentState,
     ) -> None:
+        if self._closed:
+            raise asyncio.CancelledError
         while self._pause_requested:
             loop = asyncio.get_running_loop()
             end = deadline.when()
@@ -113,6 +119,8 @@ class RunControl:
                 self._paused = False
                 if end is not None:
                     deadline.reschedule(end + loop.time() - started)
+            if self._closed:
+                raise asyncio.CancelledError
             scope = CALL_SCOPE.get()
             if scope is not None:
                 CALL_SCOPE.set(replace(scope, deadline=deadline.when()))

@@ -56,11 +56,15 @@ and the separate demo test environment survive this reset.
 3. `AgentRun` drives `ModelClient`. Muse Spark uses the official OpenAI SDK at Meta's
    endpoint in Contributor mode. Muse Spark Open uses the same interface at Baseten's
    endpoint. Each slot has its own configured profile. Tests use scripted fake clients;
-   fake B needs its own script.
+   fake B needs its own script. `LiveRun` registers the drive's `RunControl` before returning
+   Start and before the first model call; a revision installs a fresh control sharing the
+   lifetime message budget. Active registrations are dropped when a drive ends, on Stop and
+   during shutdown. Closed controls cannot restart a paused gate.
 4. The loop offers `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`.
    There is no shell tool. Paths stay within the worktree. Reads are bounded. An edit needs
    a unique old-text match and the hash from the agent's last read. Tests use the demo's
-   own environment and a fixed command with a timeout. Status follows tool execution.
+   own environment and a fixed command with a timeout. Status follows tool execution and
+   human run controls, never model text.
 5. Every completed tool call emits `agent.step`. Read focus precedes the step. Successful
    edits publish `change.updated`, edit focus and then the step. Updates carry full original
    and modified file contents, author and a pending graph overlay. Model replies produce
@@ -246,6 +250,8 @@ Live events are `run.started`, `graph.snapshot`, `graph.delta`, `agent.status`, 
 Every envelope has `seq`, `ts`, `type` and `payload`.
 
 Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
+`POST /agents/{agent_id}/message`, `POST /agents/{agent_id}/pause`,
+`POST /agents/{agent_id}/resume`,
 `POST /changes/{change_id}/approve`, `POST /changes/{change_id}/reject`,
 `POST /changes/{change_id}/request-changes`, `POST /grants/{grant_id}/revoke`, `GET /files`,
 `PUT /files` and `POST /graph/rescan`.
@@ -256,7 +262,29 @@ Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
 | `GET /agents/{agent_id}` | 200 latest committed coding `AgentStatus`; 404 `not_found` otherwise. |
 | `GET /changes/{change_id}` | 200 archived `ChangeView` at one committed seq, with usage and confirmed revision rounds (null when unavailable); 404 `not_found` otherwise. |
 
-`GET /impact`, agent message/pause/resume, merge-mode and plan routes still return 501.
+Message, Pause and Resume accept only human HTTP commands and answer an empty 202.
+The manager's public eligibility check admits only working changes; the drive also refuses
+controls once proposal or halt finalization begins. Preparation/decisions, review, conflicts,
+broken and closed changes return 409 `wrong_state`; unknown agents return 404 `not_found`.
+All three routes answer 501 in replay before reading the body. No lead or agent tool exposes
+these controls, and there is no frontend control in this package.
+
+Messages queue in arrival order until the next safe model-call boundary. Text lives only in
+memory (the queue and retained conversation); no event or SSE envelope carries it. Admission
+refuses blank text, more than 4,096 characters, more than 32 queued messages, or more than
+8,192 accepted UTF-8 bytes over the agent's lifetime with 422 `invalid_request`. Delivery,
+closing and revision never replenish that lifetime budget.
+
+Pause takes effect at a run-side gate after an in-flight call/report completes. Only actual
+paused time extends the wall-clock deadline. Resume also cancels a pending pause; before
+mutating either kind of pause it rechecks setup (503), the provider's spending brake (403)
+and suspect main (409). Refusal preserves the pause. The restored status is working or
+revising as appropriate. While paused the manager remains working, retaining the slot and
+worktree, so review decisions and review writes remain refused. The wait holds no git lock;
+decisions retain main-then-worktree lock order. Stop closes the control and cancels the wait,
+then follows the existing discard path: stopped status before the rejected resolution.
+
+`GET /impact`, merge-mode and plan routes still return 501.
 The 1.4 reservations also include tree, history, queue, leads, and change
 review/revert. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
 Six more event types are reserved: change.reviewed, change.facts_recorded, tests.executed,

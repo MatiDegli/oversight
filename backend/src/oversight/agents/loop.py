@@ -2,8 +2,8 @@
 
 Events per tool call follow docs/proposal.md, 4.5: an edit sends `change.updated` (through the
 `ChangeSink`), then `agent.focus`, then `agent.step`; a read sends `agent.focus`, then
-`agent.step`. `agent.status` follows the tool calls only, never the model's text. v1 sends no model
-text at all, so nothing goes out per token.
+`agent.step`. `agent.status` follows the tool calls and the run controls, never the model's
+text. v1 sends no model text at all, so nothing goes out per token.
 """
 
 import asyncio
@@ -206,6 +206,8 @@ class AgentRun:
     async def run(self) -> RunEnd:
         if self._running:
             raise RuntimeError("a run is already in progress on this agent run")
+        if self._messages is not None:
+            raise RuntimeError("cannot run twice; use revise to continue this agent run")
         self._running = True
         try:
             self._messages = [
