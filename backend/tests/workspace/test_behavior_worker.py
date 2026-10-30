@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from oversight.workspace import run_process
+from oversight.workspace.behavior_run import WORKER as METHOD_WORKER
 
 WORKER = Path(__file__).parents[2] / "src/oversight/workspace/behavior_worker.py"
 
@@ -183,3 +184,85 @@ async def test_object_state_outside_dictionary_is_not_a_complete_identity(tmp_pa
     )
     result = await invoke(tmp_path, body, ["((0,), {})", "((1,), {})"])
     assert all(row["kind"] == "unrepresentable" for row in result["results"])
+
+
+async def invoke_method(tmp_path, source, *, module="sample", properties=(), calls=None):
+    (tmp_path / (module + ".py")).write_text(source)
+    request, report = tmp_path / "method-request.json", tmp_path / "method-report.json"
+    literal = repr(("((), {})", "((), {})"))
+    request.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "method",
+                    "module": module,
+                    "name": "change",
+                    "receiver_class": "Box",
+                    "method_kind": "method",
+                    "properties": properties,
+                    "calls": calls or [literal],
+                }
+            ]
+        )
+    )
+    process = await run_process(
+        [sys.executable, "-B", str(METHOD_WORKER), str(tmp_path), str(request), str(report), "0.2"],
+        cwd=tmp_path,
+        timeout_s=10,
+        env={"HOME": str(tmp_path)},
+    )
+    assert process.returncode == 0, process.stderr
+    row = json.loads(report.read_text())["method"]
+    assert row["problem"] is None
+    return row["results"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "source,module",
+    [
+        ("from collections import Counter as Box\n", "sample"),
+        ("class Box:\n    def change(self): return 1\n", "test_sample"),
+        ("class Box:\n    def change(self): return 1\n", "conftest"),
+        ("from random import Random as Box\n", "sample"),
+    ],
+)
+async def test_worker_rechecks_project_class_allowlist(tmp_path, source, module):
+    [row] = await invoke_method(tmp_path, source, module=module)
+    assert row["kind"] == "unrepresentable"
+
+
+@pytest.mark.anyio
+async def test_method_construction_and_capture_share_the_call_alarm(tmp_path):
+    source = (
+        "class Box:\n    def __init__(self):\n        while True: pass\n"
+        "    def change(self): return 1\n"
+    )
+    [row] = await invoke_method(tmp_path, source)
+    assert row == {"kind": "timed_out"}
+
+
+@pytest.mark.anyio
+async def test_method_creates_fresh_receiver_per_input_and_tags_state_surfaces(tmp_path):
+    source = """class Box:
+    def __init__(self): self.value = 0
+    def change(self): self.value += 1
+    @property
+    def doubled(self): return self.value * 2
+"""
+    literal = repr(("((), {})", "((), {})"))
+    rows = await invoke_method(tmp_path, source, properties=["doubled"], calls=[literal, literal])
+    assert rows[0] == rows[1]
+    assert rows[0]["state"] == {
+        "stored": [["value", ["int", "0x1"]]],
+        "properties": [["doubled", ["int", "0x2"]]],
+    }
+    assert rows[0]["result_fingerprint"] != rows[0]["fingerprint"]
+
+
+@pytest.mark.anyio
+async def test_method_state_display_is_inside_the_result_size_cap(tmp_path):
+    assignments = "; ".join(f"self.a{i} = 'x' * 512" for i in range(40))
+    source = f"class Box:\n    def change(self): {assignments}\n"
+    [row] = await invoke_method(tmp_path, source)
+    assert row["kind"] == "unrepresentable" and len(json.dumps(row)) <= 8192
