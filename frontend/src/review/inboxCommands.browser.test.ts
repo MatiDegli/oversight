@@ -78,6 +78,7 @@ it.each(["dark", "day"])(
       await page.evaluate((t) => {
         document.documentElement.dataset.theme = t;
       }, theme);
+      await mount(page);
       await inbox(page);
       await page.getByRole("button", { name: "Standing grants 1", exact: true }).click();
       await expect(page.getByRole("button", { name: "Revoke", exact: true })).toBeEnabled();
