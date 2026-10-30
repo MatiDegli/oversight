@@ -3,12 +3,14 @@
 ## Status
 
 The tasks were approved on 2026-10-30 at 09:32 ART; the reporting rules on 2026-10-30 at
-10:10 ART. Everything in this plan is fixed before the run. A rule added later is reported as
+10:10 ART. P1-P6 were approved on 2026-10-30 by 11:57 ART in the coordinator's session.
+Everything in this plan is fixed before the run. A rule added later is reported as
 added after the run started. Scope: [Three proofs](../additions.md#three-proofs) and
 [the paired-arm decision](../../DECISIONS.md#2026-10-29--proof-2-measures-correctness-with-hidden-checks-and-a-paired-arm).
-Code references below are file:line on main `37cbe9e`; a contract shape is not a built producer.
-The proof 2 checks, contracts 1.8.0 reliability events, item 10's price table and the lead are
-future dependencies, not built claims. Their names below are plain text.
+Code references below remain pinned to main `37cbe9e` unless explicitly marked `1985dfc`;
+a contract shape is not a built producer. The proof 2 manifest, commands and feature checks
+are on main since `65199d9`, as checked below on `1985dfc`. Contracts 1.8.0 reliability events,
+item 10's price table and the lead remain future dependencies; their names are plain text.
 
 ## Repository and tasks
 
@@ -18,9 +20,11 @@ Boltons is pinned at `d31d821d56c8f7756af9c30a864077f2e5855321` (`d31d821`), as 
 on 2026-10-30, including its three redistribution conditions.
 
 D1: 16 tasks, 12 backed by open issues and four adding tests only. The frozen task inventory,
-prompts, and feature APIs and examples belong in tools/eval/proof2/tasks.json, not this plan.
-The check and validate commands and hidden checks belong in tools/eval/proof2/; the first
-front is tools/proof2-checks-1, followed by the bug and tests-only checks front.
+prompts, and feature APIs and examples are in tools/eval/proof2/tasks.json on main since
+`65199d9`, together with check, validate and the seven feature checks. Checked on `1985dfc`:
+`tools/eval/proof2/README.md:3-16`, `tools/eval/proof2/README.md:25-29`,
+`tools/eval/proof2/runner.py:41-48` and `tools/eval/proof2/runner.py:163-218`.
+The bug and tests-only checks are next in tools/proof2-checks-2, not yet on main.
 
 Issue numbers refer to Boltons' GitHub issues.
 
@@ -112,6 +116,8 @@ other question is reported as undetermined.
 P4, review cost per change: The cost of all cross-review calls on a change, across its
 revisions, by item 10's attribution.
 
+Attribution source: [item 10's amended rules][item10].
+
 ## What the report measures
 
 Report every result as a count with its n. A percentage appears only for 10 or more cases.
@@ -160,18 +166,21 @@ causes, not runtime availability.
 Report both arms' cost and wall time per correct change, by role, including failed and rejected
 work; report agent-hours and parallelism. This is the headline: overhead paid versus regressions
 stopped.
-Source: item 10 attribution, usage.tick roles
+Source: [item 10 attribution][item10], usage.tick roles
 (`contracts/src/oversight_contracts/events.py:376-395`),
 revision and merge timestamps, and hidden checks. Agent-hours sum agent elapsed run intervals;
 parallelism reports the concurrent-agent count over time, with wall time measured separately.
-Price source: Meta's official pricing page. The repository stores only the extracted table,
+Price source: Meta's official pricing page ([item 10's amended rules][item10]). The repository
+stores only the extracted table,
 its page URL and retrieval date, not a page copy; leak-guard gets an exception for that one file.
-That table is item 10's future work. Baseten is a lower bound; unknown costs stay unknown.
+That table remains item 10's future work, absent on `1985dfc`. Baseten is a lower bound;
+unknown costs stay unknown.
 
 **E6.** How reliable is each model as an agent backend? Per model and host, count 429 and
 capacity errors per agent-hour, retries, halts after retries, and malformed tool calls.
-Source: future contracts 1.8.0 events model.attempt_failed and agent.step.error_kind; these are not
-on main 37cbe9e and must land before the run.
+Source: future contracts 1.8.0 events model.attempt_failed and agent.step.error_kind; still absent
+on `1985dfc` and required before the run. That main still has contracts 1.7.0
+(`contracts/src/oversight_contracts/__init__.py:12`, checked on `1985dfc`).
 
 **E7.** Does the server's evidence agree when the agent says it is done?
 Compare files, tests_run and tests with the server's diff and test run; count agreement,
@@ -217,6 +226,7 @@ execution history; plan.updated, queue.updated and lead.status have contract env
 L2 asks what share of spend goes to planning: lead calls against execution calls, by item 10's
 attribution. Keep the disjoint agent/review/plan/lead roles
 (`contracts/src/oversight_contracts/review.py:332-344`).
+Attribution source: [item 10's amended rules][item10].
 Without the lead, report L1-L2 as not measured, and count the 16 person-queued starts as decisions.
 L3, whether the lead cuts the person's decisions, is future work.
 
@@ -227,3 +237,5 @@ L3, whether the lead cuts the person's decisions, is future work.
 - Unmeasurable behavior is not evidence of unchanged behavior; method tasks await methods-1.
 - L1-L2 are not measured under the fallback; L3 needs a future comparison.
 - Pilots are preflight only; their results are excluded and their spend remains in the cap.
+
+[item10]: ../../DECISIONS.md#2026-10-30--item-10-measures-agent-hours-from-observed-intervals-with-dated-list-prices
