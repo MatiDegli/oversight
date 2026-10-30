@@ -1413,6 +1413,40 @@ chevron inset before ellipsizing; preserve fonts, frame sizes, header layers and
 Graph creation waits for these faces; a recovered font load rebuilds early fallback layers once.
 Without font/canvas measurement, tests retain the estimate. Row state-word clearance uses the
 same measurer because it needs only the existing word face and size.
+
+
+## 2026-10-29 — Exact calls at rest, possible links as quiet context
+
+The maintainer approved the resting module rule at 09:05 ART, its open-module extension at
+09:20 ART, and the straight-line treatment at 09:42 ART on October 29 (12:05, 12:20 and 12:42 UTC).
+Keep directed exact links with their taxi routes and arrows. Count exact calls separately; possible
+calls never make an exact bundle thinner. Possible-only pairs without an exact reverse may keep
+one very faint straight line, with no arrow, when any callee name survives the Python 3.12 built-in
+attribute-name filter. The sorted names and generation command are committed. This is a drawing
+heuristic, not a new assertion about call resolution, and it never changes impact or underlying counts.
+
+Boltons has 34 non-test modules, 227 directed pairs and 1,530 cross-file calls: only 13 pairs
+(13 calls) are exact. Of 214 possible-only directed pairs, 10 survive the name filter, representing
+9 unordered pairs. Rest shows 13 exact links and 9 faint lines; 16 modules have no line. The recorded
+demo has 7 directed pairs, 4 exact; its 3 possible-only pairs all survive (orders to cart, inventory
+and models). Open views keep only exact calls at rest, even on agent-lit nodes. Hover, selection
+and displayed cones reveal possible calls without filtering; cones still follow exact calls only.
+
+This replaces bundling every call into routed module links and drawing all cross-file calls in
+open modules, the source of parallel gutter lines. Folded cards and graph text plates occlude straight
+lines; open frames retain their translucent body fill, so lines can show through it beneath the rows.
+This deliberately departs from the Modules sketch's lines across text. Labels disclose exact
+and possible counts on demand. Pointer hover lifts the existing path and arrow in a neutral token,
+with no motion, width change, camera move or focus transfer. A hidden line supplies no marker route.
+Fixture checks read the optional offline export at `.runtime/graphs/boltons-d31d821.snapshot.json`
+and skip Boltons cases only when it is absent; provenance and regeneration are in
+`fixtures/layouts/README.md`. No Boltons snapshot is committed. Same-module exact calls remain
+hidden during hover, selection and lighting, preserving the prior behavior. The graph heading,
+legend, zoom controls and Modules/Functions/Details control (including zoom percentage) use fully
+opaque `panel` plates to mask lines behind their text. Other graph overlays retain frost.
+Screenshot logs use .events rather than .jsonl so generated cuts do not enter the repository-wide
+recording validation. This required tooling deviation touches `frontend/shots/run.sh` and
+`frontend/shots/capture.ts` outside the original `frontend/src` and design-document scope.
 ## 2026-10-29 — Count final decisions per change and keep their entry point visible
 
 The maintainer approved one inbox entry for the latest pending revision of each change, containing

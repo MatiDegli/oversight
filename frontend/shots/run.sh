@@ -95,8 +95,8 @@ pids+=("$!")
 scan_port=$(free_port)
 while [ "$scan_port" = "$backend_port" ] || [ "$scan_port" = "$vite_port" ]; do scan_port=$(free_port); done
 scan_url="http://127.0.0.1:$scan_port/"
-node frontend/shots/scan-log.ts "$log" "$out/scan-log.jsonl"
-OVERSIGHT_SCAN_LOG="$root/$out/scan-log.jsonl" OVERSIGHT_VITE_CACHE_DIR="$root/$out/scan-vite-cache" bash -c \
+node frontend/shots/scan-log.ts "$log" "$out/scan-log.events"
+OVERSIGHT_SCAN_LOG="$root/$out/scan-log.events" OVERSIGHT_VITE_CACHE_DIR="$root/$out/scan-vite-cache" bash -c \
   'cd frontend && exec ./node_modules/.bin/vite --config shots/scan.vite.config.ts --mode replay --host 127.0.0.1 --port "$0" --strictPort --configLoader runner' \
   "$scan_port" >"$out/scan-vite.log" 2>&1 &
 pids+=("$!")

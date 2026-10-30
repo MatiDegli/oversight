@@ -38,6 +38,8 @@
   --node-hover: #6b6e77;
   --edge: #6a6a65;
   --edge-possible: #5f5f5b;
+  --edge-faint: #29292c;
+  --edge-hover: #f0f0eb;
   --lit-edge: #d6d3cb;
   --work-light: #8c8c88;
   --agent-a: #ff5c1f;
@@ -114,6 +116,8 @@
   --node-hover: #8d8c86;
   --edge: #6e6d67;
   --edge-possible: #85847e;
+  --edge-faint: #d2d1cb;
+  --edge-hover: #353530;
   --lit-edge: #3a3936;
   --work-light: #6b6a64;
   --agent-a: #b23c0a;
@@ -391,6 +395,8 @@
   --color-node-hover: var(--node-hover);
   --color-edge: var(--edge);
   --color-edge-possible: var(--edge-possible);
+  --color-edge-faint: var(--edge-faint);
+  --color-edge-hover: var(--edge-hover);
   --color-lit-edge: var(--lit-edge);
   --color-work-light: var(--work-light);
   --color-agent-a: var(--agent-a);

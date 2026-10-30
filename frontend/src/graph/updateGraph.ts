@@ -21,7 +21,18 @@ const leafPositions = new WeakMap<Core, Map<string, Position>>();
  * The data keys a node carries only some of the time. `data()` merges, so a key the new definition
  * leaves out would keep its old value: a mark long after the focus is gone.
  */
-const OPTIONAL_DATA = ["marks", "distance", "title", "count", "callCount", "w", "h"] as const;
+const OPTIONAL_DATA = [
+  "marks",
+  "distance",
+  "title",
+  "count",
+  "callCount",
+  "exactCount",
+  "possibleCount",
+  "restPossible",
+  "w",
+  "h",
+] as const;
 
 /** Update by id, retaining dragged positions and the viewport after the first layout. */
 export function updateGraph(
@@ -85,13 +96,13 @@ export function updateGraph(
         element.source().id() !== definition.data.source ||
         element.target().id() !== definition.data.target
       ) {
-        element.removeClass("count-hover");
+        element.removeClass("count-hover node-hover");
         element.move({ source: definition.data.source, target: definition.data.target });
       }
       writeData(element, definition.data, OPTIONAL_DATA);
       // Keep selection and routing state; hover survives while its geometry stays put.
-      const owned = ["touching", "count-hover", "unroutable"].filter((name) =>
-        element.hasClass(name),
+      const owned = ["touching", "node-hover", "count-hover", "edge-shield", "unroutable"].filter(
+        (name) => element.hasClass(name),
       );
       element.classes([...definition.classes.split(/\s+/).filter(Boolean), ...owned]);
     }

@@ -221,6 +221,9 @@
   background: var(--overlay-fill);
   box-shadow: var(--top-highlight);
 }
+.graph-text-shield {
+  background: var(--panel);
+}
 .agent-card,
 [data-slot-card] {
   background: linear-gradient(var(--card), var(--card-end));
