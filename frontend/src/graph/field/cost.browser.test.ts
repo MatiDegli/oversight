@@ -4,11 +4,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { chromium } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
+
+import { launchBrowser } from "../../browserLaunch.support";
 
 const out = fileURLToPath(new URL("../../../../.shots/field-cost/", import.meta.url));
 let server: ViteDevServer | undefined;
@@ -33,7 +34,7 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await chromium.launch();
+  browser = await launchBrowser({ webGL: true });
   await mkdir(out, { recursive: true });
 }, 60_000);
 

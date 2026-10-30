@@ -2084,3 +2084,89 @@ zones first.
 Reason: one-subtask plans and the queue give the lead a path to proof 2 that does not wait on splitting, and
 splitting is built only if it happens on the repositories proof 2 uses. A wrong split costs a conflict the
 person has to resolve, so doubt falls back to one agent.
+
+## 2026-10-30 — Browser tests use plain ground unless they test the field
+
+All 24 Chromium launch sites under frontend/src use browserLaunch.support.ts. WebGL is disabled
+by default through Chromium itself: a new canvas returns null for getContext("webgl2"). This selects
+the product's existing no-WebGL path: the field canvas is hidden, its state is plain, and draws is
+zero. No product timer, motion setting, renderer or theme changes. Review's browser test asserts
+all four observations without a context shim; the lamp test explicitly asserts WebGL2 availability.
+
+Only app/dotField.browser.test.ts (lamps, contours, travel, context loss and look),
+graph/field/mask.browser.test.ts (rendered masks and markers), and
+graph/field/cost.browser.test.ts (field buffer captures and frame cost) request webGL: true.
+Other captures concern UI controls or graph geometry, not the field's appearance. No current e2e
+spec tests the field, so e2e uses the same default options helper. A field spec can explicitly use
+browserLaunchOptions({ webGL: true }); OVERSIGHT_E2E_SOFTWARE_RENDERING=1 still selects SwiftShader.
+A direct browser probe with that variable checked both the disabled and enabled modes: exit 0.
+
+Reason: on the reported ubuntu-26.04 runner (4 vCPU, software WebGL), the life layer's 500 ms
+repaints compute the full height field and draw the lamp grid throughout unrelated graph tests.
+Reported CI comparison, run 40988845881 at af1a874 versus 40989304590 at 8fad4c2, seconds:
+
+| File | Before life layer | After life layer |
+| --- | ---: | ---: |
+| review | 53.4 | 87.0 |
+| reviewControls | 51.6 | 93.3 |
+| palette | 59.3 | 92.6 |
+| shell | 59.2 | 87.5 |
+| fileView | 33.6 | 52.0 |
+| filesTree | 29.3 | 47.7 |
+| functionTask | 62.6 | 105.6 |
+| camera (already refuses WebGL2) | 8.5 | 8.5 |
+| diffViewport | 34.5 | 34.5 |
+| LiveDiff | 19.3 | 19.9 |
+| folds | 6.9 | 7.0 |
+
+The reported suite total was 393 s before the merge and reached its 600 s cap afterward;
+level2 also reached its 90 s test timeout. Neither cap was raised; workers and retries are unchanged.
+
+Local wall seconds on ad5de55 before any edit, then on this change, each invocation alone under
+taskset -c 0-3, in order review, reviewControls, camera, repeated twice, then level2 once:
+
+| File | Base run 1 / run 2 | Changed run 1 / run 2 | Exit codes, all invocations |
+| --- | ---: | ---: | ---: |
+| src/app/review.browser.test.ts | 40.88 / 36.14 | 23.12 / 28.71 | 0 |
+| src/app/reviewControls.browser.test.ts | 36.58 / 33.88 | 21.98 / 35.46 | 0 |
+| src/app/camera.browser.test.ts | 6.53 / 5.68 | 7.03 / 9.15 | 0 |
+| e2e/level2.spec.ts | 76.78 | 69.45 | 0 |
+
+Commands, unpiped; each browser file above was substituted for FILE and invoked twice per revision:
+
+```sh
+/usr/bin/time -f 'wall=%e exit=%x' taskset -c 0-3 pnpm -C frontend exec vitest run --config vite.config.ts --project browser FILE
+/usr/bin/time -f 'wall=%e exit=%x' taskset -c 0-3 env UV_OFFLINE=1 OVERSIGHT_E2E_SOFTWARE_RENDERING=1 bash frontend/e2e/run.sh level2.spec.ts
+```
+
+The e2e wall time includes the launcher's two static builds and server startup on both revisions;
+Playwright reported the changed scenario itself at 58.6 s. These local runs did not reproduce the
+CI timeouts. The second reviewControls run did not improve, and camera varied despite already
+avoiding WebGL: these are paired local observations, not a claim about the runner's final suite time.
+
+Validation: the unpiped two-file command below exited 0 (33 passed; the two existing opt-in visual
+captures remain conditional, unchanged). tsc --noEmit and eslint --max-warnings 0 on every changed
+frontend file exited 0. No Python files changed, so ruff, pyright and pytest have no touched target.
+The unpiped vitest related --run --maxWorkers 2 command over all 27 changed frontend paths
+exited 0: 33 affected files, 202 passed and three existing conditional captures unexecuted.
+
+```sh
+pnpm -C frontend exec vitest run --config vite.config.ts --project browser src/app/review.browser.test.ts src/app/dotField.browser.test.ts
+```
+
+The existing long camera and dotField files and the native-shortcut test callback retain their
+structure; this front changes only launch wiring and the two proof assertions. This decision log
+remains append-only.
+
+### 2026-10-30 — Browser launcher review corrections
+
+The full-page captures in app/shell/agentLook.browser.test.ts intentionally show the product's
+no-WebGL ground while checking agent cards, rail avatars, review pills and pending borders. They
+do not claim to capture the field's appearance. The three field files listed above retain WebGL.
+
+The dotField fixture loads the shared launcher inside beforeAll, so fixture collection needs no
+new dependency stub. app/dotFieldChecks.test.ts is restored to its pre-front contents; its original
+collection assertions reject an eager launcher import. The no-WebGL proof is a separate review
+test that asserts the field canvas exists before reading its state. SwiftShader flags are now
+added only when WebGL is enabled, with launcher tests covering the environment variable, explicit
+overrides and preservation of other launch options. The cost test's header precedes its imports.

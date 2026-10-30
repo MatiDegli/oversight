@@ -1,5 +1,5 @@
+import { launchBrowser } from "../../browserLaunch.support";
 import { fileURLToPath } from "node:url";
-import { chromium } from "@playwright/test";
 import { createServer } from "vite";
 import { expect, it } from "vitest";
 
@@ -8,7 +8,7 @@ it("masks LEDs, resting guides and travelling markers from rendered DOM rectangl
     root: fileURLToPath(new URL("../../../", import.meta.url)),
     server: { host: "127.0.0.1", port: 0 },
   });
-  const browser = await chromium.launch();
+  const browser = await launchBrowser({ webGL: true });
   try {
     const html = await server.transformIndexHtml(
       "/",

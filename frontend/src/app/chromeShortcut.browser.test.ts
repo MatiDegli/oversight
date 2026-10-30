@@ -1,7 +1,7 @@
+import { launchBrowser } from "../browserLaunch.support";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
 import { promisify } from "node:util";
-import { chromium } from "@playwright/test";
 import { expect, it } from "vitest";
 
 // CDP's keyboard.press dispatches to the page and bypasses Chrome accelerators. Use XTest
@@ -89,7 +89,7 @@ it("Chrome reserves native Ctrl+W; Alt+W reaches the page", async () => {
   try {
     const [data] = (await once(xvfb.stdout, "data")) as [Buffer];
     const display = `127.0.0.1:${data.toString().trim()}`;
-    browser = await chromium.launch({
+    browser = await launchBrowser({
       headless: false,
       args: ["--ozone-platform=x11"],
       env: { ...process.env, DISPLAY: display },

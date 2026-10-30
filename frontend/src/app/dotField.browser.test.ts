@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { chromium, expect as browserExpect } from "@playwright/test";
+import { expect as browserExpect } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -21,6 +21,7 @@ let browser: Browser | undefined;
 let url: string;
 let html: string;
 beforeAll(async () => {
+  const { launchBrowser } = await import("../browserLaunch.support");
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
     cacheDir: fileURLToPath(new URL("../../../.shots/dot-field-vite-cache", import.meta.url)),
@@ -37,7 +38,7 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await chromium.launch();
+  browser = await launchBrowser({ webGL: true });
 }, 60_000);
 afterAll(async () => {
   await browser?.close();
@@ -283,6 +284,9 @@ async function warmPixelsFromField(
 
 it("lights lamps near a lit node in its color and leaves the far cells dark", async () => {
   await withPage({ reducedMotion: "reduce" }, async (page) => {
+    expect(
+      await page.evaluate(() => document.createElement("canvas").getContext("webgl2") !== null),
+    ).toBe(true);
     const seen = await look(page);
     expect(seen.state).toBe("webgl");
     expect(seen.draws).toBeGreaterThan(0);

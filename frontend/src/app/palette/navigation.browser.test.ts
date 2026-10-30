@@ -1,5 +1,6 @@
+import { launchBrowser } from "../../browserLaunch.support";
 import { fileURLToPath } from "node:url";
-import { chromium, expect as check } from "@playwright/test";
+import { expect as check } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -22,7 +23,7 @@ beforeAll(async () => {
     '<!doctype html><html><body><script type="module">import "/src/theme/index.css"; import { paletteNavigation } from "/src/app/palette/navigation.browser.fixture.tsx"; window.paletteNavigation = paletteNavigation;</script></body></html>',
   );
   await server.listen();
-  browser = await chromium.launch();
+  browser = await launchBrowser();
 }, 60_000);
 afterAll(async () => {
   await browser?.close();

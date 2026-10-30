@@ -1,5 +1,6 @@
+import { launchBrowser } from "../../browserLaunch.support";
 import { readFileSync } from "node:fs";
-import { chromium, expect as check } from "@playwright/test";
+import { expect as check } from "@playwright/test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { PhoneGraph } from "./PhoneGraph";
@@ -14,7 +15,7 @@ it.each(["A", "B"] as const)(
     const agent = entry && practice.cut.agents[entry.proposal.agent_id];
     if (!entry || !agent) throw new Error("Missing call case");
     agent.slot = slot;
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchBrowser({ headless: true });
     try {
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
       await page.setContent(
