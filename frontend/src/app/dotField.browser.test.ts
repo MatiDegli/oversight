@@ -876,6 +876,109 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
   });
 }, 120_000);
 
+/** Optional review evidence: the shot tool records stills only, so retain three travel moments. */
+async function captureReviewMerge(page: Page, theme: string, out: string, geometry: unknown) {
+  await page.screenshot({ path: `${out}${theme}-mid.png` });
+  writeFileSync(`${out}${theme}-geometry.json`, JSON.stringify(geometry, null, 2));
+  await page.clock.runFor(900 - 725);
+  await page.screenshot({ path: `${out}${theme}-0.9s.png` });
+  await page.clock.runFor(600);
+  await page.screenshot({ path: `${out}${theme}-1.5s.png` });
+  if (!browser) throw new Error("Browser was not started");
+  const comparison = await browser.newPage({ viewport: { width: 3840, height: 1080 } });
+  try {
+    const images = [
+      fileURLToPath(new URL("../../../docs/sketches/life/merge-mid.png", import.meta.url)),
+      `${out}${theme}-mid.png`,
+    ].map(
+      (path) =>
+        `<img width="1920" height="1080" src="data:image/png;base64,${readFileSync(path).toString("base64")}">`,
+    );
+    await comparison.setContent(`<body style="margin:0;display:flex">${images.join("")}</body>`);
+    await comparison.waitForFunction(() => [...document.images].every((image) => image.complete));
+    await comparison.screenshot({ path: `${out}${theme}-compare.png` });
+  } finally {
+    await comparison.close();
+  }
+}
+
+it.each(["dark", "day"] as const)(
+  "starts a review merge at the folded agent letter in %s without moving the view",
+  async (theme) => {
+    await withPage(
+      { scene: "review", viewport, clock: true, ...(theme === "day" ? { theme } : {}) },
+      async (page) => {
+        await page.getByRole("button", { name: "Close review", exact: true }).focus();
+        const focus = await page.evaluateHandle(() => document.activeElement);
+        const view = () =>
+          page.evaluate(() => {
+            const graph = window.fieldTest.elements().graph.oversightGraph;
+            // Compound frame centers can change when the pending badge disappears.
+            return { zoom: graph?.zoom(), pan: graph?.pan(), nodes: graph?.positions() };
+          });
+        const before = await view();
+        const letter = await page
+          .getByRole("group", { name: "Agent A: Ready for review", exact: true })
+          .locator(":scope > span")
+          .first()
+          .boundingBox();
+        if (!letter) throw new Error("No folded agent A letter");
+        expect((await lifeOf(page))?.pulses).toBe(0);
+        await page.evaluate(() => {
+          window.fieldTest.advance(21);
+        });
+        expect((await lifeOf(page))?.pulses).toBe(0);
+        // Only the last 100 px of the route are drawn. Read its origin on the first travelling
+        // frame, before that tail leaves the letter, then check the same pulse at mid-travel.
+        await page.clock.runFor(250 + 16);
+        const departure = await page.evaluate(() => {
+          const group = document.querySelector("[data-field-travel] g");
+          const paths = [...(group?.querySelectorAll<SVGPathElement>("path") ?? [])];
+          const tail = paths.filter((path) => path.getAttribute("d")).at(-1);
+          const point = tail?.getPointAtLength(0);
+          const box = window.fieldTest.elements().field.getBoundingClientRect();
+          if (!point) throw new Error("No departing pulse");
+          return { x: point.x + box.left, y: point.y + box.top };
+        });
+        await page.clock.runFor(300 - 16);
+        const out = fileURLToPath(new URL("../../../.shots/review-merge-travel/", import.meta.url));
+        const capture = process.env.REVIEW_MERGE_SHOTS === "1";
+        if (capture) {
+          mkdirSync(out, { recursive: true });
+          await page.screenshot({ path: `${out}${theme}-0.3s.png` });
+        }
+        await page.clock.runFor(725 - 300);
+        expect((await lifeOf(page))?.pulses).toBe(1);
+        const mid = await page.evaluate(() => {
+          const groups = document.querySelectorAll("[data-field-travel] g");
+          return {
+            count: groups.length,
+            stroke: groups[0]?.querySelector("path[stroke]")?.getAttribute("stroke"),
+            color: getComputedStyle(document.documentElement).getPropertyValue("--agent-a").trim(),
+          };
+        });
+        expect(mid.count).toBe(1);
+        expect(mid.stroke?.toLowerCase()).toBe(mid.color.toLowerCase());
+        expect(await view()).toEqual(before);
+        expect(await focus.evaluate((element) => element === document.activeElement)).toBe(true);
+        await browserExpect(
+          page.getByRole("complementary", { name: "Review panel" }),
+        ).toBeVisible();
+        if (capture) await captureReviewMerge(page, theme, out, { departure, letter, mid });
+        expect(
+          Math.abs(departure.x - letter.x),
+          JSON.stringify({ departure, letter }),
+        ).toBeLessThanOrEqual(2);
+        expect(
+          Math.abs(departure.y - letter.y - letter.height / 2),
+          JSON.stringify({ departure, letter }),
+        ).toBeLessThanOrEqual(2);
+      },
+    );
+  },
+  60_000,
+);
+
 it.each(["dark", "day"] as const)(
   "lights square LEDs around the travelling head in %s, excluding drawn masks",
   async (theme) => {

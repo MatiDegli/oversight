@@ -55,8 +55,6 @@ const sameModules = (a?: readonly FieldModule[], b?: readonly FieldModule[]) =>
     a.length === b.length &&
     a.every((module, i) => module.id === b.at(i)?.id && module.callers === b.at(i)?.callers));
 
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
-
 /** The look of the lamps, from the theme. */
 export interface LookTheme {
   "dot-cell-size": string;
@@ -354,17 +352,18 @@ class FieldRuntime implements FieldController {
       for (const pulse of pulses) {
         const target = targets.get(pulse.merge.id);
         if (!target) continue;
-        const card = document.querySelector<HTMLElement>(
-          `[aria-label="Agent ${pulse.merge.slot}"][data-slot="${pulse.merge.slot}"]`,
-        );
-        const rect = card?.getBoundingClientRect();
-        const start =
-          rect && rect.width > 0
-            ? {
-                x: clamp(rect.left - origin.left, 0, width),
-                y: clamp(rect.top + rect.height / 2 - origin.top, 0, height),
-              }
-            : { x: width, y: (target.y1 + target.y2) / 2 };
+        const rect = [
+          ...document.querySelectorAll<HTMLElement>(`[data-agent-origin="${pulse.merge.slot}"]`),
+        ]
+          .map((element) => element.getBoundingClientRect())
+          .find((box) => box.width > 0);
+        // Cards and rail letters sit outside the graph: keep their actual departure point.
+        const start = rect
+          ? {
+              x: rect.left - origin.left,
+              y: rect.top + rect.height / 2 - origin.top,
+            }
+          : { x: width, y: (target.y1 + target.y2) / 2 };
         paths.set(
           pulse.key,
           approachPath(start, target, this.source.edgesAt?.(pulse.merge.id) ?? []),
