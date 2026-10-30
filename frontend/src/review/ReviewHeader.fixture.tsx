@@ -54,8 +54,7 @@ export function headerState(name: keyof typeof headerCases) {
   return state;
 }
 
-export function mountHeader(name: keyof typeof headerCases) {
-  const state = headerState(name);
+export function mountHeader(name: keyof typeof headerCases, state = headerState(name)) {
   stateStore.setState({ state });
   const host = document.createElement("div");
   host.style.cssText = "display:flex;width:880px;height:940px;margin:92px 0 0 56px";

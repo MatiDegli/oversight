@@ -20,7 +20,7 @@ beforeAll(async () => {
   });
   html = await server.transformIndexHtml(
     "/",
-    '<!doctype html><html><body><script type="module">import "/src/theme/index.css"; import { mountHeader } from "/src/review/ReviewHeader.fixture.tsx"; window.mountHeader = mountHeader; import {reviewTest} from "/src/app/review.browser.fixture.tsx"; window.reviewTest = reviewTest;</script></body></html>',
+    '<!doctype html><html><body><script type="module">import "/src/theme/index.css"; import { mountHeader, headerState } from "/src/review/ReviewHeader.fixture.tsx"; window.mountHeader = mountHeader; window.headerState = headerState; import {reviewTest} from "/src/app/review.browser.fixture.tsx"; window.reviewTest = reviewTest;</script></body></html>',
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
@@ -291,6 +291,69 @@ it.each([1280, 1920])(
       } finally {
         await page.close();
       }
+    }
+  },
+  60000,
+);
+
+it.each(["a", "b"] as const)(
+  "wraps long %s evidence losslessly at ordinary size and 200%% zoom",
+  async (name) => {
+    if (!browser) throw new Error("Missing browser");
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    try {
+      await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+      await page.goto(url);
+      await page.waitForFunction(() => "headerState" in window);
+      const token = "VeryLongQualifiedName".repeat(12);
+      await page.evaluate(
+        ({ name, token }) => {
+          const api = window as unknown as Pick<
+            typeof import("./ReviewHeader.fixture"),
+            "mountHeader" | "headerState"
+          >;
+          const state = api.headerState(name);
+          const id = name === "a" ? "change-3" : "change-1";
+          const change = state.changes[id];
+          if (!change?.proposal) throw new Error("Missing proposal");
+          change.proposal.summary = `Updated ${token}. All tests pass.`;
+          const facts = state.changeFacts[id]?.at(-1);
+          for (const question of facts?.review_cards ?? []) {
+            question.question = `Was this behavior change asked for? ${token}`;
+            if (question.example) question.example.inputs = token;
+          }
+          const caller = facts?.measured_cone?.[0];
+          const node = state.graph?.nodes.find((n) => n.id === caller?.node_id);
+          if (node) node.qualname = token;
+          for (const row of caller?.rows ?? []) {
+            row.inputs = token;
+            row.before = `before ${token}`;
+            row.after = `after ${token}`;
+          }
+          api.mountHeader(name, state);
+          (document.body.firstElementChild?.firstElementChild as HTMLElement).style.width = "100%";
+        },
+        { name, token },
+      );
+      await page.evaluate(() => document.fonts.ready);
+      for (const zoom of [1, 2]) {
+        await page.evaluate((zoom) => {
+          document.body.style.zoom = String(zoom);
+          (document.body.firstElementChild as HTMLElement).style.width = `${String(880 / zoom)}px`;
+        }, zoom);
+        const overflow = await page
+          .locator(".review-body")
+          .evaluate((body) =>
+            [body, ...body.querySelectorAll<HTMLElement>("h3, p, code")]
+              .filter((el) => el.scrollWidth > el.clientWidth + 1)
+              .map((el) => el.getAttribute("class") || el.tagName),
+          );
+        expect(overflow, `zoom ${String(zoom)}`).toEqual([]);
+        expect(await page.locator(".review-agent-note > p + p").textContent()).toContain(token);
+        expect(await page.locator(".choice-example > code").last().textContent()).toBe(token);
+      }
+    } finally {
+      await page.close();
     }
   },
   60000,

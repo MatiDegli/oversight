@@ -6,8 +6,8 @@ import { ReviewDecisionBar } from "./ReviewDecisionBar";
 import { ReviewPanel } from "./ReviewPanel";
 import { headerCases, headerState } from "./ReviewHeader.fixture";
 
-vi.mock("../editor", async () => ({
-  fileKey: (await import("../editor/fileKey")).fileKey,
+vi.mock("../editor", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../editor")>()),
   EditorDiff: () => <div>Inline diff</div>,
 }));
 const button = (html: string, name: string) =>

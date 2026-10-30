@@ -3,6 +3,7 @@
   min-height: 0;
   overflow-y: auto;
   overflow-anchor: none;
+  overflow-wrap: anywhere;
   padding: 24px;
   scrollbar-color: var(--control-edge) var(--page);
   container-type: inline-size;
@@ -20,6 +21,9 @@
   font-size: 16px;
   font-weight: 700;
   line-height: 22px;
+}
+.review-lead-heading > * {
+  min-width: 0;
 }
 .review-lead-heading > p,
 .review-agent-note > p:first-child {
@@ -169,6 +173,7 @@
 }
 .differing-caller > p {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   font-size: 14px;
@@ -182,6 +187,7 @@
   margin-top: 10px;
 }
 .caller-distance {
+  flex-shrink: 0;
   border: 1px solid var(--control-edge);
   border-radius: 4px;
   padding: 0 5px;
