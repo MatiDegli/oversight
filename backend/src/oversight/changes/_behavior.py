@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from oversight.changes._behavior_inputs import BehaviorInputs, behavior_inputs, module_name
 from oversight.changes._behavior_methods import method_inputs
+from oversight.changes._behavior_scopes import InertScopes
 from oversight.changes._review_samples import OutcomeKind, sample_key
 from oversight.workspace import (
     BehaviorObservation,
@@ -137,6 +138,8 @@ class BehaviorDiff:
 
 def targets(rec: "ChangeRecord") -> tuple[FunctionBehavior, ...]:
     nodes = {node.id: node for graph in (rec.base.graph, rec.head.graph) for node in graph.nodes}
+    base_nodes = {node.id: node for node in rec.base.graph.nodes}
+    scopes = InertScopes(rec.base_files, rec.head_files)
     added = {node.id for node in rec.graph.nodes_added}
     removed = set(rec.graph.nodes_removed)
     found: list[FunctionBehavior] = []
@@ -147,6 +150,8 @@ def targets(rec: "ChangeRecord") -> tuple[FunctionBehavior, ...]:
             reason = "added (no base version)"
         elif node_id in removed:
             reason = "removed (no proposed version)"
+        elif node.kind in ("module", "class") and scopes.unchanged(base_nodes[node_id], node):
+            continue
         elif node.kind == "class":
             reason = "method or class (not probed yet)"
         elif (
