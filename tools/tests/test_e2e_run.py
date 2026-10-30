@@ -17,6 +17,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import textwrap
 import time
 from collections.abc import Iterator
@@ -268,12 +269,26 @@ def bash_function(call: str) -> subprocess.CompletedProcess[str]:
 
 
 @pytest.fixture
-def stranger(tmp_path: Path) -> Iterator[subprocess.Popen[bytes]]:
+def stranger() -> Iterator[subprocess.Popen[bytes]]:
     """A process whose command name holds spaces and parentheses, as a stat line may."""
-    sleeper = tmp_path / "a) 9 (b"
-    shutil.copy(shutil.which("sleep") or "sleep", sleeper)
-    process = subprocess.Popen([str(sleeper), "300"])
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "from pathlib import Path; import time; "
+            "Path('/proc/self/comm').write_text('a) 9 (b'); time.sleep(300)",
+        ]
+    )
     try:
+
+        def named() -> bool:
+            assert process.poll() is None, f"stranger exited at startup: {process.returncode}"
+            return Path(f"/proc/{process.pid}/comm").read_text().strip() == "a) 9 (b"
+
+        until(named, "the stranger's command name to be a) 9 (b")
+        stat = Path(f"/proc/{process.pid}/stat").read_text()
+        assert stat.split("(", 1)[1].rsplit(")", 1)[0] == "a) 9 (b"
+        assert process.poll() is None and alive(process.pid), "stranger must be alive before yield"
         yield process
     finally:
         process.kill()
