@@ -70,6 +70,7 @@ from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
 from oversight.runtime_accounting import write_tick
 from oversight.runtime_decisions import RuntimeDecisions
+from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings
@@ -91,8 +92,10 @@ from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import (
     AgentCreated,
     ApproveChange,
+    EnqueueTask,
     FileContent,
     FileSaved,
+    QueueRevision,
     RejectChange,
     RequestChanges,
     SaveFile,
@@ -114,6 +117,7 @@ from oversight_contracts.events import (
     UsageTick,
 )
 from oversight_contracts.graph import GraphSnapshot
+from oversight_contracts.queue import QueuedTask
 
 _log = logging.getLogger(__name__)
 
@@ -183,6 +187,7 @@ class _Agent:
 
     task: AgentTask
     profile: ModelProfile
+    queued_task_id: str | None = None
 
     @property
     def slot(self) -> Slot:
@@ -280,6 +285,7 @@ class LiveRun:
         """Who holds each slot: "starting" during a start, then the agent's id until its change is
         rejected or merged."""
         self._count = 0
+        self.dispatcher = Dispatcher(self)
 
     def _offer(self, slot: Slot, default: SlotDefault) -> None:
         """Load only this slot's own fake script; defaults come from the shared resolver."""
@@ -363,12 +369,14 @@ class LiveRun:
             run_id=self.run_id,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
+        self.dispatcher.start()
 
     async def shutdown(self) -> None:
         """Every step runs, even after one failed or was cancelled; the first such is re-raised."""
         self._closing = True
         failure: BaseException | None = None
         steps = (
+            self.dispatcher.close,
             self._close_review_cards,
             self.difference_decisions.close,
             self._drain_reviews,
@@ -493,8 +501,14 @@ class LiveRun:
             payload = payload.model_copy(update={"base_commit": base})
             # Answering is historical provenance from the retained server task.
             agent = self._agents.get(payload.agent_id)
+            payload = payload.model_copy(
+                update={"queued_task_id": agent.queued_task_id if agent else None}
+            )
             validate_agent_status(
-                payload, base_commit=base, answering=agent.task.answering if agent else None
+                payload,
+                base_commit=base,
+                queued_task_id=agent.queued_task_id if agent else None,
+                answering=agent.task.answering if agent else None,
             )
         stored = await self.store.publish(payload)
         if (
@@ -509,6 +523,9 @@ class LiveRun:
             if kept := self._kept.get(payload.agent_id):
                 await kept.aclose()
             self._release(payload.agent_id)
+            self.dispatcher.resolved(
+                payload.agent_id, "merged" if payload.merge == "merged" else "rejected"
+            )
         return stored
 
     def _is_metered(self, agent_id: str) -> bool:
@@ -692,28 +709,43 @@ class LiveRun:
             raise ApiError("slot_busy", self._taken())
         raise errors[0]
 
+    async def enqueue(self, request: EnqueueTask) -> QueuedTask:
+        return await self.dispatcher.enqueue(request)
+
+    async def cancel_queued(self, queued_task_id: str, request: QueueRevision) -> None:
+        await self.dispatcher.cancel(queued_task_id, request)
+
     async def start(self, request: StartAgent) -> AgentCreated:
+        return await self._launch(self._admit(request))
+
+    def _admit(self, request: StartAgent, *, queued_task_id: str | None = None) -> Admission:
         manager = self._manager
-        if manager is None:
-            raise ApiError("wrong_state", "the run has not started")
-        # Answering admission has no effects; snapshot the request before the first wait.
+        if manager is None or self._closing:
+            raise ApiError("wrong_state", "the run is not accepting starts")
         request = request.model_copy(deep=True)
         runtime_answering.admit(request.answering, self.store)
         slot, profile = self._check(request, manager)
-        self._slots[slot] = "starting"  # no await since the check: two starts cannot both pass it
+        self._slots[slot] = "starting"  # check, reservation and allocation never yield
+        self._count += 1
+        task = AgentTask(
+            agent_id=f"agent-{self._count}",
+            change_id=f"change-{self._count}",
+            slot=slot,
+            task=request.task,
+            limits=LIMITS,
+            answering=request.answering,
+        )
+        return Admission(task, profile, queued_task_id)
+
+    async def _launch(self, admission: Admission) -> AgentCreated:
+        manager = self._manager
+        assert manager is not None
+        task, profile = admission.task, admission.profile
+        slot = task.slot
         try:
             if self._venv is not None:
                 # Shielded: cancelling this start must not cancel the build later starts need.
                 await asyncio.shield(self._venv)
-            self._count += 1
-            task = AgentTask(
-                agent_id=f"agent-{self._count}",
-                change_id=f"change-{self._count}",
-                slot=slot,
-                task=request.task,
-                limits=LIMITS,
-                answering=request.answering,
-            )
             client: ModelClient | None = None
 
             def before_create() -> None:
@@ -725,12 +757,15 @@ class LiveRun:
             assert client is not None
         except ApiError:
             self._slots[slot] = None
+            self.dispatcher.wake.set()
             raise
         except WrongState as error:
             self._slots[slot] = None  # main turned suspect after the check: nothing was started
+            self.dispatcher.wake.set()
             raise ApiError("wrong_state", str(error)) from None
         except Exception as error:
             self._slots[slot] = None
+            self.dispatcher.wake.set()
             await self._report("server", f"Starting an agent failed: {_describe(error)}")
             raise ApiError(
                 "internal",
@@ -738,9 +773,10 @@ class LiveRun:
             ) from error
         except BaseException:
             self._slots[slot] = None  # cancelled: the shutdown, or the request's task
+            self.dispatcher.wake.set()
             raise
         # No await from `open` to here: the run task exists as soon as the change does.
-        agent = _Agent(task, profile)
+        agent = _Agent(task, profile, admission.queued_task_id)
         self._slots[slot] = task.agent_id
         self._agents[task.agent_id] = agent
         self._runs[task.agent_id] = asyncio.create_task(
