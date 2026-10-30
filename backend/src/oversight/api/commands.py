@@ -46,7 +46,6 @@ NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("POST", "/changes/{change_id}/revert", "Reserved /changes/{change_id}/revert"),
     ("GET", "/changes/{change_id}", "Reserved /changes/{change_id}"),
     ("GET", "/agents/{agent_id}", "Reserved /agents/{agent_id}"),
-    ("GET", "/impact", "The impact query"),
     ("GET", "/merge-mode", "Reading the merge mode"),
     ("PUT", "/merge-mode", "Setting the merge mode"),
     ("POST", "/plans", "Creating a plan"),
