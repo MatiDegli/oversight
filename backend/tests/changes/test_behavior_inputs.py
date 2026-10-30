@@ -44,6 +44,46 @@ def test_cap_and_one_parameter_at_a_time():
     )
 
 
+@pytest.mark.parametrize("tests", ["", "from pkg.mod import f\nf(500, 600, 700)\n"])
+def test_integer_boundaries_precede_constant_neighborhoods_with_shared_cap(tests):
+    body = "LIMITS = (10, 20, 30, 40, 50, 60)\ndef f(x: int, y: int, z: int): return x + y + z\n"
+    found = generate(body, tests=tests)
+    assert 0 < len(found.inputs) <= 48
+    arguments = [ast.literal_eval(item.before)[1] for item in found.inputs]
+    for param in ("x", "y", "z"):
+        assert {0, -1} <= {kwargs[param] for kwargs in arguments}
+    if tests:
+        assert arguments[0] == {"x": 500, "y": 600, "z": 700}
+
+
+def test_negative_quantity_is_generated_for_price_rejection():
+    before = (
+        "BULK_TIERS = ((50, 20), (10, 10))\n"
+        "TAX_PERCENT = 8\nFLAT_SHIPPING = 599\nFREE_SHIPPING_FROM = 10_000\n"
+        "def f(unit_price: int, quantity: int, extra_percent: int = 0) -> int:\n"
+        "    base = unit_price * quantity\n"
+        "    percent = extra_percent\n"
+        "    for minimum, tier_percent in BULK_TIERS:\n"
+        "        if quantity >= minimum:\n"
+        "            percent += tier_percent\n"
+        "            break\n"
+        "    return base - base * percent // 100\n"
+    )
+    after = before.replace(
+        "    base = unit_price * quantity\n",
+        "    if quantity < 0:\n"
+        "        raise ValueError('negative quantity')\n"
+        "    base = unit_price * quantity\n",
+    )
+    found = generate(before, after)
+    assert 0 < len(found.inputs) <= 48
+    assert any(
+        ast.literal_eval(item.before)[1]["quantity"] == -1
+        and ast.literal_eval(item.after)[1]["quantity"] == -1
+        for item in found.inputs
+    )
+
+
 def test_name_binding_survives_parameter_order_and_positional_only():
     before = "def f(x: int, /, y: int = 2): return x + y\n"
     after = "def f(y: int = 2, *, x: int): return x + y\n"
