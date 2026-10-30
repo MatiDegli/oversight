@@ -2175,3 +2175,117 @@ collection assertions reject an eager launcher import. The no-WebGL proof is a s
 test that asserts the field canvas exists before reading its state. SwiftShader flags are now
 added only when WebGL is enabled, with launcher tests covering the environment variable, explicit
 overrides and preservation of other launch options. The cost test's header precedes its imports.
+
+## 2026-10-30 — Item 11a: planner usage, start refusals, restarts and queue order
+
+The maintainer accepted five answers for item 11's plan:
+
+- The usage of a plan call the person requested, made before any agent exists, goes into `usage.tick` under a
+  planner id local to the run, taken from the agent counter. That id never gets an `agent.status`, so the reducer
+  records its cost without a card. No contract change.
+- Before a plan's first start, its queue item follows the table for standalone tasks: a busy slot leaves it
+  `queued` with a detail; the spending brake, a suspect main or missing configuration leave it `blocked`; any other
+  refusal or a failed start marks it `failed`, the plan fails, and its `waiting` subtasks become `cancelled`. After
+  a start, which only 11b or the lead allows, a refusal that may clear leaves the subtask `waiting` and the item
+  `starting` or `running` with a detail. This follows the queue contract, where a `starting` item holds at least
+  one agent and a `blocked` item holds none.
+- Unimportable `.py` files, which the graph scan drops today, count as completeness gaps, and the split
+  measurement reports them separately. They are not among the scan's own exclusions.
+- The queue lasts for one run. After a restart the new run starts with an empty queue, and the shutdown `error`
+  lists what never ran. There is no resumption across runs before proof 2.
+- The queue is strict FIFO, skipping only blocked items. Queueing proof 2's 16 tasks from the UI is a separate
+  frontend front.
+
+Reason: each answer keeps 11a within contracts 1.8.0 and the rules standalone tasks already follow, which is what
+proof 2 needs. Resuming across runs and queueing from the UI are not on proof 2's path.
+
+## 2026-10-30 — The lead requests plans only, ends when done, and claims no independence
+
+The maintainer accepted five answers for the lead's plan:
+
+- A lead plan's independent subtasks are not zone-checked against each other, as the 16 standalone queued tasks
+  are not. The person's one approval of the exact plan revision lets them run in parallel; conflicts and failed
+  combined tests reach the person through follow-main, and nothing claims the subtasks are independent. This
+  stays after 11b, whose zone checks cover only the splits the server proposes from POST /plans. The rejected
+  options were one subtask per plan until 11b, and several subtasks only as a dependency chain.
+- The lead does not queue standalone tasks before proof 2, only plans. Decision 9 of the 2026-10-27 batch (lead
+  standalone queueing) waits until after proof 2.
+- The lead never waits or replans: it ends at `done`. Waiting would need a new status, after proof 2.
+- The lead's prompt is part of the prompt set, so `run.started`'s `prompt_version` covers it. Its limits are fixed
+  in code, stated in its starting detail, and recorded in DECISIONS.md when the lead lands. No contract change.
+- A rejected lead plan is final. The person may start a new lead with the rejection comment.
+
+Reason: not zone-checking a lead plan's subtasks takes the same risk proof 2 already accepts with 16 standalone
+tasks and claims nothing; it is the only option where the lead saves approvals while agents run in parallel.
+
+## 2026-10-30 — 11b runs only if splits are common enough
+
+The free split measurement decides whether 11b (completeness evidence and the partition) is built before proof 2.
+11b runs if at least 1 in 5 Boltons task pairs splits with calls plus imports, and at least 1 demo repository pair
+splits. Otherwise it waits until after proof 2, as the order entry above says. No measurement had been reported
+when the rule was set.
+
+The method is fixed with the rule. Each task's targets are the innermost functions and methods whose base-side
+range contains a line the reference patch changes. New definitions map to nothing; a task with only additions
+falls back to its containing node, and the report shows the denominators with and without that fallback. Pairs:
+120 from proof 2's tasks on Boltons, 28 from the demo repository and 1,000 random pairs with a fixed seed, each
+under two variants, calls only and calls plus imports. A pair splits only if each zone holds the targets of exactly
+one task. An incomplete repository gives "no split possible" for all its pairs.
+
+Result, on 2026-10-30 at 22:17 UTC (main e8a52e1, Boltons d31d821, seed 20261030): both graphs were complete. On
+Boltons, calls plus imports split 15 of 21 eligible task pairs without the fallback and 26 of 66 with it; the other
+pairs include a task with no targets. A random sample of 1,000 Boltons pairs split 779 times. On the demo
+repository none of the 28 pairs split, under either variant or mapping; the partitioner's refusals were 17 for
+coupled targets and 11 for too few groups. The demo condition fails, so 11b waits until after proof 2.
+
+Reason: a rule set before the numbers keeps 11b from being justified by the results it is meant to test, and a
+split that rarely happens does not pay for the conflicts a wrong split costs.
+
+## 2026-10-30 — Item 8: a closed activation latch, and rules mode refuses without cross-review
+
+The maintainer accepted six answers for item 8's plan:
+
+1. The activation latch is a constant in code that only the activation front opens, not an environment setting,
+   so configuration cannot open it in an unapproved build.
+2. Losing isolation does not switch the mode to Ask me. Only the person switches; Oversight suspends rules
+   authority and says why in one `error` event.
+3. PUT `merge_when_safe` does not require a browser Origin header: proof runs use the command line. The lead is
+   fenced by its route allowlist instead.
+4. A disable keeps the revision check (compare-and-set). Every disable suspends authority and ends every wait at
+   once; a stale disable answers 409, and the UI re-reads the mode.
+5. The `run.started` seq identifies the protected-path table version in force, and the table's version is recorded
+   in DECISIONS.md when protected paths land. No contract change.
+6. Rules mode refuses while cross-review is off; cross-review stays optional under Ask me.
+
+Reason: until activation, PUT `merge_when_safe` always answers 409 with the latch's reason, so the person's
+authority and PRODUCT.md's merge-authority sentence stay true while the pieces land. Each answer fails closed
+without a contract change.
+
+## 2026-10-30 — Messages, pause and resume: 202 answers, three limits and memory-only text
+
+The maintainer accepted seven answers for level 3's messages, pause and resume:
+
+1. POST /agents/{id}/message, /pause and /resume answer an empty 202 once built, instead of 501.
+2. Only time actually spent paused is excluded from the agent's wall-clock limit; time with a pause pending still
+   counts.
+3. Resume cancels a pending pause.
+4. A message holds at most 4,096 characters.
+5. At most 32 messages wait in an agent's queue.
+6. An agent accepts at most 8,192 UTF-8 bytes of message text over its lifetime, never replenished.
+7. Message text lives only in memory: no event carries it, so a replay shows a message's effects but not its text.
+
+Reason: the limits bound the context messages add, since every step resends the full history, and memory-only text
+needs no contract change.
+
+## 2026-10-30 — No paid H1 pair: the free passes miss its third condition
+
+H1, in proof 2's entry, allows the paid harness-pack pair only after both free passes meet three conditions. On
+main ad5de55, with the fake model and no cost, the two asking arms met the first two: 4 of 20 cases with no
+question available in each, and equal counts. They missed the third: b04 and b19, labelled `unasked_difference`
+with tests passing in both passes, do not flip. b04's unasked difference appends a line to a file, and b19's falls
+back to `uuid4()` when `sku` is empty; a probe that compares return values and receiver state sees neither. The
+paid-run gate refused, and the maintainer chose not to run the paid pair. The bench's counting rules are
+unchanged.
+
+Reason: H1 was fixed before the run as the condition for paying. Meeting it would need probes that record file
+effects, a new product capability, or a rule changed after seeing results.
