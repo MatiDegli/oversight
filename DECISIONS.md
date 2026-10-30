@@ -2227,6 +2227,12 @@ falls back to its containing node, and the report shows the denominators with an
 under two variants, calls only and calls plus imports. A pair splits only if each zone holds the targets of exactly
 one task. An incomplete repository gives "no split possible" for all its pairs.
 
+Result, on 2026-10-30 at 22:17 UTC (main e8a52e1, Boltons d31d821, seed 20261030): both graphs were complete. On
+Boltons, calls plus imports split 15 of 21 eligible task pairs without the fallback and 26 of 66 with it; the other
+pairs include a task with no targets. A random sample of 1,000 Boltons pairs split 779 times. On the demo
+repository none of the 28 pairs split, under either variant or mapping; the partitioner's refusals were 17 for
+coupled targets and 11 for too few groups. The demo condition fails, so 11b waits until after proof 2.
+
 Reason: a rule set before the numbers keeps 11b from being justified by the results it is meant to test, and a
 split that rarely happens does not pay for the conflicts a wrong split costs.
 
