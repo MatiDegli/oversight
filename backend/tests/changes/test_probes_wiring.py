@@ -205,6 +205,7 @@ async def test_validator_rejects_forged_probe_result_and_reference(h: Harness) -
         summary_evidence=capture_summary(
             rec, added_test_ids=tuple(probe.test_id for probe in facts.added_tests)
         ),
+        reach=facts.reach,
     )
     validate_change_facts(facts, evidence)
     for update in ({"result": "fails_before_passes_after"}, {"before_seq": facts.test_runs[0]}):

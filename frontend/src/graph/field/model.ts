@@ -2,6 +2,7 @@
 // the lit nodes' boxes, and which of four levels its lamp shows after an 8 by 8 ordered dither. The
 // canvas only draws the result, so everything DESIGN.md's "Dot field and rings" says about light is
 // tested here without a GPU. Every number comes from a theme token.
+import type { PulseLight } from "./pulseLights";
 import { lightBoxKey } from "./marker";
 import type { FieldLight, FieldMode, LightSource } from "./lights";
 import { breathing, motionOf, ringFade, ringRadiusAt } from "./motion";
@@ -44,8 +45,13 @@ export interface FieldTheme extends MotionTheme, ProfileTheme, Record<LightSourc
   "signal-light-near": string;
   "signal-light-far": string;
   "dot-cell-size": string;
+  "lamp-cut-low": number;
+  "lamp-cut-high": number;
   "dot-level-count": number;
   "dot-dither-size": number;
+  "lamp-ramp-deep": number;
+  "lamp-ramp-mid": number;
+  "lamp-ramp-hot": number;
   "light-near-weight": number;
   "light-far-weight": number;
   "light-source-limit": number;
@@ -54,15 +60,21 @@ export interface FieldTheme extends MotionTheme, ProfileTheme, Record<LightSourc
 export interface FieldConfig {
   /** A cell's side, in CSS px. */
   cell: number;
-  /** The levels a lamp can show, off included. */
+  /** The intensity under which a lamp is off, and the one at which it is whole. */
+  cutLow: number;
+  cutHigh: number;
+  /** The levels a lamp can show, off included, and the side of the ordered dither that picks them. */
   levels: number;
   ditherSize: number;
+  /** How a lamp's color follows its brightness: see the lamp-ramp tokens. */
+  ramp: { deep: number; mid: number; hot: number };
   /** The shares of a light's intensity that decay over the near and the far length. */
   nearShare: number;
   farShare: number;
   /** The most lights mixed at once. */
   limit: number;
   lampOff: Rgb;
+  colors: Record<LightSource, string>;
   profile: LightProfile;
   motion: Motion;
 }
@@ -73,6 +85,11 @@ export interface LampGrid {
   rows: number;
   /** A lamp's color, and as alpha its level: 0 off, 255 the full light. Reused by the next call. */
   data: Uint8ClampedArray;
+  /**
+   * How much light reaches each cell before it is cut into levels, 0 to 255: smooth where `data`
+   * is dithered, so what must fade with the light (the rest contours) fades without blocks.
+   */
+  glow?: Uint8ClampedArray;
 }
 
 const px = Number.parseFloat;
@@ -93,12 +110,20 @@ export function fieldConfig(theme: FieldTheme, mode: FieldMode): FieldConfig {
   const key = profileKey[mode];
   return {
     cell: px(theme["dot-cell-size"]),
+    cutLow: theme["lamp-cut-low"],
+    cutHigh: theme["lamp-cut-high"],
     levels: theme["dot-level-count"],
     ditherSize: theme["dot-dither-size"],
+    ramp: {
+      deep: theme["lamp-ramp-deep"],
+      mid: theme["lamp-ramp-mid"],
+      hot: theme["lamp-ramp-hot"],
+    },
     nearShare: theme["light-near-weight"],
     farShare: theme["light-far-weight"],
     limit: theme["light-source-limit"],
     lampOff: parseHex(theme["lamp-off"]),
+    colors: theme,
     profile: {
       near: px(theme["signal-light-near"]),
       far: px(theme["signal-light-far"]),
@@ -139,7 +164,8 @@ const matrices = new Map<number, Uint8Array>();
 
 /**
  * The ordered-dither matrix of a power-of-two size: each of 0 to size² - 1 once, built by the
- * recursive rule that doubles a matrix into four quarters offset by 0, 2, 3 and 1.
+ * recursive rule that doubles a matrix into four quarters offset by 0, 2, 3 and 1. At size 8 it is
+ * the sketch's `bayer8`, cell for cell.
  */
 export function bayerMatrix(size: number): Uint8Array {
   const known = matrices.get(size);
@@ -170,20 +196,25 @@ export function boxDistance(box: Box, x: number, y: number): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-/** What share of a light's strength reaches `distance` from its box: a near term and a far one. */
+/**
+ * What share of a light's strength reaches `distance` from its box: a near term that decays fast
+ * and a far one with a long tail, 1 over one plus the square of the distance in far lengths, so the
+ * halo thins over several rings instead of ending at once.
+ */
 export function falloff(config: FieldConfig, distance: number): number {
   const { near, far } = config.profile;
   return (
-    config.nearShare * Math.exp(-distance / near) + config.farShare * Math.exp(-distance / far)
+    config.nearShare * Math.exp(-distance / near) +
+    config.farShare / (1 + (distance / far) * (distance / far))
   );
 }
 
 /**
- * The lowest intensity that can lift a lamp to its first level: the dither adds at least half a
- * step of the matrix to a level's share, so anything below this is off whatever the cell.
+ * The lowest intensity one light can add: anything under the cut's low edge adds nothing, so a
+ * cell is off whatever the dither.
  */
 function lowestLit(config: FieldConfig): number {
-  return 0.5 / (config.ditherSize * config.ditherSize * (config.levels - 1));
+  return config.cutLow;
 }
 
 /**
@@ -196,7 +227,7 @@ function reach(config: FieldConfig, amplitude: number): number {
   const { near, far } = config.profile;
   return Math.max(
     near * Math.log((2 * config.nearShare * amplitude) / floor),
-    far * Math.log((2 * config.farShare * amplitude) / floor),
+    far * Math.sqrt(Math.max(0, (2 * config.farShare * amplitude) / floor - 1)),
     0,
   );
 }
@@ -240,6 +271,7 @@ function extent(config: FieldConfig, light: PlacedLight, glow: number, ring: boo
 /** The arrays a frame is accumulated in, kept between frames. */
 interface Work extends Accumulated {
   data: Uint8ClampedArray;
+  glow: Uint8ClampedArray;
   /** Per column, for the light being added: the distance to its box, and the offset from its center. */
   colX: Float32Array;
   ringX: Float32Array;
@@ -303,8 +335,11 @@ function addLight(
       let intensity = 0;
       if (distanceSquared <= glowBound) {
         const distance = Math.sqrt(distanceSquared);
-        if (distance <= glow)
+        if (distance <= glow) {
           intensity = amplitude * cachedFalloff(config, distance, row * cols + col, work.decay);
+          // Each light is held back by its own cut, as the sketch does, before the lights add up.
+          intensity *= smooth(config.cutLow, config.cutHigh, intensity);
+        }
       }
       if (ringRow) {
         const rx = ringX[col] ?? 0;
@@ -322,6 +357,38 @@ function addLight(
       red[k] = (red[k] ?? 0) + intensity * lr;
       green[k] = (green[k] ?? 0) + intensity * lg;
       blue[k] = (blue[k] ?? 0) + intensity * lb;
+    }
+  }
+}
+
+/** Adds a point gaussian only within three radii, before the common dither and color ramp. */
+function addPointLight(
+  config: FieldConfig,
+  cols: number,
+  rows: number,
+  light: PulseLight,
+  work: Accumulated,
+) {
+  const { x, y, radius } = light;
+  if (radius <= 0 || light.intensity <= 0) return;
+  const reach = 3 * radius;
+  const c0 = Math.max(0, Math.floor((x - reach) / config.cell));
+  const c1 = Math.min(cols - 1, Math.floor((x + reach) / config.cell));
+  const r0 = Math.max(0, Math.floor((y - reach) / config.cell));
+  const r1 = Math.min(rows - 1, Math.floor((y + reach) / config.cell));
+  const [red, green, blue] = parseHex(config.colors[light.source]);
+  for (let row = r0; row <= r1; row++) {
+    const dy = (row + 0.5) * config.cell - y;
+    for (let col = c0; col <= c1; col++) {
+      const dx = (col + 0.5) * config.cell - x;
+      const squared = dx * dx + dy * dy;
+      if (squared > reach * reach) continue;
+      const intensity = light.intensity * Math.exp(-squared / (2 * radius * radius));
+      const at = row * cols + col;
+      work.sum[at] = (work.sum[at] ?? 0) + intensity;
+      work.red[at] = (work.red[at] ?? 0) + intensity * red;
+      work.green[at] = (work.green[at] ?? 0) + intensity * green;
+      work.blue[at] = (work.blue[at] ?? 0) + intensity * blue;
     }
   }
 }
@@ -346,6 +413,7 @@ export function createLampField() {
     height: number,
     lights: readonly PlacedLight[],
     time: number | null,
+    points: readonly PulseLight[] = [],
   ): LampGrid {
     const cols = Math.max(1, Math.ceil(width / config.cell));
     const rows = Math.max(1, Math.ceil(height / config.cell));
@@ -356,6 +424,7 @@ export function createLampField() {
       work.green = new Float32Array(cells);
       work.blue = new Float32Array(cells);
       work.data = new Uint8ClampedArray(cells * 4);
+      work.glow = new Uint8ClampedArray(cells);
     } else {
       work.sum.fill(0);
       work.red.fill(0);
@@ -383,68 +452,90 @@ export function createLampField() {
       addLight(config, cols, rows, one, time, work);
     }
     decays = retained;
-    quantize(config, cols, rows, work, work.data);
-    return { cols, rows, data: work.data };
+    for (const light of points) addPointLight(config, cols, rows, light, work);
+    shadeLamps(config, cols, rows, work, work.data, work.glow);
+    return { cols, rows, data: work.data, glow: work.glow };
   };
 }
 
-interface Accumulated {
+export interface Accumulated {
   sum: Float32Array;
   red: Float32Array;
   green: Float32Array;
   blue: Float32Array;
 }
 
-const dithers = new Map<number, Uint8Array>();
-/** The dither matrix of a size, made once. */
-function ditherOf(size: number): Uint8Array {
-  let matrix = dithers.get(size);
-  if (!matrix) {
-    matrix = bayerMatrix(size);
-    dithers.set(size, matrix);
-  }
-  return matrix;
+/** A smooth rise from 0 at `low` to 1 at `high`. */
+function smooth(low: number, high: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - low) / (high - low)));
+  return t * t * (3 - 2 * t);
+}
+
+/** One channel of a lit lamp: the light's, deepened if it is a weaker one, then lamp-off to it. */
+function lampColor(
+  channel: number,
+  peak: number,
+  weaker: number,
+  ink: number,
+  toInk: number,
+  off: number,
+  share: number,
+): number {
+  const base = channel >= peak ? channel : channel * weaker;
+  return off + (base + (ink - base) * toInk - off) * share;
 }
 
 /**
- * Turns each cell's intensity into a level with the ordered dither, and the level into a color
- * between lamp-off and the cell's mixed light color. The colors of overlapping lights mix by
- * intensity; their intensities add, up to the full light.
+ * Turns each cell's intensity into one of the lamp levels with the ordered dither, and the level
+ * into a color. The level is `floor(min(1, total) * (levels - 1) + threshold)`, the threshold the
+ * matrix cell over its size squared: near the core every lamp is whole, further out the dither
+ * leaves a regular pattern of single lamps. Dim levels lean to the deep end of the light's color,
+ * a level at `mid` shows it as it is, and the whole level moves `hot` of the way to the ink (the
+ * extreme away from lamp-off). The colors of overlapping lights mix by intensity; their
+ * intensities add, up to the full light.
  */
-function quantize(
+export function shadeLamps(
   config: FieldConfig,
   cols: number,
   rows: number,
   light: Accumulated,
   out: Uint8ClampedArray,
+  glow: Uint8ClampedArray,
 ) {
-  const top = config.levels - 1;
-  const matrix = ditherOf(config.ditherSize);
-  const steps = config.ditherSize * config.ditherSize;
+  const { deep, mid, hot } = config.ramp;
   const [or, og, ob] = config.lampOff;
+  const ink = or + og + ob > 381 ? 0 : 255;
+  const top = config.levels - 1;
+  const size = config.ditherSize;
+  const matrix = bayerMatrix(size);
+  const steps = size * size;
   for (let row = 0; row < rows; row += 1) {
-    const rowOffset = (row % config.ditherSize) * config.ditherSize;
+    const rowOffset = (row % size) * size;
     for (let col = 0; col < cols; col += 1) {
       const k = row * cols + col;
       const total = light.sum[k] ?? 0;
-      let level = 0;
-      if (total > 0) {
-        const threshold = ((matrix[rowOffset + (col % config.ditherSize)] ?? 0) + 0.5) / steps;
-        level = Math.min(top, Math.floor(Math.min(1, total) * top + threshold));
-      }
+      glow[k] = Math.min(1, total) * 255;
+      const threshold = (matrix[rowOffset + (col % size)] ?? 0) / steps;
+      const level = Math.min(top, Math.floor(Math.min(1, total) * top + threshold));
       const o = k * 4;
-      if (level === 0) {
+      if (level <= 0) {
         out[o] = or;
         out[o + 1] = og;
         out[o + 2] = ob;
         out[o + 3] = 0;
-      } else {
-        const share = level / top;
-        out[o] = or + ((light.red[k] ?? 0) / total - or) * share;
-        out[o + 1] = og + ((light.green[k] ?? 0) / total - og) * share;
-        out[o + 2] = ob + ((light.blue[k] ?? 0) / total - ob) * share;
-        out[o + 3] = 255 * share;
+        continue;
       }
+      const share = level / top;
+      const red = (light.red[k] ?? 0) / total;
+      const green = (light.green[k] ?? 0) / total;
+      const blue = (light.blue[k] ?? 0) / total;
+      const peak = Math.max(red, green, blue);
+      const weaker = deep + (1 - deep) * Math.min(1, share / mid);
+      const toInk = share > mid ? ((share - mid) / (1 - mid)) * hot : 0;
+      out[o] = lampColor(red, peak, weaker, ink, toInk, or, share);
+      out[o + 1] = lampColor(green, peak, weaker, ink, toInk, og, share);
+      out[o + 2] = lampColor(blue, peak, weaker, ink, toInk, ob, share);
+      out[o + 3] = 255 * share;
     }
   }
 }
@@ -483,6 +574,7 @@ function emptyWork(): Work {
     green: empty(),
     blue: empty(),
     data: new Uint8ClampedArray(0),
+    glow: new Uint8ClampedArray(0),
     colX: empty(),
     ringX: empty(),
     decay: new Float64Array(0),

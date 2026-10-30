@@ -2,7 +2,7 @@
 name: Oversight
 description: A web IDE where one person supervises coding agents on a live graph of a Python repository.
 colors:
-  ground: "#000000"
+  ground: "#070707"
   shell: "#060606"
   panel: "#080808"
   field: "#0b0b0b"
@@ -74,8 +74,9 @@ colors:
   fold-tint: "rgba(255, 255, 255, 0.035)"
   matte-top: "#151515"
   matte-bottom: "#0f0f0f"
-  lamp-off: "#050505"
+  lamp-off: "#070707"
   guide-dot: "rgba(237, 237, 234, 0.10)"
+  contour-line: "rgba(237, 237, 234, 0.09)"
   day-ground: "#f4f3ef"
   day-shell: "#e9e8e3"
   day-panel: "#eeede8"
@@ -150,6 +151,7 @@ colors:
   day-matte-bottom: "#ecebe6"
   day-lamp-off: "#eae9e5"
   day-guide-dot: "rgba(28, 28, 26, 0.10)"
+  day-contour-line: "rgba(28, 28, 26, 0.08)"
 typography:
   headline:
     fontFamily: "Atkinson Hyperlegible Next, sans-serif"
@@ -311,13 +313,21 @@ with a dark Monaco theme. A day mode exists for the submission gallery only (see
 [changes](docs/sketches/v4/changes.png), [settings](docs/sketches/v4/settings.png) and
 [motion marker](docs/sketches/v4/motion-marker.png). These are the shell target, inside Signal
 and with the matte review header retained. This file records their design, not their implementation.
+The maintainer approved the life-layer sketches on 2026-10-29:
+[rest](docs/sketches/life/rest-contour.png), [rest in day](docs/sketches/life/rest-day.png),
+[rest under reduced motion](docs/sketches/life/rest-rm.png),
+[merge travels](docs/sketches/life/merge-mid.png) and a
+[motion clip](docs/sketches/life/life-v2.webm). They are the target for the rest state and the life
+layer, on the same shell. Two flaws are known and are not copied: the light in merge-mid has a hard
+top edge, and the clip runs the contour drift and the light fade at 10x, as its label says. Its
+"Sketch" strip is mockup only.
 Where a sketch disagrees with AGENTS.md, the table of departures records the rule that wins;
 contrast failures remain explicit maintainer notes below. Sizes are CSS pixels on a 1920 by 1080
 frame, the size the demo is recorded at. Panels scale with the window; type sizes and radii do not.
 
 **Key Characteristics:**
 
-- Black ground, warm white text, two agent colors and two state colors, nothing else.
+- Near-black ground (#070707), warm white text, two agent colors and two state colors, nothing else.
 - One family, Atkinson Hyperlegible, in sentence case.
 - Layered dark surfaces with hairline borders; light lives only on the graph.
 - Every state is told in words or signs as well as color.
@@ -355,6 +365,12 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Product name | "Graph IDE" | Oversight | the placeholder was replaced |
 | Approve fill in v4 review | blue | text fill, page label | neutral decision; blue belongs to agent B |
 | Settings examples | sample numbers, rules and provider rows | backed settings only | the sketch does not create configuration or change contracts |
+| Light of a merge | merge-mid.png: a hard top edge | a soft falloff on every side | maintainer, 2026-10-29: never a hard or blocky edge |
+| Light of a waiting change | not drawn (the sketches show a merge only) | one steady light, dimmer than a working agent's, while the change has an open inbox entry | maintainer, 2026-10-29 clarification: the light belongs to a change, in three states |
+| "merged" chips on nodes | drawn in the rest and merge sketches | not built in this front: the graph shows a merged node in main's neutral look, and the rail card says what merged | the chips are a separate piece of the node look; until then the cards carry it (flagged to the maintainer) |
+| Contour mask | exact rectangles with a soft edge | whole 7px cells, the field's own mask | one mask for lamps and lines; a line ends within 7px of an overlay |
+| Tests scan, rolling numbers, top-edge light, focus glow, button press | drawn | not built in this front | part 2 of the life layer |
+| Sketch strip and its keys | drawn | not built | mockup only |
 
 ## Colors
 
@@ -447,7 +463,7 @@ The neutral roles:
   header's gradient; span-highlight and fold-tint are the Monaco highlights described below.
 - **Graph neutrals:** edge for an exact call edge, edge-possible for a possible one, lit-edge for an
   edge inside the cone or the change, node-hover for a hovered node's border; lamp-off for an
-  unlit lamp of the dot field and guide-dot for its guide dots.
+  unlit lamp of the dot field, guide-dot for its guide dots and contour-line for the rest contours.
 
 ### Code colors
 
@@ -482,7 +498,8 @@ otherwise it is cut like level 3. The screenshots (`make shots`, once it exists)
 - **Monaco** uses its built-in light theme (`vs`) with the muted day syntax tokens.
 - **The graph grid** is ink on paper: the ground is day-ground, unlit lamps are `day-lamp-off` (the
   ground darkened by about 4%), the guide dots are `day-guide-dot` (day-text at 10%), and light
-  becomes ink density: a stronger light draws denser, darker dots in the light's day color.
+  becomes ink density: a stronger light draws denser, darker dots in the light's day color. The rest
+  contours are `day-contour-line`, ink at 8%.
 - **Agents** are darker variants of the same hues, still told apart with common color blindness.
   Simulated color difference between A and B (CIE76, full-severity simulation): 119 with normal
   vision, 108 protanopia, 122 deuteranopia, 97 tritanopia (the dark pair: 137, 119, 140, 116), for
@@ -950,27 +967,133 @@ change is proposed.
 ### Dot field and rings (signature component)
 
 The signal sketch's LED field stays: light follows the box it comes from, rather than making a
-round glow. It was brought forward from after level 1 and never blocks a level. Missing WebGL,
-a failed draw or a lost context leaves plain ground behind the graph.
+round glow. It was brought forward from after level 1 and never blocks a level. The field is one
+WebGL2 canvas behind the graph that draws the lamps, the rest contours and nothing else. Missing
+WebGL2, a failed draw or a lost context leaves plain ground behind the graph: no lamps, no contour
+lines (the fallback that existed before the contours).
 
-- **LEDs:** a canvas of 7px square LEDs under transparent Cytoscape, with off and three lit levels
-  chosen by ordered dithering. Lamp-off and guide-dot make a faint 28px grid at rest. The canvas
-  reads rendered boxes; it does not draw graph nodes or edges.
-- **Shape and spread:** light follows the outline of the current row or folded card, never its
-  whole module frame. The near and far spreads are about 26px and 72px at 100% zoom, measured
-  outward from that box, and scale with graph zoom. This preserves the box-shaped pool of light.
+- **LEDs:** a canvas of 7px cells under transparent Cytoscape, each a 5px square lamp with a 2px
+  gap. A lamp shows one of four levels (off, a third, two thirds, whole), picked by an 8 by 8
+  ordered dither as the sketch does: the level is the floor of the cell's intensity (the lights
+  added, up to 1) times three plus the matrix cell over 64. Near the core every lamp is whole;
+  further out the dither leaves a regular pattern of single lamps, which is the LED character.
+  Each light is first held back by its own smooth cut (off under `lamp-cut-low`, free from
+  `lamp-cut-high`), so a glow ends on a lamp, not on scattered dust. The color follows the level, all
+  from tokens: the first level leans to the deep end of the agent's color (the weaker channels
+  scaled by `lamp-ramp-deep`, orange toward deep red, blue toward deep blue), the second is close
+  to the agent's own, and the whole level moves `lamp-ramp-hot` of the way to the ink (lighter
+  orange or blue on the dark ground, darker on paper). Only a lit lamp is drawn: its square, in the
+  light's color. An off
+  lamp is not drawn, so the ground and its contour lines show between the lit ones, and a faint
+  guide dot every 28px stays. At rest no light reaches anything, so no lamp is drawn (this replaces
+  "lamp-off and guide-dot make a faint 28px grid at rest"; a field told no modules, so with no
+  contours, still draws its off lamps in `lamp-off`). The contour lines
+  fade out under a light by its smooth glow, not by its lamps, so no edge of the light's pool cuts
+  them in blocks. The canvas reads rendered boxes; it does not draw graph nodes or edges.
+- **Shape and spread:** light follows the outline of each row an agent touches (its current row
+  and its last read), or of the folded card that holds it, never the whole module frame: the shape
+  follows the work, row by row, and lamps under cards stay hidden. The near and far spreads are about 26px and 72px at 100% zoom, measured
+  outward from that box, and scale with graph zoom; the near term decays as an exponential and the
+  far one has the long tail 1 over one plus the square of its distance (the sketch's), so the
+  halo thins over several rings.
+  A light always falls off softly on every side, however faint it has become.
 - **Sources:** only each agent's current node at full strength and its last read node at about
-  0.4 emit light, in that agent's token. The last read is one node, not an accumulating history;
-  other changed nodes, selected neighbors and the impact cone are not additional emitters.
-  The existing eight-source budget is unchanged: current foci first, then last reads, with
-  stable slot/agent-id order within each group; excess sources are dropped.
+  0.4 emit light, in that agent's token, and only while that agent is acting (see Agent light).
+  A change waiting on an open inbox entry adds one steady, dimmer light on its node, and a decided
+  change one fading light. The last read is one node, not an accumulating history; other changed
+  nodes, selected neighbors and the impact cone are not additional emitters. The existing
+  eight-source budget is unchanged: current foci first, then last reads, with stable
+  slot/agent-id order within each group; excess sources are dropped. A decided change's fading
+  light is one more source of its agent's color, counted in the same budget.
 - **Mask:** the title, legend, zoom controls and every overlay mask the field, including the
-  resting grid. Neither the LEDs nor a travelling light may show through those areas.
+  contour lines. Neither the LEDs, the lines nor a travelling light may show through those areas.
+  So do the text bands: the header of every open module (its first 54px) or class (44px), padded by
+  6px (`header-mask-pad`), and the exact box of a folded card; these hide lamps and lines only. An
+  agent's marker and a merge's travelling light are clipped by the overlays alone, as the sketch's
+  DOM marker (life.html:80) and its pulse canvas (life.html:219, z-index 40) lie above everything,
+  so a marker sits whole on a folded card. Rows are 94% opaque and a folded card hides its own
+  lamps, so lines are not seen through them either.
+- **Module frames are translucent:** an open module or class takes the panel color at
+  `module-opacity`, 0.62 in dark and 0.5 in day, so the lamps around a lit row show through the
+  frame's body, as the sketch's frame does. Only its header is masked; the body between rows,
+  and the margin at their sides, carries the light. An editing row wears its agent's tint
+  (`agent-a-node`, `agent-b-node`: a near-black warm or cool wash in dark, a pale one in day), and
+  a lit row's text stays at 4.5:1 or more over the brightest lamp beneath it, which a test checks
+  in both themes.
 - **Working ring:** an expanding ring in the agent's color reports a working agent. It stops
   when the agent stops working. It is a work signal, not a second pool of ambient light.
 - **Marker:** on each agent.focus, the lettered marker glides to the current node along the edge
-  route when one exists, carrying its local light with it. On approval the marker and its light
-  fade out. The Motion rules set its timing and reduced-motion fallback.
+  route when one exists, carrying its local light with it. When the agent stops acting the marker
+  fades out with its light; the Motion rules set its timing and reduced-motion fallback.
+
+**Agent light.** Colored light means an agent is acting now, and then the light belongs to a change,
+in three states (maintainer, 2026-10-29):
+
+1. **Working.** The agent's status is working or revising: today's light, with its ring and its
+   marker where the agent reads or edits (current node at full weight, last read at about 0.4).
+2. **Waiting.** The change has at least one open entry in the decisions inbox, read from
+   `selectDecisionInbox(state)` and never from a rule of the field's own, so it follows the
+   selector when its rule changes. The light stays on the change's node, steady and dimmer
+   (`waiting-light-weight`, 0.5, against 1 for a working agent), with no motion: no ring, no
+   marker, no breathing, and it never pulses, blinks or grows stronger however long it waits.
+   Opening the review or clicking the node does not turn it off (the mode only scales it, as it
+   scales every light); closing the entries does.
+3. **Decided.** Merged (by rules or by the person), approved or rejected: a decision fades only a
+   light that exists. The afterlight starts from the light the change had on its node at that
+   moment (the waiting level, or a working agent's) and fades out over about 90 seconds (the
+   sketch uses `(1 - p)^1.6` for the share left). A change with no light then gets none: a
+   rejection of it lights nothing. A merge still sends its pulse (Merge travel) and the fade starts
+   when it arrives; one whose change had no light brings its light as the pulse arrives, with
+   nothing before it.
+
+No color or pulse anywhere else for this: the header's "Decisions · N" counter stays neutral, and
+what changed earlier stays told without color by the rail cards and the node marks. An agent that
+has stopped or finished, with nothing open in the inbox, has no light; at rest there is none
+anywhere, only the contours and ambient motion that no event causes. The dimmer level is a
+theme-independent token, so both token sets carry it. This replaces the earlier rule in this
+section that the current node and last read stay lit, at their weights, until the change is
+decided, the earlier line that the light fades out with the marker on approval, and (within this
+front) the first version of the rule, which gave an agent waiting for review no light at all.
+
+**Rest background.** The ground at rest is gray topographic contour lines derived from the graph:
+
+- one moderate hill per module, centered on its frame; its height grows with the module's callers
+  (calls into it from other modules) over a small range, so no hill dominates, plus a few soft
+  mounds in empty areas;
+- wide spacing between levels: 5 to 7 lines around a hill that stands alone (`contour-step` 0.1
+  over hill heights of 0.52 to 0.72), never more than 8; a soft 1px line (whole within a tenth of
+  a pixel of its center, gone 1.1px past its edge), and fainter toward the outside
+  (`contour-fade`: the outermost line keeps 65% of the alpha); each hill spreads over its frame
+  (`contour-hill-spread` 1), so rings show outside big cards;
+- they drift slowly and continuously, so a change of shape takes minutes and never waits and
+  jumps; under reduced motion they are still;
+- gray only: the line color is the `contour-line` token (white at 9% in dark, ink at 8% in day), never
+  an agent color and never an accent; text keeps 4.5:1 and never sits on them;
+- the field's own mask hides them under overlays; they draw in every mode, behind everything.
+
+**Merge travel.** When a change is merged, a pulse in the agent's color leaves that agent's rail
+card, runs along the graph's edges to the merged node with a short trail that fades behind it
+(about 100px: 28px bright, then 72px that fade with the square of what is left, so no line
+stays lit), and arrives. The node's light, which held the level the change had from the decision, then fades as in
+Agent light (a rejection sends no pulse; its light fades from the decision). The travel is drawn above
+the graph, clipped by the field mask, and never moves the camera, opens a panel or takes focus.
+The travel also lights the LED field: one point at the head and five behind it at 20px steps of
+actual path length, including corners and clamped at the start. Each contributes a gaussian
+`I = i * exp(-d² / (2r²))`, with `i = 0.95 * (1 - k/6)^1.4`, `k = 0..5`, and `r = 19px`.
+At most 12 points enter the common light and color sums before the four-level 8×8 dither and
+per-level agent-color ramp; only cells within three radii are visited. The LEDs keep their 7px
+square grid and use the drawn lamp masks (overlays and header bands); the SVG is unchanged.
+Points stop at arrival; the SVG trail still fades as before. No new idle animation is scheduled.
+Under reduced motion there is no travel or point light: the node light is there at once and fades over the same time.
+
+**What is out of the life layer** (maintainer, 2026-10-29): click waves, a hover flashlight,
+borders that follow the pointer, button flashes, a boot sweep (at most a 0.5s fade-in) and
+view-change wipes (a plain crossfade instead). None existed in the product when this was written;
+none is to be added.
+
+**Later in the same front** (target, not yet built): a scan band and one lamp per passing test while
+tests run, numbers that roll digit by digit in tabular mono, a 1px top-edge light on panels, a soft
+glow on keyboard focus beside the focus ring, and buttons that press down 1 to 2px.
 
 ### Class and module folding
 
@@ -1043,9 +1166,10 @@ The depth control is built (`bfe7a18`). The map and folder groups are not built.
 
 ### Motion
 
-Nothing moves without a cause. Event-driven transitions take 160 to 320ms with
-`cubic-bezier(0.2, 0.7, 0.2, 1)`; the standard is 240ms, including module and class opening.
-Each motion says what changed:
+Nothing moves without a cause, with one allowance (2026-10-29): ambient motion and light that no
+event causes stay allowed on the graph's ground, and the rest contours are that allowance. Event-driven
+transitions take 160 to 320ms with `cubic-bezier(0.2, 0.7, 0.2, 1)`; the standard is 240ms,
+including module and class opening. Each motion says what changed:
 
 - **Agent starts:** its card slides and fades in from the right.
 - **agent.step / usage.tick:** a new step row slides in at the top, older rows move down; the
@@ -1062,13 +1186,20 @@ Each motion says what changed:
   scrolls to its first hunk. The live diff follows a new edit and marks the changed lines once;
   a proposal does not switch tabs or turn it into review by itself.
 - **change.resolved, approved and merged:** pending dashed borders become solid, rows settle into
-  main's neutral colors, added nodes grow in, and the agent marker and its light fade out.
-- **View changes:** dimming and highlights ease to their new state after navigation or an event.
+  main's neutral colors, added nodes grow in, the agent marker fades out, and a pulse runs from the
+  agent's card along the graph's edges to its node (about 1.5s, with a short trail that fades
+  behind it); the node's light then fades over about 90s, with the soft falloff of every light.
+  The pulse never moves the camera or takes focus.
+- **View changes:** dimming and highlights ease to their new state after navigation or an event. A
+  change of view is a plain crossfade, never a wipe.
 
 **Reduced motion** (`prefers-reduced-motion: reduce`) turns all of these motions off, including
-card and row movement, value easing, crossfades, rings, lamp pulses, marker travel, fades, node
-growth, camera moves and animated scrolling. State and camera changes happen immediately; the
-field's current light and the lamp remain still. No information depends on motion.
+card and row movement, value easing, crossfades, rings, lamp pulses, marker travel, merge travel,
+fades, node growth, camera moves and animated scrolling. State and camera changes happen
+immediately; the field's current light and the lamp remain still, and the contours are still. One
+fade stays, because the maintainer asked for it (2026-10-29): after a merge the light appears at
+once, with no travel, and fades over the same 90s, in coarse steps. No information depends on
+motion.
 
 ### Quality floor
 
@@ -1203,7 +1334,12 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 - **Don't** steal focus or open a tab when an agent finishes; motion follows only the causes above.
 - **Don't** dash anything but a pending change: not possible calls, selection, hover or empty
   states.
-- **Don't** add surface effects beyond the card layers, frosted graph overlays and still matte header.
+- **Don't** add surface effects beyond the card layers, frosted graph overlays, still matte header and
+  the field's contours; no click waves, hover flashlight, pointer-following borders, button flashes,
+  boot sweep or wipes.
+- **Don't** leave colored light on at rest: only an agent that is acting, a change that waits on an
+  open entry of the decisions inbox (steady and dimmer, never moving), or one decided in the last
+  90 seconds lights the graph.
 - **Don't** move nodes between modes.
 - **Don't** give Approve a keyboard shortcut, Ctrl+Enter included.
 - **Don't** use uppercase outside group labels, or Mono as decoration.
@@ -1216,6 +1352,6 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 | 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the decisions chip; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
 | 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
-| Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker; plain black ground whenever WebGL is missing |
+| Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker, the rest contours and merge travel; plain ground (#070707 in dark) whenever WebGL2 is missing |
 | After level 1, never blocking | the matte header's grain |
 | Mon Nov 2, only with level 2 closed | day mode |

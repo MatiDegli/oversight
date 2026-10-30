@@ -122,6 +122,7 @@ async def test_facts_validator_rejects_wrong_target_foreign_runs_and_fake_comple
         rec.executions,
         rec.suite_runs,
         summary_evidence=capture_summary(rec, added_test_ids=()),
+        reach=facts.reach,
     )
     validate_change_facts(facts, evidence)
     for update in (

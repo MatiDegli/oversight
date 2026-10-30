@@ -24,6 +24,7 @@ from oversight.changes._state import ChangeRecord
 from oversight.changes._summary import SummaryEvidence, build_summary
 from oversight.changes._summary_capture import capture_summary
 from oversight.changes._support import ChangeContext
+from oversight.graph import call_graph_test_reach
 from oversight.workspace import SuiteRun, validate_suite_execution
 from oversight_contracts.events import SuiteExecution
 from oversight_contracts.graph import ImpactCone
@@ -34,12 +35,10 @@ from oversight_contracts.review import (
     ChangeTarget,
     FinishDeclaration,
     IntegrityFact,
+    ReachFacts,
 )
 
-MISSING_PRODUCERS = (
-    "zone producer unavailable",
-    "reach producer unavailable",
-)
+MISSING_PRODUCERS = ("zone producer unavailable",)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -136,12 +135,13 @@ class FactsEvidence:
     measured: MeasuredEvidence | None = None
     impact: ImpactCone | None = None
     run_evidence: RunEvidence | None = None
+    reach: ReachFacts | None = None
 
 
 def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
     """Check the exact captured candidate and its individual execution/source evidence.
 
-    Zones and reach have no producer here: their empty values cannot
+    Zones have no producer here: their empty values cannot
     certify completeness. A list of execution seqs alone establishes no success.
     """
     if (
@@ -216,7 +216,9 @@ def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
             raise ValueError("probe execution differs from candidate")
         if comparison((probe.test_id,), before, after)[0][1] != probe.result:
             raise ValueError("probe result differs from captured evidence")
-    if facts.zone is not None or facts.reach is not None:
+    if facts.reach != evidence.reach:
+        raise ValueError("facts test call-graph reach differs from captured evidence")
+    if facts.zone is not None:
         raise ValueError("unbuilt producers cannot supply facts")
     if facts.complete or facts.problems != list(evidence.problems):
         raise ValueError("facts completeness differs from captured evidence")
@@ -397,6 +399,7 @@ async def capture_facts(
         executions,
         runs,
         run_evidence=run_evidence,
+        reach=await asyncio.to_thread(_reach_facts, rec, tree),
         integrity_status=status,
         summary_evidence=capture_summary(
             rec, added_test_ids=inventory.test_ids if inventory.complete else None
@@ -428,7 +431,7 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
         added_tests=list(evidence.added_tests),
         run_findings=findings,
         zone=None,
-        reach=None,
+        reach=evidence.reach.model_copy(deep=True) if evidence.reach is not None else None,
         complete=False,
         problems=list(evidence.problems),
         measured_cone=project_measured(evidence.measured, evidence.target)
@@ -437,6 +440,37 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
     )
     validate_change_facts(facts, evidence)
     return facts
+
+
+def _reach_facts(rec: ChangeRecord, tree: str) -> ReachFacts:
+    """Static exact-call reach on the agent's candidate graph, identified by its Git tree.
+
+    Removed functions have no candidate node and stay unclassified. Reuse the run's
+    cone depth/node limits as per-function search budgets, including the seed.
+    """
+    functions = {
+        node.id
+        for node in [*rec.base.graph.nodes, *rec.head.graph.nodes]
+        if node.kind in ("function", "method")
+    }
+    changed = (
+        {node.id for node in rec.graph.nodes_added}
+        | set(rec.graph.nodes_modified)
+        | set(rec.graph.nodes_removed)
+    ) & functions
+    reach = call_graph_test_reach(
+        rec.head.graph,
+        changed,
+        max_depth=rec.task.limits.cone_max_depth,
+        max_nodes=rec.task.limits.cone_max_nodes,
+    )
+    return ReachFacts(
+        basis="call_graph",
+        edges_followed="exact",
+        unreached_nodes=list(reach.unreached_nodes),
+        complete=reach.complete,
+        evidence=[EvidenceRef(git_object=tree)],
+    )
 
 
 async def _source_facts(
