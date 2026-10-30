@@ -21,6 +21,7 @@ from oversight.changes import (
     WrongState,
     read_agent_status,
     read_change_view,
+    read_plan,
     read_queue,
 )
 from oversight.events import EventStore
@@ -30,17 +31,23 @@ from oversight_contracts.commands import (
     AgentCreated,
     ApproveChange,
     ChangeView,
+    CreatePlan,
     EnqueueTask,
     FileContent,
     FileSaved,
+    PlanCreated,
+    PlanRevision,
     QueueRevision,
     RejectChange,
+    RejectPlan,
     RequestChanges,
     SaveFile,
     StartAgent,
     TreeResponse,
+    UpdatePlan,
 )
 from oversight_contracts.events import AgentStatus
+from oversight_contracts.plans import Plan
 from oversight_contracts.queue import QueuedTask, QueueSnapshot
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
@@ -52,17 +59,16 @@ NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("POST", "/changes/{change_id}/revert", "Reserved /changes/{change_id}/revert"),
     ("GET", "/merge-mode", "Reading the merge mode"),
     ("PUT", "/merge-mode", "Setting the merge mode"),
-    ("POST", "/plans", "Creating a plan"),
-    ("GET", "/plans/{plan_id}", "Reading a plan"),
-    ("PUT", "/plans/{plan_id}", "Updating a plan"),
-    ("POST", "/plans/{plan_id}/start", "Starting a plan"),
-    ("POST", "/plans/{plan_id}/reject", "Rejecting a plan"),
     ("POST", "/agents/{agent_id}/message", "Messages to an agent"),
     ("POST", "/agents/{agent_id}/pause", "Pause"),
     ("POST", "/agents/{agent_id}/resume", "Resume"),
 )
 """Routes in the contract that this level does not build: 501, whatever the body."""
 LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
+    ("POST", "/plans", "Creating a plan"),
+    ("PUT", "/plans/{plan_id}", "Updating a plan"),
+    ("POST", "/plans/{plan_id}/start", "Starting a plan"),
+    ("POST", "/plans/{plan_id}/reject", "Rejecting a plan"),
     ("POST", "/queue", "Queueing work"),
     ("POST", "/queue/{queued_task_id}/cancel", "Cancelling queued work"),
     ("GET", "/tree", "Listing files"),
@@ -87,6 +93,14 @@ class Commands(Protocol):
     async def start(self, request: StartAgent) -> AgentCreated: ...
 
     async def enqueue(self, request: EnqueueTask) -> QueuedTask: ...
+
+    async def create_plan(self, request: CreatePlan) -> PlanCreated: ...
+
+    async def update_plan(self, plan_id: str, request: UpdatePlan) -> None: ...
+
+    async def start_plan(self, plan_id: str, request: PlanRevision) -> None: ...
+
+    async def reject_plan(self, plan_id: str, request: RejectPlan) -> None: ...
 
     async def cancel_queued(self, queued_task_id: str, request: QueueRevision) -> None: ...
 
@@ -134,6 +148,13 @@ def _decide[A](decision: Callable[[str, A], None], change_id: str, comment: A) -
 
 
 def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: str) -> None:
+    @router.get("/plans/{plan_id}")
+    async def plan_view(plan_id: str, http: Request) -> Plan:  # pyright: ignore[reportUnusedFunction]
+        try:
+            return read_plan(cast(EventStore, http.app.state.store), plan_id)
+        except ChangeNotFound:
+            raise ApiError("not_found", f"there is no plan {plan_id!r}") from None
+
     @router.get("/queue")
     async def queue(http: Request) -> QueueSnapshot:  # pyright: ignore[reportUnusedFunction]
         return read_queue(cast(EventStore, http.app.state.store))
@@ -170,6 +191,25 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
                 path, _not_built(what, "is not available in a replay"), methods=[method]
             )
         return
+
+    @router.post("/plans", status_code=201)
+    async def create_plan(request: CreatePlan) -> PlanCreated:  # pyright: ignore[reportUnusedFunction]
+        return await commands.create_plan(request)
+
+    @router.put("/plans/{plan_id}", status_code=202, response_class=Response)
+    async def update_plan(plan_id: str, request: UpdatePlan) -> Response:  # pyright: ignore[reportUnusedFunction]
+        await commands.update_plan(plan_id, request)
+        return Response(status_code=202)
+
+    @router.post("/plans/{plan_id}/start", status_code=202, response_class=Response)
+    async def start_plan(plan_id: str, request: PlanRevision) -> Response:  # pyright: ignore[reportUnusedFunction]
+        await commands.start_plan(plan_id, request)
+        return Response(status_code=202)
+
+    @router.post("/plans/{plan_id}/reject", status_code=202, response_class=Response)
+    async def reject_plan(plan_id: str, request: RejectPlan) -> Response:  # pyright: ignore[reportUnusedFunction]
+        await commands.reject_plan(plan_id, request)
+        return Response(status_code=202)
 
     @router.post("/queue", status_code=201)
     async def enqueue(request: EnqueueTask) -> QueuedTask:  # pyright: ignore[reportUnusedFunction]

@@ -70,6 +70,7 @@ from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
 from oversight.runtime_accounting import write_tick
 from oversight.runtime_decisions import RuntimeDecisions
+from oversight.runtime_plans import PlanService
 from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
@@ -92,15 +93,20 @@ from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import (
     AgentCreated,
     ApproveChange,
+    CreatePlan,
     EnqueueTask,
     FileContent,
     FileSaved,
+    PlanCreated,
+    PlanRevision,
     QueueRevision,
     RejectChange,
+    RejectPlan,
     RequestChanges,
     SaveFile,
     StartAgent,
     TreeResponse,
+    UpdatePlan,
 )
 from oversight_contracts.common import Slot
 from oversight_contracts.events import (
@@ -117,6 +123,7 @@ from oversight_contracts.events import (
     UsageTick,
 )
 from oversight_contracts.graph import GraphSnapshot
+from oversight_contracts.plans import PlanZone
 from oversight_contracts.queue import QueuedTask
 
 _log = logging.getLogger(__name__)
@@ -188,6 +195,8 @@ class _Agent:
     task: AgentTask
     profile: ModelProfile
     queued_task_id: str | None = None
+    plan_id: str | None = None
+    zone: PlanZone | None = None
 
     @property
     def slot(self) -> Slot:
@@ -286,6 +295,7 @@ class LiveRun:
         rejected or merged."""
         self._count = 0
         self.dispatcher = Dispatcher(self)
+        self.plans = PlanService(self)
 
     def _offer(self, slot: Slot, default: SlotDefault) -> None:
         """Load only this slot's own fake script; defaults come from the shared resolver."""
@@ -502,11 +512,17 @@ class LiveRun:
             # Answering is historical provenance from the retained server task.
             agent = self._agents.get(payload.agent_id)
             payload = payload.model_copy(
-                update={"queued_task_id": agent.queued_task_id if agent else None}
+                update={
+                    "queued_task_id": agent.queued_task_id if agent else None,
+                    "plan_id": agent.plan_id if agent else None,
+                    "zone": agent.zone.model_copy(deep=True) if agent and agent.zone else None,
+                }
             )
             validate_agent_status(
                 payload,
                 base_commit=base,
+                plan_id=agent.plan_id if agent else None,
+                zone=agent.zone if agent else None,
                 queued_task_id=agent.queued_task_id if agent else None,
                 answering=agent.task.answering if agent else None,
             )
@@ -715,10 +731,25 @@ class LiveRun:
     async def cancel_queued(self, queued_task_id: str, request: QueueRevision) -> None:
         await self.dispatcher.cancel(queued_task_id, request)
 
+    async def create_plan(self, request: CreatePlan) -> PlanCreated:
+        return await self.plans.create(request)
+
+    async def update_plan(self, plan_id: str, request: UpdatePlan) -> None:
+        await self.plans.update(plan_id, request)
+
+    async def start_plan(self, plan_id: str, request: PlanRevision) -> None:
+        self.plans.get(plan_id)
+        await self.dispatcher.enqueue(EnqueueTask(plan_id=plan_id, plan_revision=request.revision))
+
+    async def reject_plan(self, plan_id: str, request: RejectPlan) -> None:
+        await self.plans.reject(plan_id, request)
+
     async def start(self, request: StartAgent) -> AgentCreated:
         return await self._launch(self._admit(request))
 
-    def _admit(self, request: StartAgent, *, queued_task_id: str | None = None) -> Admission:
+    def _admit(
+        self, request: StartAgent, *, queued_task_id: str | None = None, plan_id: str | None = None
+    ) -> Admission:
         manager = self._manager
         if manager is None or self._closing:
             raise ApiError("wrong_state", "the run is not accepting starts")
@@ -735,7 +766,7 @@ class LiveRun:
             limits=LIMITS,
             answering=request.answering,
         )
-        return Admission(task, profile, queued_task_id)
+        return Admission(task, profile, queued_task_id, plan_id, request.zone if plan_id else None)
 
     async def _launch(self, admission: Admission) -> AgentCreated:
         manager = self._manager
@@ -776,7 +807,7 @@ class LiveRun:
             self.dispatcher.wake.set()
             raise
         # No await from `open` to here: the run task exists as soon as the change does.
-        agent = _Agent(task, profile, admission.queued_task_id)
+        agent = _Agent(task, profile, admission.queued_task_id, admission.plan_id, admission.zone)
         self._slots[slot] = task.agent_id
         self._agents[task.agent_id] = agent
         self._runs[task.agent_id] = asyncio.create_task(

@@ -11,9 +11,19 @@ from typing import TYPE_CHECKING, Literal
 
 from oversight.agents import AgentTask
 from oversight.api import ApiError
-from oversight.changes import QUEUE_LIMIT, TERMINAL, queue_candidates, queue_transition, queued
+from oversight.changes import (
+    QUEUE_LIMIT,
+    TEMPORARY_REFUSALS,
+    TERMINAL,
+    plan_core,
+    queue_candidates,
+    queue_transition,
+    queued,
+    refusal_state,
+)
 from oversight_contracts.commands import AgentCreated, EnqueueTask, QueueRevision, StartAgent
 from oversight_contracts.events import ModelProfile
+from oversight_contracts.plans import Plan, PlanZone
 from oversight_contracts.queue import QueuedTask
 
 if TYPE_CHECKING:
@@ -25,6 +35,8 @@ class Admission:
     task: AgentTask
     profile: ModelProfile
     queued_task_id: str | None
+    plan_id: str | None = None
+    zone: PlanZone | None = None
 
 
 class Dispatcher:
@@ -35,9 +47,10 @@ class Dispatcher:
         self.queue_lock = asyncio.Lock()
         self.wake = asyncio.Event()
         self.launching: set[str] = set()
-        self._outcomes: list[tuple[str, str]] = []
+        self._outcomes: list[tuple[str, Literal["merged", "rejected"]]] = []
         self._task: asyncio.Task[None] | None = None
         self._closed = False
+        self._count = 0
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._run(), name="queue-dispatcher")
@@ -48,11 +61,9 @@ class Dispatcher:
         self.wake.set()
 
     async def _save(self, item: QueuedTask) -> None:
-        # Finish both the durable write and its cache update before propagating cancellation.
         async def commit() -> None:
             await self.live.store.publish(item)
             self.items[item.queued_task_id] = item
-            self.wake.set()
 
         pending = asyncio.create_task(commit())
         try:
@@ -61,81 +72,143 @@ class Dispatcher:
             await self.live._finish(pending)
             raise
 
-    def _available(self) -> None:
-        if self._closed or self.live._closing or self.live._manager is None:
+    def _available(self, *, dispatch: bool = True) -> None:
+        if (dispatch and self._closed) or self.live._closing or self.live._manager is None:
             raise ApiError("wrong_state", "the run is not accepting queue commands")
 
-    @staticmethod
-    def _request(item: QueuedTask) -> StartAgent:
-        assert item.agent is not None
-        return StartAgent(task=item.agent.task, slot=item.agent.slot, model=item.agent.model)
+    def _requests(self, item: QueuedTask) -> list[tuple[int | None, StartAgent]]:
+        if item.agent is not None:
+            return [
+                (
+                    None,
+                    StartAgent(task=item.agent.task, slot=item.agent.slot, model=item.agent.model),
+                )
+            ]
+        plan = self.live.plans.dispatch_plan(item)
+        assert plan.subtasks is not None
+        return [
+            (index, StartAgent(task=plan.subtasks[index].task, zone=plan.subtasks[index].zone))
+            for index in plan_core.ready(plan)
+        ]
 
     async def enqueue(self, request: EnqueueTask) -> QueuedTask:
         async with self.queue_lock:
             self._available()
-            if request.agent is None:
-                raise ApiError("not_found", "plan queueing is not available")
-            if request.agent.zone is not None:
-                raise ApiError("invalid_request", "standalone queue zones are not supported")
             if sum(item.state not in TERMINAL for item in self.items.values()) >= QUEUE_LIMIT:
                 raise ApiError("wrong_state", f"the queue holds at most {QUEUE_LIMIT} active items")
-            item = queued(request, len(self.items) + 1)
-            manager = self.live._manager
-            assert manager is not None
-            try:
-                self.live._check(self._request(item), manager)
-            except ApiError as error:
-                if error.code not in {"slot_busy", "spend_brake", "not_configured", "wrong_state"}:
-                    raise
-            await self._save(item)
+            plan: Plan | None = None
+            if request.plan_id is not None:
+                assert request.plan_revision is not None
+                plan = self.live.plans.for_queue(request.plan_id, request.plan_revision)
+            elif request.agent is not None and request.agent.zone is not None:
+                raise ApiError("invalid_request", "standalone queue zones are not supported")
+            item = queued(request, self._count + 1)
+            if plan is None:
+                manager = self.live._manager
+                assert manager is not None
+                try:
+                    self.live._check(self._requests(item)[0][1], manager)
+                except ApiError as error:
+                    if error.code not in TEMPORARY_REFUSALS:
+                        raise
+            self._count += 1
+            await self.live._finish(self._enqueue(item, plan))
             self.wake.set()
             return item.model_copy(deep=True)
 
+    async def _enqueue(self, item: QueuedTask, plan: Plan | None) -> None:
+        if plan is not None:
+            await self.live.plans.save(plan_core.link(plan, plan.revision, item.queued_task_id))
+        await self._save(item)
+
+    async def cancel_item(self, item: QueuedTask) -> None:
+        if item.queued_task_id in self.launching or item.state not in {"queued", "blocked"}:
+            raise ApiError("wrong_state", "cancel requires an undispatched item")
+        await self._save(queue_transition(item, "cancelled"))
+        self.wake.set()
+
     async def cancel(self, identifier: str, request: QueueRevision) -> None:
         async with self.queue_lock:
-            self._available()
+            self._available(dispatch=False)
             item = self.items.get(identifier)
             if item is None:
                 raise ApiError("not_found", f"there is no queue item {identifier!r}")
-            if identifier in self.launching:
-                raise ApiError("wrong_state", "the item is being dispatched")
-            if item.state not in {"queued", "blocked"} or item.revision != request.revision:
-                raise ApiError(
-                    "wrong_state", "cancel requires a queued or blocked item at that revision"
-                )
-            await self._save(queue_transition(item, "cancelled"))
-            self.wake.set()
+            if item.revision != request.revision:
+                raise ApiError("wrong_state", "the queue revision differs")
+            await self.live._finish(self._cancel(item))
 
-    async def _refused(self, item: QueuedTask, error: ApiError) -> None:
-        if error.code == "slot_busy":
+    async def _cancel(self, item: QueuedTask) -> None:
+        await self.cancel_item(item)
+        if item.plan_id is not None:
+            await self.live.plans.save(plan_core.unlink(self.live.plans.get(item.plan_id)))
+
+    async def _refused(
+        self, item: QueuedTask, error: ApiError, *, launch_failed: bool = False
+    ) -> None:
+        if item.plan_id is None and error.code == "slot_busy":
             return
-        state = (
-            "blocked"
-            if error.code in {"spend_brake", "not_configured", "wrong_state"}
-            else "failed"
-        )
-        if item.state != state or item.detail != error.message:
-            # Repeated refusals do not create revisions or events. A changed blocked reason
-            # goes through queued so every published edge follows the state machine.
-            if item.state == "blocked" and state == "blocked":
-                item = queue_transition(item, "queued")
-                await self._save(item)
-            await self._save(queue_transition(item, state, detail=error.message))
+        state = refusal_state(item, error.code, launch_failed=launch_failed)
+        if item.state == state and item.detail == error.message:
+            return
+        # Preserve F1's blocked -> queued edge when the explanation changes.
+        if item.state == "blocked" and state == "blocked":
+            item = queue_transition(item, "queued")
+            await self._save(item)
+        await self.live._finish(self._record_refusal(item, state, error.message))
 
-    async def _select(self) -> tuple[QueuedTask, Admission] | None:
-        for agent_id, outcome in self._outcomes:
-            for item in list(self.items.values()):
-                if item.state == "running" and agent_id in item.agent_ids:
-                    await self._save(queue_transition(item, "completed", detail=outcome))
-        self._outcomes.clear()
-        for item in queue_candidates(self.items.values()):
+    async def _record_refusal(self, item: QueuedTask, state: str, detail: str) -> None:
+        if item.plan_id is not None and state == "failed":
+            plan = self.live.plans.get(item.plan_id)
+            await self.live.plans.save(plan_core.fail(plan, detail))
+        await self._save(queue_transition(item, state, detail=detail))
+
+    async def _settle(self, agent_id: str, outcome: Literal["merged", "rejected"]) -> None:
+        for item in list(self.items.values()):
+            if item.state not in {"starting", "running"} or agent_id not in item.agent_ids:
+                continue
+            if item.plan_id is not None:
+                plan = plan_core.resolved(self.live.plans.get(item.plan_id), agent_id, outcome)
+                await self.live.plans.save(plan)
+                if plan.state != "completed":
+                    continue
+            await self._save(queue_transition(item, "completed", detail=outcome))
+
+    def _reserve(self, item: QueuedTask) -> list[tuple[int | None, Admission]]:
+        """Check and reserve all k ready slots without yielding; roll back all on refusal."""
+        requests = self._requests(item)
+        if len(requests) > len(self.live._slots):
+            raise ApiError("invalid_request", "the ready subtasks exceed the offered slot count")
+        admissions: list[tuple[int | None, Admission]] = []
+        try:
+            for index, request in requests:
+                admission = self.live._admit(
+                    request, queued_task_id=item.queued_task_id, plan_id=item.plan_id
+                )
+                admissions.append((index, admission))
+        except BaseException:
+            self._release_reservations(admissions)
+            raise
+        return admissions
+
+    def _release_reservations(self, admissions: list[tuple[int | None, Admission]]) -> None:
+        for _, admission in admissions:
+            if self.live._slots[admission.task.slot] == "starting":
+                self.live._slots[admission.task.slot] = None
+
+    async def _select(self) -> tuple[QueuedTask, list[tuple[int | None, Admission]]] | None:
+        while self._outcomes:
+            agent_id, outcome = self._outcomes[0]
+            await self.live._finish(self._settle(agent_id, outcome))
+            self._outcomes.pop(0)
+        for item in queue_candidates(self.items.values(), self.live.plans.plans):
             if self._closed:
                 return None
             if item.state == "blocked":
                 manager = self.live._manager
                 assert manager is not None
                 try:
-                    self.live._check(self._request(item), manager)
+                    for _, request in self._requests(item):
+                        self.live._check(request, manager)
                 except ApiError as error:
                     if error.code != "slot_busy":
                         await self._refused(item, error)
@@ -143,38 +216,76 @@ class Dispatcher:
                 item = queue_transition(item, "queued")
                 await self._save(item)
             try:
-                # Check, reserve and allocate without an await, while queue_lock is held.
-                admission = self.live._admit(
-                    self._request(item), queued_task_id=item.queued_task_id
-                )
+                admissions = self._reserve(item)
             except ApiError as error:
                 await self._refused(item, error)
                 if error.code == "slot_busy":
-                    return None  # strict head-of-line, including a named busy slot
-                continue  # blocked or failed items do not stop the queue
-            self.launching.add(item.queued_task_id)
-            return item, admission
+                    return None
+                continue
+            if admissions:
+                self.launching.add(item.queued_task_id)
+                return item, admissions
         return None
 
-    async def _dispatch(self, item: QueuedTask, admission: Admission) -> None:
-        created: AgentCreated | None = None
-        refusal: ApiError | None = None
+    async def _record_launch(
+        self,
+        identifier: str,
+        index: int | None,
+        created: AgentCreated,
+        *,
+        more_initial: bool,
+        last: bool,
+    ) -> None:
+        async with self.queue_lock:
+            item = self.items[identifier]
+            if item.plan_id is not None:
+                assert index is not None
+                plan = plan_core.launched(
+                    self.live.plans.get(item.plan_id),
+                    index,
+                    created.agent_id,
+                    more_initial=more_initial,
+                )
+                await self.live.plans.save(plan)
+            state = "starting" if more_initial else "running"
+            await self._save(queue_transition(item, state, agent_id=created.agent_id))
+            if last:
+                self.launching.discard(identifier)
+
+    async def _dispatch(
+        self, item: QueuedTask, admissions: list[tuple[int | None, Admission]]
+    ) -> None:
+        remaining = list(admissions)
         try:
-            try:
-                created = await self.live._launch(admission)
-            except ApiError as error:
-                refusal = error
-            async with self.queue_lock:
-                if refusal is not None:
-                    await self._refused(item, refusal)
-                else:
-                    assert created is not None
-                    await self._save(queue_transition(item, "running", agent_id=created.agent_id))
-                self.launching.discard(item.queued_task_id)
+            for index, admission in admissions:
+                try:
+                    created = await self.live._launch(admission)
+                except ApiError as error:
+                    async with self.queue_lock:
+                        await self._refused(
+                            self.items[item.queued_task_id],
+                            error,
+                            launch_failed=error.code not in TEMPORARY_REFUSALS,
+                        )
+                        self.launching.discard(item.queued_task_id)
+                    return
+                remaining.pop(0)
+                # Once launch returned, finish publication even if close cancels us while
+                # another command holds queue_lock. No running agent is left labelled queued.
+                await self.live._finish(
+                    self._record_launch(
+                        item.queued_task_id,
+                        index,
+                        created,
+                        more_initial=bool(remaining) and item.state != "running",
+                        last=not remaining,
+                    )
+                )
+                if self._closed:
+                    return
         finally:
-            if item.queued_task_id in self.launching:
-                async with self.queue_lock:
-                    self.launching.discard(item.queued_task_id)
+            self._release_reservations(remaining)
+            self.launching.discard(item.queued_task_id)
 
     async def _run(self) -> None:
         try:
