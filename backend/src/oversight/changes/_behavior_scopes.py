@@ -40,6 +40,7 @@ _ALLOWED_MODULES = frozenset(
     }
 )
 _BUILTIN_NAMES = frozenset(dir(builtins))
+_NAMESPACE_READS = frozenset({"globals", "vars", "locals", "dir", "__import__"})
 
 
 class _WithoutDefinitions(ast.NodeTransformer):
@@ -91,7 +92,19 @@ def _fresh_import(stmt: ast.stmt, bindings: _AliasBindings, forbidden: set[str])
     return all((alias.asname or alias.name) not in forbidden for alias in stmt.names)
 
 
+# Accepted "possible" risks: other modules' star imports and external string-based module access.
 def _module_equal(base: ast.Module, head: ast.Module) -> bool:
+    docstring = ast.get_docstring(base)
+    if docstring != ast.get_docstring(head):
+        return False
+    if docstring is not None and ast.dump(base.body[0]) != ast.dump(head.body[0]):
+        return False
+    # Include every lexical scope and every Name context, even a local store/delete.
+    identifiers = {node.id for node in ast.walk(base) if isinstance(node, ast.Name)}
+    if identifiers & _NAMESPACE_READS or any(
+        isinstance(node, ast.Attribute) and node.attr == "__dict__" for node in ast.walk(base)
+    ):
+        return False
     before = _own_tree(base).body
     after = _own_tree(head).body
     if ast.dump(ast.Module(body=before, type_ignores=[])) == ast.dump(
@@ -104,8 +117,6 @@ def _module_equal(base: ast.Module, head: ast.Module) -> bool:
     declared = {
         name for node in ast.walk(base) if isinstance(node, ast.Global) for name in node.names
     }
-    # Include every lexical scope and every Name context, even a local store/delete.
-    identifiers = {node.id for node in ast.walk(base) if isinstance(node, ast.Name)}
     forbidden = bindings.names.keys() | declared | identifiers | _BUILTIN_NAMES
     index = 0
     for stmt in after:

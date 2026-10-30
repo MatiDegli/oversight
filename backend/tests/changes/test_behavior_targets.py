@@ -48,6 +48,48 @@ def test_added_fresh_stdlib_import_has_no_module_entry(added):
     assert targets(rec) == ()
 
 
+@pytest.mark.parametrize("docstring", ['"""Module documentation."""', '""'])
+def test_allowlisted_import_before_existing_docstring_keeps_module_entry(docstring):
+    before = docstring + "\ndef f(): return __doc__\n"
+    rec = record(before, "from pathlib import Path\n" + before)
+    assert rec.graph.nodes_modified == ["sample"]
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
+
+
+@pytest.mark.parametrize("docstring", ['"""Module documentation."""', '""'])
+def test_allowlisted_import_after_existing_docstring_has_no_module_entry(docstring):
+    before = docstring + "\ndef f(): return __doc__\n"
+    after = docstring + "\nfrom pathlib import Path\ndef f(): return __doc__\n"
+    rec = record(before, after)
+    assert rec.graph.nodes_modified == ["sample"]
+    assert targets(rec) == ()
+
+
+def test_docstring_expression_must_stay_identical_even_when_cleaned_text_matches():
+    rec = record('"""Documentation."""\n', '"""  Documentation."""\nimport pathlib\n')
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
+
+
+@pytest.mark.parametrize(
+    "before",
+    [
+        "snapshot = globals()\n",
+        "def f(): return vars()\n",
+        "f = lambda: locals()\n",
+        "class Box:\n    names = dir()\n",
+        "modules = [__import__(name) for name in names]\n",
+        "def f(): return namespace.__dict__\n",
+        "globals = 1\n",
+    ],
+)
+@pytest.mark.parametrize("edit", ["import", "comment"])
+def test_base_namespace_access_keeps_module_entry(before, edit):
+    added = "from pathlib import Path\n" if edit == "import" else "# New comment\n"
+    rec = record(before, added + before)
+    assert rec.graph.nodes_modified == ["sample"]
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
+
+
 @pytest.mark.parametrize(
     "before",
     [
