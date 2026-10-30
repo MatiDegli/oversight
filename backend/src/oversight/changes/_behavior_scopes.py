@@ -1,12 +1,17 @@
 """AST comparisons of a module or class's own statements, never executing source."""
 
 import ast
+import builtins
+import sys
 from copy import deepcopy
 
 from oversight.changes._behavior_aliases import (
     _AliasBindings,  # pyright: ignore[reportPrivateUsage]
 )
 from oversight_contracts.graph import GraphNode
+
+_STDLIB_PACKAGES = sys.stdlib_module_names - {"this", "antigravity"}
+_BUILTIN_NAMES = frozenset(dir(builtins))
 
 
 class _WithoutDefinitions(ast.NodeTransformer):
@@ -41,8 +46,16 @@ def _class(tree: ast.Module, node: GraphNode) -> ast.ClassDef | None:
     )
 
 
-def _fresh_import(stmt: ast.stmt, bindings: _AliasBindings, declared: set[str]) -> bool:
+def _fresh_import(stmt: ast.stmt, bindings: _AliasBindings, forbidden: set[str]) -> bool:
     if not isinstance(stmt, (ast.Import, ast.ImportFrom)) or bindings.star_import:
+        return False
+    if isinstance(stmt, ast.ImportFrom):
+        if stmt.level or stmt.module is None:
+            return False
+        modules = [stmt.module]
+    else:
+        modules = [alias.name for alias in stmt.names]
+    if any(module.split(".")[0] not in _STDLIB_PACKAGES for module in modules):
         return False
     return all(
         alias.name != "*"
@@ -50,7 +63,7 @@ def _fresh_import(stmt: ast.stmt, bindings: _AliasBindings, declared: set[str]) 
             alias.asname
             or (alias.name.split(".")[0] if isinstance(stmt, ast.Import) else alias.name)
         )
-        not in bindings.names.keys() | declared
+        not in forbidden
         for alias in stmt.names
     )
 
@@ -68,11 +81,14 @@ def _module_equal(base: ast.Module, head: ast.Module) -> bool:
     declared = {
         name for node in ast.walk(base) if isinstance(node, ast.Global) for name in node.names
     }
+    # Include every lexical scope and every Name context, even a local store/delete.
+    identifiers = {node.id for node in ast.walk(base) if isinstance(node, ast.Name)}
+    forbidden = bindings.names.keys() | declared | identifiers | _BUILTIN_NAMES
     index = 0
     for stmt in after:
         if index < len(before) and ast.dump(before[index]) == ast.dump(stmt):
             index += 1
-        elif not _fresh_import(stmt, bindings, declared):
+        elif not _fresh_import(stmt, bindings, forbidden):
             return False
     return index == len(before)
 

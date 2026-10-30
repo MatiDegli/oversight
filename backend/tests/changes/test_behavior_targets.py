@@ -39,7 +39,7 @@ def record(before: str, after: str) -> ChangeRecord:
         "import os, pathlib\n",
     ],
 )
-def test_added_fresh_import_has_no_module_entry(added):
+def test_added_fresh_stdlib_import_has_no_module_entry(added):
     rec = record("LIMIT = 1\n", added + "LIMIT = 1\n")
     assert rec.graph.nodes_modified == ["sample"]
     assert targets(rec) == ()
@@ -76,15 +76,61 @@ def test_added_import_cannot_rebind_a_base_module_name(before):
 @pytest.mark.parametrize(
     "before",
     [
-        "def f(Path): pass\n",
+        "def f(): return Path('data')\n",
+        "def f():\n    def nested(): return Path('data')\n",
+        "class Box:\n    def f(self): return Path('data')\n",
         "def f():\n    Path = 1\n",
+        "def f():\n    del Path\n",
         "class Box:\n    Path = 1\n",
         "[Path for Path in items]\n",
+        "(Path(item) for item in items)\n",
         "f = lambda Path: Path\n",
     ],
 )
-def test_nested_local_binding_does_not_block_a_fresh_import(before):
+def test_base_identifier_in_any_scope_blocks_a_fresh_import(before):
+    assert targets(record(before, before + "from pathlib import Path\n")) == (
+        FunctionBehavior("sample", reason="unsupported signature"),
+    )
+
+
+@pytest.mark.parametrize(
+    "before", ["def f(Path): pass\n", "value = obj.Path\n", "value = 'Path'\n"]
+)
+def test_unused_parameter_attribute_or_string_does_not_count_as_a_name_node(before):
     assert targets(record(before, before + "from pathlib import Path\n")) == ()
+
+
+@pytest.mark.parametrize(
+    "added",
+    [
+        "from os import open\n",
+        "import os as open\n",
+        "from os import path as len\n",
+        "from .helpers import helper\n",
+        "from . import helper\n",
+        "from .pathlib import Path\n",
+        "import shop\n",
+        "from shop.models import Product\n",
+        "import pytest\n",
+        "from pytest import mark\n",
+        "import os, pytest\n",
+        "import this\n",
+        "import antigravity\n",
+        "from this import d\n",
+        "from antigravity import geohash\n",
+    ],
+)
+def test_disallowed_added_import_keeps_the_module_entry(added):
+    assert targets(record("LIMIT = 1\n", added + "LIMIT = 1\n")) == (
+        FunctionBehavior("sample", reason="unsupported signature"),
+    )
+
+
+def test_fresh_import_checks_the_bound_alias_against_base_identifiers():
+    before = "def f(): return P('data')\n"
+    assert targets(record(before, "from pathlib import Path as P\n" + before)) == (
+        FunctionBehavior("sample", reason="unsupported signature"),
+    )
 
 
 @pytest.mark.parametrize(
