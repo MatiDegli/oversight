@@ -156,6 +156,14 @@ describe("review evidence", () => {
     expect(html).not.toMatch(/safe|verdict|amber|#[0-9a-f]{6}/i);
   });
 
+  it("shows the behavior-not-recorded message exactly once without facts or a behavior diff", () => {
+    const view = { ...state, changeFacts: {} };
+    const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
+
+    expect(html.match(/Behavior evidence was not recorded for this revision\./g)).toHaveLength(1);
+    expect(html).not.toContain('aria-label="Behavior diff"');
+  });
+
   it("never presents stale revision facts as the current candidate's evidence", () => {
     const view = {
       ...state,
