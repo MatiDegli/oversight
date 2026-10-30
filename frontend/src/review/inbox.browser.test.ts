@@ -113,7 +113,7 @@ it.each(["dark", "day"])(
       await expect(card.getByText("1 of 2 answered")).toBeVisible();
       await expect(card.getByRole("button", { name: "Change answer" })).toBeFocused();
       await expect(
-        card.getByText("Approve opens only when every answer is Yes", { exact: true }),
+        card.getByText("Approve opens when every answer is Yes.", { exact: true }),
       ).toBeVisible();
       await expect(
         card.getByRole("region", { name: "Compared functions and callers" }),
@@ -161,13 +161,19 @@ it.each(["dark", "day"])(
       await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
       await capture("04-choice");
       await card.getByRole("button", { name: "No, send it back" }).click();
-      await expect(card.getByRole("button", { name: "Request changes", exact: true })).toHaveClass(
-        /decision-primary/,
-      );
+      await expect(
+        card.getByRole("button", { name: "Request changes", exact: true }),
+      ).toBeEnabled();
+      await expect(
+        card.getByRole("button", { name: "Request changes", exact: true }),
+      ).not.toHaveClass(/decision-primary/);
+      await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
       await expect(card.getByRole("textbox")).toHaveValue(/quantity=True|True/);
       await card.getByRole("button", { name: "Change answer" }).last().click();
       await card.getByRole("button", { name: "Unsure, decide later" }).click();
-      await expect(card.getByText(/Unsure waits here/)).toBeVisible();
+      await expect(
+        card.getByText("Approve opens when every answer is Yes.", { exact: true }),
+      ).toBeVisible();
       await expect(card.getByText("2 of 2 answered")).toBeVisible();
       await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
       await card.getByRole("button", { name: "Change answer" }).last().click();
