@@ -1,0 +1,43 @@
+--- a/boltons/mathutils.py
++++ b/boltons/mathutils.py
+@@ -35,6 +35,40 @@
+ from math import ceil as _ceil, floor as _floor
+ import bisect
+ import binascii
++
++
++def _validated_ranges(ranges):
++    result = []
++    for pair in ranges:
++        try:
++            start, end = pair
++            valid = start <= end
++        except (TypeError, ValueError) as exc:
++            raise ValueError('expected a closed start/end pair') from exc
++        if not valid:
++            raise ValueError('range start must not exceed end')
++        result.append((start, end))
++    return result
++
++
++def range_union(ranges):
++    """Return sorted closed ranges, merging overlapping or touching endpoints."""
++    result = []
++    for start, end in sorted(_validated_ranges(ranges)):
++        if result and start <= result[-1][1]:
++            result[-1] = (result[-1][0], max(end, result[-1][1]))
++        else:
++            result.append((start, end))
++    return result
++
++
++def range_intersection(ranges):
++    """Return the common closed range, or None; empty input is undefined."""
++    pairs = _validated_ranges(ranges)
++    if not pairs:
++        raise ValueError('intersection needs at least one range')
++    start, end = max(p[0] for p in pairs), min(p[1] for p in pairs)
++    return (start, end) if start <= end else None
+ 
+ 
+ def clamp(x, lower=float('-inf'), upper=float('inf')):
