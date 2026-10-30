@@ -65,3 +65,9 @@ __all__ = [
     "read_change_view",
     "read_queue",
 ]
+
+from oversight.changes import _plans as plan_core
+from oversight.changes._queue import TEMPORARY_REFUSALS, refusal_state
+from oversight.changes._queue_view import read_plan
+
+__all__ += ["TEMPORARY_REFUSALS", "plan_core", "read_plan", "refusal_state"]

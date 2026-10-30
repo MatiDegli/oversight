@@ -19,17 +19,24 @@ ROUTES = [
     ("POST", "/dictation"),
     ("GET", "/merge-mode"),
     ("PUT", "/merge-mode"),
+]
+PLAN_COMMANDS = [
     ("POST", "/plans"),
-    ("GET", "/plans/{id}"),
     ("PUT", "/plans/{id}"),
     ("POST", "/plans/{id}/start"),
     ("POST", "/plans/{id}/reject"),
 ]
 
 
-@pytest.mark.parametrize("mode", ["live", "replay"])
 @pytest.mark.parametrize("identifier", ["plan-999", "not-an-id"])
-@pytest.mark.parametrize("method,path", ROUTES)
+@pytest.mark.parametrize(
+    "mode,method,path",
+    [
+        (mode, method, path)
+        for mode in ("live", "replay")
+        for method, path in ROUTES + (PLAN_COMMANDS if mode == "replay" else [])
+    ],
+)
 async def test_reserved_routes_never_read_bodies_or_cause_effects(
     tmp_path: Path, mode: Literal["live", "replay"], identifier: str, method: str, path: str
 ) -> None:
@@ -81,6 +88,7 @@ async def test_reserved_prefixes_do_not_fall_back_to_the_static_ui(
     (dist / "index.html").write_text("<title>UI</title>")
     app = FastAPI()
     store = EventStore(tmp_path / "unused.sqlite", "run-20261027-140312", mode="replay")
+    app.state.store = store
     app.include_router(create_router(store, "replay"))
     install_error_handlers(app)
     add_static(app, dist)
@@ -95,7 +103,7 @@ async def test_reserved_prefixes_do_not_fall_back_to_the_static_ui(
             if prefix == "dictation"
             else await client.get(f"/{prefix}" if prefix == "merge-mode" else "/plans/plan-999")
         )
-        assert reserved.status_code == 501
+        assert reserved.status_code == (404 if prefix == "plans" else 501)
     # Keep this assertion independent of the backend's prefix list and route registration.
     config = (ROOT / "frontend/vite.config.ts").read_text()
     assert f'"/{prefix}"' in config

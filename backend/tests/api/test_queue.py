@@ -79,6 +79,26 @@ async def folded(s: Any) -> None:
         assert not s.live.dispatcher.launching
 
 
+async def idle(s: Any) -> None:
+    """Wait for a real selection pass to find no dispatchable work."""
+    done = asyncio.Event()
+    dispatcher = s.live.dispatcher
+    original = dispatcher._select
+
+    async def select() -> Any:
+        result = await original()
+        if result is None:
+            done.set()
+        return result
+
+    dispatcher._select = select
+    try:
+        dispatcher.wake.set()
+        await done.wait()
+    finally:
+        dispatcher._select = original
+
+
 async def test_sixteen_concurrent_items_use_four_slots_and_release_in_fifo(tmp_path: Path) -> None:
     settings = live_settings(
         tmp_path,
@@ -193,6 +213,7 @@ async def test_named_head_waits_despite_another_free_slot_and_cancel_never_start
         ).status_code == 201
         first = await enqueue(s, slot="A")
         second = await enqueue(s, slot="B")
+        await idle(s)
         assert s.live._slots["B"] is None
         path = f"/queue/{first.queued_task_id}/cancel"
         assert error_code(await s.client.post(path, json={"revision": 2})) == (409, "wrong_state")
@@ -256,8 +277,8 @@ async def test_cancel_during_held_launch_and_after_refusal(
         monkeypatch.setattr(ChangeManager, "open", held)
         original_refused = s.live.dispatcher._refused
 
-        async def observe(*args: Any) -> None:
-            await original_refused(*args)
+        async def observe(*args: Any, **kwargs: Any) -> None:
+            await original_refused(*args, **kwargs)
             settled.set()
 
         monkeypatch.setattr(s.live.dispatcher, "_refused", observe)
@@ -361,10 +382,15 @@ async def test_braked_head_is_skipped_then_keeps_its_place_when_healthy(tmp_path
         await state(s, first.queued_task_id, "blocked")
         second = await enqueue(s, slot="B")
         await state(s, second.queued_task_id, "running")
+        third = await enqueue(s, slot="A")
+        await state(s, third.queued_task_id, "blocked")
         assert s.live._slots["A"] is None
         s.live.ledger.state = LedgerState(0.0, ())
         s.live.dispatcher.wake.set()
         await state(s, first.queued_task_id, "running")
+        await idle(s)
+        assert s.live.dispatcher.items[third.queued_task_id].state == "queued"
+        assert not s.live.dispatcher.items[third.queued_task_id].agent_ids
         await folded(s)
 
 
