@@ -80,6 +80,22 @@ def test_docstring_expression_must_stay_identical_even_when_cleaned_text_matches
         "modules = [__import__(name) for name in names]\n",
         "def f(): return namespace.__dict__\n",
         "globals = 1\n",
+        "def f(): return eval('Path').__name__\n",
+        "def f(): return eval(code)\n",
+        'value = getattr(x, "Path")\n',
+        "def f(): return getattr(x, name)\n",
+        "def f(): exec(code)\n",
+        "def f(): return compile(code, filename, mode)\n",
+        "f = lambda: function.__globals__\n",
+        "def f(): return frame.f_globals\n",
+        "def f(): return sys.modules\n",
+        "frame = sys._getframe()\n",
+        "import importlib\n",
+        "import inspect as inspection\n",
+        "def f():\n    import importlib.util as loader\n",
+        "from inspect import signature as sig\n",
+        "from importlib.util import find_spec\n",
+        "from . import inspect\n",
     ],
 )
 @pytest.mark.parametrize("edit", ["import", "comment"])
@@ -138,11 +154,33 @@ def test_base_identifier_in_any_scope_blocks_a_fresh_import(before):
     )
 
 
-@pytest.mark.parametrize(
-    "before", ["def f(Path): pass\n", "value = obj.Path\n", "value = 'Path'\n"]
-)
-def test_unused_parameter_attribute_or_string_does_not_count_as_a_name_node(before):
+def test_unused_parameter_does_not_count_as_name_attribute_or_string():
+    before = "def f(Path): pass\n"
     assert targets(record(before, before + "from pathlib import Path\n")) == ()
+
+
+@pytest.mark.parametrize(
+    "before,added",
+    [
+        ("value = obj.Path\n", "from pathlib import Path\n"),
+        ("value = 'Path'\n", "from pathlib import Path\n"),
+        ("value = 'prefix_Path_suffix'\n", "from pathlib import Path\n"),
+        ("value = f'prefix Path {counter}'\n", "from pathlib import Path\n"),
+        ("value = 'Pat' 'h'\n", "from pathlib import Path\n"),
+        ("def f(): return 'uuid4'\n", "from uuid import uuid4\n"),
+        ("value = f'{counter:uuid4}'\n", "from uuid import uuid4\n"),
+        ("value = 'prefixPsuffix'\n", "from pathlib import Path as P\n"),
+    ],
+)
+def test_base_attribute_or_string_blocks_added_bound_name(before, added):
+    assert targets(record(before, added + before)) == (
+        FunctionBehavior("sample", reason="unsupported signature"),
+    )
+
+
+@pytest.mark.parametrize("before", ["value = obj.Path\n", "value = 'Path'\n"])
+def test_attribute_and_string_checks_use_bound_alias_rather_than_imported_name(before):
+    assert targets(record(before, "from pathlib import Path as NewPath\n" + before)) == ()
 
 
 @pytest.mark.parametrize(
