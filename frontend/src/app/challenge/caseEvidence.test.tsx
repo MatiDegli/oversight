@@ -309,7 +309,6 @@ it("labels the final test result Proposal", () => {
 });
 it.each([false, true])("includes executions in the test-run preview (with steps: %s)", (steps) => {
   const execution = required(additions.find((event) => event.type === "tests.executed"));
-  if (execution.type !== "tests.executed") throw new Error("Missing execution");
   const source = extended([
     {
       ...execution,
@@ -328,7 +327,6 @@ it.each([false, true])("includes executions in the test-run preview (with steps:
 });
 it("preserves earlier facts and their incompleteness after a later complete record", () => {
   const first = required(additions.find((event) => event.type === "change.facts_recorded"));
-  if (first.type !== "change.facts_recorded") throw new Error("Missing facts");
   const latest = { ...facts, complete: true, problems: [], summary: ["Later complete record"] };
   const source = extended([first, { ...first, payload: latest }]);
   expect(caseEvidence(source, required(source.cases[0])).facts).toEqual({
