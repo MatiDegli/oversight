@@ -412,12 +412,13 @@ def _pools(
         is_int = "int" in kinds or (not kinds - {None} and any(type(v) is int for v in observed))
         is_str = "str" in kinds or (not kinds - {None} and any(type(v) is str for v in observed))
         if is_int:
+            pools[param].extend((0, -1))
             for value in integers:
                 pools[param].extend((value - 1, value, value + 1))
         if is_str:
             for node in nodes:
                 pools[param].extend(value for value in _literals(node) if type(value) is str)
-        pools[param].extend(([0, -1] if is_int else []) + defaults)
+        pools[param].extend(defaults)
         unique = {literal_text(v): v for v in pools[param] if not (is_int and type(v) is bool)}
         pools[param] = list(unique.values())[:MAX_INPUTS]
     return pools
