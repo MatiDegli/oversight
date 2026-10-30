@@ -2,15 +2,43 @@
 
 import ast
 import builtins
-import sys
 from copy import deepcopy
+from importlib import import_module
 
 from oversight.changes._behavior_aliases import (
     _AliasBindings,  # pyright: ignore[reportPrivateUsage]
 )
 from oversight_contracts.graph import GraphNode
 
-_STDLIB_PACKAGES = sys.stdlib_module_names - {"this", "antigravity"}
+_ALLOWED_MODULES = frozenset(
+    {
+        "abc",
+        "collections",
+        "contextlib",
+        "dataclasses",
+        "datetime",
+        "decimal",
+        "enum",
+        "fractions",
+        "functools",
+        "hashlib",
+        "itertools",
+        "json",
+        "logging",
+        "math",
+        "operator",
+        "os",
+        "pathlib",
+        "random",
+        "re",
+        "string",
+        "sys",
+        "textwrap",
+        "time",
+        "typing",
+        "uuid",
+    }
+)
 _BUILTIN_NAMES = frozenset(dir(builtins))
 
 
@@ -50,22 +78,17 @@ def _fresh_import(stmt: ast.stmt, bindings: _AliasBindings, forbidden: set[str])
     if not isinstance(stmt, (ast.Import, ast.ImportFrom)) or bindings.star_import:
         return False
     if isinstance(stmt, ast.ImportFrom):
-        if stmt.level or stmt.module is None:
+        if stmt.level or stmt.module not in _ALLOWED_MODULES:
             return False
-        modules = [stmt.module]
-    else:
-        modules = [alias.name for alias in stmt.names]
-    if any(module.split(".")[0] not in _STDLIB_PACKAGES for module in modules):
+        try:
+            module = import_module(stmt.module)
+        except ImportError:
+            return False
+        if any(alias.name == "*" or not hasattr(module, alias.name) for alias in stmt.names):
+            return False
+    elif any(alias.name not in _ALLOWED_MODULES for alias in stmt.names):
         return False
-    return all(
-        alias.name != "*"
-        and (
-            alias.asname
-            or (alias.name.split(".")[0] if isinstance(stmt, ast.Import) else alias.name)
-        )
-        not in forbidden
-        for alias in stmt.names
-    )
+    return all((alias.asname or alias.name) not in forbidden for alias in stmt.names)
 
 
 def _module_equal(base: ast.Module, head: ast.Module) -> bool:

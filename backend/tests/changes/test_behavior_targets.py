@@ -34,9 +34,12 @@ def record(before: str, after: str) -> ChangeRecord:
         "import pathlib\n",
         "from pathlib import Path\n",
         "from pathlib import Path as P\n",
-        "import os.path\n",
-        "import os.path as path\n",
+        "import os as path\n",
+        "from os import path\n",
         "import os, pathlib\n",
+        "from pathlib import Path, PurePath as P\n",
+        "from uuid import uuid4\n",
+        "from uuid import uuid4 as new_id\n",
     ],
 )
 def test_added_fresh_stdlib_import_has_no_module_entry(added):
@@ -118,6 +121,14 @@ def test_unused_parameter_attribute_or_string_does_not_count_as_a_name_node(befo
         "import antigravity\n",
         "from this import d\n",
         "from antigravity import geohash\n",
+        "from __future__ import annotations\n",
+        "import os.path\n",
+        "import os.path as path\n",
+        "import os.__oversight_missing_stdlib_child__\n",
+        "from os.path import basename\n",
+        "from pathlib import NoSuchName\n",
+        "from pathlib import Path, NoSuchName\n",
+        "import xml\n",
     ],
 )
 def test_disallowed_added_import_keeps_the_module_entry(added):
