@@ -80,24 +80,25 @@ static build requires the recording and its receipt; UI tests select their own f
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
 
-### Zoom levels
+### Scale and depth
 
-For a repository too large to read at once, the graph would switch between three levels as you zoom:
+Depth and scale are two axes. The built **Modules / Functions / Details** control (`bfe7a18`)
+sets how much unfolds. Scale is the zoom: how it is drawn.
 
-- **Modules:** each module is a circle sized by its function count, with one line per pair of
-  modules, thicker with more calls.
-- **Functions:** modules become frames and functions become dots, named only where an agent works or
-  the impact cone reaches.
-- **Details:** the labeled boxes of the current view, with every call.
+The **map is not built**. It would appear automatically when module titles fall below the reading
+floor, replacing each module with a circle at its block's center, with area proportional to its
+function count. Folder groups appear on the map only and are not built either. The earlier middle
+level, function dots inside module frames, is dropped.
 
-Agents and the impact cone stay visible at every level, nothing moves when the level changes, and
-labels keep their size on screen. Not built yet; it comes after the core features, if time allows.
+See [Scale and depth in DESIGN.md](DESIGN.md#scale-and-depth) for the approved definition and scope:
+define and sketch now; whether to build is decided with the sketch, never before the Saturday
+checkpoint.
 
-![Design sketch of the zoom levels, not built](docs/sketches/mockup-zoom-signal-far.png)
+![Earlier sketch of zoom levels](docs/sketches/mockup-zoom-signal-far.png)
 
-*Design sketch, not built. Its structure comes from a sketch made before the kickoff, redrawn in
-Oversight's look on 2026-10-26. It is a picture of the idea, not the product: its name and numbers
-are placeholders.*
+*Earlier sketch, not the target. Its structure comes from a sketch made before the kickoff,
+redrawn in Oversight's look on 2026-10-26. Its name and numbers are placeholders; it includes the
+middle level now dropped.*
 
 See [docs/additions.md](docs/additions.md) for the queue and candidates.
 

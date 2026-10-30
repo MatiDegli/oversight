@@ -100,7 +100,9 @@ These retain useful ideas from the old inventory without approving a front or ch
 - A TypeScript graph adapter; another language/dependency needs a separate scope decision.
 - Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
-- Zoom levels (see README), a Tauri shell, a local model in slot B, and named editor cursors.
+- [Scale and depth](../DESIGN.md#scale-and-depth): define and sketch now; build decided with the
+  sketch, never before the Saturday checkpoint.
+- A Tauri shell, a local model in slot B, and named editor cursors.
 - [Repository memory](#repository-memory): what Oversight remembers about a repository that
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
   before the freeze.

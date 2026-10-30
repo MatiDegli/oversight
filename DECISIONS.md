@@ -1632,3 +1632,31 @@ without a guessed dock-height padding. Desktop composition and typography remain
 
 Source profiles separate `pytest_options` from positional `pytest_targets`, so selected case
 reruns retain collection options while replacing only the targets (including Boltons doctests).
+## 2026-10-29 — Scale and depth are separate axes; the map waits for a sketch
+
+The maintainer approved the [Scale and depth definition](DESIGN.md#scale-and-depth) on 2026-10-29.
+The built Modules / Functions / Details control (`bfe7a18`) sets how much unfolds; zoom sets how it
+is drawn. The old middle scale level, function dots inside module frames, is dropped. The map
+would enter automatically when `frame-title-size` (17px) times zoom falls below the existing
+11 CSS px floor, below 64.7% (11/17), and leave above a slightly larger size set by the sketch to
+avoid flicker. Fit chooses cards at or above that leave threshold and the map otherwise; "Map"
+appears beside the percentage, with no fourth button.
+
+The map and folder groups are not built. Modules become circles at their reserved block centers,
+with area proportional to function count. Only the map groups by folder, at the first level that
+splits the repository into at least two groups, with tests separate; never computed clusters.
+Groups with fewer than two modules and flat repositories draw no frames. Cards stay as today,
+but continuous folder frames require a preset rearrangement that also moves card positions;
+the sketch must show this for the build decision. Group summaries use team-colored rings,
+neutral pending-decision counts and cone reach. Links keep the call-visibility rules
+([DESIGN.md "Call visibility"](DESIGN.md#graph-nodes-and-their-states-signature-component)): exact
+links at today's weight; possible links that survive the built-in name filter, drawn as faint lines.
+
+The [Boltons `d31d821` preset](fixtures/layouts/boltons-d31d821.json), the proof 2 repository,
+contains 66 modules by top folder: boltons 30, tests 32, misc 3, docs 1. That gives a large library
+group, tests and misc, while docs draws no frame. Fit is at the threshold without tests (65%) and
+lower with them. This remains in [Undecided candidates](docs/additions.md#undecided-candidates):
+define now, then sketch with real Boltons and demo data, and the proof 2 repository if it changes.
+The sketch shows Boltons fitted with and without tests and identifies the resulting level.
+Whether to build is decided with that sketch in view, never before the Saturday checkpoint;
+approval of the definition does not approve the build.
