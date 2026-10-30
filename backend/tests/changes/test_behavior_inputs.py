@@ -5,6 +5,7 @@ import ast
 import pytest
 
 from oversight.changes import behavior_inputs
+from oversight.changes._review_identity import bound_inputs
 
 
 def generate(before: str, after: str | None = None, tests: str = ""):
@@ -177,3 +178,93 @@ def test_module_integer_boundaries_from_both_versions_and_every_body():
     values = {ast.literal_eval(item.before)[1]["x"] for item in single.inputs}
     assert {59, 60, 61, 19, 20, 21, 9, 10, 11, -8, -7, -6, 29, 30, 31} <= values
     assert all(type(value) is int for value in values)
+
+
+@pytest.mark.parametrize("parameter", ["extra=2", "*, extra=2", "extra=EXTRA"])
+def test_added_optional_parameter_omitted_uses_shared_identity(parameter):
+    before = "def f(x: int): return x\n"
+    after = f"EXTRA = 2\ndef f(x: int, {parameter}): return x + extra\n"
+    found = generate(before, after, "from pkg.mod import f\nf(7)\nf(7, extra=3)\n")
+    assert found.reason is None
+    assert found.inputs[0].call == "f(x=7)"
+    assert found.inputs[0].input_identity == bound_inputs({"x": 7})
+    assert all("extra=" not in item.call for item in found.inputs)
+    assert found.skipped_binding > 0  # Explicit new arguments cannot bind on base.
+
+
+def test_added_optional_parameter_without_call_sites_can_be_omitted():
+    found = generate("def f(x: int): return x\n", "def f(x: int, extra=2): return x + extra\n")
+    assert found.reason is None
+    assert found.inputs
+    assert all(item.input_identity is not None for item in found.inputs)
+
+
+@pytest.mark.parametrize(
+    "before, after, expected",
+    [
+        ("x=1", "x=2", None),
+        ("x=1", "x=True", None),
+        ("x=1, removed=2", "x=1", None),
+        ("x=1", "x=1, extra=2", bound_inputs({"x": 1})),
+        ("x=1", "x=2, extra=2", None),
+    ],
+)
+def test_shared_defaults_and_removed_parameters_keep_strict_identity(before, after, expected):
+    found = generate(
+        f"def f({before}): return x\n",
+        f"def f({after}): return x\n",
+        "from pkg.mod import f\nf()\n",
+    )
+    assert found.inputs[0].call == "f()"
+    assert found.inputs[0].input_identity == expected
+
+
+@pytest.mark.parametrize("assignment", ["VALUE = {value}", "VALUE: int = {value}"])
+@pytest.mark.parametrize("after_value", ["7", "True", "8"])
+def test_constant_defaults_resolve_in_each_versions_own_module(assignment, after_value):
+    before = assignment.format(value="7") + "\ndef f(x=VALUE, /): return x\n"
+    after = assignment.format(value=after_value) + "\ndef f(x=VALUE, /): return x\n"
+    found = generate(before, after, "from pkg.mod import f\nf()\n")
+    assert found.reason is None
+    omitted = found.inputs[0]
+    assert omitted.call == "f()"
+    assert ast.literal_eval(omitted.before) == ((7,), {})
+    assert ast.literal_eval(omitted.after) == ((ast.literal_eval(after_value),), {})
+    assert omitted.input_identity == (bound_inputs({"x": 7}) if after_value == "7" else None)
+
+
+@pytest.mark.parametrize(
+    "binding",
+    [
+        "VALUE = 7\nVALUE = 7",
+        "VALUE = 7\nVALUE += 1",
+        "VALUE = 7\ndel VALUE",
+        "from other import VALUE",
+        "VALUE = 7\nimport other as VALUE",
+        "if flag: VALUE = 7",
+        "VALUE = 7\nif flag: VALUE = 8",
+        "VALUE = 7\nfor VALUE in values: pass",
+        "VALUE = 7\nwith context() as VALUE: pass",
+        "VALUE = 7\nfrom other import *",
+        "VALUE = 7\ndef reset():\n    global VALUE",
+        "VALUE = 7\ndef reset():\n    nonlocal VALUE",
+        "VALUE = 1 + 6",
+        "VALUE = other()",
+        "OTHER = 7\nVALUE = OTHER",
+        "VALUE = OTHER = 7",
+        "VALUE: int",
+    ],
+)
+def test_ambiguous_or_nonliteral_constant_defaults_stay_opaque(binding):
+    source = binding + "\ndef f(x=VALUE): return x\n"
+    found = generate(source, tests="from pkg.mod import f\nf()\nf(x=None)\n")
+    assert found.reason is None
+    assert [item.call for item in found.inputs] == ["f(x=None)"]
+    assert found.inputs[0].input_identity == bound_inputs({"x": None})
+
+
+@pytest.mark.parametrize("value", [repr("x" * 4097), repr(list(range(129)))])
+def test_constant_defaults_preserve_literal_limits(value):
+    found = generate(f"VALUE = {value}\ndef f(x=VALUE): return x\n")
+    assert found.inputs == ()
+    assert found.reason == "unsupported signature"
