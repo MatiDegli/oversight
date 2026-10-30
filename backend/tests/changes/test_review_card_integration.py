@@ -82,7 +82,7 @@ async def test_measured_callers_and_edited_nodes_replay_from_sqlite_without_work
             if card.node_id in direct:
                 node = next(n for n in first.payload.behavior_diff if n.node_id == card.node_id)
                 question += (
-                    f" Returns a different value, for {node.differing_count} "
+                    f". Returns a different value, for {node.differing_count} "
                     f"of {node.differing_count} differing inputs."
                 )
             assert card.question == question
