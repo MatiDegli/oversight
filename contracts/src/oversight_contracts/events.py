@@ -7,7 +7,14 @@ Every event carries seq, ts, type and payload. No event carries an absolute path
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, NonNegativeInt, PositiveInt, ValidationInfo, model_validator
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveInt,
+    ValidationInfo,
+    model_validator,
+)
 
 from oversight_contracts.common import (
     AgentId,
@@ -185,6 +192,15 @@ class AgentStep(ContractModel):
     duration_ms: int
     tests: SuiteResult | None
     """Set for run_tests."""
+
+    error_kind: Literal["unknown_tool", "invalid_json", "invalid_arguments"] | None = None
+    """Set only for malformed model tool calls; every other tool error stays null."""
+
+    @model_validator(mode="after")
+    def _malformed_call_is_error(self) -> Self:
+        if self.error_kind is not None and self.result != "error":
+            raise ValueError("error_kind requires result error")
+        return self
 
 
 class FocusRange(ContractModel):
@@ -394,6 +410,55 @@ class UsageTick(ContractModel):
     """The change associated with this call."""
     plan_id: PlanId | None = None
     """The plan associated with this call."""
+
+
+class ModelAttemptFailed(ContractModel):
+    """Emitted by the server once per failed attempt, before the retry wait and for the final
+    failure; never written by the model. The card reads "Waiting for model (retry n/5)" from
+    an attempt with wait_s set, until that agent's next agent.step, usage.tick or
+    model.attempt_failed.
+    """
+
+    agent_id: AgentId
+    """The author for review calls, as in usage.tick."""
+    change_id: ChangeId | None = None
+    role: Literal["agent", "review", "plan", "lead"] | None = None
+    model: NonEmptyText
+    """The profile id sent; the API reports no model on a failure."""
+    provider: Literal["meta", "baseten", "fake"]
+    attempt: PositiveInt
+    """The 1-based number of the attempt that failed."""
+    max_attempts: PositiveInt
+    """The retry policy limit, currently 5."""
+    cause: Literal["rate_limited", "server_error", "connection", "timeout", "refused"]
+    status: int | None = None
+    """HTTP status when the provider answered."""
+    retry_after_s: NonNegativeFloat | None = None
+    """Provider Retry-After, when sent."""
+    wait_s: NonNegativeFloat | None = None
+    """Wait before the next attempt; null when none follows."""
+    final: Literal["attempts_used", "not_retryable", "deadline"] | None = None
+
+    @model_validator(mode="after")
+    def _failed_attempt_shape(self) -> Self:
+        if (self.final is not None) != (self.wait_s is None):
+            raise ValueError("final is set exactly when wait_s is null")
+        if self.attempt > self.max_attempts:
+            raise ValueError("attempt must not exceed max_attempts")
+        if self.final == "attempts_used" and self.attempt != self.max_attempts:
+            raise ValueError("attempts_used requires attempt equal to max_attempts")
+        if self.cause in {"connection", "timeout"}:
+            if self.status is not None:
+                raise ValueError("connection and timeout have no HTTP status")
+        elif self.status is None:
+            raise ValueError("provider responses require HTTP status")
+        elif self.cause == "rate_limited" and self.status != 429:
+            raise ValueError("rate_limited requires HTTP 429")
+        elif self.cause == "server_error" and not 500 <= self.status <= 599:
+            raise ValueError("server_error requires HTTP 500-599")
+        elif self.cause == "refused" and (self.status == 429 or 500 <= self.status <= 599):
+            raise ValueError("refused excludes HTTP 429 and 500-599")
+        return self
 
 
 class ErrorReport(ContractModel):
@@ -635,6 +700,13 @@ class LeadStatusEvent(EventBase):
     """The complete event payload."""
 
 
+class ModelAttemptFailedEvent(EventBase):
+    """The server-owned model.attempt_failed envelope."""
+
+    type: Literal["model.attempt_failed"]
+    payload: ModelAttemptFailed
+
+
 type ServerEvent = Annotated[
     RunStartedEvent
     | GraphSnapshotEvent
@@ -646,6 +718,7 @@ type ServerEvent = Annotated[
     | ChangeProposedEvent
     | ChangeResolvedEvent
     | UsageTickEvent
+    | ModelAttemptFailedEvent
     | ErrorReportEvent
     | ChangeAssessedEvent
     | MergeModeChangedEvent

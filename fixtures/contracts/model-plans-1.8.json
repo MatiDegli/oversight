@@ -1,0 +1,476 @@
+[
+  {
+    "seq": 1,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "model.attempt_failed",
+    "payload": {
+      "agent_id": "agent-1",
+      "change_id": "change-1",
+      "role": "review",
+      "model": "fake",
+      "provider": "fake",
+      "attempt": 1,
+      "max_attempts": 5,
+      "cause": "rate_limited",
+      "status": 429,
+      "retry_after_s": 2,
+      "wait_s": 2,
+      "final": null
+    }
+  },
+  {
+    "seq": 2,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "model.attempt_failed",
+    "payload": {
+      "agent_id": "agent-1",
+      "change_id": "change-1",
+      "role": "review",
+      "model": "fake",
+      "provider": "fake",
+      "attempt": 1,
+      "max_attempts": 5,
+      "cause": "server_error",
+      "status": 503,
+      "retry_after_s": null,
+      "wait_s": 2,
+      "final": null
+    }
+  },
+  {
+    "seq": 3,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "model.attempt_failed",
+    "payload": {
+      "agent_id": "agent-1",
+      "change_id": "change-1",
+      "role": "review",
+      "model": "fake",
+      "provider": "fake",
+      "attempt": 1,
+      "max_attempts": 5,
+      "cause": "connection",
+      "status": null,
+      "retry_after_s": null,
+      "wait_s": 2,
+      "final": null
+    }
+  },
+  {
+    "seq": 4,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "model.attempt_failed",
+    "payload": {
+      "agent_id": "agent-1",
+      "change_id": "change-1",
+      "role": "review",
+      "model": "fake",
+      "provider": "fake",
+      "attempt": 1,
+      "max_attempts": 5,
+      "cause": "timeout",
+      "status": null,
+      "retry_after_s": null,
+      "wait_s": 2,
+      "final": null
+    }
+  },
+  {
+    "seq": 5,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "model.attempt_failed",
+    "payload": {
+      "agent_id": "agent-1",
+      "change_id": "change-1",
+      "role": "review",
+      "model": "fake",
+      "provider": "fake",
+      "attempt": 1,
+      "max_attempts": 5,
+      "cause": "refused",
+      "status": 403,
+      "retry_after_s": null,
+      "wait_s": null,
+      "final": "not_retryable"
+    }
+  },
+  {
+    "seq": 6,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "model.attempt_failed",
+    "payload": {
+      "agent_id": "agent-1",
+      "model": "fake",
+      "provider": "fake",
+      "attempt": 5,
+      "max_attempts": 5,
+      "cause": "timeout",
+      "wait_s": null,
+      "final": "attempts_used"
+    }
+  },
+  {
+    "seq": 7,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "model.attempt_failed",
+    "payload": {
+      "agent_id": "agent-1",
+      "model": "fake",
+      "provider": "fake",
+      "attempt": 5,
+      "max_attempts": 5,
+      "cause": "timeout",
+      "wait_s": null,
+      "final": "deadline"
+    }
+  },
+  {
+    "seq": 8,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "agent.step",
+    "payload": {
+      "agent_id": "agent-1",
+      "step": 1,
+      "tool": "unknown",
+      "summary": "Malformed call",
+      "result": "error",
+      "error": "Invalid call",
+      "duration_ms": 0,
+      "tests": null,
+      "error_kind": "unknown_tool"
+    }
+  },
+  {
+    "seq": 9,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "agent.step",
+    "payload": {
+      "agent_id": "agent-1",
+      "step": 1,
+      "tool": "read_file",
+      "summary": "Malformed call",
+      "result": "error",
+      "error": "Invalid call",
+      "duration_ms": 0,
+      "tests": null,
+      "error_kind": "invalid_json"
+    }
+  },
+  {
+    "seq": 10,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "agent.step",
+    "payload": {
+      "agent_id": "agent-1",
+      "step": 1,
+      "tool": "read_file",
+      "summary": "Malformed call",
+      "result": "error",
+      "error": "Invalid call",
+      "duration_ms": 0,
+      "tests": null,
+      "error_kind": "invalid_arguments"
+    }
+  },
+  {
+    "seq": 11,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "plan.updated",
+    "payload": {
+      "plan_id": "plan-1",
+      "revision": 1,
+      "task": "Work",
+      "graph_version": "v1",
+      "state": "proposed",
+      "subtasks": [
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [],
+          "state": "waiting",
+          "agent_id": null
+        }
+      ]
+    }
+  },
+  {
+    "seq": 12,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "plan.updated",
+    "payload": {
+      "plan_id": "plan-1",
+      "revision": 1,
+      "task": "Work",
+      "graph_version": "v1",
+      "state": "running",
+      "subtasks": [
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [],
+          "state": "running",
+          "agent_id": "agent-1"
+        }
+      ]
+    }
+  },
+  {
+    "seq": 13,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "plan.updated",
+    "payload": {
+      "plan_id": "plan-1",
+      "revision": 1,
+      "task": "Work",
+      "graph_version": "v1",
+      "state": "running",
+      "subtasks": [
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [],
+          "state": "merged",
+          "agent_id": "agent-1"
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            0
+          ],
+          "state": "running",
+          "agent_id": "agent-2"
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            1
+          ],
+          "state": "waiting",
+          "agent_id": null
+        }
+      ]
+    }
+  },
+  {
+    "seq": 14,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "plan.updated",
+    "payload": {
+      "plan_id": "plan-1",
+      "revision": 1,
+      "task": "Work",
+      "graph_version": "v1",
+      "state": "completed",
+      "subtasks": [
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [],
+          "state": "merged",
+          "agent_id": "agent-1"
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            0
+          ],
+          "state": "merged",
+          "agent_id": "agent-2"
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            1
+          ],
+          "state": "merged",
+          "agent_id": "agent-3"
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            2
+          ],
+          "state": "merged",
+          "agent_id": "agent-4"
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            3
+          ],
+          "state": "merged",
+          "agent_id": "agent-5"
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            4
+          ],
+          "state": "merged",
+          "agent_id": "agent-6"
+        }
+      ]
+    }
+  },
+  {
+    "seq": 15,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "plan.updated",
+    "payload": {
+      "plan_id": "plan-1",
+      "revision": 1,
+      "task": "Work",
+      "graph_version": "v1",
+      "state": "completed",
+      "subtasks": [
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [],
+          "state": "rejected",
+          "agent_id": "agent-1"
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            0
+          ],
+          "state": "cancelled",
+          "agent_id": null
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            1
+          ],
+          "state": "cancelled",
+          "agent_id": null
+        }
+      ]
+    }
+  },
+  {
+    "seq": 16,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "plan.updated",
+    "payload": {
+      "plan_id": "plan-1",
+      "revision": 1,
+      "task": "Work",
+      "graph_version": "v1",
+      "state": "rejected",
+      "subtasks": [
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [],
+          "state": "cancelled",
+          "agent_id": null
+        },
+        {
+          "task": "Work",
+          "zone": {
+            "node_ids": [],
+            "paths": []
+          },
+          "depends_on": [
+            0
+          ],
+          "state": "cancelled",
+          "agent_id": null
+        }
+      ]
+    }
+  },
+  {
+    "seq": 17,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "queue.updated",
+    "payload": {
+      "queued_task_id": "queued-task-1",
+      "revision": 1,
+      "state": "running",
+      "plan_id": "plan-1",
+      "plan_revision": 1,
+      "agent_ids": [
+        "agent-1"
+      ],
+      "detail": null
+    }
+  },
+  {
+    "seq": 18,
+    "ts": "2026-10-30T14:00:00.000Z",
+    "type": "queue.updated",
+    "payload": {
+      "queued_task_id": "queued-task-1",
+      "revision": 1,
+      "state": "completed",
+      "plan_id": "plan-1",
+      "plan_revision": 1,
+      "agent_ids": [
+        "agent-1",
+        "agent-2",
+        "agent-3",
+        "agent-4",
+        "agent-5",
+        "agent-6"
+      ],
+      "detail": null
+    }
+  }
+]
