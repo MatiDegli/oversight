@@ -414,8 +414,8 @@ async def probe_behavior(
     The caller owns main/agent locks. Cleanup runs outside the computation deadline,
     in that same task, retaining the existing bounded Git and namespace cleanup.
     """
-    found = list(targets(rec))
     deadline = time.monotonic() + 2 * rec.task.limits.test_timeout_s
+    found = list(await asyncio.to_thread(targets, rec))
     stack = AsyncExitStack()
     completed: set[str] = set()
     try:

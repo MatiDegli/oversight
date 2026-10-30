@@ -2,15 +2,17 @@
 
 import asyncio
 import os
+import threading
 from dataclasses import replace
 from unittest.mock import AsyncMock
 
 import pytest
-from changes_helpers import EDIT, TEMPLATE, Harness, start_harness
+from changes_helpers import EDIT, PATH, TEMPLATE, Harness, start_harness
 from decision_helpers import observed_target
 
 from oversight.changes import BehaviorDiff
 from oversight.changes._behavior import FunctionBehavior
+from oversight.changes._behavior_scopes import InertScopes
 from oversight_contracts.review import ChangeFacts
 
 pytestmark = pytest.mark.anyio
@@ -19,6 +21,22 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 def session_c() -> bool:
     return True
+
+
+async def test_target_parsing_runs_off_event_loop_thread(h: Harness, monkeypatch):
+    loop_thread = threading.get_ident()
+    parsing_threads = []
+    original = InertScopes.unchanged
+
+    def unchanged(scopes, base_node, head_node):
+        parsing_threads.append(threading.get_ident())
+        return original(scopes, base_node, head_node)
+
+    monkeypatch.setattr(InertScopes, "unchanged", unchanged)
+    h.manager._ctx.behavior_diff = True
+    await h.run_agent(1, (PATH, "def value()", "from pathlib import Path\n\ndef value()"), EDIT)
+    assert parsing_threads
+    assert all(thread != loop_thread for thread in parsing_threads)
 
 
 async def test_base_and_proposed_workers_have_distinct_pids(tmp_path, monkeypatch):
