@@ -55,6 +55,8 @@ const sameModules = (a?: readonly FieldModule[], b?: readonly FieldModule[]) =>
     a.length === b.length &&
     a.every((module, i) => module.id === b.at(i)?.id && module.callers === b.at(i)?.callers));
 
+const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
+
 /** The look of the lamps, from the theme. */
 export interface LookTheme {
   "dot-cell-size": string;
@@ -352,18 +354,22 @@ class FieldRuntime implements FieldController {
       for (const pulse of pulses) {
         const target = targets.get(pulse.merge.id);
         if (!target) continue;
-        const rect = [
+        const agent = [
           ...document.querySelectorAll<HTMLElement>(`[data-agent-origin="${pulse.merge.slot}"]`),
         ]
-          .map((element) => element.getBoundingClientRect())
-          .find((box) => box.width > 0);
-        // Cards and rail letters sit outside the graph: keep their actual departure point.
-        const start = rect
+          .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+          .find(({ rect }) => rect.width > 0);
+        const start = agent
           ? {
-              x: rect.left - origin.left,
-              y: rect.top + rect.height / 2 - origin.top,
+              x: agent.rect.left - origin.left,
+              y: agent.rect.top + agent.rect.height / 2 - origin.top,
             }
           : { x: width, y: (target.y1 + target.y2) / 2 };
+        // Keep the card's original graph-box clamp; review departs from the actual rail letter.
+        if (agent?.element.hasAttribute("data-slot")) {
+          start.x = clamp(start.x, 0, width);
+          start.y = clamp(start.y, 0, height);
+        }
         paths.set(
           pulse.key,
           approachPath(start, target, this.source.edgesAt?.(pulse.merge.id) ?? []),

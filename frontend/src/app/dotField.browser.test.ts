@@ -818,12 +818,40 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     const waitingNode = (await look(page)).near?.level;
     expect(waiting).toBeGreaterThan(50);
     expect((await fieldPixels(page)).warm).toBeGreaterThan(200);
+    const start = await page.evaluate(() => {
+      const { field } = window.fieldTest.elements();
+      const origin = field.getBoundingClientRect();
+      const card = document.querySelector('[data-agent-origin="A"][data-slot="A"]');
+      if (!card) throw new Error("No open agent A card");
+      const rect = card.getBoundingClientRect();
+      // Watch keeps the original graph-box clamp, even when the card is outside the canvas.
+      return {
+        x: Math.min(field.clientWidth, Math.max(0, rect.left - origin.left)),
+        y: Math.min(field.clientHeight, Math.max(0, rect.top + rect.height / 2 - origin.top)),
+      };
+    });
     await page.evaluate(() => {
       window.fieldTest.advance(21);
     });
     // The merge is told, but the pulse waits a moment before it leaves the card.
     expect((await lifeOf(page))?.pulses).toBe(0);
-    await page.clock.runFor(250 + 725);
+    await page.clock.runFor(250 + 16);
+    const departure = await page.evaluate(() => {
+      const paths = document.querySelectorAll<SVGPathElement>("[data-field-travel] g path");
+      const tail = [...paths].filter((path) => path.getAttribute("d")).at(-1);
+      const point = tail?.getPointAtLength(0);
+      if (!point) throw new Error("No departing watch pulse");
+      return { x: point.x, y: point.y };
+    });
+    expect(
+      Math.abs(departure.x - start.x),
+      JSON.stringify({ departure, start }),
+    ).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs(departure.y - start.y),
+      JSON.stringify({ departure, start }),
+    ).toBeLessThanOrEqual(2);
+    await page.clock.runFor(725 - 16);
     expect((await lifeOf(page))?.pulses).toBe(1);
     // The decision itself settles the graph (the node's pending look goes); from here on, the pulse
     // and the light must leave the camera and the nodes exactly where they are.
