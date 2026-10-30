@@ -101,6 +101,12 @@ it.each(["dark", "day"])(
         }),
       ).toBeVisible();
       const merged = page.getByRole("complementary", { name: "Review panel" });
+      await expect(
+        merged.getByRole("region", { name: "Review lead" }).getByText(/Under grant/),
+      ).toContainText("grant-pricing");
+      await expect(merged.getByText(/Under grant/)).toHaveText(
+        "Under grant grant-pricing · Possible callers, not followed · This module · shop.pricing · given 15:03 ART.",
+      );
       await expect(merged.getByRole("region", { name: "Decision", exact: true })).toHaveCount(0);
       await expect(merged.locator(".review-merged")).toHaveText("Merged into main merge-p");
       await capture("03-merged-grant");

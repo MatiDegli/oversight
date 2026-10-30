@@ -1,9 +1,10 @@
 import { Fragment } from "react";
 import type { ReactNode } from "react";
 import type { State } from "../state";
+import { grantReasons, grantScopeWords } from "../state";
 import { cardAnswer, Example } from "./AnswerChoices";
 import { candidateKey, useAnswers } from "./answers";
-import { CardEvidence } from "./ChangeCard";
+import { CardEvidence, eventTime } from "./ChangeCard";
 import { CrossReviewNote } from "./CrossReviewNote";
 import { ReviewFacts } from "./ReviewFacts";
 import { selectReviewBody, smallestExample } from "./reviewBodyEvidence";
@@ -81,6 +82,14 @@ export function ReviewBody({
             <h3>{title}</h3>
             {caption && <p>{caption}</p>}
           </div>
+          {kind === "g" &&
+            change?.resolution?.grants?.map((use) => (
+              <p className="grant-receipt" key={use.grant_id}>
+                Under grant <code>{use.grant_id}</code> · {grantReasons[use.authorization.reason]} ·{" "}
+                {grantScopeWords(use.authorization.scope)} · given{" "}
+                {eventTime(use.authorization.creation_ts)}.
+              </p>
+            ))}
           {card && (kind === "a" || kind === "unavailable") && (
             <CardEvidence state={state} changeId={changeId} card={card} />
           )}

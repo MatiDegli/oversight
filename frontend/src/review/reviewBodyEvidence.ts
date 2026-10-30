@@ -68,10 +68,16 @@ export function selectReviewBody(state: State, changeId: string) {
   const summary: string[] = [];
   if (change && ["a", "b", "g"].includes(kind)) {
     for (const b of behavior ?? [])
-      if (b.compared_count && !b.rows.some((r) => r.unstable))
+      if (b.compared_count && !b.rows.some((r) => r.unstable)) {
+        const choices = facts?.review_cards?.filter((c) => c.node_id === b.node_id) ?? [];
+        const examplesShown =
+          kind === "a" &&
+          choices.length > 0 &&
+          choices.every((c) => c.example && c.example.before !== c.example.after);
         summary.push(
-          `${b.label}: ${String(b.compared_count)} inputs compared, ${String(b.differing_count)} differ${kind === "a" ? "; one example of each kind is shown above." : "."}`,
+          `${b.label}: ${String(b.compared_count)} inputs compared, ${String(b.differing_count)} differ${examplesShown ? "; one example of each kind is shown above." : "."}`,
         );
+      }
     const unmeasured = callers.total - callers.measured;
     if (unmeasured)
       summary.push(`${String(unmeasured)} possibly affected callers were not measured.`);

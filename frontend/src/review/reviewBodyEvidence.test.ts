@@ -59,3 +59,24 @@ it("leaves unsupported evidence without a lead and never repeats raw summary cla
   expect(selectReviewBody(state, "change-1").kind).toBe("other");
   expect(selectReviewBody(state, "change-1").summary).toEqual([]);
 });
+
+it.each(["missing", "equal", "other function", "partial", "rendered"] as const)(
+  "only promises examples when each choice has a rendered example: %s",
+  (shape) => {
+    const state = structuredClone(headerState("a"));
+    const facts = state.changeFacts["change-3"]?.at(-1);
+    const cards = facts?.review_cards;
+    if (!facts || !cards?.length || !cards[0]?.example) throw new Error("Missing choice examples");
+    for (const [index, card] of cards.entries()) {
+      if (shape === "missing" || (shape === "partial" && index === 0)) card.example = null;
+      if (shape === "equal" && card.example) card.example.after = card.example.before;
+      if (shape === "other function") card.node_id = "another:function";
+    }
+    const view = selectReviewBody(state, "change-3");
+    expect(view.kind).toBe("a");
+    expect(view.summary[0]).toContain("inputs compared");
+    expect(view.summary[0]?.includes("one example of each kind is shown above")).toBe(
+      shape === "rendered",
+    );
+  },
+);

@@ -187,6 +187,8 @@ test.describe("phone practice", () => {
       await finishPhoneDecisions(page, width);
       await page.setViewportSize({ width: 1920, height: 1080 });
       // CSS geometry updates before React replaces the phone practice body.
+      // bbdb86e passed when React had already committed; 03f6495 exposed the same race.
+      // The width check alone cannot guarantee the desktop status line is mounted.
       await expect(page.locator(".phone-practice")).toHaveCount(0);
       await expect(page.locator(".focus-panel")).toHaveCSS("width", "880px");
       expect(

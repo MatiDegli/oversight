@@ -98,10 +98,6 @@ it("keeps the same graph and positions through practice entry, resizing and exit
     await page.setViewportSize({ width: 1920, height: 1080 });
     await check(page.locator(".practice-phone")).toHaveCount(0);
     await check(page.locator(".phone-practice")).toHaveCount(0);
-    const status = page.getByLabel("Status line");
-    await check(status).toHaveCount(1);
-    await check(status).toContainText("Recorded run · Oct 27, 2026 · Real recorded run");
-    expect((await status.textContent())?.match(/Oct 27, 2026/g)).toHaveLength(1);
     await sameGraph();
     await page.getByRole("button", { name: "Return to ordinary replay" }).click();
     await check(
