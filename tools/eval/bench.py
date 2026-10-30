@@ -6,10 +6,12 @@ import json
 import secrets
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
-from tools.eval.arms import PAID_OUTPUT, Arm, load_arms, output_path
-from tools.eval.ledger import Ledger
-from tools.eval.planning import project, schedule
+from tools.eval.arms import PAID_OUTPUT, Arm, load_arms, output_path, validate_pair
+from tools.eval.detection.__main__ import compare_passes, history, validated_labels
+from tools.eval.ledger import Ledger, State
+from tools.eval.planning import estimate, project, schedule
 from tools.eval.report import report
 from tools.eval.run import execute, positive
 from tools.eval.server import dedicated
@@ -24,6 +26,52 @@ def positive_int(value: str) -> int:
     return number
 
 
+def start_gate(
+    arms: list[Arm], out: Path, cap: float, gate: list[Path] | None, labels_sha256: str | None
+) -> None:
+    validate_pair(arms)
+    if not any(a.profile != "fake" and a.harness_pack == "on" for a in arms):
+        return
+    if cap > 20:
+        raise BenchError("gate-required starts require --cap-usd at most 20")
+    paid_ledger = out.parent / "ledger.json"
+    if paid_ledger.exists() and State.model_validate_json(paid_ledger.read_bytes()).cap_usd > 20:
+        raise BenchError("gate-required starts refuse a ledger pinned above 20")
+    if not gate or not labels_sha256:
+        raise BenchError(
+            "pack-on paid starts require --gate FIRST_LEDGER SECOND_LEDGER LABELS "
+            "and --labels-sha256"
+        )
+    first, second, labels_path = [p.resolve() for p in gate]
+    if first == second or (first.exists() and second.exists() and first.samefile(second)):
+        raise BenchError("gate requires distinct ledgers")
+    outputs = []
+    caps = []
+    for path in (first, second):
+        if path.is_relative_to(out.parent.resolve()):
+            raise BenchError("gate ledgers must lie outside the paid directory")
+        if path.name != "ledger.json" or not path.is_file():
+            raise BenchError("gate requires two existing ledger.json files")
+        state = State.model_validate_json(path.read_bytes())
+        if Path(state.results_file).name != state.results_file:
+            raise BenchError("invalid gate ledger results filename")
+        outputs.append(path.parent / state.results_file)
+        caps.append(state.cap_usd)
+    if caps[0] != caps[1]:
+        raise BenchError("gate ledger caps differ")
+    args = SimpleNamespace(
+        command="sensitivity",
+        out=outputs[0],
+        against=outputs[1],
+        cap_usd=caps[0],
+        labels=labels_path,
+        labels_sha256=labels_sha256,
+    )
+    result = compare_passes(args, validated_labels(args))
+    if not result["paid_run_allowed"]:
+        raise BenchError(json.dumps({"failed_conditions": result["failed_conditions"]}))
+
+
 async def run_plan(
     ledger: Ledger,
     arms: list[Arm],
@@ -34,7 +82,10 @@ async def run_plan(
     pilot: bool,
     fake_script: Path | None,
     trace: bool = False,
+    gate: list[Path] | None = None,
+    labels_sha256: str | None = None,
 ) -> dict:
+    start_gate(arms, ledger.out, ledger.state.cap_usd, gate, labels_sha256)
     if pilot and (len(tasks) != 1 or repetitions != 1):
         raise BenchError("a pilot requires exactly one task per arm and one repetition")
     for arm in arms:
@@ -100,7 +151,7 @@ async def run_plan(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["pilot", "project", "plan", "report"])
+    parser.add_argument("command", choices=["pilot", "project", "plan", "report", "estimate"])
     parser.add_argument("--arms", type=Path, help="JSON array of named arm configurations")
     parser.add_argument("--arm", action="append", default=[], help="select named arms")
     parser.add_argument("--task", action="append", default=[])
@@ -110,6 +161,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=PAID_OUTPUT)
     parser.add_argument("--fake-script", type=Path)
     parser.add_argument("--trace", action="store_true")
+    parser.add_argument(
+        "--gate", type=Path, nargs=3, metavar=("FIRST_LEDGER", "SECOND_LEDGER", "LABELS")
+    )
+    parser.add_argument("--labels-sha256")
+    parser.add_argument(
+        "--detection", type=Path, help="detection dry-run JSON for combined estimate"
+    )
     args = parser.parse_args(argv)
     if args.command != "report" and args.arms is None:
         parser.error("--arms is required")
@@ -117,6 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         arms = load_arms(args.arms, args.arm) if args.arms else []
         out = output_path(args.out, paid=any(a.profile != "fake" for a in arms))
+        if args.command in {"pilot", "plan"}:
+            start_gate(arms, out, args.cap_usd, args.gate, args.labels_sha256)
         # Reporting can only inspect an existing ledger, never create a replacement by typo.
         if args.command in {"project", "report"} and not (out.parent / "ledger.json").exists():
             raise BenchError("an existing ledger is required")
@@ -124,6 +184,16 @@ def main(argv: list[str] | None = None) -> int:
         if set(args.task) - {t.id for t in tasks}:
             raise BenchError("unknown task id")
         tasks = [t for t in tasks if not args.task or t.id in args.task]
+        if args.command == "estimate":
+            result = estimate(
+                out,
+                history(out, args.cap_usd, ready=False),
+                schedule(arms, tasks, args.repetitions, args.seed or 0),
+                args.detection,
+                args.cap_usd,
+            )
+            print(json.dumps(result, indent=2, allow_nan=False))
+            return 0
         ledger = Ledger(out, args.cap_usd, None, multi_tariff=True)
         if args.command == "report":
             result = report(ledger)
@@ -140,6 +210,8 @@ def main(argv: list[str] | None = None) -> int:
                     pilot=args.command == "pilot",
                     fake_script=args.fake_script,
                     trace=args.trace,
+                    gate=args.gate,
+                    labels_sha256=args.labels_sha256,
                 )
             )
         print(json.dumps(result, indent=2, allow_nan=False))

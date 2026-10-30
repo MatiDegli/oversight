@@ -21,8 +21,10 @@ async def test_same_profile_arms_repetitions_and_resume_have_distinct_keys(tmp_p
     out = tmp_path / "results.jsonl"
     configurations = [(OFF, 1), (ON, 1), (OFF, 2)]
     for index, (arm, repetition) in enumerate(configurations):
-        factory = Scripts([script()])
-        async with live_server(live_settings(tmp_path / str(index)), factory) as server:
+        factory = Scripts([script_with_tests()])
+        async with live_server(
+            live_settings(tmp_path / str(index), harness_pack=arm.harness_pack == "on"), factory
+        ) as server:
             await execute(
                 str(server.client.base_url),
                 "fake",
@@ -35,8 +37,10 @@ async def test_same_profile_arms_repetitions_and_resume_have_distinct_keys(tmp_p
             )
             assert factory.calls == 1
     # Resume the fourth key; all of the previous keys must skip before server preflight.
-    factory = Scripts([script()])
-    async with live_server(live_settings(tmp_path / "resume"), factory) as server:
+    factory = Scripts([script_with_tests()])
+    async with live_server(
+        live_settings(tmp_path / "resume", harness_pack=True), factory
+    ) as server:
         for arm, repetition in [*configurations, (ON, 2)]:
             await execute(
                 str(server.client.base_url),
@@ -56,7 +60,7 @@ async def test_same_profile_arms_repetitions_and_resume_have_distinct_keys(tmp_p
         ("plain", 2),
         ("packed", 2),
     }
-    assert all(r.outcome == "solved" and r.turns == 3 for r in rows)
+    assert all(r.outcome == "solved" and r.turns == 4 for r in rows)
     assert len({r.attempt_id for r in rows}) == 4
     assert len({r.config_hash for r in rows}) == 2
     ledger = Ledger(out, 1, FREE)
@@ -168,7 +172,7 @@ def replace_limits(limits):
 async def test_repetitions_alone_are_independent_attempts(tmp_path):
     out = tmp_path / "results.jsonl"
     for repetition in (1, 2):
-        factory = Scripts([script()])
+        factory = Scripts([script_with_tests()])
         async with live_server(live_settings(tmp_path / str(repetition)), factory) as server:
             await execute(
                 str(server.client.base_url),
@@ -207,3 +211,15 @@ def test_completion_skips_only_the_finished_four_part_key(tmp_path):
         assert not ledger.completed(load_tasks()[1], "fake", OFF.arm_id, 1, OFF.config_hash())
     finally:
         ledger.close()
+
+
+def script_with_tests():
+    data = json.loads(script())
+    data["turns"].insert(
+        -1,
+        {
+            "tool_calls": [{"name": "run_tests", "arguments": {}}],
+            "usage": {"input_tokens": 100, "output_tokens": 20},
+        },
+    )
+    return json.dumps(data)

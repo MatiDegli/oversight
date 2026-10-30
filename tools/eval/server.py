@@ -37,7 +37,7 @@ def environment(arm: Arm, runtime: Path, port: int, cap: float) -> dict[str, str
         OVERSIGHT_RUNTIME_DIR=str(runtime),
         OVERSIGHT_AGENT_MODEL=arm.profile,
         OVERSIGHT_AGENT_MODEL_B=arm.profile,
-        OVERSIGHT_HARNESS_PACK=arm.harness_pack,
+        OVERSIGHT_HARNESS_PACK=str(arm.harness_pack == "on").lower(),
         OVERSIGHT_CROSS_REVIEW="false",
         OVERSIGHT_BUDGET_USD=str(cap),
     )
@@ -145,6 +145,7 @@ def serve(arm: Arm, socket_fd: int) -> None:
             agent_model="fake",
             fake_script=Path(os.environ["OVERSIGHT_FAKE_SCRIPT"]),
             demo_python=Path(sys.executable),
+            harness_pack=arm.harness_pack == "on",
         )
     else:
         # Keys stay in .env and are loaded only by the Oversight process.

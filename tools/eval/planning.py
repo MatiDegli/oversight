@@ -1,10 +1,13 @@
 """Seeded experiment schedules and fail-closed pilot projections."""
 
+import json
 import random
 from dataclasses import dataclass
+from pathlib import Path
 
-from tools.eval.arms import Arm
-from tools.eval.ledger import Ledger, Record
+from tools.eval.arms import Arm, validate_pair
+from tools.eval.ledger import Ledger, Record, State
+from tools.eval.session import allowance
 from tools.eval.tasks import BenchError, Task
 
 
@@ -24,6 +27,7 @@ class Job:
 
 
 def schedule(arms: list[Arm], tasks: list[Task], repetitions: int, seed: int) -> list[Job]:
+    validate_pair(arms)
     if repetitions < 1 or not tasks or not arms:
         raise BenchError("a plan needs arms, tasks and positive repetitions")
     jobs = [
@@ -31,6 +35,65 @@ def schedule(arms: list[Arm], tasks: list[Task], repetitions: int, seed: int) ->
     ]
     random.Random(seed).shuffle(jobs)
     return jobs
+
+
+def estimate(
+    out: Path, state: State | None, jobs: list[Job], detection: Path | None, cap: float = 20
+) -> dict:
+    records = state.records if state else []
+    attempts = []
+    for job in jobs:
+        matching = [r for r in records if r.arm_id == job.arm.arm_id]
+        if any(r.config_hash not in {job.arm.config_hash(), "legacy"} for r in matching):
+            raise BenchError("arm configuration changed; choose a new arm_id")
+        matching = [
+            r for r in matching if r.task_id == job.task.id and r.profile == job.arm.profile
+        ]
+        if any(r.task_hash != job.task.hash for r in matching):
+            raise BenchError("task changed after its recorded attempt")
+        attempts.append(
+            {
+                "arm_id": job.arm.arm_id,
+                "task_id": job.task.id,
+                "repetition": job.repetition,
+                "reservation_usd": allowance(job.arm.profile, job.arm.tariff),
+                "pending": not any(
+                    r.repetition == job.repetition and r.status == "finished" for r in matching
+                ),
+            }
+        )
+    spent = sum(r.charged_usd for r in records)
+    pending = sum(a["reservation_usd"] for a in attempts if a["pending"])
+    result = {
+        "method": "estimate, not a billing ceiling",
+        "ledger": str(out.parent / "ledger.json"),
+        "attempts": len(jobs),
+        "reservations": attempts,
+        "pending_total_usd": pending,
+        "spent_usd": spent,
+        "remaining_usd": (state.cap_usd if state else cap) - spent,
+        "estimated_total_usd": spent + pending,
+        "rate_basis": {
+            j.arm.arm_id: "arm tariff"
+            if j.arm.tariff
+            else "default planning rates 0.1/0.2 USD per M, assumed"
+            for j in jobs
+        },
+    }
+    if detection:
+        data = json.loads(detection.read_text())
+        if Path(data["ledger"]).resolve() != (out.parent / "ledger.json").resolve():
+            raise BenchError("detection estimate uses a foreign ledger")
+        detection_pending = float(data["estimated_total_usd"]) - float(data["spent_usd"])
+        if not 0 <= detection_pending < float("inf"):
+            raise BenchError("invalid detection pending estimate")
+        combined = spent + pending + detection_pending
+        result.update(
+            detection_pending_usd=detection_pending,
+            combined_total_usd=combined,
+            within_usd20=combined <= 20,
+        )
+    return result
 
 
 def priced(record: Record, arm: Arm) -> float:
