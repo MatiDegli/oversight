@@ -171,6 +171,8 @@ that may have left without a receipt, or missing usage, stays unknown and stops 
 Cancellation, unfinished processes or cleanup failure retain the reservation. External estimates
 cannot stop a provider from charging more than estimated. Inspect and reconcile unknown billing
 outside this runner; it has no reset, force-retry or reconciliation switch.
+Transport counting lives in transport.py, outside the arm fingerprint like accounting.py,
+so it changes no arm's configuration.
 
 Every attempt uses a fresh disposable public `Workspace`/graph/`EventStore`/`ChangeManager`
 composition, bounded `git apply --check`/apply of one verified patch, and `grade.suite` on original

@@ -14,30 +14,30 @@ from tools.eval.ledger import Ledger
 from tools.eval.tasks import BenchError
 from tools.eval.tests.test_detection_plan import simulated_measure
 
-# Pinned after the transport-accounting fix; model source hashes invalidate old pilots.
+# Computed before editing main 70d5d5031eb5ec140463e2ced8324e937cbba779.
 # Arm.configuration(fake=False), Meta tariffs (1, 2), Baseten tariffs (3, 4), USD/M.
 # No fake_choice or assumptions are included in these base configuration hashes.
-CURRENT_FINGERPRINTS = {
+MAIN_FINGERPRINTS = {
     "detect-1": "8d6af6b92b60d8650eb8d1d20e74c140af155e999549bdb23991091d2d169cf3",
-    "detect-2-v2": "7d01e62a1b76be3b5bd46a39f3567ba108e2684282fc3f2a7b8fb1059a17ad45",
-    "detect-3-v2": "d2efe788f3f287027c477afd1166a0a77f90ce9ecae5da08e836dfa05e9cf9c5",
+    "detect-2-v2": "b3c36739a437560160a37077b9a53ba2e914d3215c06967c7d477235174fa6cb",
+    "detect-3-v2": "189af32d8e7ed8f8b837baee1a393c71c311df40e5a987c6dd5bcaadeec88c4f",
 }
 # Ledger configurations additionally include fake_choice=None and these assumptions:
 ASSUMPTIONS = Assumptions(input_tokens=1000, output_tokens=512, calls=8)
-CURRENT_JOB_FINGERPRINTS = {
+MAIN_JOB_FINGERPRINTS = {
     "detect-1": "a09a2b423834677d320a3461ea8b02c16326bf4408ef4b87192e9bf7499942c9",
-    "detect-2-v2": "95ef86a76a5ad4982edd4ca22814e721f4a877c1e15aaf4a92abfa511536398a",
-    "detect-3-v2": "cf47361bbee0f17982792276792f181d5033d0060ca3e90aee234b5176b35e57",
+    "detect-2-v2": "f67f017f19a0317786b618127b4ab198907e66fce57813ae7691aaa14f221b64",
+    "detect-3-v2": "087dd2f3bb2a85ab1b91aed268e765c907c0d3497312debc6095fe8096ffa0f1",
 }
 RATES = rates_for((1, 2), (3, 4))
 
 
 @pytest.mark.parametrize("arm", ARMS[:3], ids=lambda a: a.id)
-def test_transport_accounting_fingerprints_are_pinned(arm):
+def test_completed_pilot_fingerprints_match_main(arm):
     config = arm.configuration(False, RATES)
-    assert fingerprint(config) == CURRENT_FINGERPRINTS[arm.id]
+    assert fingerprint(config) == MAIN_FINGERPRINTS[arm.id]
     job_config = config | {"fake_choice": None, "assumptions": ASSUMPTIONS.model_dump()}
-    assert fingerprint(job_config) == CURRENT_JOB_FINGERPRINTS[arm.id]
+    assert fingerprint(job_config) == MAIN_JOB_FINGERPRINTS[arm.id]
 
 
 def test_open_v3_changes_only_arm_and_prompt_identity():
@@ -45,7 +45,7 @@ def test_open_v3_changes_only_arm_and_prompt_identity():
     assert arm.id == "detect-4-v3"
     old = replace(arm, id="detect-4-v2").configuration(False, RATES)
     new = arm.configuration(False, RATES)
-    assert fingerprint(old) == "518fc0a69f69ae89afab3ceed28a32cb45c54ba201ec6d9802db3290becc98f5"
+    assert fingerprint(old) == "1cf474e59a9fceea4c43004f12dfe6ded09cadc0316fc02a774b3c3a48c62e41"
     assert fingerprint(new) != fingerprint(old)
     assert new["prompt_sha256"] != old["prompt_sha256"]
     assert new["system_prompt_sha256"] == old["system_prompt_sha256"]

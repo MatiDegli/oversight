@@ -7,19 +7,20 @@ import openai
 import pytest
 from decision_client_helpers import INPUT, FakeApi, body, ok  # pyright: ignore[reportMissingImports]
 from tools.eval.behavior.catalog import load_patches
-from tools.eval.detection.accounting import Budget
+from tools.eval.detection.accounting import Budget, task_for
 from tools.eval.detection.config import ARMS
-from tools.eval.detection.diagnostics import DetectionClient
 from tools.eval.detection.engine import run_attempt
+from tools.eval.detection.transport import TransportClient
 from tools.eval.detection_types import DetectionEvidence
 from tools.eval.ledger import Ledger
 from tools.eval.tests.test_detection_plan import ASSUMPTIONS, RATES, simulated_measure
 
 from oversight.agents import MUSE_SPARK_OPEN, DecisionUnavailable
+from oversight.agents.client import CallScope
 
 
 def client(api, **kwargs):
-    return DetectionClient(
+    return TransportClient(
         MUSE_SPARK_OPEN,
         base_url="https://decision.test/v1",
         api_key="test",
@@ -113,54 +114,6 @@ async def test_presend_job_stays_known(tmp_path, monkeypatch, cancel):
 
 
 @pytest.mark.anyio
-async def test_unbound_client_refuses_before_transport():
-    api = FakeApi(ok(body()))
-    sdk = client(api)
-    try:
-        with pytest.raises(DecisionUnavailable, match="budget_unconfigured"):
-            await sdk._completion({})
-        assert not api.bodies
-    finally:
-        await sdk.aclose()
-
-
-@pytest.mark.anyio
-async def test_send_is_durable_before_transport(tmp_path, monkeypatch):
-    import json
-
-    ledger = Ledger(tmp_path / "results.jsonl", 20, None, multi_tariff=True)
-    api = FakeApi()
-
-    def handle(request):
-        stored = json.loads(ledger.path.read_text())
-        assert stored["plans"]["detection-receipts"][ledger.state.records[0].attempt_id] == {
-            "admitted": 1,
-            "sends": 1,
-            "receipts": 0,
-        }
-        return ok(body())
-
-    monkeypatch.setattr(api, "handle", handle)
-    monkeypatch.setattr("tools.eval.detection.engine.measure", simulated_measure)
-    arm = ARMS[3]
-    patch = next(p for p in load_patches() if p.id == "d01")
-    config = arm.configuration(False, RATES) | {"assumptions": ASSUMPTIONS.model_dump()}
-    try:
-        await run_attempt(
-            ledger,
-            (patch, arm, config, 1),
-            ASSUMPTIONS,
-            tmp_path / "python",
-            fake_choice=None,
-            pilot=False,
-            labels_hash=None,
-            factory=lambda _: client(api),
-        )
-    finally:
-        ledger.close()
-
-
-@pytest.mark.anyio
 @pytest.mark.parametrize("arm", [ARMS[0], ARMS[3]], ids=lambda a: a.id)
 async def test_fake_job_keeps_send_counts(tmp_path, monkeypatch, arm):
     monkeypatch.setattr("tools.eval.detection.engine.measure", simulated_measure)
@@ -193,4 +146,28 @@ async def test_fake_job_keeps_send_counts(tmp_path, monkeypatch, arm):
         else:
             assert record.result.tokens.input == record.result.tokens.output == 0
     finally:
+        ledger.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("entry", ["completion", "decision_attempt"])
+async def test_unbound_client_refuses_before_admission(tmp_path, entry):
+    ledger = Ledger(tmp_path / "results.jsonl", 20, None, multi_tariff=True)
+    patch = next(p for p in load_patches() if p.id == "d01")
+    record = ledger.reserve(task_for(patch), "baseten", "test", 1)
+    budget = Budget(ledger, record, RATES["baseten"], 0.001, fake=False)
+    api = FakeApi(ok(body()))
+    sdk = client(api)
+    scope = CallScope(None, budget.accounting, "review", budget.admission, True)
+    try:
+        with pytest.raises(DecisionUnavailable, match="budget_unconfigured"):
+            if entry == "completion":
+                await sdk._completion({})
+            else:
+                await sdk._decision_attempt({}, scope)
+        assert budget.admitted == budget.sends == budget.receipts == 0
+        assert not api.bodies and not record.unknown
+        assert "detection-receipts" not in ledger.state.plans
+    finally:
+        await sdk.aclose()
         ledger.close()

@@ -60,6 +60,8 @@ class Budget:
         ):
             raise DecisionUnavailable("budget_blocked")
         self.admitted += 1
+        if self.fake:
+            self.sends += 1
         self.persist()
 
     def sent(self) -> None:

@@ -24,8 +24,8 @@ from tools.eval.detection.config import (
     paid_gate,
     worst_case_per_job,
 )
-from tools.eval.detection.diagnostics import DetectionClient
 from tools.eval.detection.runtime import measure
+from tools.eval.detection.transport import TransportClient
 from tools.eval.grade import Result, Tariff, Tests, Tokens
 from tools.eval.ledger import Ledger
 from tools.eval.paths import PAID_OUTPUT as CANONICAL_OUTPUT
@@ -118,7 +118,7 @@ async def run_attempt(
     fake_choice: str | None,
     pilot: bool,
     labels_hash: str | None,
-    factory: Callable[[Arm], DetectionClient] | None,
+    factory: Callable[[Arm], TransportClient] | None,
 ) -> None:
     patch, arm, config, rep = job
     fake = fake_choice is not None
@@ -148,7 +148,7 @@ async def run_attempt(
             if factory is None:
                 raise BenchError(f"{arm.id}: unavailable provider adapter")
             client = factory(arm)
-            if not isinstance(client, DetectionClient):
+            if not isinstance(client, TransportClient):
                 raise BenchError("detection requires a transport-counted client")
             client.budget = budget
         adapter = Adapter(
@@ -208,7 +208,7 @@ async def run_plan(
     paid: bool = False,
     repetitions: int = 1,
     seed: int = 42,
-    factory: Callable[[Arm], DetectionClient] | None = None,
+    factory: Callable[[Arm], TransportClient] | None = None,
 ) -> dict:
     if fake_choice is None:
         paid_gate(

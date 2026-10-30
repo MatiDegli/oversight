@@ -82,7 +82,6 @@ class Adapter:
 
     async def _fake(self, target: ChangeTarget, node: str) -> DecisionOutcome:
         await self.budget.admission()
-        self.budget.sent()
         await self.budget.accounting(ModelReply(None, [], Usage(0, 0, 0), "explicit-fake"))
         if self.fake_choice == "unavailable":
             return DecisionMissing(target, node, "transport")

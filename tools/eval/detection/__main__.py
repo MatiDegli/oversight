@@ -51,9 +51,9 @@ def provider_factory(env_file: Path):
 
     credentials = read_env_file(env_file)
 
-    from tools.eval.detection.diagnostics import DetectionClient
+    from tools.eval.detection.transport import TransportClient
 
-    def create(arm: Arm) -> DetectionClient:
+    def create(arm: Arm) -> TransportClient:
         profile, url, key = (
             (MUSE_SPARK, META_BASE_URL, "META_API_KEY")
             if arm.profile == "meta"
@@ -62,7 +62,7 @@ def provider_factory(env_file: Path):
         if not credentials.get(key):
             raise BenchError(f"{arm.profile}: unavailable credentials in explicit env file")
         assert arm.max_output_tokens is not None
-        return DetectionClient(
+        return TransportClient(
             profile,
             base_url=url,
             api_key=credentials[key],

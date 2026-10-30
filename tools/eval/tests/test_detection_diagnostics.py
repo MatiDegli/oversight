@@ -130,7 +130,6 @@ async def test_each_validation_stage_is_retained(budget, arm, stage):
     api = FakeApi(ok(raw))
     sdk = DetectionClient(
         profile,
-        budget=budget,
         base_url="https://decision.test/v1",
         api_key="test",
         max_output_tokens=512,
@@ -178,7 +177,6 @@ async def test_transport_deadline_and_unknown_counts(budget, failure):
     api = FakeApi(status(400) if failure == "transport" else ok(raw))
     sdk = DetectionClient(
         MUSE_SPARK_OPEN,
-        budget=budget,
         base_url="https://decision.test/v1",
         api_key="test",
         max_output_tokens=512,
@@ -226,7 +224,6 @@ async def test_product_unavailability_stage_is_retained(budget, code):
 
     sdk = DetectionClient(
         MUSE_SPARK_OPEN,
-        budget=budget,
         base_url="https://decision.test/v1",
         api_key="test",
         max_output_tokens=512,

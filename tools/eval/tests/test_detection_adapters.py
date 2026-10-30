@@ -17,7 +17,7 @@ from tools.eval.behavior.catalog import load_patches
 from tools.eval.detection.accounting import Budget, task_for
 from tools.eval.detection.adapters import Adapter, messages
 from tools.eval.detection.config import ARMS, NO_BEHAVIOR, system_prompt
-from tools.eval.detection.diagnostics import DetectionClient
+from tools.eval.detection.transport import TransportClient
 from tools.eval.grade import Tariff
 from tools.eval.ledger import Ledger
 from tools.eval.tasks import BenchError
@@ -117,7 +117,7 @@ async def test_cancellation_drains_unknown_accounting(budget):
         await asyncio.Event().wait()
         raise AssertionError("cancelled transport resumed")
 
-    sdk = DetectionClient(
+    sdk = TransportClient(
         client_profile(),
         budget=budget,
         base_url="https://decision.test/v1",
@@ -150,7 +150,7 @@ def client_profile():
 @pytest.mark.anyio
 async def test_spark_uses_strict_inherited_schema_and_actual_identity(budget):
     api = FakeApi(ok(body(model=MUSE_SPARK.model)))
-    sdk = DetectionClient(
+    sdk = TransportClient(
         MUSE_SPARK,
         budget=budget,
         base_url="https://meta.test/v1",
@@ -194,6 +194,7 @@ async def test_deadline_sends_nothing(budget):
 @pytest.mark.parametrize("arm", ARMS[1:], ids=lambda a: a.id)
 @pytest.mark.parametrize("choice", ["asked_for", "not_asked_for", "cannot_tell", "unavailable"])
 async def test_all_model_adapters_accept_explicit_fake_outcomes(budget, arm, choice):
+    budget.fake = True
     adapter = Adapter(arm, budget, fake_choice=choice)
     if arm.role == "task/diff":
         await adapter.task_diff(INPUT.task, "frozen diff", INPUT.target)
@@ -206,8 +207,14 @@ async def test_all_model_adapters_accept_explicit_fake_outcomes(budget, arm, cho
 
 
 @pytest.mark.anyio
-async def test_retry_rechecks_admission_and_has_one_receipt_per_send(budget):
-    budget.fake = True  # Explicit simulated zero cost, including the HTTP error receipt.
+async def test_retry_rechecks_admission_and_has_one_receipt_per_send(budget, monkeypatch):
+    add_usage = budget.usage.add
+
+    def free_receipt(tick):
+        add_usage(tick)
+        return 0  # Simulated HTTP is free, but uses the nonfake transport path.
+
+    monkeypatch.setattr(budget.usage, "add", free_receipt)
     api = FakeApi(status(500), ok(body()))
     sdk = client(api, budget=budget, retry=RetryPolicy(base_s=0))
     try:
@@ -235,7 +242,7 @@ async def test_inflight_timeout_retains_unknown_receipt(budget, monkeypatch):
         await asyncio.Event().wait()
         raise AssertionError("timed out transport resumed")
 
-    sdk = DetectionClient(
+    sdk = TransportClient(
         client_profile(),
         budget=budget,
         base_url="https://decision.test/v1",
