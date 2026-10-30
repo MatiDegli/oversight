@@ -227,6 +227,16 @@ class ChangeManager:
         rec = self._ctx.state.agents.get(agent_id)
         return rec.base_commit if rec is not None else None
 
+    def change_graph(self, change_id: ChangeId) -> GraphSnapshot:
+        """An independent snapshot of the change's current version, also used by its proposal.
+
+        No disk read or await: a concurrent refresh replaces the version atomically.
+        """
+        rec = self._ctx.state.changes.get(change_id)
+        if rec is None:
+            raise ChangeNotFound(change_id)
+        return rec.head.graph.model_copy(deep=True)
+
     def run_ended(self, agent_id: AgentId, end: RunEnd | None, *, steps: int | None = None) -> None:
         """The run is over (`end` is `None` when it raised or was cancelled): `ready` if this run
         proposed, else `unproposed`. `steps`, the run's own count, wins over `end.steps`. A run
