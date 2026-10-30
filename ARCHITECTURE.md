@@ -251,8 +251,13 @@ Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
 `PUT /files` and `POST /graph/rescan`.
 `GET /graph`, `GET /health` and `GET /events` provide graph, readiness and events.
 
+| Read route (live and replay) | Response |
+| --- | --- |
+| `GET /agents/{agent_id}` | 200 latest committed coding `AgentStatus`; 404 `not_found` otherwise. |
+| `GET /changes/{change_id}` | 200 archived `ChangeView` at one committed seq, with usage and confirmed revision rounds (null when unavailable); 404 `not_found` otherwise. |
+
 `GET /impact`, agent message/pause/resume, merge-mode and plan routes still return 501.
-The 1.4 reservations also include tree, history, queue, leads, GET agent/change, and change
+The 1.4 reservations also include tree, history, queue, leads, and change
 review/revert. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
 Six more event types are reserved: change.reviewed, change.facts_recorded, tests.executed,
 revert.resolved, queue.updated and lead.status. Transport and reducer consume their sequences.
