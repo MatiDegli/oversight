@@ -13,12 +13,14 @@ const words = (html: string) => html.replace(/<[^>]*>/g, "");
 it.each([
   ["a", ["1 file", "+2 −0", "28 passed", "No exact callers"]],
   ["b", ["1 file", "+2 −0", "28 passed", "9 possibly affected · up to distance 2"]],
-  ["g", ["1 file", "+2 −0", "28 passed", "No exact callers"]],
+  ["merged", ["1 file", "+2 −0", "28 passed", "No exact callers"]],
+  ["approvedCone", ["1 file", "+2 −0", "28 passed", "9 possibly affected · up to distance 2"]],
 ] as const)("shows only four decision chips for fixture %s", (name, copy) => {
   const html = renderToStaticMarkup(
     <ReviewHeader state={headerState(name)} changeId={headerCases[name].changeId} />,
   );
   expect([...html.matchAll(/<li .*?<\/li>/g)].map(([li]) => words(li))).toEqual(copy);
+  for (const [li] of html.matchAll(/<li .*?<\/li>/g)) expect(li).not.toContain("font-mono");
   expect(html).not.toMatch(
     /CircleHelp|circle-help|aria-label="Possible callers"|aria-label="Base commit"/,
   );

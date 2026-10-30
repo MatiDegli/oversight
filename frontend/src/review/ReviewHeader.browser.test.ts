@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import type { Browser, Locator, Page } from "@playwright/test";
@@ -9,6 +10,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 let server: ViteDevServer, browser: Browser, html: string, url: string;
 const shots = fileURLToPath(new URL("../../../.shots/review-header/", import.meta.url));
 const capture = process.env.REVIEW_HEADER_SHOTS === "1";
+const sketchDir = process.env.REVIEW_HEADER_SKETCH_DIR;
 beforeAll(async () => {
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
@@ -57,6 +59,14 @@ function measure(header: Locator) {
       chipHeight: chip.getBoundingClientRect().height,
       chipSize: number(getComputedStyle(chip).fontSize),
       chipWeight: number(getComputedStyle(chip).fontWeight),
+      // Include descendants: a Next container can still hide Mono spans around digits.
+      chipFontFamilies: [
+        ...new Set(
+          [...chips.querySelectorAll("li, li span, .rvchip, .rvchip span")].map(
+            (element) => getComputedStyle(element).fontFamily,
+          ),
+        ),
+      ],
       chipRadius: number(getComputedStyle(chip).borderRadius),
       chipGap: number(getComputedStyle(chips.querySelector("ul") ?? chips).gap),
     };
@@ -90,29 +100,35 @@ async function comparison(
   actual: Awaited<ReturnType<typeof measure>>,
   product: Buffer,
 ) {
+  if (!sketchDir)
+    throw new Error("Set REVIEW_HEADER_SKETCH_DIR to the read-only review sketch directory");
   const sketch = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   try {
     await sketch.route("http://sketch.test/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       await route.fulfill({
-        body: await readFile(`/home/matidegli/hackathon-research/mockups/review-r1${path}`),
+        body: await readFile(resolve(sketchDir, `.${path}`)),
         contentType: path.endsWith(".woff2") ? "font/woff2" : "text/html",
       });
     });
     await sketch.goto(`http://sketch.test/review.html?theme=${theme}#${name}`);
     await sketch.evaluate(() => document.fonts.ready);
     const reference = await measure(sketch.locator(".rvh"));
+    expect(reference.chipFontFamilies).toHaveLength(1);
+    expect(reference.chipFontFamilies[0]).toMatch(/AHN/);
     for (const key of Object.keys(expected) as (keyof typeof expected)[])
       expect(Math.abs(reference[key] - expected[key])).toBeLessThanOrEqual(1);
     const original = await readFile(
       new URL(`../../../docs/sketches/review/${name}-${theme}.png`, import.meta.url),
     );
-    const rows = Object.keys(expected)
-      .map((key) => {
-        const k = key as keyof typeof expected;
-        return `<tr><td>${k}</td><td>${String(actual[k])}</td><td>${String(reference[k])}</td><td>${String(expected[k])}</td></tr>`;
-      })
-      .join("");
+    const rows =
+      Object.keys(expected)
+        .map((key) => {
+          const k = key as keyof typeof expected;
+          return `<tr><td>${k}</td><td>${String(actual[k])}</td><td>${String(reference[k])}</td><td>${String(expected[k])}</td></tr>`;
+        })
+        .join("") +
+      `<tr><td>chipFontFamilies</td><td>${actual.chipFontFamilies.join(", ")}</td><td>${reference.chipFontFamilies.join(", ")}</td><td>Atkinson Hyperlegible Next</td></tr>`;
     await page.setContent(
       `<style>body{font:16px sans-serif;background:#eee;color:#111;margin:20px}.pair{display:flex;gap:24px}.pair>div{width:880px}.crop{position:relative;width:880px;height:131px;overflow:hidden}.crop img{position:absolute;left:-56px;top:-92px;width:1920px}table{border-collapse:collapse;margin-top:20px}td,th{padding:3px 18px;text-align:left;border-bottom:1px solid #bbb}</style><h1>Review header · ${name} · ${theme} · viewport 1920 × 1080</h1><div class="pair"><div><p>Product · committed hand-written UI fixture</p><img src="data:image/png;base64,${product.toString("base64")}"></div><div><p>Approved sketch · docs/sketches/review/${name}-${theme}.png</p><div class="crop"><img src="data:image/png;base64,${original.toString("base64")}"></div></div></div><table><tr><th>Measurement (px except weight)</th><th>Product</th><th>Sketch DOM</th><th>DESIGN.md</th></tr>${rows}</table>`,
     );
@@ -129,7 +145,7 @@ async function comparison(
 it.each(["dark", "day"])(
   "uses one measured header for A, B and merged in %s at 1920",
   async (theme) => {
-    for (const name of ["a", "b", "g"] as const) {
+    for (const name of ["a", "b", "merged", "approvedCone"] as const) {
       const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
@@ -154,12 +170,13 @@ it.each(["dark", "day"])(
         ).toBe(1);
         expect(await header.getByRole("button", { name: "Close review" }).count()).toBe(1);
         expect(await header.locator(".review-header-status").textContent()).toBe(
-          name === "g" ? "Merged" : "Ready for review",
+          name === "merged" ? "Merged" : name === "approvedCone" ? "Approved" : "Ready for review",
         );
         const actual = await measure(header);
+        expect(actual.chipFontFamilies).toEqual(['"Atkinson Hyperlegible Next", sans-serif']);
         for (const key of Object.keys(expected) as (keyof typeof expected)[])
           expect(Math.abs(actual[key] - expected[key]), key).toBeLessThanOrEqual(1);
-        if (capture && name !== "g")
+        if (capture && (name === "a" || name === "b"))
           await comparison(
             page,
             name,
@@ -184,7 +201,7 @@ it.each([1920, 1280, 960])("wraps long task and provenance at %i CSS px", async 
     await page.goto(url);
     await page.waitForFunction(() => "mountHeader" in window);
     for (const theme of ["dark", "day"])
-      for (const name of ["a", "b", "g"]) {
+      for (const name of ["a", "b", "merged", "approvedCone"]) {
         await page.evaluate(
           ({ name, theme }) => {
             document.documentElement.dataset.theme = theme;

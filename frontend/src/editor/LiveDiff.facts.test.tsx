@@ -43,8 +43,14 @@ function fact(html: string, label: string) {
   expect(row, `Missing ${label} chip`).toBeDefined();
   expect(row).toContain("bg-page-raised");
   expect(row).toContain("border-page-border");
-  expect(row).toContain("rounded-control");
-  expect(row).toContain("--data-size");
+  if (html.includes('class="review-header"')) {
+    expect(row).toContain("rounded-[7px]");
+    expect(row).toContain("text-sm font-semibold");
+    expect(row).not.toMatch(/font-mono|rounded-control|--data-size|py-1/);
+  } else {
+    expect(row).toContain("rounded-control");
+    expect(row).toContain("--data-size");
+  }
   return row ?? "";
 }
 function provenance(html: string, label: string, surface: string) {
@@ -58,18 +64,21 @@ const words = (html: string) => html.replace(/<[^>]*>/g, "");
 for (const surface of ["review", "live diff"])
   describe(`${surface} facts`, () => {
     it("keeps the file count chip", () => {
-      expect(fact(render(surface), "Files")).toContain('font-mono">1</span>');
+      const row = fact(render(surface), "Files");
+      expect(words(row)).toBe("1 file");
+      if (surface !== "review") expect(row).toContain('font-mono">1</span>');
     });
-    it("keeps added and removed counts with signs and mono type", () => {
+    it("keeps added and removed counts with signs and surface typography", () => {
       const row = fact(render(surface), "Lines");
-      expect(row).toContain('font-mono text-added">+2');
-      expect(row).toContain('font-mono text-removed">−0');
+      const face = surface === "review" ? "" : "font-mono ";
+      expect(row).toContain(`${face}text-added">+2`);
+      expect(row).toContain(`${face}text-removed">−0`);
     });
-    it("keeps tests with a result icon and mono count", () => {
+    it("keeps tests with a result icon and surface typography", () => {
       const row = fact(render(surface), "Tests");
       expect(words(row)).toContain("28 passed");
       expect(row).toContain("lucide-check");
-      expect(row).toContain("font-mono");
+      if (surface !== "review") expect(row).toContain("font-mono");
     });
     it("keeps the actual base commit with its full hash available", () => {
       const row = provenance(render(surface), "Base commit", surface);
@@ -102,7 +111,7 @@ for (const surface of ["review", "live diff"])
           ? "9 possibly affected · up to distance 2"
           : "9 functions possibly affected, up to distance 2",
       );
-      expect(row).toContain("font-mono");
+      if (surface !== "review") expect(row).toContain("font-mono");
       expect(row).not.toMatch(/text-agent|bg-agent/);
     });
     it("keeps the run's model label beside that agent's cost", () => {

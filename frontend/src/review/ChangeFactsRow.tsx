@@ -21,6 +21,8 @@ import { impactSummary, possibleCallersText } from "./ImpactCone";
 
 const chip =
   "inline-flex min-h-(--chip-height) min-w-0 items-center gap-1.5 rounded-control border border-page-border bg-page-raised px-2.5 py-1 text-(length:--data-size)";
+const reviewChip =
+  "inline-flex h-[30px] min-w-0 items-center gap-1.5 rounded-[7px] border border-page-border bg-page-raised px-2.5 text-sm font-semibold";
 const icon = "size-4 shrink-0 text-muted";
 
 function Fact({
@@ -35,10 +37,7 @@ function Fact({
   children: ReactNode;
 }) {
   return (
-    <li
-      aria-label={label}
-      className={review ? `${chip} h-[30px] rounded-[7px] py-0 text-sm font-semibold` : chip}
-    >
+    <li aria-label={label} className={review ? reviewChip : chip}>
       {symbol}
       <span className="min-w-0 break-words">{children}</span>
     </li>
@@ -75,7 +74,7 @@ function TestsFact({
         )
       }
     >
-      <DataWords text={text} />
+      {review ? text : <DataWords text={text} />}
     </Fact>
   );
 }
@@ -108,27 +107,19 @@ export function ChangeFactsRow({
     return (
       <ul aria-label="Facts" className="flex flex-wrap items-center gap-2 text-text">
         <Fact review label="Files" symbol={<FileCode aria-hidden="true" className={icon} />}>
-          <span className="font-mono">{fileCount}</span> {fileCount === 1 ? "file" : "files"}
+          {fileCount} {fileCount === 1 ? "file" : "files"}
         </Fact>
         <Fact review label="Lines" symbol={<ListChecks aria-hidden="true" className={icon} />}>
-          <span className="font-mono text-added">
-            +{proposal?.lines_added ?? change.lines_added}
-          </span>{" "}
-          <span className="font-mono text-removed">
-            −{proposal?.lines_removed ?? change.lines_removed}
-          </span>
+          <span className="text-added">+{proposal?.lines_added ?? change.lines_added}</span>{" "}
+          <span className="text-removed">−{proposal?.lines_removed ?? change.lines_removed}</span>
         </Fact>
         <TestsFact review tests={proposal?.tests ?? lastTests?.suite} />
         <Fact review label="Impact cone" symbol={<ScanEye aria-hidden="true" className={icon} />}>
-          <DataWords
-            text={
-              !cone
-                ? "Possibly affected: unknown"
-                : cone.entries.length === 0
-                  ? "No exact callers"
-                  : `${String(cone.entries.length)} possibly affected · up to distance ${String(Math.max(...cone.entries.map((entry) => entry.distance)))}`
-            }
-          />
+          {!cone
+            ? "Possibly affected: unknown"
+            : cone.entries.length === 0
+              ? "No exact callers"
+              : `${String(cone.entries.length)} possibly affected · up to distance ${String(Math.max(...cone.entries.map((entry) => entry.distance)))}`}
         </Fact>
       </ul>
     );

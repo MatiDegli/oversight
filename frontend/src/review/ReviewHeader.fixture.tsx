@@ -10,7 +10,8 @@ import { ReviewPanel } from "./ReviewPanel";
 export const headerCases = {
   a: { log: inbox, end: Infinity, changeId: "change-3" },
   b: { log: ordinary, end: 20, changeId: "change-1" },
-  g: { log: inbox, end: Infinity, changeId: "change-1" },
+  merged: { log: inbox, end: Infinity, changeId: "change-1" },
+  approvedCone: { log: ordinary, end: Infinity, changeId: "change-1" },
 };
 export function headerState(name: keyof typeof headerCases) {
   const { log, end } = headerCases[name];
