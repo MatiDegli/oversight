@@ -66,6 +66,8 @@ async def test_added_optional_parameter_counts_and_publishes_only_after_both_rep
     measured = await compare(generated, worker)
     assert measured.compared == 1
     assert measured.differing == int(repeat == "stable")
+    assert sum(group.count for group in measured.groups or ()) == int(repeat == "stable")
+    assert measured.unconfirmed == int(repeat != "stable")
     assert all(row.inputs_equal for row in measured.rows)
     assert worker.await_count == 4
     evidence = capture_behavior(BehaviorDiff(1, (measured,)))
@@ -110,6 +112,8 @@ async def test_unequal_input_identities_contribute_no_counts_rows_or_repeats(
     measured = await compare(inputs, worker)
     assert measured.compared == measured.differing == int(retain_equal)
     assert len(measured.rows) == int(retain_equal)
+    assert sum(group.count for group in measured.groups or ()) == int(retain_equal)
+    assert measured.unconfirmed == 0
     assert all(row.inputs_equal and row.call == "f(x=1)" for row in measured.rows)
     assert measured.reason == (None if retain_equal else "no equal typed inputs")
     assert worker.await_count == (4 if retain_equal else 2)

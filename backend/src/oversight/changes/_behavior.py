@@ -5,12 +5,14 @@ C removes the network only; detached checkout disposal contains ordinary file ef
 """
 
 import asyncio
+import json
 import time
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from oversight.changes._behavior_inputs import BehaviorInputs, behavior_inputs, module_name
+from oversight.changes._review_samples import OutcomeKind, sample_key
 from oversight.workspace import (
     BehaviorObservation,
     BehaviorTarget,
@@ -39,6 +41,58 @@ class BehaviorRow:
     inputs_equal: bool = False
     input_identity: str | None = None
 
+    @property
+    def key(self) -> tuple[int, int, tuple[str, str, str], str]:
+        return sample_key((self.call, result_text(self.before), result_text(self.after)))
+
+
+def result_display(result: TypedResult) -> dict[str, Any]:
+    """Only the public typed fields, shared by witness ordering and publication."""
+    display = {"kind": result["kind"]}
+    if result["kind"] == "value":
+        display["value"] = result["value"]
+    elif result["kind"] == "raised":
+        display["class"], display["message"] = result["class"], result["message"]
+    return display
+
+
+def result_text(result: TypedResult) -> str:
+    return json.dumps(result_display(result), ensure_ascii=True, separators=(",", ":"))
+
+
+@dataclass(frozen=True)
+class DifferenceGroup:
+    kind: OutcomeKind
+    count: int
+    witness: BehaviorRow
+
+
+def _retain_group(groups: dict[OutcomeKind, DifferenceGroup], row: BehaviorRow) -> None:
+    kind = OutcomeKind(
+        row.before["class"] if row.before["kind"] == "raised" else None,
+        row.after["class"] if row.after["kind"] == "raised" else None,
+    )
+    previous = groups.get(kind)
+    groups[kind] = DifferenceGroup(
+        kind,
+        (previous.count if previous else 0) + 1,
+        row if previous is None or row.key < previous.witness.key else previous.witness,
+    )
+
+
+def _retained_rows(
+    groups: dict[OutcomeKind, DifferenceGroup], rows: list[BehaviorRow]
+) -> tuple[BehaviorRow, ...]:
+    retained = [group.witness for group in sorted(groups.values(), key=lambda g: g.witness.key)][
+        :MAX_ROWS
+    ]
+    for row in rows:
+        if len(retained) == MAX_ROWS:
+            break
+        if row not in retained:
+            retained.append(row)
+    return tuple(retained)
+
 
 @dataclass(frozen=True)
 class FunctionBehavior:
@@ -48,6 +102,9 @@ class FunctionBehavior:
     rows: tuple[BehaviorRow, ...] = ()
     skipped_binding: int = 0
     reason: str | None = None
+    # None denotes older/synthetic evidence without group certification, never inferred counts.
+    groups: tuple[DifferenceGroup, ...] | None = None
+    unconfirmed: int = 0
 
     @property
     def measurement(self) -> str:
@@ -207,6 +264,7 @@ async def _measure_function(
         ),
     )
     rows: list[BehaviorRow] = []
+    groups: dict[OutcomeKind, DifferenceGroup] = {}
     try:
         for index, old, new in measured:
             if _identity(old) == _identity(new):
@@ -234,22 +292,30 @@ async def _measure_function(
                 reason=reason,
             )
             # Public rows exclude incomplete repeats; F2 also retains an explicit witness.
-            if not incomplete and len(rows) < MAX_ROWS:
+            if not incomplete:
                 sample = inputs[result.node_id].inputs[index]
-                rows.append(
-                    BehaviorRow(
-                        sample.call,
-                        old,
-                        new,
-                        unstable,
-                        repeat_complete=True,
-                        inputs_equal=True,
-                        input_identity=sample.input_identity,
-                    )
+                row = BehaviorRow(
+                    sample.call,
+                    old,
+                    new,
+                    unstable,
+                    repeat_complete=True,
+                    inputs_equal=True,
+                    input_identity=sample.input_identity,
                 )
+                if not unstable:
+                    _retain_group(groups, row)
+                if len(rows) < MAX_ROWS:
+                    rows.append(row)
     finally:
         # Preserve completed measurements even when a later rerun exhausts the shared deadline.
-        found[position] = replace(result, rows=tuple(rows))
+        found[position] = replace(
+            result,
+            rows=_retained_rows(groups, rows),
+            groups=tuple(groups.values()),
+            unconfirmed=sum(_identity(old) != _identity(new) for _, old, new in measured)
+            - result.differing,
+        )
 
 
 def _remaining(deadline: float) -> float:
