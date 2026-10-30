@@ -21,6 +21,7 @@ from oversight.changes import (
     WrongState,
     read_agent_status,
     read_change_view,
+    read_queue,
 )
 from oversight.events import EventStore
 from oversight.telemetry import CURRENT, TRACE_HEADER, evaluation_trace, mark
@@ -29,8 +30,10 @@ from oversight_contracts.commands import (
     AgentCreated,
     ApproveChange,
     ChangeView,
+    EnqueueTask,
     FileContent,
     FileSaved,
+    QueueRevision,
     RejectChange,
     RequestChanges,
     SaveFile,
@@ -38,13 +41,10 @@ from oversight_contracts.commands import (
     TreeResponse,
 )
 from oversight_contracts.events import AgentStatus
+from oversight_contracts.queue import QueuedTask, QueueSnapshot
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("POST", "/dictation", "Reserved /dictation"),
-    ("POST", "/queue", "Reserved /queue"),
-    ("GET", "/queue", "Reserved /queue"),
-    ("GET", "/queue/{queued_task_id}", "Reserved /queue/{queued_task_id}"),
-    ("POST", "/queue/{queued_task_id}/cancel", "Reserved /queue/{queued_task_id}/cancel"),
     ("POST", "/leads", "Reserved /leads"),
     ("GET", "/leads/{agent_id}", "Reserved /leads/{agent_id}"),
     ("POST", "/leads/{agent_id}/stop", "Reserved /leads/{agent_id}/stop"),
@@ -63,6 +63,8 @@ NOT_BUILT: tuple[tuple[str, str, str], ...] = (
 )
 """Routes in the contract that this level does not build: 501, whatever the body."""
 LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
+    ("POST", "/queue", "Queueing work"),
+    ("POST", "/queue/{queued_task_id}/cancel", "Cancelling queued work"),
     ("GET", "/tree", "Listing files"),
     ("POST", "/agents", "Starting an agent"),
     ("POST", "/agents/{agent_id}/stop", "Stop"),
@@ -83,6 +85,10 @@ class Commands(Protocol):
     `ChangeNotFound` for an id they do not know, and the app's own refusals as `ApiError`."""
 
     async def start(self, request: StartAgent) -> AgentCreated: ...
+
+    async def enqueue(self, request: EnqueueTask) -> QueuedTask: ...
+
+    async def cancel_queued(self, queued_task_id: str, request: QueueRevision) -> None: ...
 
     def approve(self, change_id: str, request: ApproveChange) -> None: ...
 
@@ -128,6 +134,18 @@ def _decide[A](decision: Callable[[str, A], None], change_id: str, comment: A) -
 
 
 def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: str) -> None:
+    @router.get("/queue")
+    async def queue(http: Request) -> QueueSnapshot:  # pyright: ignore[reportUnusedFunction]
+        return read_queue(cast(EventStore, http.app.state.store))
+
+    @router.get("/queue/{queued_task_id}")
+    async def queue_item(queued_task_id: str, http: Request) -> QueuedTask:  # pyright: ignore[reportUnusedFunction]
+        snapshot = read_queue(cast(EventStore, http.app.state.store))
+        for item in snapshot.tasks:
+            if item.queued_task_id == queued_task_id:
+                return item
+        raise ApiError("not_found", f"there is no queue item {queued_task_id!r}")
+
     @router.get("/changes/{change_id}")
     async def change_view(change_id: str, http: Request) -> ChangeView:  # pyright: ignore[reportUnusedFunction]
         try:
@@ -152,6 +170,17 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
                 path, _not_built(what, "is not available in a replay"), methods=[method]
             )
         return
+
+    @router.post("/queue", status_code=201)
+    async def enqueue(request: EnqueueTask) -> QueuedTask:  # pyright: ignore[reportUnusedFunction]
+        return await commands.enqueue(request)
+
+    @router.post("/queue/{queued_task_id}/cancel", status_code=202, response_class=Response)
+    async def cancel_queued(  # pyright: ignore[reportUnusedFunction]
+        queued_task_id: str, request: QueueRevision
+    ) -> Response:
+        await commands.cancel_queued(queued_task_id, request)
+        return Response(status_code=202)
 
     @router.post("/agents", status_code=201)
     async def start_agent(request: StartAgent, http: Request) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
