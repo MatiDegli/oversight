@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from live_helpers import DEADLINE_S, GatedModel, is_type, live_server, live_settings
+from live_helpers import DEADLINE_S, GatedModel, is_type, live_settings
+from plan_helpers import plan_server as live_server
 
 from oversight_contracts.commands import EnqueueTask
 from oversight_contracts.queue import QueuedAgentTask
@@ -104,7 +105,9 @@ async def test_shutdown_after_launch_publishes_running_while_route_holds_queue_l
                 assert dispatcher._closed and not closing.done()
             await closing
             current = dispatcher.items[item["queued_task_id"]]
-            assert current.state == "running" and current.agent_ids == ["agent-1"]
+            assert current.state == "running" and current.agent_ids == [
+                "agent-2" if plan_item else "agent-1"
+            ]
             assert not dispatcher.launching
             if plan_item:
                 assert identifier is not None

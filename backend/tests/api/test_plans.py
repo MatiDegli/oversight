@@ -15,9 +15,9 @@ from live_helpers import (
     Scripts,
     error_code,
     is_type,
-    live_server,
     live_settings,
 )
+from plan_helpers import plan_server as live_server
 from revise_helpers import ready, request, scripted_a
 
 from oversight.api import ApiError
@@ -80,7 +80,9 @@ async def folded(s: Any) -> None:
         assert read_queue(s.store).tasks == list(s.live.dispatcher.items.values())
 
 
-async def test_create_edit_reject_preserves_verbatim_task_without_a_model(tmp_path: Path) -> None:
+async def test_create_edit_reject_preserves_verbatim_task_after_invalid_reply(
+    tmp_path: Path,
+) -> None:
     clients = Scripts()
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path), clients) as s:
         plan = await create(s)
@@ -159,25 +161,27 @@ async def test_single_subtask_lifecycle_and_status_provenance(
         plan = await create(s)
         identifier = await queue(s, plan, via_start=via_start)
         await plan_state(s, plan.plan_id, "running")
-        await ready(s)
+        await ready(s, agent="agent-2")
         current = read_plan(s.store, plan.plan_id)
         assert current.revision == 4 and current.queued_task_id == identifier
         assert s.live.dispatcher.items[identifier].plan_revision == 2
-        assert current.subtasks and current.subtasks[0].agent_id == "agent-1"
+        assert current.subtasks and current.subtasks[0].agent_id == "agent-2"
         assert error_code(
             await s.client.put(f"/plans/{plan.plan_id}", json=edit_body(current))
         ) == (409, "wrong_state")
         if decision == "request-changes":
             seq = s.store.last_seq
-            assert (await request(s)).status_code == 202
-            await ready(s, after=seq)
+            assert (await request(s, change="change-2")).status_code == 202
+            await ready(s, agent="agent-2", after=seq)
             assert read_plan(s.store, plan.plan_id) == current
             assert s.live.dispatcher.items[identifier].state == "running"
             decision = "approve"
         if decision == "stop":
-            response = await s.client.post("/agents/agent-1/stop")
+            response = await s.client.post("/agents/agent-2/stop")
         else:
-            response = await s.client.post(f"/changes/change-1/{decision}", json=observed_body(s))
+            response = await s.client.post(
+                f"/changes/change-2/{decision}", json=observed_body(s, "change-2")
+            )
         assert response.status_code == 202
         await s.until(is_type("queue.updated", queued_task_id=identifier, state="completed"))
         final = read_plan(s.store, plan.plan_id)

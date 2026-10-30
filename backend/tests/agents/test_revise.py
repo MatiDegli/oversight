@@ -258,10 +258,17 @@ async def test_edit_after_a_save_needs_a_read(small_tree: Opened) -> None:
 
 
 def test_prompt_version_hashes_the_revision_prompt() -> None:
+    from oversight.agents._prompts import PLAN_PROMPT
+
     expected = (
         "agent-v1-"
         + hashlib.sha256(
-            (SYSTEM_PROMPT + REVISION_PROMPT + json.dumps(TOOL_SCHEMAS, sort_keys=True)).encode()
+            (
+                SYSTEM_PROMPT
+                + REVISION_PROMPT
+                + PLAN_PROMPT
+                + json.dumps(TOOL_SCHEMAS, sort_keys=True)
+            ).encode()
         ).hexdigest()[:12]
     )
     assert expected == PROMPT_VERSION

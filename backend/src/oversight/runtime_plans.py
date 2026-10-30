@@ -1,15 +1,20 @@
-"""Run-local plan service; the dispatcher's lock serializes all plan and queue commands."""
+"""Run-local plans; admission and person edits share the dispatcher's lock."""
 
 # Like the other runtime helpers, this composes LiveRun's owned registries.
 # pyright: reportPrivateUsage=false
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
+from oversight.agents import MUSE_SPARK, run_plan_call
 from oversight.api import ApiError
 from oversight.changes import WrongState, plan_core
+from oversight.runtime_accounting import PlanAccounting, durable
 from oversight_contracts.commands import CreatePlan, PlanCreated, RejectPlan, UpdatePlan
+from oversight_contracts.events import ModelProfile
+from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.plans import Plan, SubtaskDraft
 from oversight_contracts.queue import QueuedTask
 
@@ -23,6 +28,7 @@ class PlanService:
         self.plans: dict[str, Plan] = {}
         self.revisions: dict[tuple[str, int], Plan] = {}
         self._count = 0
+        self._calls: dict[str, asyncio.Task[PlanCreated]] = {}
 
     def get(self, plan_id: str) -> Plan:
         if plan_id not in self.plans:
@@ -48,17 +54,81 @@ class PlanService:
             self._available()
             if not request.task.strip():
                 raise ApiError("invalid_request", "the task is empty")
-            return await self.live._finish(self._create(request))
+            profile = self._profile()
+            self.live._check_spending("A", profile)
+            _, snapshot = self.live.store.graph()
+            assert snapshot is not None
+            self._count += 1
+            plan = plan_core.planning(request.task, snapshot, self._count)
+            # Q1: reserve a run-local planner identity without creating a card or taking a slot.
+            planner_id = self._planner_id()
+            call = asyncio.create_task(self._create(plan, snapshot, profile, planner_id))
+            self._calls[plan.plan_id] = call
+        # A model wait must not hold queue_lock: queue commands and shutdown remain available.
+        try:
+            return await self.live._finish(call)
+        finally:
+            self._calls.pop(plan.plan_id, None)
 
-    async def _create(self, request: CreatePlan) -> PlanCreated:
-        _, snapshot = self.live.store.graph()
-        assert snapshot is not None
-        self._count += 1
-        plan = plan_core.planning(request.task, snapshot, self._count)
-        await self.save(plan)
-        draft = SubtaskDraft(task=request.task, zone=plan_core.whole_graph(snapshot))
-        await self.save(plan_core.propose(plan, [draft]))
+    def _profile(self) -> ModelProfile:
+        profile = self.live._slot_profiles["A"]
+        return profile if profile.provider == "fake" else MUSE_SPARK
+
+    def _planner_id(self) -> str:
+        self.live._count += 1
+        return f"agent-{self.live._count}"
+
+    async def _create(
+        self, plan: Plan, snapshot: GraphSnapshot, profile: ModelProfile, planner_id: str
+    ) -> PlanCreated:
+        await durable(self.save(plan))
+        accounting = PlanAccounting(self.live, plan.plan_id, profile, planner_id)
+        ready_time = asyncio.get_running_loop().time()
+        # Client construction uses the same injectable factory as author starts.
+        outcome = await run_plan_call(
+            lambda: self.live._client_factory(profile, "A"),
+            plan.task,
+            snapshot,
+            ready_time=ready_time,
+            record=accounting.record,
+        )
+        if accounting.failure is not None:
+            await self.live._finish(self.live._report("server", accounting.failure))
+        if self.live._closing:
+            return PlanCreated(plan_id=plan.plan_id)
+        draft = SubtaskDraft(task=outcome.task, zone=plan_core.whole_graph(snapshot))
+        proposed = plan_core.propose(plan, [draft]).model_copy(update={"detail": outcome.detail})
+        await self.live._finish(self.save(proposed))
         return PlanCreated(plan_id=plan.plan_id)
+
+    async def create_and_propose(
+        self, task: str, drafts: list[SubtaskDraft], *, started_by: str
+    ) -> PlanCreated:
+        """Lead-supplied drafts never trigger a model call or enter the queue."""
+        async with self.live.dispatcher.queue_lock:
+            self._available()
+            _, snapshot = self.live.store.graph()
+            assert snapshot is not None
+            self._count += 1
+            plan = plan_core.planning(task, snapshot, self._count).model_copy(
+                update={"started_by": started_by}
+            )
+            proposed = plan_core.propose(plan, drafts)
+            return await self.live._finish(self._save_drafts(plan, proposed))
+
+    async def _save_drafts(self, plan: Plan, proposed: Plan) -> PlanCreated:
+        await self.save(plan)
+        await self.save(proposed)
+        return PlanCreated(plan_id=plan.plan_id)
+
+    async def close(self) -> None:
+        calls = list(self._calls.values())
+        for call in calls:
+            call.cancel()
+        await asyncio.gather(*calls, return_exceptions=True)
+        pending = [plan.plan_id for plan in self.plans.values() if plan.state == "planning"]
+        if pending:
+            await self.live._report("server", "Plans ended without resuming: " + ", ".join(pending))
 
     async def update(self, plan_id: str, request: UpdatePlan) -> None:
         async with self.live.dispatcher.queue_lock:
