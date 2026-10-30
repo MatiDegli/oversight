@@ -403,8 +403,8 @@ an unavailable check to passing evidence.
 intervals of one agent are unioned, distinct agents add up, and a lead that only waits for its agents adds
 nothing. Use observed intervals, never fixed time buckets: each agent's own working intervals come from its
 agent.status events, where starting, working and revising count and ready_for_review, halted, done, stopped and
-paused do not. A review is one bounded call that starts when the change is proposed, so its interval runs from
-change.proposed to change.reviewed and it counts as its own actor. Also report project active hours (the union
+paused do not. A review is one bounded call that starts when the author's run ends after proposing, so its
+interval runs from that agent's ready_for_review status to change.reviewed and it counts as its own actor. Also report project active hours (the union
 of all intervals) and parallelism (agent-hours divided by project active hours). The lead has no producer yet
 and lead.status cannot tell waiting from working; until its contract can, lead hours are unavailable and its
 waits are never counted.
@@ -441,16 +441,6 @@ never sum cumulative `spent_usd`. Main keeps agent totals, not these aggregates
 (`frontend/src/state/applyEvent.ts:175`). Live/replay derivation needs no addition; optional archived
 change/role totals and rounds belong in the proposal. Unknown usage/unpriced Baseten work stays
 unknown, never free. The cumulative product Meta ledger is separate from the bench ledger.
-
-**Implementation premise — review timing:** the proposal-start interval above is the decided target,
-not an observed interval in the current runtime. `facts_ready` parks the proposal in `_review_pending`;
-`run_ended` schedules review and takes `ready_time` only after the author's run ends
-(`backend/src/oversight/runtime_review.py:59-74`). The call is bounded by `ready_time + 90 s`
-(`backend/src/oversight/agents/_review_call.py:55`). Counting from change.proposed today would include
-the author's remaining work, overstating reviewer hours and overlapping the author's own interval.
-The implementation front must resolve this gap with the maintainer: amend the decided interval to
-start at the end of the author's run, or retain proposal-start timing as an implementation requirement.
-Until that decision, change.proposed to change.reviewed must not be reported as observed review hours.
 
 ### 11. One plan, server-computed zones and task queue
 
