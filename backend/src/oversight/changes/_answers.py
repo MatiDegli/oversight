@@ -17,6 +17,8 @@ def validate_answers(
     if answers is None:
         return None
     current = {(card.node_id, card.question): card for card in cards}
+    if len(current) != len(cards):
+        raise InvalidAnswers("Server question identity is duplicated")
     accepted: dict[tuple[str, str], ReviewCard] = {}
     for answer in answers:
         identity = answer.node_id, answer.question

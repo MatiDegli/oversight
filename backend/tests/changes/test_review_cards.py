@@ -197,3 +197,13 @@ def test_unstable_display_rows_do_not_hide_unretained_stable_differences():
     source = FactsEvidence("agent-1", TARGET, None, (), (), (), {}, {}, behavior_evidence=behavior)
     result = selection(source, 8)
     assert not result.samples and any("not retained" in problem for problem in result.problems)
+
+
+def test_answers_reject_duplicated_server_identity():
+    from oversight.changes._answers import InvalidAnswers, validate_answers
+    from oversight_contracts.review import ReviewCard
+
+    card = ReviewCard(node_id="m:f", question="server question", evidence_seq=1)
+    answer = card.model_copy(update={"answer": "yes", "answered_by": "person"})
+    with pytest.raises(InvalidAnswers, match="duplicated"):
+        validate_answers([card, card], [answer])
