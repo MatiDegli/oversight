@@ -2011,3 +2011,42 @@ choices. Samples are escaped text, disclosed only by a person; incoming events n
 Impeccable 4.5.2 conflicts resolved in favor of Signal: retain the project's dense title/data
 roles instead of a generic 16px body floor or 65–75ch minimum, and add no authored motion to
 measured evidence. Existing tokens, spacing, Next/Mono roles and review geometry govern.
+
+## 2026-10-30 — Review panel rework: the approved sketches replace the fronts' review rules
+
+The maintainer approved the review sketches on 2026-10-30, before 10:39 ART (exact time not
+recorded). The baseline is [docs/sketches/review/](docs/sketches/review/README.md), not the final
+look. It replaces the review rules added by behavior-review and measured-cone-review: "unmatched
+stay visible", "Mono carries counts", and the mid-dot section. The critique ranks harm to the
+approve/reject decision: grids and duplicate lists bury differences; diagnostic counters, equal
+chips and mixed-width prose compete with the evidence. Differences lead, agreement is a sentence,
+method details open on request, and the graph owns places and reach. Data contracts stay intact.
+
+The maintainer's five settled departures, verbatim:
+
+- the diff comes before "What was compared";
+- "Out of view" covers functions off camera and inside folded modules;
+- "varied" is the cone word for unstable results;
+- the answered row always wraps, never truncates (at 1280 the After cell may need a scroll);
+- state g's Revert is the item 8 target, built only when item 8 delivers it.
+
+The approved baseline bends Signal's frame dimming to 16% outside the review cone and change,
+including module frames. Grain and top light stay on the header. The sketch's local day syntax
+values must become token-driven in the code step; day syntax tokens already exist, and this step
+adds no colors. Mono's narrower prose rule applies only inside review: the agent card and dock
+keep their numeric readings. Approval from the review panel starts merge travel like any merge;
+with the agents panel folded, the pulse leaves that agent's letter in the rail. It never moves
+the camera or takes focus from the panel. Revert remains absent until item 8 supplies its command.
+
+Impeccable 4.5.2 shape ordinarily asks for brief confirmation and stops; this screen's approved
+brief and explicit instruction to write DESIGN.md settle that step. Clarify's preference for
+specific actions does not rename the approved Yes/No/Unsure answers or rewrite server questions.
+The project's fixed sizes, tokens, matte header and focus rules win over generic style guidance;
+AGENTS.md and DESIGN.md remain authoritative. No new visual world or UI code is introduced here.
+
+## 2026-10-30 — Review panel life pass: a candidate after level 3
+
+Not built now. Once level 3 is solid, a candidate life pass may add the answer fold transition,
+a rolling answered count, and hover on a differing caller that lights its node. It goes through
+the same sketch approval as this rework. These are later candidates; merge travel on Approve is
+already required by the approved baseline.
