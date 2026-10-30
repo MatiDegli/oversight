@@ -61,11 +61,16 @@ export function ReviewPanel({
     agent?.state === "ready_for_review" &&
     change?.status === "ready_for_review" &&
     decision?.kind === "open";
-  const [chosen, setChosen] = useState<string | null>(() =>
-    ["a", "unavailable"].includes(body.kind) ? null : (files[0] ?? null),
-  );
-  const openPath = chosen !== null && files.includes(chosen) ? chosen : null;
-  const [opened, setOpened] = useState(() => new Set(chosen ? [chosen] : []));
+  const [choices, setChoices] = useState<Record<string, string | null>>({});
+  const chosen = Object.hasOwn(choices, changeId)
+    ? choices[changeId]
+    : ["a", "unavailable"].includes(body.kind)
+      ? null
+      : (files[0] ?? null);
+  const openPath = chosen && files.includes(chosen) ? chosen : null;
+  const [opened, setOpened] = useState<Record<string, Set<string>>>({});
+  if (openPath && !opened[changeId]?.has(openPath))
+    setOpened({ ...opened, [changeId]: new Set([...(opened[changeId] ?? []), openPath]) });
   // A deferred editor cannot report readiness until its chunk and file have loaded.
   const editingBlocked =
     fileAccess !== undefined &&
@@ -106,22 +111,16 @@ export function ReviewPanel({
                 <section
                   key={path}
                   aria-label={`Diff of ${path}`}
-                  className={`flex flex-col border-b border-page-border ${open ? "review-file-open" : ""}`}
+                  className={`review-file flex flex-col ${open ? "review-file-open" : ""}`}
                 >
                   <button
                     type="button"
                     aria-expanded={open}
                     onClick={() => {
-                      setChosen(open ? null : path);
-                      if (!open) setOpened((paths) => new Set([...paths, path]));
+                      setChoices((current) => ({ ...current, [changeId]: open ? null : path }));
                     }}
-                    className={`review-file-row flex shrink-0 items-center gap-2.5 text-left ${focusRing}`}
+                    className={`review-file-row flex shrink-0 items-center gap-2 text-left ${focusRing}`}
                   >
-                    {open ? (
-                      <ChevronDown aria-hidden="true" className="size-4 text-muted" />
-                    ) : (
-                      <ChevronRight aria-hidden="true" className="size-4 text-muted" />
-                    )}
                     <span className="min-w-0 truncate font-mono text-sm">{path}</span>
                     {stat && (
                       <span className="text-sm font-semibold">
@@ -136,10 +135,15 @@ export function ReviewPanel({
                           ? "Inline diff"
                           : fileAccess && editable
                             ? "Editable · Inline diff"
-                            : "Read-only · Inline diff"}
+                            : "Inline diff"}
                     </span>
+                    {open ? (
+                      <ChevronDown aria-hidden="true" className="size-4 text-muted" />
+                    ) : (
+                      <ChevronRight aria-hidden="true" className="size-4 text-muted" />
+                    )}
                   </button>
-                  {opened.has(path) && (
+                  {opened[changeId]?.has(path) && (
                     <div className="review-diff-viewport" hidden={!open}>
                       {data ? (
                         fileAccess && body.kind !== "g" ? (

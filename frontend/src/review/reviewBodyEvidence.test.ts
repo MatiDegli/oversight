@@ -1,7 +1,13 @@
 import { expect, it } from "vitest";
 import { headerState } from "./ReviewHeader.fixture";
 import { availableFacts, firstCaller, withMeasuredFacts } from "./measuredCallers.fixture";
-import { selectCallerComparison, selectReviewBody, smallestExample } from "./reviewBodyEvidence";
+import {
+  nothingComparedLine,
+  partialLines,
+  selectCallerComparison,
+  selectReviewBody,
+  smallestExample,
+} from "./reviewBodyEvidence";
 
 it("counts measured callers separately from possibly affected callers", () => {
   const view = selectCallerComparison(headerState("b"), "change-1");
@@ -38,7 +44,7 @@ it("uses the smallest retained stable differing example and escapes it at render
     ])?.inputs,
   ).toBe("<b>");
 });
-it.each(["a", "b", "d", "merged"] as const)(
+it.each(["a", "b", "c", "d", "d2", "merged"] as const)(
   "projects %s from current revision evidence",
   (name) => {
     const state = structuredClone(headerState(name));
@@ -50,14 +56,24 @@ it.each(["a", "b", "d", "merged"] as const)(
     if (name !== "merged") expect(selectReviewBody(state, id).kind).toBe("d");
   },
 );
-it("leaves unsupported evidence without a lead and never repeats raw summary claims", () => {
+it("keeps complete stable evidence without a differing caller title", () => {
   const state = withMeasuredFacts({
     ...availableFacts,
     summary: ["Everything is safe"],
+    complete: true,
     measured_cone: [],
+    behavior_diff: [
+      {
+        node_id: "shop.pricing:compute_price",
+        compared_count: 2,
+        differing_count: 0,
+        rows: [],
+        not_probed: null,
+      },
+    ],
   });
   expect(selectReviewBody(state, "change-1").kind).toBe("other");
-  expect(selectReviewBody(state, "change-1").summary).toEqual([]);
+  expect(selectReviewBody(state, "change-1").summary[0]).toContain("2 inputs compared, 0 differ.");
 });
 
 it.each(["missing", "equal", "other function", "partial", "rendered"] as const)(
@@ -80,3 +96,76 @@ it.each(["missing", "equal", "other function", "partial", "rendered"] as const)(
     );
   },
 );
+
+it.each([
+  ["incomplete", "c"],
+  ["empty", "d2"],
+  ["not_probed", "c"],
+  ["unstable", "c"],
+  ["incomplete caller", "c"],
+  ["b incomplete", "c"],
+] as const)("selects %s evidence as %s", (shape, kind) => {
+  const state = structuredClone(headerState("b"));
+  const facts = state.changeFacts["change-1"]?.at(-1);
+  if (!facts?.measured_cone?.[0]) throw new Error("Missing facts");
+  const caller = facts.measured_cone[0];
+  if (shape === "incomplete" || shape === "b incomplete") facts.complete = false;
+  if (shape === "empty") {
+    facts.measured_cone = [];
+    facts.behavior_diff = [];
+  }
+  if (shape === "not_probed") caller.not_probed = "unknown reason";
+  if (shape === "unstable") caller.rows = caller.rows.map((r) => ({ ...r, unstable: true }));
+  if (shape === "incomplete caller") caller.complete = false;
+  expect(selectReviewBody(state, "change-1").kind).toBe(kind);
+});
+it("uses c wording and only the stable caller supplies an example", () => {
+  const state = headerState("c");
+  const lines = partialLines(state, "change-1");
+  expect(lines.map((l) => l.line)).toEqual([
+    "Cart.quote_add: 3 of 12 matched calls changed; 3 calls could not be matched.",
+    "Cart.subtotals: results varied between runs; no difference established.",
+    "Customer.quote: not measured, recording budget reached.",
+    "compute_price: 2 inputs compared; results varied between runs.",
+  ]);
+  expect(lines.filter((l) => l.example)).toHaveLength(1);
+  expect(selectCallerComparison(state, "change-1").differing).toHaveLength(1);
+  expect(selectCallerComparison(state, "change-1").same).toEqual([]);
+  expect(selectReviewBody(state, "change-1").summary[0]).toBe(
+    "2 of 9 callers measured; 7 were not.",
+  );
+  const caller = state.changeFacts["change-1"]?.at(-1)?.measured_cone?.[2];
+  if (!caller) throw new Error("Missing caller");
+  for (const reason of ["Caller recording budget reached", "unknown", null]) {
+    caller.not_probed = reason;
+    expect(partialLines(state, "change-1")[2]?.line).toBe("Customer.quote: not measured.");
+  }
+});
+it.each([
+  [null, "Nothing was compared."],
+  [
+    "compute_price could not run outside its test setup",
+    "Nothing was compared: compute_price could not run outside its test setup.",
+  ],
+  ["Server Reason.", "Nothing was compared: Server Reason."],
+  ["unsupported node kind", "Nothing was compared: this node type is not probed yet."],
+  ["version unavailable", "Nothing was compared: the base or proposed version is unavailable."],
+  [
+    "probe unavailable",
+    "Nothing was compared: behavior probing was unavailable; no further reason was published.",
+  ],
+])("formats d2 reason %s", (reason, expected) => {
+  const state = headerState("d2");
+  const probe = state.changeFacts["change-1"]?.at(-1)?.behavior_diff?.[0];
+  if (!probe) throw new Error("Missing probe");
+  probe.not_probed = reason;
+  expect(nothingComparedLine(state, "change-1")).toBe(expected);
+  if (reason === "unsupported node kind") {
+    const node = state.graph?.nodes.find((n) => n.id === probe.node_id);
+    if (!node) throw new Error("Missing node");
+    node.kind = "method";
+    expect(nothingComparedLine(state, "change-1")).toBe(
+      "Nothing was compared: methods and classes are not probed yet.",
+    );
+  }
+});

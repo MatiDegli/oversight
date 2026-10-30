@@ -69,6 +69,22 @@ const expected = {
   inputSize: 14,
   inputLine: 20,
   pairLabel: 13,
+  loneSize: 15,
+  loneLine: 22,
+  loneWeight: 400,
+  iconSize: 16,
+  iconGap: 10,
+  partialGap: 12,
+  partialTop: 14,
+  cardBorder: 1,
+  cardRadius: 10,
+  filePadding: 14,
+  chevron: 16,
+  fileGap: 8,
+  promptSize: 14,
+  promptWeight: 600,
+  promptGap: 12,
+  captionInputGap: 10,
 };
 async function measure(page: Page) {
   return page.locator(".review-panel").evaluate((panel) => {
@@ -89,8 +105,8 @@ async function measure(page: Page) {
       titleSize: css(".review-lead-heading h3", "font-size"),
       titleWeight: css(".review-lead-heading h3", "font-weight"),
       titleLine: css(".review-lead-heading h3", "line-height"),
-      captionSize: css(".review-lead-heading > p", "font-size"),
-      captionLine: css(".review-lead-heading > p", "line-height"),
+      captionSize: css(".review-lead-heading > p:last-child", "font-size"),
+      captionLine: css(".review-lead-heading > p:last-child", "line-height"),
       captionGap: css(".review-lead-heading", "gap"),
       noteLabel: css(".review-agent-note > p", "font-size"),
       noteSize: css(".review-agent-note > p + p", "font-size"),
@@ -117,6 +133,22 @@ async function measure(page: Page) {
       codeLine: css(".monaco-diff-editor .view-lines", "line-height"),
       inputSize: css(".choice-example > code", "font-size"),
       inputLine: css(".choice-example > code", "line-height"),
+      loneSize: css(".review-lone", "font-size"),
+      loneLine: css(".review-lone", "line-height"),
+      loneWeight: css(".review-lone", "font-weight"),
+      iconSize: css(".partial-lines svg", "width"),
+      iconGap: css(".partial-lines li", "column-gap"),
+      partialGap: css(".partial-lines", "gap"),
+      partialTop: css(".partial-lines", "margin-top"),
+      cardBorder: css(".review-file-open", "border-left-width"),
+      cardRadius: css(".review-file-open", "border-radius"),
+      filePadding: css(".review-file-open .review-file-row", "padding-left"),
+      fileGap: css(".review-file-row", "gap"),
+      chevron: css(".review-file-row > svg", "width"),
+      promptSize: css(".choice-prompt", "font-size"),
+      promptWeight: css(".choice-prompt", "font-weight"),
+      promptGap: css(".panel-choice-actions", "margin-top"),
+      captionInputGap: gap(".choice-caption", ".choice-caption + .choice-example > code"),
       pairLabel: css(".example-pair > div > span", "font-size"),
     };
   });
@@ -124,6 +156,14 @@ async function measure(page: Page) {
 const cases = [
   ["a", "2 choices need you", "1 of 2 answered", true],
   ["b", "1 caller behaves differently", "3 of 9 callers measured", false],
+  ["c", "Partial evidence", "Read the diff before approving", false],
+  [
+    "d2",
+    "Nothing was compared: compute_price could not run outside its test setup.",
+    "The diff and tests are the evidence.",
+    false,
+  ],
+  ["d2NoReason", "Nothing was compared.", "The diff and tests are the evidence.", false],
   [
     "d",
     "Nothing was compared for this change.",
@@ -169,15 +209,19 @@ it.each(cases)(
         await page.locator(".review-lead").waitFor();
         await page.evaluate(() => document.fonts.ready);
         if (!closed) await page.locator(".monaco-diff-editor").waitFor();
-        expect(await page.locator(".review-lead-heading h3").textContent()).toBe(title);
-        expect(await page.locator(".review-lead-heading > p").textContent()).toBe(caption);
+        expect(await page.locator(".review-lead-heading h3, .review-lone").textContent()).toBe(
+          title,
+        );
+        expect(await page.locator(".review-lead-heading > p:last-child").textContent()).toBe(
+          caption,
+        );
         const order = await page
           .locator(".review-body > *")
           .evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
         expect(order).toEqual(
           name === "a" || name === "merged"
             ? ["Review lead", "Agent note", "What was compared", "Change files"]
-            : name === "b"
+            : name === "b" || name === "c"
               ? ["Review lead", "Agent note", "Change files", "What was compared"]
               : ["Review lead", "Agent note", "Change files"],
         );
@@ -185,7 +229,9 @@ it.each(cases)(
           String(!closed),
         );
         expect(await page.locator(".review-details > details[open]").count()).toBe(0);
-        expect(await page.locator(".review-compared").count()).toBe(name === "d" ? 0 : 1);
+        expect(await page.locator(".review-compared").count()).toBe(
+          name === "d" || name.startsWith("d2") ? 0 : 1,
+        );
         expect(await page.locator(".review-decision-bar").count()).toBe(name === "merged" ? 0 : 1);
         if (name === "merged") {
           expect(await page.locator(".review-merged").textContent()).toBe(
@@ -206,7 +252,7 @@ it.each(cases)(
           expect(await page.locator(".same-callers").textContent()).toBe(
             "Cart.subtotals and Customer.quote: same result on 12 recorded calls each.",
           );
-        if (process.env.REVIEW_LEAD_SHOTS === "1") {
+        if (process.env.REVIEW_LEAD_SHOTS === "1" && name !== "d2NoReason") {
           await mkdir(shots, { recursive: true });
           const key = `${name === "merged" ? "g" : name}${width === 1280 ? "-1280" : ""}-${theme}`;
           const product = await page
@@ -232,6 +278,53 @@ it.each(cases)(
             JSON.stringify({ actual, expected: target }, null, 2),
           );
           await report.close();
+        }
+        if (name === "c") {
+          expect(await page.locator(".partial-lines li").count()).toBe(4);
+          expect(await page.locator(".partial-lines .choice-example").count()).toBe(1);
+          expect(await page.locator(".partial-lines").textContent()).toContain(
+            "Customer.quote: not measured, recording budget reached.",
+          );
+          expect(await page.locator(".comparison-lines").textContent()).toContain(
+            "2 of 9 callers measured; 7 were not.",
+          );
+          expect(
+            await page
+              .locator(".partial-lines > li > svg")
+              .evaluateAll((els) =>
+                els.every(
+                  (el) =>
+                    getComputedStyle(el).color ===
+                    getComputedStyle(document.querySelector(".review-lead-heading > p") as Element)
+                      .color,
+                ),
+              ),
+          ).toBe(true);
+        }
+        if (name === "d" || name.startsWith("d2")) {
+          expect(await page.locator(".review-details").count()).toBe(0);
+          expect(
+            await page.locator(".review-diff-viewport").evaluate((el) => el.clientHeight),
+          ).toBeGreaterThanOrEqual(400);
+        }
+        expect(
+          await page
+            .locator(".review-file-row")
+            .first()
+            .evaluate((el) => el.lastElementChild?.tagName.toLowerCase()),
+        ).toBe("svg");
+        if (name === "a" || name === "merged")
+          expect(
+            await page
+              .locator(".review-details > details > summary")
+              .evaluate((el) => el.lastElementChild?.tagName.toLowerCase()),
+          ).toBe("svg");
+        if (name === "a") {
+          expect(await page.locator(".choice-caption").textContent()).toBe(
+            "Inventory.reserve · from 24 compared inputs",
+          );
+          expect(await page.locator(".choice-prompt").textContent()).toBe("Keep this behavior?");
+          expect(await page.locator(".answered-controls").textContent()).toBe("Yes, keep itChange");
         }
         expect(errors).toEqual([]);
       } finally {
@@ -352,6 +445,67 @@ it.each(["a", "b"] as const)(
         expect(await page.locator(".review-agent-note > p + p").textContent()).toContain(token);
         expect(await page.locator(".choice-example > code").last().textContent()).toBe(token);
       }
+    } finally {
+      await page.close();
+    }
+  },
+  60000,
+);
+
+it.each(["default", "opened", "closed"])(
+  "recomputes d to a until a person chooses: %s",
+  async (choice) => {
+    if (!browser) throw new Error("Missing browser");
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    try {
+      await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+      await page.goto(url);
+      await page.waitForFunction(() => "mountHeader" in window);
+      await page.evaluate(() => {
+        const api = window as unknown as Pick<
+          typeof import("./ReviewHeader.fixture"),
+          "mountHeader" | "headerState"
+        > & {
+          update: (
+            state: ReturnType<(typeof import("./ReviewHeader.fixture"))["headerState"]>,
+          ) => void;
+        };
+        const state = api.headerState("a");
+        const facts = state.changeFacts["change-3"]?.at(-1);
+        if (!facts) throw new Error("Missing facts");
+        const proposal = state.changes["change-3"]?.proposal;
+        if (proposal) proposal.summary = "Agent note. ".repeat(400);
+        facts.review_cards = [];
+        facts.behavior_diff = null;
+        facts.measured_cone = null;
+        api.update = api.mountHeader("a", state);
+      });
+      const file = page.locator(".review-file-row").first();
+      await page.locator(".monaco-diff-editor").waitFor();
+      if (choice !== "default") await file.click();
+      if (choice === "opened") await file.click();
+      await page.locator(".review-body").evaluate((el) => {
+        el.scrollTop = 40;
+      });
+      const before = await page.locator(".review-body").evaluate((el) => el.scrollTop);
+      expect(before).toBe(40);
+      const close = page.getByRole("button", { name: "Close review" });
+      await close.focus();
+      await page.evaluate(() => {
+        const api = window as unknown as {
+          headerState: (typeof import("./ReviewHeader.fixture"))["headerState"];
+          update: (
+            state: ReturnType<(typeof import("./ReviewHeader.fixture"))["headerState"]>,
+          ) => void;
+        };
+        const state = api.headerState("a");
+        const proposal = state.changes["change-3"]?.proposal;
+        if (proposal) proposal.summary = "Agent note. ".repeat(400);
+        api.update(state);
+      });
+      expect(await file.getAttribute("aria-expanded")).toBe(String(choice === "opened"));
+      expect(await close.evaluate((el) => document.activeElement === el)).toBe(true);
+      expect(await page.locator(".review-body").evaluate((el) => el.scrollTop)).toBe(before);
     } finally {
       await page.close();
     }

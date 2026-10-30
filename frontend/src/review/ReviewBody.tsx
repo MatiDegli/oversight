@@ -1,3 +1,4 @@
+import { CircleAlert } from "lucide-react";
 import { Fragment } from "react";
 import type { ReactNode } from "react";
 import type { State } from "../state";
@@ -7,7 +8,12 @@ import { candidateKey, useAnswers } from "./answers";
 import { CardEvidence, eventTime } from "./ChangeCard";
 import { CrossReviewNote } from "./CrossReviewNote";
 import { ReviewFacts } from "./ReviewFacts";
-import { selectReviewBody, smallestExample } from "./reviewBodyEvidence";
+import {
+  nothingComparedLine,
+  partialLines,
+  selectReviewBody,
+  smallestExample,
+} from "./reviewBodyEvidence";
 import "./reviewBody.css";
 
 /** One evidence order, with one parent-owned scroll; event updates never replace that parent. */
@@ -34,27 +40,35 @@ export function ReviewBody({
         : `${String(questions.length)} choices need you`
       : kind === "b"
         ? `${String(callers.differing.length)} caller${callers.differing.length === 1 ? " behaves" : "s behave"} differently`
-        : kind === "d"
-          ? "Nothing was compared for this change."
-          : kind === "g"
-            ? "Merged by your rules"
-            : kind === "unavailable"
-              ? "Needs you because a check was unavailable"
-              : null;
+        : kind === "c"
+          ? "Partial evidence"
+          : kind === "d2"
+            ? nothingComparedLine(state, changeId)
+            : kind === "d"
+              ? "Nothing was compared for this change."
+              : kind === "g"
+                ? "Merged by your rules"
+                : kind === "unavailable"
+                  ? "Needs you because a check was unavailable"
+                  : null;
   const mode = change?.resolution?.assessment?.mode ?? state.run?.merge_mode;
   const caption =
     kind === "a"
       ? `${String(questions.filter((q) => cardAnswer(q, answers) !== null).length)} of ${String(questions.length)} answered`
       : kind === "b"
         ? `${String(callers.measured)} of ${String(callers.total)} callers measured`
-        : kind === "d"
-          ? "Behavior and callers were not recorded for this revision. The diff and tests are the evidence."
-          : kind === "g" && mode === "merge_when_safe"
-            ? "Merge mode: Merge alone when safe"
-            : kind === "unavailable"
-              ? `Asked: ${change?.proposal?.task ?? ""} · Done: ${change?.proposal?.summary ?? ""}`
-              : null;
-  const comparison = ["a", "b", "g"].includes(kind) && (
+        : kind === "c"
+          ? "Read the diff before approving"
+          : kind === "d2"
+            ? "The diff and tests are the evidence."
+            : kind === "d"
+              ? "Behavior and callers were not recorded for this revision. The diff and tests are the evidence."
+              : kind === "g" && mode === "merge_when_safe"
+                ? "Merge mode: Merge alone when safe"
+                : kind === "unavailable"
+                  ? `Asked: ${change?.proposal?.task ?? ""} · Done: ${change?.proposal?.summary ?? ""}`
+                  : null;
+  const comparison = ["a", "b", "c", "g", "other"].includes(kind) && (
     <section aria-label="What was compared" className="review-compared">
       <h3>What was compared</h3>
       <div className="comparison-lines">
@@ -79,7 +93,11 @@ export function ReviewBody({
       {title && (
         <section aria-label="Review lead" className="review-lead">
           <div className="review-lead-heading">
-            <h3>{title}</h3>
+            {kind === "d" || kind === "d2" ? (
+              <p className="review-lone">{title}</p>
+            ) : (
+              <h3>{title}</h3>
+            )}
             {caption && <p>{caption}</p>}
           </div>
           {kind === "g" &&
@@ -91,7 +109,20 @@ export function ReviewBody({
               </p>
             ))}
           {card && (kind === "a" || kind === "unavailable") && (
-            <CardEvidence state={state} changeId={changeId} card={card} />
+            <CardEvidence state={state} changeId={changeId} card={card} panel />
+          )}
+          {kind === "c" && (
+            <ul className="partial-lines">
+              {partialLines(state, changeId).map((item) => (
+                <li key={item.nodeId}>
+                  <CircleAlert aria-hidden="true" size={16} />
+                  <div>
+                    {item.line}
+                    {item.example && <Example row={item.example} slot={slot} />}
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
           {kind === "b" &&
             callers.differing.map((row) => {
@@ -133,15 +164,7 @@ export function ReviewBody({
       </section>
       {(kind === "a" || kind === "g" ? ["comparison", "diff"] : ["diff", "comparison"]).map(
         (part) => (
-          <Fragment key={part}>
-            {part === "diff" ? (
-              diff
-            ) : kind === "other" && change?.proposal ? (
-              <ReviewFacts state={state} proposal={change.proposal} scrollable={false} panel />
-            ) : (
-              comparison
-            )}
-          </Fragment>
+          <Fragment key={part}>{part === "diff" ? diff : comparison}</Fragment>
         ),
       )}
     </section>

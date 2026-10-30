@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import type { AddedTestProbe, ChangeFacts, ChangeProposed, SuiteExecution } from "@contracts";
 
 import type { State } from "../state";
@@ -168,6 +169,7 @@ export function ReviewFacts({
           {panel
             ? "Details"
             : `Review signals · ${facts.complete ? "Recorded facts" : "Incomplete"}`}
+          {panel && <ChevronRight aria-hidden="true" size={16} />}
         </summary>
         <div
           className={`mt-2 break-words text-muted${scrollable ? " max-h-48 overflow-y-auto" : ""}`}

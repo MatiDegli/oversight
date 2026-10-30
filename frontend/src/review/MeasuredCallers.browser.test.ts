@@ -120,7 +120,9 @@ async function checkGeometry(page: Page) {
     const context = get('[aria-label="Review context"]');
     const decision = get('[aria-label="Decision"]');
     const diff = get('[aria-label^="Diff of"] > div');
-    const measured = get('[aria-label="Measured callers · Possibly affected"]');
+    const measured = element.querySelector<HTMLElement>(
+      '[aria-label="Measured callers · Possibly affected"]',
+    );
     return {
       decisionBottom: decision.getBoundingClientRect().bottom,
       panelBottom: element.getBoundingClientRect().bottom,
@@ -132,7 +134,7 @@ async function checkGeometry(page: Page) {
           !child.closest(".monaco-diff-editor") &&
           /auto|scroll/.test(getComputedStyle(child).overflowY),
       ),
-      measuredOverflow: measured.scrollWidth > measured.clientWidth,
+      measuredOverflow: measured ? measured.scrollWidth > measured.clientWidth : false,
     };
   });
   expect(geometry.decisionBottom).toBeLessThanOrEqual(geometry.panelBottom);
@@ -172,23 +174,28 @@ for (const width of [1920, 1280])
               true,
             );
             expect(await comment.inputValue()).toBe("Keep my review comment");
-            if (label !== "absent") await page.getByText("Details", { exact: true }).click();
+            const hasDetails = label === "available" || label === "partial";
+            if (hasDetails) await page.getByText("Details", { exact: true }).click();
             else {
-              expect(await page.getByText("Nothing was compared for this change.").count()).toBe(1);
+              expect(
+                await page
+                  .getByText(
+                    label === "absent"
+                      ? "Nothing was compared for this change."
+                      : "Nothing was compared.",
+                    { exact: true },
+                  )
+                  .count(),
+              ).toBe(1);
+              expect(await page.getByText("Details", { exact: true }).count()).toBe(0);
               expect(await measured.count()).toBe(0);
             }
-            if (label !== "absent")
+            if (hasDetails)
               expect(await measured.textContent()).toContain(
-                label === "available"
-                  ? "Comparisons available"
-                  : label === "partial"
-                    ? "Partial measurements"
-                    : label === "unavailable"
-                      ? "Recording unavailable: suite stopped"
-                      : "Caller measurements not recorded for this revision",
+                label === "available" ? "Comparisons available" : "Partial measurements",
               );
             if (label !== "absent") await checkGeometry(page);
-            if (label !== "absent")
+            if (hasDetails)
               await measured.evaluate((element) => {
                 const context = element.closest('[aria-label="Review context"]');
                 if (context)

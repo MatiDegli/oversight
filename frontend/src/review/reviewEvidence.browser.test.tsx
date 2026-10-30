@@ -91,7 +91,7 @@ it("renders recorded level 2 facts without comparisons as state d", async () => 
     );
     const panel = page.getByRole("complementary", { name: "Review panel" });
     await expect(
-      panel.getByRole("heading", { name: "Nothing was compared for this change.", exact: true }),
+      panel.getByText("Nothing was compared for this change.", { exact: true }),
     ).toBeVisible();
     await expect(panel.getByRole("listitem", { name: "Tests", exact: true })).toContainText(
       `${String(proposal.tests.passed)} passed`,

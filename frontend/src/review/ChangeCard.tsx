@@ -1,3 +1,4 @@
+import { selectBehaviorEvidence } from "./behaviorEvidence";
 import { GitMerge, LockKeyhole } from "lucide-react";
 import { ReviewHeader } from "./ReviewHeader";
 import { EditorDiff } from "../editor";
@@ -93,7 +94,7 @@ export function ChangeCard({
   );
 }
 
-type CardContentProps = { state: State; changeId: string; card: ChangeCardState };
+type CardContentProps = { state: State; changeId: string; card: ChangeCardState; panel?: boolean };
 
 function CardLead({ card }: CardContentProps) {
   const { change, kind } = card;
@@ -140,7 +141,7 @@ function CardDiffs({ state, changeId }: { state: State; changeId: string }) {
   );
 }
 
-export function CardEvidence({ state, changeId, card }: CardContentProps) {
+export function CardEvidence({ state, changeId, card, panel }: CardContentProps) {
   const candidate = candidateKey(state, changeId);
   const answers = useAnswers((s) => s.drafts[candidate]) ?? {};
   const { change, facts, kind } = card;
@@ -170,6 +171,7 @@ export function CardEvidence({ state, changeId, card }: CardContentProps) {
             useAnswers.getState().answer(candidate, key, value);
           }}
           slot={slot}
+          panelComparisons={panel ? (selectBehaviorEvidence(state, changeId) ?? []) : undefined}
         />
       ) : (
         <div className="unavailable-check">
