@@ -26,6 +26,12 @@ function checks(lifeShots: string | undefined, referenceExists: boolean) {
     URL,
     process: { env: { LIFE_SHOTS: lifeShots } },
     require: (name: string) => {
+      if (name === "../browserLaunch.support")
+        return {
+          launchBrowser() {
+            throw new Error("Fixture collection must not launch Chromium");
+          },
+        };
       if (name === "vitest") return { it: browserIt, beforeAll() {}, afterAll() {} };
       if (name === "node:fs") return { existsSync: () => referenceExists };
       if (name === "@playwright/test" || name === "vite") return {};
