@@ -78,12 +78,13 @@ it.each(["dark", "day"])(
       await capture("01-inbox");
       await page.getByText("Don't ask again", { exact: false }).first().click();
       await expect(page.getByRole("radio")).toHaveCount(2);
-      await page.getByRole("radio", { name: /This module/ }).check();
+      await expect(page.getByRole("radio", { name: /This module shop.pricing/ })).toBeDisabled();
+      await expect(page.getByRole("radio", { name: "This run", exact: true })).toBeDisabled();
       await capture("02-grant-choice");
-      await page.getByRole("button", { name: "Approve", exact: true }).click();
-      await expect(
-        page.getByText("Approve prepared with module grant. No command sent."),
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeDisabled();
+      await expect(page.locator(".inbox-row").first().getByRole("status")).toHaveText(
+        "Replay: nothing here sends a decision. The decision in the log shows when it arrives.",
+      );
       await expect(
         page.getByRole("button", { name: "Decisions: 3 pending. Open decisions inbox" }),
       ).toBeVisible();
@@ -171,10 +172,17 @@ it.each(["dark", "day"])(
       await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
       await card.getByRole("button", { name: "Change answer" }).last().click();
       await card.getByRole("button", { name: "Yes, keep it" }).click();
-      await expect(card.getByRole("button", { name: "Approve and merge" })).toBeEnabled();
-      await card.getByRole("textbox").fill("Comment stays local");
+      await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
+      await expect(
+        card.getByRole("button", { name: "Request changes", exact: true }),
+      ).toBeDisabled();
+      await expect(card.getByRole("button", { name: "Reject", exact: true })).toBeDisabled();
+      await expect(card.getByRole("textbox")).toHaveJSProperty("readOnly", true);
+      await card.getByRole("textbox").focus();
       await page.keyboard.press("Control+Enter");
+      expect(commands).toEqual([]);
       await expect(card.getByText("Approve prepared locally. No command sent.")).toHaveCount(0);
+      await expect(card.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
       await page.getByRole("button", { name: /Decisions: 3/ }).click();
       await page
         .locator(".inbox-row")
@@ -184,7 +192,7 @@ it.each(["dark", "day"])(
       await expect(
         page.getByRole("heading", { name: "Needs you because a check was unavailable" }),
       ).toBeVisible();
-      await expect(page.getByRole("button", { name: "Reject", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Reject", exact: true })).toBeDisabled();
       await capture("05-unavailable");
       await page.getByRole("button", { name: /^Decisions:/ }).click();
       await page.getByRole("button", { name: /^Standing grants / }).click();
@@ -192,6 +200,8 @@ it.each(["dark", "day"])(
       await expect(page.locator(".grant-row")).toHaveCount(1);
       await expect(page.locator(".grant-row")).toContainText("1 change let through");
       await capture("06-grants");
+      await expect(page.getByRole("button", { name: "Revoke", exact: true })).toBeDisabled();
+      await expect(page.getByText(/Preview/)).toHaveCount(0);
       await page.getByRole("button", { name: "Revoke", exact: true }).dispatchEvent("click");
       await expect(page.locator(".grant-row")).toHaveCount(1);
       await mount(14);
