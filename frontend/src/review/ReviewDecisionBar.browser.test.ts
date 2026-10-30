@@ -82,6 +82,49 @@ const check = (actual: Awaited<ReturnType<typeof measure>>) => {
     expect(Math.abs(actual[key] - expected[key]), JSON.stringify(actual)).toBeLessThanOrEqual(1);
 };
 
+it.each(["dark", "day"])("prepares a No request locally during %s replay", async (theme) => {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  const commands: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() !== "GET") commands.push(request.url());
+  });
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url);
+    await page.waitForFunction(() => "mountInboxCommands" in window);
+    await page.evaluate((theme) => {
+      document.documentElement.dataset.theme = theme;
+      (window as unknown as { mountInboxCommands: (recorded: boolean) => void }).mountInboxCommands(
+        true,
+      );
+    }, theme);
+    await page.getByRole("button", { name: /^Decisions:/ }).click();
+    await page.locator(".inbox-row").nth(1).getByRole("button", { name: "Review change" }).click();
+    const bar = page.getByRole("region", { name: "Decision", exact: true });
+    const request = bar.getByRole("button", { name: "Request changes" });
+    await browserExpect(request).toBeDisabled();
+    await page.getByRole("button", { name: "Yes, keep it" }).first().click();
+    await page.getByRole("button", { name: "No, send it back" }).click();
+    await browserExpect(request).toBeEnabled();
+    await browserExpect(bar.getByRole("textbox")).toHaveValue(/quantity=True|True/);
+    await browserExpect(bar.getByRole("textbox")).toHaveJSProperty("readOnly", true);
+    await request.click();
+    await browserExpect(bar.getByRole("status")).toHaveText(
+      "Request changes prepared locally. No command sent.",
+    );
+    await browserExpect(request).toBeFocused();
+    for (const name of ["Approve and merge", "Reject"])
+      await browserExpect(bar.getByRole("button", { name, exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: "Change answer" }).last().click();
+    await page.getByRole("button", { name: "Unsure, decide later" }).click();
+    await browserExpect(request).toBeDisabled();
+    await browserExpect(bar.locator('[role="status"]')).toBeEmpty();
+    expect(commands).toEqual([]);
+  } finally {
+    await page.close();
+  }
+});
+
 it.each(["dark", "day"])(
   "contains long failures and preserves multilingual comments and focus in %s",
   async (theme) => {
