@@ -67,6 +67,18 @@ it.each(["pending", "settled"])("discards edits with a %s folded diff at EOF", a
       await browserExpect(
         page.locator('.modified .diff-hidden-lines [title="Show Unchanged Region"]').first(),
       ).toBeVisible();
+      await page.evaluate(() => window.panelTest.current()?.getModifiedEditor().focus());
+      await page.keyboard.press("Control+z");
+      await browserExpect(review).toHaveAttribute("data-state", "dirty");
+      await browserExpect(review.getByRole("button", { name: "Save review edits" })).toBeEnabled();
+      await browserExpect(
+        review.getByRole("button", { name: "Discard edits", exact: true }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(() => window.panelTest.current()?.getModel()?.modified.getValue()),
+      ).toBe(data.modified + text);
+      await review.getByRole("button", { name: "Discard edits", exact: true }).click();
+      await browserExpect(review).toHaveAttribute("data-state", "clean");
     }
   });
 });

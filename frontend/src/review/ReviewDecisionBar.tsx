@@ -85,7 +85,6 @@ export function ReviewDecisionBar({
     : no?.question;
   const commentKey = candidate + (no ? cardKey(no) : "general");
   const [comments, setComments] = useState<Record<string, string>>({});
-  const [preparedRequest, setPreparedRequest] = useState<string | null>(null);
   const comment = comments[commentKey] ?? prefill ?? "";
   const locked = values.some((value) => value !== "yes");
   if (view.kind === "decided") {
@@ -112,8 +111,6 @@ export function ReviewDecisionBar({
   const approvable = view.kind === "open" && onDecide !== undefined && !blocked && !locked;
   const requestable =
     (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined && !blocked;
-  // A No can prepare a request locally in replay; it must never dispatch a recorded decision.
-  const localRequest = recorded && no !== undefined && !blocked;
   const rejectable = (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined;
   const failure = view.kind === "open" || view.kind === "conflict" ? view.failure : null;
   // No key in this section makes a decision. Approve answers only a pointer click: Enter and Space
@@ -168,10 +165,9 @@ export function ReviewDecisionBar({
         </button>
         <button
           type="button"
-          disabled={(!requestable && !localRequest) || comment.trim() === ""}
+          disabled={!requestable || comment.trim() === ""}
           onClick={() => {
-            if (localRequest) setPreparedRequest(commentKey);
-            else if (requestable) onDecide(changeId, "request-changes", comment);
+            if (requestable) onDecide(changeId, "request-changes", comment);
           }}
           aria-description="Request changes keeps the worktree and sends your comment back."
           className={`${button} border border-control-edge`}
@@ -214,9 +210,6 @@ export function ReviewDecisionBar({
       )}
       {/* Always mounted, so what appears under the buttons is announced where it appears. */}
       <div role="status" className="text-sm text-muted">
-        {localRequest && preparedRequest === commentKey && (
-          <p className="mt-2.5">Request changes prepared locally. No command sent.</p>
-        )}
         {pending && (
           <p className="mt-2.5">
             {view.action === "request-changes"

@@ -82,7 +82,7 @@ const check = (actual: Awaited<ReturnType<typeof measure>>) => {
     expect(Math.abs(actual[key] - expected[key]), JSON.stringify(actual)).toBeLessThanOrEqual(1);
 };
 
-it.each(["dark", "day"])("prepares a No request locally during %s replay", async (theme) => {
+it.each(["dark", "day"])("keeps No disabled in %s replay", async (theme) => {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   const commands: string[] = [];
   page.on("request", (request) => {
@@ -105,14 +105,9 @@ it.each(["dark", "day"])("prepares a No request locally during %s replay", async
     await browserExpect(request).toBeDisabled();
     await page.getByRole("button", { name: "Yes, keep it" }).first().click();
     await page.getByRole("button", { name: "No, send it back" }).click();
-    await browserExpect(request).toBeEnabled();
+    await browserExpect(request).toBeDisabled();
     await browserExpect(bar.getByRole("textbox")).toHaveValue(/quantity=True|True/);
     await browserExpect(bar.getByRole("textbox")).toHaveJSProperty("readOnly", true);
-    await request.click();
-    await browserExpect(bar.getByRole("status")).toHaveText(
-      "Request changes prepared locally. No command sent.",
-    );
-    await browserExpect(request).toBeFocused();
     for (const name of ["Approve and merge", "Reject"])
       await browserExpect(bar.getByRole("button", { name, exact: true })).toBeDisabled();
     await page.getByRole("button", { name: "Change answer" }).last().click();

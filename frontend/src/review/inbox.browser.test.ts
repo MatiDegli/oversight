@@ -163,7 +163,7 @@ it.each(["dark", "day"])(
       await card.getByRole("button", { name: "No, send it back" }).click();
       await expect(
         card.getByRole("button", { name: "Request changes", exact: true }),
-      ).toBeEnabled();
+      ).toBeDisabled();
       await expect(
         card.getByRole("button", { name: "Request changes", exact: true }),
       ).not.toHaveClass(/decision-primary/);
