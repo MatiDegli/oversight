@@ -3,11 +3,12 @@ a change, read and save a file on main, rescan the graph; 501 for the rest.
 
 A replay takes no commands: every command route answers 501 there, its body not parsed. Live, the
 app passes an object that implements `Commands`; this module maps its errors to the contract's.
+Archived change and coding-agent reads use the app's committed store in both modes.
 """
 
 import re
 from collections.abc import Callable, Coroutine
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from fastapi import APIRouter, Request, Response
 
@@ -18,12 +19,16 @@ from oversight.changes import (
     InvalidAnswers,
     InvalidGrant,
     WrongState,
+    read_agent_status,
+    read_change_view,
 )
+from oversight.events import EventStore
 from oversight.telemetry import CURRENT, TRACE_HEADER, evaluation_trace, mark
 from oversight.workspace import TREE_TIMEOUT_S, FileTooLarge, InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
     AgentCreated,
     ApproveChange,
+    ChangeView,
     FileContent,
     FileSaved,
     RejectChange,
@@ -32,6 +37,7 @@ from oversight_contracts.commands import (
     StartAgent,
     TreeResponse,
 )
+from oversight_contracts.events import AgentStatus
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("POST", "/dictation", "Reserved /dictation"),
@@ -44,8 +50,6 @@ NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("POST", "/leads/{agent_id}/stop", "Reserved /leads/{agent_id}/stop"),
     ("POST", "/changes/{change_id}/review", "Reserved /changes/{change_id}/review"),
     ("POST", "/changes/{change_id}/revert", "Reserved /changes/{change_id}/revert"),
-    ("GET", "/changes/{change_id}", "Reserved /changes/{change_id}"),
-    ("GET", "/agents/{agent_id}", "Reserved /agents/{agent_id}"),
     ("GET", "/impact", "The impact query"),
     ("GET", "/merge-mode", "Reading the merge mode"),
     ("PUT", "/merge-mode", "Setting the merge mode"),
@@ -125,6 +129,20 @@ def _decide[A](decision: Callable[[str, A], None], change_id: str, comment: A) -
 
 
 def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: str) -> None:
+    @router.get("/changes/{change_id}")
+    async def change_view(change_id: str, http: Request) -> ChangeView:  # pyright: ignore[reportUnusedFunction]
+        try:
+            return read_change_view(cast(EventStore, http.app.state.store), change_id)
+        except ChangeNotFound:
+            raise ApiError("not_found", f"there is no change {change_id!r}") from None
+
+    @router.get("/agents/{agent_id}")
+    async def agent_status(agent_id: str, http: Request) -> AgentStatus:  # pyright: ignore[reportUnusedFunction]
+        try:
+            return read_agent_status(cast(EventStore, http.app.state.store), agent_id)
+        except ChangeNotFound:
+            raise ApiError("not_found", f"there is no agent {agent_id!r}") from None
+
     for method, path, what in NOT_BUILT:
         router.add_api_route(
             path, _not_built(what, "is not built yet"), methods=[method], status_code=501

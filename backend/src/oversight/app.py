@@ -1056,5 +1056,6 @@ def _replay_app(settings: Settings, replay: ReplayConfig) -> FastAPI:
                 await store.close()
 
     app = FastAPI(title="Oversight (replay)", lifespan=lifespan)
+    app.state.store = store
     app.include_router(create_router(store, "replay"))
     return app
