@@ -30,6 +30,22 @@ what was cut.
 
 ## Decided queue
 
+### Hackathon priority (2026-10-30)
+
+The maintainer set this order on 2026-10-30, ahead of the queue below. It has no dates: take the
+next item by real progress.
+
+1. Evidence for an added optional parameter (bench tasks b02, b06, b08, b10, b12 and b18), inside
+   the bench evidence fix: the most common change must not end in Needs you.
+2. Item 10 with agent-hours, project active hours and parallelism. Proof 2's closing line ("this
+   many agents for this many hours") depends on it. (The maintainer confirmed proof 2 on
+   2026-10-30.)
+3. Reasons in words on the card instead of "probe unavailable"
+   (`backend/src/oversight/changes/_behavior_publish.py:166`), from fixed templates over the
+   evidence, never written by the model.
+4. "Waiting for model (retry n/5)" on the card, from the call's own data (five attempts,
+   `backend/src/oversight/agents/client.py:163`); a provider halt says so instead of "working".
+
 This is the working home for everything beyond level 2. The maintainer set this order on
 2026-10-28. When capacity opens, take the first unfinished item that can proceed; dates do not
 supersede priority. Level 2 closed on Oct 27; its demo remains the fallback. Queue numbers replace
@@ -82,7 +98,40 @@ the task bench (10; eight-task base on main `9a1772f`, arms in progress on `tool
 ## Undecided candidates
 
 These retain useful ideas from the old inventory without approving a front or changing the freeze.
+None is queued: nothing is built until the maintainer orders level-3 work (2026-10-30).
 
+- Native sandbox, the first level-3 candidate (maintainer, 2026-10-30). "A sandbox" is on AGENTS.md's
+  out-of-scope list; lifting it needs the maintainer's decision. Goal: safety without slowing
+  agents. The sandbox bounds side effects, not what an agent does in its task; normal work runs
+  with no prompts.
+
+  1. On by default for agents; off only by the person's explicit choice. The person's own commands
+     are never sandboxed. Linux first, with bubblewrap or the unshare already in
+     `backend/src/oversight/workspace/isolation.py` (today network and PID only). On Windows and
+     macOS the card says "no sandbox on this system" and never implies one.
+  2. The worktree is the agent's world. Free, with no prompt: writing in its own worktree, reading
+     the repository, running tests, linters and builds, and installing from allowlisted registries
+     (PyPI, npm) or from shared read-only uv and pnpm caches. Blocked: writes outside its worktree,
+     other agents' worktrees included; credentials (SSH keys, .env, key files); any other network
+     egress; global installs.
+  3. One tier per role: writers as above; reviewers read-only; probes and test runs strictest, with
+     no network and writes only to a temporary directory; the person unsandboxed.
+  4. Fast exit: a blocked action returns a clear error to the agent ("network to X blocked"), and
+     the card shows "Needs you: asks for access to X". One click approves it, remembered per
+     repository, so the allowlist grows with use. The lead never grants an exit on its own.
+  5. Metric: exits requested per accepted change, beside questions per accepted change. A task type
+     that keeps hitting the boundary means the allowlist is wrong; the target is zero in normal
+     work.
+  6. Division of labor: Oversight's evidence guards what code reaches main; the sandbox guards what
+     code does while it runs.
+
+- Benchmarks view: a read-only view of the bench and proof results inside Oversight. Until it
+  exists, the README and the demo video carry the proofs.
+- Linux on demand: with the Tauri shell on Windows, git, Python and Node run natively, and only
+  what needs the Linux kernel (isolated test runs, the sandbox) goes to WSL, which starts on demand
+  and stops when idle.
+- Resume a halted agent in the same conversation and worktree, through the level-3 resume route
+  (reserved in the contract, 501 today, `backend/src/oversight/api/commands.py:62`).
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
 - No repeated automatic revision for an unchanged failure: before cross-review or rules follow-up
@@ -162,6 +211,10 @@ These retain useful ideas from the old inventory without approving a front or ch
 - Hypothesis: its MPL-2.0 license is outside the dependency allowlist.
 - Trained verifiers: no training pipeline within this hackathon.
 - Tree search: branching does not fit the bounded workflow and budget.
+- A model training room: after the hackathon and outside Oversight's scope; declined for now.
+- Native fine-tuning: after the hackathon and outside Oversight's scope; declined for now.
+  It would depend on TRL, Unsloth or Axolotl (Apache-2.0) or torchtune (BSD-3-Clause),
+  and Muse Spark cannot be fine-tuned through the API.
 
 ## Item descriptions
 
@@ -231,7 +284,8 @@ coverage nor proof that all callers behave identically.
 
 Identify same-node edits on the node and both cards. If B has read something A is changing, say so
 on B's card and retain observed reads for the whole change. Edits inside another agent's cone
-become a fact at review. Never interrupt the person or move focus for overlap.
+become a fact at review. Never interrupt the person or move focus for overlap. Overlap warnings
+name the shared nodes and never block on their own: they warn, and the person decides.
 
 Reuse `pending-both` (`frontend/src/graph/styles.ts:302`), pending-node sets and live/proposal cones.
 Add pure selectors and change-lifetime read sets to the reducer; main retains only latest focus
@@ -582,7 +636,8 @@ The maintainer chooses the video script Mon Nov 2: start with a real clean-looki
 tests, ask for a decision, reveal an unrequested result and measured cone, then scale with real-run
 counts. Keep editor/file view/editable side out of the video. Replace the level 2 fallback only
 after three clean one-command runs without manual fixes. Robustness/takes freeze Tue Nov 3 at
-20:00 ART; submission target Wed Nov 4 at 20:00 ART.
+20:00 ART; submission target Wed Nov 4 at 20:00 ART. The pitch and the README state what is already
+isolated today, test runs in their own network and PID namespaces, and never claim a sandbox.
 
 **Graph polish (package 8).** Continue readability/performance within DESIGN.md's tokens, saved
 layout and single graph. Dot-field and palette exist; `535e6f6` includes Ctrl K navigation. No new
