@@ -75,10 +75,10 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 5 | Live overlap between agents | Queued — card facts/change-lifetime reads remain; latest focus and last-read node only at `06c34a5` | No |
 | 6 | Fails before, passes after (package 4) | On main — base setup/import errors are unknown `b786f6c`; isolated probes `19443e8` | No — conservative classification uses existing fields; exception type declined |
 | 7 | Cross-review and automatic Request changes (package 2) | On main — one-round revision `7da6fa9`, independent reviewer selection `045f589`; manual review route still 501 | No |
-| 8 | Merge by rules, follow main and Revert (package 1) | Partial — reservation `5dac67c`, transaction `73b4f65`, barriers `7aec7d5` wired; mode closed, merge-mode routes 501 at `06c34a5`; isolated start and routes first | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
+| 8 | Merge by rules, follow main and Revert (package 1) | Partial — reservation `5dac67c`, transaction `73b4f65`, barriers `7aec7d5` wired; mode closed, merge-mode routes 501 at `c820fbf`; isolated start and routes first | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
 | 9 | A change card with three states | Partial — decision producer `3786310`, answer guards `2efd586`, inbox projection `f4ab346`; full UI/rules state remain | Yes |
 | 10 | Cost and rounds per accepted change | Partial — usage fold `43f3bb8`, archived change totals `bf36052`; agent-hours, dated prices and aggregate UI remain | Yes — stored aggregates; event-derived totals need none |
-| 11 | One plan, server-computed zones and task queue (package 6) | Partial — unwired partition core `deb7148`, dependency contracts `bb9dc43`; scheduler/dispatcher and plan/queue routes remain | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
+| 11 | One plan, server-computed zones and task queue (package 6) | Partial — unwired partition core `deb7148`, dependency contracts `bb9dc43`; standalone queue routes/dispatcher live `c820fbf`; plan routes/dependency scheduling remain | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
 | — | [Lead agent](#lead-agent) | Queued — after items 8 and 11; lead routes still 501 at `06c34a5` | No — lead routes and `started_by` reserved |
 | — | [Saved agent flows](#saved-agent-flows) | Queued — picker absent at `06c34a5`; after the lead, extends package 12 `c1c19c6` | No while filling task text; a distinct role or tool limits need maintainer review |
 | 12 | Examples before code | Queued — contracts reserved `649ff0d`; no examples phase on main `06c34a5` | Yes |
@@ -300,7 +300,7 @@ name the shared nodes and never block on their own: they warn, and the person de
 
 Reuse `pending-both` (`frontend/src/graph/styles.ts:302`), pending-node sets and live/proposal cones.
 Add pure selectors and change-lifetime read sets to the reducer; main retains latest focus and
-one last-read node per agent (`frontend/src/state/applyAgentEvent.ts:41`), not change-lifetime reads.
+one last-read node per agent (`frontend/src/state/applyAgentEvent.ts:42`), not change-lifetime reads.
 No contract addition; replay must agree with live runs.
 Search focus is capped, so observed reads are not a complete audit. Once item 18 supplies messages,
 notify the later agent as a separate turn; notification in its next tool result remains Next.
@@ -313,7 +313,7 @@ C3 already requires isolated probes (`backend/src/oversight/changes/_probes.py:2
 classification landed in `b786f6c`.
 
 Base import/setup errors now count as unknown with their diagnostic, using existing probe
-results/problems (`backend/src/oversight/changes/_beforeafter.py:62`); they no longer establish
+results/problems (`backend/src/oversight/changes/_beforeafter.py:58`); they no longer establish
 failure on base. The merge-alone evaluator must never use them as evidence of failure on base.
 Build this before merge-alone can activate, with no contract change. That prerequisite is met
 by `b786f6c`. An exception-type field was declined for the
@@ -478,9 +478,10 @@ its prerequisite merges. Use one agent when no independent split exists. Queue d
 Main validates/expands supplied zones (`backend/src/oversight/changes/_zones.py:40`).
 Reuse that after deterministic cycle contraction; uncertain calls and same-file zones still need
 conservative handling. A pure partition-feasibility core landed in `deb7148`, but has no production
-completeness producer or caller (`backend/src/oversight/changes/_partition.py:1`). Plan/queue routes
-remain 501 (`backend/src/oversight/api/commands.py:44`); scheduler/dispatcher wiring remains, and finishing
-alone does not free a retained worktree's slot. Contracts 1.8.0 (`bb9dc43`, P1–P5) now allow one
+completeness producer or caller (`backend/src/oversight/changes/_partition.py:1`). Plan routes remain
+501 (`backend/src/oversight/api/commands.py:55`). Queue routes are live, with the standalone FIFO
+dispatcher wired (`c820fbf`); plan queueing and dependency scheduling remain. Finishing alone does
+not free a retained worktree's slot. Contracts 1.8.0 (`bb9dc43`, P1–P5) now allow one
 to six subtasks, validated dependencies and sequential/single-agent starts. Those schema changes
 do not start or dispatch a plan (`contracts/src/oversight_contracts/plans.py:1`).
 A partition heuristic does not prove independence; speed claims wait for the split bench.
@@ -623,7 +624,7 @@ remembers what you let go."
 Contracts 1.7.0 and the first backend landed in `93a3664`: possible_callers only, module/run scope,
 run expiry, Approve creation and POST /grants/{id}/revoke. Grant checks are wired into reservation
 and every transaction barrier. Creation requires a current rules-mode wait
-(`backend/src/oversight/changes/_grants.py:145`), so closed rules activation still prevents live
+(`backend/src/oversight/changes/_grants.py:147`), so closed rules activation still prevents live
 creation/use; the frontend ignores grant events (`frontend/src/state/applyEvent.ts:30`). The full
 grants UI, broader scopes/expiry and protected-path grants remain.
 
