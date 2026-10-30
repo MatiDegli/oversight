@@ -3,6 +3,7 @@
 Other modules import only what this file exports; everything else here is internal.
 """
 
+from oversight.agents._control import RunControl
 from oversight.agents._crossreview import ConeEntry
 from oversight.agents._crossreview import Inputs as ReviewInputs
 from oversight.agents._crossreview import TestResult as ReviewTests
@@ -117,6 +118,7 @@ __all__ = [
     "ReviewInputs",
     "ReviewOutcome",
     "ReviewTests",
+    "RunControl",
     "RunEnd",
     "Script",
     "ScriptedModel",
