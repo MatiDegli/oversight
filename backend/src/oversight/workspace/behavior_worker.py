@@ -173,12 +173,14 @@ def limited(action: Callable[[], Any], timeout_s: float) -> Any:
         signal.setitimer(signal.ITIMER_REAL, 0)
 
 
-def call(function: Callable[..., Any], literal: str, timeout_s: float) -> dict[str, Any]:
+def call(
+    function: Callable[..., Any], literal: str, timeout_s: float, root: Path | None = None
+) -> dict[str, Any]:
     def execute() -> dict[str, Any]:
-        args, kwargs = ast.literal_eval(literal)
+        args, kwargs, memo = _arguments(literal, root or Path.cwd())
         bound = inspect.signature(function).bind(*args, **kwargs)
         bound.apply_defaults()
-        arguments = copy.deepcopy((bound.args, bound.kwargs))
+        arguments = copy.deepcopy((bound.args, bound.kwargs), memo)
         try:
             value = function(*arguments[0], **arguments[1])
         except CallTimeout:
@@ -198,6 +200,8 @@ def call(function: Callable[..., Any], literal: str, timeout_s: float) -> dict[s
         result = limited(execute, timeout_s)
     except CallTimeout:
         return {"kind": "timed_out"}
+    except ArgumentClassMismatch:
+        return {"kind": "unrepresentable", "reason": "argument class mismatch"}
     except BaseException as error:
         result = {"kind": "unrepresentable", "class": class_name(error)}
     if len(canonical(result).encode()) > MAX_RESULT:
@@ -252,14 +256,14 @@ def _state_display(state: tuple[Any, Any]) -> dict[str, Any]:
     }
 
 
-def _receiver_class(target: dict[str, Any], root: Path) -> type[Any]:
-    module = importlib.import_module(target["module"])
-    cls = getattr(module, target["receiver_class"])
+def _project_class(module_name: str, name: str, root: Path) -> type[Any]:
+    module = importlib.import_module(module_name)
+    cls = getattr(module, name)
     if type(cls) is not type:
         raise ValueError("receiver metaclass")
-    if not inspect.isclass(cls) or cls.__module__ != target["module"]:
+    if not inspect.isclass(cls) or cls.__module__ != module_name:
         raise ValueError("receiver is not a project class")
-    if cls.__qualname__ != target["receiver_class"] or cls.__bases__ != (object,):
+    if cls.__qualname__ != name or cls.__bases__ != (object,):
         raise ValueError("receiver is not a simple class")
     if module.__file__ is None:
         raise ValueError("receiver module has no file")
@@ -286,6 +290,11 @@ def _receiver_class(target: dict[str, Any], root: Path) -> type[Any]:
         hooks -= {"__setattr__", "__delattr__"}
     if hooks.intersection(cls.__dict__):
         raise ValueError("custom receiver hooks")
+    return cls
+
+
+def _receiver_class(target: dict[str, Any], root: Path) -> type[Any]:
+    cls = _project_class(target["module"], target["receiver_class"], root)
     descriptor = inspect.getattr_static(cls, target["name"])
     kind = target["method_kind"]
     if kind in ("property", "setter"):
@@ -297,6 +306,41 @@ def _receiver_class(target: dict[str, Any], root: Path) -> type[Any]:
         if name.startswith("_") or not isinstance(inspect.getattr_static(cls, name), property):
             raise ValueError("property allowlist mismatch")
     return cls
+
+
+class ArgumentClassMismatch(ValueError):
+    pass
+
+
+def _arguments(literal: str, root: Path) -> tuple[Any, Any, dict[int, Any]]:
+    data = ast.literal_eval(literal)
+    if len(data) == 2:
+        return (*data, {})
+    if len(data) != 3 or data[0] != "oversight.object_arguments.v1":
+        raise ValueError("argument protocol mismatch")
+
+    memo: dict[int, Any] = {}
+
+    def build(value: Any) -> Any:
+        if len(value) == 2 and value[0] == "literal":
+            return value[1]
+        if len(value) != 5 or value[0] != "constructor":
+            raise ValueError("argument protocol mismatch")
+        _, module, name, args, kwargs = value
+        _literal_state((args, kwargs))
+        try:
+            cls = _project_class(module, name, root)
+        except (ValueError, TypeError, AttributeError, ImportError) as error:
+            raise ArgumentClassMismatch("argument class mismatch") from error
+        binding = inspect.signature(cls).bind(*args, **kwargs)
+        binding.apply_defaults()
+        args, kwargs = copy.deepcopy((binding.args, binding.kwargs), memo)
+        instance = cls(*args, **kwargs)
+        # Copy defaults and literals, never clone constructed objects.
+        memo[id(instance)] = instance
+        return instance
+
+    return tuple(build(v) for v in data[1]), {k: build(v) for k, v in data[2].items()}, memo
 
 
 def _exception(error: BaseException) -> dict[str, Any]:
@@ -311,9 +355,9 @@ def _exception(error: BaseException) -> dict[str, Any]:
 
 
 def _method_action(
-    receiver: object, cls: type[Any], target: dict[str, Any], invocation: str
+    receiver: object, cls: type[Any], target: dict[str, Any], invocation: str, root: Path
 ) -> Callable[[], Any]:
-    args, kwargs = ast.literal_eval(invocation)
+    args, kwargs, memo = _arguments(invocation, root)
     name, kind = target["name"], target["method_kind"]
     if kind in ("property", "setter"):
         descriptor = inspect.getattr_static(cls, name)
@@ -336,7 +380,7 @@ def _method_action(
     method = getattr(receiver, name)
     binding = inspect.signature(method).bind(*args, **kwargs)
     binding.apply_defaults()
-    args, kwargs = copy.deepcopy((binding.args, binding.kwargs))
+    args, kwargs = copy.deepcopy((binding.args, binding.kwargs), memo)
     return lambda: method(*args, **kwargs)
 
 
@@ -357,7 +401,7 @@ def method_call(
         stored = _stored(receiver)
         _literal_state(stored)
         initial = fingerprint((stored, _state(receiver, target.get("properties", []))))
-        action = _method_action(receiver, cls, target, invocation)
+        action = _method_action(receiver, cls, target, invocation, root)
         try:
             value = action()
         except CallTimeout:
@@ -379,6 +423,8 @@ def method_call(
         result = limited(execute, timeout_s)
     except CallTimeout:
         return {"kind": "timed_out"}
+    except ArgumentClassMismatch:
+        return {"kind": "unrepresentable", "reason": "argument class mismatch"}
     except BaseException as error:
         return {"kind": "unrepresentable", "class": class_name(error)}
     if len(canonical(result).encode()) > MAX_RESULT:
@@ -401,7 +447,7 @@ def probe(target: dict[str, Any], timeout_s: float, root: Path | None = None) ->
         )
     except BaseException:
         return {"problem": "import failed", "results": []}
-    results = [call(function, literal, timeout_s) for literal in target["calls"][:48]]
+    results = [call(function, literal, timeout_s, root) for literal in target["calls"][:48]]
     return {"problem": None, "results": results}
 
 

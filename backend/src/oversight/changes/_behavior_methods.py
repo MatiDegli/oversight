@@ -4,19 +4,20 @@ import ast
 import inspect
 from dataclasses import replace
 
+from oversight.changes._behavior_generation import generate
 from oversight.changes._behavior_inputs import (
     MAX_INPUTS,
     BehaviorInput,
     BehaviorInputs,
-    _calls,  # pyright: ignore[reportPrivateUsage]
     _default,  # pyright: ignore[reportPrivateUsage]
     _effect_reason,  # pyright: ignore[reportPrivateUsage]
-    _generate,  # pyright: ignore[reportPrivateUsage]
     _literals,  # pyright: ignore[reportPrivateUsage]
     _signature,  # pyright: ignore[reportPrivateUsage]
+    calls,
     literal_text,
     module_name,
 )
+from oversight.changes._behavior_objects import display, method_arguments
 from oversight.changes._review_identity import bound_inputs, canonical
 from oversight.changes._shortcuts_common import Source, is_test_file, walk_local
 
@@ -251,7 +252,7 @@ def _receivers(module: str, cls: str, files: dict[str, str], deadline: float):
         for path, text in files.items()
         if is_test_file(path) or (path.endswith(".py") and module_name(path) == module)
     }
-    return _calls(eligible, module, cls, deadline)
+    return calls(eligible, module, cls, deadline)
 
 
 def _receiver_inputs(
@@ -280,33 +281,6 @@ def _receiver_inputs(
             if len(found) == 4:
                 return list(found.values())
     return list(found.values())
-
-
-def _method_seeds(module: str, cls: str, name: str, files: dict[str, str], deadline: float):
-    # Reuse the alias/shadow-aware constructor resolver before accepting direct receiver calls.
-    from oversight.changes._behavior_aliases import module_aliases
-    from oversight.changes._behavior_inputs import _resolved  # pyright: ignore[reportPrivateUsage]
-
-    calls: list[str] = []
-    for path, text in files.items():
-        if not path.endswith(".py"):
-            continue
-        try:
-            source = Source(text, deadline)
-            aliases = module_aliases(source)
-        except (SyntaxError, ValueError, RecursionError):
-            continue
-        for node in ast.walk(source.tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-                continue
-            receiver = node.func.value
-            if node.func.attr != name or not isinstance(receiver, ast.Call):
-                continue
-            if _resolved(source, receiver, path, module, cls, aliases):
-                calls.append(
-                    ast.unparse(ast.Call(ast.Name(name, ast.Load()), node.args, node.keywords))
-                )
-    return {module.replace(".", "/") + ".py": "\n".join(calls)}
 
 
 def method_inputs(
@@ -351,9 +325,9 @@ def method_inputs(
         receivers = _receiver_inputs(module, cls, base, head, constructors, deadline)
         if not receivers:
             raise ValueError("no literal constructor receivers")
-        seeds = [_method_seeds(module, cls, name, files, deadline) for files in (base, head)]
-        generated = _generate(
-            module, name, seeds[0], seeds[1], nodes, signatures, integers, deadline
+        observed = [method_arguments(module, cls, name, files, deadline) for files in (base, head)]
+        generated = generate(
+            module, name, base, head, nodes, signatures, integers, deadline, observed
         )
         return replace(
             generated,
@@ -391,7 +365,7 @@ def _combine_receivers(
                 values = [*args, *kwargs.values()]
                 if len(values) != 1:
                     continue
-                call = f"{receiver_text}.{name} = {literal_text(values[0])}"
+                call = f"{receiver_text}.{name} = {display(values[0])}"
             else:
                 call = f"{receiver_text}.{sample.call}"
             samples.append(
