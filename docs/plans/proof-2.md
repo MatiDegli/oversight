@@ -3,10 +3,11 @@
 ## Status
 
 The tasks were approved on 2026-10-30 at 09:32 ART; the reporting rules on 2026-10-30 at
-10:10 ART. P1-P6 were approved on 2026-10-30 by 11:57 ART in the coordinator's session.
+10:10 ART. P1-P5 were approved on 2026-10-30 by 11:57 ART in the coordinator's session.
 Everything in this plan is fixed before the run. A rule added later is reported as
 added after the run started. Scope: [Three proofs](../additions.md#three-proofs) and
 [the paired-arm decision](../../DECISIONS.md#2026-10-29--proof-2-measures-correctness-with-hidden-checks-and-a-paired-arm).
+The frozen rules are recorded in [the plan decision](../../DECISIONS.md#2026-10-30--proof-2s-tasks-and-reporting-rules-are-fixed-before-the-run).
 Code references below remain pinned to main `37cbe9e` unless explicitly marked `1985dfc`;
 a contract shape is not a built producer. The proof 2 manifest, commands and feature checks
 are on main since `65199d9`, as checked below on `1985dfc`. Contracts 1.8.0 reliability events,
@@ -54,7 +55,7 @@ Freeze all hidden checks before seeing agent output; keep checks outside the pro
 (`DECISIONS.md:1376-1378`). Agents have no network.
 
 Queue parallel pairs 1-2, 3-4, 5-6, 7-8, 9-10, 11-12 and 13-14. Task 15 runs after task 5;
-task 16 runs alone. Queuing all tasks does not bypass these execution constraints.
+task 16 runs alone.
 
 D3: a tests-only task (10, 12, 14 and 15) is correct when its new tests pass on the base
 code, fail on at least two of three seeded mutants written and frozen before the run, and
@@ -179,13 +180,13 @@ unknown costs stay unknown.
 **E6.** How reliable is each model as an agent backend? Per model and host, count 429 and
 capacity errors per agent-hour, retries, halts after retries, and malformed tool calls.
 Source: future contracts 1.8.0 events model.attempt_failed and agent.step.error_kind; still absent
-on `1985dfc` and required before the run. That main still has contracts 1.7.0
+on `1985dfc` and required before the run. Main still has contracts 1.7.0
 (`contracts/src/oversight_contracts/__init__.py:12`, checked on `1985dfc`).
 
 **E7.** Does the server's evidence agree when the agent says it is done?
-Compare files, tests_run and tests with the server's diff and test run; count agreement,
-disagreement and omitted claims separately per field. Never parse prose with a model; declarations
-are agent claims, never evidence.
+Compare files, tests_run and tests with the server's diff and test run.
+A claim omitted in finish is counted apart. Derived reporting detail: count agreement and
+disagreement per field. Never parse prose with a model; declarations are agent claims, never evidence.
 Source: FinishDeclaration (`contracts/src/oversight_contracts/review.py:113-121`), facts
 (`contracts/src/oversight_contracts/review.py:376-381`), Git diffs and tests.executed
 (`contracts/src/oversight_contracts/events.py:602-607`).
@@ -213,8 +214,8 @@ cases:
 - both passes have the same count;
 - every case labelled unasked_difference whose tests pass in both passes flips between them.
 
-Bring the numbers to the maintainer before any paid call. Passing the gate does not itself
-start or authorize a paid run.
+The pair runs only after both passes meet these three conditions.
+Bring the numbers to the maintainer before any paid call.
 
 ## The lead (L1-L3)
 

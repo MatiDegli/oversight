@@ -1934,3 +1934,33 @@ Reason: Oversight records when each agent works, so measured intervals replace a
 lead must not inflate the hours. A stored price table needs no contract change; recording a price in
 run.started was the rejected alternative. The coverage, grouping and comparison rules come from prior
 work in the maintainer's projects, rewritten for Oversight; no code was copied.
+
+## 2026-10-30 — Proof 2's tasks and reporting rules are fixed before the run
+
+Tasks were approved at 09:32 ART and reporting rules at 10:10 ART on 2026-10-30.
+P1-P5 were approved by 11:57 ART; the [plan](docs/plans/proof-2.md) fixes the rules before the run.
+P6 has no text in `43e64a7`; approval is recorded as P1-P5 until its exact text exists.
+D1: 16 Boltons tasks, 12 issue-backed and four tests-only; parallel pairs 1-2 through 13-14,
+task 15 after 5, task 16 alone. D2: seven feature APIs and examples are frozen in tasks.json.
+D3: tests-only changes pass on base, kill at least two of three frozen mutants and change no production code.
+D4: open upstream PR tasks stay, pinned at d31d821; checks follow issues, not PRs; replace only resolved issues.
+E1: reviewer verdicts against hidden checks, all four cells, unknowns apart, and review cost per change.
+E2: hidden checks on every reviewed revision; cited fixes use P2. New regressions have two counts:
+passing at task base then failing now, and passing at the previous reviewed revision then failing now.
+E3: unasked behavior changes split by difference kind; Boltons method tasks await methods-1.
+E4 causes: checks_unavailable = missing evidence; review_card = model judgment; risky_area,
+examples_before_code, lead_plan and follow_main = the person's policy, never the other two causes.
+follow_main also has its own parallel-agent cost subcount; assign new decision kinds a cause before the run.
+E5: paired-arm cost and wall time per correct change, by role, including failed/rejected work; hours and parallelism.
+Meta's official pricing page supplies the dated extracted table and one leak-guard exception; Baseten is a lower bound.
+E6: per model/host, 429/capacity errors per agent-hour, retries, retry halts and malformed calls, from contracts 1.8.0.
+E7: compare finish files/tests_run/tests with server diff/tests; omitted claims count apart; never model-parse prose.
+Under 10 cases, counts only, never a percentage. Proof 2's US$25 cap includes the uncounted pilots.
+H1: same-model harness-pack pair belongs to the bench's US$20; it runs only after both free passes meet all three:
+at most 4/20 question-not-available cases per pass, equal counts, and every eligible unasked_difference case flips.
+Bring the numbers before paying. L1: rework/re-splits/conflicts, zone overlaps, round-0 acceptance; L2: planning spend.
+L3 is future work. With the lead on main, measure L1-L2; otherwise, if hidden checks, item 8, E6 and item 10 are on main,
+the person queues the 16 tasks at once; starts count as their decisions and L1-L2 are not measured.
+P1: correct change; P2: fixed what was cited; P3: questions that were not needed; P4: review cost per change.
+P5: pilots 16 and 4 first, results excluded, all 16 then queued again; pilot costs remain within US$25.
+Reason: freeze tasks, definitions and reporting before seeing results; later rules are marked added after run start.
