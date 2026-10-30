@@ -23,9 +23,10 @@ The freeze is organized around three proofs. Judge each front by the proof it se
    reporting rule before measuring: if the share is low or the sample too small, tell the scale
    story without a percentage. Do not repeat the run to improve that result.
 
-Checkpoint: Sat Oct 31 at 23:00 ART. Items 1, 2, 4 and 9, the behavior-diff bench and proof 1
-must all be on main. If any is missing, cut work from item 12 down and tell the maintainer what
-was cut.
+Checkpoint: items 1, 2, 4 and 9, the behavior-diff bench and proof 1 must all be on main. The
+cut line is drawn as soon as they are, whatever the day. Sat Oct 31 at 23:00 ART is only the
+fallback deadline: if any is missing then, cut work from item 12 down and tell the maintainer
+what was cut.
 
 ## Decided queue
 
@@ -94,8 +95,8 @@ These retain useful ideas from the old inventory without approving a front or ch
   tasks that change functions only and state that limit in the write-up; current targets are
   module-level functions (`backend/src/oversight/changes/_behavior.py:79`).
 - A dependency guard for package existence, license and vulnerability evidence.
-- Native workflow candidates from the maintainer (2026-10-29), none queued. The cut line drawn
-  after the Saturday checkpoint comes before any of them is considered.
+- Native workflow candidates from the maintainer (2026-10-29), none queued. The cut line, drawn
+  once the checkpoint list is on main, comes before any of them is considered.
   - Resource admission: the person's cap on running agents stays the limit. Memory and spend can
     only hold a start below that cap, never raise it, and a held start shows its reason, for
     example "Waiting: memory at 88%, 2 test runs ahead". Thresholds are deterministic; no model
