@@ -1,5 +1,5 @@
 import { selectDecisionInbox } from "../state";
-import type { ChangeState, State } from "../state";
+import type { ChangeState, DecisionInboxEntry, State } from "../state";
 import type { ChangeFacts } from "@contracts";
 import { possibleCallerNodes } from "../graph";
 import { factsForRevision } from "./ReviewFacts";
@@ -45,28 +45,23 @@ export type ChangeCardState = {
   facts: ChangeFacts | undefined;
 };
 /** Only current-candidate evidence defines a card. Local answers never alter this projection. */
-export function selectChangeCard(state: State, changeId: string): ChangeCardState | null {
+export function selectChangeCard(
+  state: State,
+  changeId: string,
+  inboxEntry?: DecisionInboxEntry,
+): ChangeCardState | null {
   const change = state.changes[changeId];
   if (!change?.proposal) return null;
   const facts = factsForRevision(state, change.proposal);
   if (change.resolution?.decided_by === "rules" && change.resolution.merge === "merged")
     return { kind: "merged", change, facts };
   if (change.status !== "ready_for_review" && change.status !== "conflict") return null;
-  if (
-    selectDecisionInbox(state).some(
-      (entry) =>
-        entry.changeId === changeId && entry.decisions.some((d) => d.kind === "follow_main"),
-    )
-  )
-    return null;
+  const entry = inboxEntry ?? selectDecisionInbox(state).find((e) => e.changeId === changeId);
+  if (entry?.decisions.some((d) => d.kind === "follow_main")) return null;
   if (facts?.review_cards?.length) return { kind: "choice", change, facts };
   if (
     facts &&
-    selectDecisionInbox(state).some(
-      (entry) =>
-        entry.changeId === changeId &&
-        entry.decisions.some((decision) => decision.kind === "checks_unavailable"),
-    ) &&
+    entry?.decisions.some((decision) => decision.kind === "checks_unavailable") &&
     !selectPossibleCallersWait(state, changeId)
   )
     return { kind: "unavailable", change, facts };

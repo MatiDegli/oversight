@@ -73,7 +73,7 @@ function InboxAnswer({ state, entry }: { state: State; entry: DecisionInboxEntry
   const change = entry.changeId ? state.changes[entry.changeId] : undefined;
   const wait = entry.changeId ? selectPossibleCallersWait(state, entry.changeId) : null;
   const question = entry.decisions.find((d) => d.kind === "review_card");
-  const card = change ? selectChangeCard(state, change.change_id) : null;
+  const card = change ? selectChangeCard(state, change.change_id, entry) : null;
   if (entry.decisions.some((d) => d.kind === "follow_main")) return null;
   return (
     <>
@@ -102,7 +102,7 @@ function InboxAnswer({ state, entry }: { state: State; entry: DecisionInboxEntry
           {question && card && (
             <details className="inbox-answer">
               <summary>Answer this change before approving</summary>
-              <ChangeCard state={state} changeId={change?.change_id ?? ""} />
+              <ChangeCard state={state} changeId={change?.change_id ?? ""} card={card} />
             </details>
           )}
         </div>
@@ -124,6 +124,7 @@ function InboxAnswer({ state, entry }: { state: State; entry: DecisionInboxEntry
                 key={`${state.run?.run_id ?? ""}:${change.proposal?.head_commit ?? ""}`}
                 state={state}
                 changeId={change.change_id}
+                card={card}
               />
             </details>
           )}

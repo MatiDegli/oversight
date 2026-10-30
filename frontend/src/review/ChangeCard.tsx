@@ -12,6 +12,7 @@ import { decisionView } from "./decisions";
 import type { ReviewPanelProps } from "./ReviewPanel";
 import { GrantChoice } from "./GrantChoice";
 import { selectChangeCard, selectPossibleCallersWait } from "./inboxSelectors";
+import type { ChangeCardState } from "./inboxSelectors";
 import { ComparisonMap } from "./ComparisonMap";
 import "./inbox.css";
 
@@ -28,10 +29,13 @@ export function ChangeCard({
   changeId,
   attempt,
   onDecide,
-}: Pick<ReviewPanelProps, "state" | "changeId" | "attempt" | "onDecide">) {
+  card: projectedCard,
+}: Pick<ReviewPanelProps, "state" | "changeId" | "attempt" | "onDecide"> & {
+  card?: ChangeCardState;
+}) {
   const shared = useDecisions();
   const decide = onDecide ?? shared.onDecide;
-  const card = selectChangeCard(state, changeId);
+  const card = projectedCard ?? selectChangeCard(state, changeId);
   const candidate = candidateKey(state, changeId);
   const answers = useAnswers((s) => s.drafts[candidate]) ?? {};
   if (!card) return null;
@@ -39,9 +43,9 @@ export function ChangeCard({
   const slot = state.agents[change.agent_id]?.slot;
   return (
     <aside aria-label="Change card" className="decision-card" style={agentSlotStyle(slot)}>
-      <CardHeader state={state} changeId={changeId} />
+      <CardHeader state={state} changeId={changeId} card={card} />
       <div className="decision-card-body">
-        <CardEvidence state={state} changeId={changeId} />
+        <CardEvidence state={state} changeId={changeId} card={card} />
         {kind !== "unavailable" && <ComparisonMap state={state} change={change} facts={facts} />}
         <CardDiffs state={state} changeId={changeId} />
       </div>
@@ -67,9 +71,9 @@ export function ChangeCard({
   );
 }
 
-function CardHeader({ state, changeId }: { state: State; changeId: string }) {
-  const card = selectChangeCard(state, changeId);
-  if (!card) return null;
+type CardContentProps = { state: State; changeId: string; card: ChangeCardState };
+
+function CardHeader({ state, changeId, card }: CardContentProps) {
   const { change, kind } = card;
   const slot = state.agents[change.agent_id]?.slot;
   const questions = card.facts?.review_cards ?? [];
@@ -124,11 +128,9 @@ function CardDiffs({ state, changeId }: { state: State; changeId: string }) {
   );
 }
 
-function CardEvidence({ state, changeId }: { state: State; changeId: string }) {
-  const card = selectChangeCard(state, changeId);
+function CardEvidence({ state, changeId, card }: CardContentProps) {
   const candidate = candidateKey(state, changeId);
   const answers = useAnswers((s) => s.drafts[candidate]) ?? {};
-  if (!card) return null;
   const { change, facts, kind } = card;
   const slot = state.agents[change.agent_id]?.slot;
   const grantUses = change.resolution?.grants ?? [];
