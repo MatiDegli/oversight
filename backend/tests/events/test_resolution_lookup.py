@@ -3,6 +3,7 @@
 import asyncio
 import sqlite3
 import threading
+from contextlib import closing
 
 import pytest
 
@@ -61,7 +62,7 @@ async def test_lookup_ignores_rows_above_the_horizon(tmp_path, monkeypatch):
         pending = asyncio.create_task(store.publish(resolution()))
         try:
             assert await asyncio.to_thread(entered.wait, 5)
-            with sqlite3.connect(store.path) as db:
+            with closing(sqlite3.connect(store.path)) as db:
                 assert db.execute("SELECT max(seq) FROM events").fetchone()[0] == first.seq + 1
             assert store.last_seq == first.seq
             assert await resolution_at(store, "change-1", first.seq + 1) is None

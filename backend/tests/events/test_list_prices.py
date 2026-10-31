@@ -6,6 +6,7 @@ from typing import Literal
 import pytest
 
 from oversight.events import LIST_PRICES, ListPrice, PriceTable, fold_usage, price_usage, read_jsonl
+from oversight.events import list_prices as prices
 from oversight_contracts.events import (
     ChangeResolved,
     ChangeResolvedEvent,
@@ -302,3 +303,20 @@ def test_other_events_only_consume_their_sequence() -> None:
     assert fold.through_seq == 2
     assert fold.calls == 1
     assert fold.usd == pytest.approx(0.2608)
+
+
+@pytest.mark.parametrize(
+    "kind,coverage",
+    [
+        ("exact", "complete"),
+        ("unpriced", "missing_metrics"),
+        ("ranged", "missing_metrics"),
+        ("inconsistent", "incomplete"),
+    ],
+)
+def test_coverage_uses_call_flags_independently_of_problem_texts(kind, coverage) -> None:
+    for problems in ([], ["first", "second"], ["second", "first"]):
+        fold = prices._totals(1, LIST_PRICES, [prices._Call(0.0, kind)], 0, 0, problems, {})
+        assert fold.coverage == coverage
+        assert fold.unpriced_calls == int(kind == "unpriced")
+        assert fold.ranged_calls == int(kind == "ranged")

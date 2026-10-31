@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 import sys
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from live_helpers import SERVER_EVENT
@@ -14,7 +14,9 @@ from test_revert_preflight import repo as repo
 
 from oversight.changes import ChangeManager, Person, RevertRefused, WrongState
 from oversight.changes import _delivery as delivery
+from oversight.events import EventRejected
 from oversight.workspace import run_process
+from oversight_contracts.events import ErrorReport
 
 pytestmark = pytest.mark.anyio
 
@@ -40,6 +42,22 @@ async def test_submit_duplicate_refused_before_any_await(system):
         assert len(s.events) == 2 and not task.done()
     finally:
         await task
+
+
+async def test_submit_task_creation_failure_releases_admission(system, monkeypatch):
+    s = system
+    before = list(s.events)
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            asyncio.get_running_loop(),
+            "create_task",
+            Mock(side_effect=RuntimeError("task creation failed")),
+        )
+        with pytest.raises(RuntimeError, match="task creation failed"):
+            s.service.submit(s.target, s.command, principal=Person)
+    assert not s.service._reserved and not s.service._owners and not s.service._attempts
+    assert s.events == before
+    assert (await s.service.submit(s.target, s.command, principal=Person)).result == "reverted"
 
 
 async def test_submit_cancel_before_start_releases_key(system):
@@ -71,8 +89,42 @@ async def test_submit_post_admission_refusal_publishes_one_error(system):
     assert len(reports) == 1 and reports[0].type == "error"
     report = reports[0].payload
     assert not report.fatal and report.source == "server"
-    assert report.agent_id is None and report.change_id is None
+    assert report.agent_id == "agent-1" and report.change_id == "change-1"
     assert "change-1" in report.message and "Main is suspended" in report.message
+
+
+@pytest.mark.parametrize("fatal", [False, True])
+@pytest.mark.parametrize("refused", [False, True])
+async def test_revert_reports_ids_and_logs_refused_publication(
+    system, monkeypatch, caplog, fatal, refused
+):
+    s, reports = system, []
+    publish = s.service.ctx.publish
+
+    async def reporting(payload):
+        if isinstance(payload, ErrorReport):
+            reports.append(payload)
+            if refused:
+                raise EventRejected("store refused report")
+        return await publish(payload)
+
+    monkeypatch.setattr(s.service.ctx, "publish", reporting)
+    if fatal:
+        monkeypatch.setattr(s.service, "_execute", AsyncMock(side_effect=OSError("failed")))
+        monkeypatch.setattr(s.service, "_main", AsyncMock(side_effect=OSError("unverified")))
+    else:
+        s.service.ctx.state.suspect = True
+    with pytest.raises(RevertRefused):
+        await s.service.submit(s.target, s.command, principal=Person)
+    await s.service.aclose()
+    assert len(reports) == 1
+    report = reports[0]
+    assert (report.change_id, report.agent_id) == (s.target.change_id, "agent-1")
+    assert report.fatal == fatal and report.source == ("git" if fatal else "server")
+    logs = [r for r in caplog.records if "The store refused an error event:" in r.message]
+    assert len(logs) == int(refused)
+    if refused:
+        assert logs[0].levelname == "ERROR" and report.message in logs[0].message
 
 
 async def test_port_shutdown_cancels_and_settles(system, monkeypatch, tmp_path):
@@ -153,7 +205,7 @@ async def test_port_shutdown_while_waiting_for_main_publishes_one_error(system, 
     assert len(reports) == 1 and reports[0].type == "error"
     report = reports[0].payload
     assert not report.fatal and report.source == "server"
-    assert report.agent_id is None and report.change_id is None
+    assert report.agent_id == "agent-1" and report.change_id == "change-1"
     assert "change-1" in report.message and "CancelledError" in report.message
     assert not port.service._reserved and not port.service._owners
     assert not manager.main_suspect

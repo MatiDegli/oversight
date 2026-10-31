@@ -143,13 +143,15 @@ def _totals(
 ) -> ListPriceFold:
     unpriced = sum(call.kind == "unpriced" for call in calls)
     ranged = sum(call.kind == "ranged" for call in calls)
-    coverage: Coverage = "incomplete" if problems else "complete"
+    inconsistent = any(call.kind == "inconsistent" for call in calls)
+    missing_metrics = bool(unpriced or ranged)
+    coverage: Coverage = (
+        "incomplete" if inconsistent else "missing_metrics" if missing_metrics else "complete"
+    )
     if unpriced:
         problems.append(f"{unpriced} calls have no list price")
     if ranged:
         problems.append(f"{ranged} priced calls have unreported token counts")
-    if coverage != "incomplete" and (unpriced or ranged):
-        coverage = "missing_metrics"
     known = fsum(call.known for call in calls)
     usd = known if coverage == "complete" else None
     return ListPriceFold(
