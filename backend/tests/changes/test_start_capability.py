@@ -262,3 +262,31 @@ async def test_expiry_after_loss_emits_one_notice_without_a_barrier(h, monkeypat
     assert len(notices(h)) == 1 and not notices(h)[0].fatal
     assert reason in notices(h)[0].message
     assert h.manager.merge_mode() == MergeModeState(mode="merge_when_safe", revision=1)
+
+
+async def test_unknown_reviewer_is_a_capability_refusal_and_terminal_reads_are_safe(h, monkeypatch):
+    await arm_production_port(h, monkeypatch)
+    settings = Settings(cross_review=True, review_model="unknown-reviewer")
+    h.manager._ctx.mode._availability = lambda: _mode.start_capability(h.workspace, settings)
+    reason = "The reviewer model is not configured"
+    assert h.manager._ctx.mode.capability() == _mode.StartCapability(False, reason)
+    # Both terminal entry points read availability; neither may raise ValueError.
+    h.manager.run_ended("agent-1", None)
+    await settled(h)
+    clock_wait = wait(h)
+    await h.manager._ctx.assessment.terminal(clock_wait, "Evidence unavailable")
+    reservation = _rules.RulesReservation(clock_wait, Mock(), rec(h).decision)
+    await _rules.terminal(h.manager._ctx, reservation, "policy_invalid", reason)
+    await asyncio.gather(*h.manager._ctx.state.tasks)
+    assert len(notices(h)) == 1 and reason in notices(h)[0].message
+    assert len(terminals(h)) == 1
+    assert not h.payloads(ChangeResolved)
+
+
+async def test_unknown_reviewer_refuses_enable_without_event(h):
+    await h.workspace.check_isolation()
+    configured(h, Settings(cross_review=True, review_model="unknown-reviewer"))
+    before = list(h.log)
+    with pytest.raises(WrongState, match="The reviewer model is not configured"):
+        await select(h, "merge_when_safe", 0)
+    assert h.log == before and h.manager.merge_mode() == MergeModeState()

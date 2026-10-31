@@ -1,6 +1,7 @@
 """Mode CAS, closed startup port, receipt uncertainty and lock independence."""
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import NoReturn
 
 import pytest
@@ -12,6 +13,14 @@ from oversight_contracts.commands import ERROR_STATUS, SetMergeMode
 from oversight_contracts.policy import MergeModeState
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.fixture(autouse=True)
+async def no_disable_leaks(h: Harness) -> AsyncIterator[None]:
+    yield
+    h.open_every_gate()
+    await asyncio.gather(*h.manager._ctx.state.tasks, return_exceptions=True)
+    assert not h.manager._ctx.mode._disables
 
 
 def available(h: Harness, *, timeout_s: float = 5) -> ModeController:
@@ -102,7 +111,11 @@ async def test_mode_lock_wait_has_a_bound(h: Harness) -> None:
         async with asyncio.timeout(0.5):
             with pytest.raises(WrongState, match=r"timed out after 0\.02 seconds"):
                 await select(h, "ask_me", 0)
+    assert len(controller._disables) == 1
+    assert h.manager.authority_suspended()
+    await asyncio.gather(*h.manager._ctx.state.tasks)
     assert not controller._lock.locked()
+    assert not controller._disables
     assert not h.manager.authority_suspended()
     assert h.payloads(MergeModeState) == []
 
@@ -179,7 +192,9 @@ async def test_confirmation_timeout_keeps_receipt_tracked_and_prevents_overtakin
             assert controller._receipt is receipt
     finally:
         h.open_gate.set()
-        await asyncio.gather(*h.manager._ctx.state.tasks)
+        results = await asyncio.gather(*h.manager._ctx.state.tasks, return_exceptions=True)
+        assert any(isinstance(result, WrongState) for result in results)
+    assert not controller._disables
     assert not h.manager.authority_suspended()
     assert controller.snapshot() == MergeModeState(mode="merge_when_safe", revision=1)
     assert len(h.payloads(MergeModeState)) == 1
@@ -244,3 +259,13 @@ async def test_disable_uses_only_mode_lock_and_never_git_or_idleness(
     assert h.workspace.calls == calls
     assert not controller._lock.locked()
     assert not h.manager.authority_suspended()
+
+
+async def test_enable_timeout_waiting_for_lock_cannot_enable_later(h: Harness) -> None:
+    controller = available(h, timeout_s=0.02)
+    async with controller._lock:
+        with pytest.raises(WrongState, match="timed out"):
+            await select(h, "merge_when_safe", 0)
+    await asyncio.gather(*h.manager._ctx.state.tasks, return_exceptions=True)
+    assert controller.snapshot() == MergeModeState()
+    assert not controller.authority_suspended() and h.payloads(MergeModeState) == []

@@ -43,12 +43,14 @@ from oversight_contracts.commands import (
     RejectPlan,
     RequestChanges,
     SaveFile,
+    SetMergeMode,
     StartAgent,
     TreeResponse,
     UpdatePlan,
 )
 from oversight_contracts.events import AgentStatus
 from oversight_contracts.plans import Plan
+from oversight_contracts.policy import MergeModeState
 from oversight_contracts.queue import QueuedTask, QueueSnapshot
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
@@ -58,8 +60,6 @@ NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("POST", "/leads/{agent_id}/stop", "Reserved /leads/{agent_id}/stop"),
     ("POST", "/changes/{change_id}/review", "Reserved /changes/{change_id}/review"),
     ("POST", "/changes/{change_id}/revert", "Reserved /changes/{change_id}/revert"),
-    ("GET", "/merge-mode", "Reading the merge mode"),
-    ("PUT", "/merge-mode", "Setting the merge mode"),
 )
 """Routes in the contract that this level does not build: 501, whatever the body."""
 LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
@@ -78,6 +78,8 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
     ("POST", "/changes/{change_id}/approve", "Approve"),
     ("POST", "/changes/{change_id}/reject", "Reject"),
     ("POST", "/changes/{change_id}/request-changes", "Request changes"),
+    ("GET", "/merge-mode", "Reading the merge mode"),
+    ("PUT", "/merge-mode", "Setting the merge mode"),
     ("POST", "/grants/{grant_id}/revoke", "Revoke grant"),
     ("GET", "/files", "Reading files"),
     ("PUT", "/files", "Saving files"),
@@ -132,6 +134,10 @@ class Commands(Protocol):
         ...
 
     async def rescan(self) -> None: ...
+
+    def merge_mode(self) -> MergeModeState: ...
+
+    async def set_merge_mode(self, request: SetMergeMode) -> MergeModeState: ...
 
     async def get_tree(self, agent_id: str | None) -> TreeResponse: ...
 
@@ -200,6 +206,17 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
                 path, _not_built(what, "is not available in a replay"), methods=[method]
             )
         return
+
+    @router.get("/merge-mode")
+    async def merge_mode() -> MergeModeState:  # pyright: ignore[reportUnusedFunction]
+        return commands.merge_mode()
+
+    @router.put("/merge-mode")
+    async def set_merge_mode(request: SetMergeMode) -> MergeModeState:  # pyright: ignore[reportUnusedFunction]
+        try:
+            return await commands.set_merge_mode(request)
+        except WrongState as error:
+            raise ApiError("wrong_state", str(error)) from None
 
     @router.post("/plans", status_code=201)
     async def create_plan(request: CreatePlan) -> PlanCreated:  # pyright: ignore[reportUnusedFunction]
