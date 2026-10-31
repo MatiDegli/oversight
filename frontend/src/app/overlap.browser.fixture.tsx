@@ -3,7 +3,13 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { applyEvent, stateStore } from "../state";
 // eslint-disable-next-line no-restricted-imports -- Shared test fixture, never a product dependency.
-import { baseMoment, readEvents, sameNodeEvents, required } from "../state/overlap.fixture";
+import {
+  baseMoment,
+  priceId,
+  readEvents,
+  sameNodeEvents,
+  required,
+} from "../state/overlap.fixture";
 import { Frame } from "./Frame";
 import { initialView } from "./view";
 
@@ -41,9 +47,20 @@ export const overlapTest = {
   mount() {
     render();
   },
-  apply(moment: "read" | "same-node") {
+  apply(moment: "read" | "same-node", name?: string) {
     const events = moment === "read" ? readEvents : sameNodeEvents;
     state = events.reduce(applyEvent, baseMoment());
+    if (name !== undefined && state.graph) {
+      state = {
+        ...state,
+        graph: {
+          ...state.graph,
+          nodes: state.graph.nodes.map((node) =>
+            node.id === priceId ? { ...node, qualname: name } : node,
+          ),
+        },
+      };
+    }
     render();
   },
   ready() {

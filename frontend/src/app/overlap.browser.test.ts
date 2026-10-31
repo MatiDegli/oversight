@@ -114,6 +114,38 @@ it.each(["read", "same-node"] as const)(
   },
 );
 
+it.each([1, 2])("contains long multilingual names at %s× scale", async (scale) => {
+  const page = await open(1280, 800);
+  try {
+    const name = "compute_é_日本語_مرحبا_🧪_<>&".repeat(8);
+    await page.evaluate(
+      ({ name, scale }) => {
+        document.body.style.zoom = String(scale);
+        window.overlapTest.apply("same-node", name);
+      },
+      { name, scale },
+    );
+    for (const [slot, other] of [
+      ["A", "B"],
+      ["B", "A"],
+    ] as const) {
+      const line = card(page, slot).getByText(`Also changed by Agent ${other}: ${name}`, {
+        exact: true,
+      });
+      await check(line).toHaveAttribute("title", `Also changed by Agent ${other}: ${name}`);
+      expect(
+        await line.evaluate((element) => ({
+          truncated: element.scrollWidth > element.clientWidth,
+          ellipsis: getComputedStyle(element).textOverflow,
+          height: element.closest(".agent-card-body")?.clientHeight,
+        })),
+      ).toEqual({ truncated: true, ellipsis: "ellipsis", height: 144 });
+    }
+  } finally {
+    await page.close();
+  }
+});
+
 it.each([1920, 1280])("captures both moments in both themes at %s px", async (width) => {
   if (process.env.LIVE_OVERLAP_SHOTS !== "1") return;
   const shots = fileURLToPath(new URL("../../../.shots/live-overlap/", import.meta.url));
