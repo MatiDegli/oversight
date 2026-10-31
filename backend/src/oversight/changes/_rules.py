@@ -7,6 +7,7 @@ from oversight.changes import _spend
 from oversight.changes._assessment import PROFILE, AssessmentWait
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
+from oversight.changes._policy import PolicyInputs, assess
 from oversight.changes._state import APPROVABLE, WrongState
 from oversight.changes._support import ChangeContext, RulesFailure
 from oversight.events import StoredEvent
@@ -46,6 +47,30 @@ def pending_policy(assessment: ChangeAssessment, grants: Sequence[GrantUse] = ()
     )
 
 
+def paths_confirmed(ctx: ChangeContext, wait: AssessmentWait, assessment: ChangeAssessment) -> bool:
+    """A cached pass cannot outlive or replace either original protected-path source."""
+    paths = ctx.assessment.path_sources(wait)
+    if paths is None:
+        return False
+    expected = assess(
+        PolicyInputs(
+            change_id=assessment.change_id,
+            agent_id=assessment.agent_id,
+            revision=assessment.revision,
+            base_commit=assessment.base_commit,
+            head_commit=assessment.head_commit,
+            main_commit=assessment.main_commit,
+            mode=assessment.mode,
+            mode_revision=assessment.mode_revision,
+            protected_paths=paths[0],
+            changed_files=paths[1],
+        ),
+        PROFILE,
+    )
+    rule = next(r for r in expected.rules if r.rule == "protected_paths")
+    return rule.result == "pass" and rule in assessment.rules
+
+
 def capture(
     ctx: ChangeContext, wait: AssessmentWait, assessment: ChangeAssessment
 ) -> RulesReservation:
@@ -63,9 +88,10 @@ def capture(
     _spend.guard(ctx, ctx.assessment.inputs(wait))
     if (
         not pending_policy(assessment, grants)
+        or not paths_confirmed(ctx, wait, assessment)
         or assessment != wait.latest
         or any(
-            not _spend.admits(ctx, rule.rule, ref, wait.spend_pin)
+            not ctx.assessment.admits(rule.rule, ref, wait.spend_pin)
             for rule in assessment.rules
             for ref in rule.evidence
         )
@@ -158,8 +184,9 @@ def revalidate(ctx: ChangeContext, reservation: RulesReservation) -> tuple[str, 
         or assessment is None
         or assessment != wait.latest
         or not pending_policy(assessment, grants)
+        or not paths_confirmed(ctx, wait, assessment)
         or any(
-            not _spend.admits(ctx, rule.rule, ref, reservation.spend_pin)
+            not ctx.assessment.admits(rule.rule, ref, reservation.spend_pin)
             for rule in assessment.rules
             for ref in rule.evidence
         )

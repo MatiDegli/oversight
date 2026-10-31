@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { PhonePractice } from "./PhonePractice";
+import { diffPreview, PhoneReview } from "./PhoneReview";
 import { PhoneDiff } from "./PhoneDiff";
 import { AgentLine, PhoneGraph } from "./PhoneGraph";
 import { freshAttempt } from "./PracticePanel";
@@ -39,10 +40,26 @@ it.each([
   });
   const entry = fallback.cases[0];
   if (!entry) throw new Error("Missing case");
-  const html = renderToStaticMarkup(<AgentLine practice={fallback} entry={entry} />);
-  expect(html).toContain("Agent B");
-  expect(html).toContain(`<span>${label}</span>`);
-  expect(html).not.toContain("Muse Spark Open");
+  const line = renderToStaticMarkup(<AgentLine state={fallback.cut} changeId={entry.changeId} />);
+  const review = renderToStaticMarkup(
+    <PhoneReview state={fallback.cut} changeId={entry.changeId} title={entry.title} slot="B" />,
+  );
+  expect(line).toContain("Agent B");
+  expect(line).toContain(`<span>${label}</span>`);
+  expect(line).not.toContain("Muse Spark Open");
+  expect(review).toContain(line);
+});
+it("keeps the explicit review slot when the agent model is unavailable", () => {
+  const entry = practice.cases[0];
+  if (!entry) throw new Error("Missing case");
+  const state = { ...practice.cut, agents: {} };
+  const line = renderToStaticMarkup(<AgentLine state={state} changeId={entry.changeId} slot="B" />);
+  const review = renderToStaticMarkup(
+    <PhoneReview state={state} changeId={entry.changeId} title={entry.title} slot="B" />,
+  );
+  expect(line).toContain("Agent B");
+  expect(line).toContain("Model unavailable");
+  expect(review).toContain(line);
 });
 it.each([
   [0, "Both were approved in the recording."],
@@ -87,7 +104,9 @@ it.each([0, 1])(
     );
     expect(html).toContain(entry.title);
     expect(html).toContain(entry.proposal.summary);
-    expect(html).toContain("summary");
+    expect(html).toContain("Nothing was compared for this change.");
+    expect(html).toContain('aria-label="Agent note"');
+    expect(html.indexOf("Review lead")).toBeLessThan(html.indexOf("Agent note"));
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain("Show diff");
     expect(html).not.toMatch(
@@ -128,7 +147,7 @@ it.each([1, 2])("derives decision previews and graph counts with only distance %
     />,
   );
   expect(html).toContain(`Recorded task</span> <span>${entry.proposal.task}`);
-  expect(html).toContain(`Possibly affected</span> <span>${preview}`);
+  expect(html).not.toContain("Possibly affected</span>");
   const graph = renderToStaticMarkup(
     <PhoneGraph practice={changed} entry={entry} merged={false} />,
   );
@@ -235,4 +254,17 @@ it("uses words for a finish with no matching decisions", () => {
     />,
   );
   expect(html).toContain('<p class="pp-score">None of your decisions matched the recording.</p>');
+});
+
+it.each([
+  [0, "+9 −0"],
+  [1, "shop/inventory.py · +9 −0"],
+  [2, "shop/inventory.py and 1 more file · +9 −0"],
+  [3, "shop/inventory.py and 2 more files · +9 −0"],
+] as const)("previews a diff with %i files", (count, expected) => {
+  const proposal = practice.cases[0]?.proposal;
+  const file = proposal?.files[0];
+  if (!proposal || !file) throw new Error("Missing proposal file");
+  const files = [...proposal.files, { ...file, path: "shop/extra.py" }].slice(0, count);
+  expect(diffPreview({ ...proposal, files })).toBe(expected);
 });

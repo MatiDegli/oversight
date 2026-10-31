@@ -1,4 +1,4 @@
-import { selectAgentCard as selectBaseCard } from "../state";
+import { selectAgentCard as selectBaseCard, selectOverlap } from "../state";
 import type { State } from "../state";
 
 /** The latest completed tool is authoritative; focus supplies a location before the first step.
@@ -22,6 +22,7 @@ export function selectAgentCard(state: State, agentId: string) {
       : "Waiting for the first tool call.");
   return {
     ...data,
+    overlap: selectOverlap(state, agentId),
     activity: wait
       ? `Waiting for model (retry ${String(wait.attempt + 1)}/${String(wait.max_attempts)})`
       : activity,

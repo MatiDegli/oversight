@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 
 import { AgentCard, selectAgentCard } from "../agents";
-import { ChangeFactsRow } from "../review";
+import { ChangeFactsRow, ReviewPanel } from "../review";
 import { applyEvent, createInitialState, costText } from "../state";
 
 vi.mock("../state", async (importOriginal) => ({
@@ -28,7 +28,11 @@ for (const live of [false, true]) {
   it(`uses the shared cost wording in ${live ? "live diff" : "review"} facts`, () => {
     vi.mocked(costText).mockClear();
     const html = renderToStaticMarkup(
-      <ChangeFactsRow state={value} changeId="change-1" live={live} />,
+      live ? (
+        <ChangeFactsRow state={value} changeId="change-1" live />
+      ) : (
+        <ReviewPanel state={value} changeId="change-1" onClose={() => {}} />
+      ),
     );
     expect(html).toContain("Shared cost wording");
     expect(costText).toHaveBeenCalledWith(0.001);

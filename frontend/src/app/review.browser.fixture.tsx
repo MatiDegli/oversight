@@ -7,6 +7,10 @@ import { useStore } from "zustand";
 
 import { createCommandClient } from "../transport";
 import { createFileSession } from "./files";
+import { DecisionContext } from "../review";
+import { useAnswers } from "../review";
+import inboxLog from "../../../fixtures/events/handwritten-inbox-grants.jsonl?raw";
+import { navigateView, surfaceTab, tabbedView, viewReducer } from "./view";
 import { sendDecision } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { applyEvent, createInitialState, stateStore } from "../state";
@@ -186,4 +190,67 @@ declare global {
   interface Window {
     reviewTest: typeof reviewTest;
   }
+}
+
+// Item 9 command harness uses the same shared attempts and command client as App.
+let commandsRoot: ReturnType<typeof createRoot> | undefined;
+function InboxCommands({ recorded }: { recorded: boolean }) {
+  const state = useStore(stateStore, (s) => s.state);
+  const [view, setView] = useState<View>(tabbedView);
+  const [attempts, setAttempts] = useState<Record<string, DecisionAttempt>>({});
+  const onDecide = (id: string, action: DecisionAction, comment: string) => {
+    void sendDecision(commands, state, id, action, comment, (attempt) => {
+      setAttempts((old) => ({ ...old, [id]: attempt }));
+    });
+  };
+  const review = (id: string) => {
+    setView((v) => navigateView(v, { ...v, review: id, diff: null, file: null }, state));
+  };
+  return (
+    <DecisionContext
+      value={{
+        attempts,
+        onDecide: recorded ? undefined : onDecide,
+        revokeGrant: recorded ? undefined : commands.revokeGrant,
+      }}
+    >
+      <Frame
+        state={state}
+        view={view}
+        attempts={attempts}
+        onDecide={recorded ? undefined : onDecide}
+        onNodeTap={() => {}}
+        canOpenChange={() => true}
+        onOpenChange={review}
+        onReview={review}
+        canReview={() => true}
+        onClosePanel={() => {
+          setView(closePanel);
+        }}
+        onOpenQueue={() => {
+          setView((v) => viewReducer(v, { type: "open", tab: surfaceTab(v, "inbox") }));
+        }}
+        onTabAction={(action) => {
+          setView((v) => viewReducer(v, action));
+        }}
+      />
+    </DecisionContext>
+  );
+}
+export function mountInboxCommands(recorded = false, twoFiles = false) {
+  commandsRoot?.unmount();
+  useAnswers.setState({ drafts: {}, grants: {} });
+  const state = inboxLog
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as ServerEvent)
+    .reduce(applyEvent, createInitialState());
+  const p = state.changes["change-2"]?.proposal;
+  if (twoFiles && p?.files[0]) p.files.push({ ...p.files[0], path: "shop/orders.py" });
+  stateStore.setState({ state });
+  const host = document.createElement("div");
+  host.style.height = "100vh";
+  document.body.replaceChildren(host);
+  commandsRoot = createRoot(host);
+  flushSync(() => commandsRoot?.render(<InboxCommands recorded={recorded} />));
 }

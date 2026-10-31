@@ -4,7 +4,7 @@ import type { ServerEvent } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { ReviewPanel } from "../review";
+import { ImpactConeCard, ReviewPanel } from "../review";
 import { applyEvent, createInitialState, selectLiveDiff, stateStore } from "../state";
 import type { State, StateStore } from "../state";
 import { LiveDiff } from "./LiveDiff";
@@ -43,74 +43,113 @@ function fact(html: string, label: string) {
   expect(row, `Missing ${label} chip`).toBeDefined();
   expect(row).toContain("bg-page-raised");
   expect(row).toContain("border-page-border");
-  expect(row).toContain("rounded-control");
-  expect(row).toContain("--data-size");
+  if (html.includes('class="review-header"')) {
+    expect(row).toContain("rounded-[7px]");
+    expect(row).toContain("text-sm font-semibold");
+    expect(row).not.toMatch(/font-mono|rounded-control|--data-size|py-1/);
+  } else {
+    expect(row).toContain("rounded-control");
+    expect(row).toContain("--data-size");
+  }
   return row ?? "";
+}
+function provenance(html: string, label: string, surface: string) {
+  if (surface !== "review") return fact(html, label);
+  const caption = /<header class="review-header".*?(<p .*?<\/p>)/.exec(html)?.[1];
+  expect(caption, "Missing review provenance caption").toBeDefined();
+  expect(html).not.toContain(`aria-label="${label}"`);
+  return caption ?? "";
 }
 const words = (html: string) => html.replace(/<[^>]*>/g, "");
 for (const surface of ["review", "live diff"])
   describe(`${surface} facts`, () => {
     it("keeps the file count chip", () => {
-      expect(fact(render(surface), "Files")).toContain('font-mono">1</span>');
+      const row = fact(render(surface), "Files");
+      expect(words(row)).toBe("1 file");
+      if (surface !== "review") expect(row).toContain('font-mono">1</span>');
     });
-    it("keeps added and removed counts with signs and mono type", () => {
+    it("keeps added and removed counts with signs and surface typography", () => {
       const row = fact(render(surface), "Lines");
-      expect(row).toContain('font-mono text-added">+2');
-      expect(row).toContain('font-mono text-removed">−0');
+      const face = surface === "review" ? "" : "font-mono ";
+      expect(row).toContain(`${face}text-added">+2`);
+      expect(row).toContain(`${face}text-removed">−0`);
     });
-    it("keeps tests with a result icon and mono count", () => {
+    it("keeps tests with a result icon and surface typography", () => {
       const row = fact(render(surface), "Tests");
       expect(words(row)).toContain("28 passed");
       expect(row).toContain("lucide-check");
-      expect(row).toContain("font-mono");
+      if (surface !== "review") expect(row).toContain("font-mono");
     });
     it("keeps the actual base commit with its full hash available", () => {
-      const row = fact(render(surface), "Base commit");
+      const row = provenance(render(surface), "Base commit", surface);
       expect(row).toContain(`title="${proposal.base_commit}"`);
-      expect(row).toContain(`font-mono">${proposal.base_commit.slice(0, 7)}`);
+      expect(row).toMatch(
+        new RegExp(`<code [^>]*class="font-mono"[^>]*>${proposal.base_commit.slice(0, 7)}</code>`),
+      );
     });
     it("derives the worktree name from the change author even without an agent card", () => {
       for (const agents of [state.agents, {}]) {
-        const row = fact(render(surface, { ...state, agents }), "Worktree");
-        expect(row).toContain('font-mono">agent-1');
+        const row = provenance(render(surface, { ...state, agents }), "Worktree", surface);
+        expect(row).toMatch(/<code [^>]*class="font-mono"[^>]*>agent-1<\/code>/);
         expect(row).toContain('title=".runtime/worktrees/agent-1"');
-        expect(row).not.toContain("unknown");
+        if (surface !== "review") expect(row).not.toContain("unknown");
+        expect(words(row)).toContain(
+          surface === "review" ? "worktree agent-1" : "Worktree agent-1",
+        );
       }
     });
     it("keeps neutral step counts from the agent and run limit", () => {
-      const row = fact(render(surface), "Steps");
-      expect(words(row)).toMatch(/Step 5 of 30/);
-      expect(row).toContain("font-mono");
+      const row = provenance(render(surface), "Steps", surface);
+      expect(words(row)).toContain(surface === "review" ? "step 5 of 30" : "Step 5 of 30");
+      if (surface !== "review") expect(row).toContain("font-mono");
       expect(row).not.toMatch(/text-agent|bg-agent/);
     });
     it("keeps the bounded possibly-affected summary neutral", () => {
       const row = fact(render(surface), "Impact cone");
-      expect(words(row)).toContain("9 functions possibly affected, up to distance 2");
-      expect(row).toContain("font-mono");
+      expect(words(row)).toContain(
+        surface === "review"
+          ? "9 possibly affected · up to distance 2"
+          : "9 functions possibly affected, up to distance 2",
+      );
+      if (surface !== "review") expect(row).toContain("font-mono");
       expect(row).not.toMatch(/text-agent|bg-agent/);
     });
     it("keeps the run's model label beside that agent's cost", () => {
-      const row = fact(
+      const row = provenance(
         render(surface, { ...state, agentCosts: { "agent-1": 0.38, "agent-2": 99 } }),
         "Model and cost",
+        surface,
       );
       expect(row).toContain("Muse Spark");
-      expect(row).toContain('font-mono">US$0.38');
+      expect(words(row)).toContain("Muse Spark · US$0.38");
+      if (surface !== "review") expect(row).toContain('font-mono">US$0.38');
       expect(row).not.toContain("99");
     });
     it("never turns absent or unreported costs into zero", () => {
       for (const agentCosts of [{}, { "agent-1": null }] as State["agentCosts"][]) {
-        const row = fact(render(surface, { ...state, agentCosts }), "Model and cost");
-        expect(row).toContain("Unknown");
+        const row = provenance(
+          render(surface, { ...state, agentCosts }),
+          "Model and cost",
+          surface,
+        );
+        expect(row).toContain(surface === "review" ? "cost unknown" : "Unknown");
         expect(row).not.toContain("US$0");
       }
     });
     it("preserves small reported costs and actual zero", () => {
       expect(
-        fact(render(surface, { ...state, agentCosts: { "agent-1": 0.001 } }), "Model and cost"),
+        provenance(
+          render(surface, { ...state, agentCosts: { "agent-1": 0.001 } }),
+          "Model and cost",
+          surface,
+        ),
       ).toContain("&lt;US$0.01");
       expect(
-        fact(render(surface, { ...state, agentCosts: { "agent-1": 0 } }), "Model and cost"),
+        provenance(
+          render(surface, { ...state, agentCosts: { "agent-1": 0 } }),
+          "Model and cost",
+          surface,
+        ),
       ).toContain("US$0.00");
     });
     it("shows both cone bounds without claiming completeness", () => {
@@ -136,12 +175,23 @@ for (const surface of ["review", "live diff"])
           },
         },
       });
-      expect(words(fact(html, "Cone depth bound"))).toContain(
-        surface === "review" ? "+12 omitted by depth" : "+2 omitted by depth",
-      );
-      expect(words(fact(html, "Cone node bound"))).toContain(
-        surface === "review" ? "+3 omitted by the node limit" : "+6 omitted by the node limit",
-      );
+      if (surface === "review") {
+        expect(words(fact(html, "Impact cone"))).toBe("9 possibly affected · up to distance 2");
+        const chips = /<ul aria-label="Facts".*?<\/ul>/.exec(html)?.[0] ?? "";
+        expect([...chips.matchAll(/<li /g)]).toHaveLength(4);
+        expect(chips).not.toMatch(/Cone depth bound|Cone node bound|circle-help/);
+        const graphCard = renderToStaticMarkup(
+          <ImpactConeCard
+            cone={{ ...change.proposal.impact, omitted_by_depth: 12, omitted_by_limit: 3 }}
+            nodes={state.graph?.nodes ?? []}
+          />,
+        );
+        expect(words(graphCard)).toContain("+12 omitted by depth");
+        expect(words(graphCard)).toContain("+3 omitted by the node limit");
+      } else {
+        expect(words(fact(html, "Cone depth bound"))).toContain("+2 omitted by depth");
+        expect(words(fact(html, "Cone node bound"))).toContain("+6 omitted by the node limit");
+      }
     });
     it.each(["failed", "error", "timeout"] as const)(
       "keeps %s tests explicit with an icon",
@@ -316,7 +366,11 @@ it.each(["review", "live diff"])("keeps possible callers explicit in %s", (surfa
     };
     const html = render(surface, value);
     const summary = words(fact(html, "Impact cone"));
-    if (size) {
+    if (surface === "review") {
+      expect(summary).toBe(size ? "9 possibly affected · up to distance 2" : "No exact callers");
+      const header = /<header class="review-header".*?<\/header>/.exec(html)?.[0] ?? "";
+      expect(header).not.toMatch(/aria-label="Possible callers"|circle-help|not followed/);
+    } else if (size) {
       expect(summary).toContain("9 functions possibly affected");
       const extra = fact(html, "Possible callers");
       expect(words(extra)).toContain("+2 possible callers, not followed");

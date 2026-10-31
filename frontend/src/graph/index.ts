@@ -15,5 +15,5 @@ export type {
   FieldProbe,
   FieldScope,
 } from "./field";
-export { liveImpact, possibleCallers } from "./impact";
+export { liveImpact, possibleCallers, possibleCallerNodes } from "./impact";
 export { routingOmissionText } from "./RoutingOmissions";

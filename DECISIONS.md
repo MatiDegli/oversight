@@ -1960,6 +1960,172 @@ classes defined in the project's own non-test modules are constructed.
 Reason: deferring methods leaves missing evidence in the bench, so the evidence fix scope
 supersedes the level 3 deferral while retaining the existing effect and construction policies.
 
+## 2026-10-29 — Item 9's card and inbox: answers, content, shots and where grants are listed
+
+The maintainer decided on 2026-10-29, as follow-up 3 to item 9 and the decisions inbox. Earlier
+entries record the inbox itself ("A decisions inbox is the form of Needs you": No is Request
+changes, Unsure stays in the inbox), the header count, and what becomes a question ("Item 9
+questions are only for unasked or untied differences"). This entry records the rest: how the
+card's answers gate its actions, what the card and the inbox show, the shots gate, and where
+standing grants are listed.
+
+Approve on a card with questions opens only when every answer is Yes, and the reason sits beside
+the locked button: "Approve opens only when every answer is Yes". With any No, Request changes
+becomes the primary action, prefilled with that question's example as the comment. With any
+Unsure, the card waits. Reject is always available. In Ask me, every change still waits for
+Approve.
+
+The card says "N choices need you" and gives one line, from events, with what was asked and what
+was done. Each question shows its smallest example as large before -> after cells, the after cell
+in the agent's color, with Yes keep it, No send it back and Unsure decide later; an answered
+question collapses to one line with its answer. A block headed with what was compared,
+such as "No other difference in what was compared · 1 function, 24 inputs", counts the functions
+and inputs compared, as one row of function squares per module, beside the changed module with its
+changed functions numbered to their questions, and their callers; functions not compared stay
+neutral, and the block never claims that everything else is the same.
+A footer reads "k of N answered"
+next to the locked Approve. The inbox shows the large count; one line computed from events, such
+as how many agents took how many steps in how long and how many of those decisions needed a
+person; when each decision arrived; and rows with their before -> after, never a row whose before
+equals its after. The earlier prep mockups give content and hierarchy only. The screens use the
+product's own components at the quality of the v4 shell sketches, with data from a real recorded
+run (the demo, or Boltons) that names only files that exist.
+
+Before any card or inbox front merges, the maintainer sees shots of the card's three states and of
+the inbox, in dark and day. Once he approves them, they go into docs/sketches/ beside the v4
+sketches.
+
+Standing grants get no Settings tab for grants alone. The grants list sits next to the inbox, as a
+second view of the same panel or a section under the decisions, with its own count. The inbox
+answers front shows that placement in its first shots; a reason it does not work comes back with
+them.
+
+This keeps every decision the person makes, and every answer they gave once for good, in one
+place, and Approve, which merges into main, never opens while an answer still says No or Unsure.
+
+## 2026-10-29 — Review shows bounded direct behavior evidence
+
+Review renders the latest facts matching both revision and head, without falling back to older
+optional evidence. Direct changed-node probes remain separate from measured caller observations
+and the static “possibly affected” cone. All published nodes survive, including removed or unknown
+IDs; graph labels resolve where available and IDs remain the fallback.
+
+Counts describe admitted inputs and stable measured differences. No same-result count is displayed:
+ten comparisons and nine differences can include instability beyond the eight retained samples.
+Visible instability is partial evidence, never an established difference. Positive comparisons with
+zero differences say “No difference measured on these inputs” only without published limitations or
+visible instability; the bounded-input qualification remains beside it. Null or omitted evidence is
+not recorded, an empty list means no changed-node probes, and facts completeness says nothing about
+behavior completeness. Missing current facts stay explicit in review; the portable block itself
+returns null without direct evidence so other parents can choose their own absent-state copy.
+
+Published reasons are limited to unsupported node kind, unavailable version and unavailable probe.
+Only a graph-confirmed method/class gets the specific method/class wording. Unknown reasons are
+preserved as text; no timeout, isolation or signature diagnosis is inferred. Samples are escaped,
+losslessly wrapped display strings, with disclosures initially closed to preserve editor space.
+
+DESIGN.md wins over Impeccable's ordinary 16px body floor and generic card/motion recommendations:
+review keeps its existing 14px dense evidence role, theme tokens, plain surfaces and event-driven
+focus rules. Facts, signals and the agent report share one bounded context scroll even without
+a summary, so expanded evidence cannot overlap Monaco or the decision footer at 1280×800.
+No new animation or visual world is introduced.
+
+## 2026-10-29 — Measured caller evidence stays inside static possibilities
+
+Review shows published caller outcomes only for the current proposal revision and head, joined
+by node id to the retained static cone in distance order. A missing name falls back to its id.
+Observed equality means “No difference measured on these inputs”; it establishes neither
+behavioral equivalence nor coverage. A caller without measurement stays possible. Invocation
+counts remain independent of caller counts and bounded display samples; unstable samples never
+supply stable difference evidence.
+
+Availability is independent of outcome: partial evidence preserves stable differences, while
+zero admitted comparisons shows unavailable measurements and the published reasons. Matching,
+recording and probing diagnostics remain visible, without inferred causes or use of overall
+facts completeness as caller completeness. Missing/null legacy evidence differs from an explicit
+empty array. The static graph, bounds, omissions and possible callers remain visible beside the
+focus panel, and both summary paths share one context scroll without displacing the diff or
+choices. Samples are escaped text, disclosed only by a person; incoming events never move focus.
+
+Impeccable 4.5.2 conflicts resolved in favor of Signal: retain the project's dense title/data
+roles instead of a generic 16px body floor or 65–75ch minimum, and add no authored motion to
+measured evidence. Existing tokens, spacing, Next/Mono roles and review geometry govern.
+
+## 2026-10-30 — Review panel rework: the approved sketches replace the fronts' review rules
+
+The maintainer approved the review sketches on 2026-10-30, before 10:39 ART (exact time not
+recorded). The baseline is [docs/sketches/review/](docs/sketches/review/README.md), not the final
+look. It replaces the review rules added by behavior-review and measured-cone-review: "unmatched
+stay visible", "Mono carries counts", and the mid-dot section. The critique ranks harm to the
+approve/reject decision: grids and duplicate lists bury differences; diagnostic counters, equal
+chips and mixed-width prose compete with the evidence. Differences lead, agreement is a sentence,
+method details open on request, and the graph owns places and reach. Data contracts stay intact.
+
+The maintainer's five settled departures, verbatim:
+
+- the diff comes before "What was compared";
+- "Out of view" covers functions off camera and inside folded modules;
+- "varied" is the cone word for unstable results;
+- the answered row always wraps, never truncates (at 1280 the After cell may need a scroll);
+- state g's Revert is the item 8 target, built only when item 8 delivers it.
+
+The approved baseline bends Signal's frame dimming to 16% outside the review cone and change,
+including module frames. Grain and top light stay on the header. The sketch's local day syntax
+values must become token-driven in the code step; day syntax tokens already exist, and this step
+adds no colors. Mono's narrower prose rule applies only inside review: the agent card and dock
+keep their numeric readings. Approval from the review panel starts merge travel like any merge;
+with the agents panel folded, the pulse leaves that agent's letter in the rail. It never moves
+the camera or takes focus from the panel. Revert remains absent until item 8 supplies its command.
+
+Impeccable 4.5.2 shape ordinarily asks for brief confirmation and stops; this screen's approved
+brief and explicit instruction to write DESIGN.md settle that step. Clarify's preference for
+specific actions does not rename the approved Yes/No/Unsure answers or rewrite server questions.
+The project's fixed sizes, tokens, matte header and focus rules win over generic style guidance;
+AGENTS.md and DESIGN.md remain authoritative. No new visual world or UI code is introduced here.
+
+## 2026-10-30 — Review panel life pass: a candidate after level 3
+
+Not built now. Once level 3 is solid, a candidate life pass may add the answer fold transition,
+a rolling answered count, and hover on a differing caller that lights its node. It goes through
+the same sketch approval as this rework. These are later candidates; merge travel on Approve is
+already required by the approved baseline.
+
+## 2026-10-31 — Review words use the approved table and recorded rule results
+
+No server phrase reaches the review panel verbatim. The table in `evidenceWords.ts` translates
+reasons, and none says "probe"; an unknown phrase shows no reason. In g, the first three recorded
+passes in the approved order make one sentence. "{n} more rules passed." follows when more
+passed ("1 more rule passed." for one). "Your grant covered {k} rule(s) that could not be checked."
+follows when a grant covered an unknown rule. Details lists each as "{name}: passed" or
+"{name}: covered by your grant". Approved as implemented at `60152b2` in packet B: "Approve all",
+before 2026-10-31T04:05:38Z (01:05:38 ART).
+
+Reason: the panel uses the approved review words, and recorded passes and grant uses explain the
+merge without exposing server diagnostics or inferring evidence from the current policy.
+
+## 2026-10-31 — Map view and folder groups follow the later line B work
+
+The map view and folder groups are left out of the current level. They come after the Conversation tab, milestone pulses and life layer part 2, built only from a sketch the maintainer approves (maintainer, 2026-10-31).
+The depth control stays built (`bfe7a18`). The definition remains for a later level; sketch first.
+Packet B's "Approve all", before 2026-10-31T04:05:38Z (01:05:38 ART), covered leaving these out
+of the current level. The maintainer later placed them in this line B order on 2026-10-31.
+
+Reason: the current level keeps its built depth control; the later map view and folder groups
+require the maintainer's approved sketch after the preceding line B work.
+
+## 2026-10-31 — Phone practice reviews with the panel's evidence
+
+The phone practice uses the panel's evidence from f and f-b. The Oct 27 recording stays, so its
+two decisions show kind d; a, b, c and d2 appear only in fixture tests. The maintainer said
+"No, keep Oct 27", before 2026-10-31T04:14:42Z (01:14:42 ART). The progress row ("Decision {i} of {n}")
+and the 44px "Recorded task" row with the exact task stay as departures: the practice holds two
+recorded decisions, and their 40–60 word tasks need more than the headline. The "Possibly affected"
+disclosure is removed: the graph owns the list (DESIGN.md, graph-owned review context), and the
+fourth chip keeps the count.
+
+Reason: the practice retains the real recording while sharing the panel's evidence order; progress
+and the verbatim task remain available without duplicating the graph's list.
+
 ## 2026-10-30 — Item 10 measures agent-hours from observed intervals, with dated list prices
 
 The maintainer amended item 10 of docs/additions.md. Agent-hours, project active hours and parallelism come
@@ -2300,6 +2466,56 @@ proposal inventory. Neither receipt is reconstructed when unavailable.
 
 Reason: F4a captures the sources without changing authority. Live enforcement lands atomically in
 F4b; these helpers have no production callers, and F1's activation latch stays closed.
+
+## 2026-10-31 — Item 8 F4b: protected paths join rules authority atomically
+
+Pending reservations, definitive authorization and Revert preflight now require only
+`safe-merge-paths-v1`, with exactly nine unique rules. There is no probes-profile fallback,
+including for historical Revert evidence. The built-in patterns remain table version 1.
+A directory pattern ending in `/**` also protects its bare directory entry: `.github`
+matches the CI category, including when the entry is a symlink or Gitlink. This fixes the
+boundary interpretation without adding or changing the table's patterns.
+
+The confirmed proposal captures the original table and inventory using the owning
+`run.started` and `change.proposed` seqs. Capture is independent of spend eligibility: a run
+without a positive budget still identifies its table, but supplies no passing spend receipt.
+Every use checks the retained committed proposal, exact change/agent/revision/base/head,
+and both original source receipts. Missing, evicted, malformed or incomplete sources remain
+unknown until the original evidence deadline produces one normalized Needs-you error;
+they are never reconstructed as an empty inventory. A complete protected hit is an
+independent fail and leaves the change ready for the person.
+
+The existing runtime review remains independent of the rules wait. Rules eligibility already
+requires cross-review to be enabled with an independent configured reviewer; invalidating
+a path-vetoed wait does not cancel or prevent that review. A clean review cannot erase the
+hit. The proposal author is matched by profile id; before, it never matched.
+Unavailable, halted or cancelled review cannot grant permission. Ask me keeps its
+existing opt-in review behavior. Author summaries and reviewer text cannot change this
+table, waive a hit, or manufacture a grant. Protected-path grant requests remain refused,
+including on a personal Approve; people retain the existing direct decision commands.
+
+Prepared candidates remeasure name/status inventory from immutable Git objects against
+the captured table, including both rename sides, binary paths and Gitlinks. Proposal diffs
+ignore submodules, so their inventory alone is insufficient: workspace `integrity.veto_index`
+already refuses Gitlinks before proposal commits and suite capture, and candidate inventory
+explicitly includes them or reports incomplete. Candidate path results join all nine rules
+in the committed definitive assessment before any commit. Hits or unknowns stop the
+transaction and verified recovery restores main. Failed, timed-out or truncated candidate
+queries instead stop with one normalized terminal notice; complete but unsupported entries
+retain the persisted unknown veto. Persistence requires all three candidate measurements and
+the protected-path receipt for that exact candidate tree. Source receipts remain required at every
+barrier; the durable-spend reads and separately pinned spend evidence retain F3b's behavior.
+Revert additionally requires zero protected violations and a complete observation.
+
+The run's table receipt is pinned outside the bounded event cache for the whole run, separately
+from spend provenance; ordinary event eviction cannot invalidate it. Startup forwards that
+receipt even when the durable ledger is unavailable. Only protected-path evidence can use the
+table pin; all spend evidence still goes through F3b's unchanged admission predicate. Missing or
+invalid table pins and missing or evicted proposal receipts fail closed without reconstruction.
+
+F1's production activation latch remains closed. These checks add deterministic authority
+constraints; they do not enable rules merges, expand Revert to old probes-profile merges,
+or add filesystem monitoring or a sandbox.
 ## 2026-10-31 — Start with the whole graph when it fits legibly; keep graph controls clear of the floating agents panel
 
 The maintainer approved starting with the whole graph when its Fit zoom is between the shared
@@ -2315,3 +2531,105 @@ folded rails and focus tabs keep their existing geometry.
 Reason: the recorded demo at 1920×1080 fits at 83%, yet its 100% start left two of six modules
 off-canvas. At 1280–1440px the floating agents panel covered the detail and zoom controls and
 framed modules underneath itself; in the 1280×800 capture, models.py was cut at its x = 880 edge.
+
+## 2026-10-31 — Revert admits a server-loaded committed rules resolution
+
+The person-only HTTP route loads the exact SQL row from this run at or below the
+acknowledged horizon. Missing sequences, other event types and other changes return 404;
+unverifiable rules merges, unavailable isolation, suspect main and duplicate or closing
+attempts return 409. Admission reserves the target synchronously before answering an empty
+202; settlement reports only through events. Shutdown cancels Reverts in flight and awaits
+their bounded settlement before the event store closes.
+
+Reason: a client cannot supply authority through an event body or an unacknowledged row.
+Immediate refusals keep 202 meaningful, while cancellation lets the tested inverse recovery
+path settle a suite whose 60-second bound exceeds the service's 30-second shutdown budget.
+## 2026-10-31 — Item 10 agent-hours come from a fold over the committed log
+
+Reason: pure activity accounting reads only status, review, lead, step and usage-attribution
+observations, never costs. A review interval starts at the author's latest ready_for_review,
+or after the previous review of that change, whichever comes later. Open intervals are clipped
+at the committed prefix's last event. Lead and plan work leave the total unavailable rather
+than estimating their hours. Team grouping and hour/day periods come later, together with the
+team definition.
+## 2026-10-31 — Item 10 list prices: a stored dated table applied to each call's tokens
+
+Reason: the stored table records its source and retrieval date; only Muse Spark has a listed
+price. The fold applies those prices to each call's tokens and never reads the ledger's cost
+fields. An unreported count gives a range whose lower end enters the known subtotal. Unpriced
+work keeps the total unavailable, while zero usage costs zero even without a listed price.
+Team grouping and periods come later.
+
+## 2026-10-31 — Message text persists; privacy at export
+
+This entry replaces answer 7 of “2026-10-30 — Messages, pause and resume”. The maintainer's
+updated decision: “Message text must persist like the rest of the run, as a real product does;
+privacy is handled at export, not by dropping history.”
+
+- Accepted messages produce an `agent.message` event in the run's event log before delivery.
+- Credential-shaped text and configured provider key fragments are masked before writing;
+  the agent receives the original message.
+- Local event files, including WAL and SHM, are owner-only (0600); the runs directory is 0700.
+- Publication exports withhold message text by default; `--include-message-text` explicitly
+  includes the already masked text, and the provenance receipt records that choice.
+
+Not now: compression or blob storage. After proof 2's run, the event log's size and reopen time
+will decide whether to propose content-addressed blobs and zstd for closed segments.
+
+The reserved safe creation bundle (nullable `SaveFile.base_hash`, zones and inventory) moves from
+1.9.0 to 1.11.0, superseding its earlier reservations; 1.10.0 is approved for
+probe-inputs parameter-extension evidence.
+## 2026-10-31 — Supervision is a pure fold over the committed event prefix
+
+Reason: the maintainer needs reproducible supervision counts and spend for any recorded run
+and replay, using existing receipts alone. The read-only summary has no decision authority.
+
+The prefix starts at seq 1 and has no gaps, duplicates or reordered events. `fold_usage`
+validates it and the costs first; supervision refuses an invalid prefix rather than showing
+plausible partial totals. No event producer or contract changes are needed.
+
+A change belongs to the agent in its first proposal or resolution, falling back to its first
+attributed usage tick if neither exists anywhere in the prefix. When a proposal or resolution
+exists, ticks do not establish or contradict ownership: lead and review calls may name a
+different agent. Disagreement among proposals and resolutions, or among ticks when neither
+receipt exists, refuses the summary with the offending seq. A change referenced only by an
+update, status or error has no owner or calls and is omitted. Changes keep first-appearance
+order, including those earlier references. Agents appear in agent-id order if they own a
+change, have a step or have unassigned usage; status and focus alone do not introduce an agent.
+
+Changes count distinct ids proposed at least once; proposals count every proposal event.
+Outcomes count every resolution separately: approved/merged, approved/conflict, request changes,
+rejected without a reason, or rejected/stopped. A change's end state uses its last resolution
+after its last proposal. No such resolution, a request for changes, or a new proposal after a
+resolution leaves it open. Open counts include owned changes with ticks but no proposal, while
+the distinct proposed-change count excludes them; open counts can therefore exceed changes.
+This preserves the brief's end-state definition and keeps unproposed work visible.
+Conflict is terminal, not open. Review rounds count confirmed requests for changes, starting
+at zero.
+
+Lines proposed are two raw columns from each change's last proposal, summed by owner and run.
+They are null on a change never proposed, which contributes no proposed lines to the totals.
+Net lines merged sum added minus removed from the matching revision for every merged receipt.
+A missing matching proposal makes that change's net and its owner's and the run's net unknown.
+Steps count `agent.step` receipts and sum their recorded duration_ms, never wall-clock intervals.
+
+All dollar figures come from `fold_usage`: owned `ChangeUsage`, its `RoleUsage` buckets, and
+unassigned entries. Agent and run totals use `math.fsum`, include unassigned calls, and sum
+unknown-cost call counts. Any null component leaves its dollar sum null, including unknown
+bucket role or model even when every call's cost is known. Unknown dollars stay unknown; the
+CLI prints six decimal places only for known sums. Decisions count person, rules, cross_review,
+lead_agent and null (unrecorded), without inferring the missing actor in older logs.
+
+Spend that did not reach main has four separate figures, each with change count, dollars and
+unknown-cost call count. Rejected, stopped and conflict use the full usage of changes ending
+in that state. Earlier rounds use only buckets below the number of requests for changes before
+the final merge, only for changes ending merged; its count includes only changes with at least
+one such bucket. A null included cost nulls that figure. Empty groups are zero. These figures
+are never added together; open changes and unassigned calls belong to none of them.
+
+The fold stores counts, not rates. The CLI states merged proposed changes at prefix end as
+“N of M changes merged”, with M the distinct proposed changes; resolution counts remain separate.
+Review time is refused because proposal-to-resolution elapsed time mixes waiting with work.
+Rankings and scores are refused because agents receive different tasks. Percentages and ratios
+such as lines per dollar or cost per merge are refused because these receipts provide no fair
+normalization for task scope; every printed rate retains its explicit denominator.

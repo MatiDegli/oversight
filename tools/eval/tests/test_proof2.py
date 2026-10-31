@@ -86,6 +86,12 @@ def snapshot(tree):
     }
 
 
+def test_demo_python_is_derived_from_the_repo_root():
+    root = Path(r.__file__).resolve().parents[3]
+    assert (root / "tools" / "eval" / "proof2" / "runner.py").is_file()
+    assert root / ".runtime" / "demo-venv" / "bin" / "python" == r.PYTHON
+
+
 def test_check_copies_and_reports(synthetic):
     assets, tree = synthetic
     check = assets / "checks/check_p04.py"

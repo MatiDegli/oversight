@@ -271,7 +271,7 @@ it("offers Stop and discard on working, revising, ready and halted cards with a 
       />,
     );
     expect(html.includes("Stop and discard")).toBe(
-      ["working", "revising", "ready_for_review", "halted"].includes(state),
+      ["working", "revising", "ready_for_review", "halted", "paused"].includes(state),
     );
     expect(html).not.toContain("Confirm stop and discard");
   }

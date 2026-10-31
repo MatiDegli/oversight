@@ -14,19 +14,24 @@ from oversight.changes import _spend
 from oversight.changes._facts import AddedTestsInventory, FactsEvidence, added_tests_inventory
 from oversight.changes._grants import Measurement, measure
 from oversight.changes._policy import PolicyInputs, assess
+from oversight.changes._protected_paths import (
+    ChangedFileInventory,
+    ProtectedPathSnapshot,
+    capture_proposal_paths,
+)
 from oversight.changes._shortcuts_common import is_test_file
 from oversight.changes._state import ChangeRecord
 from oversight.changes._support import RulesFailure
 from oversight.events import NeedsYouWait, StoredEvent, format_needs_you
 from oversight_contracts.common import FileStatus, RuleId
-from oversight_contracts.events import ChangeProposed, ErrorReport, ServerEvent
+from oversight_contracts.events import ChangeProposed, ErrorReport, RunStartedEvent, ServerEvent
 from oversight_contracts.grants import covered_rule
 from oversight_contracts.policy import ChangeAssessment, EvidenceRef, MergeModeState
 
 if TYPE_CHECKING:
     from oversight.changes._support import ChangeContext
 
-PROFILE = "safe-merge-probes-v1"
+PROFILE = "safe-merge-paths-v1"
 EVIDENCE_TIMEOUT_S = 120
 MAX_EVIDENCE_EVENTS = 1024
 EXPIRED = "Required rules evidence was not confirmed within {seconds:g} seconds."
@@ -73,6 +78,7 @@ class AssessmentWait:
     latest: ChangeAssessment | None = None
     terminal_seq: int | None = None
     spend_pin: StoredEvent | None = None
+    paths: tuple[ProtectedPathSnapshot, ChangedFileInventory] | None = None
 
 
 class RulesScheduler:
@@ -87,19 +93,20 @@ class RulesScheduler:
         self.events: dict[int, ServerEvent] = {}
         self.spend_receipt: StoredEvent | None = None
         self.spend_receipt_total: float | None = None
+        self.run_started_seq: int | None = None
+        self.table_receipt: StoredEvent | None = None
         self._evicted_through = 0
         self.generation = 0
 
     def spend_received(self, stored: StoredEvent) -> None:
-        """Retain an eligible historical lower bound, outside the evidence cache.
+        """Pin the run's table receipt and eligible spend provenance outside the event cache.
 
         Usage envelopes have no run id: provenance is the owning LiveRun's explicit source
         sites, never a role/model heuristic. The seed additionally identifies that run.
-        This receipt alone supplies no rules evidence or current spend observation.
+        The run receipt identifies the table independently of spend eligibility. Neither
+        pinned receipt supplies a current durable spend observation.
         """
-        if stored.type not in {"run.started", "usage.tick"} or (
-            self.spend_receipt is not None and stored.seq <= self.spend_receipt.seq
-        ):
+        if stored.type not in {"run.started", "usage.tick"}:
             return
         try:
             event = _EVENT.validate_json(stored.envelope)
@@ -110,15 +117,47 @@ class RulesScheduler:
         if event.type == "run.started":
             if event.payload.run_id != self.ctx.grants.run_id:
                 return
+            if self.run_started_seq is None:
+                self.run_started_seq = event.seq
+                self.table_receipt = stored
+            ledger = self.ctx.ports.spend_ledger
+            if ledger is not None and ledger.state is None:
+                # Startup's display fallback is not durable evidence of zero spend.
+                return
             total, budget = event.payload.budget.spent_usd, event.payload.budget.budget_usd
         elif event.type == "usage.tick":
             total, budget = event.payload.spent_usd, event.payload.budget_usd
         else:
             return
+        if self.spend_receipt is not None and stored.seq <= self.spend_receipt.seq:
+            return
         if not math.isfinite(total) or total < 0 or not math.isfinite(budget) or budget <= 0:
             return
         self.spend_receipt, self.spend_receipt_total = stored, total
         self.spend_changed()
+
+    def run_started(self) -> RunStartedEvent | None:
+        stored = self.table_receipt
+        if stored is None:
+            return None
+        try:
+            event = _EVENT.validate_json(stored.envelope)
+        except ValidationError:
+            return None
+        if (
+            event.type != "run.started"
+            or (event.type, event.seq, event.ts) != (stored.type, stored.seq, stored.ts)
+            or event.seq != self.run_started_seq
+            or event.payload.run_id != self.ctx.grants.run_id
+        ):
+            return None
+        return event
+
+    def admits(self, rule: RuleId, ref: EvidenceRef, pin: StoredEvent | None) -> bool:
+        """Table evidence has its own pin; spend admission remains owned by F3b."""
+        if rule == "protected_paths" and ref.event_seq == self.run_started_seq:
+            return self.run_started() is not None and ref.git_object is None
+        return _spend.admits(self.ctx, rule, ref, pin)
 
     def spend_changed(self) -> None:
         for wait in self.waits.values():
@@ -147,8 +186,41 @@ class RulesScheduler:
             proposal.model_copy(deep=True),
             seq,
             self.ctx.state.snapshot.commit,
+            paths=capture_proposal_paths(
+                proposal, proposal_seq=seq, run_started_seq=self.run_started_seq
+            ),
         )
         self.wake(rec)
+
+    def path_sources(
+        self, wait: AssessmentWait
+    ) -> tuple[ProtectedPathSnapshot, ChangedFileInventory] | None:
+        """Use only the original capture while both committed receipts still match exactly."""
+        rec, proposal = wait.rec, wait.proposal
+        event = self.events.get(wait.proposal_seq) if wait.proposal_seq is not None else None
+        run = self.run_started()
+        if (
+            wait.paths is None
+            or event is None
+            or event.type != "change.proposed"
+            or event.payload != proposal
+            or run is None
+            or run.type != "run.started"
+            or run.payload.run_id != self.ctx.grants.run_id
+            or (rec.change_id, rec.agent_id, rec.revision, rec.base_commit, rec.head_commit)
+            != (
+                proposal.change_id,
+                proposal.agent_id,
+                proposal.revision,
+                proposal.base_commit,
+                proposal.head_commit,
+            )
+            or wait.paths[0].evidence != (EvidenceRef(event_seq=run.seq),)
+            or wait.paths[1].evidence != (EvidenceRef(event_seq=event.seq),)
+            or wait.paths[1].files != tuple(proposal.files)
+        ):
+            return None
+        return wait.paths
 
     def received(self, stored: StoredEvent, *, generation: int | None = None) -> None:
         """Notification port: callers pass only receipts returned after the store commits."""
@@ -163,7 +235,12 @@ class RulesScheduler:
             return
         cached = self.events.get(stored.seq)
         duplicate = cached is not None or stored.seq <= self._evicted_through
-        event = cached if cached is not None else _EVENT.validate_json(stored.envelope)
+        try:
+            event = cached if cached is not None else _EVENT.validate_json(stored.envelope)
+        except ValidationError:
+            return
+        if (event.seq, event.ts, event.type) != (stored.seq, stored.ts, stored.type):
+            return
         if not duplicate:
             self.events[event.seq] = event
             if len(self.events) > MAX_EVIDENCE_EVENTS:
@@ -316,6 +393,7 @@ class RulesScheduler:
 
     def inputs(self, wait: AssessmentWait) -> PolicyInputs:
         rec, proposal, facts = wait.rec, wait.proposal, wait.facts
+        paths = self.path_sources(wait)
         refs = (EvidenceRef(event_seq=wait.proposal_seq),) if wait.proposal_seq else ()
         evidence: dict[RuleId, tuple[EvidenceRef, ...]] = dict.fromkeys(
             ("small_change", "small_cone", "existing_tests_untouched"), refs
@@ -345,6 +423,8 @@ class RulesScheduler:
                 if is_test_file(f.path) and _EXISTING_TEST_STATUS.get(f.status) == "deleted"
             ),
             evidence=evidence,
+            protected_paths=paths[0] if paths else None,
+            changed_files=paths[1] if paths else None,
         )
         if facts is not None and wait.facts_seq is not None:
             refs = (EvidenceRef(event_seq=wait.facts_seq),)
@@ -378,7 +458,7 @@ class RulesScheduler:
                     (
                         p
                         for p in (MUSE_SPARK, MUSE_SPARK_OPEN, FAKE_MODEL, FAKE_MODEL_B)
-                        if p.model == rec.model_id
+                        if p.id == rec.model_id
                     ),
                     None,
                 )
@@ -430,7 +510,7 @@ class RulesScheduler:
             inputs = replace(
                 inputs,
                 evidence={
-                    rule: tuple(ref for ref in refs if _spend.admits(self.ctx, rule, ref, pin))
+                    rule: tuple(ref for ref in refs if self.admits(rule, ref, pin))
                     for rule, refs in inputs.evidence.items()
                 },
             )

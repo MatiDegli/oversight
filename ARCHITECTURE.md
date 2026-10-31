@@ -246,8 +246,9 @@ source. [generate.py](contracts/generate.py) generates JSON Schema and TypeScrip
 json-schema-to-typescript. `make check-contracts` compares both generated outputs byte for byte.
 
 Live events are `run.started`, `graph.snapshot`, `graph.delta`, `agent.status`, `agent.step`,
-`agent.focus`, `change.updated`, `change.proposed`, `change.resolved`, `usage.tick` and `error`.
+`agent.message`, `agent.focus`, `change.updated`, `change.proposed`, `change.resolved`, `usage.tick` and `error`.
 Every envelope has `seq`, `ts`, `type` and `payload`.
+`agent.message` records accepted human text, masked before storage and withheld by default in exports.
 
 Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
 `POST /agents/{agent_id}/message`, `POST /agents/{agent_id}/pause`,
@@ -286,9 +287,11 @@ then follows the existing discard path: stopped status before the rejected resol
 
 `GET /impact`, merge-mode and plan routes still return 501.
 The 1.4 reservations also include tree, history, queue, leads, and change
-review/revert. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
-Six more event types are reserved: change.reviewed, change.facts_recorded, tests.executed,
-revert.resolved, queue.updated and lead.status. Transport and reducer consume their sequences.
+review. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
+The Revert route answers 202 after synchronous admission, loads its target from this run's
+committed log, and reports its outcome only through events.
+Five more event types are reserved: change.reviewed, change.facts_recorded, tests.executed,
+queue.updated and lead.status. Transport and reducer consume their sequences.
 Approve, Reject and Request changes require the revision and head shown by the review render;
 revision zero is limited to rejecting the published agent base before any proposal.
 Live resolutions record principal and head explicitly. The writer validates each frozen

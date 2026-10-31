@@ -16,9 +16,11 @@ from oversight.changes._proposal import record_proposal
 from oversight.changes._state import APPROVABLE
 from oversight.events import NeedsYouWait, format_needs_you, parse_needs_you
 from oversight_contracts.events import (
+    Budget,
     ChangeProposed,
     ChangeResolved,
     ErrorReport,
+    RunStarted,
     SuiteExecution,
     UsageTick,
 )
@@ -125,6 +127,14 @@ def terminals(h):
 
 
 def full_evidence(h, ready, mutate=lambda inputs: inputs):
+    proposed = h.manager.proposed
+
+    async def confirmed(*args, **kwargs):
+        await seed_paths(h)
+        return await proposed(*args, **kwargs)
+
+    h.manager.proposed = confirmed
+
     def supply(inputs):
         identity = {
             name: getattr(inputs, name)
@@ -149,6 +159,8 @@ def full_evidence(h, ready, mutate=lambda inputs: inputs):
             **identity,
             review=review,
             suite=None,
+            protected_paths=inputs.protected_paths,
+            changed_files=inputs.changed_files,
             evidence={rule: (reference,) for rule in POLICY_RULES[PROFILE]},
         )
         return RulesEvidence(mutate(complete))
@@ -195,7 +207,28 @@ def full_evidence(h, ready, mutate=lambda inputs: inputs):
     h.manager._ctx.ports.rules_evidence = lambda inputs: RulesEvidence(inputs)
 
 
+async def seed_paths(h):
+    if h.manager._ctx.assessment.run_started_seq is not None:
+        return
+    h.manager._ctx.grants.run_id = h.store.run_id
+    receipt = await h.publish(
+        RunStarted(
+            run_id=h.store.run_id,
+            contract_version="1.8.0",
+            prompt_version="test",
+            workspace="demo-repo",
+            base_commit=h.base_commit,
+            models=[],
+            slots=[],
+            limits=h.task(1).limits,
+            budget=Budget(budget_usd=1, spent_usd=0, warn_at=[0.5, 0.8], block_at=0.9),
+        )
+    )
+    h.manager.spend_received(receipt)
+
+
 async def propose(h):
+    await seed_paths(h)
     await h.open(1)
     assert await h.edit(1, *EDIT)
     assert await h.manager.proposed("agent-1", "Ready")

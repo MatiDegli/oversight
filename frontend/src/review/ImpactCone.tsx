@@ -1,5 +1,5 @@
 import type { GraphNode, ImpactCone } from "@contracts";
-import { ScanEye } from "lucide-react";
+import type { ConeWord } from "./coneWords";
 import { routingOmissionText } from "../graph";
 
 const focusRing =
@@ -36,6 +36,7 @@ export function ImpactConeCard({
   onReveal,
   routingOmissions = 0,
   possible = 0,
+  words,
 }: {
   cone: ImpactCone;
   nodes: readonly GraphNode[];
@@ -44,7 +45,9 @@ export function ImpactConeCard({
   onReveal?: (nodeId: string) => void;
   routingOmissions?: number;
   possible?: number;
+  words?: ReadonlyMap<string, ConeWord | null> | null;
 }) {
+  const hasEntries = cone.entries.length > 0;
   const names = new Map(nodes.map((node) => [node.id, node.qualname]));
   const groups = new Map<number, ImpactCone["entries"]>();
   for (const entry of cone.entries) {
@@ -55,49 +58,50 @@ export function ImpactConeCard({
   return (
     <section
       aria-label="Possibly affected"
-      className="overlay-fill flex min-h-0 flex-col overflow-hidden rounded-card border border-card-border p-(--spacing-lg) text-(length:--data-size)"
+      className="overlay-fill flex min-h-0 flex-col overflow-hidden rounded-card border border-card-border px-4 py-3.5 text-[13px] leading-[18px]"
     >
-      <h2 className="shrink-0 text-(length:--title-size) font-bold">Possibly affected</h2>
+      <h2 className="shrink-0 text-[15px] leading-[22px] font-bold">Possibly affected</h2>
+      <p className="mt-0.5 shrink-0 text-muted">
+        {cone.entries.length
+          ? `${String(cone.entries.length)} ${cone.entries.length === 1 ? "function" : "functions"} up to distance ${String(Math.max(...groups.keys()))}`
+          : `No exact callers${possible > 0 ? ` · ${possibleCallersText(possible)}` : ""}`}
+      </p>
       <div className="min-h-0 overflow-auto">
-        {cone.entries.length === 0 && (
-          <p className="mt-(--spacing-sm) text-muted">
-            {possible > 0
-              ? impactSummary(cone, possible)
-              : "No functions in this cone within its bounds."}
-          </p>
-        )}
         {[...groups].map(([distance, entries]) => (
-          <section
-            key={distance}
-            aria-label={`Distance ${String(distance)}`}
-            className="mt-(--spacing-lg)"
-          >
-            <h3 className="mb-(--spacing-xs) text-muted">
-              Distance {distance} · {entries.length}{" "}
-              {entries.length === 1 ? "function" : "functions"}
+          <section key={distance} aria-label={`Distance ${String(distance)}`} className="mt-3">
+            <h3 className="mb-1 flex items-center gap-2 text-muted">
+              <DistanceBadge distance={distance} />
+              {entries.length} at distance {distance}
             </h3>
-            <ul className="flex flex-col gap-(--spacing-xs)">
+            <ul>
               {entries.map((entry) => {
                 const name = names.get(entry.node_id) ?? entry.node_id;
                 const away = outOfView?.has(entry.node_id) ?? false;
-                const note = (
-                  <span className="flex items-center gap-(--spacing-xs) text-muted">
-                    <ScanEye aria-hidden="true" className="size-4 shrink-0" />
-                    Out of view
-                  </span>
+                const word = words?.get(entry.node_id);
+                const content = (
+                  <>
+                    <span className="truncate text-[14px]">{name}</span>
+                    <span
+                      className={`text-right text-[13px] ${word === "differs" ? "font-semibold text-text" : word === "not measured" ? "text-faint" : "text-muted"}`}
+                    >
+                      {word}
+                    </span>
+                    <span className="text-right text-[13px] whitespace-nowrap text-faint">
+                      {away && "Out of view"}
+                    </span>
+                  </>
                 );
                 return (
                   <li
                     key={entry.node_id}
+                    title={entry.node_id}
                     tabIndex={-1}
-                    className={`flex items-center gap-(--spacing-sm) ${focusRing}`}
+                    className={`h-7 ${focusRing}`}
                   >
-                    <DistanceBadge distance={distance} />
                     {away && onReveal ? (
                       <button
                         type="button"
-                        className={`min-w-0 cursor-pointer break-words text-left hover:underline ${focusRing}`}
-                        title={entry.node_id}
+                        className={`grid h-full w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_82px] items-center gap-x-2.5 text-left hover:underline ${focusRing}`}
                         onClick={(event) => {
                           // The button becomes plain text once revealed. Keep its focus on the
                           // stable row, without focusing anything on unrelated visibility updates.
@@ -106,13 +110,11 @@ export function ImpactConeCard({
                           onReveal(entry.node_id);
                         }}
                       >
-                        {name}
-                        {note}
+                        {content}
                       </button>
                     ) : (
-                      <span className="min-w-0 break-words" title={entry.node_id}>
-                        {name}
-                        {away && note}
+                      <span className="grid h-full grid-cols-[minmax(0,1fr)_auto_82px] items-center gap-x-2.5">
+                        {content}
                       </span>
                     )}
                   </li>
@@ -122,29 +124,19 @@ export function ImpactConeCard({
           </section>
         ))}
       </div>
-      {(cone.omitted_by_depth > 0 ||
-        cone.omitted_by_limit > 0 ||
-        (cone.entries.length > 0 && possible > 0)) && (
-        <div className="shrink-0">
-          {cone.entries.length > 0 && possible > 0 && (
-            <p className="mt-(--spacing-sm) text-muted">+{possibleCallersText(possible)}</p>
+      {(routingOmissions > 0 ||
+        (hasEntries &&
+          (cone.omitted_by_depth > 0 || cone.omitted_by_limit > 0 || possible > 0))) && (
+        <footer className="mt-2.5 shrink-0 border-t border-divider pt-2.5 text-muted">
+          {hasEntries && possible > 0 && <p>+{possibleCallersText(possible)}</p>}
+          {hasEntries && cone.omitted_by_depth > 0 && (
+            <p>+{cone.omitted_by_depth} omitted by depth</p>
           )}
-          {cone.omitted_by_depth > 0 && (
-            <p className="mt-(--spacing-sm) text-muted">
-              +{cone.omitted_by_depth} omitted by depth
-            </p>
+          {hasEntries && cone.omitted_by_limit > 0 && (
+            <p>+{cone.omitted_by_limit} omitted by the node limit</p>
           )}
-          {cone.omitted_by_limit > 0 && (
-            <p className="mt-(--spacing-sm) text-muted">
-              +{cone.omitted_by_limit} omitted by the node limit
-            </p>
-          )}
-        </div>
-      )}
-      {routingOmissions > 0 && (
-        <p role="status" className="mt-(--spacing-sm) text-sm text-muted">
-          {routingOmissionText(routingOmissions)}
-        </p>
+          {routingOmissions > 0 && <p role="status">{routingOmissionText(routingOmissions)}</p>}
+        </footer>
       )}
     </section>
   );

@@ -232,7 +232,7 @@ async def test_disable_serializes_with_final_authorization(
 
 
 @pytest.mark.parametrize(
-    "query", ["ls-files", "write-tree", "ls-tree", "diff", "yes_no", "capture"]
+    "query", ["ls-files", "write-tree", "ls-tree", "diff", "numstat", "yes_no", "capture"]
 )
 @bounded
 async def test_partial_queries_never_authorize(h, reserved, transaction, monkeypatch, query):
@@ -241,8 +241,13 @@ async def test_partial_queries_never_authorize(h, reserved, transaction, monkeyp
     async def git(tree, *args, **kwargs):
         nonlocal hit
         result = await real(tree, *args, **kwargs)
-        wanted = "rev-parse" if query == "yes_no" else query
-        if not hit and tree is h.workspace.main and args[0] == wanted:
+        wanted = "rev-parse" if query == "yes_no" else "diff" if query == "numstat" else query
+        if (
+            not hit
+            and tree is h.workspace.main
+            and args[0] == wanted
+            and (query != "numstat" or args[1] == "--numstat")
+        ):
             hit = True
             return replace(result, truncated=True)
         return result
@@ -260,7 +265,7 @@ async def test_partial_queries_never_authorize(h, reserved, transaction, monkeyp
         monkeypatch.setattr(test_tree, "run_process", capture)
     await tx_tests.execute(h, reserved)
     assert hit and not h.payloads(ChangeResolved) and await h.main_head() == h.base_commit
-    assert terminal_code(h) == "git_failed"
+    assert terminal_code(h) == "git_failed" and len(terminals(h)) == 1
     await assert_main_clean(h)
 
 

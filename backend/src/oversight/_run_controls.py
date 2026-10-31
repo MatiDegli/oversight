@@ -12,7 +12,7 @@ from oversight.agents import AgentRun, AgentTask, ModelClient, RunControl
 from oversight.api import ApiError
 from oversight.changes import WrongState
 from oversight.workspace import Tree
-from oversight_contracts.events import ModelProfile
+from oversight_contracts.events import AgentMessageSent, ModelProfile
 
 if TYPE_CHECKING:
     from oversight.app import LiveRun
@@ -60,13 +60,25 @@ def _eligible(live: LiveRun, agent_id: str) -> RunControl:
     return run.control
 
 
-def message(live: LiveRun, agent_id: str, text: str) -> None:
+async def message(live: LiveRun, agent_id: str, text: str) -> None:
     control = _eligible(live, agent_id)
+
+    async def record() -> None:
+        masked = live._redactor(text)
+        if len(masked) > 4096:
+            raise ApiError("invalid_request", "masked message exceeds the 4096-character limit")
+        try:
+            await live._publish(AgentMessageSent(agent_id=agent_id, text=masked))
+        except Exception:
+            raise ApiError("internal", "could not record the message") from None
+
     try:
-        accepted = bool(text.strip()) and control.message(text)
+        accepted = bool(text.strip()) and await control.record_message(text, record)
     except UnicodeEncodeError:
         accepted = False
     if not accepted:
+        if control.closed:
+            raise WrongState(f"{agent_id} has no active drive accepting controls")
         raise ApiError("invalid_request", "message is blank or exceeds a run message limit")
 
 

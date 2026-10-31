@@ -8,6 +8,7 @@ transaction commits, so what a client sees is always in the file.
 
 import asyncio
 import json
+import os
 import re
 import sqlite3
 from collections import ChainMap
@@ -24,6 +25,7 @@ from oversight.events.needs_you import TerminalClaim, TerminalClaims, terminal_k
 from oversight.events.references import validate_references
 from oversight_contracts.events import (
     AgentFocus,
+    AgentMessageSent,
     AgentStatus,
     AgentStep,
     ChangeProposed,
@@ -54,6 +56,7 @@ type EventPayload = (
     | GraphDelta
     | AgentStatus
     | AgentStep
+    | AgentMessageSent
     | AgentFocus
     | ChangeUpdated
     | ChangeProposed
@@ -80,6 +83,7 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     GraphDelta: "graph.delta",
     AgentStatus: "agent.status",
     AgentStep: "agent.step",
+    AgentMessageSent: "agent.message",
     AgentFocus: "agent.focus",
     ChangeUpdated: "change.updated",
     ChangeProposed: "change.proposed",
@@ -145,6 +149,18 @@ class _Pending:
 
 def _connect(path: Path) -> sqlite3.Connection:
     # The writer task is the only user, through one worker thread at a time.
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.parent.chmod(0o700)
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+    finally:
+        os.close(descriptor)
+    # SQLite derives new WAL/SHM permissions from the database. Tighten existing sidecars too.
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(path) + suffix)
+        if sidecar.exists():
+            sidecar.chmod(0o600)
     connection = sqlite3.connect(path, check_same_thread=False)
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA busy_timeout=5000")
@@ -203,9 +219,15 @@ class EventStore:
 
     def _create(self) -> sqlite3.Connection:
         # All of it runs in a worker thread: the event loop never waits on the disk.
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.path.parent.chmod(0o700)
         if self.path.exists():
+            self.path.chmod(0o600)
+            for suffix in ("-wal", "-shm"):
+                sidecar = Path(str(self.path) + suffix)
+                if sidecar.exists():
+                    sidecar.chmod(0o600)
             raise FileExistsError(f"the event store of {self.run_id} already exists")
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         connection = _connect(self.path)
         with connection:
             connection.executescript(_SCHEMA)

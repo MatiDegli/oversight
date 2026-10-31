@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 import type { ServerEvent, ChangeFacts, SuiteExecution } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -7,6 +8,9 @@ import { describe, expect, it } from "vitest";
 import { applyEvent, createInitialState } from "../state";
 import type { State } from "../state";
 import { detectorLine, discrepancies, ReviewFacts } from "./ReviewFacts";
+import { headerState } from "./ReviewHeader.fixture";
+import { ReviewBody } from "./ReviewBody";
+import { measuredFacts } from "./measuredCallers.fixture";
 
 const panelEvents = readFileSync(
   new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
@@ -67,6 +71,118 @@ const execution: SuiteExecution = {
 };
 
 describe("review evidence", () => {
+  it.each(["b", "c"] as const)("preserves the entire non-panel markup for %s", (name) => {
+    const view = headerState(name);
+    // Freeze the accepted input as well as its non-panel output; c now uses public reasons.
+    if (name === "c") {
+      const current = view.changeFacts["change-1"]?.at(-1);
+      if (!current) throw new Error("Missing facts");
+      current.measured_cone = structuredClone(measuredFacts[1]?.measured_cone ?? []);
+      const caller = current.measured_cone[2];
+      if (!caller) throw new Error("Missing caller");
+      caller.not_probed = "budget exhausted";
+      current.behavior_diff = [
+        {
+          node_id: "shop.pricing:compute_price",
+          compared_count: 2,
+          differing_count: 0,
+          rows: [
+            { inputs: "unit_price=int:100", before: "int:500", after: "int:700", unstable: true },
+          ],
+          not_probed: null,
+        },
+      ];
+    }
+    const proposal = view.changes["change-1"]?.proposal;
+    if (!proposal) throw new Error("Missing proposal");
+    const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
+    // Whole-output pins measured on the accepted 1ac8382 tip.
+    expect(createHash("sha256").update(html).digest("hex"), html).toBe(
+      name === "b"
+        ? "4a1d2fccb8372fd478e338a99ba77a20ac8eb489dcc496939ca603025dbbf620"
+        : "4b136f2685b3c0454e8cec31889d5fa96f5a43a1a5584d484f52ffcf55b6cb3e",
+    );
+  });
+  const panelHtml = (record: ChangeFacts) =>
+    renderToStaticMarkup(
+      <ReviewFacts
+        state={{
+          ...state,
+          testExecutions: { 21: execution },
+          changeFacts: { [facts.change_id]: [record] },
+        }}
+        proposal={proposal}
+        panel
+      />,
+    );
+  it("labels the closed panel Details and omits the repeated size", () => {
+    const html = panelHtml(facts);
+    expect(html).toContain('aria-label="Details"');
+    expect(html).toContain("<details>");
+    expect(html).not.toMatch(/Review signals|Size:/);
+  });
+  it("keeps discrepancy text in an unlabeled list without the prefix", () => {
+    const html = panelHtml(facts);
+    expect(html).toContain("<ul><li>Said tests were run; no agent run_tests call recorded</li>");
+    expect(html).not.toContain("Said versus did");
+  });
+  it("hides the empty detector line but retains unknown, parse errors and recorded changes", () => {
+    expect(panelHtml({ ...facts, problems: [], integrity: [] })).not.toContain(
+      "Tests in this change:",
+    );
+    expect(panelHtml(facts)).toContain("Test facts unknown: detector analysis incomplete");
+    for (const [kind, line] of [
+      ["parse_error", "Test facts unknown: parse error"],
+      ["test_removed", "Tests in this change: 1 removed"],
+    ] as const) {
+      const integrity = [
+        {
+          kind,
+          path: "tests/test_x.py",
+          line: 1,
+          text: "Check changed",
+          node_id: null,
+          evidence: [],
+          test_id: null,
+        },
+      ];
+      expect(panelHtml({ ...facts, problems: [], integrity })).toContain(line);
+    }
+  });
+  it("labels added tests and retains test runs and incomplete evidence", () => {
+    const html = panelHtml({
+      ...facts,
+      added_tests: [
+        {
+          test_id: "tests/test_x.py::test_x",
+          before_seq: 20,
+          after_seq: 21,
+          result: "fails_before_passes_after",
+        },
+      ],
+    });
+    expect(html).toContain('aria-label="Added tests"');
+    expect(html).toContain("fails before, passes after");
+    expect(html).toContain("Tests #21 (proposal): failed; 1 passed, 1 failed, 0 skipped");
+    expect(html).toContain(`Incomplete: ${facts.problems.join("; ")}`);
+  });
+  it.each(["b", "d2", "c", "merged"] as const)(
+    "excludes DESIGN vocabulary from panel Details for %s",
+    (name) => {
+      const view = headerState(name);
+      const proposal = view.changes["change-1"]?.proposal;
+      if (!proposal) throw new Error("Missing proposal");
+      const html = renderToStaticMarkup(
+        <>
+          <ReviewBody state={view} changeId="change-1" diff={null} showCrossReview={false} />
+          <ReviewFacts state={view} proposal={proposal} panel />
+        </>,
+      );
+      expect(html).not.toMatch(
+        /invocations|unmatched|static cone bounds|signals|said versus did|probe|equivalence|\bAvailable\b/i,
+      );
+    },
+  );
   it("lists every added case with neutral before/after signals", () => {
     const kinds = [
       "fails_before_passes_after",
@@ -156,6 +272,14 @@ describe("review evidence", () => {
     expect(html).not.toMatch(/safe|verdict|amber|#[0-9a-f]{6}/i);
   });
 
+  it("shows the behavior-not-recorded message exactly once without facts or a behavior diff", () => {
+    const view = { ...state, changeFacts: {} };
+    const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
+
+    expect(html.match(/Behavior evidence was not recorded for this revision\./g)).toHaveLength(1);
+    expect(html).not.toContain('aria-label="Behavior diff"');
+  });
+
   it("never presents stale revision facts as the current candidate's evidence", () => {
     const view = {
       ...state,
@@ -163,7 +287,7 @@ describe("review evidence", () => {
     };
     const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
     expect(html).toContain("facts for this revision are unavailable");
-    expect(html).not.toContain("<section"); // Historical logs keep the editor's existing height.
+    expect(html).toContain("Caller measurements not recorded for this revision");
   });
 
   it("preserves detector unknown, parse errors and neutral observations", () => {

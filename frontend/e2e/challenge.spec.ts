@@ -186,6 +186,10 @@ test.describe("phone practice", () => {
       await firstPhoneDecision(page, width);
       await finishPhoneDecisions(page, width);
       await page.setViewportSize({ width: 1920, height: 1080 });
+      // CSS geometry updates before React replaces the phone practice body.
+      // bbdb86e passed when React had already committed; 03f6495 exposed the same race.
+      // The width check alone cannot guarantee the desktop status line is mounted.
+      await expect(page.locator(".phone-practice")).toHaveCount(0);
       await expect(page.locator(".focus-panel")).toHaveCSS("width", "880px");
       expect(
         await instance.evaluate(
@@ -235,10 +239,11 @@ async function phoneStage(page: Page) {
     expect(size.width, size.text).toBeGreaterThanOrEqual(44);
   }
 }
-async function phoneDecision(page: Page, index: number, summary: string) {
+async function phoneDecision(page: Page, index: number, note: string) {
   await phoneStage(page);
   await expect(practice(page)).toContainText(`Decision ${String(index)} of 2`);
-  await expect(practice(page).getByRole("region", { name: summary })).toBeVisible();
+  await expect(practice(page).getByRole("region", { name: "Agent note" })).toBeVisible();
+  await expect(practice(page).getByRole("region", { name: "Agent note" })).toContainText(note);
   await expect(practice(page).getByRole("button", { name: /Show diff/ })).toHaveAttribute(
     "aria-expanded",
     "false",
@@ -325,7 +330,7 @@ async function phoneCapture(page: Page, width: number, state: string) {
 
 async function firstPhoneDecision(page: Page, width: number) {
   await practice(page).getByRole("button", { name: "Start practice" }).tap();
-  await phoneDecision(page, 1, "Agent B's summary");
+  await phoneDecision(page, 1, "Agent B says");
   await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
     "New exact call",
   );
@@ -346,7 +351,7 @@ async function firstPhoneDecision(page: Page, width: number) {
 
 async function finishPhoneDecisions(page: Page, width: number) {
   await practice(page).getByRole("button", { name: "Next", exact: true }).tap();
-  await phoneDecision(page, 2, "Agent A's summary");
+  await phoneDecision(page, 2, "Agent A says");
   await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
     "7 direct callers",
   );

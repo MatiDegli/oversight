@@ -193,6 +193,33 @@ async def test_clean_candidate_preserves_later_edits(repo, later):
         assert await repo.git("show", f"{result.candidate_tree}:later.py") == "unrelated = True\n"
 
 
+@pytest.mark.parametrize(
+    "gap", [None, "probes", "missing", "duplicate", "hit", "incomplete", "unsupported"]
+)
+async def test_revert_preflight_accepts_nine_consistent_rules_only(repo, gap):
+    assessment = repo.event.payload.assessment.model_copy(deep=True)
+    assert len(assessment.rules) == 9 and assessment.policy_version == "safe-merge-paths-v1"
+    if gap == "probes":
+        assessment = assessment.model_copy(
+            update={
+                "policy_version": "safe-merge-probes-v1",
+                "rules": [r for r in assessment.rules if r.rule != "protected_paths"],
+            }
+        )
+    elif gap == "missing":
+        assessment.rules.pop()
+    elif gap == "duplicate":
+        assessment.rules[-1] = assessment.rules[0]
+    elif gap in {"hit", "incomplete"}:
+        item = next(r for r in assessment.rules if r.rule == "protected_paths")
+        # Keep the claimed pass: preflight must cross-check its observations.
+        item.observed.update(violations=int(gap == "hit"), complete=gap != "incomplete")
+    elif gap == "unsupported":
+        assessment = assessment.model_copy(update={"policy_version": "future-paths"})
+    result = await repo.classify(event=altered(repo, assessment=assessment))
+    assert result.status == ("clean" if gap is None else "conflict")
+
+
 async def test_overlap_conflicts(repo):
     head = await repo.commit("value.py", "value = 3\n")
     repo.command = repo.command.model_copy(update={"main_commit": head})
