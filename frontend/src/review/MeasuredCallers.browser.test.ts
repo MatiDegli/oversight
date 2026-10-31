@@ -120,9 +120,7 @@ async function checkGeometry(page: Page) {
     const context = get('[aria-label="Review context"]');
     const decision = get('[aria-label="Decision"]');
     const diff = get('[aria-label^="Diff of"] > div');
-    const measured = element.querySelector<HTMLElement>(
-      '[aria-label="Measured callers · Possibly affected"]',
-    );
+    const measured = element.querySelector<HTMLElement>('[aria-label="Measured callers"]');
     return {
       decisionBottom: decision.getBoundingClientRect().bottom,
       panelBottom: element.getBoundingClientRect().bottom,
@@ -167,7 +165,7 @@ for (const width of [1920, 1280])
             await comment.fill("Keep my review comment");
             await publish(page, cases.indexOf(label), summary);
             const measured = page.getByRole("region", {
-              name: "Measured callers · Possibly affected",
+              name: "Measured callers",
               exact: true,
             });
             expect(await comment.evaluate((element) => document.activeElement === element)).toBe(
@@ -193,12 +191,13 @@ for (const width of [1920, 1280])
                 "Recording unavailable",
               );
             }
-            if (hasDetails)
-              expect(await measured.textContent()).toContain(
-                label === "available" ? "Comparisons available" : "Partial measurements",
-              );
+            if (hasDetails) {
+              expect(await measured.count()).toBe(label === "available" ? 0 : 1);
+              if (label === "partial")
+                expect(await measured.textContent()).toContain("Observed samples");
+            }
             if (label !== "absent") await checkGeometry(page);
-            if (hasDetails)
+            if (label === "partial")
               await measured.evaluate((element) => {
                 const context = element.closest('[aria-label="Review context"]');
                 if (context)
@@ -226,10 +225,7 @@ for (const width of [1920, 1280])
             );
             expect(await header.locator('[aria-label="Possible callers"]').count()).toBe(0);
             expect(await header.locator(".lucide-circle-help").count()).toBe(0);
-            if (label !== "absent")
-              expect(await measured.textContent()).toContain(
-                "Static cone bounds: depth 3 · 40 nodes",
-              );
+            expect(await measured.textContent()).not.toContain("Static cone bounds");
             expect(errors).toEqual([]);
           } finally {
             await page.close();

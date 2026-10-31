@@ -10,6 +10,71 @@ import {
 } from "./measuredCallers.fixture";
 
 describe("measured caller presentation", () => {
+  const renderDetails = (caller = firstCaller) =>
+    renderToStaticMarkup(
+      <MeasuredCallers
+        state={withMeasuredFacts({ ...availableFacts, measured_cone: [caller] })}
+        changeId="change-1"
+        detailsOnly
+      />,
+    );
+  it("shows only further changed samples, a Mono name and method details", () => {
+    const html = renderDetails({
+      ...firstCaller,
+      rows: [
+        ...firstCaller.rows,
+        {
+          inputs: "longer additional input ".repeat(10),
+          before: "before",
+          after: "after",
+          unstable: false,
+        },
+      ],
+      not_compared: ["Inputs differed"],
+      problems: ["Recording stopped"],
+      not_probed: "budget exhausted",
+    });
+    expect(html).toContain('aria-label="Measured callers"');
+    expect(html).toContain('<code class="font-mono">Cart.quote_add</code></p>');
+    expect(html).toContain("Not compared: Inputs differed");
+    expect(html).toContain("Observation problem: Recording stopped");
+    expect(html).toContain("Observed samples");
+    expect(html).toContain("longer additional input");
+    expect(html).not.toContain(firstCaller.rows[0]?.inputs);
+    expect(html).not.toMatch(
+      /Distance|·|Unmatched|Not probed|Static cone bounds|Comparisons available|recorded for this revision|No caller measurements|Possibly affected/,
+    );
+    expect(html.match(/<li>/g)).toHaveLength(2);
+  });
+  it.each([
+    { ...firstCaller, compared_count: 0 },
+    { ...firstCaller, outcome: "unchanged" as const },
+    { ...firstCaller, outcome: "not_compared" as const },
+    { ...firstCaller, rows: [] },
+    firstCaller,
+  ])("omits callers without further qualifying samples (%j)", (caller) => {
+    expect(renderDetails(caller)).toBe("");
+  });
+  it("keeps unstable rows even without an established changed outcome", () => {
+    const html = renderDetails({
+      ...firstCaller,
+      outcome: "not_compared",
+      rows: firstCaller.rows.map((row) => ({ ...row, unstable: true })),
+    });
+    expect(html).toContain("Unstable observation");
+    expect(html).toContain(firstCaller.rows[0]?.inputs);
+  });
+  it.each([null, []])("omits absent or empty caller evidence (%j)", (measured_cone) => {
+    expect(
+      renderToStaticMarkup(
+        <MeasuredCallers
+          changeId="change-1"
+          detailsOnly
+          state={withMeasuredFacts({ ...availableFacts, measured_cone })}
+        />,
+      ),
+    ).toBe("");
+  });
   it.each(measuredFacts)("renders each availability state and its reasons", (facts) => {
     const html = renderToStaticMarkup(
       <MeasuredCallers state={withMeasuredFacts(facts)} changeId="change-1" />,

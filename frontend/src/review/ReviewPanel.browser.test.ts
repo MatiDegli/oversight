@@ -7,6 +7,7 @@ import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { launchBrowser } from "../browserLaunch.support";
+import type { GraphProbeHost } from "../graph";
 
 let server: ViteDevServer | undefined;
 let browser: Browser | undefined;
@@ -34,6 +35,72 @@ afterAll(async () => {
 });
 
 const shots = fileURLToPath(new URL("../../../.shots/review-lead/", import.meta.url));
+it.each(["b", "c"] as const)(
+  "opens %s Details at 1920 without overflow or moving focus",
+  async (name) => {
+    if (!browser) throw new Error("Missing browser");
+    const page = await browser.newPage({
+      viewport: { width: 1920, height: 1080 },
+      reducedMotion: "reduce",
+    });
+    try {
+      await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+      await page.goto(url);
+      await page.waitForFunction(() => "mountHeader" in window);
+      await page.evaluate((name) => {
+        document.documentElement.dataset.theme = "dark";
+        const api = window as unknown as Pick<
+          typeof import("./ReviewHeader.fixture"),
+          "mountHeader"
+        >;
+        api.mountHeader(name);
+      }, name);
+      const panel = page.getByRole("complementary", { name: "Review panel" });
+      await panel.locator(".line-insert").first().waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      const details = panel.getByRole("region", { name: "Details", exact: true });
+      const summary = details.locator(":scope > details > summary");
+      expect(await details.locator("details[open]").count()).toBe(0);
+      await summary.focus();
+      await summary.press("Enter");
+      expect(await summary.evaluate((element) => document.activeElement === element)).toBe(true);
+      await details.evaluate((element) => {
+        for (const samples of element.querySelectorAll("details")) samples.open = true;
+      });
+      expect(await summary.evaluate((element) => document.activeElement === element)).toBe(true);
+      const geometry = await panel.evaluate((element) => ({
+        width: element.getBoundingClientRect().width,
+        overflow: element.scrollWidth > element.clientWidth,
+        detailsOverflow: [
+          ...element.querySelectorAll<HTMLElement>(".review-details, .review-details *"),
+        ].some((child) => child.clientWidth > 0 && child.scrollWidth > child.clientWidth),
+      }));
+      expect(geometry).toEqual({ width: 880, overflow: false, detailsOverflow: false });
+      if (process.env.REVIEW_DETAILS_SHOTS === "1") {
+        const directory = fileURLToPath(
+          new URL("../../../.shots/review-details/", import.meta.url),
+        );
+        await mkdir(directory, { recursive: true });
+        await page.waitForFunction(
+          () =>
+            (document
+              .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+              ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
+        );
+        await details.evaluate((element) => {
+          const context = element.closest('[aria-label="Review context"]');
+          if (context)
+            context.scrollTop +=
+              element.getBoundingClientRect().top - context.getBoundingClientRect().top;
+        });
+        await page.screenshot({ path: `${directory}${name}-dark-1920.png` });
+        await writeFile(`${directory}${name}-geometry.json`, JSON.stringify(geometry, null, 2));
+      }
+    } finally {
+      await page.close();
+    }
+  },
+);
 const expected = {
   padding: 24,
   sectionGap: 24,

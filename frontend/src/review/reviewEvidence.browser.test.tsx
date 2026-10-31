@@ -62,20 +62,20 @@ it("keeps recorded test-run evidence available in the closed Details component",
     await page.setContent(
       renderToStaticMarkup(<ReviewFacts state={state} proposal={proposal} panel />),
     );
-    const signals = page.getByRole("region", { name: "Review signals" });
+    const signals = page.getByRole("region", { name: "Details" });
     await expect(signals.locator("details").first()).not.toHaveAttribute("open");
     await expect(signals.getByText(/Tests in this change:/)).toBeHidden();
     await signals.getByText("Details", { exact: true }).click();
     await expect(signals.locator("details").first()).toHaveAttribute("open", "");
-    await expect(signals).toContainText("Tests in this change: 0 recorded test changes");
+    await expect(signals).not.toContainText("Tests in this change: 0 recorded test changes");
     await expect(signals).not.toContainText("added_tests producer unavailable (package 4)");
-    await expect(signals.getByRole("list", { name: "Added test signals" })).toContainText(
+    await expect(signals.getByRole("list", { name: "Added tests" })).toContainText(
       "tests/test_pricing.py::test_unknown_coupon_keeps_total: passes before and after",
     );
     for (const phase of ["base_probe", "head_probe", "agent", "proposal"])
       await expect(signals).toContainText(`(${phase}): passed`);
     await expect(signals).toContainText("run_findings producer unavailable (package 5)");
-    await expect(signals).toContainText(`Size: ${String(proposal.files.length)} files`);
+    await expect(signals).not.toContainText("Size:");
   } finally {
     await page.close();
   }

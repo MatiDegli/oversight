@@ -157,7 +157,7 @@ export function ReviewFacts({
     );
   return (
     <section
-      aria-label="Review signals"
+      aria-label={panel ? "Details" : "Review signals"}
       className={
         panel
           ? "review-details text-sm"
@@ -175,14 +175,16 @@ export function ReviewFacts({
           className={`mt-2 break-words text-muted${scrollable ? " max-h-48 overflow-y-auto" : ""}`}
         >
           {!panel && <p>Signals for your review. You decide.</p>}
-          <p>
-            Size: {proposal.files.length} files, +{proposal.lines_added}/−{proposal.lines_removed}{" "}
-            lines
-          </p>
+          {!panel && (
+            <p>
+              Size: {proposal.files.length} files, +{proposal.lines_added}/−{proposal.lines_removed}{" "}
+              lines
+            </p>
+          )}
           <>
-            <ul aria-label="Said versus did">
+            <ul aria-label={panel ? undefined : "Said versus did"}>
               {discrepancies(facts, executions, proposal.summary).map((line) => (
-                <li key={line}>Said versus did: {line}</li>
+                <li key={line}>{panel ? line : `Said versus did: ${line}`}</li>
               ))}
             </ul>
             {facts.test_runs.length === 0 && <p>Tests: no execution evidence recorded</p>}
@@ -197,9 +199,12 @@ export function ReviewFacts({
                 </p>
               );
             })}
-            <p>{detectorLine(facts)}</p>
+            {(!panel ||
+              detectorLine(facts) !== "Tests in this change: 0 recorded test changes") && (
+              <p>{detectorLine(facts)}</p>
+            )}
             {facts.added_tests.length > 0 && (
-              <ul aria-label="Added test signals">
+              <ul aria-label={panel ? "Added tests" : "Added test signals"}>
                 {facts.added_tests.map((probe) => (
                   <li key={probe.test_id}>
                     <code className="break-all font-mono">{probe.test_id}</code>:{" "}

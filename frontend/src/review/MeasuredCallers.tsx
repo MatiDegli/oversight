@@ -6,12 +6,16 @@ import { selectMeasuredCallers } from "./measuredCallers";
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
-function CallerEvidence({ caller, detailsOnly }: { caller: MeasuredCaller; detailsOnly: boolean }) {
+function callerSamples(caller: MeasuredCaller, detailsOnly: boolean) {
   const example =
     detailsOnly && caller.outcome === "changed" && !caller.rows.some((r) => r.unstable)
       ? smallestExample(caller.rows)
       : undefined;
-  const samples = caller.rows.filter((row) => row !== example);
+  return caller.rows.filter((row) => row !== example);
+}
+
+function CallerEvidence({ caller, detailsOnly }: { caller: MeasuredCaller; detailsOnly: boolean }) {
+  const samples = callerSamples(caller, detailsOnly);
   return (
     <>
       {!detailsOnly && (
@@ -20,17 +24,19 @@ function CallerEvidence({ caller, detailsOnly }: { caller: MeasuredCaller; detai
           <span className="font-mono">{caller.differing_count}</span> differing
         </p>
       )}
-      <p>
-        Unmatched before: <span className="font-mono">{caller.unmatched_before}</span> · Unmatched
-        after: <span className="font-mono">{caller.unmatched_after}</span>
-      </p>
+      {!detailsOnly && (
+        <p>
+          Unmatched before: <span className="font-mono">{caller.unmatched_before}</span> · Unmatched
+          after: <span className="font-mono">{caller.unmatched_after}</span>
+        </p>
+      )}
       {caller.not_compared.map((reason, index) => (
         <p key={index}>Not compared: {reason}</p>
       ))}
       {caller.problems.map((reason, index) => (
         <p key={index}>Observation problem: {reason}</p>
       ))}
-      {caller.not_probed && <p>Not probed: {caller.not_probed}</p>}
+      {!detailsOnly && caller.not_probed && <p>Not probed: {caller.not_probed}</p>}
       {samples.length > 0 && (
         <details>
           <summary className={`cursor-pointer rounded-label text-text ${focusRing}`}>
@@ -75,30 +81,48 @@ export function MeasuredCallers({
 }) {
   const view = selectMeasuredCallers(state, changeId);
   if (!view) return null;
+  const rows = detailsOnly
+    ? view.rows.filter(
+        ({ evidence: caller }) =>
+          caller &&
+          caller.compared_count > 0 &&
+          (caller.outcome === "changed" || caller.rows.some((row) => row.unstable)) &&
+          callerSamples(caller, true).length > 0,
+      )
+    : view.rows;
+  if (detailsOnly && rows.length === 0) return null;
+  const heading = detailsOnly ? "Measured callers" : "Measured callers · Possibly affected";
   return (
     <section
-      aria-label="Measured callers · Possibly affected"
+      aria-label={heading}
       className="flex min-w-0 flex-col gap-(--spacing-sm) wrap-anywhere text-(length:--data-size) text-muted"
     >
-      <h3 className="text-(length:--title-size) font-bold text-text">
-        Measured callers · Possibly affected
-      </h3>
-      <p>
-        Static cone bounds: depth <span className="font-mono">{view.maxDepth}</span> ·{" "}
-        <span className="font-mono">{view.maxNodes}</span> nodes
-      </p>
-      {view.recording === "absent" && <p>Caller measurements not recorded for this revision</p>}
-      {view.recording === "empty" && <p>No caller measurements in this cone</p>}
+      <h3 className="text-(length:--title-size) font-bold text-text">{heading}</h3>
+      {!detailsOnly && (
+        <>
+          <p>
+            Static cone bounds: depth <span className="font-mono">{view.maxDepth}</span> ·{" "}
+            <span className="font-mono">{view.maxNodes}</span> nodes
+          </p>
+          {view.recording === "absent" && <p>Caller measurements not recorded for this revision</p>}
+          {view.recording === "empty" && <p>No caller measurements in this cone</p>}
+        </>
+      )}
       {view.recording === "recorded" && (
         <ul className="flex flex-col gap-(--spacing-lg)">
-          {view.rows.map((row) => (
+          {rows.map((row) => (
             <li key={row.nodeId}>
               <p className="text-text">
-                <code className="font-mono">{row.name}</code> · Distance{" "}
-                <span className="font-mono">{row.distance}</span>
+                <code className="font-mono">{row.name}</code>
+                {!detailsOnly && (
+                  <>
+                    {" "}
+                    · Distance <span className="font-mono">{row.distance}</span>
+                  </>
+                )}
               </p>
               {!detailsOnly && <p className="font-semibold text-text">{row.label}</p>}
-              {row.availability && <p>{row.availability}</p>}
+              {!detailsOnly && row.availability && <p>{row.availability}</p>}
               {row.evidence && <CallerEvidence caller={row.evidence} detailsOnly={detailsOnly} />}
             </li>
           ))}

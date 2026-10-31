@@ -29,7 +29,8 @@ export function BehaviorDiff({
             {nodes.map((node, index) => (
               <li key={`${node.node_id}:${String(index)}`} className="flex min-w-0 flex-col gap-2">
                 <p className="wrap-anywhere text-text">
-                  <code className="font-mono">{node.label}</code> · {node.status}
+                  <code className="font-mono">{node.label}</code>
+                  {!detailsOnly && ` · ${node.status}`}
                 </p>
                 {!detailsOnly && (
                   <div className="flex flex-wrap gap-x-3.5 gap-y-1">
@@ -53,7 +54,7 @@ export function BehaviorDiff({
                   <details>
                     <summary className="cursor-pointer rounded-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text">
                       Samples ({node.rows.length})
-                      {node.rows.some((row) => row.unstable)
+                      {!detailsOnly && node.rows.some((row) => row.unstable)
                         ? " · Results varied between runs"
                         : ""}
                     </summary>
