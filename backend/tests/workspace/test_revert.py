@@ -453,7 +453,7 @@ async def test_competing_head_untouched(workspace, api):
 
 
 @pytest.mark.parametrize("dirty", ["index", "checkout", "untracked", "detached"])
-async def test_dirty_or_detached_refused_before_cas(workspace, api, dirty, monkeypatch):
+async def test_dirty_refused_and_detached_unknown_before_cas(workspace, api, dirty, monkeypatch):
     item = await prepared(workspace, api)
     async with workspace.locks(main=True, agent_id="agent-1"):
         path = workspace.main.root / ("new.py" if dirty == "untracked" else "later.py")
