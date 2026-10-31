@@ -2636,7 +2636,7 @@ normalization for task scope; every printed rate retains its explicit denominato
 
 ## 2026-10-31 — Settings shows the merge mode only
 
-The maintainer accepted packet B item 6 at 12:47 ART. A refused mode change shows
+The maintainer accepted the recommended answers at 12:47 ART. A refused mode change shows
 one inline line below the cards, with an X icon, the server's words and role="alert";
 no toast. Ask me's second sentence is dropped. Merge alone when safe reads
 "A change merges by itself only when every rule holds. Otherwise it waits for you."
