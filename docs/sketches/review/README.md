@@ -2,6 +2,8 @@
 
 These are the approved baseline of 2026-10-30, not the final look.
 
+See the [design sketch index](../README.md) for current status and delivery fronts.
+
 - [a-dark.png](a-dark.png): state a, choices; dark; 1920×1080 CSS px (1920×1080 PNG).
 - [a-day.png](a-day.png): state a, choices; day; 1920×1080 CSS px (1920×1080 PNG).
 - [a-1280-dark.png](a-1280-dark.png): state a, choices; dark; 1280×800 CSS px (1280×800 PNG).
