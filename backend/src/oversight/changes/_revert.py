@@ -93,6 +93,7 @@ class _Attempt:
     cancelled: bool = False
     blocked: bool = False
     prepared: bool = False
+    git_verified: bool = False
 
 
 class RevertService:
@@ -105,7 +106,7 @@ class RevertService:
         run_id: str,
         drain_pending: Callable[[ChangeContext], Awaitable[None]] = shared_drain,
         supersede_pending: Callable[[ChangeContext], None] = shared_supersede,
-        test_timeout_s: float = 60,
+        test_timeout_s: float,
     ) -> None:
         if not run_id or not math.isfinite(test_timeout_s) or test_timeout_s <= 0:
             raise ValueError("Revert requires a run and a finite positive suite timeout")
@@ -120,7 +121,7 @@ class RevertService:
         self._closing = False
 
     async def revert(
-        self, target: RevertTarget, command: RevertChange, *, principal: object = Person
+        self, target: RevertTarget, command: RevertChange, *, principal: object
     ) -> RevertResult:
         """Return only after the outcome (and success delta) has a confirmed SQL receipt."""
         if principal is not Person:
@@ -156,9 +157,9 @@ class RevertService:
                 except BaseException as error:
                     if isinstance(error, asyncio.CancelledError):
                         attempt.cancelled = True
-                    elif isinstance(error, (KeyboardInterrupt, SystemExit)):
-                        raise
                     await self._recover(attempt)
+                    if isinstance(error, (KeyboardInterrupt, SystemExit)):
+                        raise
                 if attempt.cancelled:
                     raise asyncio.CancelledError
                 if attempt.blocked or attempt.result is None:
@@ -168,6 +169,9 @@ class RevertService:
                 return attempt.result
         finally:
             self._owners.discard(owner)
+            # A second process interrupt during settlement must not release a prepared K.
+            if attempt.prepared and not attempt.git_verified and not attempt.blocked:
+                self._block(attempt)
             if key not in self._consumed and not attempt.blocked:
                 self._reserved.discard(key)
 
@@ -196,9 +200,11 @@ class RevertService:
         )
 
     async def _needs_you(self, a: _Attempt, reason: str) -> None:
+        a.git_verified = False
         head = await self._main()
         if a.candidate is not None and head == a.candidate.inverse_commit:
             raise IntegrityError("Inverse may have landed", ".git")
+        a.git_verified = True
         a.result = self._result(a, head, reason)
         await self._publish(a, "outcome", a.result)
 
@@ -259,6 +265,7 @@ class RevertService:
             timeout_s=ctx.timeout,
         )
         if outcome.kind == "landed":
+            a.git_verified = True
             self._consumed.add(a.key)
             await self._success(a)
         elif outcome.kind == "main_moved" and outcome.main_commit != item.inverse_commit:
@@ -279,12 +286,14 @@ class RevertService:
 
     async def _recover(self, a: _Attempt) -> None:
         """No inverse inference from exceptions: inspect H/C in this lock-owning task."""
+        a.git_verified = False
         try:
             if a.candidate is not None:
                 classification = await self._defer(a, lambda: self._classify(a))
                 if not a.candidate.cleaned:
                     raise IntegrityError("Inverse checkout cleanup unverified", ".git")
                 if classification == "landed":
+                    a.git_verified = True
                     self._consumed.add(a.key)
                     if a.suite is None or inverse_suite_problem(
                         a.suite, tree=a.candidate.inverse_tree, cleaned=True
@@ -295,10 +304,13 @@ class RevertService:
                     return
                 if classification != "untouched":
                     raise IntegrityError("Inverse may have landed", ".git")
+                a.git_verified = True
             else:
-                head = await self._defer(a, self._main)
-                if head != a.command.main_commit or a.prepared:
-                    raise IntegrityError("Untouched main or temporary cleanup unverified", ".git")
+                await self._defer(a, self._main)
+                if a.prepared:
+                    raise IntegrityError("Temporary inverse cleanup unverified", ".git")
+                # No candidate or preparation: the caller's stale H never authorized an effect.
+                a.git_verified = True
             # A possibly committing publish is never retried. Settle that exact task only.
             if a.sending:
                 for task in a.sending.values():
@@ -373,12 +385,16 @@ class RevertService:
                 break
         task.result()
 
-    async def _suspend(self, a: _Attempt) -> None:
+    def _block(self, a: _Attempt) -> None:
         a.blocked = self.ctx.state.suspect = True
-        self.ctx.workspace.integrity.suspend(
-            IntegrityError("Revert settlement unverified", ".git", code="main_suspect"),
-            uncertain=True,
-        )
+        if not a.git_verified:
+            self.ctx.workspace.integrity.suspend(
+                IntegrityError("Revert settlement unverified", ".git", code="main_suspect"),
+                uncertain=True,
+            )
+
+    async def _suspend(self, a: _Attempt) -> None:
+        self._block(a)
         reporting = self.ctx.spawn(
             self.ctx.error(
                 "git", "Revert settlement unverified; restart required", None, fatal=True
@@ -401,8 +417,6 @@ class RevertService:
                     task.exception()  # Observe retained failures; no publication is ever resent.
             if pending:
                 self.ctx.state.suspect = True
-                self.ctx.workspace.integrity.suspend(
-                    IntegrityError("Revert shutdown unsettled", ".git", code="main_suspect"),
-                    uncertain=True,
-                )
+                # Pending receipts block main decisions; only Git settlement sets the workspace
+                # latch. An active owner still retains its locks and must classify its effect.
                 raise RevertRefused("unsettled", "Revert tasks still require settlement")

@@ -11,7 +11,7 @@ from test_revert import system as system
 from test_revert_preflight import repo as repo
 from test_rules_transaction import reserved as reserved
 
-from oversight.changes import RevertRefused, _revert
+from oversight.changes import Person, RevertRefused, _revert
 from oversight.events import EventRejected
 from oversight.workspace import (
     InverseError,
@@ -171,6 +171,9 @@ async def test_revert_cas_won_publication_failure_suspends(system, monkeypatch, 
         await s.run()
     assert await s.head() != s.command.main_commit
     assert s.service._consumed and s.manager.main_suspect
+    assert not s.ws.integrity.main_suspect and not s.ws.integrity.rules_suspended
+    async with s.ws.locks(main=True):
+        assert (await ctx.git(s.ws.main, "rev-parse", "HEAD")).strip() != s.command.main_commit
     assert ctx.state.snapshot is old
     assert calls.count(RevertResult) <= 1 and calls.count(GraphDelta) <= 1
     assert not any(e.type == "graph.delta" for e in s.events)
@@ -289,6 +292,7 @@ async def test_revert_repeated_cancel_and_delivery_budget(system, monkeypatch):
     assert calls.count(RevertResult) == 1
     with pytest.raises(RevertRefused, match="settlement"):
         await s.service.aclose()
+    assert not s.ws.integrity.main_suspect
     release.set()
     await s.service.aclose()
     assert ctx.state.snapshot is old  # An outcome acknowledgment cannot invent a delta.
@@ -498,7 +502,7 @@ async def test_revert_serializes_with_rules_and_person_decisions(h, reserved, mo
     assert await h.manager.file_edited("agent-2", "later.py")
     assert await h.finish(2)
     rec = h.manager._ctx.state.agents["agent-2"]
-    service = _revert.RevertService(ctx=h.manager._ctx, run_id=h.store.run_id)
+    service = _revert.RevertService(ctx=h.manager._ctx, run_id=h.store.run_id, test_timeout_s=10)
     target = RevertTarget(h.store.run_id, "change-1", original)
     entered, release = asyncio.Event(), asyncio.Event()
     real_suite = h.workspace.run_tests
@@ -518,7 +522,7 @@ async def test_revert_serializes_with_rules_and_person_decisions(h, reserved, mo
     monkeypatch.setattr(h.workspace, "run_tests", held_suite)
     try:
         if first == "revert":
-            reverting = asyncio.create_task(service.revert(target, command))
+            reverting = asyncio.create_task(service.revert(target, command, principal=Person))
             await asyncio.wait_for(entered.wait(), 10)
             person = approve()
             await asyncio.sleep(0)
@@ -530,14 +534,14 @@ async def test_revert_serializes_with_rules_and_person_decisions(h, reserved, mo
             h.workspace.arm("commit", mode="hold")
             person = approve()
             await asyncio.wait_for(h.workspace.entered.wait(), 10)
-            reverting = asyncio.create_task(service.revert(target, command))
+            reverting = asyncio.create_task(service.revert(target, command, principal=Person))
             await asyncio.sleep(0)
             assert not reverting.done()
             h.workspace.resume.set()
             await person
             assert (await reverting).result == "needs_you"
             command = command.model_copy(update={"main_commit": await h.main_head()})
-            result = await service.revert(target, command)
+            result = await service.revert(target, command, principal=Person)
         assert result.result == "reverted" and result.decided_by == "person"
         assert (h.workspace.main.root / "shop/mod.py").read_text().count("return 1") == 1
         assert (h.workspace.main.root / "later.py").read_text() == "later = True\n"
@@ -547,3 +551,165 @@ async def test_revert_serializes_with_rules_and_person_decisions(h, reserved, mo
         release.set()
         h.workspace.resume.set()
         await service.aclose()
+
+
+@pytest.mark.parametrize("interruption", ["cancel", "drain_timeout"])
+async def test_stale_command_pre_effect_interruption_releases_key(
+    system, monkeypatch, interruption
+):
+    s, ctx = system, system.service.ctx
+    actual = await s.repo.commit("later.txt", "unrelated later edit\n")
+    entered = asyncio.Event()
+    needs_you, drain = s.service._needs_you, s.service.drain_pending
+    calls = 0
+
+    async def cancelled_result(attempt, reason):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            entered.set()
+            await asyncio.Event().wait()
+        return await needs_you(attempt, reason)
+
+    async def timed_drain(ctx):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            try:
+                await asyncio.Event().wait()
+            finally:
+                ctx.timeout = 10  # Bound just the drain; Git verification uses its own budget.
+        await drain(ctx)
+
+    if interruption == "cancel":
+        monkeypatch.setattr(s.service, "_needs_you", cancelled_result)
+        task = asyncio.create_task(s.run())
+        await asyncio.wait_for(entered.wait(), 10)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    else:
+        ctx.timeout = 0.05
+        s.service.drain_pending = timed_drain
+        assert (await s.run()).result == "needs_you"
+    outcome = json.loads(s.events[-1].envelope)["payload"]
+    assert outcome["result"] == "needs_you" and outcome["main_commit"] == actual
+    assert s.service._attempts[-1].candidate is None and not s.service._attempts[-1].prepared
+    assert not s.service._reserved and not s.service._consumed
+    assert not ctx.state.suspect and not s.ws.integrity.main_suspect
+    s.command = s.command.model_copy(update={"main_commit": actual})
+    assert (await s.run()).result == "reverted"
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+@pytest.mark.parametrize("phase", ["suite", "effect", "unknown"])
+async def test_process_interrupt_settles_prepared_inverse(system, monkeypatch, interruption, phase):
+    from oversight.workspace import classify_inverse
+
+    s, classified = system, []
+    suite = s.ws.run_tests
+
+    async def interrupted_suite(*args, **kwargs):
+        await suite(*args, **kwargs)
+        raise interruption("injected process interrupt")
+
+    async def interrupted_effect(ws, **kwargs):
+        if phase == "unknown":
+            await ws.git_ok(
+                ws.main,
+                "update-ref",
+                "refs/heads/main",
+                kwargs["inverse_commit"],
+                kwargs["main_commit"],
+            )
+            (ws.main.root / "value.py").write_text("unexplained partial checkout\n")
+        else:
+            await apply_inverse(ws, **kwargs)
+        raise interruption("injected process interrupt")
+
+    async def classify(*args, **kwargs):
+        assert s.ws.operations.holds(main=True, agent_id="agent-1")
+        result = await classify_inverse(*args, **kwargs)
+        classified.append(result)
+        return result
+
+    monkeypatch.setattr(_revert, "classify_inverse", classify)
+    if phase == "suite":
+        monkeypatch.setattr(s.ws, "run_tests", interrupted_suite)
+    else:
+        monkeypatch.setattr(_revert, "apply_inverse", interrupted_effect)
+    with pytest.raises(interruption):
+        await s.run()
+    assert classified == [{"suite": "untouched", "effect": "landed", "unknown": "unknown"}[phase]]
+    assert bool(s.service._consumed) == (phase == "effect")
+    assert s.manager.main_suspect == s.ws.integrity.main_suspect == (phase == "unknown")
+    assert s.service._attempts[-1].candidate.cleaned
+    assert (await s.head() != s.command.main_commit) == (phase != "suite")
+    if phase == "unknown":
+        assert s.service._reserved and s.service._attempts[-1].blocked
+        assert not any(e.type == "revert.resolved" for e in s.events)
+
+
+async def test_revert_waits_for_inflight_rules_resolution_and_delta(h, reserved, monkeypatch):
+    from test_rules_reservation import start
+    from test_rules_transaction import configure_transaction
+
+    from oversight.changes import RevertService, RevertTarget
+    from oversight_contracts.commands import RevertChange
+    from oversight_contracts.events import ChangeResolved
+
+    configure_transaction(h, monkeypatch)
+    h.hold = ChangeResolved  # SQL took the resolution, while its rules owner still holds main.
+    decision = await start(h, reserved)
+    await asyncio.wait_for(h.held.wait(), 10)
+    original = next(e for e in h.log if e.type == "change.resolved")
+    merged = json.loads(original.envelope)["payload"]["merge_commit"]
+    command = RevertChange(resolution_seq=original.seq, merge_commit=merged, main_commit=merged)
+    service = RevertService(ctx=h.manager._ctx, run_id=h.store.run_id, test_timeout_s=10)
+    reverting = asyncio.create_task(
+        service.revert(
+            RevertTarget(h.store.run_id, "change-1", original), command, principal=Person
+        )
+    )
+    try:
+        await asyncio.sleep(0)
+        assert not decision.done() and not reverting.done()
+        assert service._reserved and not service._attempts[-1].prepared
+        assert h.workspace.operations._main.owner is decision
+        h.release.set()
+        await decision
+        result = await reverting
+        assert result.result == "reverted"
+        assert [e.type for e in h.log[-2:]] == ["revert.resolved", "graph.delta"]
+        assert not h.worktree_dir("agent-1").exists()
+        assert h.manager.snapshot.commit == result.revert_commit
+        h.events()  # Rules' acknowledged delta is chained before the inverse delta.
+    finally:
+        h.release.set()
+        await decision
+        await reverting
+        await service.aclose()
+
+
+async def test_unconfirmed_stale_needs_you_blocks_main_but_allows_tree_cleanup(system, monkeypatch):
+    s, ctx = system, system.service.ctx
+    actual = await s.repo.commit("later.txt", "later work\n")
+    tree = await s.ws.create_worktree("agent-2")
+    publish = ctx.publish
+
+    async def missing_receipt(payload):
+        if isinstance(payload, RevertResult):
+            raise OSError("needs_you receipt unavailable")
+        return await publish(payload)
+
+    monkeypatch.setattr(ctx, "publish", missing_receipt)
+    with pytest.raises(RevertRefused):
+        await s.run()
+    assert s.service._attempts[-1].candidate is None
+    assert s.service._reserved and ctx.state.suspect
+    assert not s.ws.integrity.main_suspect and not s.ws.integrity.rules_suspended
+    async with s.ws.locks(agent_id="agent-2"):
+        assert (await ctx.git(tree, "rev-parse", "HEAD")).strip() == actual
+    await s.ws.cleanup_merged_worktree("agent-2", delete_branch=True)
+    assert not tree.root.exists()
+    assert not any(e.type == "revert.resolved" for e in s.events)

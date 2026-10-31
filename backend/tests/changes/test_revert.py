@@ -22,7 +22,7 @@ from oversight.events import EventStore, StoredEvent
 from oversight.graph import WorkspaceGraph
 from oversight.workspace import apply_inverse
 from oversight_contracts.commands import RevertChange
-from oversight_contracts.events import RevertResolvedEvent, SuiteResult
+from oversight_contracts.events import ChangeResolvedEvent, RevertResolvedEvent, SuiteResult
 from oversight_contracts.graph import GraphDelta
 from oversight_contracts.policy import EvidenceRef
 
@@ -45,7 +45,8 @@ class ServiceRepo:
         return self.repo.ws
 
     async def run(self, **kwargs):
-        return await self.service.revert(self.target, self.command, **kwargs)
+        principal = kwargs.pop("principal", Person)
+        return await self.service.revert(self.target, self.command, principal=principal, **kwargs)
 
     async def head(self):
         if self.manager.main_suspect:
@@ -176,7 +177,7 @@ async def test_revert_non_rules_refused(system, actor):
     target = replace(s.target, resolution=stored)
     command = s.command.model_copy(update={"resolution_seq": event.seq})
     with pytest.raises(RevertRefused) as error:
-        await s.service.revert(target, command)
+        await s.service.revert(target, command, principal=Person)
     assert error.value.code == "invalid_target"
     assert await s.head() == s.command.main_commit
     assert len(s.events) == 2
@@ -207,7 +208,7 @@ async def test_revert_identity_refused(system, field):
             data["seq"] += 1
         target = replace(target, resolution=replace(stored, envelope=json.dumps(data)))
     with pytest.raises(RevertRefused):
-        await s.service.revert(target, command)
+        await s.service.revert(target, command, principal=Person)
     assert len(s.events) == 2
 
 
@@ -319,10 +320,17 @@ async def test_revert_suite_failed_timeout_unavailable_or_mutated(system, monkey
     assert not any(e.type == "graph.delta" for e in s.events[:3])
 
 
-async def test_revert_temp_lock_key_held_across_suite(system, monkeypatch):
+@pytest.mark.parametrize("original_removed", [False, True])
+async def test_revert_temp_lock_key_held_across_suite(system, monkeypatch, original_removed):
     s = system
     real = s.ws.run_tests
     calls = []
+    if original_removed:
+        original = await s.ws.create_worktree("agent-1")
+        assert original.root.exists()
+        await s.ws.cleanup_merged_worktree("agent-1", delete_branch=True)
+        assert not original.root.exists()
+        assert "agent-1" not in await s.repo.git("worktree", "list", "--porcelain")
 
     async def suite(tree, **kwargs):
         assert tree.agent_id == "agent-1"
@@ -467,3 +475,172 @@ async def test_waiting_rules_current_main_barrier_fails_after_revert(system, mon
     assert await s.head() == result.revert_commit
     assert reservation.evidence.assessment is not None
     assert ctx.state.snapshot.commit != reservation.evidence.assessment.main_commit
+
+
+async def test_revert_requires_explicit_person_principal(system):
+    import inspect
+
+    method = system.service.revert
+    assert inspect.signature(method).parameters["principal"].default is inspect.Parameter.empty
+    with pytest.raises(TypeError, match="principal"):
+        await method(system.target, system.command)  # pyright: ignore[reportCallIssue]
+    assert len(system.events) == 2 and not system.service._reserved
+
+
+async def test_revert_requires_server_suite_timeout(system):
+    import inspect
+
+    assert (
+        inspect.signature(RevertService).parameters["test_timeout_s"].default
+        is inspect.Parameter.empty
+    )
+    with pytest.raises(TypeError, match="test_timeout_s"):
+        RevertService(ctx=system.manager._ctx, run_id="run-test")  # pyright: ignore[reportCallIssue]
+
+
+@pytest.mark.parametrize("damage", ["trailer", "parents", "tree"])
+async def test_revert_forged_git_provenance_has_no_effect(system, damage):
+    from oversight.workspace import Author
+
+    s, ctx = system, system.service.ctx
+    old = await s.head()
+    assessed = s.repo.event.payload.assessment
+    tree = assessed.candidate_tree
+    parents = [s.repo.parent, s.repo.proposal]
+    message = "Merge change-1 (agent-1)\n\nMerged-by: rules"
+    if damage == "trailer":
+        message += "\nUnverified trailer"
+    elif damage == "parents":
+        parents.reverse()
+    else:
+        tree = (await s.repo.git("rev-parse", s.repo.parent + "^{tree}")).strip()
+    async with s.ws.locks(main=True):
+        forged = (
+            await s.ws.git_ok(
+                s.ws.main,
+                "commit-tree",
+                tree,
+                "-p",
+                parents[0],
+                "-p",
+                parents[1],
+                "-m",
+                message,
+                author=Author("rules", "rules@oversight.invalid"),
+            )
+        ).strip()
+    await s.repo.git("update-ref", "refs/heads/main", forged, old)
+    await s.repo.git("read-tree", "-m", "-u", old, forged)
+    payload = ChangeResolvedEvent.model_validate_json(s.target.resolution.envelope).payload
+    payload = payload.model_copy(update={"merge_commit": forged})
+    original = await ctx.publish(payload)
+    s.target = replace(s.target, resolution=original)
+    s.command = s.command.model_copy(
+        update=dict(resolution_seq=original.seq, merge_commit=forged, main_commit=forged)
+    )
+    before = await s.repo.snapshot()
+    result = await s.run()
+    assert result.result == "needs_you" and result.main_commit == forged and result.reason
+    assert result.revert_commit is None and result.tests is None and not s.policies
+    assert s.service._attempts[-1].candidate is None
+    assert not s.service._reserved and not s.manager.main_suspect
+    assert await s.repo.snapshot() == before
+    assert not any(e.type == "graph.delta" for e in s.events)
+
+
+@pytest.mark.parametrize("phase", ["suite", "effect"])
+async def test_revert_allows_concurrent_ask_me_switch(system, monkeypatch, phase):
+    from oversight_contracts.commands import SetMergeMode
+    from oversight_contracts.policy import MergeModeState
+
+    s, ctx = system, system.service.ctx
+    ctx.mode._state = MergeModeState(mode="merge_when_safe", revision=1)
+    entered, release = asyncio.Event(), asyncio.Event()
+    run = s.ws.run_tests if phase == "suite" else apply_inverse
+
+    async def held(*args, **kwargs):
+        assert s.ws.operations.holds(main=True, agent_id="agent-1")
+        assert not ctx.mode._lock.locked()
+        entered.set()
+        await release.wait()
+        return await run(*args, **kwargs)
+
+    monkeypatch.setattr(
+        s.ws if phase == "suite" else _revert,
+        "run_tests" if phase == "suite" else "apply_inverse",
+        held,
+    )
+    reverting = asyncio.create_task(s.run())
+    try:
+        await asyncio.wait_for(entered.wait(), 10)
+        switched = await asyncio.wait_for(
+            s.manager.set_merge_mode(SetMergeMode(mode="ask_me", revision=1)), 10
+        )
+        assert switched.mode == "ask_me" and switched.revision == 2
+        assert not reverting.done()
+        release.set()
+        assert (await reverting).result == "reverted"
+        assert not ctx.state.suspect
+    finally:
+        release.set()
+        await reverting
+
+
+async def test_revert_second_drain_observes_publish_started_during_suite(system, monkeypatch):
+    from functools import partial
+
+    from changes_helpers import Harness
+
+    from oversight.changes import _delivery
+    from oversight.changes._versions import main_delta
+
+    s, ctx = system, system.service.ctx
+    await s.manager.open(Harness.task(2), "fake")
+    rec = ctx.state.agents["agent-2"]
+    head = await s.repo.commit("later.py", "later = True\n")
+    s.command = s.command.model_copy(update={"main_commit": head})
+    old, new = ctx.state.snapshot, await ctx.scan(head)
+    rec.delta, rec.next_snapshot = main_delta(old, new, head, "merge"), new
+    suite, publish = s.ws.run_tests, ctx.publish
+    pending, second, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    drains = 0
+
+    async def gated(payload):
+        if isinstance(payload, GraphDelta) and payload.cause == "merge":
+            pending.set()
+            await release.wait()
+        return await publish(payload)
+
+    async def late_pending(tree, **kwargs):
+        assert drains == 1 and rec.agent_id not in ctx.state.pending
+        ctx.state.pending[rec.agent_id] = rec
+        rec.sending = ctx.spawn(_delivery.deliver(ctx, rec.delta))
+        rec.sending.add_done_callback(partial(_delivery.receipt, ctx, rec, "delta"))
+        await pending.wait()
+        return await suite(tree, **kwargs)
+
+    async def drain(ctx):
+        nonlocal drains
+        drains += 1
+        if drains == 2:
+            assert not rec.sending.done() and ctx.state.snapshot is old
+            second.set()
+        await _delivery.drain_pending(ctx)
+
+    monkeypatch.setattr(ctx, "publish", gated)
+    monkeypatch.setattr(s.ws, "run_tests", late_pending)
+    s.service.drain_pending = drain
+    task = asyncio.create_task(s.run())
+    try:
+        await asyncio.wait_for(second.wait(), 10)
+        assert ctx.state.snapshot is old and not task.done()
+        release.set()
+        result = await task
+        delta = json.loads(s.events[-1].envelope)["payload"]
+        assert drains == 2 and delta["from_version"] == new.version
+        assert delta["from_version"] != old.version
+        assert s.manager.snapshot.commit == result.revert_commit
+    finally:
+        release.set()
+        await task
+        ctx.state.pending.clear()
