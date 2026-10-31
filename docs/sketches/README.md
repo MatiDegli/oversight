@@ -57,7 +57,6 @@ Approved shell designs of 2026-10-27. The earlier review image was replaced by
 | [changes.png](v4/changes.png) | Changes view | Target | No delivery front specified yet. |
 | [settings.png](v4/settings.png) | Settings view | Target | No delivery front specified yet. |
 
-
 ## Graph evidence
 
 Approved graph-evidence sketch of 2026-10-31.

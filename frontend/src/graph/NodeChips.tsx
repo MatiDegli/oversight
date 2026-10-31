@@ -13,6 +13,7 @@ function place(element: HTMLElement, x: number, y: number, visible: boolean) {
   if (element.style.transform !== next) element.style.transform = next;
   const visibility = visible ? "visible" : "hidden";
   if (element.style.visibility !== visibility) element.style.visibility = visibility;
+  element.classList.toggle("pointer-events-auto", visible);
 }
 
 function usePlacement(
@@ -96,7 +97,7 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
       id={id}
       data-chip-popover
       aria-label={`${chip.label} behavior samples`}
-      className="pointer-events-auto frosted graph-text-shield absolute left-0 top-0 max-h-[calc(100%-16px)] w-[440px] max-w-[calc(100%-16px)] overflow-auto rounded-(--radius-card) border border-border p-4 text-(length:--caption-size) text-text"
+      className="frosted graph-text-shield absolute left-0 top-0 max-h-[calc(100%-16px)] w-[440px] max-w-[calc(100%-16px)] overflow-auto rounded-(--radius-card) border border-border p-4 text-(length:--caption-size) text-text"
       style={{ visibility: "hidden" }}
     >
       <header className="mb-1 flex items-baseline justify-between gap-3">
@@ -110,15 +111,15 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
       <ol>
         {chip.rows.map((row, index) => (
           <li key={index} className="border-b border-border">
-            <div className="flex h-[26px] items-center gap-2 font-mono">
+            <div className="flex min-h-[26px] items-center gap-2 font-mono">
               <span className="min-w-0 flex-1 truncate text-muted" title={row.inputs}>
                 {row.inputs.replace(/^[\w.]+\((.*)\)$/s, "$1")}
               </span>
-              <span className="max-w-[25%] truncate" title={row.before}>
+              <span className="min-w-0 max-w-[25%] wrap-anywhere whitespace-pre-wrap">
                 {row.before}
               </span>
               <ArrowRight aria-hidden="true" size={14} className="shrink-0 text-muted" />
-              <span className="max-w-[25%] truncate" title={row.after}>
+              <span className="min-w-0 max-w-[25%] wrap-anywhere whitespace-pre-wrap">
                 {row.after}
               </span>
             </div>
@@ -193,7 +194,7 @@ export function NodeChips({ state, litIds }: { state: State; litIds: readonly st
             <button
               key={chip.key}
               type="button"
-              className={`pointer-events-auto h-[22px] shrink-0 cursor-pointer whitespace-nowrap rounded-(--radius-control) border border-border bg-ground px-2 text-(length:--caption-size) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text ${chip.kind === "varied" ? "font-normal text-muted" : "font-(--label-weight) text-text"}`}
+              className={`h-[22px] shrink-0 cursor-pointer whitespace-nowrap rounded-(--radius-control) border border-border bg-ground px-2 text-(length:--caption-size) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text ${chip.kind === "varied" ? "font-normal text-muted" : "font-(--label-weight) text-text"}`}
               aria-label={`${chip.text}, ${chip.label}`}
               aria-expanded={openKey === chip.key}
               aria-controls={`${id}-${encodeURIComponent(chip.key)}`}

@@ -65,6 +65,8 @@ export const nodeChipTest = {
       evidence.rows = evidence.rows.map((row) => ({
         ...row,
         inputs: `compute_price(${"x".repeat(240)})`,
+        before: `${"shared".repeat(40)}-before`,
+        after: `${"shared".repeat(40)}-after`,
       }));
     if (mode === "empty") evidence.rows = [];
     if (mode === "folded") evidence.node_id = "shop.cart:Cart.total";

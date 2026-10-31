@@ -3,6 +3,25 @@ import { expect, it } from "vitest";
 import { exposeProbe } from "./probe";
 import type { GraphProbeHost } from "./probe";
 
+it("attaches, notifies and disposes safely on a plain-object host", () => {
+  const cy = cytoscape({ headless: true });
+  const host = {} as GraphProbeHost;
+  try {
+    const dispose = exposeProbe(host, cy);
+    expect(host.oversightGraph).toBeDefined();
+    expect(() => {
+      cy.emit("render");
+      cy.emit("resize");
+      dispose();
+      cy.emit("render");
+      cy.emit("resize");
+    }).not.toThrow();
+    expect(host.oversightGraph).toBeUndefined();
+  } finally {
+    cy.destroy();
+  }
+});
+
 it("returns only drawn body boxes in screen pixels and notifies until disposed", () => {
   const cy = cytoscape({
     headless: true,

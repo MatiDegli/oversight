@@ -278,22 +278,35 @@ it("places the captured graph evidence beside its approved sketches", async () =
   }
 });
 
-it("handles long inputs, empty samples, two chips, folded and removed nodes", async () => {
+it("keeps long values readable with the keyboard and handles empty samples", async () => {
   await withPage("dark", 1920, false, async (page) => {
     await page.evaluate(() => {
       window.nodeChipTest.emit(21);
       window.nodeChipTest.amend("long");
     });
-    await chip(page).click();
+    await chip(page).press("Enter");
     await check(samples(page)).toBeVisible();
     await clamped(page);
     expect(await samples(page).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    for (const suffix of ["before", "after"])
+      expect(
+        await samples(page)
+          .getByText(`${"shared".repeat(40)}-${suffix}`, { exact: true })
+          .first()
+          .evaluate((el) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight),
+      ).toBe(true);
     await page.evaluate(() => {
       window.nodeChipTest.amend("empty");
     });
     await check(samples(page).locator("li")).toHaveCount(0);
     await check(samples(page).getByText("0 of 9 differing inputs shown")).toBeVisible();
+  });
+});
+
+it("replaces the first chip's open popover when the second chip opens", async () => {
+  await withPage("dark", 1920, false, async (page) => {
     await page.evaluate(() => {
+      window.nodeChipTest.emit(21);
       window.nodeChipTest.amend("two");
     });
     for (let index = 0; index < 2; index++)
@@ -304,12 +317,23 @@ it("handles long inputs, empty samples, two chips, folded and removed nodes", as
     const first = await buttons.nth(0).boundingBox(),
       second = await buttons.nth(1).boundingBox();
     expect(first && second && first.x + first.width <= second.x).toBe(true);
+    await buttons.nth(0).press("Enter");
+    await check(buttons.nth(0)).toHaveAttribute("aria-expanded", "true");
+    await check(page.locator("[data-chip-popover]")).toHaveAttribute(
+      "id",
+      (await buttons.nth(0).getAttribute("aria-controls")) ?? "",
+    );
     await buttons.nth(1).evaluate((button) => {
       (button as HTMLButtonElement).focus({ preventScroll: true });
     });
     await buttons.nth(1).press("Enter");
     await check(page.locator("[data-chip-popover]")).toHaveCount(1);
     await check(buttons.nth(0)).toHaveAttribute("aria-expanded", "false");
+    await check(buttons.nth(1)).toHaveAttribute("aria-expanded", "true");
+    await check(page.locator("[data-chip-popover]")).toHaveAttribute(
+      "id",
+      (await buttons.nth(1).getAttribute("aria-controls")) ?? "",
+    );
     await page.evaluate(() => {
       window.nodeChipTest.emit(22);
       window.nodeChipTest.amend("two");
@@ -336,6 +360,9 @@ it("handles long inputs, empty samples, two chips, folded and removed nodes", as
       expect(colors.letter).not.toBe(colors.count);
     }
   });
+});
+
+it("keeps folded and removed chips out of the field mask", async () => {
   for (const mode of ["folded", "gone"] as const)
     await withPage("dark", 1920, false, async (page) => {
       await page.evaluate((mode) => {
@@ -343,6 +370,10 @@ it("handles long inputs, empty samples, two chips, folded and removed nodes", as
         window.nodeChipTest.amend(mode);
       }, mode);
       await check(page.locator("[data-chip-node] button")).toBeHidden();
+      await ready(page);
+      await check(
+        page.locator("[data-chip-node].pointer-events-auto, [data-chip-node] .pointer-events-auto"),
+      ).toHaveCount(0);
     });
 });
 it("hides chips too wide for the drawn node and closes their popover", async () => {
@@ -356,5 +387,35 @@ it("hides chips too wide for the drawn node and closes their popover", async () 
       await page.getByRole("button", { name: "Zoom out", exact: true }).click();
     await check(chip(page)).toBeHidden();
     await check(samples(page)).toHaveCount(0);
+    await check(
+      page.locator("[data-chip-node].pointer-events-auto, [data-chip-node] .pointer-events-auto"),
+    ).toHaveCount(0);
+    for (let index = 0; index < 8; index++)
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await check(chip(page)).toBeVisible();
+    await check(
+      page.locator("[data-chip-node].pointer-events-auto, [data-chip-node] .pointer-events-auto"),
+    ).toHaveCount(1);
+  });
+});
+
+it("keeps chips out of the field mask before their first placement", async () => {
+  await withPage("dark", 1920, false, async (page) => {
+    const initial = await page.evaluate(() => {
+      window.nodeChipTest.emit(21);
+      const group = document.querySelector<HTMLElement>("[data-chip-node]");
+      if (!group) throw new Error("Missing chip group");
+      return {
+        visibility: getComputedStyle(group).visibility,
+        maskCandidates: group.matches(".pointer-events-auto")
+          ? 1
+          : group.querySelectorAll(".pointer-events-auto").length,
+      };
+    });
+    expect(initial).toEqual({ visibility: "hidden", maskCandidates: 0 });
+    await check(chip(page)).toBeVisible();
+    await check(
+      page.locator("[data-chip-node].pointer-events-auto, [data-chip-node] .pointer-events-auto"),
+    ).toHaveCount(1);
   });
 });
