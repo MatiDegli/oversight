@@ -166,60 +166,11 @@
   .pp-ticks .is-active {
     background: var(--text);
   }
-  .pp-facts {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin: 14px 0 18px;
-  }
-  .pp-chip {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    min-height: 30px;
-    padding: 4px 8px;
-    border: 1px solid var(--page-border);
-    border-radius: var(--radius-control);
-    background: var(--page-raised);
-    font-size: 13px;
-    white-space: nowrap;
-  }
-  .pp-diff-toggle {
-    min-height: 44px;
-    border-color: var(--control-edge);
-    flex: 1;
-    flex-direction: column;
-    gap: 0;
-  }
-  .pp-diff-toggle > span:last-child {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .pp-diff-toggle[aria-expanded="true"] svg {
-    transform: rotate(180deg);
-  }
   .pp-positive {
     color: var(--passed);
   }
   .pp-negative {
     color: var(--failed-text);
-  }
-  .pp-summary {
-    margin-bottom: 18px;
-  }
-  .pp-summary h2 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 6px;
-  }
-  .pp-summary p {
-    font-size: 14px;
-    line-height: 21px;
-    color: var(--muted);
-    max-width: 75ch;
   }
   .pp-disclosure {
     margin-top: 10px;

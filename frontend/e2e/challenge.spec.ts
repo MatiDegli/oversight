@@ -239,13 +239,11 @@ async function phoneStage(page: Page) {
     expect(size.width, size.text).toBeGreaterThanOrEqual(44);
   }
 }
-async function phoneDecision(page: Page, index: number, summary: string) {
+async function phoneDecision(page: Page, index: number, note: string) {
   await phoneStage(page);
   await expect(practice(page)).toContainText(`Decision ${String(index)} of 2`);
   await expect(practice(page).getByRole("region", { name: "Agent note" })).toBeVisible();
-  await expect(practice(page).getByRole("region", { name: "Agent note" })).toContainText(
-    summary.replace("'s summary", " says"),
-  );
+  await expect(practice(page).getByRole("region", { name: "Agent note" })).toContainText(note);
   await expect(practice(page).getByRole("button", { name: /Show diff/ })).toHaveAttribute(
     "aria-expanded",
     "false",
@@ -332,7 +330,7 @@ async function phoneCapture(page: Page, width: number, state: string) {
 
 async function firstPhoneDecision(page: Page, width: number) {
   await practice(page).getByRole("button", { name: "Start practice" }).tap();
-  await phoneDecision(page, 1, "Agent B's summary");
+  await phoneDecision(page, 1, "Agent B says");
   await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
     "New exact call",
   );
@@ -353,7 +351,7 @@ async function firstPhoneDecision(page: Page, width: number) {
 
 async function finishPhoneDecisions(page: Page, width: number) {
   await practice(page).getByRole("button", { name: "Next", exact: true }).tap();
-  await phoneDecision(page, 2, "Agent A's summary");
+  await phoneDecision(page, 2, "Agent A says");
   await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
     "7 direct callers",
   );

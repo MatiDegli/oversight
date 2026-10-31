@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import type { State } from "../../state";
 import { ChangeFactsRow, ReviewBody } from "../../review";
-import { AgentLetter } from "./PhoneGraph";
+import { AgentLine } from "./PhoneGraph";
 import { Disclosure } from "./PhoneDiff";
 
 export function diffPreview(proposal: ChangeProposed) {
@@ -30,18 +30,9 @@ export function PhoneReview({
   const change = state.changes[changeId];
   const proposal = change?.proposal;
   if (!proposal) return null;
-  const agent = state.agents[change.agent_id];
-  const model =
-    state.run?.models.find((m) => m.id === agent?.model)?.label ??
-    agent?.model ??
-    "Model unavailable";
   return (
     <>
-      <div className="pp-agent" data-slot={slot}>
-        <AgentLetter slot={slot} />
-        <strong>Agent {slot}</strong>
-        <span>{model}</span>
-      </div>
+      <AgentLine state={state} changeId={changeId} slot={slot} />
       <h1>{title}</h1>
       <ChangeFactsRow state={state} changeId={changeId} shortReach />
       <ReviewBody

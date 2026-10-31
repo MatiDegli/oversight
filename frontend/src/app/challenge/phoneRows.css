@@ -1,7 +1,4 @@
 @media (width < 1280px) {
-  .pp-summary {
-    margin-bottom: 10px;
-  }
   .pp-decision-rows {
     border-block: 1px solid var(--divider);
   }

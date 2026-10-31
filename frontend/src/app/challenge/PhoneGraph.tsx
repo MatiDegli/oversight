@@ -1,4 +1,5 @@
 import { GitBranch } from "lucide-react";
+import type { State } from "../../state";
 import type { Practice } from "./manifest";
 import { calledHelper, caseSlot, countAt, nodeName } from "./phoneEvidence";
 import type { PracticeCase } from "./phoneEvidence";
@@ -10,11 +11,20 @@ export function AgentLetter({ slot }: { slot: string }) {
     </span>
   );
 }
-export function AgentLine({ practice, entry }: { practice: Practice; entry: PracticeCase }) {
-  const slot = caseSlot(practice, entry);
-  const agent = practice.cut.agents[entry.proposal.agent_id];
+export function AgentLine({
+  state,
+  changeId,
+  slot: explicitSlot,
+}: {
+  state: State;
+  changeId: string;
+  slot?: string;
+}) {
+  const change = state.changes[changeId];
+  const agent = change ? state.agents[change.agent_id] : undefined;
+  const slot = explicitSlot ?? agent?.slot ?? "A";
   const modelLabel =
-    practice.cut.run?.models.find((model) => model.id === agent?.model)?.label ??
+    state.run?.models.find((model) => model.id === agent?.model)?.label ??
     agent?.model ??
     "Model unavailable";
   return (
