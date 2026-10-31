@@ -2315,3 +2315,12 @@ folded rails and focus tabs keep their existing geometry.
 Reason: the recorded demo at 1920×1080 fits at 83%, yet its 100% start left two of six modules
 off-canvas. At 1280–1440px the floating agents panel covered the detail and zoom controls and
 framed modules underneath itself; in the 1280×800 capture, models.py was cut at its x = 880 edge.
+
+## 2026-10-31 — Item 10 agent-hours come from a fold over the committed log
+
+Reason: pure activity accounting reads only status, review, lead, step and usage-attribution
+observations, never costs. A review interval starts at the author's latest ready_for_review,
+or after the previous review of that change, whichever comes later. Open intervals are clipped
+at the committed prefix's last event. Lead and plan work leave the total unavailable rather
+than estimating their hours. Team grouping and hour/day periods come later, together with the
+team definition.
