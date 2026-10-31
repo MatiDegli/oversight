@@ -63,20 +63,43 @@ class RunControl:
     async def record_message(self, text: str, record: Callable[[], Awaitable[None]]) -> bool:
         """Reserve limits atomically, commit history, then permit verbatim delivery.
 
-        The gate waits on this lock. Failed or cancelled writes roll back the reservation;
-        close may drop the inbox during the write, but never delivers unrecorded text.
+        The gate waits on this lock. Cancellation waits for the shielded write to settle:
+        a committed write keeps its reservation; only a failed write rolls it back. Close
+        may drop the inbox during the write, but never delivers unrecorded text.
         """
         async with self._admission:
             if not self.message(text):
                 return False
-            try:
+
+            async def persist() -> None:
                 await record()
+
+            write = asyncio.create_task(persist())
+            cancelled: asyncio.CancelledError | None = None
+            while not write.done():
+                try:
+                    await asyncio.shield(write)
+                except asyncio.CancelledError as error:
+                    cancelled = error
+                except Exception:
+                    break
+            try:
+                write.result()
             except BaseException:
                 if not self._closed:
                     self._inbox.pop()
                 self._budget.accepted_bytes -= len(text.encode("utf-8"))
+                if cancelled is not None:
+                    raise cancelled from None
                 raise
+            if cancelled is not None:
+                raise cancelled
             return True
+
+    async def wait_for_admission(self) -> None:
+        """Wait for any reserved message's write to settle, without waiting on pause."""
+        async with self._admission:
+            pass
 
     def pause(self) -> bool:
         if self._closed:

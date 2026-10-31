@@ -21,6 +21,7 @@ from live_helpers import (
     meta_settings,
     start,
 )
+from message_log_helpers import MessageBarrier
 from revise_helpers import HeldRequests, opened, ready, request, states
 
 from oversight.agents import (
@@ -88,7 +89,28 @@ async def pause(s: LiveServer, model: HeldScript) -> None:
     await s.until(is_type("agent.status", state="paused"))
 
 
-async def test_working_pending_and_paused_resume_order_and_persisted_text(tmp_path: Path) -> None:
+async def resume_with_pending_commit(
+    s: LiveServer, model: HeldScript, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with MessageBarrier(s, model, monkeypatch, "Before next call.") as held:
+        accepted(await control(s, "resume"))
+        await held.step_entered.wait()
+        request = asyncio.create_task(control(s, "message", "Before next call."))
+        try:
+            await held.write_entered.wait()
+            await held.assert_pre_call_blocked()
+            assert model.entered.empty()
+            held.write_release.set()
+            accepted(await request)
+            await model.entered.get()
+        finally:
+            held.release()
+            await request
+
+
+async def test_working_pending_and_paused_resume_order_and_persisted_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     model = HeldScript()
     async with (
         asyncio.timeout(DEADLINE_S),
@@ -133,8 +155,7 @@ async def test_working_pending_and_paused_resume_order_and_persisted_text(tmp_pa
             },
         )
         assert error_code(response) == (409, "wrong_state")
-        accepted(await control(s, "resume"))
-        await model.entered.get()
+        await resume_with_pending_commit(s, model, monkeypatch)
         model.permits.release()
         await ready(s)
         assert states(s.events()) == [
@@ -144,18 +165,21 @@ async def test_working_pending_and_paused_resume_order_and_persisted_text(tmp_pa
             "working",
             "ready_for_review",
         ]
-        assert [m["content"] for m in model.requests[1][-3:]] == [
+        assert [m["content"] for m in model.requests[1][-4:]] == [
             "  Private first.\n",
             "Private pending.",
             "Private second. 😀",
+            "Before next call.",
         ]
         sent = [e for e in s.events() if e.type == "agent.message"]
         assert [e.payload.text for e in sent] == [
             "  Private first.\n",
             "Private pending.",
             "Private second. 😀",
+            "Before next call.",
         ]
-        assert max(e.seq for e in sent) < max(e.seq for e in s.events() if e.type == "agent.step")
+        step = next(e for e in s.events() if e.type == "agent.step" and e.payload.step == 2)
+        assert all(e.seq < step.seq for e in sent)
         assert s.live._controls == {}
         for action in ACTIONS:
             assert error_code(await control(s, action)) == (409, "wrong_state")

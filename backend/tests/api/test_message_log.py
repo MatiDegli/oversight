@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from backend.tests.api.test_agent_controls import HeldScript, accepted, control
 from live_helpers import DEADLINE_S, error_code, is_type, live_server, live_settings, start
+from message_log_helpers import MessageBarrier
 
 from oversight.events import EventPayload, StoredEvent, read_store
 from oversight.redaction import Redactor
@@ -82,62 +83,45 @@ async def test_pending_commit_blocks_delivery_and_failure_rolls_back(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail: bool
 ) -> None:
     model = HeldScript()
-    entered, release, gate_entered = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    text = "Please reconsider."
     async with (
         asyncio.timeout(DEADLINE_S),
         live_server(live_settings(tmp_path), lambda *_: model) as s,
     ):
         await start(s)
         await model.entered.get()
-        original = s.store.publish
-        run_control = s.live._controls["agent-1"].control
-        gate = run_control.gate
-
-        async def held(payload: EventPayload, *, ts: str | None = None) -> StoredEvent:
-            if isinstance(payload, AgentMessageSent):
-                entered.set()
-                await release.wait()
+        with MessageBarrier(s, model, monkeypatch, text, fail=fail) as held:
+            # Hold the step publish after the tool gate, before accepting the message.
+            model.permits.release()
+            await held.step_entered.wait()
+            request = asyncio.create_task(control(s, "message", text))
+            try:
+                await held.write_entered.wait()
+                await held.assert_pre_call_blocked()
+                assert model.entered.empty() and not request.done()
+                held.write_release.set()
+                response = await request
                 if fail:
-                    raise OSError("synthetic disk failure")
-            return await original(payload, ts=ts)
-
-        async def observed_gate(*args, **kwargs):
-            gate_entered.set()
-            return await gate(*args, **kwargs)
-
-        monkeypatch.setattr(s.store, "publish", held)
-        monkeypatch.setattr(run_control, "gate", observed_gate)
-        request = asyncio.create_task(control(s, "message", "Please reconsider."))
-        try:
-            await entered.wait()
-            assert not run_control.claim_finish()
-            model.permits.release()
-            await gate_entered.wait()
-            assert model.entered.empty()
-            assert not request.done()
-            release.set()
-            response = await request
-            if fail:
-                assert error_code(response) == (500, "internal")
-            else:
-                accepted(response)
-            await model.entered.get()
-            recorded = [e for e in s.events() if e.type == "agent.message"]
-            assert len(recorded) == (0 if fail else 1)
-            if fail:
-                monkeypatch.setattr(s.store, "publish", original)
-                # A failed write spent neither lifetime bytes nor a queue slot.
-                accepted(await control(s, "message", "x" * 4096))
-                accepted(await control(s, "message", "y" * 4096))
-            model.permits.release()
-            events = await s.until(is_type("agent.step", step=2))
-            messages = [m["content"] for m in model.requests[1] if m["role"] == "user"]
-            assert ("Please reconsider." in messages) is (not fail)
-            if recorded:
-                assert recorded[0].seq < events[-1].seq
-        finally:
-            release.set()
-            await request
+                    assert error_code(response) == (500, "internal")
+                else:
+                    accepted(response)
+                await model.entered.get()
+                recorded = [e for e in s.events() if e.type == "agent.message"]
+                assert len(recorded) == (0 if fail else 1)
+                if fail:
+                    accepted(await control(s, "message", "x" * 4096))
+                    accepted(await control(s, "message", "y" * 4096))
+                model.permits.release()
+                events = await s.until(is_type("agent.step", step=2))
+                assert any(m.get("content") == text for r in held.requests for m in r) is (not fail)
+                if fail:
+                    assert not any(m.get("content") == text for r in model.requests for m in r)
+                else:
+                    step = next(e for e in events if e.type == "agent.step" and e.payload.step == 2)
+                    assert recorded[0].seq < step.seq
+            finally:
+                held.release()
+                await request
 
 
 async def test_waiting_admission_refuses_a_drive_closed_during_commit(
