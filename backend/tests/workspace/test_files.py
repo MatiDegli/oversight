@@ -337,6 +337,27 @@ def test_remove_tree_refuses_a_symlinked_target_or_ancestor_and_never_follows_in
     assert os.path.islink(runtime / "tmp")
 
 
+def test_only_uuid_inverse_checkouts_are_deletable_under_tmp(runtime: Path) -> None:
+    name = "revert-" + "a" * 32
+    target = runtime / "tmp" / name
+    (target / "x").mkdir(parents=True)
+    (target / "x" / "keep.txt").write_text("temporary checkout")
+    refused = [target / "x", runtime / "tmp" / "revert-other", runtime / "worktrees" / name]
+    for path in refused[1:]:
+        path.mkdir()
+    for path in refused:
+        with pytest.raises(UnsafeDeletion):
+            remove_tree(runtime, path)
+        assert path.exists()
+    remove_tree(runtime, target)
+    assert not target.exists()
+    target.symlink_to(runtime / "workspace", target_is_directory=True)
+    with pytest.raises(UnsafeDeletion):
+        remove_tree(runtime, target)
+    assert target.is_symlink()
+    assert (runtime / "workspace" / "keep.txt").read_text() == "x"
+
+
 def test_only_uuid_probe_checkouts_are_deletable_under_tmp(runtime: Path) -> None:
     probe = runtime / "tmp" / ("base-probe-" + "a" * 32)
     probe.mkdir()

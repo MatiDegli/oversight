@@ -4,7 +4,7 @@ from typing import Literal
 
 from oversight_contracts.graph import GraphDelta, GraphSnapshot
 
-type DeltaCause = Literal["merge", "user_edit", "rescan"]
+type DeltaCause = Literal["merge", "user_edit", "rescan", "revert"]
 
 
 def graph_delta(

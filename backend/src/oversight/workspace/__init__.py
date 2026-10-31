@@ -36,6 +36,16 @@ from oversight.workspace.junit import Outcome as JUnitOutcome
 from oversight.workspace.junit import TestRun as JUnitRun
 from oversight.workspace.measured_report import CallReport, CallTarget, Invocation
 from oversight.workspace.probes import base_probe_checkout
+from oversight.workspace.revert import (
+    InverseCandidate,
+    InverseClassification,
+    InverseError,
+    InverseOutcome,
+    apply_inverse,
+    classify_inverse,
+    inverse_suite_problem,
+    prepare_inverse,
+)
 from oversight.workspace.runner import ProcessResult, Spawn, run_process
 from oversight.workspace.source import (
     BOLTONS,
@@ -70,6 +80,10 @@ __all__ = [
     "FileTooLarge",
     "IntegrityError",
     "InvalidPath",
+    "InverseCandidate",
+    "InverseClassification",
+    "InverseError",
+    "InverseOutcome",
     "Invocation",
     "IsolatedRunner",
     "IsolationCapability",
@@ -93,12 +107,16 @@ __all__ = [
     "Workspace",
     "WorkspaceBusy",
     "WorkspaceError",
+    "apply_inverse",
     "base_probe_checkout",
     "check_content",
+    "classify_inverse",
     "configure_suite",
     "content_hash",
+    "inverse_suite_problem",
     "list_tree",
     "parse_junit",
+    "prepare_inverse",
     "prepare_merge_guard",
     "print_isolation_probe",
     "run_process",
