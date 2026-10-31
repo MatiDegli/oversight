@@ -428,8 +428,9 @@ async def probe_behavior(
     extensions = ExtensionProbe()
     try:
         async with asyncio.timeout_at(deadline):
-            await ctx.whole(asyncio.to_thread(extensions.prepare, rec, found, deadline))
+            extension_targets = found.copy()
             inputs = await ctx.whole(asyncio.to_thread(_prepare, rec, found, deadline))
+            await ctx.whole(asyncio.to_thread(extensions.prepare, rec, extension_targets, deadline))
             if not inputs and not extensions.inputs:
                 return BehaviorDiff(revision, tuple(found))
             if not ctx.workspace.isolation.available:

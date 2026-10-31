@@ -236,7 +236,7 @@ def normalize_text_aliases(definitions: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
+def test_schema_changes_only_slots_and_the_three_approved_attachments() -> None:
     baseline = json.loads((ROOT / "contracts/baselines/1.5.0.schema.json").read_text())["$defs"]
     current = json.loads((ROOT / "contracts/generated/oversight.schema.json").read_text())["$defs"]
     current = normalize_text_aliases(current)

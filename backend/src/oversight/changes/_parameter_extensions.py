@@ -37,30 +37,43 @@ def _record(
     after: BehaviorObservation,
 ) -> ParameterExtension:
     if before.problem or after.problem:
-        return replace(result, reason="worker failed")
+        return replace(result, reason=_join_reason(generated.reason, "worker failed"))
     rows: list[BehaviorRow] = []
     runs = rejected = 0
     reason = generated.reason
     if len(before.results) != len(generated.samples) or len(after.results) != len(
         generated.samples
     ):
-        reason = "worker failed"
+        reason = _join_reason(reason, "worker failed")
     for sample, old, new in zip(generated.samples, before.results, after.results, strict=False):
+        if sample.input_identity is None or (
+            generated.receiver_class is not None
+            and (
+                old.get("pre_fingerprint") is None
+                or old.get("pre_fingerprint") != new.get("pre_fingerprint")
+            )
+        ):
+            reason = _join_reason(reason, "unrepresentable input or unequal receiver state")
+            continue
         if any(
             value.get("kind") not in ("value", "raised")
             or not isinstance(value.get("fingerprint"), str)
             for value in (old, new)
         ):
-            reason = "unrepresentable input"
+            reason = _join_reason(reason, "unrepresentable input")
             continue
         runs += 1
         rejected += int(old.get("binding_rejected") is True)
         if len(rows) < 8:
-            # Evidence-only calls are not repeated, so stability is unverified.
-            rows.append(BehaviorRow(sample.call, old, new, unstable=True))
+            # Single-run evidence: no repeated execution has disagreed.
+            rows.append(BehaviorRow(sample.call, old, new, unstable=False))
     return replace(
         result, run_count=runs, rejected_before=rejected, rows=tuple(rows), reason=reason
     )
+
+
+def _join_reason(reason: str | None, added: str) -> str:
+    return "; ".join(dict.fromkeys([*(reason.split("; ") if reason else []), added]))
 
 
 class ExtensionProbe:

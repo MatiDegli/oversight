@@ -1,5 +1,8 @@
 """Iterator consumption is bounded inside the same worker call alarm as execution."""
 
+import asyncio
+import signal
+
 import pytest
 
 from .test_behavior_worker import invoke
@@ -94,3 +97,97 @@ async def test_no_observation_marker_keeps_opaque_iterator_behavior(tmp_path):
     [row] = result["results"]
     assert row["kind"] == "unrepresentable" and "fingerprint" not in row
     assert "observation" not in row
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mode", ["cap", "timeout"])
+async def test_blocking_generator_finally_does_not_prevent_the_next_call(tmp_path, mode):
+    source = (
+        "def f(mode):\n"
+        "    if mode == 'next': return 42\n"
+        "    def values():\n"
+        "        try:\n"
+        "            if mode == 'cap':\n"
+        "                while True: yield 1\n"
+        "            yield 1\n"
+        "            while True: pass\n"
+        "        finally:\n"
+        "            while True: pass\n"
+        "    return values()\n"
+    )
+    async with asyncio.timeout(5):
+        result = await invoke(
+            tmp_path,
+            source,
+            [consumed(repr(((mode,), {}))), consumed("(('next',), {})")],
+            timeout_s=0.1,
+        )
+    first, second = result["results"]
+    assert first == {"kind": "timed_out", "reason": "iterator observation timeout"}
+    assert second["kind"] == "value" and second["value"] == ["int", "0x2a"]
+
+
+@pytest.mark.anyio
+async def test_capped_generator_is_closed_and_released_before_the_alarm_is_disabled(tmp_path):
+    source = (
+        "import signal\n"
+        "closed = []\n"
+        "def f(mode):\n"
+        "    if mode: return closed\n"
+        "    def values():\n"
+        "        try:\n"
+        "            while True: yield 1\n"
+        "        finally:\n"
+        "            closed.append(signal.getitimer(signal.ITIMER_REAL)[0] > 0)\n"
+        "    return values()\n"
+    )
+    result = await invoke(tmp_path, source, [consumed("((0,), {})"), consumed("((1,), {})")])
+    first, second = result["results"]
+    assert first == {"kind": "unrepresentable", "reason": "iterator item cap"}
+    assert second["value"][1] == [["bool", True]]
+
+
+def test_timeout_releases_a_generator_paused_at_yield_under_a_fresh_alarm(monkeypatch):
+    from oversight.workspace import behavior_worker as worker
+
+    closed = []
+
+    def values():
+        try:
+            yield 1
+        finally:
+            closed.append(signal.getitimer(signal.ITIMER_REAL)[0] > 0)
+
+    def interrupted(value):
+        next(value)
+        raise worker.CallTimeout
+
+    monkeypatch.setattr(worker, "iterator_items", interrupted)
+    result = worker.call(values, consumed(), 0.2)
+    assert result == {"kind": "timed_out", "reason": "iterator observation timeout"}
+    assert closed == [True]
+
+
+@pytest.mark.anyio
+async def test_timeout_cleanup_that_blocks_is_bounded_and_the_target_continues(tmp_path):
+    source = (
+        "def values():\n"
+        "    try: yield 1\n"
+        "    finally:\n"
+        "        while True: pass\n"
+        "class Waiting:\n"
+        "    def __init__(self): self.values = values()\n"
+        "    def __iter__(self): return self\n"
+        "    def __next__(self):\n"
+        "        next(self.values)\n"
+        "        while True: pass\n"
+        "    def close(self): self.values.close()\n"
+        "def f(mode): return 42 if mode else Waiting()\n"
+    )
+    async with asyncio.timeout(5):
+        result = await invoke(
+            tmp_path, source, [consumed("((0,), {})"), consumed("((1,), {})")], timeout_s=0.1
+        )
+    first, second = result["results"]
+    assert first == {"kind": "timed_out", "reason": "iterator observation timeout"}
+    assert second["kind"] == "value" and second["value"] == ["int", "0x2a"]

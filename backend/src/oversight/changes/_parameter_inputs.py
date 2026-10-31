@@ -34,6 +34,7 @@ from oversight.changes._behavior_objects import (
     class_signature,
     constructor,
     display,
+    input_identity,
     invocation,
 )
 from oversight.changes._behavior_sources import Sources
@@ -111,6 +112,7 @@ def _samples(
     candidates: Iterator[SuppliedCall],
     deadline: float,
     generator: bool,
+    caches: list[Sources],
 ) -> tuple[tuple[str, ...], tuple[BehaviorInput, ...], str | None]:
     base_parameters = {
         key
@@ -148,7 +150,19 @@ def _samples(
             continue
         if raw not in samples and len(samples) == MAX_INPUTS:
             return tuple(sorted(used)), tuple(samples.values()), "budget exhausted"
-        samples[raw] = BehaviorInput(text, raw, raw)
+        supplied_arguments = {
+            **{f"positional:{index}": value for index, value in enumerate(candidate.args)},
+            **{f"keyword:{key}": value for key, value in candidate.kwargs.items()},
+        }
+        identities: list[str | None] = []
+        for cache in caches:
+            try:
+                identities.append(input_identity(supplied_arguments, cache, deadline))
+            except (ValueError, TypeError, SyntaxError, RecursionError):
+                identities.append(None)
+        samples[raw] = BehaviorInput(
+            text, raw, raw, identities[0] if identities[0] == identities[1] else None
+        )
         used.update(supplied)
     return tuple(sorted(used)), tuple(samples.values()), None
 
@@ -195,7 +209,9 @@ def extension_inputs(
                 for child in walk_local(node)
             )
             candidates = _function_calls(module, name, caches[1])
-        parameters, samples, reason = _samples(name, signatures, candidates, deadline, generator)
+        parameters, samples, reason = _samples(
+            name, signatures, candidates, deadline, generator, caches
+        )
         return (
             ExtensionInputs(parameters, samples, receiver_class, properties, reason)
             if samples

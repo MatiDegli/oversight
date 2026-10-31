@@ -10,6 +10,7 @@ import pytest
 from backend.tests.workspace.test_behavior_parameter_extensions import invoke_extension
 from changes_helpers import Harness
 
+from oversight.changes import _behavior as behavior
 from oversight.changes import _proposal
 from oversight.changes._behavior import BehaviorDiff, FunctionBehavior
 from oversight.changes._behavior_publish import (
@@ -66,12 +67,12 @@ async def measure(tmp_path, before, after, tests, *, problem=None, method=None):
 
 
 @pytest.mark.anyio
-async def test_evidence_only_rows_without_repeats_are_unstable(tmp_path):
+async def test_single_run_extension_rows_do_not_claim_disagreeing_repeats(tmp_path):
     result, measured, _ = await measure(
         tmp_path, "def f(): return 1\n", "def f(extra=0): return extra\n", "f(extra=3)\n"
     )
-    assert measured.extensions[0].rows[0].unstable
-    assert result.rows[0].unstable
+    assert not measured.extensions[0].rows[0].unstable
+    assert not result.rows[0].unstable
 
 
 @pytest.mark.anyio
@@ -238,3 +239,101 @@ async def test_isolation_failure_retains_extension_not_probed(h: Harness, monkey
     assert facts.parameter_extensions and facts.parameter_extensions[0].not_probed == "probe failed"
     assert facts.parameter_extensions[0].run_count == 0
     worker.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kwargs", [False, True])
+async def test_changed_receiver_state_excludes_rejections_and_values(tmp_path, kwargs):
+    before = "class Box:\n    def __init__(self, x): self.x = x\n" + (
+        "    def f(self, **kwargs): return self.x\n"
+        if kwargs
+        else "    def f(self): return self.x\n"
+    )
+    after = (
+        "class Box:\n    def __init__(self, x): self.x = x + 1\n"
+        "    def f(self, extra=0): return self.x\n"
+    )
+    result, measured, _ = await measure(
+        tmp_path, before, after, "Box(2).f(extra=3)", method="Box.f"
+    )
+    assert result.run_count == result.rejected_before == 0 and result.rows == []
+    assert measured.extensions[0].reason == "unrepresentable input or unequal receiver state"
+    assert result.not_probed == "input not representable"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("aliased", [False, True])
+@pytest.mark.parametrize("changed", [False, True])
+async def test_constructor_arguments_share_static_guards_including_local_class_aliases(
+    tmp_path, aliased, changed
+):
+    cls = "class Box:\n    def __init__(self, x): self.x = x\n"
+    before = cls + "def f(value, **kwargs): return value.x\n"
+    after = (cls.replace("self.x = x", "self.x = x + 1") if changed else cls) + (
+        "def f(value, extra=0): return value.x\n"
+    )
+    call = (
+        "def test_it():\n    Local = Box\n    f(Local(2), extra=3)\n"
+        if aliased
+        else "f(Box(2), extra=3)\n"
+    )
+    result, measured, _ = await measure(tmp_path, before, after, "from sample import Box\n" + call)
+    assert result.run_count == int(not changed) and result.rejected_before == 0
+    assert len(result.rows) == int(not changed)
+    assert measured.extensions[0].reason == (
+        "unrepresentable input or unequal receiver state" if changed else None
+    )
+
+
+@pytest.mark.anyio
+async def test_unrepresentable_result_preserves_the_supplied_input_cap_reason(tmp_path):
+    result, measured, _ = await measure(
+        tmp_path,
+        "def f(): return 1\n",
+        "def f(extra=0): return iter(()) if extra else 1\n",
+        "\n".join(f"f(extra={i})" for i in range(49)),
+    )
+    assert result.run_count == result.rejected_before == 1 and len(result.rows) == 1
+    assert measured.extensions[0].reason == "budget exhausted; unrepresentable input"
+    assert result.not_probed == "input not representable; recording budget reached"
+
+
+@pytest.mark.anyio
+async def test_counted_prepare_runs_first_without_hiding_kwargs_extensions(monkeypatch):
+    node = SimpleNamespace(id="sample:f", path="sample.py", name="f", kind="function")
+    rec = SimpleNamespace(
+        base_files={"sample.py": "def f(**kwargs): return 1\n"},
+        head_files={
+            "sample.py": "def f(extra=0): return extra\n",
+            "test_sample.py": "from sample import f\nf(extra=3)",
+        },
+        head=SimpleNamespace(graph=SimpleNamespace(nodes=[node])),
+        task=SimpleNamespace(limits=SimpleNamespace(test_timeout_s=30)),
+    )
+    order = []
+    original_counted, original_extension = behavior._prepare, ExtensionProbe.prepare
+
+    def counted(*args):
+        order.append("counted")
+        return original_counted(*args)
+
+    def extension(self, record, found, deadline):
+        order.append("extension")
+        assert found[0].reason is None
+        original_extension(self, record, found, deadline)
+
+    async def whole(action):
+        return await action
+
+    monkeypatch.setattr(behavior, "targets", lambda _: (FunctionBehavior(node.id),))
+    monkeypatch.setattr(behavior, "_prepare", counted)
+    monkeypatch.setattr(ExtensionProbe, "prepare", extension)
+    ctx = SimpleNamespace(
+        whole=whole, workspace=SimpleNamespace(isolation=SimpleNamespace(available=False))
+    )
+    measured = await behavior.probe_behavior(
+        cast(Any, ctx), cast(Any, rec), head="head", revision=1
+    )
+    assert order == ["counted", "extension"]
+    assert measured.functions[0].reason == "unsupported signature"
+    assert measured.extensions[0].parameters == ("extra",)

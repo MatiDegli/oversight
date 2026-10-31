@@ -163,6 +163,39 @@ class IteratorObservationError(ValueError):
     """A bounded observation cut, never a project exception or equality evidence."""
 
 
+class IteratorRelease:
+    """Retain an interrupted iterator until its caller can release it under an alarm."""
+
+    def __init__(self) -> None:
+        self.value: Any = None
+
+    def release(self) -> None:
+        value, self.value = self.value, None
+        close = None
+        try:
+            close = getattr(value, "close", None)
+            if callable(close):
+                close()
+        finally:
+            close = value = None
+
+
+def release_exception(error: BaseException) -> None:
+    """Discard traceback chains while the caller's cleanup alarm is still active."""
+    pending = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        pending.extend(
+            part for part in (current.__cause__, current.__context__) if part is not None
+        )
+        current.__traceback__ = None
+        current.__cause__ = current.__context__ = None
+
+
 def observation_literal(literal: str) -> tuple[str, bool]:
     import ast
 

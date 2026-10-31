@@ -96,14 +96,14 @@ def test_generator_is_admitted_only_with_consumed_call_site():
 )
 @pytest.mark.parametrize("side", [0, 1])
 @pytest.mark.parametrize("call", ["f()", "list(f())"])
-def test_generator_signature_parse_failure_keeps_unsupported_reason(signature, side, call):
+def test_generator_signature_parse_failure_keeps_main_generator_reason(signature, side, call):
     files = [
         {"sample.py": "def f(): yield 1\n", "test_sample.py": "from sample import f\n" + call},
         {"sample.py": "def f(): yield 1\n", "test_sample.py": "from sample import f\n" + call},
     ]
     files[side] = {**files[side], "sample.py": f"def f({signature}): yield 1\n"}
     found = behavior_inputs("sample", "f", *files)
-    assert found.reason == "unsupported signature"
+    assert found.reason == "async or generator"
     assert not found.inputs
     assert not found.consume_iterator
 
@@ -221,4 +221,4 @@ def test_unconsumed_generator_keeps_existing_refusal_before_effect_checks():
     assert prepare("f()", source=source).reason == "async or generator"
     assert prepare("list(f())", source=source).reason == "print or input"
     assert prepare("list(f(999))", source=source).reason == "async or generator"
-    assert prepare("f()", source="def f(*args): yield 1\n").reason == "unsupported signature"
+    assert prepare("f()", source="def f(*args): yield 1\n").reason == "async or generator"

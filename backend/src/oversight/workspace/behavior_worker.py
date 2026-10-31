@@ -24,6 +24,7 @@ if TYPE_CHECKING or __package__:
         MAX_RESULT,
         MAX_TEXT,
         IteratorObservationError,
+        IteratorRelease,
         RangeArgumentError,
         canonical,
         class_name,
@@ -32,6 +33,7 @@ if TYPE_CHECKING or __package__:
         iterator_items,
         observation_literal,
         range_value,
+        release_exception,
         value_result,
     )
 else:
@@ -39,6 +41,7 @@ else:
         MAX_RESULT,
         MAX_TEXT,
         IteratorObservationError,
+        IteratorRelease,
         RangeArgumentError,
         canonical,
         class_name,
@@ -47,6 +50,7 @@ else:
         iterator_items,
         observation_literal,
         range_value,
+        release_exception,
         value_result,
     )
 
@@ -62,7 +66,8 @@ def alarm(_signum: int, _frame: object) -> None:
 
 
 def limited(action: Callable[[], Any], timeout_s: float) -> Any:
-    signal.setitimer(signal.ITIMER_REAL, timeout_s)
+    # A further alarm also bounds project finalizers entered while unwinding the first.
+    signal.setitimer(signal.ITIMER_REAL, timeout_s, timeout_s)
     try:
         return action()
     finally:
@@ -86,6 +91,17 @@ def _bind(
         raise
 
 
+def _release_timeout(pending: IteratorRelease, error: BaseException, timeout_s: float) -> None:
+    def cleanup() -> None:
+        try:
+            release_exception(error)
+            pending.release()
+        except BaseException as cleanup_error:
+            release_exception(cleanup_error)
+
+    limited(cleanup, min(timeout_s, 0.05))
+
+
 def call(
     function: Callable[..., Any],
     literal: str,
@@ -95,6 +111,7 @@ def call(
     observe_binding: bool = False,
 ) -> dict[str, Any]:
     consume_iterator = False
+    pending = IteratorRelease()
 
     def execute() -> dict[str, Any]:
         nonlocal consume_iterator
@@ -105,28 +122,36 @@ def call(
             bound.apply_defaults()
             args, kwargs = bound.args, bound.kwargs
         arguments = copy.deepcopy((args, kwargs), memo)
+        value = None
         try:
             value = function(*arguments[0], **arguments[1])
             if consume_iterator:
-                value, consume_iterator = iterator_items(value)
-        except (CallTimeout, IteratorObservationError):
+                pending.value = value
+                try:
+                    value, consume_iterator = iterator_items(value)
+                except IteratorObservationError as error:
+                    reason = str(error)
+                    release_exception(error)
+                    value = None
+                    pending.release()
+                    return {"kind": "unrepresentable", "reason": reason}
+                pending.value = None
+        except CallTimeout:
             raise
         except BaseException as error:
-            message = str(error)
-            full_class = f"{type(error).__module__}.{type(error).__qualname__}"
-            return {
-                "kind": "raised",
-                "class": class_name(error),
-                "message": message[:MAX_TEXT],
-                "fingerprint": fingerprint(("raised", full_class, message)),
-            }
+            result = _exception(error)
+            release_exception(error)
+            value = None
+            pending.release()
+            return result
         return value_result(value)
 
     try:
         result = limited(execute, timeout_s)
     except BindingRejected as error:
         return {**_exception(error.error), "binding_rejected": True}
-    except CallTimeout:
+    except CallTimeout as error:
+        _release_timeout(pending, error, timeout_s)
         return (
             {"kind": "timed_out", "reason": "iterator observation timeout"}
             if consume_iterator
@@ -140,7 +165,7 @@ def call(
         return {"kind": "unrepresentable", "reason": "argument class mismatch"}
     except BaseException as error:
         result = {"kind": "unrepresentable", "class": class_name(error)}
-    if consume_iterator:
+    if consume_iterator and result["kind"] in ("value", "raised"):
         result = {**result, "observation": "iterator_items"}
     if len(canonical(result).encode()) > MAX_RESULT:
         return {**result, "value": ["cut", "encoded result size"]}
@@ -330,7 +355,10 @@ def _method_action(
 def method_call(
     target: dict[str, Any], literal: str, timeout_s: float, root: Path
 ) -> dict[str, Any]:
+    initial: str | None = None
+
     def execute() -> dict[str, Any]:
+        nonlocal initial
         # Construction, both fingerprints, invocation and getters share ONE call alarm.
         cls = _receiver_class(target, root)
         constructor, invocation = ast.literal_eval(literal)
@@ -365,7 +393,7 @@ def method_call(
     try:
         result = limited(execute, timeout_s)
     except BindingRejected as error:
-        return {**_exception(error.error), "binding_rejected": True}
+        return {**_exception(error.error), "binding_rejected": True, "pre_fingerprint": initial}
     except CallTimeout:
         return {"kind": "timed_out"}
     except RangeArgumentError as error:
