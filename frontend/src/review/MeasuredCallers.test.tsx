@@ -18,7 +18,7 @@ describe("measured caller presentation", () => {
         detailsOnly
       />,
     );
-  it("shows only further changed samples, a Mono name and method details", () => {
+  it("shows only further changed samples and a Mono name without server reasons", () => {
     const html = renderDetails({
       ...firstCaller,
       rows: [
@@ -36,8 +36,9 @@ describe("measured caller presentation", () => {
     });
     expect(html).toContain('aria-label="Measured callers"');
     expect(html).toContain('<code class="font-mono">Cart.quote_add</code></p>');
-    expect(html).toContain("Not compared: Inputs differed");
-    expect(html).toContain("Observation problem: Recording stopped");
+    expect(html).not.toContain("Inputs differed");
+    expect(html).not.toContain("Recording stopped");
+    expect(html).not.toMatch(/Not compared:|Observation problem:/);
     expect(html).toContain("Observed samples");
     expect(html).toContain("longer additional input");
     expect(html).not.toContain(firstCaller.rows[0]?.inputs);

@@ -30,12 +30,10 @@ function CallerEvidence({ caller, detailsOnly }: { caller: MeasuredCaller; detai
           after: <span className="font-mono">{caller.unmatched_after}</span>
         </p>
       )}
-      {caller.not_compared.map((reason, index) => (
-        <p key={index}>Not compared: {reason}</p>
-      ))}
-      {caller.problems.map((reason, index) => (
-        <p key={index}>Observation problem: {reason}</p>
-      ))}
+      {!detailsOnly &&
+        caller.not_compared.map((reason, index) => <p key={index}>Not compared: {reason}</p>)}
+      {!detailsOnly &&
+        caller.problems.map((reason, index) => <p key={index}>Observation problem: {reason}</p>)}
       {!detailsOnly && caller.not_probed && <p>Not probed: {caller.not_probed}</p>}
       {samples.length > 0 && (
         <details>
