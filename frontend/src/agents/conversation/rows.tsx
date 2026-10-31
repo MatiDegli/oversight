@@ -67,7 +67,7 @@ export function Divider({ children }: { children: ReactNode }) {
   return (
     <div className="mx-[22px] my-[10px] flex items-center gap-3 text-center text-[13px] font-semibold text-faint">
       <span className="h-px min-w-3 flex-1 bg-divider" />
-      <span>{children}</span>
+      <span className="min-w-0 wrap-anywhere">{children}</span>
       <span className="h-px min-w-3 flex-1 bg-divider" />
     </div>
   );
@@ -111,7 +111,11 @@ function TestOutput({ tests }: { tests: SuiteResult }) {
   ]);
   return (
     <details className="mt-[6px] text-[14px] text-muted">
-      <summary className={`w-fit cursor-pointer rounded-control ${focusRing}`}>Test output</summary>
+      <summary
+        className={`min-h-6 w-fit cursor-pointer content-center rounded-control ${focusRing}`}
+      >
+        Test output
+      </summary>
       <div className="mt-[6px] rounded-[8px] border border-divider bg-panel px-3 py-2 font-mono text-[13px] leading-5 whitespace-pre-wrap wrap-anywhere">
         <p>
           {tests.passed} passed in {(tests.duration_ms / 1000).toFixed(2)}s
@@ -169,7 +173,7 @@ function StepRow({
       {step.tool === "edit_file" && step.result === "ok" && onOpenDiff && (
         <button
           type="button"
-          className={`rounded-control text-[14px] text-muted underline underline-offset-2 hover:text-text ${focusRing}`}
+          className={`inline-flex min-h-6 items-center rounded-control text-[14px] text-muted underline underline-offset-2 hover:text-text ${focusRing}`}
           onClick={() => {
             onOpenDiff(changeId);
           }}

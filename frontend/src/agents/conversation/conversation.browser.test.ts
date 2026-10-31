@@ -180,6 +180,37 @@ it.each([
   }
 });
 
+it.each([608, 304])(
+  "keeps long content inside a %i px panel with usable targets",
+  async (width) => {
+    const page = await pageFor("revising", width);
+    try {
+      await page.getByRole("heading").evaluate((node) => {
+        node.textContent = node.textContent.repeat(4);
+      });
+      await page.getByText(/^Cross-review ·/).evaluate((node) => {
+        node.textContent = `Cross-review · ${"MuseSparkOpen".repeat(30)} · 1 note, nothing blocking`;
+      });
+      const list = timeline(page);
+      expect(await list.evaluate((node) => node.scrollWidth)).toBe(
+        await list.evaluate((node) => node.clientWidth),
+      );
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      await check(box(page)).toBeInViewport();
+      for (const target of [
+        page.getByRole("button", { name: "View in diff" }).first(),
+        page.getByText("Test output", { exact: true }),
+      ]) {
+        expect(
+          await target.evaluate((node) => node.getBoundingClientRect().height),
+        ).toBeGreaterThanOrEqual(24);
+      }
+    } finally {
+      await page.close();
+    }
+  },
+);
+
 it.each([
   [880, "dark", false],
   [608, "dark", false],
