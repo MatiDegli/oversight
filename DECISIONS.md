@@ -2328,3 +2328,11 @@ their bounded settlement before the event store closes.
 Reason: a client cannot supply authority through an event body or an unacknowledged row.
 Immediate refusals keep 202 meaningful, while cancellation lets the tested inverse recovery
 path settle a suite whose 60-second bound exceeds the service's 30-second shutdown budget.
+## 2026-10-31 — Item 10 agent-hours come from a fold over the committed log
+
+Reason: pure activity accounting reads only status, review, lead, step and usage-attribution
+observations, never costs. A review interval starts at the author's latest ready_for_review,
+or after the previous review of that change, whichever comes later. Open intervals are clipped
+at the committed prefix's last event. Lead and plan work leave the total unavailable rather
+than estimating their hours. Team grouping and hour/day periods come later, together with the
+team definition.

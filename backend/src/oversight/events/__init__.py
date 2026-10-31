@@ -5,6 +5,13 @@ Other modules import only what this file exports; everything else here is intern
 
 from pathlib import Path
 
+from oversight.events.activity_fold import (
+    ActivityFold,
+    ActivityGroup,
+    ActivityInterval,
+    ActorActivity,
+    fold_activity,
+)
 from oversight.events.clock import Clock, format_ts, parse_ts, system_clock
 from oversight.events.history import (
     HistoryTooLarge,
@@ -55,6 +62,10 @@ __all__ = [
     "MAX_GAP_S",
     "NEEDS_YOU_CODES",
     "NEEDS_YOU_TEMPLATE",
+    "ActivityFold",
+    "ActivityGroup",
+    "ActivityInterval",
+    "ActorActivity",
     "ChangeAccounting",
     "Clock",
     "EventPayload",
@@ -75,6 +86,7 @@ __all__ = [
     "UsageFold",
     "absolute_paths",
     "export_run",
+    "fold_activity",
     "fold_usage",
     "format_needs_you",
     "format_ts",
