@@ -310,6 +310,9 @@ During a rules decision, the person’s Reject or Request changes is admitted un
 authorization starts and cancels the rules attempt; from that cutoff it answers 409.
 Each confirmed main commit parks idle armed rules waits; once the graph snapshot holds that
 commit, a new generation renews them against that main with the original absolute deadline.
+A queued rules attempt finding an announced newer main publishes no notice and, once its decision
+ends, a new generation re-assesses against that main with the original deadline, a fresh combined
+suite and fresh spend; every in-flight outcome closes following.
 Live resolutions record principal and head explicitly. The writer validates each frozen
 candidate independently before SQL admission. EventRejected is terminal for that delivery;
 valid neighbors still commit with contiguous sequences. A rejected post-effect resolution
