@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from oversight.changes._measured import MeasuredEvidence
+    from oversight.changes._preemption import PersonIntent
     from oversight.changes._review_port import ReviewCapture
     from oversight.changes._run_findings import EditReceipt, SuiteReceipt
 
@@ -152,6 +153,12 @@ class ChangeRecord:
     """Counts the decisions taken; only the latest one's task may end `deciding`."""
     taken: int = 0
     """The revision Approve was clicked on (R1): a later one is reviewed before any merge."""
+    rules_task: asyncio.Task[None] | None = None
+    rules_phase: (
+        Literal["queued", "preflight", "suite", "authorizing", "effect", "settling", "finished"]
+        | None
+    ) = None
+    person_intent: PersonIntent | None = None
     person_acted: bool = False
     """Permanent per change, including all future re-proposals."""
     review_ready: bool = False
