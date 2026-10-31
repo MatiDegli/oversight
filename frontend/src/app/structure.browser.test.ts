@@ -67,6 +67,7 @@ async function withPage(run: (page: Page) => Promise<void>, dockedWatch = false)
           "margin:0;width:calc(100vw - var(--left-rail-width) - var(--agents-panel-width))",
         )
       : html;
+    if (dockedWatch) expect(body).not.toBe(html);
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body }));
     await page.goto(url);
     await page.waitForFunction(

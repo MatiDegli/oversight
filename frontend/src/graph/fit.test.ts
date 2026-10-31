@@ -46,7 +46,7 @@ it("fits a graph without a preset with the camera's padding, and sizes the prese
   }
 });
 
-it("starts a preset at 100%, fitting nothing", () => {
+it("falls back to 100% for a preset when the viewport has no size", () => {
   const cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(themes.dark) });
   try {
     const layout = vi.spyOn(cy, "layout");

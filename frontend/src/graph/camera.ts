@@ -25,6 +25,16 @@ export interface Box {
   y2: number;
 }
 
+/** Shared padding for the measured start and panel fit areas, in graph coordinates. */
+export function paddedArea(size: { width: number; height: number }, area: Box, leftInset = 0): Box {
+  return {
+    x1: leftInset + PADDING,
+    y1: Math.max(PADDING, area.y1),
+    x2: Math.min(size.width - PADDING, area.x2),
+    y2: Math.min(size.height - PADDING, area.y2),
+  };
+}
+
 interface Limits {
   padding: number;
   maxZoom: number;
@@ -229,14 +239,7 @@ export function startCamera(cy: Core, area?: Box): void {
     .map((frame) => bounds(frame));
   const size = { width: cy.width(), height: cy.height() };
   // Match the explicit Fit control's area, including its padding and the measured overlays.
-  const fitArea = area
-    ? {
-        x1: PADDING,
-        y1: Math.max(PADDING, area.y1),
-        x2: Math.min(size.width - PADDING, area.x2),
-        y2: Math.min(size.height - PADDING, area.y2),
-      }
-    : undefined;
+  const fitArea = area ? paddedArea(size, area) : undefined;
   const fit = fitCamera(cy, fitArea);
   const limits = changeZoom();
   if (fit && fit.zoom >= limits.min && fit.zoom < limits.max) {
@@ -262,11 +265,16 @@ export function startCamera(cy: Core, area?: Box): void {
 }
 
 /** Expand around the current view's centre, retaining its context and every node's position. */
-export function includeNewNodes(cy: Core, ids: readonly string[], reduceMotion: boolean): void {
+export function includeNewNodes(
+  cy: Core,
+  ids: readonly string[],
+  reduceMotion: boolean,
+  covered = 0,
+): void {
   const nodes = cy.nodes().filter((node) => ids.includes(node.id()));
   if (nodes.empty()) return;
   const box = nodes.renderedBoundingBox({ includeLabels: true, includeOverlays: false });
-  const width = cy.width();
+  const width = cy.width() - covered;
   const height = cy.height();
   if (box.x1 >= 0 && box.y1 >= 0 && box.x2 <= width && box.y2 <= height) return;
   if (width <= PADDING * 2 || height <= PADDING * 2) return;
@@ -286,6 +294,7 @@ export function includeNewNodes(cy: Core, ids: readonly string[], reduceMotion: 
       },
     },
     reduceMotion,
+    covered,
   );
 }
 
@@ -318,11 +327,11 @@ export function zoomBy(cy: Core, factor: number, reduceMotion: boolean): void {
  * brought to its edge about the middle of the view, so the view's middle stays where it was meant
  * to be. The range is the person's navigation limit; no move changes it.
  */
-function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean): void {
+function moveCamera(cy: Core, camera: Camera, reduceMotion: boolean, covered = 0): void {
   cy.stop();
   const zoom = Math.min(cy.maxZoom(), Math.max(cy.minZoom(), camera.zoom));
   const scale = zoom / camera.zoom;
-  const center = { x: cy.width() / 2, y: cy.height() / 2 };
+  const center = { x: (cy.width() - covered) / 2, y: cy.height() / 2 };
   const viewport = {
     zoom,
     pan:
