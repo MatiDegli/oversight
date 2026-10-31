@@ -2932,3 +2932,17 @@ With criteria absent, the verifier returns the original run without Git I/O. The
 binds the rendered criteria source in the tested candidate; it does not defend against a
 hostile conftest or module edit, which remain covered only by current test-integrity and
 isolation checks. E2's lifecycle and E3's human confirmation remain separate fronts.
+
+### Review round 1: accepted effects on retained-run readers
+
+An unmet criterion deliberately makes the retained proposal run unverifiable through its
+example_criteria problem, even though its observed cases are preserved. We accept the resulting
+loss of review evidence: _facts.py cannot resolve parametrized integrity identities and reports
+"integrity parameter ids unavailable"; it also adds "suite N: example_criteria: <code>" and
+"suite N: incomplete retained cases", because the published cases_complete is false. _probes.py
+reports "added tests: parameter ids unavailable" for added parametrized tests. _measured.py
+declines to select proposal tests and reports "proposal test selection unavailable", so the
+measured cone is unavailable. These readers keep their existing conservative completeness rules;
+E4 does not certify a report that its required criteria could not verify. The real-harness
+test_proposal_suite_normalized_and_consistent now asserts all four effects for every covered
+normalization code, including preserved observed parameter ids and no measured probe suites.

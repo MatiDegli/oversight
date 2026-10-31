@@ -48,6 +48,7 @@ from oversight_contracts.events import (
     SuiteResult,
 )
 from oversight_contracts.examples import ExamplePin, TaskExample
+from oversight_contracts.review import ChangeFacts
 
 reserved = rules_reserved
 
@@ -377,6 +378,13 @@ async def test_verify_read_failure(h: Harness, monkeypatch, failure) -> None:
 async def test_proposal_suite_normalized_and_consistent(h: Harness, fault: str, code: str) -> None:
     tree = await h.open(1)
     rec = h.manager._ctx.state.changes["change-1"]
+    h.manager._ctx.measured_cone = True
+    old = rec.head_files["tests/test_mod.py"]
+    new = "import pytest\n" + old.replace(
+        "def test_value()", '@pytest.mark.parametrize("unused", [1])\ndef test_value(unused)'
+    ).replace("assert value() > 0", "assert value() >= 0")
+    new += '\n@pytest.mark.parametrize("n", [1])\ndef test_added(n):\n    assert value() == n\n'
+    assert await h.edit(1, "tests/test_mod.py", old, new)
     required = await install_criteria(h.manager._ctx, rec, [example()])
     read = await tree.read_text(required.path)
     if fault == "edited":
@@ -412,6 +420,20 @@ async def test_proposal_suite_normalized_and_consistent(h: Harness, fault: str, 
     )
     [error] = h.payloads(ErrorReport)
     assert error.message == f'example_criteria: {code}; example_ids=["basic"]'
+    [facts] = h.payloads(ChangeFacts)
+    assert {
+        f"suite {seq}: example_criteria: {code}",
+        f"suite {seq}: incomplete retained cases",
+        "integrity parameter ids unavailable: tests/test_mod.py::test_value",
+        "added tests: parameter ids unavailable for tests/test_mod.py::test_added",
+    } <= set(facts.problems)
+    assert any(fact.test_id is None for fact in facts.integrity if fact.path == "tests/test_mod.py")
+    assert {"tests/test_mod.py::test_value[1]", "tests/test_mod.py::test_added[1]"} <= {
+        case.test_id for case in stored.cases
+    }
+    measured = rec.measured_cones[rec.revision]
+    assert measured.problems == ("proposal test selection unavailable",)
+    assert not measured.selection and not measured.suites
 
 
 @pytest.mark.anyio
