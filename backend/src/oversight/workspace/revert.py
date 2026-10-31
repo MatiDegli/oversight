@@ -75,6 +75,8 @@ class InverseCandidate:
 
 
 def _require_locks(workspace: Workspace, agent_id: str) -> None:
+    if not valid_agent_id(agent_id):
+        raise InverseError("invalid original agent id")
     if not (
         workspace.operations.holds(main=True) and workspace.operations.holds(agent_id=agent_id)
     ):
@@ -89,8 +91,8 @@ def _expected(workspace: Workspace, h: str, c: str, t: str) -> _Expected:
     return expected
 
 
-async def _cleanup(workspace: Workspace, item: InverseCandidate) -> None:
-    """Retry interrupted cleanup in the owner task, then propagate cancellation."""
+async def _cleanup(workspace: Workspace, item: InverseCandidate) -> bool:
+    """Retry interrupted cleanup in the owner task and report deferred cancellation."""
     cancelled = False
     root = item.tree.root
     for step in range(3):
@@ -141,8 +143,7 @@ async def _cleanup(workspace: Workspace, item: InverseCandidate) -> None:
             break
     if item.cleaned:
         workspace.git_identities.pop(root, None)
-    if cancelled:
-        raise asyncio.CancelledError
+    return cancelled
 
 
 @asynccontextmanager
@@ -161,8 +162,6 @@ async def prepare_inverse(
     directory and worktree registration have all been verified absent.
     """
     _require_locks(workspace, agent_id)
-    if not valid_agent_id(agent_id):
-        raise InverseError("invalid original agent id")
     if (
         not all(OID.fullmatch(value) for value in (main_commit, inverse_tree))
         or not message.strip()
@@ -208,6 +207,7 @@ async def prepare_inverse(
     item = InverseCandidate(
         _InverseTree(workspace, root, agent_id, "", main_commit), main_commit, inverse_tree, commit
     )
+    completed = False
     try:
         await offload(partial(ensure_plain_dir, workspace.runtime_root, root.parent))
         await workspace.git_ok(
@@ -221,8 +221,10 @@ async def prepare_inverse(
         )
         await offload(item.tree.git_identity.verify_registration)
         yield item
+        completed = True
     finally:
-        await _cleanup(workspace, item)
+        if await _cleanup(workspace, item) and completed:
+            raise asyncio.CancelledError
 
 
 def inverse_suite_problem(run: SuiteRun, *, tree: str, cleaned: bool) -> str | None:
@@ -349,7 +351,10 @@ async def classify_inverse(
 ) -> InverseClassification:
     """Settle only H/C from Git facts, with finite retries and no second CAS.
 
-    Interrupted Git has already terminated when Workspace.git returns/raises.
+    Cancellation can raise after bounded cleanup without reaping the Git child.
+    An interrupted update-ref may therefore publish while settlement is reading
+    evidence: unknown is required unless the ref and checkout are both verified.
+    Even untouched is only an observation, not proof that a live child cannot land.
     Repeated cancellation is deferred in this owner task until settlement ends.
     """
     expected = _expected(workspace, main_commit, inverse_commit, inverse_tree)
@@ -369,6 +374,23 @@ async def classify_inverse(
     return result
 
 
+async def _settled_outcome(
+    workspace: Workspace, expected: _Expected, timeout_s: float
+) -> InverseOutcome:
+    settled = await classify_inverse(
+        workspace,
+        main_commit=expected.main_commit,
+        inverse_commit=expected.inverse_commit,
+        inverse_tree=expected.inverse_tree,
+        timeout_s=timeout_s,
+    )
+    return (
+        InverseOutcome("landed", expected.inverse_commit)
+        if settled == "landed"
+        else InverseOutcome("unknown")
+    )
+
+
 async def apply_inverse(
     workspace: Workspace,
     *,
@@ -386,6 +408,8 @@ async def apply_inverse(
     deadline = time.monotonic() + timeout_s
     async with lease_until(workspace.git_lease(), deadline):
         head = await _head(workspace, deadline)
+        if head == inverse_commit:
+            return await _settled_outcome(workspace, expected, timeout_s)
         index = await _checkout_tree(workspace, deadline)
         head_tree = (await _git(workspace, deadline, "rev-parse", f"{head}^{{tree}}")).strip()
         if index != head_tree:
@@ -393,8 +417,6 @@ async def apply_inverse(
         if head not in (main_commit, inverse_commit):
             return InverseOutcome("main_moved", head)
         await _verify_commit(workspace, expected, deadline)
-        if head == inverse_commit:
-            return InverseOutcome("landed", inverse_commit)
         try:
             result = await workspace.git(
                 workspace.main,
@@ -413,6 +435,7 @@ async def apply_inverse(
                 if (
                     not result.timed_out
                     and mismatch
+                    and mismatch[1] != inverse_commit
                     and await _head(workspace, deadline) == mismatch[1]
                 ):
                     return InverseOutcome("main_moved", mismatch[1])
@@ -435,15 +458,4 @@ async def apply_inverse(
                 raise
         except (OSError, WorkspaceError, TimeoutError):
             pass
-        settled = await classify_inverse(
-            workspace,
-            main_commit=main_commit,
-            inverse_commit=inverse_commit,
-            inverse_tree=inverse_tree,
-            timeout_s=timeout_s,
-        )
-        return (
-            InverseOutcome("landed", inverse_commit)
-            if settled == "landed"
-            else InverseOutcome("unknown")
-        )
+        return await _settled_outcome(workspace, expected, timeout_s)
