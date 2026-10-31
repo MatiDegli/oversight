@@ -14,6 +14,27 @@ _CAUSES = {
     "method or class not probed": r"unsupported node kind",
     "probe unavailable": r"probe unavailable",
     "version unavailable": r"version unavailable",
+    **{
+        phrase: re.escape(phrase)
+        for phrase in (
+            "default value not literal",
+            "no literal value for a required argument",
+            "no literal receiver",
+            "signature not supported",
+            "async or generator",
+            "side effect: global or nonlocal assignment",
+            "side effect: environment access",
+            "side effect: randomness",
+            "side effect: time access",
+            "side effect: network access",
+            "side effect: print or input",
+            "side effect: file access",
+            "side effect: property getter effects",
+            "input not representable",
+            "repeat incomplete",
+            "probe failed",
+        )
+    },
     "comparison incomplete": r"(?:behavior|caller) comparison incomplete",
     "repetition incomplete": r"(?:caller )?comparison or repetition incomplete",
     "observations not retained": r"differing observations not retained",
@@ -75,10 +96,18 @@ def cause(reason: str) -> str:
     if re.fullmatch(_CAUSES["review deadline"], reason):
         return "review deadline"
     if not reason.startswith("isolation unavailable: "):
-        reason = reason.removeprefix("review cards: ").rsplit(": ", 1)[-1]
+        reason = re.sub(r"^\S+: ", "", reason.removeprefix("review cards: "), count=1)
     return next(
         (name for name, pattern in _CAUSES.items() if re.fullmatch(pattern, reason)), "other"
     )
+
+
+def reason_causes(reason: str) -> set[str]:
+    """Match whole reasons first, then collect each part of a joined public reason."""
+    whole = cause(reason)
+    if whole != "other":
+        return {whole}
+    return {cause(part) for part in reason.split("; ")}
 
 
 def _question_sources(rows: list[DetectionEvidence]) -> dict[str, int]:
@@ -113,7 +142,9 @@ def repetition(records: list[Record], answers: dict[str, str]) -> dict:
     for answer in ("unasked_difference", "only_asked"):
         selected = [r for r in rows if answers.get(r.patch_id) == answer]
         causes = Counter(
-            name for r in selected for name in {cause(reason) for reason in r.unavailable}
+            name
+            for r in selected
+            for name in {name for reason in r.unavailable for name in reason_causes(reason)}
         )
         groups[answer] = {
             "denominator": 10,

@@ -207,6 +207,27 @@ def test_review_timeout_is_distinct_from_decision_timeout():
         ("unsupported node kind", "method or class not probed"),
         ("probe unavailable", "probe unavailable"),
         ("version unavailable", "version unavailable"),
+        *[
+            (phrase, phrase)
+            for phrase in (
+                "default value not literal",
+                "no literal value for a required argument",
+                "no literal receiver",
+                "signature not supported",
+                "async or generator",
+                "side effect: global or nonlocal assignment",
+                "side effect: environment access",
+                "side effect: randomness",
+                "side effect: time access",
+                "side effect: network access",
+                "side effect: print or input",
+                "side effect: file access",
+                "side effect: property getter effects",
+                "input not representable",
+                "repeat incomplete",
+                "probe failed",
+            )
+        ],
         ("behavior comparison incomplete", "comparison incomplete"),
         ("caller comparison incomplete", "comparison incomplete"),
         ("comparison or repetition incomplete", "repetition incomplete"),
@@ -238,6 +259,38 @@ def test_reason_causes_strip_node_ids_and_counts(reason, expected):
         if reason.startswith("isolation unavailable") and prefix:
             continue  # Runtime emits isolation reasons without a node or review-card prefix.
         assert reporting.cause(prefix + reason) == expected
+        assert reporting.reason_causes(prefix + reason) == {expected}
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        (
+            "no literal receiver; signature not supported",
+            {"no literal receiver", "signature not supported"},
+        ),
+        ("side effect: randomness; unknown reason", {"side effect: randomness", "other"}),
+    ],
+)
+def test_joined_reason_causes(reason, expected):
+    for prefix in ("", "shop.cart:Cart.remove: ", "review cards: shop.cart:Cart.remove: "):
+        assert reporting.reason_causes(prefix + reason) == expected
+
+
+def test_joined_reason_counts_each_cause_once_per_row():
+    row = record(1, unavailable=True)
+    assert row.result is not None and row.result.detection is not None
+    row.result.detection.unavailable = [
+        "shop.cart:Cart.remove: side effect: randomness; no literal receiver",
+        "shop.cart:Cart.add: no literal receiver",
+        "side effect: randomness; side effect: randomness",
+    ]
+    group = repetition([row], ANSWERS)["classification"]["groups"]["unasked_difference"]
+    assert list(group["unavailable_causes"].items()) == [
+        ("no literal receiver", 1),
+        ("side effect: randomness", 1),
+    ]
+    assert group["unavailable_questions"] == 1
 
 
 @pytest.mark.parametrize(
