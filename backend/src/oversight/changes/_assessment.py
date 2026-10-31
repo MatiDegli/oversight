@@ -120,6 +120,10 @@ class RulesScheduler:
             if self.run_started_seq is None:
                 self.run_started_seq = event.seq
                 self.table_receipt = stored
+            ledger = self.ctx.ports.spend_ledger
+            if ledger is not None and ledger.state is None:
+                # Startup's display fallback is not durable evidence of zero spend.
+                return
             total, budget = event.payload.budget.spent_usd, event.payload.budget.budget_usd
         elif event.type == "usage.tick":
             total, budget = event.payload.spent_usd, event.payload.budget_usd

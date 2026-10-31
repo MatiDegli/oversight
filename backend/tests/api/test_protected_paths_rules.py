@@ -249,6 +249,7 @@ async def test_table_capture_without_durable_ledger_state(tmp_path, monkeypatch)
         assert live._manager is not None and live.ledger.state is None
         scheduler = live._manager._ctx.assessment
         assert scheduler.table_receipt is not None
+        assert scheduler.spend_receipt is None and scheduler.spend_receipt_total is None
         await live.start(StartAgent(task="Edit the file", slot="A"))
         await until(live, "change.reviewed")
         w = scheduler.waits["change-1"]
