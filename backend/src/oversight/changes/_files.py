@@ -236,14 +236,17 @@ async def main_blocked(ctx: ChangeContext) -> str | None:
 async def publish_main(ctx: ChangeContext, head: str, cause: DeltaCause) -> None:
     """M3: scan main at `head` and send the one delta from the graph the UI holds, then move
     `snapshot` to it with no await between. A rescan sends none when nothing moved."""
+    ctx.assessment.main_changed(head)
     new = await ctx.scan(head)
     old = ctx.state.snapshot
     delta = rescan_delta(old, new, head) if cause == "rescan" else main_delta(old, new, head, cause)
     if delta is None:
+        ctx.assessment.main_delivered(ctx.state.snapshot.commit)
         return
     delivery.supersede_pending(ctx)
     await ctx.publish(delta)
     ctx.state.snapshot = with_positions(new, old)
+    ctx.assessment.main_delivered(ctx.state.snapshot.commit)
 
 
 async def check_main(ctx: ChangeContext) -> bool | None:

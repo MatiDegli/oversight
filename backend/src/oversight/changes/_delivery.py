@@ -48,6 +48,7 @@ async def record_merge(
 
 async def project_merge(ctx: ChangeContext, rec: ChangeRecord, post: str) -> None:
     """Shared graph projection; a scan failure preserves the previous snapshot."""
+    ctx.assessment.main_changed(post)
     try:
         new = await ctx.scan(post)
     except Exception as error:
@@ -269,6 +270,7 @@ def receipt(ctx: ChangeContext, rec: ChangeRecord, name: str, sending: asyncio.T
     rec.sent.add(name)
     if name == "delta" and rec.next_snapshot is not None:
         ctx.state.snapshot = rec.next_snapshot
+        ctx.assessment.main_delivered(ctx.state.snapshot.commit)
 
 
 async def drain_pending(ctx: ChangeContext) -> None:

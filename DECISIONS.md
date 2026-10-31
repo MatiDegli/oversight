@@ -2739,3 +2739,27 @@ and node limits. A proven reached edit clears even with other uncertainty. Execu
 test are not recorded on main, so call edges are the only source. With the same failure and an
 exhaustive miss, `unchanged_failure` asks the person; uncertainty uses `reach_unknown`. Both
 leave the automatic round unused. A clear verdict follows the existing revision path unchanged.
+
+## 2026-10-31 — Idle rules waits follow verified main through graph delivery
+
+Confirmed main commits park eligible, unconsumed rules waits in ready or working state;
+only delivery of the latest announced commit into the graph snapshot renews their generation.
+Merge projection, person saves/rescans (including unchanged recovery), and Revert notify the
+same synchronous commit/delivery ports. The first absolute evidence deadline survives every
+renewal; a parked ready wait starts its deadline when first awakened and expires with the
+existing policy_invalid notice if delivery never arrives.
+
+Reason: parking replaces the plan's invalidation so graph scan or delivery failure cannot
+silently cancel the deadline. Only immutable proposal-source captures with identical
+revision/base/head survive: facts, their inventory and measurements, and protected-path
+captures whose committed receipts are revalidated at use. Main-dependent combined suites
+are reselected against the new snapshot; latest assessment, spend pin, terminal receipt,
+and evaluation/timer tasks are discarded. No model run or agent merge/rebase is needed.
+Renewal only schedules assessment; the activation latch stays closed and no wire contract
+changes. Revert uses its own verified-commit and snapshot-receipt hooks. Consumed attempts,
+attempt keys, and queued/in-flight renewal belong to F5b. Unannounced snapshot moves retain
+the existing terminal main_moved behavior.
+`park` safely cancels an in-flight evaluation only because production publishes a terminal
+through `ReviewCards.publish` -> `ctx.whole` (`_review_cards.py:216-218`), which completes
+the publish and its `rules_received`; F5b must preserve that behavior or route the terminal
+publish through `ctx.whole` itself.
