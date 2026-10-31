@@ -16,7 +16,7 @@ it does not settle and does not repeat it.
   one gate to the model API, and the web framework kept to the HTTP layer. ESLint's built-in rules
   check the same kind of boundary in the frontend.
 - Contracts v1: the eleven events of AGENTS.md, unchanged in name, with exact payloads; its
-  thirteen commands, three of them answering 501 until level 3, plus the event stream and a new
+  thirteen commands, the three level-3 commands now answering 202, plus the event stream and a new
   `GET /health`; one error format; stable ids for runs, agents, changes, nodes and edges.
 - One protocol for live and replay: the UI applies the run's event log from `seq` 1 with one pure
   reducer, and resumes from the last `seq` it applied.
