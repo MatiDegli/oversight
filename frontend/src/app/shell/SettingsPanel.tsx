@@ -66,7 +66,7 @@ export function SettingsPanel({
                 if (event.detail === 0 || marked || pending || !current) return;
                 onSetMergeMode?.(mode);
               }}
-              className={`flex min-w-0 items-start gap-2.5 rounded-card border p-4 text-start ${marked ? "border-muted bg-page-raised" : "border-border bg-page"} enabled:hover:border-muted ${focusRing}`}
+              className={`group flex min-w-0 items-start gap-2.5 rounded-card border p-4 text-start ${marked ? "border-muted bg-page-raised" : "border-border bg-page"} aria-disabled:cursor-default aria-disabled:text-faint aria-[disabled=false]:hover:border-muted ${focusRing}`}
             >
               <span
                 aria-hidden="true"
@@ -76,7 +76,9 @@ export function SettingsPanel({
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-bold">{title}</span>
-                <span className="mt-1.5 block text-sm leading-relaxed text-muted">{body}</span>
+                <span className="mt-1.5 block text-sm leading-relaxed text-muted group-aria-disabled:text-faint">
+                  {body}
+                </span>
               </span>
             </button>
           );

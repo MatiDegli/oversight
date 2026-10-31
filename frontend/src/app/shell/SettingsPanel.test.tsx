@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ReactNode, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
@@ -43,6 +44,10 @@ it("acts once on an unmarked pointer click, never on mount, marked or detail-zer
   });
   expect(onSetMergeMode).not.toHaveBeenCalled();
   const [ask, rules] = buttons(tree);
+  for (const card of buttons(tree)) {
+    expect(card.props.onKeyDown).toBeUndefined();
+    expect(card.props.onKeyUp).toBeUndefined();
+  }
   const click = (button: typeof ask, detail: number) => {
     (button?.props.onClick as (e: { detail: number }) => void)({ detail });
   };
@@ -87,4 +92,20 @@ it("shows a refusal until revision changes and labels read-only replay", () => {
   expect(renderToStaticMarkup(<SettingsPanel state={state} />)).toContain(
     "Setting the merge mode is not available in a replay.",
   );
+});
+it("explains the activation refusal without private front labels", () => {
+  const architecture = readFileSync(
+    new URL("../../../../ARCHITECTURE.md", import.meta.url),
+    "utf8",
+  );
+  expect(architecture.replace(/\s+/g, " ")).toContain(
+    "until rules mode is activated, PUT merge_when_safe returns 409",
+  );
+  expect(architecture).not.toMatch(/\bF10\b/);
+});
+it("records the settings decisions without external questionnaire labels", () => {
+  const decisions = readFileSync(new URL("../../../../DECISIONS.md", import.meta.url), "utf8");
+  const entry = decisions.split("## 2026-10-31 — Settings shows the merge mode only")[1];
+  expect(entry).toBeDefined();
+  expect(entry).not.toMatch(/\bQ\d+:/);
 });

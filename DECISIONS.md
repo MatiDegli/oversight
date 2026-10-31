@@ -2636,15 +2636,15 @@ normalization for task scope; every printed rate retains its explicit denominato
 
 ## 2026-10-31 — Settings shows the merge mode only
 
-The maintainer accepted packet B item 6 at 12:47 ART. Q1: a refused mode change shows
+The maintainer accepted packet B item 6 at 12:47 ART. A refused mode change shows
 one inline line below the cards, with an X icon, the server's words and role="alert";
-no toast. Q2: Ask me's second sentence is dropped. Q3: Merge alone when safe reads
+no toast. Ask me's second sentence is dropped. Merge alone when safe reads
 "A change merges by itself only when every rule holds. Otherwise it waits for you."
-Q4: the rules checklist waits for a backed source. Q5: no left navigation, repository
-label, Saved or scope line; Merge mode fills the tab. Q6: both cards disable in flight,
-with no words. Q7: replay cards are read-only, mark the recorded mode, and show
+The rules checklist waits for a backed source. No left navigation, repository
+label, Saved or scope line; Merge mode fills the tab. Both cards disable in flight,
+with no words. Replay cards are read-only, mark the recorded mode, and show
 "Setting the merge mode is not available in a replay." A null mode marks neither card
-and omits the status segment. Q13: the cards act only on their own pointer click;
+and omits the status segment. The cards act only on their own pointer click;
 Enter and Space send nothing, with no shortcut, palette command or confirmation.
 Item 8's accepted plan asks for a mode toggle that shows the server's 409 reason. Until rules
 mode is activated, the live Merge alone when safe choice presents that refusal.

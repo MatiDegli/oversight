@@ -285,8 +285,8 @@ worktree, so review decisions and review writes remain refused. The wait holds n
 decisions retain main-then-worktree lock order. Stop closes the control and cancels the wait,
 then follows the existing discard path: stopped status before the rejected resolution.
 
-`GET /impact` and plan routes still return 501. Merge-mode GET and PUT are live; before F10,
-PUT merge_when_safe returns 409. Merge-mode routes return 501 only in a replay.
+`GET /impact` and plan routes still return 501. Merge-mode GET and PUT are live; until rules
+mode is activated, PUT merge_when_safe returns 409. Merge-mode routes return 501 only in a replay.
 The 1.4 reservations also include tree, history, queue, leads, and change
 review. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
 The Revert route answers 202 after synchronous admission, loads its target from this run's

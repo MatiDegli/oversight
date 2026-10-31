@@ -81,6 +81,37 @@ async function mode(page: Page, mode: "ask_me" | "merge_when_safe", revision: nu
 }
 const rules = (page: Page) =>
   page.getByRole("button", { name: "Merge alone when safe", exact: false });
+async function disabledCards(page: Page) {
+  const cards = page.getByRole("region", { name: "Merge mode", exact: true }).getByRole("button");
+  for (const card of await cards.all()) {
+    await check(card).toBeDisabled();
+    await page.mouse.move(0, 0);
+    const before = await card.evaluate((element) => getComputedStyle(element).borderColor);
+    await card.hover({ force: true });
+    const styles = await card.evaluate((element) => {
+      const text = element.lastElementChild;
+      if (!text) throw new Error("Missing card text");
+      return {
+        border: getComputedStyle(element).borderColor,
+        cursor: getComputedStyle(element).cursor,
+        colors: [...text.children].map((child) => getComputedStyle(child).color),
+        faint: getComputedStyle(element).getPropertyValue("--faint").trim(),
+      };
+    });
+    expect(styles.border).toBe(before);
+    expect(styles.cursor).toBe("default");
+    // Resolve the token through the browser, including each theme's color format.
+    const faint = await card.evaluate((element, color) => {
+      const probe = document.createElement("span");
+      probe.style.color = color;
+      element.append(probe);
+      const resolved = getComputedStyle(probe).color;
+      probe.remove();
+      return resolved;
+    }, styles.faint);
+    expect(styles.colors).toEqual([faint, faint]);
+  }
+}
 async function shot(page: Page, name: string, suffix: string) {
   const status = page.getByLabel("Status line");
   await check(status).not.toContainText("Connection lost");
@@ -263,6 +294,7 @@ it.each([
         // aria-disabled retains focus and still rejects additional pointer clicks.
         await rules(page).dispatchEvent("click", { detail: 1 });
         expect(requests).toBe(1);
+        await disabledCards(page);
         await shot(page, "mode-settings-pending", suffix);
         release?.();
         await check(page.getByRole("alert").filter({ hasText: refusal })).toBeVisible();
@@ -281,6 +313,7 @@ it.each([
         await check(
           replay.getByText("Setting the merge mode is not available in a replay."),
         ).toBeVisible();
+        await disabledCards(replay);
         await rules(replay).click({ force: true });
         await rules(replay).focus();
         await replay.keyboard.press("Enter");
