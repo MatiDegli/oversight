@@ -265,8 +265,9 @@ unstable, not an established change.
 The core landed in `174c0ce`; contracts 1.5.0 (`649ff0d`) reserved its optional per-node evidence,
 including unstable/not-probed outcomes. Publication is wired behind `OVERSIGHT_BEHAVIOR_DIFF`
 (`e72fcc7`, `backend/src/oversight/changes/_proposal.py:328`). Shared-input comparison landed in
-`647d545`; review rows and per-node count chips with up to eight sample rows are built (`frontend/node-chip`). Reuse the demo interpreter, asynchronous bounded
-runner, guarded base checkout and C3 session isolation
+`647d545`; review rows and per-node count chips with up to eight sample rows are built
+(`frontend/node-chip`). Reuse the demo interpreter, asynchronous bounded runner, guarded base
+checkout and C3 session isolation
 (`19443e8`; `backend/src/oversight/workspace/capability.py:116`). Never fall back to an open network.
 Apply time/output/input caps across the whole probe, not a full suite allowance per input. Write
 fresh implementation; exploratory prototypes supply no product code.

@@ -90,4 +90,8 @@ it("keeps two changes on one node in change-id order with neutral agent letters"
     "A 9 of 10 differ",
     "B 9 of 10 differ",
   ]);
+  expect(selectNodeChips({ ...two, agents: {} }, null).map((chip) => chip.text)).toEqual([
+    "a 9 of 10 differ",
+    "a 9 of 10 differ",
+  ]);
 });

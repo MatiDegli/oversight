@@ -151,6 +151,7 @@ async function reviewFlow(page: Page, name: string) {
   await check(panel(page)).toBeVisible();
   await ready(page);
   await anchored(page);
+  await check(chip(page)).not.toHaveAttribute("aria-controls");
   await chip(page).focus();
   const before = await geometry(page);
   await chip(page).press("Enter");
@@ -158,12 +159,14 @@ async function reviewFlow(page: Page, name: string) {
   await check(chip(page)).toHaveAttribute("aria-expanded", "true");
   await check(samples(page).locator("li")).toHaveCount(8);
   await check(samples(page).getByText("8 of 9 differing inputs shown")).toBeVisible();
+  expect(await samples(page).locator("footer .font-mono").allTextContents()).toEqual(["8", "9"]);
   await check(samples(page).locator("button, input, textarea, [tabindex]")).toHaveCount(0);
   await clamped(page);
   expect(await geometry(page)).toEqual(before);
   await check(chip(page)).toBeFocused();
   await capture(page, `review-${name}`);
   await chip(page).press("Escape");
+  await check(chip(page)).not.toHaveAttribute("aria-controls");
   await check(samples(page)).toHaveCount(0);
   await check(panel(page)).toBeVisible();
   await check(chip(page)).toBeFocused();
@@ -245,6 +248,126 @@ it.each([
   120000,
 );
 
+it("excludes drawn labels, overlays, underlays and edges from body boxes", async () => {
+  const page = await browser.newPage();
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    const cytoscapeModule = fileURLToPath(
+      new URL("../../node_modules/cytoscape/dist/cytoscape.esm.mjs", import.meta.url),
+    );
+    const fixture = await server.transformIndexHtml(
+      "/probe-box.html",
+      `<!doctype html><html><body>
+      <div id="graph" style="width:600px;height:400px"></div>
+      <script type="module">
+        import cytoscape from "/@fs/${cytoscapeModule}";
+        import { exposeProbe } from "/src/graph/probe.ts";
+        const host = document.getElementById("graph");
+        const cy = cytoscape({ container: host, layout: { name: "preset" },
+          elements: [
+            { data: { id: "a" }, position: { x: 100, y: 100 } },
+            { data: { id: "b" }, position: { x: 240, y: 200 } },
+            { data: { id: "edge", source: "a", target: "b" } }
+          ],
+          style: [{ selector: "node", style: {
+            width: 80, height: 40, label: "data(id)", "text-valign": "top",
+            "overlay-opacity": 0.5, "overlay-padding": 10,
+            "underlay-opacity": 0.5, "underlay-padding": 20
+          } }]
+        });
+        exposeProbe(host, cy);
+        cy.zoom(2); cy.pan({ x: 10, y: 20 });
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          const node = cy.$id("a");
+          window.bodyBoxes = {
+            body: host.oversightGraph.renderedBox("a"),
+            label: node.renderedBoundingBox({ includeOverlays: false, includeUnderlays: false }),
+            overlay: node.renderedBoundingBox({ includeLabels: false, includeUnderlays: false }),
+            decorations: node.renderedBoundingBox({ includeLabels: false }),
+            edge: host.oversightGraph.renderedBox("edge")
+          };
+          cy.destroy();
+        }));
+      </script></body></html>`,
+    );
+    await page.route("**/probe-box.html", (route) =>
+      route.fulfill({ contentType: "text/html", body: fixture }),
+    );
+    await page.goto(`${url}probe-box.html`);
+    await check
+      .poll(async () => {
+        expect(errors).toEqual([]);
+        return page.evaluate(() => "bodyBoxes" in window);
+      })
+      .toBe(true);
+    const boxes = await page.evaluate(
+      () =>
+        Reflect.get(window, "bodyBoxes") as {
+          body: { x1: number; y1: number; x2: number; y2: number; w: number; h: number };
+          label: { y1: number };
+          overlay: { w: number };
+          decorations: { w: number };
+          edge: null;
+        },
+    );
+    // Preset body is 80 by 40 at (100, 100), plus Cytoscape's 1px antialias pad.
+    expect(boxes.body).toEqual({ x1: 128, y1: 178, x2: 292, y2: 262, w: 164, h: 84 });
+    expect(boxes.label.y1).toBeLessThan(boxes.body.y1);
+    expect(boxes.overlay.w).toBeGreaterThan(boxes.body.w);
+    expect(boxes.decorations.w).toBeGreaterThan(boxes.body.w);
+    expect(boxes.edge).toBeNull();
+  } finally {
+    await page.close();
+  }
+});
+
+it("keeps placement and dismissal subscriptions stable across usage ticks", async () => {
+  await withPage("dark", 1280, false, async (page) => {
+    await page.evaluate(() => {
+      window.nodeChipTest.emit(21);
+    });
+    await page.getByRole("button", { name: "Review change", exact: true }).click();
+    await chip(page).click();
+    await check(samples(page)).toBeVisible();
+    await ready(page);
+    const changes = await page.evaluate(async () => {
+      const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+      if (!host) throw new Error("Missing graph");
+      const changes: string[] = [];
+      const restore: (() => void)[] = [];
+      const targets: EventTarget[] = [host, document];
+      for (const target of targets) {
+        for (const method of ["addEventListener", "removeEventListener"] as const) {
+          const original = target[method].bind(target);
+          target[method] = function (...args: Parameters<typeof original>) {
+            if (["graphrender", "keydown", "pointerdown"].includes(args[0]))
+              changes.push(`${method}:${args[0]}`);
+            original(args[0], args[1], args[2]);
+          };
+          restore.push(() => {
+            target[method] = original;
+          });
+        }
+      }
+      try {
+        for (let tick = 0; tick < 3; tick++) {
+          window.nodeChipTest.emit(17);
+          await new Promise(requestAnimationFrame);
+        }
+        return changes;
+      } finally {
+        restore.forEach((restore) => {
+          restore();
+        });
+      }
+    });
+    expect(changes).toEqual([]);
+    await check(samples(page)).toBeVisible();
+    await check(chip(page)).toBeFocused();
+  });
+});
+
 it("places the captured graph evidence beside its approved sketches", async () => {
   const page = await browser.newPage({ viewport: { width: 3840, height: 1080 } });
   try {
@@ -278,15 +401,35 @@ it("places the captured graph evidence beside its approved sketches", async () =
   }
 });
 
-it("keeps long values readable with the keyboard and handles empty samples", async () => {
-  await withPage("dark", 1920, false, async (page) => {
+it.each([1920, 1280])("keeps long values readable without keyboard stops at %i", async (width) => {
+  await withPage("dark", width, false, async (page) => {
     await page.evaluate(() => {
       window.nodeChipTest.emit(21);
       window.nodeChipTest.amend("long");
     });
+    await page.getByRole("button", { name: "Review change", exact: true }).click();
+    await ready(page);
     await chip(page).press("Enter");
     await check(samples(page)).toBeVisible();
     await clamped(page);
+    // Test descendants directly, then real Tab navigation for implicit scroller focus.
+    expect(
+      await samples(page).evaluate((popover) => {
+        const focused: string[] = [];
+        for (const element of popover.querySelectorAll<HTMLElement>("*")) {
+          element.focus({ preventScroll: true });
+          if (document.activeElement === element) focused.push(element.tagName);
+        }
+        return focused;
+      }),
+    ).toEqual([]);
+    await check(chip(page)).toBeFocused();
+    for (let tab = 0; tab < 8; tab++) {
+      await page.keyboard.press("Tab");
+      expect(
+        await samples(page).evaluate((popover) => popover.contains(document.activeElement)),
+      ).toBe(false);
+    }
     expect(await samples(page).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     for (const suffix of ["before", "after"])
       expect(

@@ -7,6 +7,26 @@ import { selectNodeChips } from "./nodeChip";
 import type { NodeChip } from "./nodeChip";
 import type { GraphProbeHost } from "./probe";
 
+/** Cache on evidence inputs; ticks and equivalent lit sets keep effects attached. */
+function createChipSelector() {
+  let inputs: readonly unknown[] = [];
+  let chips: NodeChip[] = [];
+  return (state: State, litIds: readonly string[] | null) => {
+    const next = [
+      state.changes,
+      state.changeFacts,
+      state.graph,
+      state.agents,
+      JSON.stringify(litIds),
+    ];
+    if (!next.every((value, index) => value === inputs[index])) {
+      chips = selectNodeChips(state, litIds);
+      inputs = next;
+    }
+    return chips;
+  };
+}
+
 /** Only changed rounded geometry writes styles, so the field's overlay observer stays quiet. */
 function place(element: HTMLElement, x: number, y: number, visible: boolean) {
   const next = `translate(${String(Math.round(x))}px, ${String(Math.round(y))}px)`;
@@ -96,6 +116,8 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
     <section
       id={id}
       data-chip-popover
+      // Chromium otherwise adds overflowing scrollers to sequential keyboard navigation.
+      tabIndex={-1}
       aria-label={`${chip.label} behavior samples`}
       className="frosted graph-text-shield absolute left-0 top-0 max-h-[calc(100%-16px)] w-[440px] max-w-[calc(100%-16px)] overflow-auto rounded-(--radius-card) border border-border p-4 text-(length:--caption-size) text-text"
       style={{ visibility: "hidden" }}
@@ -129,7 +151,11 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
       </ol>
       {(chip.footer || chip.limitation) && (
         <footer className="mt-2 text-muted">
-          {chip.footer && <p>{chip.footer}</p>}
+          {chip.footer && (
+            <p>
+              <Count text={chip.footer} />
+            </p>
+          )}
           {chip.limitation && <p className="wrap-anywhere">{chip.limitation}</p>}
         </footer>
       )}
@@ -140,7 +166,8 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
 export function NodeChips({ state, litIds }: { state: State; litIds: readonly string[] | null }) {
   const root = useRef<HTMLDivElement>(null);
   const id = useId();
-  const chips = useMemo(() => selectNodeChips(state, litIds), [state, litIds]);
+  const selectChips = useMemo(() => createChipSelector(), []);
+  const chips = selectChips(state, litIds);
   const groups = useMemo(() => {
     const grouped = new Map<string, NodeChip[]>();
     for (const chip of chips) grouped.set(chip.nodeId, [...(grouped.get(chip.nodeId) ?? []), chip]);
@@ -197,7 +224,9 @@ export function NodeChips({ state, litIds }: { state: State; litIds: readonly st
               className={`h-[22px] shrink-0 cursor-pointer whitespace-nowrap rounded-(--radius-control) border border-border bg-ground px-2 text-(length:--caption-size) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text ${chip.kind === "varied" ? "font-normal text-muted" : "font-(--label-weight) text-text"}`}
               aria-label={`${chip.text}, ${chip.label}`}
               aria-expanded={openKey === chip.key}
-              aria-controls={`${id}-${encodeURIComponent(chip.key)}`}
+              aria-controls={
+                openKey === chip.key ? `${id}-${encodeURIComponent(chip.key)}` : undefined
+              }
               onClick={(event) => {
                 event.currentTarget.focus({ preventScroll: true });
                 setOpen((current) => (current === chip.key ? null : chip.key));

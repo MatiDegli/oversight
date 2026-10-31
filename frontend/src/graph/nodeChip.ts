@@ -24,7 +24,7 @@ export function selectNodeChips(state: State, litIds: readonly string[] | null) 
           other.compared > 0 &&
           (other.differing > 0 || other.unstable),
       ).length > 1
-        ? (state.agents[entry.agentId]?.slot ?? entry.agentId)
+        ? (state.agents[entry.agentId]?.slot ?? entry.agentId.slice(0, 1))
         : null;
     const shown = rows.filter((row) => !row.unstable).length;
     const proposal = state.changes[entry.changeId]?.proposal;

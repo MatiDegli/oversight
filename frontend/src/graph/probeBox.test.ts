@@ -26,8 +26,25 @@ it("returns only drawn body boxes in screen pixels and notifies until disposed",
   const cy = cytoscape({
     headless: true,
     styleEnabled: true,
+    style: [
+      {
+        selector: "node",
+        style: {
+          label: "data(id)",
+          "text-valign": "top",
+          "overlay-opacity": 0.5,
+          "overlay-padding": 10,
+          "underlay-opacity": 0.5,
+          "underlay-padding": 20,
+        },
+      },
+    ],
     layout: { name: "preset" },
-    elements: [{ data: { id: "a" }, position: { x: 40, y: 50 } }, { data: { id: "b" } }],
+    elements: [
+      { data: { id: "a" }, position: { x: 40, y: 50 } },
+      { data: { id: "b" } },
+      { data: { id: "edge", source: "a", target: "b" } },
+    ],
   });
   const host = new EventTarget() as GraphProbeHost;
   let notifications = 0;
@@ -39,13 +56,16 @@ it("returns only drawn body boxes in screen pixels and notifies until disposed",
     expect(notifications).toBe(1);
     cy.zoom(2);
     cy.pan({ x: 10, y: 20 });
-    expect(host.oversightGraph?.renderedBox("a")).toEqual(
-      cy.$id("a").renderedBoundingBox({
-        includeLabels: false,
-        includeOverlays: false,
-        includeUnderlays: false,
-      }),
-    );
+    expect(host.oversightGraph?.renderedBox("a")).toEqual({
+      x1: 58,
+      y1: 88,
+      x2: 122,
+      y2: 152,
+      w: 64,
+      h: 64,
+    });
+    expect(cy.$id("a").renderedBoundingBox().w).toBeGreaterThan(64);
+    expect(host.oversightGraph?.renderedBox("edge")).toBeNull();
     expect(host.oversightGraph?.renderedBox("absent")).toBeNull();
     cy.scratch("foldAliases", new Map([["b", "a"]]));
     expect(host.oversightGraph?.renderedBox("b")).toBeNull();
