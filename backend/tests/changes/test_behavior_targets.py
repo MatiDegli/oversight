@@ -45,7 +45,7 @@ def record(before: str, after: str) -> ChangeRecord:
 def test_added_fresh_stdlib_import_keeps_module_entry(added):
     rec = record("LIMIT = 1\n", added + "LIMIT = 1\n")
     assert rec.graph.nodes_modified == ["sample"]
-    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported node kind"),)
 
 
 @pytest.mark.parametrize("docstring", ['"""Module documentation."""', '""'])
@@ -53,7 +53,7 @@ def test_added_import_before_existing_docstring_keeps_module_entry(docstring):
     before = docstring + "\ndef f(): return __doc__\n"
     rec = record(before, "from pathlib import Path\n" + before)
     assert rec.graph.nodes_modified == ["sample"]
-    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported node kind"),)
 
 
 @pytest.mark.parametrize("docstring", ['"""Module documentation."""', '""'])
@@ -62,12 +62,12 @@ def test_added_import_after_existing_docstring_keeps_module_entry(docstring):
     after = docstring + "\nfrom pathlib import Path\ndef f(): return __doc__\n"
     rec = record(before, after)
     assert rec.graph.nodes_modified == ["sample"]
-    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported node kind"),)
 
 
 def test_changed_docstring_expression_keeps_module_entry_even_when_cleaned_text_matches():
     rec = record('"""Documentation."""\n', '"""  Documentation."""\n')
-    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported node kind"),)
 
 
 @pytest.mark.parametrize(
@@ -104,7 +104,7 @@ def test_namespace_access_does_not_override_own_statement_comparison(before, edi
     rec = record(before, added + before)
     assert rec.graph.nodes_modified == ["sample"]
     expected = (
-        (FunctionBehavior("sample", reason="unsupported signature"),) if edit == "import" else ()
+        (FunctionBehavior("sample", reason="unsupported node kind"),) if edit == "import" else ()
     )
     assert targets(rec) == expected
 
@@ -134,7 +134,7 @@ def test_namespace_access_does_not_override_own_statement_comparison(before, edi
 )
 def test_added_import_cannot_rebind_a_base_module_name(before):
     rec = record(before, before + "from pathlib import Path\n")
-    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported signature"),)
+    assert targets(rec) == (FunctionBehavior("sample", reason="unsupported node kind"),)
 
 
 @pytest.mark.parametrize(
@@ -153,14 +153,14 @@ def test_added_import_cannot_rebind_a_base_module_name(before):
 )
 def test_base_identifier_in_any_scope_blocks_a_fresh_import(before):
     assert targets(record(before, before + "from pathlib import Path\n")) == (
-        FunctionBehavior("sample", reason="unsupported signature"),
+        FunctionBehavior("sample", reason="unsupported node kind"),
     )
 
 
 def test_added_import_keeps_module_entry_with_unused_parameter():
     before = "def f(Path): pass\n"
     assert targets(record(before, before + "from pathlib import Path\n")) == (
-        FunctionBehavior("sample", reason="unsupported signature"),
+        FunctionBehavior("sample", reason="unsupported node kind"),
     )
 
 
@@ -179,14 +179,14 @@ def test_added_import_keeps_module_entry_with_unused_parameter():
 )
 def test_added_import_keeps_module_entry_with_base_attribute_or_string(before, added):
     assert targets(record(before, added + before)) == (
-        FunctionBehavior("sample", reason="unsupported signature"),
+        FunctionBehavior("sample", reason="unsupported node kind"),
     )
 
 
 @pytest.mark.parametrize("before", ["value = obj.Path\n", "value = 'Path'\n"])
 def test_added_import_keeps_module_entry_with_unused_alias(before):
     assert targets(record(before, "from pathlib import Path as NewPath\n" + before)) == (
-        FunctionBehavior("sample", reason="unsupported signature"),
+        FunctionBehavior("sample", reason="unsupported node kind"),
     )
 
 
@@ -220,14 +220,14 @@ def test_added_import_keeps_module_entry_with_unused_alias(before):
 )
 def test_other_added_imports_keep_module_entry(added):
     assert targets(record("LIMIT = 1\n", added + "LIMIT = 1\n")) == (
-        FunctionBehavior("sample", reason="unsupported signature"),
+        FunctionBehavior("sample", reason="unsupported node kind"),
     )
 
 
 def test_added_import_keeps_module_entry_when_alias_was_used():
     before = "def f(): return P('data')\n"
     assert targets(record(before, "from pathlib import Path as P\n" + before)) == (
-        FunctionBehavior("sample", reason="unsupported signature"),
+        FunctionBehavior("sample", reason="unsupported node kind"),
     )
 
 
@@ -248,7 +248,7 @@ def test_added_import_keeps_module_entry_when_alias_was_used():
 )
 def test_other_module_changes_keep_the_original_reason(before, after):
     assert targets(record(before, after)) == (
-        FunctionBehavior("sample", reason="unsupported signature"),
+        FunctionBehavior("sample", reason="unsupported node kind"),
     )
 
 
@@ -301,7 +301,7 @@ def test_comment_only_class_body_change_has_no_entry():
 )
 def test_changed_class_scope_keeps_the_original_reason(before, after):
     assert targets(record(before, after)) == (
-        FunctionBehavior("sample:Box", reason="method or class (not probed yet)"),
+        FunctionBehavior("sample:Box", reason="unsupported node kind"),
     )
 
 
@@ -313,7 +313,7 @@ def test_unparseable_recorded_source_keeps_the_original_reason(side, kind):
     # Retained graph nodes can outlive a failed parse of the actual recorded source.
     getattr(rec, side)["sample.py"] = "def broken(:\n"
     node_id = "sample" if kind == "module" else "sample:Box"
-    reason = "unsupported signature" if kind == "module" else "method or class (not probed yet)"
+    reason = "unsupported node kind"
     assert targets(rec) == (FunctionBehavior(node_id, reason=reason),)
 
 
@@ -354,10 +354,10 @@ async def test_import_and_probed_function_edit_keep_module_entry(h: Harness):
     rec = h.manager._agents["agent-1"]
     assert "shop.mod" in rec.graph.nodes_modified
     module, result = rec.behavior_diffs[1].functions
-    assert module == FunctionBehavior("shop.mod", reason="unsupported signature")
+    assert module == FunctionBehavior("shop.mod", reason="unsupported node kind")
     assert result.node_id == VALUE and result.reason is None
     assert result.compared == result.differing == 1
     [facts] = h.payloads(ChangeFacts)
     assert facts.behavior_diff is not None
     assert [row.node_id for row in facts.behavior_diff] == ["shop.mod", VALUE]
-    assert facts.behavior_diff[0].not_probed == "probe unavailable"
+    assert facts.behavior_diff[0].not_probed == "unsupported node kind"

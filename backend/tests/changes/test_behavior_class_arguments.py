@@ -112,7 +112,7 @@ def test_simple_fixture_scopes_and_constructor_aliases(location):
 )
 def test_unsupported_fixture_is_refused(fixture):
     _, result = prepared("def test_price(widget):\n    f(widget)", fixture=fixture)
-    assert not result.inputs and result.reason == "unsupported signature"
+    assert not result.inputs and result.reason == "required argument has no literal value"
 
 
 @pytest.mark.parametrize(
@@ -128,7 +128,7 @@ def test_unsupported_fixture_is_refused(fixture):
 )
 def test_parent_reuses_receiver_refusals(product):
     _, result = prepared(product=product)
-    assert not result.inputs and result.reason == "unsupported signature"
+    assert not result.inputs and result.reason == "required argument has no literal value"
 
 
 def test_test_module_class_is_refused():

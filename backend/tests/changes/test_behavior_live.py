@@ -189,7 +189,7 @@ async def test_missing_isolation_refuses_workers(tmp_path, monkeypatch):
         [public] = facts.behavior_diff
         assert public.node_id == result.node_id
         assert public.compared_count == public.differing_count == 0
-        assert public.rows == [] and public.not_probed == "probe unavailable"
+        assert public.rows == [] and public.not_probed == "probe failed"
         serialized = facts.model_dump_json()
         assert "isolation unavailable" not in serialized
         assert str(s.live.workspace.tmp_dir) not in serialized

@@ -152,14 +152,12 @@ def targets(rec: "ChangeRecord") -> tuple[FunctionBehavior, ...]:
             reason = "removed (no proposed version)"
         elif node.kind in ("module", "class") and scopes.unchanged(base_nodes[node_id], node):
             continue
-        elif node.kind == "class":
-            reason = "method or class (not probed yet)"
         elif (
             node.kind not in ("function", "method")
             or not node.parent_id
             or (node.kind == "function" and nodes[node.parent_id].kind != "module")
         ):
-            reason = "unsupported signature"
+            reason = "unsupported node kind"
         found.append(FunctionBehavior(node_id, reason=reason))
     return tuple(found)
 
@@ -258,7 +256,7 @@ async def _compare_batch(
             problem = (
                 f"import failed on {'base' if before.problem else 'proposed'} side"
                 if "import failed" in (before.problem, after.problem)
-                else (before.problem or after.problem)
+                else "worker failed"
             )
             found[position] = replace(result, reason=problem)
             completed.add(node_id)
@@ -446,7 +444,7 @@ async def probe_behavior(
             if isinstance(error, TimeoutError)
             else "isolation unavailable"
             if isinstance(error, IsolationUnavailable)
-            else f"probe unavailable ({type(error).__name__})"
+            else "worker failed"
         )
         found = [
             replace(result, reason=result.reason or reason)

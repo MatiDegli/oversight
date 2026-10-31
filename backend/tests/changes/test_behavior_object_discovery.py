@@ -60,7 +60,7 @@ def files_for(test):
 def test_non_fixture_test_bindings_refuse_parent_fallback(test):
     files = files_for(test)
     result = behavior_inputs("sample", "f", files, files)
-    assert not result.inputs and result.reason == "unsupported signature"
+    assert not result.inputs and result.reason == "required argument has no literal value"
 
 
 def test_fixture_reference_in_signature_default_has_fixed_refusal():
