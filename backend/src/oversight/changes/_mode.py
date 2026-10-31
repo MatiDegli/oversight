@@ -110,7 +110,7 @@ class ModeController:
             self._disables.add(token)
             ctx.assessment.mode_changed()
         attempt = ctx.spawn(self._attempt(ctx, command, token))
-        attempt.add_done_callback(lambda task: self._attempt_done(task, token))
+        attempt.add_done_callback(lambda task: self._attempt_done(ctx, task, token))
         try:
             async with asyncio.timeout(self._timeout_s):
                 return await asyncio.shield(attempt)
@@ -166,10 +166,13 @@ class ModeController:
         self._suspended = False
         ctx.assessment.mode_changed()
 
-    def _attempt_done(self, attempt: asyncio.Task[MergeModeState], token: object | None) -> None:
+    def _attempt_done(
+        self, ctx: "ChangeContext", attempt: asyncio.Task[MergeModeState], token: object | None
+    ) -> None:
         # Retrieve failures even if a timed-out/cancelled caller never comes back.
         if not attempt.cancelled():
             attempt.exception()
-        elif token is not None:
+        elif token is not None and token in self._disables:
             # Shutdown can cancel before the coroutine enters its try/finally.
             self._disables.discard(token)
+            ctx.assessment.mode_changed()

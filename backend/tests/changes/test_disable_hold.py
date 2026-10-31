@@ -191,6 +191,39 @@ async def test_shutdown_before_attempt_starts_removes_its_own_hold(h, monkeypatc
     assert not controller._disables and not controller.authority_suspended()
 
 
+async def test_cancel_before_attempt_starts_rechecks_wait_created_during_hold(h, monkeypatch):
+    make_clock(h, monkeypatch)
+    controller = available(h)
+    await select(h, "merge_when_safe", 0)
+    await propose(h)
+    await settled(h)
+    previous = wait(h)
+    ctx = h.manager._ctx
+    spawn = ctx.spawn
+
+    def cancel_before_start(work):
+        assert controller.authority_suspended() and not previous.active
+        # Reproduce a proposal registered while the disable owns its hold, before
+        # the attempt or its cancellation callback can run.
+        ctx.assessment.proposed(previous.rec, previous.proposal, controller.snapshot(), armed=True)
+        pending = wait(h)
+        assert pending.active and pending.timer is None and pending.task is None
+        attempt = spawn(work)
+        attempt.cancel()
+        return attempt
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ctx, "spawn", cancel_before_start)
+        with pytest.raises(asyncio.CancelledError):
+            await select(h, "ask_me", 1)
+    await queued_callbacks_ran()
+    pending = wait(h)
+    assert pending is not previous
+    assert not controller._disables and not controller.authority_suspended()
+    assert not pending.active
+    assert pending.timer is None and pending.task is None
+
+
 @pytest.mark.parametrize("waiting_on", ["lock", "receipt"])
 async def test_cancelled_disable_caller_leaves_its_attempt_and_hold_alive(h, waiting_on):
     controller = available(h)
