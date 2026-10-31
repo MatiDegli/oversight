@@ -14,7 +14,7 @@ BOUNDED = Path(__file__).resolve().parents[1] / "bounded.sh"
 
 @pytest.mark.parametrize("hang", [True, False], ids=["bounded-hang", "passing-teardown"])
 def test_a_worker_names_its_slow_teardown_in_the_log(tmp_path: Path, hang: bool) -> None:
-    bound = 8 if hang else 20
+    bound = 8 if hang else 90
     (tmp_path / "pytest.ini").write_text("[pytest]\n")
     (tmp_path / "test_inner.py").write_text(
         textwrap.dedent(
@@ -92,7 +92,7 @@ def test_worker_probe_allows_startup_and_bounds_an_orphaned_teardown(
     # The integration test above still runs real xdist workers and checks their stderr.
     def run_probe(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         bound = int(command[2])
-        assert bound == (8 if hang else 20)
+        assert bound == (8 if hang else 90)
         assert isinstance(kwargs["timeout"], int)
         assert kwargs["timeout"] >= bound + 10
         source = (tmp_path / "test_inner.py").read_text()
