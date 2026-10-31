@@ -33,6 +33,7 @@ _CAUSES = {
             "input not representable",
             "repeat incomplete",
             "probe failed",
+            "recording budget reached",
         )
     },
     "comparison incomplete": r"(?:behavior|caller) comparison incomplete",

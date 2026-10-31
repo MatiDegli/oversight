@@ -52,7 +52,7 @@ async function frame(page: Page) {
     )
     .toBe(false);
 }
-async function withPage(run: (page: Page) => Promise<void>) {
+async function withPage(run: (page: Page) => Promise<void>, dockedWatch = false) {
   const page = await browser.newPage({
     viewport: { width: 1920, height: 1080 },
     reducedMotion: "reduce",
@@ -60,7 +60,15 @@ async function withPage(run: (page: Page) => Promise<void>) {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   try {
-    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    // This graph-only fixture reserves watch's docked widths when checking its 1920px start.
+    const body = dockedWatch
+      ? html.replace(
+          "margin:0",
+          "margin:0;width:calc(100vw - var(--left-rail-width) - var(--agents-panel-width))",
+        )
+      : html;
+    if (dockedWatch) expect(body).not.toBe(html);
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body }));
     await page.goto(url);
     await page.waitForFunction(
       () =>
@@ -159,7 +167,7 @@ function clearBoxes(r: Awaited<ReturnType<typeof read>>) {
       }
 }
 it(
-  "starts with folded module cards, legible labels and overlay clearance",
+  "starts with folded module cards at the whole-graph zoom with legible labels and overlay clearance",
   async () =>
     withPage(async (page) => {
       const r = await read(page);
@@ -171,7 +179,6 @@ it(
       ).toHaveAttribute("aria-pressed", "false");
       expect(r.leaves).toHaveLength(6);
       expect(r.modules).toHaveLength(6);
-      expect(r.zoom).toBe(1);
       expect(r.metrics.minLabelPx).toBeGreaterThanOrEqual(11);
       expect(r.draggable.sort()).toEqual(r.modules.map((n) => n.id).sort());
       clearBoxes(r);
@@ -197,8 +204,14 @@ it(
               b.y1 * r.zoom + r.pan.y + r.host.y < o.y + o.height &&
               b.y2 * r.zoom + r.pan.y + r.host.y > o.y,
           ).toBe(false);
-      await browserExpect(page.getByLabel("Zoom percentage")).toHaveText("100%");
-    }),
+      await browserExpect(page.getByLabel("Zoom percentage")).toHaveText(
+        `${String(Math.round(r.zoom * 100))}%`,
+      );
+      await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+      await frame(page);
+      const fitted = await read(page);
+      expect(Math.abs(r.zoom - fitted.zoom)).toBeLessThanOrEqual(0.01);
+    }, true),
   30_000,
 );
 it.each(["Fit the graph to the view", "Modules"])(

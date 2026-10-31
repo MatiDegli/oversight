@@ -5,7 +5,7 @@ import json
 import sqlite3
 from contextlib import closing
 
-from oversight.events.store import EventStore
+from oversight.events.store import EventStore, StoredEvent
 from oversight_contracts.commands import HistoryPage
 
 HISTORY_MAX_BYTES = 1024 * 1024
@@ -88,3 +88,24 @@ def _read_page(store: EventStore, after: int, limit: int, horizon: int) -> bytes
     body = prefix + b",".join(envelopes) + _suffix(next_seq)
     HistoryPage.model_validate_json(body)
     return body
+
+
+async def resolution_at(store: EventStore, change_id: str, seq: int) -> StoredEvent | None:
+    """Read an exact resolution at the acknowledged horizon of this run's log."""
+    horizon = store.last_seq
+    if not 1 <= seq <= horizon:
+        return None
+    return await asyncio.to_thread(_resolution_row, store, change_id, seq)
+
+
+def _resolution_row(store: EventStore, change_id: str, seq: int) -> StoredEvent | None:
+    with closing(sqlite3.connect(f"{store.path.resolve().as_uri()}?mode=ro", uri=True)) as db:
+        row = db.execute(
+            "SELECT seq, ts, type, envelope FROM events WHERE seq = ?", (seq,)
+        ).fetchone()
+    if row is None or row[2] != "change.resolved":
+        return None
+    envelope = json.loads(row[3])
+    if envelope.get("payload", {}).get("change_id") != change_id:
+        return None
+    return StoredEvent(*row)

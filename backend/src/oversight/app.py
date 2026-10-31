@@ -11,7 +11,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -53,9 +53,13 @@ from oversight.api import (
 from oversight.changes import (
     ChangeManager,
     ChangeNotFound,
+    PolicyInputs,
+    RevertTarget,
     ReviewCapture,
     ReviewCardLimits,
     Revision,
+    RulesEvidence,
+    SpendSnapshot,
     WrongState,
 )
 from oversight.events import (
@@ -64,6 +68,7 @@ from oversight.events import (
     StoredEvent,
     play,
     read_jsonl,
+    resolution_at,
     run_store_path,
 )
 from oversight.graph import WorkspaceGraph, read_layout
@@ -103,6 +108,7 @@ from oversight_contracts.commands import (
     RejectChange,
     RejectPlan,
     RequestChanges,
+    RevertChange,
     SaveFile,
     SetMergeMode,
     StartAgent,
@@ -383,11 +389,29 @@ class LiveRun:
                 self._settings.review_card_total_s,
             ),
             run_id=self.run_id,
+            revert_test_timeout_s=LIMITS.test_timeout_s,
             spend_ledger=self.ledger,
-            spend_receipt=started if self.ledger.state is not None else None,
+            rules_evidence=self._rules_evidence,
+            spend_lost=lambda: self._ledger_lost,
+            spend_receipt=started,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
         self.dispatcher.start()
+
+    def _rules_evidence(self, inputs: PolicyInputs) -> RulesEvidence:
+        """Loop-owned durable Meta truth; receipt totals and decision spend are unrelated."""
+        state = self.ledger.state
+        return RulesEvidence(
+            replace(
+                inputs,
+                spend=SpendSnapshot(
+                    spent_usd=state.spent_usd if state is not None else None,
+                    budget_usd=self._settings.budget_usd,
+                    unknown_costs=len(state.unknown) if state is not None else None,
+                    ledger_ok=self.ledger.loaded and state is not None and not self._ledger_lost,
+                ),
+            )
+        )
 
     async def shutdown(self) -> None:
         """Every step runs, even after one failed or was cancelled; the first such is re-raised."""
@@ -960,6 +984,16 @@ class LiveRun:
             answers=request.answers,
             grant=request.grant,
         )
+
+    async def revert(self, change_id: str, request: RevertChange) -> None:
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        resolution = await resolution_at(self.store, change_id, request.resolution_seq)
+        if resolution is None:
+            raise ChangeNotFound(change_id)
+        if self._manager.main_suspect:
+            raise ApiError("wrong_state", MAIN_SUSPECT)
+        self._manager.revert(RevertTarget(self.run_id, change_id, resolution), request)
 
     async def revoke_grant(self, grant_id: str) -> None:
         if self._manager is None:

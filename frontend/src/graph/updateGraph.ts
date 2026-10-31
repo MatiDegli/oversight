@@ -115,8 +115,8 @@ export function updateGraph(
 function initialLayout(cy: Core, elements: GraphElement[], theme: GeometryTheme): void {
   const preset = elements.some((element) => element.position !== undefined);
   if (cy.nodes().nonempty()) {
-    // The preset shows the graph at 100% on its hub; nothing is fitted. Without one, the layout
-    // places the nodes and the camera fits them, as before.
+    // The preset keeps node positions and chooses a legible whole-graph start, or the hub at the
+    // legibility floor. Without one, the layout places the nodes and fits the camera, as before.
     if (preset) cy.layout({ name: "preset", fit: false }).run();
     else {
       const fallback = { name: "fcose", animate: false, fit: true, padding: FIT_PADDING };

@@ -72,3 +72,11 @@ def test_a_delta_is_deterministic() -> None:
     assert first.model_dump_json() == second.model_dump_json()
     assert [n.id for n in first.nodes_added] == ["a:a2", "z:z2", "z:z3"]
     assert first.nodes_removed == ["a:a", "z:z"]
+
+
+def test_revert_cause_validates_against_contract() -> None:
+    old = version({"m.py": "def f(): ...\n"}).graph
+    new = version({"m.py": "def f():\n    return 1\n"}).graph
+    found = graph_delta(old, new, "revert", MERGE)
+    assert found is not None and found.cause == "revert"
+    assert GraphDelta.model_validate_json(found.model_dump_json()) == found

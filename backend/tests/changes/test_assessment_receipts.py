@@ -96,7 +96,19 @@ async def test_uncommitted_references_are_unknown(h: Harness, clock):
     )
     await h.run_agent(1, EDIT)
     await settled(h)
-    assert all(rule.result == "unknown" and not rule.evidence for rule in latest(h).rules)
+    assert all(
+        rule.result == "unknown" and not rule.evidence
+        for rule in latest(h).rules
+        if rule.rule not in {"known_spend", "protected_paths"}
+    )
+    assert next(r for r in latest(h).rules if r.rule == "known_spend").result == "pass"
+    # Protected paths own two separate confirmed sources; generic refs cannot replace them.
+    paths = next(r for r in latest(h).rules if r.rule == "protected_paths")
+    assert paths.result == "pass"
+    assert paths.evidence == [
+        EvidenceRef(event_seq=h.manager._ctx.assessment.run_started_seq),
+        EvidenceRef(event_seq=wait(h).proposal_seq),
+    ]
     assert terminals(h) == []
 
 

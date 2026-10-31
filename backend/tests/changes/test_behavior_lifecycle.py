@@ -135,8 +135,16 @@ async def test_import_failure_does_not_become_raised_difference(h: Harness):
     assert result.reason == "import failed on proposed side"
 
 
-@pytest.mark.parametrize("cancel", [False, True])
-async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(h: Harness, cancel):
+@pytest.mark.parametrize(
+    "cancel,private_reason,public_reason",
+    [
+        (False, "budget exhausted", "recording budget reached"),
+        (True, "interrupted", "probe failed"),
+    ],
+)
+async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(
+    h: Harness, cancel, private_reason, public_reason
+):
     h.manager._ctx.behavior_diff = True
     await h.open(1)
     rec = h.manager._agents["agent-1"]
@@ -185,7 +193,7 @@ async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(h: Har
         else:
             assert await task
     result = next(r for r in rec.behavior_diffs[1].functions if r.node_id == "shop.mod:value")
-    assert result.reason == ("interrupted" if cancel else "budget exhausted")
+    assert result.reason == private_reason
     assert all(0 < seconds <= 2 for seconds in timeouts)
     assert timeouts == sorted(timeouts, reverse=True)
     with pytest.raises(ProcessLookupError):
@@ -193,10 +201,10 @@ async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(h: Har
     assert not list(h.workspace.tmp_dir.glob("base-probe-*"))
     assert not list(h.workspace.tmp_dir.glob("behavior-*"))
     assert "base-probe-" not in (await h.main_git("worktree", "list", "--porcelain")).stdout
-    assert_unavailable_candidate_facts(h, rec, pid_file)
+    assert_unavailable_candidate_facts(h, rec, pid_file, public_reason)
 
 
-def assert_unavailable_candidate_facts(h: Harness, rec, pid_file):
+def assert_unavailable_candidate_facts(h: Harness, rec, pid_file, public_reason):
     [facts] = h.payloads(ChangeFacts)
     execution = next(e for e in rec.executions.values() if e.phase == "proposal")
     assert (facts.change_id, facts.revision, facts.base_commit, facts.head_commit) == (
@@ -215,7 +223,8 @@ def assert_unavailable_candidate_facts(h: Harness, rec, pid_file):
     # The proposed side blocked before completing its first observation in this fixture.
     # Neither cancellation nor deadline exhaustion has a complete differing comparison.
     assert public.compared_count == public.differing_count == 0
-    assert public.rows == [] and public.not_probed == "probe failed"
+    assert public.rows == []
+    assert public.not_probed == public_reason
     assert all(item.differing_count == 0 for item in facts.behavior_diff)
     serialized = facts.model_dump_json()
     for private in ("STALE_BEHAVIOR_SENTINEL", "interrupted", "budget exhausted", str(pid_file)):

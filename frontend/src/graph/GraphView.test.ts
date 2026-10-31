@@ -455,12 +455,12 @@ it("expands watch only for added nodes and yields to active pan, wheel zoom and 
   };
   add("new");
   paint();
-  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new"], false);
+  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new"], false, 0);
   const animating = vi.spyOn(cy, "animated").mockReturnValue(true);
   expand.mockClear();
   add("before-ease-ends");
   paint();
-  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new", "before-ease-ends"], false);
+  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new", "before-ease-ends"], false, 0);
   animating.mockReturnValue(false);
   expand.mockClear();
   stateStore.setState({ state: { ...stateStore.getState().state } });
@@ -492,7 +492,38 @@ it("expands watch only for added nodes and yields to active pan, wheel zoom and 
   vi.stubGlobal("matchMedia", () => ({ matches: true }));
   add("after-pan");
   paint();
-  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["after-pan"], true);
+  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["after-pan"], true, 0);
+});
+
+it.each([0, 400])("passes the styled panel occlusion to growth (%s px)", async (covered) => {
+  setLabel("Caller");
+  const overlays = {} as HTMLElement;
+  const startAreaRef = {
+    current: {
+      parentElement: overlays,
+      getBoundingClientRect: () => ({ left: 24, top: 80, right: 876, bottom: 810 }),
+    } as HTMLDivElement,
+  };
+  const property = vi.fn(() => `${String(covered)}px`);
+  const computed = vi.fn(() => ({ getPropertyValue: property }));
+  vi.stubGlobal("getComputedStyle", computed);
+  const { settle } = mount({ startAreaRef });
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Missing graph");
+  const expand = vi.spyOn(camera, "includeNewNodes").mockImplementation(() => undefined);
+  const state = stateStore.getState().state;
+  const template = state.graph?.nodes[0];
+  if (!state.graph || !template) throw new Error("Missing graph data");
+  stateStore.setState({
+    state: {
+      ...state,
+      graph: { ...state.graph, nodes: state.graph.nodes.concat({ ...template, id: "new" }) },
+    },
+  });
+  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new"], false, covered);
+  expect(computed).toHaveBeenCalledWith(overlays);
+  expect(property).toHaveBeenCalledWith("--graph-overlay-occlusion");
 });
 
 it("measures the card's real height and refreshes marks when that height changes", async () => {

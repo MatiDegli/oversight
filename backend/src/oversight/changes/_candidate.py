@@ -5,12 +5,65 @@ from dataclasses import dataclass
 from oversight.changes._grants import Measurement
 from oversight.changes._grants import measure as measure_grants
 from oversight.changes._policy import PolicyInputs, assess
+from oversight.changes._protected_paths import (
+    ChangedFileInventory,
+    ProtectedPathSnapshot,
+    _valid_path,  # pyright: ignore[reportPrivateUsage]
+)
 from oversight.changes._support import ChangeContext, RulesFailure
 from oversight.changes._versions import parse
 from oversight.graph import change_cone, change_graph
-from oversight.workspace import MergeGuard
-from oversight_contracts.events import Limits
-from oversight_contracts.policy import ChangeAssessment, RuleAssessment
+from oversight.workspace import IntegrityError, LockOrderError, MergeGuard, WorkspaceError
+from oversight_contracts.common import FileStatus
+from oversight_contracts.events import FileStat, Limits
+from oversight_contracts.policy import ChangeAssessment, EvidenceRef, RuleAssessment
+
+
+class InventoryQueryFailed(WorkspaceError):
+    """No complete query result exists; this is distinct from unsupported Git entries."""
+
+
+async def changed_inventory(
+    ctx: ChangeContext, guard: MergeGuard, proposal_seq: int
+) -> ChangedFileInventory:
+    """Capture every candidate path and status from immutable objects, never proposal statuses.
+
+    Name-status does not measure line counts: those FileStat fields are zero here. Failed or
+    truncated queries raise; well-framed unsupported entries retain an incomplete source.
+    """
+    evidence = (
+        EvidenceRef(event_seq=proposal_seq),
+        EvidenceRef(git_object=guard.pre),
+        EvidenceRef(git_object=guard.candidate_tree),
+    )
+    unavailable = ChangedFileInventory(files=(), complete=False, evidence=evidence)
+    try:
+        output = await ctx.git(
+            ctx.workspace.main,
+            "diff",
+            "--name-status",
+            "--no-renames",
+            "-z",
+            "--ignore-submodules=none",
+            guard.pre,
+            guard.candidate_tree,
+        )
+    except (IntegrityError, LockOrderError):
+        raise
+    except WorkspaceError as error:
+        raise InventoryQueryFailed("Candidate path query failed.") from error
+    if output and not output.endswith("\0"):
+        raise InventoryQueryFailed("Candidate path query was truncated.")
+    fields = output[:-1].split("\0") if output else []
+    if len(fields) % 2:
+        raise InventoryQueryFailed("Candidate path query has incomplete fields.")
+    statuses: dict[str, FileStatus] = {"A": "added", "M": "modified", "D": "deleted"}
+    files: list[FileStat] = []
+    for status, path in zip(fields[::2], fields[1::2], strict=True):
+        if status not in statuses or not _valid_path(path) or "\ufffd" in path:
+            return unavailable
+        files.append(FileStat(path=path, status=statuses[status], lines_added=0, lines_removed=0))
+    return ChangedFileInventory(files=tuple(files), complete=True, evidence=evidence)
 
 
 async def python_files(ctx: ChangeContext, tree: str) -> dict[str, str]:
@@ -39,8 +92,15 @@ class Measured:
 
 
 async def measure(
-    ctx: ChangeContext, guard: MergeGuard, pending: ChangeAssessment, limits: Limits
+    ctx: ChangeContext,
+    guard: MergeGuard,
+    pending: ChangeAssessment,
+    limits: Limits,
+    *,
+    protected_paths: ProtectedPathSnapshot | None,
+    proposal_seq: int,
 ) -> Measured:
+    inventory = await changed_inventory(ctx, guard, proposal_seq)
     stats = await ctx.git(
         ctx.workspace.main,
         "diff",
@@ -87,11 +147,21 @@ async def measure(
             possible_callers=grant_measurement.caller_count,
             parse_errors=len(base.graph.parse_errors) + len(candidate.graph.parse_errors),
             unresolved_removed=len(delta.nodes_removed),
-            evidence={r.rule: tuple(r.evidence) for r in pending.rules},
+            evidence={
+                **{r.rule: tuple(r.evidence) for r in pending.rules},
+                "protected_paths": (
+                    *(protected_paths.evidence if protected_paths else ()),
+                    *inventory.evidence,
+                ),
+            },
+            protected_paths=protected_paths,
+            changed_files=inventory,
         ),
         pending.policy_version,
     )
     return Measured(
-        tuple(r for r in measured.rules if r.rule in {"small_change", "small_cone"}),
+        tuple(
+            r for r in measured.rules if r.rule in {"small_change", "small_cone", "protected_paths"}
+        ),
         grant_measurement,
     )

@@ -13,6 +13,7 @@ from oversight.changes._facts import (
     integrity_status,
 )
 from oversight.changes._policy import PolicyInputs, SpendSnapshot, assess, merges_alone
+from oversight.changes._protected_paths import ChangedFileInventory, ProtectedPathSnapshot
 from oversight.changes._state import ChangeRecord
 from oversight_contracts.common import RuleId
 from oversight_contracts.events import ModelProfile, SuiteExecution, SuiteResult
@@ -20,7 +21,7 @@ from oversight_contracts.graph import ImpactCone
 from oversight_contracts.policy import POLICY_RULES, ChangeAssessment, EvidenceRef, RuleAssessment
 from oversight_contracts.review import AddedTestProbe, CrossReview, IntegrityFact, ReviewFinding
 
-PROFILE = "safe-merge-probes-v1"
+PROFILE = "safe-merge-paths-v1"
 TARGET = dict(
     change_id="change-1",
     revision=1,
@@ -90,6 +91,10 @@ def policy_inputs() -> PolicyInputs:
         integrity_status=IntegrityStatus(complete=True),
         added_tests=(),
         added_tests_inventory=AddedTestsInventory(test_ids=(), complete=True),
+        protected_paths=ProtectedPathSnapshot(evidence=(EvidenceRef(event_seq=1),)),
+        changed_files=ChangedFileInventory(
+            files=(), complete=True, evidence=(EvidenceRef(event_seq=2),)
+        ),
         evidence={
             rule: (EvidenceRef(event_seq=100 + i),)
             for i, rule in enumerate(sorted(POLICY_RULES[PROFILE]))

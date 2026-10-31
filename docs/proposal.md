@@ -16,7 +16,7 @@ it does not settle and does not repeat it.
   one gate to the model API, and the web framework kept to the HTTP layer. ESLint's built-in rules
   check the same kind of boundary in the frontend.
 - Contracts v1: the eleven events of AGENTS.md, unchanged in name, with exact payloads; its
-  thirteen commands, three of them answering 501 until level 3, plus the event stream and a new
+  thirteen commands, the three level-3 commands now answering 202, plus the event stream and a new
   `GET /health`; one error format; stable ids for runs, agents, changes, nodes and edges.
 - One protocol for live and replay: the UI applies the run's event log from `seq` 1 with one pure
   reducer, and resumes from the last `seq` it applied.
@@ -554,15 +554,15 @@ the single error format.
 | --- | --- | --- | --- |
 | `POST /agents` | `StartAgent {task, slot?, model?, zone?}` | 201 `AgentCreated {agent_id, change_id, slot}` | `slot_busy`, `not_configured`, `spend_brake` |
 | `POST /agents/{id}/stop` | none | 202 | `not_found`, `wrong_state` |
-| `POST /agents/{id}/message` | `{text}` | 501 until level 3 | |
-| `POST /agents/{id}/pause` | none | 501 until level 3 | |
-| `POST /agents/{id}/resume` | none | 501 until level 3 | |
+| `POST /agents/{id}/message` | `{text}` | 202 | `not_found`, `wrong_state`, `invalid_request` |
+| `POST /agents/{id}/pause` | none | 202 | `not_found`, `wrong_state` |
+| `POST /agents/{id}/resume` | none | 202 | `not_found`, `wrong_state`, `not_configured`, `spend_brake` |
 | `POST /changes/{id}/approve` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
 | `POST /changes/{id}/request-changes` | `{revision, head_commit, comment}`, not empty | 202 | `not_found`, `wrong_state` |
 | `POST /changes/{id}/reject` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
 | `GET /agents/{id}` | none | Reserved: 501; then 200 `AgentStatus` for coding agents | `not_implemented` |
 | `POST /changes/{id}/review` | `ReviewChange {revision, head_commit, main_commit}` | Reserved: 501; then 202 | `not_implemented` |
-| `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | Reserved: 501; then 202 | `not_implemented` |
+| `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | 202 | `not_found`, `wrong_state` |
 | `GET /changes/{id}` | none | Reserved: 501; then 200 `ChangeView` | `not_implemented` |
 | `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | Reserved: 501; then 200 `HistoryPage` | `not_implemented` |
 | `POST /queue` | `EnqueueTask` | Reserved: 501; then 201 `QueuedTask` | `not_implemented` |

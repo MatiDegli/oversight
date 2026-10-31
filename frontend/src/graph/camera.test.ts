@@ -2,6 +2,7 @@ import cytoscape from "cytoscape";
 import type { Core } from "cytoscape";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import * as changeFrameModule from "./changeFrame";
 import { getActiveTheme } from "../theme";
 import { changeZoom } from "./changeFrame";
 import {
@@ -467,9 +468,14 @@ describe("prefersReducedMotion", () => {
 });
 
 describe("watch growth", () => {
-  it.each([true, false])(
-    "includes an offscreen addition with the minimum centred zoom-out (reduced: %s)",
-    (reduced) => {
+  it.each([
+    [true, undefined],
+    [false, undefined],
+    [true, 0],
+    [false, 0],
+  ] as const)(
+    "includes an offscreen addition with the minimum centred zoom-out (reduced: %s, covered: %s)",
+    (reduced, covered) => {
       const cy = narrowedGraph(600);
       const before = structuredClone(positions(cy));
       const zoom = cy.zoom();
@@ -479,7 +485,7 @@ describe("watch growth", () => {
         .getElementById("lone")
         .boundingBox({ includeLabels: true, includeOverlays: false });
       const animate = vi.spyOn(cy, "animate").mockReturnValue(cy);
-      includeNewNodes(cy, ["lone"], reduced);
+      includeNewNodes(cy, ["lone"], reduced, covered);
       if (!reduced) {
         expect(animate).toHaveBeenCalledOnce();
         const target = animate.mock.calls[0]?.[0];
@@ -498,6 +504,25 @@ describe("watch growth", () => {
       expect(cy.getElementById("lone").renderedBoundingBox().x1).toBeGreaterThanOrEqual(40);
       expect(positions(cy)).toEqual(before);
       expect(cy.nodes(":selected")).toHaveLength(0);
+    },
+  );
+
+  it.each([undefined, 0, 200])(
+    "uses only the uncovered width for new nodes (covered=%s)",
+    (covered) => {
+      const cy = narrowedGraph(600);
+      const before = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+      const center = { x: (600 - (covered ?? 0)) / 2, y: 300 };
+      const anchor = (center.x - before.pan.x) / before.zoom;
+      includeNewNodes(cy, ["b"], true, covered);
+      if (!covered) expect({ zoom: cy.zoom(), pan: cy.pan() }).toEqual(before);
+      else {
+        expect(cy.zoom()).toBeLessThan(before.zoom);
+        const box = cy.getElementById("b").renderedBoundingBox();
+        expect(box.x1).toBeGreaterThanOrEqual(0);
+        expect(box.x2).toBeLessThanOrEqual(600 - covered);
+        expect((center.x - cy.pan().x) / cy.zoom()).toBeCloseTo(anchor);
+      }
     },
   );
 
@@ -593,18 +618,22 @@ describe("the zoom range after Fit", () => {
     expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
   });
 
-  it("does not let growth in watch mode take the zoom below the range, and keeps the view's middle", () => {
-    const cy = wideGraph(40_000);
-    cy.viewport({ zoom: ZOOM_RANGE.min, pan: { x: 20, y: 40 } });
-    const middle = { x: (500 - 20) / ZOOM_RANGE.min, y: (300 - 40) / ZOOM_RANGE.min };
-    // Well past what the view shows at the lower end of the range.
-    cy.add({ data: { id: "far" }, position: { x: 400_000, y: 100 } });
-    includeNewNodes(cy, ["far"], true);
-    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
-    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
-    expect((500 - cy.pan().x) / cy.zoom()).toBeCloseTo(middle.x);
-    expect((300 - cy.pan().y) / cy.zoom()).toBeCloseTo(middle.y);
-  });
+  it.each([0, 200])(
+    "keeps growth above the zoom floor about the clear centre (covered=%s)",
+    (covered) => {
+      const cy = wideGraph(40_000);
+      cy.viewport({ zoom: ZOOM_RANGE.min, pan: { x: 20, y: 40 } });
+      const centerX = (1000 - covered) / 2;
+      const middle = { x: (centerX - 20) / ZOOM_RANGE.min, y: (300 - 40) / ZOOM_RANGE.min };
+      // Well past what the view shows at the lower end of the range.
+      cy.add({ data: { id: "far" }, position: { x: 400_000, y: 100 } });
+      includeNewNodes(cy, ["far"], true, covered);
+      expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+      expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+      expect((centerX - cy.pan().x) / cy.zoom()).toBeCloseTo(middle.x);
+      expect((300 - cy.pan().y) / cy.zoom()).toBeCloseTo(middle.y);
+    },
+  );
 });
 
 describe("revealNode", () => {
@@ -764,7 +793,56 @@ describe("hubOf", () => {
 });
 
 describe("startCamera", () => {
-  it("shows the graph at 100% on the module of its hub, clamped inside the graph", () => {
+  function graphForStart() {
+    const cy = narrowedGraph(1000);
+    vi.spyOn(cy, "height").mockReturnValue(800);
+    return cy;
+  }
+
+  it("starts at the same 0.83 whole-graph framing as Fit, including labels and clear area", () => {
+    const cy = graphForStart();
+    const whole = cy.nodes().boundingBox({ includeLabels: true, includeOverlays: false });
+    const width = (whole.x2 - whole.x1) * 0.83;
+    vi.spyOn(cy, "width").mockReturnValue(width + 464);
+    const area = { x1: 24, y1: 84, x2: width + 40, y2: 730 };
+    startCamera(cy, area);
+    const start = { zoom: cy.zoom(), pan: cy.pan() };
+    expect(start.zoom).toBeCloseTo(0.83, 8);
+    frameCamera(cy, [], true, { area: { ...area, x1: 40 } });
+    expect(cy.zoom()).toBeCloseTo(start.zoom, 8);
+    expect(cy.pan()).toEqual(start.pan);
+    expect(
+      inView(
+        cy,
+        cy.nodes().map((node) => node.id()),
+      ),
+    ).toBe(true);
+  });
+
+  it("retains the centered 100% start when the whole graph fits without shrinking", () => {
+    const cy = graphForStart();
+    vi.spyOn(cy, "width").mockReturnValue(3000);
+    startCamera(cy);
+    expect(cy.zoom()).toBe(1);
+    const b = cy.nodes().renderedBoundingBox({ includeLabels: false });
+    expect((b.x1 + b.x2) / 2).toBeCloseTo(1500);
+  });
+
+  it("reads its floor from changeZoom's active typography rather than a copied constant", () => {
+    const active = vi
+      .spyOn(changeFrameModule, "changeZoom")
+      .mockReturnValue(changeZoom({ "node-name-size": "20px", "node-word-size": "20px" }));
+    try {
+      const cy = graphForStart();
+      vi.spyOn(cy, "width").mockReturnValue(400);
+      startCamera(cy);
+      expect(cy.zoom()).toBe(changeZoom().min);
+    } finally {
+      active.mockRestore();
+    }
+  });
+
+  it("uses the shared legibility floor on the hub when the whole graph cannot fit", () => {
     const cy = cytoscape({
       headless: true,
       styleEnabled: true,
@@ -786,7 +864,7 @@ describe("startCamera", () => {
     vi.spyOn(cy, "height").mockReturnValue(800);
     cy.zoom(0.3);
     startCamera(cy);
-    expect(cy.zoom()).toBe(1);
+    expect(cy.zoom()).toBe(changeZoom().min);
     // The hub's module is at the middle of the view.
     const box = cy.getElementById("m2").renderedBoundingBox({ includeLabels: false });
     expect((box.x1 + box.x2) / 2).toBeCloseTo(500, 0);
@@ -817,6 +895,7 @@ describe("startCamera", () => {
     vi.spyOn(cy, "width").mockReturnValue(560);
     vi.spyOn(cy, "height").mockReturnValue(400);
     startCamera(cy);
+    expect(cy.zoom()).toBe(changeZoom().min);
     for (const id of ["m1", "m2", "m3"]) {
       const box = cy.getElementById(id).renderedBoundingBox({ includeLabels: false });
       for (const edge of [0, 560])

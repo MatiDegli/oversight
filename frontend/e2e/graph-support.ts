@@ -131,7 +131,7 @@ export function installRecorder() {
         for (const slot of ["A", "B"] as const)
           for (const mode of ["read", "edit"])
             for (const { id, x, y } of probe.nodeCenters(`node.focus-${slot}-${mode}`)) {
-              // The canvas starts at 100% and is panned: a node beyond its edge draws nothing here.
+              // A graph wider than the legible start is panned: a node beyond its edge draws nothing here.
               if (x < 0 || y < 0 || x > host.clientWidth || y > host.clientHeight) continue;
               const found = count(host, x, y, halfWidth, halfHeight);
               current.paint[id] = Math.max(current.paint[id] ?? 0, found[slot]);

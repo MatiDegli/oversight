@@ -2455,3 +2455,107 @@ unchanged.
 
 Reason: H1 was fixed before the run as the condition for paying. Meeting it would need probes that record file
 effects, a new product capability, or a rule changed after seeing results.
+
+## 2026-10-31 — Item 8 F4a: protected-path built-in table version 1
+
+`safe-merge-paths-v1` uses built-in table version 1: `BUILTIN_CATEGORIES` in
+`backend/src/oversight/changes/_protected_paths.py` as of this commit, identified in code by
+`BUILTIN_TABLE_VERSION = 1`. Any change to the table needs a new version. The `run.started` seq
+identifies the table version in force; the `change.proposed` seq separately witnesses the complete
+proposal inventory. Neither receipt is reconstructed when unavailable.
+
+Reason: F4a captures the sources without changing authority. Live enforcement lands atomically in
+F4b; these helpers have no production callers, and F1's activation latch stays closed.
+
+## 2026-10-31 — Item 8 F4b: protected paths join rules authority atomically
+
+Pending reservations, definitive authorization and Revert preflight now require only
+`safe-merge-paths-v1`, with exactly nine unique rules. There is no probes-profile fallback,
+including for historical Revert evidence. The built-in patterns remain table version 1.
+A directory pattern ending in `/**` also protects its bare directory entry: `.github`
+matches the CI category, including when the entry is a symlink or Gitlink. This fixes the
+boundary interpretation without adding or changing the table's patterns.
+
+The confirmed proposal captures the original table and inventory using the owning
+`run.started` and `change.proposed` seqs. Capture is independent of spend eligibility: a run
+without a positive budget still identifies its table, but supplies no passing spend receipt.
+Every use checks the retained committed proposal, exact change/agent/revision/base/head,
+and both original source receipts. Missing, evicted, malformed or incomplete sources remain
+unknown until the original evidence deadline produces one normalized Needs-you error;
+they are never reconstructed as an empty inventory. A complete protected hit is an
+independent fail and leaves the change ready for the person.
+
+The existing runtime review remains independent of the rules wait. Rules eligibility already
+requires cross-review to be enabled with an independent configured reviewer; invalidating
+a path-vetoed wait does not cancel or prevent that review. A clean review cannot erase the
+hit. The proposal author is matched by profile id; before, it never matched.
+Unavailable, halted or cancelled review cannot grant permission. Ask me keeps its
+existing opt-in review behavior. Author summaries and reviewer text cannot change this
+table, waive a hit, or manufacture a grant. Protected-path grant requests remain refused,
+including on a personal Approve; people retain the existing direct decision commands.
+
+Prepared candidates remeasure name/status inventory from immutable Git objects against
+the captured table, including both rename sides, binary paths and Gitlinks. Proposal diffs
+ignore submodules, so their inventory alone is insufficient: workspace `integrity.veto_index`
+already refuses Gitlinks before proposal commits and suite capture, and candidate inventory
+explicitly includes them or reports incomplete. Candidate path results join all nine rules
+in the committed definitive assessment before any commit. Hits or unknowns stop the
+transaction and verified recovery restores main. Failed, timed-out or truncated candidate
+queries instead stop with one normalized terminal notice; complete but unsupported entries
+retain the persisted unknown veto. Persistence requires all three candidate measurements and
+the protected-path receipt for that exact candidate tree. Source receipts remain required at every
+barrier; the durable-spend reads and separately pinned spend evidence retain F3b's behavior.
+Revert additionally requires zero protected violations and a complete observation.
+
+The run's table receipt is pinned outside the bounded event cache for the whole run, separately
+from spend provenance; ordinary event eviction cannot invalidate it. Startup forwards that
+receipt even when the durable ledger is unavailable. Only protected-path evidence can use the
+table pin; all spend evidence still goes through F3b's unchanged admission predicate. Missing or
+invalid table pins and missing or evicted proposal receipts fail closed without reconstruction.
+
+F1's production activation latch remains closed. These checks add deterministic authority
+constraints; they do not enable rules merges, expand Revert to old probes-profile merges,
+or add filesystem monitoring or a sandbox.
+## 2026-10-31 — Start with the whole graph when it fits legibly; keep graph controls clear of the floating agents panel
+
+The maintainer approved starting with the whole graph when its Fit zoom is between the shared
+**Opening a change** legibility floor and 100%. The floor comes from `changeZoom()`, keeping node
+names and state words at least 11 CSS px. A graph that fits at 100% or more keeps the centered 100%
+start and gutter rule. A graph that cannot fit at the floor starts at the floor on the hub's module,
+inside the graph bounds and moved to the nearest gutter to keep module frames whole.
+
+The maintainer also approved reserving the floating expanded agents panel's width for graph
+overlays and camera framing at 1440px and below: both end 24px from its edge. Docked panels,
+folded rails and focus tabs keep their existing geometry.
+
+Reason: the recorded demo at 1920×1080 fits at 83%, yet its 100% start left two of six modules
+off-canvas. At 1280–1440px the floating agents panel covered the detail and zoom controls and
+framed modules underneath itself; in the 1280×800 capture, models.py was cut at its x = 880 edge.
+
+## 2026-10-31 — Revert admits a server-loaded committed rules resolution
+
+The person-only HTTP route loads the exact SQL row from this run at or below the
+acknowledged horizon. Missing sequences, other event types and other changes return 404;
+unverifiable rules merges, unavailable isolation, suspect main and duplicate or closing
+attempts return 409. Admission reserves the target synchronously before answering an empty
+202; settlement reports only through events. Shutdown cancels Reverts in flight and awaits
+their bounded settlement before the event store closes.
+
+Reason: a client cannot supply authority through an event body or an unacknowledged row.
+Immediate refusals keep 202 meaningful, while cancellation lets the tested inverse recovery
+path settle a suite whose 60-second bound exceeds the service's 30-second shutdown budget.
+## 2026-10-31 — Item 10 agent-hours come from a fold over the committed log
+
+Reason: pure activity accounting reads only status, review, lead, step and usage-attribution
+observations, never costs. A review interval starts at the author's latest ready_for_review,
+or after the previous review of that change, whichever comes later. Open intervals are clipped
+at the committed prefix's last event. Lead and plan work leave the total unavailable rather
+than estimating their hours. Team grouping and hour/day periods come later, together with the
+team definition.
+## 2026-10-31 — Item 10 list prices: a stored dated table applied to each call's tokens
+
+Reason: the stored table records its source and retrieval date; only Muse Spark has a listed
+price. The fold applies those prices to each call's tokens and never reads the ledger's cost
+fields. An unreported count gives a range whose lower end enters the known subtotal. Unpriced
+work keeps the total unavailable, while zero usage costs zero even without a listed price.
+Team grouping and periods come later.

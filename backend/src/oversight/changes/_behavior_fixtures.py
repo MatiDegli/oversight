@@ -40,8 +40,11 @@ def fixture(source: Source, path: str, node: ast.Name, cache: Sources):
     ):
         raise ValueError("rebound fixture parameter")
     enclosing = parents.get(parent)
-    if isinstance(enclosing, ast.ClassDef) and _named_fixture(source, enclosing.body, node.id):
-        raise ValueError("unsupported class fixture")
+    while enclosing is not None:
+        check_deadline(cache.deadline)
+        if isinstance(enclosing, ast.ClassDef) and _named_fixture(source, enclosing.body, node.id):
+            raise ValueError("unsupported class fixture")
+        enclosing = parents.get(enclosing)
     directory = PurePosixPath(path).parent
     candidates = [path, *(str(p / "conftest.py") for p in (directory, *directory.parents))]
     for candidate in dict.fromkeys(candidates):

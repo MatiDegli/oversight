@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+import { stopXvfb } from "./chromeShortcut.support";
 import { launchBrowser } from "../browserLaunch.support";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
@@ -66,6 +68,32 @@ for key in reversed(keys):
 x.XSync(d, 0)
 `;
 
+type Key = { key: string; ctrl: boolean; alt: boolean };
+
+async function proveFocus(page: Page, keys: Key[], display: string) {
+  // XSetInputFocus returning does not mean Chrome has handled the focus event yet.
+  // Retry the harmless Alt+W until the page acknowledges it, not just until XTest sends it.
+  await expect
+    .poll(
+      async () => {
+        if (keys.some((key) => key.key === "w" && key.alt)) return true;
+        try {
+          await promisify(execFile)("python3", ["-c", nativeKeys, display], { timeout: 1_000 });
+          if (!(await page.evaluate(() => document.hasFocus()))) return false;
+          await promisify(execFile)("python3", ["-c", nativeKeys, display, "Alt_L", "w"], {
+            timeout: 1_000,
+          });
+          return keys.some((key) => key.key === "w" && key.alt);
+        } catch (error) {
+          return String(error);
+        }
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+  await expect.poll(() => page.evaluate(() => document.hasFocus()), { timeout: 5_000 }).toBe(true);
+}
+
 it("Chrome reserves native Ctrl+W; Alt+W reaches the page", async () => {
   const xvfb = spawn(
     "Xvfb",
@@ -86,6 +114,7 @@ it("Chrome reserves native Ctrl+W; Alt+W reaches the page", async () => {
     },
   );
   let browser;
+  let failure: { error: unknown } | undefined;
   try {
     const [data] = (await once(xvfb.stdout, "data")) as [Buffer];
     const display = `127.0.0.1:${data.toString().trim()}`;
@@ -97,7 +126,7 @@ it("Chrome reserves native Ctrl+W; Alt+W reaches the page", async () => {
     const context = await browser.newContext();
     const survivor = await context.newPage(); // Closing the probe must leave this page alive.
     const page = await context.newPage();
-    const keys: { key: string; ctrl: boolean; alt: boolean }[] = [];
+    const keys: Key[] = [];
     await page.exposeFunction("reportKey", (value: (typeof keys)[number]) => {
       keys.push(value);
     });
@@ -113,42 +142,26 @@ it("Chrome reserves native Ctrl+W; Alt+W reaches the page", async () => {
       });
     });
     await page.bringToFront();
-    // XSetInputFocus returning does not mean Chrome has handled the focus event yet.
-    // Retry the harmless Alt+W until the page acknowledges it, not just until XTest sends it.
-    await expect
-      .poll(
-        async () => {
-          if (keys.some((key) => key.key === "w" && key.alt)) return true;
-          try {
-            await promisify(execFile)("python3", ["-c", nativeKeys, display], { timeout: 1_000 });
-            if (!(await page.evaluate(() => document.hasFocus()))) return false;
-            await promisify(execFile)("python3", ["-c", nativeKeys, display, "Alt_L", "w"], {
-              timeout: 1_000,
-            });
-            return keys.some((key) => key.key === "w" && key.alt);
-          } catch (error) {
-            return String(error);
-          }
-        },
-        { timeout: 10_000 },
-      )
-      .toBe(true);
-    await expect
-      .poll(() => page.evaluate(() => document.hasFocus()), { timeout: 5_000 })
-      .toBe(true);
-    // Alt+W proved delivery to the page. Never retry the destructive browser shortcut.
+    await proveFocus(page, keys, display);
+    // Allow slow CI startup: unlike Alt+W, the destructive Ctrl+W must never be retried.
     await promisify(execFile)("python3", ["-c", nativeKeys, display, "Control_L", "w"], {
-      timeout: 1_000,
+      timeout: 5_000,
     });
     await expect.poll(() => page.isClosed(), { timeout: 5_000 }).toBe(true);
     expect(browser.isConnected()).toBe(true);
     expect(survivor.isClosed()).toBe(false);
     expect(await survivor.evaluate(() => document.readyState)).toBe("complete");
     expect(keys.some((key) => key.key === "w" && key.ctrl)).toBe(false);
+  } catch (error) {
+    failure = { error };
   } finally {
-    await browser?.close();
-    const exited = once(xvfb, "exit");
-    xvfb.kill("SIGTERM");
-    await exited;
+    try {
+      await browser?.close();
+    } catch (error) {
+      failure ??= { error };
+    } finally {
+      await stopXvfb(xvfb);
+    }
   }
+  if (failure) throw failure.error;
 }, 30_000);

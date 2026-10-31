@@ -106,9 +106,10 @@ async def test_unconfirmed_start_capability_is_refused(h: Harness, reason: str) 
 
 
 async def test_mode_lock_wait_has_a_bound(h: Harness) -> None:
-    controller = available(h, timeout_s=0.02)
+    controller = available(h)
     async with controller._lock:
         async with asyncio.timeout(0.5):
+            controller._timeout_s = 0.02
             with pytest.raises(WrongState, match=r"timed out after 0\.02 seconds"):
                 await select(h, "ask_me", 0)
     assert len(controller._disables) == 1
@@ -176,10 +177,11 @@ async def test_failed_disable_can_be_retried_while_suspended(h: Harness) -> None
 async def test_confirmation_timeout_keeps_receipt_tracked_and_prevents_overtaking(
     h: Harness,
 ) -> None:
-    controller = available(h, timeout_s=0.02)
+    controller = available(h)
     h.gate = MergeModeState
     try:
         async with asyncio.timeout(0.5):
+            controller._timeout_s = 0.02
             with pytest.raises(WrongState, match="timed out"):
                 await select(h, "merge_when_safe", 0)
             assert h.manager.authority_suspended()
@@ -262,8 +264,9 @@ async def test_disable_uses_only_mode_lock_and_never_git_or_idleness(
 
 
 async def test_enable_timeout_waiting_for_lock_cannot_enable_later(h: Harness) -> None:
-    controller = available(h, timeout_s=0.02)
+    controller = available(h)
     async with controller._lock:
+        controller._timeout_s = 0.02
         with pytest.raises(WrongState, match="timed out"):
             await select(h, "merge_when_safe", 0)
     await asyncio.gather(*h.manager._ctx.state.tasks, return_exceptions=True)

@@ -226,6 +226,7 @@ def test_review_timeout_is_distinct_from_decision_timeout():
                 "input not representable",
                 "repeat incomplete",
                 "probe failed",
+                "recording budget reached",
             )
         ],
         ("behavior comparison incomplete", "comparison incomplete"),
@@ -268,6 +269,10 @@ def test_reason_causes_strip_node_ids_and_counts(reason, expected):
         (
             "no literal receiver; signature not supported",
             {"no literal receiver", "signature not supported"},
+        ),
+        (
+            "probe failed; recording budget reached",
+            {"probe failed", "recording budget reached"},
         ),
         ("side effect: randomness; unknown reason", {"side effect: randomness", "other"}),
     ],
