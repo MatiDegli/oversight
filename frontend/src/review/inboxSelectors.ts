@@ -1,6 +1,6 @@
 import { selectDecisionInbox } from "../state";
 import type { ChangeState, DecisionInboxEntry, State } from "../state";
-import type { ChangeFacts } from "@contracts";
+import type { ChangeFacts, LeadStatus } from "@contracts";
 import { possibleCallerNodes } from "../graph";
 import { factsForRevision } from "./factsForRevision";
 
@@ -69,8 +69,18 @@ export function selectChangeCard(
 }
 
 export function selectInboxSummary(state: State) {
-  const agents = Object.keys(state.agents).length;
-  const steps = Object.values(state.steps).reduce((n, s) => n + s.length, 0);
+  const leads = new Map<string, LeadStatus>();
+  for (const event of state.decisionEvents) {
+    if (event.type !== "lead.status") continue;
+    const previous = leads.get(event.payload.agent_id);
+    if (!previous || previous.revision <= event.payload.revision)
+      leads.set(event.payload.agent_id, event.payload);
+  }
+  const agents = new Set([...Object.keys(state.agents), ...leads.keys()]).size;
+  // Lead statuses are authoritative for lead steps, including ids also present as agents.
+  const steps =
+    Object.entries(state.steps).reduce((n, [id, s]) => n + (leads.has(id) ? 0 : s.length), 0) +
+    [...leads.values()].reduce((n, lead) => n + lead.step, 0);
   const minutes =
     state.clock && state.runStartedAt
       ? Math.max(0, Math.round((Date.parse(state.clock) - Date.parse(state.runStartedAt)) / 60000))

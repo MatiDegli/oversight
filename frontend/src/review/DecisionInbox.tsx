@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Inbox } from "lucide-react";
+import type { Plan } from "@contracts";
 import type { DecisionInboxEntry, State } from "../state";
 import { selectDecisionInbox, selectActiveGrants } from "../state";
 import { ChangeCard, eventTime } from "./ChangeCard";
@@ -13,10 +14,12 @@ import "./inbox.css";
 function InboxRow({
   state,
   entry,
+  plan,
   onReview,
 }: {
   state: State;
   entry: DecisionInboxEntry;
+  plan: Plan | undefined;
   onReview?: (id: string) => void;
 }) {
   const change = entry.changeId ? state.changes[entry.changeId] : undefined;
@@ -24,6 +27,23 @@ function InboxRow({
   const facts = change?.proposal ? factsForRevision(state, change.proposal) : undefined;
   const question = entry.decisions.find((d) => d.kind === "review_card");
   const followMain = entry.decisions.find((d) => d.kind === "follow_main");
+  const heading =
+    plan?.task ??
+    (followMain
+      ? followMain.reason
+      : wait
+        ? "Possible callers need your decision"
+        : question
+          ? "Choices need you"
+          : (entry.decisions.find((d) => d.kind !== "change")?.reason ??
+            change?.proposal?.task ??
+            "Decision needs you"));
+  const paragraph = plan
+    ? (plan.detail ?? "Lead plan awaits approval")
+    : (change?.proposal?.summary ?? entry.decisions[0]?.reason);
+  const reasons = [
+    ...new Set(entry.decisions.filter((d) => d.kind !== "change").map((d) => d.reason)),
+  ].filter((reason) => reason !== heading && reason !== paragraph);
   const example =
     question?.example.source === "review_card"
       ? question.example.value
@@ -37,18 +57,15 @@ function InboxRow({
         </span>
         <span className="decision-muted">{entry.age}</span>
       </div>
-      <h3>
-        {followMain
-          ? followMain.reason
-          : wait
-            ? "Possible callers need your decision"
-            : question
-              ? "Choices need you"
-              : (entry.decisions.find((d) => d.kind !== "change")?.reason ??
-                change?.proposal?.task ??
-                "Decision needs you")}
-      </h3>
-      <p>{change?.proposal?.summary ?? entry.decisions[0]?.reason}</p>
+      <h3>{heading}</h3>
+      {paragraph && paragraph !== heading && <p>{paragraph}</p>}
+      {reasons.length > 0 && (
+        <ul className="decision-reasons">
+          {reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      )}
       {example && <Example row={example} slot={slot ?? undefined} />}
       <InboxAnswer state={state} entry={entry} />
       {change && onReview && (
@@ -104,15 +121,6 @@ function InboxAnswer({ state, entry }: { state: State; entry: DecisionInboxEntry
         </div>
       ) : (
         <>
-          {!question && !change && (
-            <ul className="decision-reasons">
-              {entry.decisions
-                .filter((d) => d.kind !== "change")
-                .map((d) => (
-                  <li key={d.id}>{d.reason}</li>
-                ))}
-            </ul>
-          )}
           {change && card && (
             <details className="inbox-answer">
               <summary>Answer this change</summary>
@@ -141,6 +149,13 @@ export function DecisionInbox({
   const entries = selectDecisionInbox(state);
   const grants = selectActiveGrants(state);
   const { agents, steps, minutes } = selectInboxSummary(state);
+  const plans = new Map<string, Plan>();
+  for (const event of state.decisionEvents) {
+    if (event.type !== "plan.updated") continue;
+    const previous = plans.get(event.payload.plan_id);
+    if (!previous || previous.revision <= event.payload.revision)
+      plans.set(event.payload.plan_id, event.payload);
+  }
   return (
     <section aria-label="Decisions inbox" className="decisions-inbox">
       <nav aria-label="Inbox views" className="inbox-views">
@@ -172,7 +187,8 @@ export function DecisionInbox({
             <div>
               <h2>{entries.length ? "Decisions waiting for you" : "No decisions waiting"}</h2>
               <p className="decision-muted">
-                {agents} agents took {steps} steps
+                {agents} {agents === 1 ? "agent" : "agents"} took {steps}{" "}
+                {steps === 1 ? "step" : "steps"}
                 {minutes === null ? "" : ` in ${String(minutes)} min`}.{" "}
                 {entries.length
                   ? `These ${String(entries.length)} need a person.`
@@ -182,9 +198,18 @@ export function DecisionInbox({
           </header>
           <div className="inbox-entries">
             {entries.length ? (
-              entries.map((entry) => (
-                <InboxRow key={entry.id} state={state} entry={entry} onReview={onReview} />
-              ))
+              entries.map((entry) => {
+                const lead = entry.decisions.find((d) => d.kind === "lead_plan");
+                return (
+                  <InboxRow
+                    key={entry.id}
+                    state={state}
+                    entry={entry}
+                    plan={lead?.planId ? plans.get(lead.planId) : undefined}
+                    onReview={onReview}
+                  />
+                );
+              })
             ) : (
               <div className="inbox-empty">
                 <Inbox aria-hidden="true" size={28} />
