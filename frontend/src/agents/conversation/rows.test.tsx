@@ -6,6 +6,15 @@ import { sketchState } from "./fixture";
 import { selectConversation } from "./selectConversation";
 import { TimelineEntry } from "./rows";
 
+it("keeps a positive cost below half a cent visible in the header chip", () => {
+  const conversation = selectConversation(sketchState, "agent-1", []);
+  if (!conversation) throw new Error("Missing fixture");
+  conversation.header.cost = 0.001;
+  expect(renderToStaticMarkup(<ConversationPanel conversation={conversation} />)).toContain(
+    ">&lt;US$0.01</span>",
+  );
+});
+
 it("renders optional header chips from retained facts and withholds message text", () => {
   const conversation = selectConversation(sketchState, "agent-1", [
     { seq: 14, ts: "2026-10-27T17:02:02Z", text: null },

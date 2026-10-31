@@ -55,7 +55,9 @@ export function FocusPanel(
                 : tab.id === "practice"
                   ? "Two-change practice"
                   : tab.conversation
-                    ? `Agent ${slot ?? tab.conversation} · conversation`
+                    ? slot
+                      ? `Agent ${slot} · conversation`
+                      : "Conversation"
                     : tab.review
                       ? `Review · ${tab.review}`
                       : tab.diff
@@ -151,7 +153,8 @@ function ConversationFocus({
   canOpenChange,
 }: FrameProps & { agentId: string }) {
   const conversation = selectConversation(state, agentId, state.messages[agentId] ?? []);
-  if (!conversation) return <p>This agent is not in the current run.</p>;
+  if (!conversation)
+    return <p className="px-3 py-2 text-muted">This agent is not in the current run.</p>;
   return (
     <ConversationPanel
       conversation={conversation}

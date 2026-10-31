@@ -240,6 +240,10 @@ it("keeps a conversation tab open with the unavailable line after a new run", as
     await check(
       page.getByText("This agent is not in the current run.", { exact: true }),
     ).toBeVisible();
+    await check(page.getByRole("tab", { name: "Conversation", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(await page.evaluate(() => window.conversationTabTest.view().activeTab)).toBe(
       "conversation:agent-1",
     );

@@ -342,49 +342,51 @@ function CardActions({
   const own = look[agent.slot];
   const reviewClass = `inline-flex h-(--button-primary-height) min-w-0 items-center gap-(--spacing-xs) rounded-control px-(--spacing-xs) text-(length:--label-size) font-semibold whitespace-nowrap text-on-agent hover:brightness-110 [&>svg]:shrink-0 ${own.fill} ${focusRing}`;
   return (
-    <footer className="mt-3 flex min-h-10 flex-wrap gap-x-(--spacing-xs) gap-y-2">
-      {!readyForReview && onOpenDiff && (
-        <button
-          type="button"
-          className={compactSecondaryButtonClass}
-          onClick={() => {
-            onOpenDiff(agent.change_id);
-          }}
-        >
-          <FileDiff aria-hidden="true" className="size-4" /> Live diff
-        </button>
-      )}
-      {readyForReview && onReview && (
-        <button
-          type="button"
-          className={reviewClass}
-          onClick={() => {
-            onReview(agent.change_id);
-          }}
-        >
-          <Eye aria-hidden="true" className="size-4" /> Review change
-        </button>
-      )}
-      {onConversation && (
-        <button
-          type="button"
-          className={compactSecondaryButtonClass}
-          onClick={() => {
-            onConversation(agent.agent_id);
-          }}
-        >
-          <MessagesSquare aria-hidden="true" className="size-4" /> Conversation
-        </button>
-      )}
-      {onPause && onResume && (
-        <PauseControl
-          compact
-          agentId={agent.agent_id}
-          state={agent.state}
-          onPause={onPause}
-          onResume={onResume}
-        />
-      )}
+    <footer className="mt-3 flex min-h-10 flex-col gap-2">
+      <div className="flex min-w-0 flex-nowrap gap-(--spacing-xs) has-[[data-pausing]]:flex-wrap">
+        {!readyForReview && onOpenDiff && (
+          <button
+            type="button"
+            className={compactSecondaryButtonClass}
+            onClick={() => {
+              onOpenDiff(agent.change_id);
+            }}
+          >
+            <FileDiff aria-hidden="true" className="size-4" /> Live diff
+          </button>
+        )}
+        {readyForReview && onReview && (
+          <button
+            type="button"
+            className={reviewClass}
+            onClick={() => {
+              onReview(agent.change_id);
+            }}
+          >
+            <Eye aria-hidden="true" className="size-4" /> Review change
+          </button>
+        )}
+        {onConversation && (
+          <button
+            type="button"
+            className={compactSecondaryButtonClass}
+            onClick={() => {
+              onConversation(agent.agent_id);
+            }}
+          >
+            <MessagesSquare aria-hidden="true" className="size-4" /> Conversation
+          </button>
+        )}
+        {onPause && onResume && (
+          <PauseControl
+            compact
+            agentId={agent.agent_id}
+            state={agent.state}
+            onPause={onPause}
+            onResume={onResume}
+          />
+        )}
+      </div>
       {onStop &&
         ["working", "revising", "ready_for_review", "halted", "paused"].includes(agent.state) && (
           <div className="w-full">

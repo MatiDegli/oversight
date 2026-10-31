@@ -339,7 +339,8 @@ it("offers Conversation in every state only with a callback, in footer order", (
   const footer = (actions.type as (p: typeof props) => ReactElement<{ children: ReactElement[] }>)(
     actions.props,
   );
-  const button = Children.toArray(footer.props.children).find(
+  const row = footer.props.children[0] as ReactElement<{ children: ReactElement[] }>;
+  const button = Children.toArray(row.props.children).find(
     (child) =>
       isValidElement<{ onClick?: () => void; children: unknown[] }>(child) &&
       child.props.children.includes(" Conversation"),
