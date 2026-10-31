@@ -78,7 +78,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 8 | Merge by rules, follow main and Revert (package 1) | Partial — transaction `73b4f65`, barriers `7aec7d5`, merge-mode HTTP `0e21fdf` wired; start capability `1824a46` keeps activation closed; protected-path evaluation/capture `f8d720c`/`31b45f2`, spend evidence `085c555`, inverse-merge primitives `5bf57e7`/`5aa5680`, Revert preflight `88a54f4` and internal service `454f602` on main; Revert route/UI, follow main and preemption remain | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
 | 9 | A change card with three states | Partial — decision producer `3786310`, grouped witnesses `3068b81`, answer guards `2efd586`, inbox projection `f4ab346`; full UI/rules state remain | Yes |
 | 10 | Cost and rounds per accepted change | Partial — usage fold `43f3bb8`, archived change totals `bf36052`; agent-hours, dated prices and aggregate UI remain | Yes — stored aggregates; event-derived totals need none |
-| 11 | One plan, server-computed zones and task queue (package 6) | Partial — standalone queue `c820fbf`, plan service/routes and internal dependency dispatch `efd592f`, metered single-subtask generation `f907e41`; person plans use one whole-graph zone; partition core `deb7148` remains unwired and plan UI remains | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
+| 11 | One plan, server-computed zones and task queue (package 6) | Partial — standalone queue `c820fbf`, dependency contracts `bb9dc43`, plan service/routes and internal dependency dispatch `efd592f`, metered single-subtask generation `f907e41`; partition core `deb7148` remains unwired and plan UI remains | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
 | — | [Lead agent](#lead-agent) | Queued — after items 8 and 11; lead routes still 501 at `454f602`; internal lead-supplied plan drafts supported by `efd592f` | No — lead routes and `started_by` reserved |
 | — | [Saved agent flows](#saved-agent-flows) | Queued — picker absent at `454f602`; after the lead, extends package 12 `c1c19c6` | No while filling task text; a distinct role or tool limits need maintainer review |
 | 12 | Examples before code | Queued — contracts reserved `649ff0d`; no examples phase on main `454f602` | Yes |
@@ -96,12 +96,12 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 16 | Bounded one-hop context for initial tasks | Queued — initial slice absent at `454f602`, waits for bench; revision callers/siblings `ee92691` | No |
 
 **Not ranked, goes in regardless:** delivery (package 9; static replay `a0a4624`, challenge
-`99a57de`, phone practice `0c884f6`/`b7ea554`/`6ce0d19`, recorded evidence `e621acb` on main), graph polish (8;
-scale layout `04f0a41`, life layer `8fad4c2`/`ff80c6f`, exact edges `19a94ce`, camera fit
-`37c40b9`/`b860ef4` on main, polish continues), and the task bench (10;
-arms `9ad1ecf`, frozen patches `724b5c9`, detection arms `75b30f8`, sensitivity gate `cc52a78`
-and harness pair `ad5de55`, split measurement `74b5791`, send accounting `cc023c8`, probe-cause
-reports `507ce31`/`25d6ea3` on main; the gate does not establish a completed paid run).
+`99a57de`, phone practice `0c884f6`/`b7ea554`/`6ce0d19`, recorded evidence `e621acb` on main), graph
+polish (8; scale layout `04f0a41`, life layer `8fad4c2`/`ff80c6f`, exact edges `19a94ce`, camera fit
+`37c40b9`/`b860ef4` on main, polish continues), and the task bench (10; arms `9ad1ecf`, frozen
+patches `724b5c9`, detection arms `75b30f8`, sensitivity gate `cc52a78` and harness pair `ad5de55`,
+split measurement `74b5791`, send accounting `cc023c8`, probe-cause reports `507ce31`/`25d6ea3` on
+main; the gate does not establish a completed paid run).
 
 ## Undecided candidates
 
@@ -132,6 +132,19 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
      work.
   6. Division of labor: Oversight's evidence guards what code reaches main; the sandbox guards what
      code does while it runs.
+
+- Progress made visible, from real data only (maintainer, 2026-10-31). No bar or percentage
+  without a real denominator. A sketch round follows the map sketch; nothing is built before the
+  checkpoint.
+
+  1. Evidence steps on each change card: tests, fails before and passes after, behavior diff, cone,
+     cross-review and decision, each shown as done, running or pending from existing events.
+  2. Collapsible agent steps with their durations, from `agent.step` events.
+  3. A plan checklist from item 11's per-subtask states, for example "2 of 4 merged".
+  4. Progress bars only against a real bound: the agent's time limit, spend against the budget,
+     model retries (n/5), and proof 2's queue, for example "7 of 16 tasks done".
+  5. Later, and only with a contract change: a todo list the agent writes, labeled as the agent's
+     claim.
 
 - Benchmarks view: a read-only view of the bench and proof results inside Oversight. Until it
   exists, the README and the demo video carry the proofs.
