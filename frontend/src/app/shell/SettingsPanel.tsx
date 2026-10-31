@@ -45,12 +45,15 @@ export function SettingsPanel({
       ? attempt.message
       : null;
   return (
-    <section aria-labelledby="merge-mode-heading" className="p-8">
+    <section
+      aria-labelledby="merge-mode-heading"
+      className="@container min-h-0 w-full min-w-0 overflow-y-auto p-8"
+    >
       <h2 id="merge-mode-heading" className="text-(length:--title-size) font-bold">
         Merge mode
       </h2>
       <p className="mt-1 text-sm text-muted">Who lets a finished change into main.</p>
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 @sm:grid-cols-2">
         {choices.map(([mode, title, body]) => {
           const marked = current?.mode === mode;
           return (
@@ -64,7 +67,7 @@ export function SettingsPanel({
                 if (event.detail === 0 || marked || pending || !current) return;
                 onSetMergeMode?.(mode);
               }}
-              className={`flex items-start gap-2.5 rounded-card border p-4 text-left ${marked ? "border-muted bg-page-raised" : "border-border bg-page"} enabled:hover:border-muted ${focusRing}`}
+              className={`flex min-w-0 items-start gap-2.5 rounded-card border p-4 text-start ${marked ? "border-muted bg-page-raised" : "border-border bg-page"} enabled:hover:border-muted ${focusRing}`}
             >
               <span
                 aria-hidden="true"
@@ -83,7 +86,7 @@ export function SettingsPanel({
       {failure && (
         <p role="alert" className="mt-4 flex items-start gap-2 text-sm text-muted">
           <X aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          {failure}
+          <span className="min-w-0 wrap-anywhere">{failure}</span>
         </p>
       )}
       {!onSetMergeMode && (

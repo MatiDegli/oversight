@@ -137,6 +137,72 @@ it("waits for the event revision after a 200 and never marks the response optimi
   }
 });
 
+it("keeps a long multilingual refusal readable with 200% text and vertical scrolling", async () => {
+  const page = await open(false, 1280, 800);
+  const message = ("رفض🙂漢字é" + "x".repeat(120)).repeat(16);
+  await page.route("**/merge-mode", (r) =>
+    r.fulfill({ status: 409, json: { error: { code: "wrong_state", message } } }),
+  );
+  try {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    await rules(page).click();
+    await check(page.getByRole("alert").filter({ hasText: message })).toHaveText(message);
+    const section = page.getByRole("region", { name: "Merge mode", exact: true });
+    const geometry = await section.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      const [first, second] = [...element.querySelectorAll("button")].map((card) =>
+        card.getBoundingClientRect(),
+      );
+      const alert = element.querySelector('[role="alert"]');
+      if (!first || !second || !alert) throw new Error("Missing merge mode controls or refusal");
+      return {
+        overflow: element.scrollWidth - element.clientWidth,
+        scrolled: element.scrollTop,
+        end: alert.getBoundingClientRect().bottom,
+        bottom: element.getBoundingClientRect().bottom,
+        stacked: second.top >= first.bottom,
+      };
+    });
+    expect(geometry.overflow).toBeLessThanOrEqual(1);
+    expect(geometry.scrolled).toBeGreaterThan(0);
+    expect(geometry.end).toBeLessThanOrEqual(geometry.bottom);
+    expect(geometry.stacked).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each(["network", "server"])(
+  "recovers from a %s failure only on the next pointer click",
+  async (failure) => {
+    const page = await open();
+    let requests = 0;
+    await page.route("**/merge-mode", (r) => {
+      requests += 1;
+      return failure === "network" ? r.abort("internetdisconnected") : r.fulfill({ status: 500 });
+    });
+    try {
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await rules(page).click();
+      const message =
+        failure === "network"
+          ? "Setting the merge mode did not reach the server. Check the connection and try again."
+          : "Setting the merge mode failed: the server hit an internal error. Try again.";
+      await check(page.getByRole("alert").filter({ hasText: message })).toBeVisible();
+      await check(rules(page)).toBeEnabled();
+      expect(requests).toBe(1);
+      await rules(page).click();
+      await check(page.getByRole("alert").filter({ hasText: message })).toBeVisible();
+      expect(requests).toBe(2);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
 it.each([
   [1920, 1080],
   [1280, 800],
