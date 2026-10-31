@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 from oversight.changes._behavior_aliases import (
     _AliasBindings,  # pyright: ignore[reportPrivateUsage]
+    local_alias,
     module_aliases,
     shadowed,
 )
-from oversight.changes._shortcuts_common import Source, walk_local
+from oversight.changes._shortcuts_common import Source, is_test_file, walk_local
 
 if TYPE_CHECKING:
     from oversight.changes._behavior_sources import Sources
@@ -187,6 +188,8 @@ def _resolved(
     source: Source, call: ast.Call, path: str, module: str, name: str, aliases: dict[str, str]
 ) -> bool:
     resolved = source.resolve(call.func)
+    if is_test_file(path) and (local := local_alias(source, call)) is not None:
+        resolved = local
     if (
         isinstance(call.func, ast.Name)
         and call.func.id in aliases
