@@ -7,7 +7,7 @@ import type { getActiveTheme } from "../theme";
 import { cacheLayers } from "./layerCache";
 import { layerImages } from "./layerImages";
 import { nodeGeometry } from "./geometry";
-import { headerLayers, marksClearance, marksLayer } from "./layers";
+import { headerLayers, marksClearance, marksLayer, measuredLayer } from "./layers";
 import type { Band, Layer, NodeMarks } from "./layers";
 import type { Route } from "./routes";
 
@@ -83,6 +83,8 @@ export function graphStyles(
     return { width: size.width - geometry.border, height: size.height - geometry.border };
   };
   const marks = (node: NodeSingular): Layer[] => {
+    const word = measuredWord(node);
+    if (word) return [measuredLayer(theme, word, body(node))];
     const value = node.data("marks") as NodeMarks | undefined;
     return value ? [marksLayer(theme, value, body(node))] : [];
   };
@@ -90,6 +92,12 @@ export function graphStyles(
     node.hasClass("cone") ? [distanceBadge(node)] : [];
   const frameText = (node: NodeSingular) =>
     [String(node.data("title") ?? ""), String(node.data("count") ?? "")] as const;
+  const measuredWord = (node: NodeSingular) =>
+    node.hasClass("cone") && node.hasClass("measured-differs")
+      ? "differs"
+      : node.hasClass("cone") && node.hasClass("measured-varied")
+        ? "varied"
+        : undefined;
   // A frame with children: its header row, which carries the agent's state word if one touches it.
   // The row spans the frame's outer width: `width()` is its content, without the padding around it.
   const frameLayers = (node: NodeSingular): Layer[] => [
@@ -113,6 +121,7 @@ export function graphStyles(
           "empty" satisfies Band,
           node.data("marks") as NodeMarks | undefined,
           node.hasClass("folded"),
+          measuredWord(node),
         )
       : marks(node)),
     ...cone(node),
@@ -121,7 +130,11 @@ export function graphStyles(
   // badges when an agent touches it. Cytoscape cuts the name with an ellipsis at this width.
   const nameRoom = (node: NodeSingular) => {
     const value = node.data("marks") as NodeMarks | undefined;
-    const taken = value ? marksClearance(theme, value) + px(theme["node-word-gap"]) : 0;
+    const taken = measuredWord(node)
+      ? 70 + 2 * px(theme["node-word-gap"])
+      : value
+        ? marksClearance(theme, value) + px(theme["node-word-gap"])
+        : 0;
     return Math.max(
       0,
       outer(node).width - px(theme["node-pad-left"]) - px(theme["node-pad-right"]) - taken,

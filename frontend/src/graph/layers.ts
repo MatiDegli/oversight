@@ -12,6 +12,7 @@ import semibold from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hype
 import bold from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-700-normal.woff2?inline";
 
 import { textWidth } from "./textWidth";
+import type { MeasuredWord } from "./elements";
 
 /** The words a node says about what an agent is doing with it, in order of precedence. */
 export type Word = "editing" | "changed" | "new" | "read";
@@ -30,6 +31,8 @@ export interface LayerTheme extends Record<AgentFamily | `${AgentFamily}-text`, 
   "on-agent": string;
   "module-label": string;
   faint: string;
+  text: string;
+  muted: string;
   "label-weight": number;
   "badge-weight": number;
   "agent-border-width": string;
@@ -191,6 +194,36 @@ export function marksLayer(theme: LayerTheme, marks: NodeMarks, leaf: LeafSize):
   };
 }
 
+/** Review evidence occupies the state-word slot without changing the node's box or light. */
+export function measuredLayer(
+  theme: LayerTheme,
+  word: Extract<MeasuredWord, "differs" | "varied">,
+  leaf: LeafSize,
+): Layer {
+  const width = HEADER.wordWidth;
+  return {
+    image: rowImage(
+      theme,
+      width,
+      text(
+        theme,
+        `x="${String(width)}" ${rowBaseline} text-anchor="end"`,
+        theme["node-word-size"],
+        word === "differs" ? 600 : 400,
+        word === "differs" ? theme.text : theme.muted,
+        word,
+      ),
+    ),
+    width,
+    height: HEADER.height,
+    x: "100%",
+    y: "0%",
+    offsetX: -px(theme["node-pad-right"]) - px(theme["node-word-gap"]),
+    offsetY: (leaf.height - HEADER.height) / 2,
+    clip: "node",
+  };
+}
+
 /** The room the title and the count each get on a frame's header row, in px. */
 const HEADER = { titleWidth: 240, countWidth: 180, height: 28, wordWidth: 70 };
 
@@ -293,6 +326,7 @@ export function headerLayers(
   band: Band,
   marks?: NodeMarks,
   folded = false,
+  measured?: "differs" | "varied",
 ): Layer[] {
   const inset = px(theme["frame-title-inset"]);
   const top = bandCenter(theme, band, size.height) - HEADER.height / 2;
@@ -306,6 +340,32 @@ export function headerLayers(
     offsetY: top,
     clip: "node",
   });
+  if (measured) {
+    const word = measuredLayer(theme, measured, { width: size.width, height: HEADER.height });
+    const gap = px(theme["node-word-gap"]);
+    const countWidth = textWidth(
+      count,
+      `${String(theme["caption-weight"])} ${theme["frame-count-size"]} ${theme["text-font"]}`,
+      px(theme["frame-count-size"]),
+    );
+    const room = Math.max(0, size.width - 2 * inset - word.width - countWidth - 2 * gap);
+    return [
+      titleLayer(theme, title, room, top, folded),
+      trailing(
+        HEADER.countWidth,
+        text(
+          theme,
+          `x="${String(HEADER.countWidth)}" ${rowBaseline} text-anchor="end"`,
+          theme["frame-count-size"],
+          theme["caption-weight"],
+          theme.faint,
+          escape(count),
+        ),
+        word.offsetX - word.width - gap,
+      ),
+      { ...word, offsetY: top },
+    ];
+  }
   if (marks) {
     const badges = badgesWidth(theme, marks.badges.length);
     const gap = px(theme["node-word-gap"]);

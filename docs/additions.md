@@ -300,9 +300,9 @@ Tests construct the objects; do not serialize/rebuild arbitrary objects to invok
 Bounded caller recording and optional measured-cone evidence, including unmatched calls and
 incompleteness, are on main (`1c50382`), behind `OVERSIGHT_MEASURED_CONE`
 (`backend/src/oversight/changes/_proposal.py:342`). GET /impact serves bounded graph cones
-(`920e930`); measured caller highlighting/list rendering remains. Both runs
+(`920e930`); measured caller list and canvas words are built; the node evidence chip/popover remains. Both runs
 require session network isolation, never open-network execution. Unsupported or unmatched calls
-are not compared; other nodes stay “possible, no change measured”. This is neither per-test
+are not compared; other nodes stay “not measured”. This is neither per-test
 coverage nor proof that all callers behave identically.
 
 ### 5. Live overlap between agents

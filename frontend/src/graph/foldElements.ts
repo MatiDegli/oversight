@@ -40,11 +40,14 @@ export function foldElements(
   for (const [id, group] of represented) {
     const original = group.find((e) => e.data.id === id);
     if (!original) continue;
+    const { measured: ownMeasurement, ...originalData } = original.data;
     const folded = foldedModules.has(id) || (original.data.kind === "class" && !expanded.has(id));
     const classes = new Set(
       group
         .flatMap((e) => e.classes.split(" "))
-        .filter((c) => c !== "dimmed" && c !== "cone" && c !== "marked"),
+        .filter(
+          (c) => c !== "dimmed" && c !== "cone" && c !== "marked" && !c.startsWith("measured-"),
+        ),
     );
     // A class's kind remains a class; descendants do not turn it into a method or another frame.
     for (const kind of ["module", "class", "function", "method"]) classes.delete(kind);
@@ -57,11 +60,18 @@ export function foldElements(
     const marks = combinedMarks(group);
     if (marks) classes.add("marked");
     if (distance !== Infinity) classes.add("cone");
+    const measured = folded
+      ? group.some((e) => e.data.measured === "differs") && distance !== Infinity
+        ? "differs"
+        : undefined
+      : ownMeasurement;
+    if (measured) classes.add(`measured-${measured === "not measured" ? "unmeasured" : measured}`);
     if (folded) classes.add("folded");
     result.push({
       ...original,
       data: {
-        ...original.data,
+        ...originalData,
+        measured,
         ...(folded
           ? {
               w:
