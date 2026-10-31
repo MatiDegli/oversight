@@ -137,3 +137,54 @@ it.each(["dark", "day"] as const)(
     expect(svg).toContain(">differs</text>");
   },
 );
+
+it.each(["class", "module"])("keeps agent marks over measured words on a folded %s", (kind) => {
+  const { elements, state } = projection(21);
+  const pending = elements.map((e) =>
+    e.data.id === "shop.cart:Cart.total"
+      ? {
+          ...e,
+          classes: `${e.classes} pending pending-A marked`,
+          data: {
+            ...e.data,
+            marks: {
+              word: "changed" as const,
+              slot: "A" as const,
+              badges: [{ slot: "A" as const, filled: true }],
+            },
+          },
+        }
+      : e,
+  );
+  const expanded = new Set(state.graph?.nodes.filter((n) => n.kind === "module").map((n) => n.id));
+  const folded = foldElements(
+    pending,
+    expanded,
+    kind === "module" ? new Set(["shop.cart"]) : new Set(),
+  );
+  const row = folded.elements.find(
+    (e) => e.data.id === (kind === "class" ? "shop.cart:Cart" : "shop.cart"),
+  );
+  if (!row?.data.marks) throw new Error("Missing folded agent marks");
+  const size = { width: row.data.w ?? 280, height: row.data.h ?? 46 };
+  const draw = (measured?: "differs") =>
+    headerLayers(
+      themes.dark,
+      row.data.title ?? "",
+      row.data.count ?? "",
+      size,
+      "empty",
+      row.data.marks,
+      true,
+      measured,
+    );
+  const layers = draw("differs");
+  expect(row.data.measured).toBe("differs");
+  expect(layers).toHaveLength(2);
+  expect(layers).toEqual(draw());
+  const svg = layers.map((layer) => decodeURIComponent(layer.image)).join("");
+  expect(svg).toContain(">changed</text>");
+  expect(svg).toContain(">A</text>");
+  expect(svg).not.toContain(">differs</text>");
+  expect(svg).not.toContain(`>${row.data.count ?? ""}</text>`);
+});

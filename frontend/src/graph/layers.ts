@@ -225,7 +225,7 @@ export function measuredLayer(
 }
 
 /** The room the title and the count each get on a frame's header row, in px. */
-const HEADER = { titleWidth: 240, countWidth: 180, height: 28, wordWidth: 70 };
+export const HEADER = { titleWidth: 240, countWidth: 180, height: 28, wordWidth: 70 };
 
 const escape = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -340,6 +340,26 @@ export function headerLayers(
     offsetY: top,
     clip: "node",
   });
+  // Agent marks own this slot even when a hidden caller differs.
+  if (marks) {
+    const badges = badgesWidth(theme, marks.badges.length);
+    const gap = px(theme["node-word-gap"]);
+    const cluster = HEADER.wordWidth + gap + badges;
+    const room = Math.max(0, Math.min(HEADER.titleWidth, size.width - 2 * inset - cluster - gap));
+    const centerY = HEADER.height / 2;
+    return [
+      titleLayer(theme, title, room, top, folded),
+      trailing(
+        cluster,
+        wordText(
+          theme,
+          marks,
+          `x="${String(cluster - badges - gap)}" y="${String(centerY)}" dy=".35em" text-anchor="end"`,
+        ) + badgeShapes(theme, marks, cluster, centerY),
+        -inset,
+      ),
+    ];
+  }
   if (measured) {
     const word = measuredLayer(theme, measured, { width: size.width, height: HEADER.height });
     const gap = px(theme["node-word-gap"]);
@@ -364,25 +384,6 @@ export function headerLayers(
         word.offsetX - word.width - gap,
       ),
       { ...word, offsetY: top },
-    ];
-  }
-  if (marks) {
-    const badges = badgesWidth(theme, marks.badges.length);
-    const gap = px(theme["node-word-gap"]);
-    const cluster = HEADER.wordWidth + gap + badges;
-    const room = Math.max(0, Math.min(HEADER.titleWidth, size.width - 2 * inset - cluster - gap));
-    const centerY = HEADER.height / 2;
-    return [
-      titleLayer(theme, title, room, top, folded),
-      trailing(
-        cluster,
-        wordText(
-          theme,
-          marks,
-          `x="${String(cluster - badges - gap)}" y="${String(centerY)}" dy=".35em" text-anchor="end"`,
-        ) + badgeShapes(theme, marks, cluster, centerY),
-        -inset,
-      ),
     ];
   }
   const countWidth = textWidth(

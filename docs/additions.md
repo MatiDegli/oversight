@@ -71,7 +71,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 1 | Facts and a summary from events (package 3) | On main — summary producer `027ec36`, review rendering `9cdd02a`; facts row/steps `ae9822d` | Yes — summary; report check needs no field |
 | 2 | Behavior diff | Backend on main — opt-in publication `e72fcc7`, shared-input comparison `647d545`, methods/getters/setters `2cfe760`, project-object arguments `8a4a2ec`, unprobed reasons `f44dd62`; node/review rows remain | Yes |
 | 3 | Agent harness pack | On main — opt-in pack `42976ee`, runner wiring `b4446cc` | No |
-| 4 | Measured impact cone | Backend on main — caller evidence `1c50382`, bounded GET /impact `920e930`; measured graph display remains | Yes |
+| 4 | Measured impact cone | Backend on main — caller evidence `1c50382`, bounded GET /impact `920e930`; measured caller list and canvas words built `b431391`; node evidence chip/popover remains | Yes |
 | 5 | Live overlap between agents | Queued — card facts/change-lifetime reads remain; latest focus and last-read node only at `454f602` | No |
 | 6 | Fails before, passes after (package 4) | On main — base setup/import errors are unknown `b786f6c`; isolated probes `19443e8` | No — conservative classification uses existing fields; exception type declined |
 | 7 | Cross-review and automatic Request changes (package 2) | On main — one-round revision `7da6fa9`, independent reviewer selection `045f589`; manual review route still 501 | No |

@@ -967,7 +967,8 @@ everything else steps back.
 In review, measured callers use the row's state-word slot: right-aligned just left of the distance
 badge, with the existing SVG font, node-word-size and node-word-gap. "differs" uses text at 600;
 "varied" uses muted at 400. "same", "not measured" and null get no canvas mark and keep today's
-cone look. A folded class or module says "differs" if any hidden member differs; "varied" never
+cone look. A folded class or module says "differs" if any hidden member differs and the row has
+no agent marks; agent words and badges keep their slot and omit the count. "varied" never
 projects onto a folded row. Measurements never open or close rows, move nodes, routes, camera,
 framing or focus, or add a field light. No border, color, token, edge caption or legend changes.
 

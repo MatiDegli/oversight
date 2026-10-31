@@ -6,7 +6,7 @@ import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchBrowser } from "../browserLaunch.support";
-import type { GraphProbeHost } from "../graph";
+import type { FieldProbe, GraphProbeHost } from "../graph";
 import type {} from "./measuredCone.browser.fixture";
 
 let server: ViteDevServer, browser: Browser, html: string, url: string;
@@ -91,6 +91,21 @@ async function geometry(page: Page) {
   });
 }
 
+async function fieldLight(page: Page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement & { oversightField?: FieldProbe }>(
+      ".graph-stage canvas",
+    );
+    const field = canvas?.oversightField;
+    if (!field || field.state() !== "webgl") throw new Error("Missing rendered field");
+    field.pixel(0, 0);
+    const lamps = [];
+    for (let y = 0; y < canvas.clientHeight; y += 49)
+      for (let x = 0; x < canvas.clientWidth; x += 49) lamps.push(field.lamp(x, y));
+    return { life: field.life(), lamps };
+  });
+}
+
 async function compare(sketch: string, capture: string) {
   const reference = fileURLToPath(
     new URL(`../../../docs/sketches/graph-evidence/${sketch}-dark.png`, import.meta.url),
@@ -127,7 +142,11 @@ it("updates facts in place without camera, nodes, routes, borders or focus movin
     );
     const comment = page.getByRole("textbox", { name: "Comment for the agent" });
     await comment.fill("Keep this comment");
+    await check
+      .poll(() => page.evaluate(() => window.measuredConeTest.drawnWords()))
+      .toContain("differs");
     const before = await geometry(page);
+    const light = await fieldLight(page);
     for (const seq of [22, 23, 24]) {
       await page.evaluate((seq) => {
         window.measuredConeTest.advance(seq);
@@ -144,7 +163,25 @@ it("updates facts in place without camera, nodes, routes, borders or focus movin
           ),
         )
         .toBe(seq === 22 ? 1 : 0);
+      if (seq === 22)
+        await check
+          .poll(() => page.evaluate(() => window.measuredConeTest.drawnWords()))
+          .toContain("varied");
+      else {
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  resolve();
+                });
+              }),
+            ),
+        );
+        expect(await page.evaluate(() => window.measuredConeTest.drawnWords())).toEqual([]);
+      }
       expect(await geometry(page)).toEqual(before);
+      expect(await fieldLight(page)).toEqual(light);
       if (seq >= 23)
         expect(
           await page.evaluate(() =>

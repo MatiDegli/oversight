@@ -7,7 +7,7 @@ import type { getActiveTheme } from "../theme";
 import { cacheLayers } from "./layerCache";
 import { layerImages } from "./layerImages";
 import { nodeGeometry } from "./geometry";
-import { headerLayers, marksClearance, marksLayer, measuredLayer } from "./layers";
+import { HEADER, headerLayers, marksClearance, marksLayer, measuredLayer } from "./layers";
 import type { Band, Layer, NodeMarks } from "./layers";
 import type { Route } from "./routes";
 
@@ -131,7 +131,7 @@ export function graphStyles(
   const nameRoom = (node: NodeSingular) => {
     const value = node.data("marks") as NodeMarks | undefined;
     const taken = measuredWord(node)
-      ? 70 + 2 * px(theme["node-word-gap"])
+      ? HEADER.wordWidth + 2 * px(theme["node-word-gap"])
       : value
         ? marksClearance(theme, value) + px(theme["node-word-gap"])
         : 0;

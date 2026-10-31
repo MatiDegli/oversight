@@ -5,7 +5,7 @@ Each decision with its reason. The design approved before the build is in
 
 ## 2026-10-31 — Measured caller words on the graph
 
-Approved by the maintainer at 13:55:35 ART (packet B 1031e item 1): review callers say
+Approved by the maintainer at 13:55:35 ART (2026-10-31T16:55:35Z; packet B 1031e item 1): review callers say
 "differs" in neutral text at 600 or "varied" in muted at 400, using the existing state-word
 slot. "same", "not measured" and absent comparisons leave the cone unchanged. Folded classes
 and modules project only a hidden member's "differs"; evidence never changes folds, geometry,
