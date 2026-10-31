@@ -57,7 +57,7 @@ def class_signature(cache: Sources, module: str, name: str):
         ):
             raise ValueError(reason)
     signature = _constructor(source, cls)
-    cache.constructors[key] = (signature, construction_ast(cls, cache.deadline))
+    cache.constructors[key] = (signature, construction_ast(cls, cache.deadline, source))
     return signature
 
 
