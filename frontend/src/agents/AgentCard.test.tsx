@@ -2,7 +2,14 @@ import { readFileSync } from "node:fs";
 
 import type { ServerEvent, SuiteResult } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("react", async (original) => ({
+  ...(await original<typeof import("react")>()),
+  useRef: () => ({ current: null }),
+  useLayoutEffect: () => undefined,
+}));
 
 import { applyEvent, createInitialState } from "../state";
 import type { State } from "../state";
@@ -286,3 +293,58 @@ it.each(["US$1,234.56", "US$12,345,678.90", "1,234", "−1,234.56"])(
     );
   },
 );
+
+it("offers Conversation in every state only with a callback, in footer order", () => {
+  const data = selectAgentCard(through(18), "agent-1");
+  if (!data) throw new Error("Missing agent");
+  const onConversation = vi.fn();
+  const command = () => Promise.resolve();
+  for (const state of [
+    "starting",
+    "working",
+    "revising",
+    "paused",
+    "ready_for_review",
+    "halted",
+    "stopped",
+    "done",
+  ] as const) {
+    const html = renderToStaticMarkup(
+      <AgentCard
+        data={{ ...data, agent: { ...data.agent, state } }}
+        onConversation={onConversation}
+      />,
+    );
+    expect(html).toContain("Conversation</button>");
+    expect(html).toContain("lucide-messages-square");
+  }
+  expect(renderToStaticMarkup(<AgentCard data={data} />)).not.toContain("Conversation");
+  const props = {
+    data,
+    onConversation,
+    onOpenDiff: () => undefined,
+    onPause: command,
+    onResume: command,
+  };
+  const html = renderToStaticMarkup(<AgentCard {...props} />);
+  expect(html.indexOf("Live diff</button>")).toBeLessThan(html.indexOf("Conversation</button>"));
+  expect(html.indexOf("Conversation</button>")).toBeLessThan(html.indexOf("Pause</button>"));
+  const tree = AgentCard(props) as ReactElement<{ children: ReactNode }>;
+  const actions = Children.toArray(tree.props.children).find(
+    (child) =>
+      isValidElement(child) &&
+      typeof child.type === "function" &&
+      child.type.name === "CardActions",
+  ) as ReactElement<typeof props>;
+  const footer = (actions.type as (p: typeof props) => ReactElement<{ children: ReactElement[] }>)(
+    actions.props,
+  );
+  const row = footer.props.children[0] as ReactElement<{ children: ReactElement[] }>;
+  const button = Children.toArray(row.props.children).find(
+    (child) =>
+      isValidElement<{ onClick?: () => void; children: unknown[] }>(child) &&
+      child.props.children.includes(" Conversation"),
+  ) as ReactElement<{ onClick: () => void }>;
+  button.props.onClick();
+  expect(onConversation).toHaveBeenCalledExactlyOnceWith("agent-1");
+});

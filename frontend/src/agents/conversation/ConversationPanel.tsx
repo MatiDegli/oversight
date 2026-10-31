@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { agentLook } from "../../theme";
+import { costText } from "../../state";
 import { labels } from "../AgentCard";
 import { Composer } from "./Composer";
 import type { ConversationControls } from "./Composer";
@@ -37,7 +38,7 @@ function Header({ header }: { header: ConversationHeader }) {
         </span>
         {header.cost !== undefined && (
           <span className={`${chip} ${header.cost === null ? "" : "font-mono"}`}>
-            {header.cost === null ? "Cost unknown" : `US$${header.cost.toFixed(2)}`}
+            {header.cost === null ? "Cost unknown" : costText(header.cost)}
           </span>
         )}
         {header.round > 1 && <span className={chip}>Round {header.round}</span>}
