@@ -103,3 +103,51 @@ async def test_pending_commit_blocks_delivery_and_failure_rolls_back(
         finally:
             release.set()
             await request
+
+
+async def test_waiting_admission_refuses_a_drive_closed_during_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = HeldScript()
+    entered, release = asyncio.Event(), asyncio.Event()
+    waiting: asyncio.Queue[None] = asyncio.Queue()
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(live_settings(tmp_path), lambda *_: model) as s,
+    ):
+        await start(s)
+        await model.entered.get()
+        original = s.store.publish
+        run_control = s.live._controls["agent-1"].control
+        record_message = run_control.record_message
+
+        async def held(payload: EventPayload, *, ts: str | None = None) -> StoredEvent:
+            if isinstance(payload, AgentMessageSent):
+                entered.set()
+                await release.wait()
+            return await original(payload, ts=ts)
+
+        async def observed_admission(*args, **kwargs):
+            waiting.put_nowait(None)
+            return await record_message(*args, **kwargs)
+
+        monkeypatch.setattr(s.store, "publish", held)
+        monkeypatch.setattr(run_control, "record_message", observed_admission)
+        first = asyncio.create_task(control(s, "message", "First."))
+        second = None
+        try:
+            await entered.wait()
+            await waiting.get()
+            second = asyncio.create_task(control(s, "message", "Second."))
+            await waiting.get()
+            accepted(await control(s, "stop"))
+            release.set()
+            accepted(await first)
+            assert error_code(await second) == (409, "wrong_state")
+            sent = [e.payload.text for e in s.events() if e.type == "agent.message"]
+            assert sent == ["First."] and not run_control.pending_messages
+        finally:
+            release.set()
+            await first
+            if second is not None:
+                await second

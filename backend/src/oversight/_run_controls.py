@@ -74,6 +74,8 @@ async def message(live: LiveRun, agent_id: str, text: str) -> None:
     except UnicodeEncodeError:
         accepted = False
     if not accepted:
+        if control.closed:
+            raise WrongState(f"{agent_id} has no active drive accepting controls")
         raise ApiError("invalid_request", "message is blank or exceeds a run message limit")
 
 
