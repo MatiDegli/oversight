@@ -26,7 +26,7 @@ def construction_ast(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
             bindings.update(names)
             if isinstance(node, ast.Assign):
                 assignments.update(names)
-            if "__init__" in bindings:
+            if any(name.startswith("__") and name.endswith("__") for name in bindings):
                 return _whole_class(cls, deadline)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if any(

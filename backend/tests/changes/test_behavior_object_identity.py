@@ -1,5 +1,6 @@
 """Construction code changes invalidate object inputs rather than reporting false differences."""
 
+import ast
 import time
 from types import SimpleNamespace
 from typing import Any, cast
@@ -8,6 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from oversight.changes._behavior import FunctionBehavior, _compare
+from oversight.changes._behavior_construction import construction_ast
 from oversight.changes._behavior_inputs import behavior_inputs
 from oversight.workspace import BehaviorObservation
 
@@ -63,6 +65,13 @@ DATACLASS_SETTER = "from dataclasses import dataclass\n@dataclass\n" + (
 DATACLASS_DEFAULT = DATACLASS_PROPERTY.replace("    value: int\n", "").replace(
     "    value = property(_get, _set)", "    _p = property(_get, _set)\n    value: int = _p"
 )
+DATACLASS_POST_INIT = """from dataclasses import dataclass
+@dataclass
+class Product:
+    value: int
+    def _post(self): self.value += 1
+    __post_init__ = _post
+"""
 
 
 def inputs(before, after):
@@ -131,6 +140,7 @@ def inputs(before, after):
             (bound, bound.replace("self._value = self.normalize(value)", "self._value = value + 1"))
             for bound in (DATACLASS_PROPERTY, DATACLASS_SETTER, DATACLASS_DEFAULT)
         ],
+        (DATACLASS_POST_INIT, DATACLASS_POST_INIT.replace("self.value += 1", "self.value += 2")),
         (
             PRODUCT,
             PRODUCT.replace(
@@ -168,6 +178,7 @@ def inputs(before, after):
         "dataclass-assigned-property-setter",
         "dataclass-assigned-setter",
         "dataclass-nonliteral-field-default",
+        "dataclass-assigned-post-init",
         "transitive-method",
         "assignment",
         "annotated-field",
@@ -210,6 +221,26 @@ async def test_changed_construction_is_not_measured(before, after):
     assert found[0].compared == found[0].differing == 0
     assert found[0].reason == "no equal typed inputs"
     assert worker.await_count == 2  # Unequal inputs do not spend any repeat calls.
+
+
+def test_assigned_setattr_changes_construction_identity_and_stays_refused():
+    before = """class Product:
+    def __init__(self, value): self.value = value
+    def _set(self, name, value): object.__setattr__(self, name, value)
+    __setattr__ = _set
+"""
+    after = before.replace(
+        "object.__setattr__(self, name, value)", "object.__setattr__(self, name, value + 1)"
+    )
+    classes = [ast.parse(code).body[0] for code in (before, after)]
+    assert all(isinstance(cls, ast.ClassDef) for cls in classes)
+    identities = [
+        construction_ast(cls, time.monotonic() + 10)
+        for cls in classes
+        if isinstance(cls, ast.ClassDef)
+    ]
+    assert identities[0] != identities[1]
+    assert not inputs(before, after).inputs  # Custom hooks retain their existing refusal.
 
 
 @pytest.mark.parametrize(
