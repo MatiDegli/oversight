@@ -444,7 +444,7 @@ overlap in item 5, so it survives restarts and appears in replay, with no field 
 The answer-to-another-agent link is now reserved in contracts 1.6.0 (`a13ef3f`) and wired in
 `7c989e2`. Inbox projection landed in `f4ab346`, including delegation recovery (`8c13033`) and
 one pending decision per change (`eef7daa`). The inbox is mounted in
-`app/shell/FocusPanel.tsx`, counted in `app/shell/TopBar.tsx`, and sends answers, grants and
+`app/shell/FocusPanel.tsx`, counted in `app/TopBar.tsx`, and sends answers, grants and
 revocations (`7c25429`, `review/DecisionInbox.tsx`). Lead-plan rows landed in `bf9fb04`;
 `state/decisionLifecycle.ts:recordPlanEntries` retains each requested plan while proposed and
 `DecisionInbox` renders its text. Plan approval/edit/start controls remain absent.
