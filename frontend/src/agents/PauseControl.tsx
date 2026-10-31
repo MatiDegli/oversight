@@ -7,16 +7,22 @@ import { commandFailure } from "../transport";
 export const secondaryButtonClass =
   "inline-flex h-(--button-secondary-height) items-center gap-2 rounded-control border border-control-edge px-3 text-(length:--label-size) font-semibold text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
+export const compactSecondaryButtonClass = `${secondaryButtonClass
+  .replace("gap-2", "gap-(--spacing-xs)")
+  .replace("px-3", "px-(--spacing-xs)")} min-w-0 whitespace-nowrap [&>svg]:shrink-0`;
+
 export function PauseControl({
   agentId,
   state,
   onPause,
   onResume,
+  compact = false,
 }: {
   agentId: string;
   state: AgentStatus["state"];
   onPause: (agentId: string) => Promise<unknown>;
   onResume: (agentId: string) => Promise<unknown>;
+  compact?: boolean;
 }) {
   const [request, setRequest] = useState({
     agentId,
@@ -36,7 +42,7 @@ export function PauseControl({
     <div className="flex min-w-0 flex-col gap-2">
       <button
         type="button"
-        className={`${secondaryButtonClass} aria-disabled:cursor-not-allowed aria-disabled:text-faint self-start`}
+        className={`${compact ? compactSecondaryButtonClass : secondaryButtonClass} aria-disabled:cursor-not-allowed aria-disabled:text-faint self-start`}
         aria-disabled={request.pending || request.requested}
         onClick={() => {
           if (request.pending || request.requested) return;

@@ -10,7 +10,7 @@ import type { AgentCardDetail } from "./selectors";
 import "./agentCard.css";
 import { ageWords } from "./age";
 import { StopControl } from "./StopControl";
-import { PauseControl, secondaryButtonClass } from "./PauseControl";
+import { PauseControl, compactSecondaryButtonClass } from "./PauseControl";
 
 export const labels: Record<AgentStatus["state"], string> = {
   starting: "Starting",
@@ -340,13 +340,13 @@ function CardActions({
 }: AgentCardProps) {
   const { agent, readyForReview } = data;
   const own = look[agent.slot];
-  const reviewClass = `inline-flex h-(--button-primary-height) items-center gap-2 rounded-control px-4 text-(length:--label-size) font-semibold text-on-agent hover:brightness-110 ${own.fill} ${focusRing}`;
+  const reviewClass = `inline-flex h-(--button-primary-height) min-w-0 items-center gap-(--spacing-xs) rounded-control px-(--spacing-xs) text-(length:--label-size) font-semibold whitespace-nowrap text-on-agent hover:brightness-110 [&>svg]:shrink-0 ${own.fill} ${focusRing}`;
   return (
-    <footer className="mt-3 flex min-h-10 flex-wrap gap-2">
+    <footer className="mt-3 flex min-h-10 flex-wrap gap-x-(--spacing-xs) gap-y-2">
       {!readyForReview && onOpenDiff && (
         <button
           type="button"
-          className={secondaryButtonClass}
+          className={compactSecondaryButtonClass}
           onClick={() => {
             onOpenDiff(agent.change_id);
           }}
@@ -368,7 +368,7 @@ function CardActions({
       {onConversation && (
         <button
           type="button"
-          className={secondaryButtonClass}
+          className={compactSecondaryButtonClass}
           onClick={() => {
             onConversation(agent.agent_id);
           }}
@@ -378,6 +378,7 @@ function CardActions({
       )}
       {onPause && onResume && (
         <PauseControl
+          compact
           agentId={agent.agent_id}
           state={agent.state}
           onPause={onPause}
