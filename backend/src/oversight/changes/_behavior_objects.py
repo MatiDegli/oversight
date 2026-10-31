@@ -68,7 +68,7 @@ def constructor(source: Source, path: str, node: ast.Call, cache: Sources) -> Co
     for module, classes in cache.classes.items():
         for _, cls in classes:
             check_deadline(cache.deadline)
-            if _resolved(source, node, path, module, cls.name, aliases):
+            if _resolved(source, node, path, module, cls.name, aliases, cache):
                 matches.append((module, cls.name))
     if len(matches) != 1:
         raise ValueError("unresolved argument constructor")
@@ -210,7 +210,7 @@ def method_arguments(module: str, cls: str, name: str, cache: Sources):
                 if isinstance(receiver, ast.Name):
                     receiver = _assigned_receiver(source, node, receiver.id, cache)
                 if isinstance(receiver, ast.Call) and _resolved(
-                    source, receiver, path, module, cls, aliases
+                    source, receiver, path, module, cls, aliases, cache
                 ):
                     try:
                         found.append(arguments(source, path, node, cache))

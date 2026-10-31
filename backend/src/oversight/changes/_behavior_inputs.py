@@ -186,10 +186,20 @@ def binding_arguments(
 
 
 def _resolved(
-    source: Source, call: ast.Call, path: str, module: str, name: str, aliases: dict[str, str]
+    source: Source,
+    call: ast.Call,
+    path: str,
+    module: str,
+    name: str,
+    aliases: dict[str, str],
+    cache: Sources | None = None,
 ) -> bool:
     resolved = source.resolve(call.func)
-    if resolved is None and is_test_file(path) and (local := local_alias(source, call)) is not None:
+    if (
+        resolved is None
+        and is_test_file(path)
+        and (local := local_alias(source, call, cache)) is not None
+    ):
         resolved = local
     if (
         isinstance(call.func, ast.Name)
@@ -239,7 +249,7 @@ def calls(
             key=lambda n: (n.lineno, n.col_offset),
         )
         for call in calls:
-            if not _resolved(source, call, path, module, name, aliases):
+            if not _resolved(source, call, path, module, name, aliases, cache):
                 continue
             if consumed_only and not consumed_call(source, path, call, cache.parents(source)):
                 continue

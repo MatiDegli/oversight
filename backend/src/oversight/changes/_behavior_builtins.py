@@ -2,7 +2,7 @@
 
 import ast
 
-from oversight.changes._behavior_aliases import shadowed
+from oversight.changes._behavior_aliases import shadowed, syntax
 from oversight.changes._shortcuts_common import Source, is_test_file
 
 MAX_RANGE_ITEMS = 10_000
@@ -11,7 +11,7 @@ MAX_RANGE_ITEMS = 10_000
 def builtin_call(source: Source, call: ast.Call, name: str) -> bool:
     if not isinstance(call.func, ast.Name) or call.func.id != name:
         return False
-    bindings, declared = source.alias_inventory
+    bindings, declared = syntax(source).alias_inventory
     if bindings.star_import or name in bindings.names or shadowed(source, call, name):
         return False
     if name in declared:

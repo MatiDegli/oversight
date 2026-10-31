@@ -4,11 +4,43 @@ import ast
 
 import pytest
 
-from oversight.changes._behavior_aliases import local_alias
+from oversight.changes._behavior_aliases import _AliasBindings, local_alias, syntax
 from oversight.changes._behavior_aliases import test_scope as find_test_scope
 from oversight.changes._behavior_builtins import builtin_call
 from oversight.changes._behavior_sources import Sources
-from oversight.changes._shortcuts_common import Source, _AliasBindings
+from oversight.changes._shortcuts_common import Source
+
+
+def test_alias_binding_visitor_is_owned_by_behavior_discovery():
+    from oversight.changes import _behavior_aliases
+
+    assert _behavior_aliases._AliasBindings.__module__ == _behavior_aliases.__name__
+
+
+def test_local_alias_inventory_visits_each_test_body_once(monkeypatch):
+    source = Source(
+        "from sample import target\n"
+        "def test_values():\n"
+        "    alias = target\n"
+        "    alias('first')\n"
+        "    alias('second')\n"
+    )
+    calls = [node for node in ast.walk(source.tree) if isinstance(node, ast.Call)]
+    body = source.tests["test_values"].body
+    original_visit = _AliasBindings.visit
+    statement_visits = 0
+
+    def visit(self, node):
+        nonlocal statement_visits
+        if node in body:
+            statement_visits += 1
+        original_visit(self, node)
+
+    monkeypatch.setattr(_AliasBindings, "visit", visit)
+    for _ in range(2):
+        for call in calls:
+            assert local_alias(source, call) == "sample.target"
+    assert statement_visits == len(body)
 
 
 @pytest.mark.parametrize("cache_first", [False, True])
@@ -29,7 +61,7 @@ def test_scope_and_discovery_share_one_parent_walk(monkeypatch, cache_first):
     if cache_first:
         cache.parents(source)
     for call in calls:
-        assert find_test_scope(source, call) is source.tests["test_values"]
+        assert find_test_scope(source, call, cache) is source.tests["test_values"]
     parents = cache.parents(source)
     assert parents is cache.parents(source)
     assert all(call in parents for call in calls)
@@ -84,7 +116,7 @@ def test_global_and_nonlocal_inventory_is_walked_once(monkeypatch):
         return original_walk(node)
 
     monkeypatch.setattr(ast, "walk", walk)
-    inventory = source.alias_inventory
-    assert inventory is source.alias_inventory
+    inventory = syntax(source).alias_inventory
+    assert inventory is syntax(source).alias_inventory
     assert inventory[1] == frozenset({"range", "value"})
     assert module_walks == 1

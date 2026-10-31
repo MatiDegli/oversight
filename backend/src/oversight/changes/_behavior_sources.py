@@ -14,6 +14,7 @@ class Sources:
         self.deadline = deadline
         self.constructors: dict[tuple[str, str], tuple[inspect.Signature, tuple[str, ...]]] = {}
         self.parsed: dict[str, Source | None] = {}
+        self._parents: dict[int, dict[ast.AST, ast.AST]] = {}
 
     def get(self, path: str) -> Source:
         check_deadline(self.deadline)
@@ -52,5 +53,11 @@ class Sources:
         return classes
 
     def parents(self, source: Source) -> dict[ast.AST, ast.AST]:
-        check_deadline(self.deadline)
-        return source.parents
+        key = id(source)
+        if key not in self._parents:
+            parents: dict[ast.AST, ast.AST] = {}
+            for node in ast.walk(source.tree):
+                check_deadline(self.deadline)
+                parents.update((child, node) for child in ast.iter_child_nodes(node))
+            self._parents[key] = parents
+        return self._parents[key]
