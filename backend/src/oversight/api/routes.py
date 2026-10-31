@@ -11,12 +11,19 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from oversight.api.commands import Commands, add_command_routes
 from oversight.api.errors import ApiError
 from oversight.changes import ChangeNotFound
-from oversight.events import EventStore, HistoryTooLarge, InvalidHistoryRequest, read_history
+from oversight.events import (
+    EventStore,
+    HistoryTooLarge,
+    InvalidHistoryRequest,
+    build_usage_view,
+    read_history,
+)
 from oversight.graph import NodeNotFoundError, node_cone
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import GraphResponse, Health, MissingSetting
 from oversight_contracts.events import Limits
 from oversight_contracts.graph import GraphSnapshot, ImpactCone
+from oversight_contracts.usage import UsageView
 
 _SEQ = re.compile(r"[0-9]{1,18}")
 
@@ -101,6 +108,10 @@ def create_router(
         except HistoryTooLarge as error:
             raise ApiError("too_large", str(error)) from error
         return Response(body, media_type="application/json")
+
+    @router.get("/usage")
+    async def usage() -> UsageView:  # pyright: ignore[reportUnusedFunction]
+        return build_usage_view(store.run_id, store.committed_events())
 
     @router.get("/graph")
     async def graph() -> GraphResponse:  # pyright: ignore[reportUnusedFunction]
