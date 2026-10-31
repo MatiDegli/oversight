@@ -7,6 +7,7 @@ import { ZOOM_RANGE } from "./camera";
 
 const theme = getActiveTheme();
 const graphs: Core[] = [];
+// Importing this module registers cleanup for every test, even when only a constant is used.
 afterEach(() => {
   for (const cy of graphs.splice(0)) cy.destroy();
   vi.unstubAllGlobals();

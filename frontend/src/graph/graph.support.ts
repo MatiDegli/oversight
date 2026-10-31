@@ -148,6 +148,7 @@ function render(state: State) {
   updateGraph(cy, graphElements(state));
   return cy;
 }
+// Importing this module registers cleanup for every test, even when only a constant is used.
 afterEach(() => {
   cy?.destroy();
   stateStore.setState({ state: createInitialState() });
