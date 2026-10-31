@@ -310,6 +310,31 @@ it("handles long inputs, empty samples, two chips, folded and removed nodes", as
     await buttons.nth(1).press("Enter");
     await check(page.locator("[data-chip-popover]")).toHaveCount(1);
     await check(buttons.nth(0)).toHaveAttribute("aria-expanded", "false");
+    await page.evaluate(() => {
+      window.nodeChipTest.emit(22);
+      window.nodeChipTest.amend("two");
+    });
+    for (let index = 0; index < 2; index++)
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await check(buttons).toHaveText(["A varied on 1 of 2 inputs", "B varied on 1 of 2 inputs"]);
+    await check(buttons.nth(1)).toBeVisible();
+    for (const button of await buttons.all()) {
+      const colors = await button.evaluate((element) => {
+        const letter = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode();
+        const probe = document.createElement("span");
+        probe.style.color = "var(--text)";
+        element.append(probe);
+        const result = {
+          count: getComputedStyle(element).color,
+          letter: getComputedStyle(letter?.parentElement ?? element).color,
+          text: getComputedStyle(probe).color,
+        };
+        probe.remove();
+        return result;
+      });
+      expect(colors.letter).toBe(colors.text);
+      expect(colors.letter).not.toBe(colors.count);
+    }
   });
   for (const mode of ["folded", "gone"] as const)
     await withPage("dark", 1920, false, async (page) => {

@@ -202,7 +202,8 @@ export function NodeChips({ state, litIds }: { state: State; litIds: readonly st
                 setOpen((current) => (current === chip.key ? null : chip.key));
               }}
             >
-              <Count text={chip.text} />
+              {chip.letter && <span className="text-text">{chip.letter} </span>}
+              <Count text={chip.letter ? chip.text.slice(chip.letter.length + 1) : chip.text} />
             </button>
           ))}
         </div>

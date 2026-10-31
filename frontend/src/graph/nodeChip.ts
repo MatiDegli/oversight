@@ -34,6 +34,7 @@ export function selectNodeChips(state: State, litIds: readonly string[] | null) 
         kind,
         rows,
         label: node.label,
+        letter,
         text: letter ? `${letter} ${text}` : text,
         key: JSON.stringify([
           entry.changeId,
