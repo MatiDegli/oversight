@@ -354,17 +354,23 @@ class FieldRuntime implements FieldController {
       for (const pulse of pulses) {
         const target = targets.get(pulse.merge.id);
         if (!target) continue;
-        const card = document.querySelector<HTMLElement>(
-          `[aria-label="Agent ${pulse.merge.slot}"][data-slot="${pulse.merge.slot}"]`,
-        );
-        const rect = card?.getBoundingClientRect();
-        const start =
-          rect && rect.width > 0
-            ? {
-                x: clamp(rect.left - origin.left, 0, width),
-                y: clamp(rect.top + rect.height / 2 - origin.top, 0, height),
-              }
-            : { x: width, y: (target.y1 + target.y2) / 2 };
+        const agent = [
+          ...document.querySelectorAll<HTMLElement>(`[data-agent-origin="${pulse.merge.slot}"]`),
+        ]
+          .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+          .find(({ rect }) => rect.width > 0);
+        const start = agent
+          ? {
+              x: agent.rect.left - origin.left,
+              y: agent.rect.top + agent.rect.height / 2 - origin.top,
+            }
+          : { x: width, y: (target.y1 + target.y2) / 2 };
+        // AgentCard carries data-slot; the folded rail letter deliberately omits it.
+        // Both expose data-agent-origin: clamp the card, depart from the actual rail letter.
+        if (agent?.element.hasAttribute("data-slot")) {
+          start.x = clamp(start.x, 0, width);
+          start.y = clamp(start.y, 0, height);
+        }
         paths.set(
           pulse.key,
           approachPath(start, target, this.source.edgesAt?.(pulse.merge.id) ?? []),

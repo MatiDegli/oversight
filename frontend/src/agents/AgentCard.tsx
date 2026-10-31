@@ -1,7 +1,7 @@
 import { agentSlotStyle } from "../theme";
 import { agentLook as look } from "../theme";
 import type { AgentStatus, SuiteResult } from "@contracts";
-import { Check, CircleCheck, CircleX, Eye, FileDiff, X } from "lucide-react";
+import { Check, CircleCheck, CircleX, Eye, FileDiff, MessagesSquare, X } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
@@ -10,8 +10,9 @@ import type { AgentCardDetail } from "./selectors";
 import "./agentCard.css";
 import { ageWords } from "./age";
 import { StopControl } from "./StopControl";
+import { PauseControl, compactSecondaryButtonClass } from "./PauseControl";
 
-const labels: Record<AgentStatus["state"], string> = {
+export const labels: Record<AgentStatus["state"], string> = {
   starting: "Starting",
   working: "Working",
   ready_for_review: "Ready for review",
@@ -122,10 +123,21 @@ export interface AgentCardProps {
   data: AgentCardDetail;
   onOpenDiff?: (changeId: string) => void;
   onReview?: (changeId: string) => void;
+  onConversation?: (agentId: string) => void;
   onStop?: (agentId: string) => Promise<unknown>;
+  onPause?: (agentId: string) => Promise<unknown>;
+  onResume?: (agentId: string) => Promise<unknown>;
 }
 
-export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps) {
+export function AgentCard({
+  data,
+  onOpenDiff,
+  onReview,
+  onConversation,
+  onStop,
+  onPause,
+  onResume,
+}: AgentCardProps) {
   const { agent, readyForReview } = data;
   const own = look[agent.slot];
   // Keep the person's focus when what holds it leaves the card. The step list and Live diff go when
@@ -153,6 +165,7 @@ export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps
         inside.current = false;
       }}
       data-slot={agent.slot}
+      data-agent-origin={agent.slot}
       style={agentSlotStyle(agent.slot)}
       className={`agent-card min-w-0 shrink-0 rounded-card border bg-card p-3.5 text-text ${border} ${focusRing}`}
     >
@@ -160,11 +173,52 @@ export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps
       <p title={agent.task} className="mt-3 truncate text-(length:--body-size)">
         {agent.task}
       </p>
-      <div className="agent-card-body">
-        {readyForReview ? <Summary data={data} /> : <RunningBody data={data} />}
+      <div className="agent-card-body flex flex-col">
+        <OverlapLines overlap={data.overlap} />
+        <div className="min-h-0 flex-1">
+          {readyForReview ? <Summary data={data} /> : <RunningBody data={data} />}
+        </div>
       </div>
-      <CardActions data={data} onOpenDiff={onOpenDiff} onReview={onReview} onStop={onStop} />
+      <CardActions
+        data={data}
+        onOpenDiff={onOpenDiff}
+        onReview={onReview}
+        onConversation={onConversation}
+        onStop={onStop}
+        onPause={onPause}
+        onResume={onResume}
+      />
     </article>
+  );
+}
+
+/** Quiet card facts: full names remain available when the single line is truncated. */
+function OverlapLines({ overlap }: { overlap: AgentCardDetail["overlap"] }) {
+  return (["sharedEdits", "readOfOthers"] as const).flatMap((kind) =>
+    overlap[kind].map(({ agentId, slot, nodes }) => {
+      const names = nodes.map((node) => node.name);
+      const words = (all: string[]) =>
+        all.length <= 2
+          ? all.join(" and ")
+          : `${all.slice(0, 2).join(", ")} and ${String(all.length - 2)} more`;
+      const sentence = (text: string) =>
+        kind === "sharedEdits"
+          ? `Also changed by Agent ${slot}: ${text}`
+          : `Read ${text}, which Agent ${slot} is changing`;
+      const full =
+        names.length <= 2
+          ? names.join(" and ")
+          : `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
+      return (
+        <p
+          key={`${kind}:${agentId}`}
+          title={sentence(full)}
+          className="shrink-0 truncate text-sm text-text"
+        >
+          {sentence(words(names))}
+        </p>
+      );
+    }),
   );
 }
 
@@ -275,38 +329,70 @@ function CardHeader({ data }: { data: AgentCardDetail }) {
   );
 }
 
-function CardActions({ data, onOpenDiff, onReview, onStop }: AgentCardProps) {
+function CardActions({
+  data,
+  onOpenDiff,
+  onReview,
+  onConversation,
+  onStop,
+  onPause,
+  onResume,
+}: AgentCardProps) {
   const { agent, readyForReview } = data;
   const own = look[agent.slot];
-  const buttonClass = `inline-flex h-(--button-secondary-height) items-center gap-2 rounded-control border border-control-edge px-3 text-(length:--label-size) font-semibold text-text ${focusRing}`;
-  const reviewClass = `inline-flex h-(--button-primary-height) items-center gap-2 rounded-control px-4 text-(length:--label-size) font-semibold text-on-agent hover:brightness-110 ${own.fill} ${focusRing}`;
+  const reviewClass = `inline-flex h-(--button-primary-height) min-w-0 items-center gap-(--spacing-xs) rounded-control px-(--spacing-xs) text-(length:--label-size) font-semibold whitespace-nowrap text-on-agent hover:brightness-110 [&>svg]:shrink-0 ${own.fill} ${focusRing}`;
   return (
-    <footer className="mt-3 flex min-h-10 flex-wrap gap-2">
-      {!readyForReview && onOpenDiff && (
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => {
-            onOpenDiff(agent.change_id);
-          }}
-        >
-          <FileDiff aria-hidden="true" className="size-4" /> Live diff
-        </button>
-      )}
-      {readyForReview && onReview && (
-        <button
-          type="button"
-          className={reviewClass}
-          onClick={() => {
-            onReview(agent.change_id);
-          }}
-        >
-          <Eye aria-hidden="true" className="size-4" /> Review change
-        </button>
-      )}
-      {onStop && ["working", "revising", "ready_for_review", "halted"].includes(agent.state) && (
-        <StopControl agentId={agent.agent_id} onStop={onStop} />
-      )}
+    <footer className="mt-3 flex min-h-10 flex-col gap-2">
+      <div className="flex min-w-0 flex-nowrap gap-(--spacing-xs) has-[[data-pausing]]:flex-wrap">
+        {!readyForReview && onOpenDiff && (
+          <button
+            type="button"
+            className={compactSecondaryButtonClass}
+            onClick={() => {
+              onOpenDiff(agent.change_id);
+            }}
+          >
+            <FileDiff aria-hidden="true" className="size-4" /> Live diff
+          </button>
+        )}
+        {readyForReview && onReview && (
+          <button
+            type="button"
+            className={reviewClass}
+            onClick={() => {
+              onReview(agent.change_id);
+            }}
+          >
+            <Eye aria-hidden="true" className="size-4" /> Review change
+          </button>
+        )}
+        {onConversation && (
+          <button
+            type="button"
+            className={compactSecondaryButtonClass}
+            onClick={() => {
+              onConversation(agent.agent_id);
+            }}
+          >
+            <MessagesSquare aria-hidden="true" className="size-4" /> Conversation
+          </button>
+        )}
+        {onPause && onResume && (
+          <PauseControl
+            compact
+            agentId={agent.agent_id}
+            state={agent.state}
+            onPause={onPause}
+            onResume={onResume}
+          />
+        )}
+      </div>
+      {onStop &&
+        ["working", "revising", "ready_for_review", "halted", "paused"].includes(agent.state) && (
+          <div className="w-full">
+            <StopControl agentId={agent.agent_id} onStop={onStop} />
+          </div>
+        )}
     </footer>
   );
 }

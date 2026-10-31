@@ -32,7 +32,11 @@ export interface View {
 export const initialView: View = { selected: null, diff: null, review: null, file: null };
 
 export const panelOpen = (view: View) =>
-  view.diff !== null || view.review !== null || view.file !== null;
+  view.diff !== null ||
+  view.review !== null ||
+  view.file !== null ||
+  view.activeTab === "inbox" ||
+  Boolean(view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation);
 
 /** Proposed and not yet decided: what review opens on. A revising change shows its live diff. */
 export function isProposed(change: ChangeState): boolean {
@@ -177,6 +181,7 @@ export function closesPanel(
 /** Tab state is owned by navigation, never by the event reducer. */
 export interface FocusTab {
   id: string;
+  conversation?: string;
   selected: string | null;
   diff: DiffTarget | null;
   review: string | null;
@@ -276,4 +281,33 @@ export function navigateView(view: View, next: View, state: State): View {
             .map((node) => node.id) ?? []),
     },
   });
+}
+
+/** Neutral focus tabs keep the same shell and graph owner. */
+export function surfaceTab(view: View, id: "inbox"): FocusTab {
+  return {
+    id,
+    selected: view.selected,
+    review: null,
+    diff: null,
+    file: null,
+    frameIds: [],
+    frameKey: id,
+  };
+}
+
+export function conversationTab(view: View, state: State, agentId: string): FocusTab {
+  const agent = state.agents[agentId];
+  const change = agent ? state.changes[agent.change_id] : undefined;
+  const id = `conversation:${agentId}`;
+  return {
+    id,
+    conversation: agentId,
+    selected: view.selected,
+    diff: null,
+    review: null,
+    file: null,
+    frameIds: change ? changeNodeIds(change) : [],
+    frameKey: id,
+  };
 }

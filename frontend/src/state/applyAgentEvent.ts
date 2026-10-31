@@ -4,11 +4,19 @@ import { createChange } from "./types";
 
 type Event = Extract<
   ServerEvent,
-  { type: "agent.status" | "agent.step" | "agent.focus" | "usage.tick" }
+  { type: "agent.status" | "agent.step" | "agent.focus" | "usage.tick" | "model.attempt_failed" }
 >;
 
 export function applyAgentEvent(state: State, next: State, event: Event): State {
   switch (event.type) {
+    case "model.attempt_failed": {
+      const { agent_id, role, attempt, max_attempts, cause, wait_s, final } = event.payload;
+      const modelWaits = { ...state.modelWaits };
+      if (wait_s !== null && final === null && (role === "agent" || role === null)) {
+        modelWaits[agent_id] = { seq: event.seq, attempt, max_attempts, cause, wait_s };
+      } else Reflect.deleteProperty(modelWaits, agent_id);
+      return { ...next, modelWaits };
+    }
     case "agent.status": {
       const status = event.payload;
       return {
@@ -23,8 +31,11 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
     }
     case "agent.step": {
       const step = event.payload;
+      const modelWaits = { ...state.modelWaits };
+      Reflect.deleteProperty(modelWaits, step.agent_id);
       return {
         ...next,
+        modelWaits,
         steps: {
           ...state.steps,
           [step.agent_id]: [...(state.steps[step.agent_id] ?? []), step],
@@ -47,10 +58,25 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
         if (id) lastReads[focus.agent_id] = id;
         else Reflect.deleteProperty(lastReads, focus.agent_id);
       }
-      return { ...next, focus: { ...state.focus, [focus.agent_id]: focus }, lastReads };
+      const changeId = state.agents[focus.agent_id]?.change_id;
+      const changeReads =
+        focus.mode === "read" && changeId && focus.node_ids.length > 0
+          ? {
+              ...state.changeReads,
+              [changeId]: [...new Set([...(state.changeReads[changeId] ?? []), ...focus.node_ids])],
+            }
+          : state.changeReads;
+      return {
+        ...next,
+        focus: { ...state.focus, [focus.agent_id]: focus },
+        lastReads,
+        changeReads,
+      };
     }
     case "usage.tick": {
       const tick = event.payload;
+      const modelWaits = { ...state.modelWaits };
+      Reflect.deleteProperty(modelWaits, tick.agent_id);
       const before = state.agentCosts[tick.agent_id];
       // Unknown stays unknown: a later tick with a cost does not make the total known again.
       const cost = tick.cost_usd === null || before === null ? null : (before ?? 0) + tick.cost_usd;
@@ -60,6 +86,7 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
       return {
         ...next,
         usage: tick,
+        modelWaits,
         agentCosts: { ...state.agentCosts, [tick.agent_id]: cost },
         spendUnknown:
           !profile || profile.provider === "meta" ? tick.cost_usd === null : state.spendUnknown,

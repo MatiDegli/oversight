@@ -10,6 +10,9 @@ export function AgentsPanel({
   onOpenChange,
   onStartAgent,
   onStopAgent,
+  onOpenConversation,
+  onPauseAgent,
+  onResumeAgent,
   canReview,
   onReview,
   replayOf,
@@ -20,6 +23,9 @@ export function AgentsPanel({
   | "canOpenChange"
   | "onOpenChange"
   | "onStopAgent"
+  | "onOpenConversation"
+  | "onPauseAgent"
+  | "onResumeAgent"
   | "onStartAgent"
   | "canReview"
   | "onReview"
@@ -52,6 +58,9 @@ export function AgentsPanel({
               key={data.agent.agent_id}
               data={data}
               onStop={onStopAgent}
+              onConversation={onOpenConversation}
+              onPause={onPauseAgent}
+              onResume={onResumeAgent}
               onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
               onReview={review ? onReview : undefined}
             />
@@ -93,6 +102,7 @@ export function AgentsRail({ state }: { state: State }) {
             className="flex flex-col items-center gap-1.5"
           >
             <span
+              data-agent-origin={agent.slot}
               className={`relative grid size-(--letter-avatar-size) place-items-center rounded-card border-(length:--agent-border-width) text-(length:--letter-avatar-font-size) font-bold ${look.border} ${look.tint}`}
             >
               {agent.slot}

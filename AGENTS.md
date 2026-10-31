@@ -21,7 +21,7 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 
 ## Architecture
 - backend/ (Python 3.12, uv, FastAPI):
-  - graph core: ast parser to nodes and edges; stable node ids from qualified names; span index from file and line to the innermost node; re-parse of changed files after every edit, merge or discard (no file watcher), driven by a content hash per file; impact cone as a bounded reverse BFS over call edges.
+  - graph core: ast parser to nodes and edges; stable node ids from qualified names; span index from file and line to the innermost node; re-parse of changed files after every edit, merge or discard, driven by a content hash per file; for my own repository, a file watcher only triggers that same rescan path (Opening my own repository); impact cone as a bounded reverse BFS over call edges.
   - agent runtime: tool loop on Muse Spark using the official OpenAI SDK pointed at Meta's endpoint (no LiteLLM), behind a small client interface so the provider format can be swapped. The model and endpoint are set per agent: agent B may run Muse Spark Open (meta-models/muse-spark-open-1026) through Baseten's Chat Completions API. One git worktree per agent.
   - event bus: an SSE stream at /events, backed by an append-only SQLite event store (stdlib sqlite3). Each event's SSE id is its seq; on reconnect the browser sends Last-Event-ID and the server resumes from there.
   - change manager: live diffs, proposals, approve = merge the agent's worktree into main, request changes = send my comment back to the agent and keep its worktree, reject = discard. Git through the CLI, no GitPython.
@@ -34,7 +34,7 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 - One origin: in development Vite proxies API and SSE calls to FastAPI, with no compression or buffering on the SSE route; for the demo FastAPI serves the built frontend.
 - contracts/: Pydantic models are the source. JSON Schema and TypeScript types (json-schema-to-typescript) are generated from them. TypeScript and the generator are pinned, and CI compares the regenerated types byte for byte.
 - demo-repo/: a template of plain files in this repo, with no git of its own: a small Python project of our own (4-6 modules, 20-40 functions, tests) with one central function that has many callers.
-- desktop/ (level 3, optional): a Tauri shell. The demo runs in the browser.
+- desktop/ (after the hackathon, after the native Windows port): a Tauri shell. The demo runs in the browser.
 
 ## UI
 - One graph, always visible, with a side panel that changes with what I am doing. Dark theme everywhere.
@@ -61,6 +61,17 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 - On start, the backend copies demo-repo/ to .runtime/workspace/ and runs git init there, so every demo starts clean.
 - The product agents' worktrees live in .runtime/worktrees/{agent_id}, outside the parsed tree. .runtime/ is gitignored.
 - Do not confuse the two kinds of worktree: my development agents use worktrees of this IDE repo; the product's agents use worktrees of the runtime workspace.
+
+## Opening my own repository
+Decided on 2026-10-31. Built only after the cut line, and only if time remains, after a plan that gets the double review, because it touches git and integrity. The demo path (demo-repo/, make demo, make demo-check) does not change.
+- Oversight never copies my repository. It creates a session branch (oversight/session-...) at my last commit, checked out in a worktree under .runtime/, and that branch is Oversight's main. Agents branch from the session's tip; their worktrees are worktrees of my repository under .runtime/worktrees/.
+- When I commit on my own branch, the session takes it in with the follow-main logic.
+- The graph shows the session plus my uncommitted edits as a separate "your edits" layer, drawn as its sketch decides: color stays reserved for agents and states. Approval warns when an agent's change touches lines I edited.
+- A file watcher (watchfiles, MIT) only triggers the existing rescan path. It debounces saves, skips while a merge or another main write holds the git lease, and emits the usual graph.delta with cause "rescan" (no contract change). On the Linux filesystem it uses native events; under /mnt/c it polls more slowly and says so at start.
+- The session reaches my branch in one final step: a click with no keyboard shortcut, or by rules under its own standing grant, off by default and revocable. Either way it runs only after the tests pass on the combined result, only as a clean merge or a fast-forward, and never when my uncommitted edits touch the same files. Oversight never stashes in my repository; a conflict goes to "needs you".
+- Opening a repository shows a trust prompt once per repository: its tests and probes run its code as my user, with no filesystem sandbox, and one line names the providers that receive the folder's code (today Meta Model API and Baseten). It informs and does not block.
+- Tests run with the repository's own .venv Python when there is one; otherwise they show as unavailable.
+- Agent commits keep the repository's git hooks disabled.
 
 ## Events (server to UI)
 run.started (run id, exact model, prompt version, limits), graph.snapshot, graph.delta, agent.status, agent.step, agent.focus, change.updated, change.proposed, change.resolved, usage.tick, error. Every event carries seq, ts, type and payload.
@@ -95,6 +106,7 @@ Level 3, in the contract from v1 and answering 501 until built: POST /agents/{id
 - read_file returns numbered lines and has a size cap; long files are read by line range. Prefer few, large reads of whole functions: every step resends the full history.
 - edit_file fails unless the old text appears exactly once, or if the file changed since the agent last read it. The error goes back to the model.
 - No tool can touch paths outside the agent's worktree: validate every path.
+- No tool returns the content of an obvious secret file, even a tracked one: .env*, *.pem, *.key, id_*.
 - run_tests runs one fixed command, with a timeout, in the demo repo's own virtual environment, never the backend's.
 - Tool results carry no extra metadata.
 - Stop a run that makes no progress: the same call with the same result four times, or six failures in a row.
@@ -128,11 +140,13 @@ Level 3, in the contract from v1 and answering 501 until built: POST /agents/{id
 ## Scope levels
 - Level 1 (by Thu Oct 29): graph, Monaco, one Muse agent in its worktree, watch mode with live node highlighting and the agent card (status and steps), a read-only live diff panel, the "Ready for review" pill, review mode with Approve and Reject and a graph update.
 - Level 2 (by Sun Nov 1): two agents in parallel with their colors (agent B on Muse Spark Open via Baseten if tool calling works, otherwise Muse Spark), impact cone (highlighted in review and listed in the panel), pending changes on the graph, Request changes, an editable new side in review, user edits from the file view that update the graph, a spend meter, stop and discard from the agent card.
-- Level 3 (only if 1 and 2 are solid): cone overlap alerts, replay timeline, "Earlier today" history, messages to a running agent, pause and resume, starting an agent from a function, agent cursors with names in the editor, "no tests" badges, usage panel, dictating tasks with Muse Voice Transcribe, agent B running locally on my GPU (Muse Glimmer, Meta's other open model, is a candidate if it is smaller than Muse Spark Open), "possible" call edges drawn thinner and grey, inheritance edges, a Tauri desktop shell.
+- Level 3 (only if 1 and 2 are solid): cone overlap alerts, replay timeline, "Earlier today" history, messages to a running agent, pause and resume, starting an agent from a function, agent cursors with names in the editor, "no tests" badges, usage panel, dictating tasks with Muse Voice Transcribe, agent B running locally on my GPU (Muse Glimmer, Meta's other open model, is a candidate if it is smaller than Muse Spark Open), "possible" call edges drawn thinner and grey, inheritance edges.
+- After level 2, once the cut line is drawn and only if time remains, in this order: opening my own repository (its own section), then a minimal native Windows port: a per-OS layer in backend/src/oversight/workspace/ (process-tree cleanup, file locks, no-follow file opens) that runs in the existing mode without isolation (network open; rules, Revert and added-test probes disabled). Windows isolation, macOS and the Tauri shell come after the hackathon.
 A level is done when its demo runs three times in a row from a clean start, with one command and no manual fixes.
 
 ## Out of scope for these 9 days
-A persistent incremental engine, more languages, runtime traces, embeddings, a sandbox, undo, and a worktree pool.
+A persistent incremental engine, more languages, runtime traces, embeddings, a filesystem sandbox (Next: bubblewrap on Linux), undo, and a worktree pool.
+After the hackathon, each starting as a plan: the repository's git hooks run as evidence on a proposal, repositories without Python (opened without a graph), and native isolation for Windows and macOS.
 One bounded exception to undo, in level 3: a one-click Revert of a merge made by rules, only while it applies
 without conflict; otherwise the change goes to "needs you".
 

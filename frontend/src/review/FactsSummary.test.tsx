@@ -48,6 +48,7 @@ const facts: ChangeFacts = {
   summary: lines,
   behavior_diff: null,
   measured_cone: null,
+  parameter_extensions: null,
   review_cards: null,
   shape: null,
   shape_complete: null,
@@ -74,16 +75,15 @@ function block(html: string) {
 }
 
 describe("recorded facts summary", () => {
-  it("renders the three server lines in order above the existing facts block", () => {
+  it("keeps raw server lines out of the unified panel body", () => {
     const html = panel([facts]);
-    const summary = block(html);
-    expect(summary).toBeDefined();
-    expect(summary?.match(/<p [^>]*>(.*?)<\/p>/g)?.map((p) => p.replace(/<[^>]*>/g, ""))).toEqual(
-      lines,
+    expect(block(html)).toBeUndefined();
+    expect(html).toContain("Nothing was compared for this change.");
+    expect(html.indexOf('aria-label="Agent note"')).toBeLessThan(
+      html.indexOf('aria-label="Change files"'),
     );
-    expect(html.indexOf(`aria-label="${label}"`)).toBeLessThan(
-      html.indexOf('aria-label="Review signals"'),
-    );
+    for (const line of lines) expect(html).not.toContain(line);
+    expect(renderToStaticMarkup(<FactsSummary facts={facts} />)).toContain(lines[0]);
   });
 
   it.each<[string, ChangeFacts | undefined]>([
@@ -94,7 +94,9 @@ describe("recorded facts summary", () => {
     expect(renderToStaticMarkup(<FactsSummary facts={record} />)).toBe("");
     const html = panel(record ? [record] : []);
     expect(html).not.toContain(label);
-    expect(html).not.toContain('aria-label="Review context"');
+    expect(html).toContain("Behavior and callers were not recorded for this revision.");
+    // Caller evidence still needs the shared, bounded context without a summary.
+    expect(html).toContain('aria-label="Review context"');
     for (const line of lines) expect(html).not.toContain(line);
   });
 
@@ -109,8 +111,8 @@ describe("recorded facts summary", () => {
 
   it("uses the latest matching facts and never falls back to an older summary", () => {
     const old = { ...facts, summary: ["Earlier facts"] };
-    expect(block(panel([old, facts]))).not.toContain("Earlier facts");
-    expect(block(panel([old, facts]))).toContain(lines[2]);
+    expect(panel([old, facts])).not.toContain("Earlier facts");
+    expect(panel([old, facts])).not.toContain(lines[2]);
     expect(panel([old, { ...facts, summary: null }])).not.toContain(label);
   });
 
@@ -118,9 +120,8 @@ describe("recorded facts summary", () => {
     const report = "Agent report: I changed everything and all tests passed.";
     const html = panel([facts], { ...proposal, summary: report });
     expect(html).toContain(report);
-    expect(block(html)).toBeDefined();
-    expect(block(html)).not.toContain(report);
-    expect(html.indexOf(report)).toBeGreaterThan(html.indexOf('aria-label="Review signals"'));
+    expect(block(html)).toBeUndefined();
+    expect(html.indexOf(report)).toBeGreaterThan(html.indexOf('aria-label="Agent note"'));
   });
 
   it("preserves opaque text and whitespace, escapes markup and keeps unknowns neutral", () => {

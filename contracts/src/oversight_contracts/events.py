@@ -521,6 +521,8 @@ class LeadStatus(ContractModel):
     """Completed public-command tool calls."""
     detail: str | None
     """The lifecycle explanation."""
+    requested_plan_id: PlanId | None = None
+    """The plan this revision's step requested, or null."""
 
 
 class RevertResult(ContractModel):

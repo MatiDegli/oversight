@@ -103,6 +103,7 @@ class ScriptedModel:
         self._turn_delay_s = script.turn_delay_s
         self._profile = profile
         self.requests: list[list[Message]] = []
+        self.tool_requests: list[list[ToolSchema]] = []
 
     @property
     def profile(self) -> ModelProfile:
@@ -112,6 +113,7 @@ class ScriptedModel:
         self, messages: Sequence[Message], tools: Sequence[ToolSchema]
     ) -> ModelReply:
         self.requests.append([dict(message) for message in messages])
+        self.tool_requests.append([dict(tool) for tool in tools])
         if not self._turns:
             return ModelReply(text=None, tool_calls=[], model=self._profile.model)
         if self._turn_delay_s:

@@ -141,7 +141,7 @@ const baseThemes = {
     "left-rail-width": "56px",
     "agents-panel-width": "400px",
     "review-panel-width": "880px",
-    "cone-card-width": "280px",
+    "cone-card-width": "384px",
     "agents-rail-width": "56px",
     "button-primary-height": "40px",
     "button-primary-padding": "0 16px",

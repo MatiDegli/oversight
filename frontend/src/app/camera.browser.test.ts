@@ -372,7 +372,7 @@ it("refreshes a revealed cone row after pan, zoom and Fit without moving the cam
     const positions = (await report(page, [])).positions;
     await panAway(page);
     await browserExpect(row).toContainText("Out of view");
-    await browserExpect(row).toHaveRole("button");
+    await browserExpect(row.getByRole("button")).toHaveCount(1);
     expect((await report(page, [id])).cutOff).toContain(id);
     // Let another browser frame pass: reporting visibility must never recenter the camera.
     const away = await report(page, [id]);
@@ -404,10 +404,10 @@ it("the impact cone component keeps keyboard focus on a revealed row and never t
       return window.graphTest.caller;
     });
     const row = page.getByTitle(id);
-    await row.focus();
-    await row.press("Enter");
+    await row.getByRole("button").focus();
+    await row.getByRole("button").press("Enter");
     await browserExpect(row).not.toContainText("Out of view");
-    await browserExpect(row.locator("..")).toBeFocused();
+    await browserExpect(row).toBeFocused();
     const other = page.getByRole("button", { name: "Other control" });
     await other.focus();
     await page.evaluate(() => window.graphTest.mountCone(true));
@@ -478,7 +478,7 @@ it("offers a reveal row for a caller under the bottom overlays, then clears it o
     expect(occluded.y2).toBeLessThan(occluded.height);
     expect(occluded.y2).toBeGreaterThan(occluded.bottom);
     await browserExpect(row).toContainText("Out of view");
-    await browserExpect(row).toHaveRole("button");
+    await browserExpect(row.getByRole("button")).toHaveCount(1);
     await click(page, row);
     await paint(page);
     await browserExpect(row).not.toContainText("Out of view");

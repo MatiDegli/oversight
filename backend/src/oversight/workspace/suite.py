@@ -8,6 +8,7 @@ pytest's text.
 
 import asyncio
 import json
+import re
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field, replace
@@ -220,7 +221,7 @@ async def run_suite(
         process = ProcessResult(None, "", "", isinstance(error, asyncio.CancelledError), False, 0)
     finally:
         tally, report_found, report_error = await offload(lambda: _take_tally(report))
-        cases, problems = await offload(lambda: _take_cases(junit))
+        cases, problems = await offload(lambda: _take_cases(junit, redact))
         measured = None
         if measured_targets is not None:
             try:
@@ -261,7 +262,21 @@ async def run_suite(
     return run
 
 
-def _take_cases(path: Path) -> tuple[tuple[CaseResult, ...], tuple[str, ...]]:
+# Conservative and local: workspace and events are independent layers.
+_DETAIL_PATH = re.compile(r"(?<!\w)/|~/|file:|[A-Za-z]:[\\/]|\\{2}", re.IGNORECASE)
+
+
+def _safe_detail(message: str | None, redact: Callable[[str], str]) -> str | None:
+    if message is None:
+        return None
+    text = redact(message).strip()
+    text = text[:239] + "…" if len(text) > 240 else text
+    return text if text and not _DETAIL_PATH.search(text) else None
+
+
+def _take_cases(
+    path: Path, redact: Callable[[str], str] = lambda text: text
+) -> tuple[tuple[CaseResult, ...], tuple[str, ...]]:
     try:
         with path.open("r", encoding="utf-8", errors="replace") as report:
             parsed = parse_junit(report.read(MAX_XML_BYTES + 1))
@@ -271,7 +286,10 @@ def _take_cases(path: Path) -> tuple[tuple[CaseResult, ...], tuple[str, ...]]:
         path.unlink(missing_ok=True)
     return (
         tuple(
-            CaseResult(test_id=key, outcome=value) for key, value in sorted(parsed.outcomes.items())
+            CaseResult(
+                test_id=key, outcome=value, detail=_safe_detail(parsed.details.get(key), redact)
+            )
+            for key, value in sorted(parsed.outcomes.items())
         ),
         tuple(p.code for p in parsed.problems),
     )

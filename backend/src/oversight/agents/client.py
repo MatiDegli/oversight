@@ -128,7 +128,7 @@ class CallScope:
 
     deadline: float | None
     record: Callable[[ModelReply], Awaitable[None]]
-    role: Literal["agent", "review", "plan"] = "agent"
+    role: Literal["agent", "review", "plan", "lead"] = "agent"
     admission: Callable[[], Awaitable[None]] | None = None
     """Decision-only admission, immediately before every send, after retry waits."""
     all_attempts: bool = False

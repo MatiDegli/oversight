@@ -317,6 +317,8 @@ def validate_usage_tick(tick: "UsageTick") -> None:
         raise ValueError("agent and review usage require a change")
     if tick.role == "plan" and tick.plan_id is None:
         raise ValueError("plan usage requires a plan")
+    if tick.role == "lead" and (tick.change_id is not None or tick.plan_id is not None):
+        raise ValueError("lead usage names no change or plan")
     if any(
         value is not None and value < 0
         for value in (tick.input_tokens, tick.output_tokens, tick.cached_tokens, tick.cost_usd)

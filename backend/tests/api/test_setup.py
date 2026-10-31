@@ -65,6 +65,7 @@ async def proposed_run(
     app = create_app(settings, client_factory=Scripts())
     live: LiveRun = app.state.live
     manager = Mock(spec=ChangeManager, main_suspect=False)
+    manager.merged_by_rules.return_value = False
     manager.request_changes.side_effect = lambda _id, comment, **_guard: asyncio.create_task(
         asyncio.sleep(0, result=Revision(comment, None))
     )
@@ -135,9 +136,35 @@ async def test_unmetered_revision_ignores_missing_meta_setup(
             json={"comment": "Revise, please.", "revision": 1, "head_commit": "seeded-head"},
         )
         assert response.status_code == 202, response.text
+        manager = cast(Mock, live._manager)  # pyright: ignore[reportPrivateUsage]
+        manager.merged_by_rules.assert_called_once_with("change-1")
         await asyncio.wait({live._runs["agent-1"]})  # pyright: ignore[reportPrivateUsage]
         run = cast(Mock, live._kept["agent-1"])  # pyright: ignore[reportPrivateUsage]
         run.revise.assert_awaited_once_with("Revise, please.", None)
+
+
+async def test_rules_merged_revision_names_revert_without_kept_run(tmp_path: Path) -> None:
+    settings = meta_settings(
+        tmp_path, agent_model_b="fake", fake_script_b=FAKE_SCRIPT_B, meta_api_key=None
+    )
+    async with asyncio.timeout(DEADLINE_S), proposed_run(settings, FAKE_MODEL) as (client, live):
+        manager = cast(Mock, live._manager)  # pyright: ignore[reportPrivateUsage]
+        manager.merged_by_rules.return_value = True
+        live._kept.clear()  # pyright: ignore[reportPrivateUsage]
+        before = live.store.last_seq
+        response = await client.post(
+            "/changes/change-1/request-changes",
+            json={"comment": "Revise, please.", "revision": 1, "head_commit": "seeded-head"},
+        )
+        assert response.status_code == 409, response.text
+        assert response.json()["error"] == {
+            "code": "wrong_state",
+            "message": "change-1 was merged by rules; use Revert to undo it",
+        }
+        manager.merged_by_rules.assert_called_once_with("change-1")
+        manager.request_changes.assert_not_called()
+        assert live._runs == {} and live._decisions == {}  # pyright: ignore[reportPrivateUsage]
+        assert live.store.last_seq == before
 
 
 @pytest.mark.parametrize("attribute", ["budget_usd", "input_usd_per_m", "output_usd_per_m"])

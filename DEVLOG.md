@@ -28,6 +28,7 @@ One line per day, in Argentina time (ART).
   activity light and merge travel; phone practice decision rows; detection comparisons with
   per-arm limits, deadlines and diagnostics; preserved source test options and refreshed the
   submission README.
+  Measured caller evidence in review, with revision-isolated event replay, partial/unavailable reasons and static cone limits; hand-written UI fixtures and browser checks.
 - **2026-10-30:** Extended behavior comparisons to methods, properties and project-object arguments,
   shared-input identity and inert-scope filtering, with published reasons for unprobed functions;
   added removed/skipped-check findings; durable FIFO task dispatch, plan routes, internal dependency

@@ -3,6 +3,19 @@
 Each decision with its reason. The design approved before the build is in
 [docs/proposal.md](docs/proposal.md); this file adds what is decided while building.
 
+Entries are ordered by merge, not by date; when two entries conflict, the later date wins.
+
+## 2026-10-31 — Measured caller words on the graph
+
+Approved by the maintainer at 13:55:35 ART (2026-10-31T16:55:35Z; packet B 1031e item 1): review callers say
+"differs" in neutral text at 600 or "varied" in muted at 400, using the existing state-word
+slot. "same", "not measured" and absent comparisons leave the cone unchanged. Folded classes
+and modules project only a hidden member's "differs"; evidence never changes folds, geometry,
+camera, focus or field light. This makes observed differences visible without claiming safety.
+The three sketch exclusions retain the built cone card position, retain the built 1280 camera,
+and leave the canvas wordless when no caller was compared. The panel stays as built; the watch
+card's Evidence line and the node evidence chip/popover belong to separate fronts.
+
 ## Dependencies
 
 Every direct dependency, its license, and why it is here. Versions are pinned exactly, and a release
@@ -16,6 +29,7 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 | openai | 3.29.0 | Apache-2.0 | the official SDK, pointed at Meta's and Baseten's endpoints (AGENTS.md) |
 | pydantic | 2.14.1 | MIT | the contracts' source of truth |
 | ruff, pyright, pytest, import-linter, httpx | 0.17.0, 1.1.414, 9.1.1, 2.15, 0.28.1 | MIT, MIT, MIT, BSD-2-Clause, BSD-3-Clause | lint and format, types, tests, import contracts, the test client |
+| httpx2 | 2.13.1 | BSD-3-Clause | direct dev dependency used by the no-credits test guard alongside httpx (`pyproject.toml`, `conftest.py`) |
 | pytest-timeout | 2.4.0 | MIT | a time limit per test: a hang fails alone, with its name |
 | pytest-xdist (and execnet 2.1.2) | 3.8.0 | MIT | runs the suite on 8 worker processes: `make check` waits for the slowest group, not the sum |
 | react, react-dom | 19.3.0 | MIT | the UI |
@@ -97,6 +111,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
     with a lint error and with a failing test). CI runs `make check-ci`, the same without
     gitleaks, which its check job has not got (the history is scanned in a job of its own), so
     the two cannot drift apart.
+
+    Amended 2026-10-31 (Docs audit): `Makefile` GATES also includes `check-notices`; the groups are Python, contracts, frontend, secrets and notices.
   - *xdist.* Chosen over splitting the suite by hand because the tests were already isolated:
     real uvicorn on a socket bound before it starts, `tmp_path` runtimes, no shared state.
     `-n 8` is fixed, not `auto`, so the memory share below is the same on every machine;
@@ -150,6 +166,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   `graph`, `events` and `commands`, so each import says which part of the contract it uses.
 - **The contract-scope check** (docs/proposal.md, section 4.8) comes in its own small PR, with its
   plan reviewed first, since it guards the tree.
+
+Superseded by 2026-10-31 Docs audit: the record follows main (decision 6); the contract-scope check never existed, and each approved contract change rides in its own front.
 - **Contract 1.1 adds the error code `internal` (500)** (the maintainer, 2026-10-26): without it an
   unexpected server-side failure, such as the change manager failing to open, answered FastAPI's
   plain 500, outside the single `ErrorResponse` format. A minor version, since it only adds a code;
@@ -199,6 +217,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   Approve has no keyboard shortcut and must never fire while a comment is typed, and Tab then Space
   from the comment box would merge into main. Cost: keyboard and screen-reader users cannot approve;
   they are told why, and the merge stays a deliberate pointer act.
+
+Amended 2026-10-31 (Docs audit): the caption was dropped in ff9ddb9 without a decision; decision 2 of “Docs audit: the record follows main” reinstates it through line B's design-docs front. Approve stays pointer-only.
 - **Bezier edges kept over taxi (maintainer, 2026-10-26), superseded on 2026-10-27 by the graph
   at the sketch's direction, below:** captures of both on the preset layout were compared; curves
   read better. That preset packed every module in a tight box, with no room for lanes; on the wide
@@ -221,11 +241,15 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   draws calls, and with 36 functions the imports doubled the lines without saying what a change
   reaches. Cost of the whole: in review, at the 12px floor, only the nearest callers of the demo's
   hub fit beside the cone card; the rest are lit and listed as out of view.
+
+Amended 2026-10-31 (Start with the whole graph when it fits legibly; b860ef4): `frontend/src/graph/camera.ts` startCamera fits the whole graph when legible, otherwise frames the hub at the legibility floor.
 - **Answers on the graph at the sketch (maintainer, 2026-10-27):** edges at a lit node stay grey,
   and only a change's own edges take the agent's color; imports stay hidden; a cone row that says
   "Out of view" pans the camera to its node only when clicked (at the zoom it has, never on its
   own, and the card then lists what is still out of view); the start view is the module of the hub
   (pricing).
+
+Amended 2026-10-31 (Start with the whole graph when it fits legibly; b860ef4): startCamera now fits the whole graph when legible.
 - **Fit stops at the zoom range (2026-10-27):** a graph too wide for 20% is framed at 20%, centered,
   and is not fitted below it, rather than letting Fit go below the range for its own framing and
   restoring the limit afterwards. A wheel or button zoom that started below the range would have
@@ -275,6 +299,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 - **R3: function edges on demand.** Module edges show at rest. Function edges appear on hover,
   selection and working agents' cones; calls within one file stay hidden. This reduces clutter
   while keeping the calls relevant to the current work visible.
+
+Amended 2026-10-29 (Exact calls at rest, possible links as quiet context): open modules show exact cross-file calls at rest; possible calls appear on hover, selection or displayed cones. Same-file calls stay hidden (`frontend/src/graph/styles.ts`, `exactEdges.test.ts`).
 - **R4: local light, amended by the maintainer on 2026-10-27.** The approved v4 field keeps
   square LEDs and box-shaped light from the current node and last read, not a round glow.
   The full amendment is recorded under v4 below and in DESIGN.md; it replaces the earlier
@@ -399,6 +425,8 @@ Ours wins in every case below.
 - **Classes start folded (maintainer, 2026-10-27):** one row names the class and its method count; a click toggles it, and a new change adding or modifying a method opens it. Reads and cone membership project onto the folded row (nearest distance). Preset positions plus fold state determine all positions; only later rows and modules in that column slide for 240ms with cubic-bezier(0.2, 0.7, 0.2, 1), or jump under reduced motion. Incoming calls share a target trunk outside frames; endpoint taps alone traverse their own containing frame.
 
 - **Graph cleanup evidence (2026-10-27):** comparison images and work reports stay outside the product repository; the start camera stays at 100%, frames settled header bounds, and treats the heading, notices and bottom overlays as viewport edges when choosing the nearest clear gutter.
+
+Amended 2026-10-31 (Start with the whole graph when it fits legibly; b860ef4): the start camera now fits the whole graph when legible.
 - **Dot field brought forward (maintainer, 2026-10-27):** the dot field and working rings
   behind the graph move from "after level 1" to now, with the v4 R4 amendment above; it must never
   block level 1, so with no WebGL, a failed draw or a lost context the graph shows plain ground.
@@ -412,6 +440,8 @@ Ours wins in every case below.
   holds a `_support.ChangeContext` with dependencies and that state, rather than copied aliases.
   Assignable compatibility properties preserve private test access. Public signatures and tasks,
   lock/await order, combined tests, permanent main suspicion and receipt ordering remain intact.
+
+Amended 2026-10-31 (Docs audit): names and sizes as of Oct 27; `_manager.py` now has 728 lines, and file transactions live in `changes/_files.py` as save_main, settle_save and restore_save.
 - **Typed ports only while needed:** ports are a record of lambdas that resolve facade methods
   on each invocation, preserving class-level monkeypatches without making the facade implement a
   protocol. PR 2 adds finish_pending/send_requested for proposal; PR 3 adds drain_pending/finish
@@ -434,11 +464,15 @@ Ours wins in every case below.
   scope; no function exceeds 80 lines. Two unsuccessful fidelity/review repair rounds stop the
   sequence for a coordinator decision.
 
+Amended 2026-10-31 (Docs audit): names and sizes as of Oct 27; save_main, settle_save and restore_save now live in `changes/_files.py`.
+
 ## Level 2 closed on Tue Oct 27
 
 Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
 start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
 scripted two-agent replay. A real recorded run will be bundled for the static replay.
+
+Amended 2026-10-31 (Docs audit): the real recorded run is bundled in `fixtures/events/recorded-demo.jsonl`; `frontend/tools/recorded-replay.ts` loads it for the static replay build.
 
 Level 3 wiring starts now. Contracts 1.4.0 delivery A was approved by the maintainer, 2026-10-27.
 
@@ -487,6 +521,8 @@ all shell shortcuts pause except Escape, which dismisses only the sheet.
    Require revision/head guards, explicit live provenance and published agent bases. Reserve
    GET /tree with required nullable file hashes, a joint 2,000-entry cap and a future 8 MiB
    hashing budget; no traversal is enabled yet.
+
+Amended 2026-10-31 (Docs audit): GET /tree is built in `backend/src/oversight/api/commands.py`; replay answers 501.
 2. **Finish declarations** — approved by the maintainer, 2026-10-27.
    Optional files, tests_run and pytest ids preserve agent claims separately from observed facts.
 3. **Evidence rules** — approved by the maintainer, 2026-10-27.
@@ -564,6 +600,8 @@ separate 1 MiB limits; regular files use 256 KiB, while agent ranged reads allow
 Event line limits exclude the trailing newline and apply to both import and export. Ledger
 writes are compact and refuse growth beyond their read cap before replacing the previous file.
 
+Amended 2026-10-31 (d157a33): event lines retain 1 MiB except graph events, 8 MiB (`backend/src/oversight/limits.py` MAX_GRAPH_EVENT_LINE_BYTES).
+
 ## Monaco's vendored DOMPurify — 2026-10-27
 
 Pin Monaco's DOMPurify dependency to 3.4.17 and patch monaco-editor@0.57.0 with the official
@@ -638,6 +676,8 @@ reviews or publish events yet. A reviewer uses the opposite slot's model, a fres
 separate message history. Fake reviews require an entirely fake configuration and use scripts
 named for the reviewer, independently of the author scripts.
 
+Amended 2026-10-31 (Docs audit): `OVERSIGHT_REVIEW_MODEL` selects the independent reviewer, default Muse Spark Open; PR3a/PR3b built scheduling (`runtime_review.py`). `make demo` does not enable cross-review; `.env.example` leaves it off.
+
 The reviewer uses `REVIEW_MAX_OUTPUT_TOKENS = 12_288` with explicit `reasoning_effort="low"`
 on Meta and Baseten. This provisional budget leaves room for twenty findings of 1,000 characters
 and reasoning; 32,768 has no documented provider validation. Paid acceptance must measure provider
@@ -662,6 +702,8 @@ duplicates or contradictions; a clean merge does not establish agreement.
 The maintainer accepted package 2 decisions 6a–6c on October 27 at 22:17 ART (UTC−3):
 
 - 6a: the cross-review switch stays false by default; the demo enables it explicitly.
+
+Amended 2026-10-31 (Docs audit): `make demo` follows `.env` and does not enable cross-review; `.env.example` sets OVERSIGHT_CROSS_REVIEW=false. Demo activation needs a separate decision.
 - 6b: parity accounting records an unanswered Meta review attempt as unknown and closes the
   Meta spending brake. Recovery requires stopping the server, checking Meta's total and running
   `ledger settle`; settlement is refused while the server runs. Restart creates a clean workspace
@@ -678,6 +720,8 @@ PR1 already supplies the default-off switch. PR3a carries runtime registration, 
 lifecycle wiring, including explicit demo activation; PR3b carries call scope, accounting, the
 Meta brake and distinct review-ledger failure handling. PR4 carries replay/UI projection and
 recognition of the shared fixture. Contracts remain frozen at 1.4.0.
+
+Amended 2026-10-31 (Docs audit): PR3a/PR3b scheduling is built (`runtime_review.py`); the reviewer is OVERSIGHT_REVIEW_MODEL, default Muse Spark Open. `make demo` follows `.env` without enabling cross-review.
 
 ## Cross-review runtime lifecycle (PR3a)
 
@@ -748,6 +792,8 @@ The active backend profile remains safe-merge-probes-v1. No protected-path evalu
 UI, Revert or delivery manifest is implemented here. Cost per node and exception type are left
 out. These additions identify schema 1.5.0; safe creation, nullable SaveFile.base_hash, zones and
 inventory move to 1.6.0. Delivery A decisions 11–12 remain unchanged as the approval history.
+
+Superseded by 2026-10-31 Item 8 F4b: protected paths join rules authority atomically; `_assessment.py` selects safe-merge-paths-v1, while `_mode.py` RULES_ACTIVATION remains false.
 The tuple check now compares against the byte-exact 1.4.0 baseline, retaining the 1.3.0 baseline
 and negative controls. Baseline snapshots count toward the commit line limit; an indivisible
 snapshot requires the existing Commit-Exception trailer. Pydantic/JSON Schema enforce list bounds
@@ -810,6 +856,8 @@ contract-proposal approval below. The code also shows that dependent starts and 
 fallback exceed the two-agent running-plan validator
 (`contracts/src/oversight_contracts/plans.py:60`); propose that extension before wiring it. These
 questions prevent optional properties from hiding changes to the meaning of a contract.
+
+Amended 2026-10-31 (Docs audit): plans.py:60 has since moved; Plan and validate_dependencies now admit one to six subtasks and dependencies (contracts 1.8.0).
 
 ## 2026-10-28 — Bench criteria and a shared US$20 ceiling
 
@@ -901,6 +949,8 @@ unavailable evidence. Reuse the test-run caps and guarded asynchronous execution
 does not contain filesystem effects, so unsupported side effects remain unprobed. This avoids
 turning an optional evidence producer into a less restricted execution path.
 
+Amended 2026-10-31 (Docs audit): capability.py:116 has since moved; SessionIsolation and check_effect in `workspace/capability.py` own the isolation capability.
+
 ## 2026-10-28 — Exploratory spike is not implementation code
 
 Coordinator ruling: write the behavior probe afresh within this repository. The exploratory spike
@@ -923,6 +973,8 @@ profile, preserving charges, unknowns and outstanding reservations. Main's `tool
 still identifies completion by task/profile; `tools/bench-arms` owns the extension. Never erase or
 reset the ledger or create another output directory as a repetition mechanism. A retry with lost
 accounting would evade the shared cap and make the measurements irreproducible.
+
+Amended 2026-10-31 (9ad1ecf): tools/bench-arms is done; `tools/eval/ledger.py` Ledger.completed uses arm_id and repetition, and the cited line 112 has since moved.
 
 ## 2026-10-28 — Remove completed cross-review and small packages from work
 
@@ -993,6 +1045,8 @@ Require that explicit tariff before paid bench comparisons: the shared US$20 cei
 enforced with an unpriced arm. Unknown cost is never zero and never debits the Meta credit ledger.
 This makes the budget rule apply to both providers without inventing a price.
 
+Amended 2026-10-31 (Docs audit): Baseten serves Muse Spark Open as reviewer and decider by default (`settings.py` review_model and decision_model); agent slots default to Muse Spark (`slots.py`). Explicit Baseten tariffs still determine known spend.
+
 ## 2026-10-28 — Agents receive graph context as server-built text
 
 Item 16 passes its bounded graph context only as text assembled by the server, never a graph tool
@@ -1018,6 +1072,8 @@ items 1, 2, 4 and 9, the behavior-diff bench and proof 1 must all be on main. Ot
 item 12 down and report the cuts to the maintainer. These proofs focus the freeze on something a
 judge can try and measured supervision, while fixing the reporting rule before results are known.
 
+Amended 2026-10-30 (ffb3210): the cut line is drawn when the checklist reaches main; Sat Oct 31 at 23:00 ART is only the fallback (`docs/additions.md`, “Three proofs”).
+
 ## 2026-10-28 — D2: A thin lead starts agents through the public commands
 
 Move the [lead agent](docs/additions.md#lead-agent) out of Next and place it immediately after
@@ -1026,6 +1082,8 @@ task queue. The lead writes only the plan and subtasks and starts agents through
 using the reserved lead routes and `started_by`. It never merges or reviews and has no information
 hidden from the person. This lets proof 2 start many agents without making the person start each
 one, while preserving the existing authority and evidence boundaries.
+
+Amended 2026-10-30 (The lead requests plans only): the lead never starts agents; the person approves an exact plan revision and the server dispatches it. The built lead is recorded in 2026-10-31 “The lead runs inside one run with fixed limits” (6818b3b).
 
 ## 2026-10-28 — D3: Saved flows fill task text before an agent starts
 
@@ -1058,6 +1116,8 @@ language by extension in the file view and live diff, without language-service w
 (`frontend/src/editor/language.ts`, `FileView.tsx:193`, `LiveDiff.tsx:266`). Files that create no
 graph nodes show a discreet No impact analysis header label. This makes other repository files
 readable without suggesting that Oversight analyzes their impact or adding language services.
+
+Amended 2026-10-31 (Docs audit): TOML uses INI tokens and JSON stays plain text (`frontend/src/editor/language.ts`, `language.test.ts`).
 
 ## 2026-10-28 — D6: Give Spark Open a constrained decision on behavior differences
 
@@ -1099,6 +1159,8 @@ establish reachability or its absence, the card asks; it never starts another ro
 Keep this in Undecided candidates, outside the decided queue. Repeating an unchanged failure
 spends credits and the person's attention for nothing.
 
+Amended 2026-10-31 (Ask instead of repeating an unchanged failure): the guard is built with call edges as its only reach source; executed nodes per test are not recorded on main.
+
 ## 2026-10-28 — D8: Attribute video numbers to the team's build process
 
 The maintainer allows the video's impact beat to use numbers from building Oversight with a
@@ -1121,6 +1183,8 @@ outside the decided queue.
 Until then, measure the third proof, the share of green patches with an unrequested difference,
 on tasks that change functions only, and say so in the write-up. This keeps the measurement within
 what the current probe can compare instead of implying evidence about methods.
+
+Amended 2026-10-31 (Docs audit): the `_behavior.py:79` and `:76-77` references have since moved; `targets` now accepts functions and methods and uses `_behavior_methods.py` method_inputs. The Oct 28 restriction describes its original scope.
 
 ## 2026-10-28 — D10: The D6 probe did not provide decision probabilities
 
@@ -1254,6 +1318,8 @@ A/B are unchanged. DESIGN.md records the tint and node-fill recipe.
 The contract Slot keys one exhaustive typed look map; components, graph layers/styles and field
 emitters read it. Missing slot families fail typecheck. Admission remains two agents until the
 backend's separate front. Overlaps, badges and folds for N agents remain a later graph front.
+
+Amended 2026-10-31 (Docs audit): admission is built as OVERSIGHT_MAX_AGENTS, default 4, from 1 through 6 (`settings.py`, `slots.py`).
 
 The coordinator measured each graphic at >=3:1 and text at >=4.5:1 over dark #101012, #151518,
 #131313 and day #f8f7f3, #fcfbf8, #fbfaf7, #f4f3ef, #eeede8. Letters on graphic fill pass
@@ -1555,6 +1621,8 @@ The creation bundle remains reserved for 1.8.0.
 
 The coordinator approved a built-in category table for the reserved `protected_paths` rule,
 based on the four categories in `docs/additions.md:270`. The maintainer may change its patterns.
+
+Amended 2026-10-31 (Docs audit): the protected-path categories are in `docs/additions.md`, section “8. Merge by rules”; the old line number has moved.
 `changes/_protected_paths.py` records manifests/lockfiles (`pyproject.toml`, `setup.py`, `setup.cfg`,
 `requirements*.txt`, `uv.lock`, `poetry.lock`, `Pipfile`, `Pipfile.lock`) and test configuration
 (`pytest.ini`, `tox.ini`, `noxfile.py`, `.coveragerc`, `conftest.py`) by basename at any depth.
@@ -1577,12 +1645,16 @@ This adds a callable evaluator, not live enforcement: the scheduler still select
 `safe-merge-probes-v1`, both merge predicates reject the paths profile, protected-path grants stay
 refused, and startup capability remains closed. Source capture/loading, settings, profile
 migration, activation and any future waivable-hit semantics require separate work.
+
+Superseded by 2026-10-31 Item 8 F4b: protected paths join rules authority atomically; `_assessment.py` selects safe-merge-paths-v1 and captures proposal paths, while `_mode.py` RULES_ACTIVATION stays false.
 ## 2026-10-29 — Internal object-only preflight for a rules merge's inverse
 
 `changes._revert_preflight.preflight` accepts a server-supplied resolution event (or its stored
 envelope), a `RevertChange` and the target change ID. Store lookup and HTTP remain separate work;
 Revert stays reserved. It revalidates provenance and the recorded assessment, including pass
 observations and grant coverage, and refuses unknown or inconsistent evidence.
+
+Amended 2026-10-31 (Revert admits a server-loaded committed rules resolution; 69aaee8): POST /changes/{id}/revert is live; its UI belongs to line B's front. No rules merge can occur while RULES_ACTIVATION is false.
 
 Classification holds main's lock and the shared Git lease, with one finite deadline covering lock
 waits and guarded asynchronous Git. It captures main's commit H, requires the caller's observed
@@ -1661,6 +1733,8 @@ verbatim task and shared graph-count previews, and down chevrons; their content 
 The diff's disclosures keep their existing boxes. Consolidating the rows and tightening the
 summary-to-list gap keeps the collapsed last row above the dock on first view at both phone sizes,
 without a guessed dock-height padding. Desktop composition and typography remain unchanged.
+
+Amended 2026-10-31 (Phone practice reviews with the panel's evidence): Possibly affected was removed; Recorded task remains a disclosure (`frontend/src/app/challenge/PhoneReview.tsx`).
 
 ## 2026-10-29 — Source profiles keep pytest options apart from targets
 
@@ -1959,6 +2033,176 @@ classes defined in the project's own non-test modules are constructed.
 
 Reason: deferring methods leaves missing evidence in the bench, so the evidence fix scope
 supersedes the level 3 deferral while retaining the existing effect and construction policies.
+
+## 2026-10-29 — Item 9's card and inbox: answers, content, shots and where grants are listed
+
+The maintainer decided on 2026-10-29, as follow-up 3 to item 9 and the decisions inbox. Earlier
+entries record the inbox itself ("A decisions inbox is the form of Needs you": No is Request
+changes, Unsure stays in the inbox), the header count, and what becomes a question ("Item 9
+questions are only for unasked or untied differences"). This entry records the rest: how the
+card's answers gate its actions, what the card and the inbox show, the shots gate, and where
+standing grants are listed.
+
+Approve on a card with questions opens only when every answer is Yes, and the reason sits beside
+the locked button: "Approve opens only when every answer is Yes". With any No, Request changes
+becomes the primary action, prefilled with that question's example as the comment. With any
+Unsure, the card waits. Reject is always available. In Ask me, every change still waits for
+Approve.
+
+The card says "N choices need you" and gives one line, from events, with what was asked and what
+was done. Each question shows its smallest example as large before -> after cells, the after cell
+in the agent's color, with Yes keep it, No send it back and Unsure decide later; an answered
+question collapses to one line with its answer. A block headed with what was compared,
+such as "No other difference in what was compared · 1 function, 24 inputs", counts the functions
+and inputs compared, as one row of function squares per module, beside the changed module with its
+changed functions numbered to their questions, and their callers; functions not compared stay
+neutral, and the block never claims that everything else is the same.
+A footer reads "k of N answered"
+next to the locked Approve. The inbox shows the large count; one line computed from events, such
+as how many agents took how many steps in how long and how many of those decisions needed a
+person; when each decision arrived; and rows with their before -> after, never a row whose before
+equals its after. The earlier prep mockups give content and hierarchy only. The screens use the
+product's own components at the quality of the v4 shell sketches, with data from a real recorded
+run (the demo, or Boltons) that names only files that exist.
+
+Before any card or inbox front merges, the maintainer sees shots of the card's three states and of
+the inbox, in dark and day. Once he approves them, they go into docs/sketches/ beside the v4
+sketches.
+
+Standing grants get no Settings tab for grants alone. The grants list sits next to the inbox, as a
+second view of the same panel or a section under the decisions, with its own count. The inbox
+answers front shows that placement in its first shots; a reason it does not work comes back with
+them.
+
+This keeps every decision the person makes, and every answer they gave once for good, in one
+place, and Approve, which merges into main, never opens while an answer still says No or Unsure.
+
+## 2026-10-29 — Review shows bounded direct behavior evidence
+
+Review renders the latest facts matching both revision and head, without falling back to older
+optional evidence. Direct changed-node probes remain separate from measured caller observations
+and the static “possibly affected” cone. All published nodes survive, including removed or unknown
+IDs; graph labels resolve where available and IDs remain the fallback.
+
+Counts describe admitted inputs and stable measured differences. No same-result count is displayed:
+ten comparisons and nine differences can include instability beyond the eight retained samples.
+Visible instability is partial evidence, never an established difference. Positive comparisons with
+zero differences say “No difference measured on these inputs” only without published limitations or
+visible instability; the bounded-input qualification remains beside it. Null or omitted evidence is
+not recorded, an empty list means no changed-node probes, and facts completeness says nothing about
+behavior completeness. Missing current facts stay explicit in review; the portable block itself
+returns null without direct evidence so other parents can choose their own absent-state copy.
+
+Published reasons are limited to unsupported node kind, unavailable version and unavailable probe.
+Only a graph-confirmed method/class gets the specific method/class wording. Unknown reasons are
+preserved as text; no timeout, isolation or signature diagnosis is inferred. Samples are escaped,
+losslessly wrapped display strings, with disclosures initially closed to preserve editor space.
+
+DESIGN.md wins over Impeccable's ordinary 16px body floor and generic card/motion recommendations:
+review keeps its existing 14px dense evidence role, theme tokens, plain surfaces and event-driven
+focus rules. Facts, signals and the agent report share one bounded context scroll even without
+a summary, so expanded evidence cannot overlap Monaco or the decision footer at 1280×800.
+No new animation or visual world is introduced.
+
+## 2026-10-29 — Measured caller evidence stays inside static possibilities
+
+Review shows published caller outcomes only for the current proposal revision and head, joined
+by node id to the retained static cone in distance order. A missing name falls back to its id.
+Observed equality means “No difference measured on these inputs”; it establishes neither
+behavioral equivalence nor coverage. A caller without measurement stays possible. Invocation
+counts remain independent of caller counts and bounded display samples; unstable samples never
+supply stable difference evidence.
+
+Availability is independent of outcome: partial evidence preserves stable differences, while
+zero admitted comparisons shows unavailable measurements and the published reasons. Matching,
+recording and probing diagnostics remain visible, without inferred causes or use of overall
+facts completeness as caller completeness. Missing/null legacy evidence differs from an explicit
+empty array. The static graph, bounds, omissions and possible callers remain visible beside the
+focus panel, and both summary paths share one context scroll without displacing the diff or
+choices. Samples are escaped text, disclosed only by a person; incoming events never move focus.
+
+Impeccable 4.5.2 conflicts resolved in favor of Signal: retain the project's dense title/data
+roles instead of a generic 16px body floor or 65–75ch minimum, and add no authored motion to
+measured evidence. Existing tokens, spacing, Next/Mono roles and review geometry govern.
+
+## 2026-10-30 — Review panel rework: the approved sketches replace the fronts' review rules
+
+The maintainer approved the review sketches on 2026-10-30, before 10:39 ART (exact time not
+recorded). The baseline is [docs/sketches/review/](docs/sketches/review/README.md), not the final
+look. It replaces the review rules added by behavior-review and measured-cone-review: "unmatched
+stay visible", "Mono carries counts", and the mid-dot section. The critique ranks harm to the
+approve/reject decision: grids and duplicate lists bury differences; diagnostic counters, equal
+chips and mixed-width prose compete with the evidence. Differences lead, agreement is a sentence,
+method details open on request, and the graph owns places and reach. Data contracts stay intact.
+
+The maintainer's five settled departures, verbatim:
+
+- the diff comes before "What was compared";
+- "Out of view" covers functions off camera and inside folded modules;
+- "varied" is the cone word for unstable results;
+- the answered row always wraps, never truncates (at 1280 the After cell may need a scroll);
+- state g's Revert is the item 8 target, built only when item 8 delivers it.
+
+Amended 2026-10-31 (Revert admits a server-loaded committed rules resolution; 69aaee8): the Revert route is live; its UI is line B's front, and rules activation stays closed.
+
+The approved baseline bends Signal's frame dimming to 16% outside the review cone and change,
+including module frames. Grain and top light stay on the header. The sketch's local day syntax
+values must become token-driven in the code step; day syntax tokens already exist, and this step
+adds no colors. Mono's narrower prose rule applies only inside review: the agent card and dock
+keep their numeric readings. Approval from the review panel starts merge travel like any merge;
+with the agents panel folded, the pulse leaves that agent's letter in the rail. It never moves
+the camera or takes focus from the panel. Revert remains absent until item 8 supplies its command.
+
+Amended 2026-10-31 (Revert admits a server-loaded committed rules resolution; 69aaee8): the route is live; the UI belongs to line B's front. No rules merge can occur while RULES_ACTIVATION is false.
+
+Impeccable 4.5.2 shape ordinarily asks for brief confirmation and stops; this screen's approved
+brief and explicit instruction to write DESIGN.md settle that step. Clarify's preference for
+specific actions does not rename the approved Yes/No/Unsure answers or rewrite server questions.
+The project's fixed sizes, tokens, matte header and focus rules win over generic style guidance;
+AGENTS.md and DESIGN.md remain authoritative. No new visual world or UI code is introduced here.
+
+## 2026-10-30 — Review panel life pass: a candidate after level 3
+
+Not built now. Once level 3 is solid, a candidate life pass may add the answer fold transition,
+a rolling answered count, and hover on a differing caller that lights its node. It goes through
+the same sketch approval as this rework. These are later candidates; merge travel on Approve is
+already required by the approved baseline.
+
+## 2026-10-31 — Review words use the approved table and recorded rule results
+
+No server phrase reaches the review panel verbatim. The table in `evidenceWords.ts` translates
+reasons, and none says "probe"; an unknown phrase shows no reason. In g, the first three recorded
+passes in the approved order make one sentence. "{n} more rules passed." follows when more
+passed ("1 more rule passed." for one). "Your grant covered {k} rule(s) that could not be checked."
+follows when a grant covered an unknown rule. Details lists each as "{name}: passed" or
+"{name}: covered by your grant". Approved as implemented at `60152b2` in packet B: "Approve all",
+before 2026-10-31T04:05:38Z (01:05:38 ART).
+
+Reason: the panel uses the approved review words, and recorded passes and grant uses explain the
+merge without exposing server diagnostics or inferring evidence from the current policy.
+
+## 2026-10-31 — Map view and folder groups follow the later line B work
+
+The map view and folder groups are left out of the current level. They come after the Conversation tab, milestone pulses and life layer part 2, built only from a sketch the maintainer approves (maintainer, 2026-10-31).
+The depth control stays built (`bfe7a18`). The definition remains for a later level; sketch first.
+Packet B's "Approve all", before 2026-10-31T04:05:38Z (01:05:38 ART), covered leaving these out
+of the current level. The maintainer later placed them in this line B order on 2026-10-31.
+
+Reason: the current level keeps its built depth control; the later map view and folder groups
+require the maintainer's approved sketch after the preceding line B work.
+
+## 2026-10-31 — Phone practice reviews with the panel's evidence
+
+The phone practice uses the panel's evidence from f and f-b. The Oct 27 recording stays, so its
+two decisions show kind d; a, b, c and d2 appear only in fixture tests. The maintainer said
+"No, keep Oct 27", before 2026-10-31T04:14:42Z (01:14:42 ART). The progress row ("Decision {i} of {n}")
+and the 44px "Recorded task" row with the exact task stay as departures: the practice holds two
+recorded decisions, and their 40–60 word tasks need more than the headline. The "Possibly affected"
+disclosure is removed: the graph owns the list (DESIGN.md, graph-owned review context), and the
+fourth chip keeps the count.
+
+Reason: the practice retains the real recording while sharing the panel's evidence order; progress
+and the verbatim task remain available without duplicating the graph's list.
 
 ## 2026-10-30 — Item 10 measures agent-hours from observed intervals, with dated list prices
 
@@ -2277,6 +2521,8 @@ The maintainer accepted seven answers for level 3's messages, pause and resume:
 Reason: the limits bound the context messages add, since every step resends the full history, and memory-only text
 needs no contract change.
 
+Superseded by 2026-10-31 Message text persists; privacy at export (answer 7 only); the message, pause and resume limits remain.
+
 ## 2026-10-30 — No paid H1 pair: the free passes miss its third condition
 
 H1, in proof 2's entry, allows the paid harness-pack pair only after both free passes meet three conditions. On
@@ -2300,6 +2546,8 @@ proposal inventory. Neither receipt is reconstructed when unavailable.
 
 Reason: F4a captures the sources without changing authority. Live enforcement lands atomically in
 F4b; these helpers have no production callers, and F1's activation latch stays closed.
+
+Amended 2026-10-31 (Item 8 F4b: protected paths join rules authority atomically): `changes/_assessment.py` now calls capture_proposal_paths in production; RULES_ACTIVATION remains false.
 
 ## 2026-10-31 — Item 8 F4b: protected paths join rules authority atomically
 
@@ -2414,7 +2662,9 @@ The reserved safe creation bundle (nullable `SaveFile.base_hash`, zones and inve
 1.9.0 to 1.11.0, superseding its earlier reservations; 1.10.0 is approved for
 probe-inputs parameter-extension evidence.
 
-## Contracts 1.11.0 — approved by the maintainer, 2026-10-31
+Amended 2026-10-31 (Docs audit): versions are assigned next free at landing; the chain above is approval history.
+
+## Contracts 1.12.0 — approved by the maintainer, 2026-10-31
 
 GET /usage serves UsageView live and in a replay. It maps the existing list-price, activity and
 revision-round folds over one committed event inventory. Ledger figures never appear in this view:
@@ -2431,4 +2681,241 @@ for bounded message text keeps generated names stable without changing accepted 
 proposal.md no longer claims a contract-scope check: recorded maintainer approval accompanies a
 contract change and its first producer, and CI compares regenerated artifacts byte for byte.
 
-The reserved safe creation bundle moves from 1.11.0 to 1.12.0.
+The usage view took 1.12.0 at landing, next free after the lead runtime (1.10.0)
+and the parameter-extension evidence (1.11.0). Safe creation takes a later contract version
+assigned at landing after its own approval.
+
+## 2026-10-31 — Supervision is a pure fold over the committed event prefix
+
+Reason: the maintainer needs reproducible supervision counts and spend for any recorded run
+and replay, using existing receipts alone. The read-only summary has no decision authority.
+
+The prefix starts at seq 1 and has no gaps, duplicates or reordered events. `fold_usage`
+validates it and the costs first; supervision refuses an invalid prefix rather than showing
+plausible partial totals. No event producer or contract changes are needed.
+
+A change belongs to the agent in its first proposal or resolution, falling back to its first
+attributed usage tick if neither exists anywhere in the prefix. When a proposal or resolution
+exists, ticks do not establish or contradict ownership: lead and review calls may name a
+different agent. Disagreement among proposals and resolutions, or among ticks when neither
+receipt exists, refuses the summary with the offending seq. A change referenced only by an
+update, status or error has no owner or calls and is omitted. Changes keep first-appearance
+order, including those earlier references. Agents appear in agent-id order if they own a
+change, have a step or have unassigned usage; status and focus alone do not introduce an agent.
+
+Changes count distinct ids proposed at least once; proposals count every proposal event.
+Outcomes count every resolution separately: approved/merged, approved/conflict, request changes,
+rejected without a reason, or rejected/stopped. A change's end state uses its last resolution
+after its last proposal. No such resolution, a request for changes, or a new proposal after a
+resolution leaves it open. Open counts include owned changes with ticks but no proposal, while
+the distinct proposed-change count excludes them; open counts can therefore exceed changes.
+This preserves the brief's end-state definition and keeps unproposed work visible.
+Conflict is terminal, not open. Review rounds count confirmed requests for changes, starting
+at zero.
+
+Lines proposed are two raw columns from each change's last proposal, summed by owner and run.
+They are null on a change never proposed, which contributes no proposed lines to the totals.
+Net lines merged sum added minus removed from the matching revision for every merged receipt.
+A missing matching proposal makes that change's net and its owner's and the run's net unknown.
+Steps count `agent.step` receipts and sum their recorded duration_ms, never wall-clock intervals.
+
+All dollar figures come from `fold_usage`: owned `ChangeUsage`, its `RoleUsage` buckets, and
+unassigned entries. Agent and run totals use `math.fsum`, include unassigned calls, and sum
+unknown-cost call counts. Any null component leaves its dollar sum null, including unknown
+bucket role or model even when every call's cost is known. Unknown dollars stay unknown; the
+CLI prints six decimal places only for known sums. Decisions count person, rules, cross_review,
+lead_agent and null (unrecorded), without inferring the missing actor in older logs.
+
+Spend that did not reach main has four separate figures, each with change count, dollars and
+unknown-cost call count. Rejected, stopped and conflict use the full usage of changes ending
+in that state. Earlier rounds use only buckets below the number of requests for changes before
+the final merge, only for changes ending merged; its count includes only changes with at least
+one such bucket. A null included cost nulls that figure. Empty groups are zero. These figures
+are never added together; open changes and unassigned calls belong to none of them.
+
+The fold stores counts, not rates. The CLI states merged proposed changes at prefix end as
+“N of M changes merged”, with M the distinct proposed changes; resolution counts remain separate.
+Review time is refused because proposal-to-resolution elapsed time mixes waiting with work.
+Rankings and scores are refused because agents receive different tasks. Percentages and ratios
+such as lines per dollar or cost per merge are refused because these receipts provide no fair
+normalization for task scope; every printed rate retains its explicit denominator.
+
+## 2026-10-31 — The lead runs inside one run with fixed limits
+
+The coordination lead reads main through the person's read handlers and only proposes plans.
+Its closed tool table is `graph`, `list_files`, `read_file`, `queue`, `request_plan` and `finish`.
+The person queues every accepted proposal. No lead tool edits, starts agents, reviews or decides.
+A lead requests at most 3 plans of 1 to 6 subtasks each. Subtasks without dependencies are bounded
+by the run's offered slots. Lead plan zones cover the whole graph captured at request time;
+they are intentionally unchecked against one another and may precede the plan's graph version.
+
+The fixed limits are 12 tool calls, 18 model calls, 300 seconds, 3 plans, 6 subtasks per plan and
+2,000 characters for the plan task and each subtask task. The starting detail is:
+"Limits: 12 tool calls, 18 model calls, 300 s, 3 plans of up to 6 subtasks, 2,000 characters per task."
+The client retains the existing output-token cap. The lead prompt and closed tool schemas join
+the prompt set; `prompt_version` moves from `agent-v1-c7ca1d7c6ffe` to `agent-v1-6972184812a7`.
+No paid comparison crosses this prompt change.
+
+Muse Spark is the hosted default; the maintainer's model ruling also offers Muse Spark Open on
+Baseten when explicitly selected. The fake profile uses slot A's existing script and profile;
+there is no separate lead script setting. Setup checks only the selected provider and ignores
+reviewer settings. Meta lead usage has role `lead`, names neither a plan nor a change, and goes
+through the shared ledger accounting. The Meta spending brake is checked before every model call.
+
+Only one lead may be starting or working per run. Its committed `lead.status` revisions carry the
+requested plan id only on the working step that produced that plan. Every other revision has a
+null attachment. It ends after requesting plans, without waiting or replanning. Stop preserves
+all proposals. Shutdown halts the lead, closes its client, and a new run contains no lead and
+makes no model call until the person starts one. Lead-plan answering remains unavailable as on main.
+## 2026-10-31 — A person's decision preempts rules before authorization starts
+
+Reason: a long rules suite must not keep the person waiting through repeated 409s.
+Reject and Request changes synchronously claim one private intent, invalidate the wait
+and following authority, and cancel only the owned rules task once. The cutoff is entry
+into the acquired mode and Git authorization block, before its first revalidation or await;
+this is earlier than F2's separate final disable barrier. From that cutoff commands answer
+409 with instructions to wait and use Revert if merged; landed rules merges are never undone
+by these commands. Approve, Stop and cross-review retain their existing refusals.
+
+A tracked coordinator shields the accepted intent from caller cancellation and waits without
+locks for subprocess cleanup, verified recovery and the old decision's restoration. Rules
+captures and counters stay intact through recovery. Pending intent guards in decision admission
+and review saves exclude competitors until one synchronous personal `_take` installs new
+evidence. Late rules callbacks cannot authorize or emit a competing cancellation notice;
+integrity and main-suspect notices remain visible. Shutdown drains accepted decisions before
+closing the store. Each accepted intent produces its personal resolution or one nonfatal
+server error naming the decision and why it did not run; unverifiable recovery preserves the
+worktree, latches suspect, and resumes no author. Restart starts Ask me with no pending intent.
+
+A public manager predicate lets Request changes return the same Revert refusal after runtime
+has released the merged author's run. No contract, route, UI or production activation changes.
+Dropped rules receipts log one warning per drop with sequence, type and validation or mismatch
+reason, never payload; they grant no cached evidence, and later valid receipts remain admissible.
+
+## 2026-10-31 — Item 12 E1: inert examples selector and one bounded call
+
+The maintainer's answers were recorded at 13:49:39 ART (2026-10-31T16:49:39Z):
+Q1 reserves the typed confirmation command for E3, contract 1.13.0; E1 changes no contract.
+
+Amended 2026-10-31 (Docs audit): E3's typed confirmation command takes a later contract version, assigned at landing after its own approval.
+Q2, “Un envío, sin reintento”, means one HTTP send, including failure. This explicitly
+excepts the examples phase alone from the usual 429/5xx retry rule. A failed collection
+requires a new human start; coding keeps its existing retries. Q3, “Sí, JSON síncrono”,
+limits v1 executable criteria to synchronous top-level functions, with rendered JSON inputs
+`{"node_id": str, "args": [...], "kwargs": {...}}` and an exact JSON expected value.
+`TaskExample` is unchanged; this phase refuses behavior-only examples. Q4, “Aceptar
+constantes”, accepts the thresholds below; reject/stop cancel the task in E2/E3, and no model
+reply bypasses human review.
+
+`oversight/examples_selector.py` is a top-level pure module, like the runtime helpers, using
+only the public graph facade. No layer or facade exception is needed. Trimmed task thresholds
+are `SHORT_TASK_CHARS=80` and `LONG_TASK_CHARS=1600`; naming thresholds are
+`MANY_NAMED_NODES=3`, `MAX_NAMED_NODES=20`; `LARGE_CONE_ENTRIES=15`. The maximum-named
+constant is an offer threshold, not a truncation of resolved targets. Distinct matching node
+candidates include ambiguous definitions; aliases and repeated mentions count once. Longest
+references take precedence over overlapping short labels; exact ids take precedence over
+colliding labels. Ambiguous names never resolve speculatively. Targets and ambiguous labels
+are sorted, and reason order is stable policy order:
+`examples_only`, `supplied_unconfirmed`, `long_task`, `many_named_targets`,
+`too_many_named_candidates`, `large_cone`, `cone_omitted`, `short_task_no_target`,
+`short_task_no_test_calls`, `target_parse_error`, `snapshot_parse_errors`, `ambiguous_name`.
+The last code alone is diagnostic and does not offer examples. Missing parse evidence
+conservatively offers examples: errors anywhere may hide callers or test reach. Cones are
+unavailable for targets in broken files; other targets retain the cone from `node_cone` at
+the requested bounds, including positive large/omitted evidence. A snapshot parse error
+prevents treating zero static test reach as evidence of absence. Otherwise zero means
+“no test calls it”, never “no tests exist”. Supplied pins do not confer confirmation authority.
+
+`agents/examples.py` constructs Muse Spark with reasoning low, one attempt, a 90-second timeout
+and 4096 output tokens. Missing Meta setup is `not_configured`; there is no provider fallback.
+The pure context builder accepts caller-read excerpts and unconfirmed examples, strips supplied
+pins and states omissions at 12000 characters. The send includes allowed target ids within the
+same text bound; the graph and cone stay server-side. Only the phase's `finish(summary: str)`
+schema is advertised; no Toolbox, dispatch, repair or second call is involved. Usage receipts
+are retained before reply validation, and HTTP failures without usage remain unknown. E1
+produces no events and changes no runtime admission, routes or review authority.
+
+Call/protocol failure codes live in `agents/examples.py`: `truncated`, `model_mismatch`,
+`no_tool_call`, `multiple_tool_calls`, `unexpected_tool`, `context_too_long`, `timeout`,
+`call_failed`, plus the separate `not_configured` outcome. All returned call names are retained.
+`agents/_examples_validate.py` reuses `_plan_call`'s private strict-JSON helpers and defines
+`empty_output`, `malformed_json`, `non_strict_json`, `non_finite_numbers`, `invalid_schema`,
+`strings_too_long`, `meaning_count`, `case_count`, `invalid_meaning`, `duplicate_example_ids`,
+`unknown_meaning`, `model_supplied_pin`, `missing_expected_output`, `behavior_only`,
+`invalid_inputs`, `target_not_allowed`, `target_not_sync_top_level`. Duplicate keys are refused,
+as are non-finite numbers at every nesting level, including overflowing exponents. Inputs
+must have exactly node_id/args/kwargs; target eligibility comes from caller-captured facts.
+String bounds are named there: ids 128, descriptions 1000, rendered inputs 4000, canonical
+expected outputs 8000, notes 2000, clarification 2000, summary/finish arguments 65536 characters.
+Valid cases become unconfirmed TaskExamples with meaning-prefixed notes.
+
+The public `canonical_json` helper is exactly `json.dumps(value, sort_keys=True,
+separators=(",", ":"), ensure_ascii=True, allow_nan=False)`. E3 preview and E4 checking will
+share it; integer `1` and float `1.0` remain distinct. The examples prompt stays in
+`agents/examples.py`, outside `_prompts.py` and `prompt_version()` until E2 decides how a run
+reports it. E2 runtime admission, E3 human confirmation and E4 execution remain separate fronts.
+## 2026-10-31 — Ask instead of repeating an unchanged failure
+
+Before the cross-review automatic revision, a pure verdict reads the committed event log and
+change graph. A prior cross-review resolution clears the guard first, so `round_exhausted`
+keeps precedence. Next come the last run's limits, the current proposal test run and its last
+agent or proposal predecessor. No predecessor, a passing run, different outcomes, different
+failing test ids or different recorded assertions clear the guard. Repeated errors or timeouts
+and incomplete per-test results ask the person.
+
+Here, an assertion is the JUnit failure or error `message`, with whitespace collapsed, redacted
+and bounded to 240 characters in `CaseResult.detail`; any remaining absolute path drops the
+detail. It is diagnostic evidence, never added to the model's observations. Missing assertions,
+moved bases, non-Python edits, parse errors, removed files or nodes, missing edit evidence and
+unresolved test reach accumulate uncertainty. Equal tested trees have no changed nodes;
+otherwise successive recorded contents are parsed and node own-source hashes are compared.
+
+Only exact forward call edges from each failing test establish reach, within the run's depth
+and node limits. A proven reached edit clears even with other uncertainty. Executed nodes per
+test are not recorded on main, so call edges are the only source. With the same failure and an
+exhaustive miss, `unchanged_failure` asks the person; uncertainty uses `reach_unknown`. Both
+leave the automatic round unused. A clear verdict follows the existing revision path unchanged.
+
+## 2026-10-31 — Idle rules waits follow verified main through graph delivery
+
+Confirmed main commits park eligible, unconsumed rules waits in ready or working state;
+only delivery of the latest announced commit into the graph snapshot renews their generation.
+Merge projection, person saves/rescans (including unchanged recovery), and Revert notify the
+same synchronous commit/delivery ports. The first absolute evidence deadline survives every
+renewal; a parked ready wait starts its deadline when first awakened and expires with the
+existing policy_invalid notice if delivery never arrives.
+
+Reason: parking replaces the plan's invalidation so graph scan or delivery failure cannot
+silently cancel the deadline. Only immutable proposal-source captures with identical
+revision/base/head survive: facts, their inventory and measurements, and protected-path
+captures whose committed receipts are revalidated at use. Main-dependent combined suites
+are reselected against the new snapshot; latest assessment, spend pin, terminal receipt,
+and evaluation/timer tasks are discarded. No model run or agent merge/rebase is needed.
+Renewal only schedules assessment; the activation latch stays closed and no wire contract
+changes. Revert uses its own verified-commit and snapshot-receipt hooks. Consumed attempts,
+attempt keys, and queued/in-flight renewal belong to F5b. Unannounced snapshot moves retain
+the existing terminal main_moved behavior.
+`park` safely cancels an in-flight evaluation only because production publishes a terminal
+through `ReviewCards.publish` -> `ctx.whole` (`_review_cards.py:216-218`), which completes
+the publish and its `rules_received`; F5b must preserve that behavior or route the terminal
+publish through `ctx.whole` itself.
+
+## 2026-10-31 — Graph difference chip
+
+Approved at 13:55:35 ART (UTC-3), packet B 1031e item 1: a neutral count on each changed node,
+with a click/Enter popover for current-revision behavior samples. Facts arriving after Ready for
+review add it in place without opening it or taking focus. Existing caption-size is 13px, within
+1px of the sketch. The approved exclusions are the moved cone card, the 1280 reframe, and the agent
+card's “Evidence 5 of 6” line. Measured caller words belong to the parallel measured-cone graph front.
+
+## 2026-10-31 — Docs audit: the record follows main
+
+Reason: a docs audit found many docs behind main after several days of changed decisions. The maintainer approved all seven decisions on 2026-10-31 at 18:10:21 ART.
+
+1. Contract versions are assigned next free at landing; docs and comments promise no version number. The lead runtime took 1.10.0 when it landed first (6818b3b); parameter-extension evidence takes the next free version when it lands; safe creation (nullable SaveFile.base_hash, zones, inventory) and item 12's E3 confirmation command take the next free version after their own approval. This supersedes the reservations in the version chain.
+2. The Approve caption ("Approve with a click: it merges into main"), dropped in ff9ddb9 without a decision, is reinstated by line B's design-docs front; Approve stays pointer-only.
+3. PRODUCT.md gains one status line saying what is on today and what is target; the maintainer's text is unchanged.
+4. README's models line describes what is real today; turning cross-review on for the demo is a separate decision.
+5. AGENTS.md is aligned only with decisions already recorded.
+6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
+7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.

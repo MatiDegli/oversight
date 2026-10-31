@@ -134,6 +134,8 @@ def test_terminal_unavailable_checks_are_one_entry(code: str) -> None:
         "worktree_unverifiable",
         "unproposed_edits",
         "delivery_failed",
+        "unchanged_failure",
+        "reach_unknown",
     ],
 )
 def test_other_terminal_errors_do_not_establish_check_unavailability(code: str) -> None:

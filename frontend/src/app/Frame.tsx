@@ -31,6 +31,10 @@ export interface FrameProps {
   /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
   onStopAgent?: (agentId: string) => Promise<unknown>;
+  onOpenConversation?: (agentId: string) => void;
+  onMessageAgent?: (agentId: string, text: string) => Promise<unknown>;
+  onPauseAgent?: (agentId: string) => Promise<unknown>;
+  onResumeAgent?: (agentId: string) => Promise<unknown>;
   /** True for a proposed change: its card offers Review change instead of the live diff. */
   canReview?: (changeId: string) => boolean;
   onReview?: (changeId: string) => void;

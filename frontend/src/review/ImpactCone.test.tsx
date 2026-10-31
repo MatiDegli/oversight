@@ -28,10 +28,10 @@ describe("the recorded impact cone", () => {
   it("groups the handwritten entries by distance with counts, neutral badges and names", () => {
     const html = renderToStaticMarkup(<ImpactConeCard cone={cone} nodes={nodes} />);
     expect(html).toContain("Possibly affected");
-    expect(html).toContain("Distance 1 · 7 functions");
-    expect(html).toContain("Distance 2 · 2 functions");
+    expect(html).toContain("7 at distance 1");
+    expect(html).toContain("2 at distance 2");
     expect(html.match(/<li /g)).toHaveLength(9);
-    expect(html.match(/<span aria-label="Distance /g)).toHaveLength(9);
+    expect(html.match(/<span aria-label="Distance /g)).toHaveLength(2);
     for (const entry of cone.entries) {
       const node = nodes.find((node) => node.id === entry.node_id);
       expect(html).toContain(node?.qualname);
@@ -43,7 +43,7 @@ describe("the recorded impact cone", () => {
     expect(html).toContain("size-(--distance-badge-size)");
   });
 
-  it("marks only the camera's excluded nodes with an icon and screen-reader-visible text", () => {
+  it("marks only the camera's excluded nodes with plain visible text", () => {
     const excluded = cone.entries[0]?.node_id;
     if (!excluded) throw new Error("Missing caller");
     const html = renderToStaticMarkup(
@@ -54,8 +54,7 @@ describe("the recorded impact cone", () => {
     for (const row of rows) {
       expect(row.includes("Out of view")).toBe(row.includes(`title="${excluded}"`));
       if (row.includes("Out of view")) {
-        expect(row).toContain("<svg");
-        expect(row).toContain('aria-hidden="true"');
+        expect(row).not.toContain("<svg");
         expect(row).not.toContain('class="sr-only"');
       }
     }
@@ -113,9 +112,9 @@ describe("the recorded impact cone", () => {
   it("states an empty cone plainly without implying no impact beyond the bounds", () => {
     const empty = { ...cone, entries: [], omitted_by_depth: 12, omitted_by_limit: 3 };
     const html = renderToStaticMarkup(<ImpactConeCard cone={empty} nodes={nodes} />);
-    expect(html).toContain("No functions in this cone within its bounds.");
-    expect(html).toContain("+12 omitted by depth");
-    expect(html).toContain("+3 omitted by the node limit");
+    expect(html).toContain("No exact callers");
+    expect(html).not.toContain("<footer");
+    expect(html).not.toContain("<li");
     expect(html).not.toContain('aria-label="Distance');
     expect(impactSummary(empty)).toBe("No functions possibly affected within the cone bounds");
   });
@@ -146,10 +145,8 @@ describe("the recorded impact cone", () => {
     const html = renderToStaticMarkup(
       <ReviewPanel state={state} changeId="change-1" onClose={() => undefined} />,
     );
-    expect(html).toContain('class="text-(length:--data-size) text-muted"');
-    expect(html.replace(/<[^>]*>/g, "")).toContain(
-      "9 functions possibly affected, up to distance 2",
-    );
+    expect(html).toContain('aria-label="Impact cone"');
+    expect(html.replace(/<[^>]*>/g, "")).toContain("9 possibly affected · up to distance 2");
   });
 });
 
@@ -165,4 +162,67 @@ it.each([1, 2])("states %i possible callers without warning styling", (possible)
     expect(html).toContain(value.entries.length ? `+${text}` : `No exact callers · ${text}`);
     expect(html).not.toMatch(/warning|text-failed|text-passed|agent-[ab]/);
   }
+});
+
+it("summarizes plural and singular entries without changing the reach summary", () => {
+  for (const [entries, text] of [
+    [cone.entries, "9 functions up to distance 2"],
+    [[{ node_id: "one", distance: 3 }], "1 function up to distance 3"],
+  ] as const) {
+    const html = renderToStaticMarkup(
+      <ImpactConeCard cone={{ ...cone, entries: [...entries] }} nodes={nodes} />,
+    );
+    expect(html).toContain(text);
+    expect(html).not.toContain("<footer");
+    for (const row of html.match(/<li .*?<\/li>/g) ?? []) expect(row).not.toContain("Distance");
+  }
+});
+
+it("styles measured words with neutral tokens only and keeps the whole row under its id", () => {
+  for (const [word, style] of [
+    ["differs", "font-semibold text-text"],
+    ["same", "text-muted"],
+    ["varied", "text-muted"],
+    ["not measured", "text-faint"],
+  ] as const) {
+    const id = cone.entries[0]?.node_id ?? "";
+    const html = renderToStaticMarkup(
+      <ImpactConeCard cone={cone} nodes={nodes} words={new Map([[id, word]])} />,
+    );
+    const row = html.match(/<li .*?<\/li>/)?.[0];
+    expect(row).toContain(`title="${id}"`);
+    expect(row).toContain(`${style}">${word}</span>`);
+    expect(row).not.toContain("text-passed");
+  }
+});
+
+it("orders footer lines and limits an empty cone’s footer to routing omissions", () => {
+  const card = (entries = cone.entries) =>
+    renderToStaticMarkup(
+      <ImpactConeCard
+        cone={{ ...cone, entries, omitted_by_depth: 12, omitted_by_limit: 3 }}
+        nodes={nodes}
+        possible={2}
+        routingOmissions={4}
+      />,
+    );
+  const html = card();
+  const footer = html.match(/<footer .*?<\/footer>/)?.[0] ?? "";
+  expect(footer).toContain("border-t border-divider");
+  expect([...footer.matchAll(/<p[^>]*>(.*?)<\/p>/g)].map((m) => m[1])).toEqual([
+    "+2 possible callers, not followed",
+    "+12 omitted by depth",
+    "+3 omitted by the node limit",
+    "+4 call routes omitted: no clear lane",
+  ]);
+  expect(footer).toContain('role="status"');
+  const empty = card([]);
+  const emptyFooter = empty.match(/<footer .*?<\/footer>/)?.[0] ?? "";
+  expect([...emptyFooter.matchAll(/<p[^>]*>(.*?)<\/p>/g)].map((m) => m[1])).toEqual([
+    "+4 call routes omitted: no clear lane",
+  ]);
+  expect(emptyFooter).toContain('role="status"');
+  expect(empty).toContain("No exact callers · 2 possible callers, not followed");
+  expect(empty).not.toContain("<li");
+  expect(empty).not.toContain('aria-label="Distance');
 });

@@ -11,6 +11,7 @@ import type {
   ChangeUpdated,
   ErrorReport,
   GraphSnapshot,
+  ModelAttemptFailed,
   RunStarted,
   UsageTick,
 } from "@contracts";
@@ -49,13 +50,31 @@ export interface ChangeState {
   personActed: boolean;
 }
 
+export type ModelWait = Pick<ModelAttemptFailed, "attempt" | "max_attempts" | "cause"> & {
+  seq: number;
+  wait_s: number;
+};
+
+export interface AgentMessage {
+  seq: number;
+  ts: string;
+  text: string | null;
+}
+
 export interface State {
   run: RunStarted | null;
+  runStartedAt: string | null;
+  grantEvents: Extract<
+    import("@contracts").ServerEvent,
+    { type: "grant.created" | "grant.revoked" }
+  >[];
   lastSeq: number;
   gap: boolean;
   graph: GraphSnapshot | null;
   agents: Record<string, AgentStatus>;
   steps: Record<string, AgentStep[]>;
+  modelWaits: Record<string, ModelWait>;
+  messages: Record<string, AgentMessage[]>;
   /** When each step's event arrived, by agent then step number: the age the card shows. */
   stepTimes: Record<string, Record<number, string>>;
   stepSeqs: Record<string, Record<number, number>>;
@@ -67,6 +86,8 @@ export interface State {
   focus: Record<string, AgentFocus>;
   /** One most recently read node per agent, independent of subsequent edit focus. */
   lastReads: Record<string, string>;
+  /** Observed reads, in first-read order, for the life of each change. */
+  changeReads: Record<string, string[]>;
   changes: Record<string, ChangeState>;
   usage: UsageTick | null;
   spendUnknown: boolean;
@@ -88,16 +109,21 @@ export interface State {
 export function createInitialState(): State {
   return {
     run: null,
+    runStartedAt: null,
+    grantEvents: [],
     lastSeq: 0,
     gap: false,
     graph: null,
     agents: {},
     steps: {},
+    modelWaits: {},
+    messages: {},
     stepTimes: {},
     stepSeqs: {},
     clock: null,
     focus: {},
     lastReads: {},
+    changeReads: {},
     changes: {},
     usage: null,
     spendUnknown: false,

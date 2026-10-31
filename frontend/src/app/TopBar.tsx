@@ -82,8 +82,8 @@ export function TopBar({
           type="button"
           disabled={onOpenQueue === undefined}
           onClick={onOpenQueue}
-          title="Open the review queue"
-          aria-label={`Decisions: ${String(ready)} pending. Open review queue`}
+          title="Open decisions inbox"
+          aria-label={`Decisions: ${String(ready)} pending. Open decisions inbox`}
           className={`inline-flex h-(--queue-counter-height) items-center gap-2.5 rounded-control border border-border bg-raised px-3.5 text-(length:--label-size) font-semibold ${ready > 0 ? "text-text" : "text-muted"} enabled:hover:bg-page-raised ${focusRing}`}
         >
           {ready === 0 ? (

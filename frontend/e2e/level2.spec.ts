@@ -181,19 +181,26 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
         .getByRole("region", { name: "Diff of shop/pricing.py" })
         .getByText("Editable · Inline diff"),
     ).toBeVisible();
-    const signals = review.getByRole("region", { name: "Review signals" });
-    await expect(signals).toContainText("Tests in this change: 0 recorded test changes");
-    await expect(signals).not.toContainText("added_tests producer unavailable (package 4)");
-    await expect(signals.getByRole("list", { name: "Added test signals" })).toContainText(
-      "tests/test_pricing.py::test_unknown_coupon_keeps_total: passes before and after",
+    // This recording has test runs, but no behavior or caller comparisons (state d).
+    await expect(review.getByRole("region", { name: "Review lead" })).toContainText(
+      "Nothing was compared for this change.",
     );
-    await expect(signals).toContainText("(base_probe): passed");
-    await expect(signals).toContainText("(head_probe): passed");
-    await expect(signals).toContainText("run_findings producer unavailable (package 5)");
-    await expect(signals).toContainText("Signals for your review. You decide.");
-    await expect(signals).toContainText("(agent): passed");
-    await expect(signals).toContainText("(proposal): passed");
-    await expect(signals).toContainText(`Size: ${String(proposal.files.length)} files`);
+    await expect(
+      review
+        .getByRole("region", { name: "Review lead" })
+        .getByRole("heading", { name: "Nothing was compared for this change.", exact: true }),
+    ).toHaveCount(0);
+    await expect(review.getByRole("region", { name: "Review lead" })).toContainText(
+      "Behavior and callers were not recorded for this revision. The diff and tests are the evidence.",
+    );
+    await expect(review.getByRole("listitem", { name: "Tests", exact: true })).toContainText(
+      `${String(proposal.tests.passed)} passed`,
+    );
+    await expect(
+      review.getByRole("region", { name: "What was compared", exact: true }),
+    ).toHaveCount(0);
+    await expect(review.getByRole("region", { name: "Review signals" })).toHaveCount(0);
+    await expect(review.getByText("Details", { exact: true })).toHaveCount(0);
     const cone = page.getByRole("region", { name: "Possibly affected", exact: true });
     await expect(cone).toBeVisible();
     expect(proposal.impact.entries.length).toBeGreaterThan(0);
@@ -202,7 +209,9 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     for (const entry of proposal.impact.entries) {
       await expect(cone.locator(`[title="${entry.node_id}"]`)).toBeVisible();
       await expect(
-        cone.locator(`span[aria-label="Distance ${String(entry.distance)}"]`),
+        cone
+          .getByRole("region", { name: `Distance ${String(entry.distance)}`, exact: true })
+          .locator(`span[aria-label="Distance ${String(entry.distance)}"]`),
       ).toBeVisible();
     }
     await expect(cone).toContainText(
@@ -230,7 +239,9 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     expect((await appearance(page, "node.dimmed:childless")).every((n) => n.opacity < 1)).toBe(
       true,
     );
-    await expect(review).toContainText(/function(?:s)? possibly affected/);
+    await expect(review.getByLabel("Impact cone", { exact: true })).toHaveText(
+      "1 possibly affected · up to distance 1",
+    );
     await expect(approve).toBeEnabled();
     await expect(review.getByRole("button", { name: "Reject", exact: true })).toBeEnabled();
     await expect(request).toBeDisabled();

@@ -3,11 +3,14 @@ import {
   Check,
   CircleHelp,
   Coins,
+  File,
   FileCode,
+  Diff,
   GitBranch,
   GitCommitHorizontal,
   ListChecks,
   ScanEye,
+  ScanLine,
   TestTube,
   X,
 } from "lucide-react";
@@ -21,26 +24,36 @@ import { impactSummary, possibleCallersText } from "./ImpactCone";
 
 const chip =
   "inline-flex min-h-(--chip-height) min-w-0 items-center gap-1.5 rounded-control border border-page-border bg-page-raised px-2.5 py-1 text-(length:--data-size)";
+const reviewChip =
+  "inline-flex h-[30px] min-w-0 items-center gap-1.5 rounded-[7px] border border-page-border bg-page-raised px-2.5 text-sm font-semibold";
 const icon = "size-4 shrink-0 text-muted";
 
 function Fact({
   label,
   symbol,
   children,
+  review = false,
 }: {
+  review?: boolean;
   label: string;
   symbol: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <li aria-label={label} className={chip}>
+    <li aria-label={label} className={review ? reviewChip : chip}>
       {symbol}
       <span className="min-w-0 break-words">{children}</span>
     </li>
   );
 }
 
-function TestsFact({ tests }: { tests: SuiteResult | undefined }) {
+function TestsFact({
+  tests,
+  review = false,
+}: {
+  tests: SuiteResult | undefined;
+  review?: boolean;
+}) {
   const text = !tests
     ? "Tests unknown"
     : tests.outcome === "passed"
@@ -52,6 +65,7 @@ function TestsFact({ tests }: { tests: SuiteResult | undefined }) {
           : "Tests timed out";
   return (
     <Fact
+      review={review}
       label="Tests"
       symbol={
         !tests ? (
@@ -63,7 +77,7 @@ function TestsFact({ tests }: { tests: SuiteResult | undefined }) {
         )
       }
     >
-      <DataWords text={text} />
+      {review ? text : <DataWords text={text} />}
     </Fact>
   );
 }
@@ -73,37 +87,56 @@ export function ChangeFactsRow({
   state,
   changeId,
   live = false,
+  shortReach = false,
 }: {
   state: State;
   changeId: string;
   live?: boolean;
+  shortReach?: boolean;
 }) {
   const change = state.changes[changeId];
   if (!change) return null;
   const proposal = live && ["editing", "revising"].includes(change.status) ? null : change.proposal;
   const cone = live ? liveImpact(state, change) : proposal?.impact;
-  const possible = cone ? (possibleCallers(state, change, cone) ?? 0) : 0;
   const fileCount = live ? change.files_changed : (proposal?.files.length ?? change.files_changed);
-  const card = selectAgentCard(state, change.agent_id);
-  const base = proposal?.base_commit || card?.agent.base_commit;
   const lastTests = Object.values(state.testExecutions).findLast(
     (execution) =>
       execution.change_id === changeId &&
       execution.agent_id === change.agent_id &&
       execution.phase === "agent",
   );
+  if (!live)
+    return (
+      <ul aria-label="Facts" className="flex flex-wrap items-center gap-2 text-text">
+        <Fact review label="Files" symbol={<File aria-hidden="true" className={icon} />}>
+          {fileCount} {fileCount === 1 ? "file" : "files"}
+        </Fact>
+        <Fact review label="Lines" symbol={<Diff aria-hidden="true" className={icon} />}>
+          <span className="text-added">+{proposal?.lines_added ?? change.lines_added}</span>{" "}
+          <span className="text-removed">−{proposal?.lines_removed ?? change.lines_removed}</span>
+        </Fact>
+        <TestsFact review tests={proposal?.tests ?? lastTests?.suite} />
+        <Fact review label="Impact cone" symbol={<ScanLine aria-hidden="true" className={icon} />}>
+          {!cone
+            ? "Possibly affected: unknown"
+            : cone.entries.length === 0
+              ? "No exact callers"
+              : `${String(cone.entries.length)} possibly affected${shortReach ? "" : ` · up to distance ${String(Math.max(...cone.entries.map((entry) => entry.distance)))}`}`}
+        </Fact>
+      </ul>
+    );
+  const possible = cone ? (possibleCallers(state, change, cone) ?? 0) : 0;
+  const card = selectAgentCard(state, change.agent_id);
+  const base = proposal?.base_commit || card?.agent.base_commit;
+
   return (
     <ul aria-label="Facts" className="flex flex-wrap items-center gap-2 text-text">
       <Fact label="Files" symbol={<FileCode aria-hidden="true" className={icon} />}>
         <span className="font-mono">{fileCount}</span> {fileCount === 1 ? "file" : "files"}
       </Fact>
       <Fact label="Lines" symbol={<ListChecks aria-hidden="true" className={icon} />}>
-        <span className="font-mono text-added">
-          +{live ? change.lines_added : (proposal?.lines_added ?? change.lines_added)}
-        </span>{" "}
-        <span className="font-mono text-removed">
-          −{live ? change.lines_removed : (proposal?.lines_removed ?? change.lines_removed)}
-        </span>
+        <span className="font-mono text-added">+{change.lines_added}</span>{" "}
+        <span className="font-mono text-removed">−{change.lines_removed}</span>
       </Fact>
       <TestsFact tests={proposal?.tests ?? lastTests?.suite} />
       <Fact
