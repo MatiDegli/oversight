@@ -135,7 +135,7 @@ export function ReviewPanel({
                           ? "Inline diff"
                           : fileAccess && editable
                             ? "Editable · Inline diff"
-                            : "Inline diff"}
+                            : "Read-only · Inline diff"}
                     </span>
                     {open ? (
                       <ChevronDown aria-hidden="true" className="size-4 text-muted" />

@@ -179,9 +179,14 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
         .getByText("Editable · Inline diff"),
     ).toBeVisible();
     // This recording has test runs, but no behavior or caller comparisons (state d).
+    await expect(review.getByRole("region", { name: "Review lead" })).toContainText(
+      "Nothing was compared for this change.",
+    );
     await expect(
-      review.getByRole("heading", { name: "Nothing was compared for this change.", exact: true }),
-    ).toBeVisible();
+      review
+        .getByRole("region", { name: "Review lead" })
+        .getByRole("heading", { name: "Nothing was compared for this change.", exact: true }),
+    ).toHaveCount(0);
     await expect(review.getByRole("region", { name: "Review lead" })).toContainText(
       "Behavior and callers were not recorded for this revision. The diff and tests are the evidence.",
     );
