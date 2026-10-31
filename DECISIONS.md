@@ -2386,3 +2386,10 @@ or after the previous review of that change, whichever comes later. Open interva
 at the committed prefix's last event. Lead and plan work leave the total unavailable rather
 than estimating their hours. Team grouping and hour/day periods come later, together with the
 team definition.
+## 2026-10-31 — Item 10 list prices: a stored dated table applied to each call's tokens
+
+Reason: the stored table records its source and retrieval date; only Muse Spark has a listed
+price. The fold applies those prices to each call's tokens and never reads the ledger's cost
+fields. An unreported count gives a range whose lower end enters the known subtotal. Unpriced
+work keeps the total unavailable, while zero usage costs zero even without a listed price.
+Team grouping and periods come later.
