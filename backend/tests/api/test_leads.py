@@ -357,3 +357,28 @@ async def test_a_lead_zone_is_main_at_request_time_even_if_the_graph_moves(
         assert plan.graph_version == newer.version
         assert plan.subtasks and plan.subtasks[0].zone == plan_core.whole_graph(snapshot)
         assert plan.subtasks[0].zone != plan_core.whole_graph(newer)
+
+
+@pytest.mark.parametrize(
+    "model,unverified",
+    [
+        (None, "fake"),
+        ("muse-spark", "muse-spark"),
+        ("muse-spark-open", "muse-spark-open"),
+    ],
+)
+async def test_unverified_lead_profiles_are_refused_before_setup_or_a_model_call(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    model: str | None,
+    unverified: str,
+) -> None:
+    monkeypatch.setattr("oversight.runtime_leads.UNVERIFIED_PROFILES", frozenset({unverified}))
+    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), lead_factory()) as s:
+        before = s.store.last_seq
+        response = await s.client.post("/leads", json={"task": "Coordinate", "model": model})
+        assert error_code(response) == (422, "invalid_request")
+        assert (
+            response.json()["error"]["message"] == f"{unverified} cannot run agents yet: unverified"
+        )
+        assert s.store.last_seq == before and not s.live.leads.leads and s.live._count == 0

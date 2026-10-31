@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,7 @@ from oversight.agents import (
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
     STARTING_DETAIL,
+    UNVERIFIED_PROFILES,
     LeadProposalError,
     LeadRun,
     LeadTools,
@@ -36,6 +38,10 @@ from oversight_contracts.plans import SubtaskDraft
 
 if TYPE_CHECKING:
     from oversight.app import LiveRun
+
+
+_log = logging.getLogger(__name__)
+UNEXPECTED_DETAIL = "The lead failed unexpectedly."
 
 
 @dataclass
@@ -91,12 +97,19 @@ class LeadService:
         default = self.live._slot_profiles["A"]
         default = default if default.provider == "fake" else MUSE_SPARK
         profiles = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, default)}
+        name = model or default.id
+        if name in UNVERIFIED_PROFILES:
+            raise ApiError("invalid_request", f"{name} cannot run agents yet: unverified")
         if model is not None and model not in profiles:
             raise ApiError("invalid_request", "the lead runs on muse-spark or muse-spark-open")
         return profiles[model] if model is not None else default
 
     async def _begin(self, lead: _Lead, profile: ModelProfile) -> None:
-        await self._status(lead, "starting", STARTING_DETAIL)
+        try:
+            await self._status(lead, "starting", STARTING_DETAIL)
+        except Exception as error:
+            await self._halt_unexpected(lead, error)
+            return
         lead.task = asyncio.create_task(self._drive(lead, profile))
 
     async def _status(
@@ -200,13 +213,41 @@ class LeadService:
                     "Stopped by the person." if lead.stopping else "The server shut down."
                 )
             except LedgerError:
-                await accounting.report_failure()
                 state, detail = "halted", run.detail(LEDGER_DETAIL)
+            if accounting.failure is not None:
+                await accounting.report_failure()
             await live._finish(self._status(lead, state, detail, step=run.steps))
+        except Exception as error:
+            await self._halt_unexpected(lead, error, run)
         finally:
             if client is not None:
                 with contextlib.suppress(Exception):
                     await live._finish(close_model(client))
+
+    async def _halt_unexpected(
+        self,
+        lead: _Lead,
+        error: Exception,
+        run: LeadRun | None = None,
+    ) -> None:
+        _log.error("Lead %s failed unexpectedly", lead.status.agent_id, exc_info=error)
+        await self.live._finish(
+            self.live._report(
+                "server",
+                f"Lead {lead.status.agent_id} failed ({type(error).__name__}); see the server log.",
+                agent_id=lead.status.agent_id,
+                fatal=True,
+            )
+        )
+        detail = run.detail(UNEXPECTED_DETAIL) if run is not None else UNEXPECTED_DETAIL
+        await self.live._finish(
+            self._status(
+                lead,
+                "halted",
+                detail,
+                step=run.steps if run is not None else 0,
+            )
+        )
 
     def stop(self, agent_id: str, request: StopLead) -> None:
         lead = self.leads.get(agent_id)

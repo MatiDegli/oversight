@@ -5,6 +5,7 @@
 
 import ast
 import asyncio
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -251,10 +252,30 @@ def test_nothing_on_the_lead_path_calls_a_decision_or_queue_command() -> None:
         "rescan",
         "dispatch_plan",
         "run_plan_call",
+        "build_change_view",
+        "read_change_view",
+        "get_change_view",
+        "get_diff",
+        "read_diff",
+        "get_facts",
+        "read_facts",
+        "read_cross_review",
     }
     for relative in ("runtime_leads.py", "agents/_lead.py", "agents/_lead_tools.py"):
         tree = ast.parse((root / relative).read_text())
         for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute):
+                assert node.attr not in {
+                    "dispatcher",
+                    "worktree",
+                    "worktrees",
+                    "_worktrees",
+                    "diff",
+                    "diffs",
+                    "change_view",
+                    "facts",
+                    "cross_review",
+                }, (relative, node.lineno)
             if isinstance(node, ast.Call):
                 name = (
                     node.func.attr
@@ -264,6 +285,18 @@ def test_nothing_on_the_lead_path_calls_a_decision_or_queue_command() -> None:
                     else None
                 )
                 assert name not in forbidden, (relative, node.lineno, name)
+                if name in {"get_file", "get_tree"}:
+                    index = 1 if name == "get_file" else 0
+                    agent = (
+                        node.args[index]
+                        if len(node.args) > index
+                        else next((kw.value for kw in node.keywords if kw.arg == "agent_id"), None)
+                    )
+                    assert isinstance(agent, ast.Constant) and agent.value is None, (
+                        relative,
+                        node.lineno,
+                        "lead reads must name main explicitly",
+                    )
                 assert not (
                     isinstance(node.func, ast.Attribute)
                     and node.func.attr in {"start", "stop", "create", "update", "dispatch_plan"}
@@ -339,3 +372,97 @@ async def test_shutdown_waits_for_a_starting_status_before_halting_the_lead(
         assert not built and len(terminal(s)) == 1
         assert terminal(s)[0].detail == "The server shut down."
         assert [e.payload.revision for e in s.events() if e.type == "lead.status"] == [1, 2]
+
+
+async def test_stop_during_a_failing_ledger_write_reports_one_fatal_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = load_script(LEAD_SCRIPT)
+    entered, release = threading.Event(), threading.Event()
+
+    def factory(profile: Any, _slot: Any) -> Any:
+        return ScriptedModel(
+            replace(script, turns=[replace(r, model=profile.model) for r in script.turns]), profile
+        )
+
+    async with asyncio.timeout(DEADLINE_S), live_server(meta_settings(tmp_path), factory) as s:
+
+        def fail(_state: Any) -> None:
+            entered.set()
+            assert release.wait(DEADLINE_S), "the test did not release the ledger writer"
+            raise LedgerError("injected write failure during Stop")
+
+        monkeypatch.setattr(s.live.ledger, "write", fail)
+        try:
+            await s.client.post("/leads", json={"task": "Coordinate"})
+            assert await asyncio.to_thread(entered.wait, DEADLINE_S)
+            response = await s.client.post(
+                "/leads/agent-1/stop", json={"revision": (await current(s))["revision"]}
+            )
+            assert response.status_code == 202
+        finally:
+            release.set()
+        await s.until(is_type("lead.status", state="stopped"))
+        errors = [e for e in s.events() if e.type == "error" and e.payload.fatal]
+        assert len(errors) == 1
+        assert errors[0].payload.source == "server" and "Lead agent-1" in errors[0].payload.message
+        assert "settle" in errors[0].payload.message
+        assert len(terminal(s)) == 1 and s.live._ledger_lost
+        assert errors[0].seq < next(
+            e.seq for e in s.events() if e.type == "lead.status" and e.payload.state == "stopped"
+        )
+
+
+@pytest.mark.parametrize("failure", ["read", "starting", "working", "terminal"])
+async def test_an_unexpected_failure_halts_logs_and_allows_the_next_lead(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    failure: str,
+) -> None:
+    script = load_script(LEAD_SCRIPT)
+    failed = asyncio.Event()
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path), lambda p, _s: ScriptedModel(script, p)) as s,
+    ):
+        original_read, original_publish = s.live.get_file, s.store.publish
+
+        async def read(path: str, agent_id: str | None) -> Any:
+            if failure == "read" and not failed.is_set():
+                failed.set()
+                raise RuntimeError("private unexpected read failure")
+            return await original_read(path, agent_id)
+
+        async def publish(payload: Any) -> Any:
+            if isinstance(payload, LeadStatus) and not failed.is_set():
+                state = "done" if failure == "terminal" else failure
+                if payload.state == state:
+                    failed.set()
+                    raise RuntimeError("private unexpected status failure")
+            return await original_publish(payload)
+
+        monkeypatch.setattr(s.live, "get_file", read)
+        monkeypatch.setattr(s.store, "publish", publish)
+        response = await s.client.post("/leads", json={"task": "Coordinate"})
+        assert response.status_code == 201, response.text
+        await failed.wait()
+        owned = s.live.leads.leads[response.json()["agent_id"]]
+        if owned.task is not None:
+            await owned.task
+        latest = await current(s)
+        assert latest["state"] == "halted" and len(terminal(s)) == 1
+        expected = "The lead failed unexpectedly."
+        if failure == "terminal":
+            expected += " Requested plan-1, plan-2."
+        assert latest["detail"] == expected
+        assert "private unexpected" not in (latest["detail"] or "")
+        errors = [e.payload for e in s.events() if e.type == "error"]
+        assert len(errors) == 1 and errors[0].source == "server"
+        assert errors[0].agent_id == "agent-1" and "RuntimeError" in errors[0].message
+        assert "private unexpected" not in errors[0].message
+        assert any(r.name == "oversight.runtime_leads" and r.exc_info for r in caplog.records)
+        response = await s.client.post("/leads", json={"task": "Try again"})
+        assert response.status_code == 201 and response.json()["agent_id"] == "agent-2"
+        await s.until(is_type("lead.status", agent_id="agent-2", state="done"))
