@@ -54,6 +54,7 @@ from oversight.changes import (
     ChangeManager,
     ChangeNotFound,
     PolicyInputs,
+    RevertTarget,
     ReviewCapture,
     ReviewCardLimits,
     Revision,
@@ -67,6 +68,7 @@ from oversight.events import (
     StoredEvent,
     play,
     read_jsonl,
+    resolution_at,
     run_store_path,
 )
 from oversight.graph import WorkspaceGraph, read_layout
@@ -106,6 +108,7 @@ from oversight_contracts.commands import (
     RejectChange,
     RejectPlan,
     RequestChanges,
+    RevertChange,
     SaveFile,
     SetMergeMode,
     StartAgent,
@@ -386,6 +389,7 @@ class LiveRun:
                 self._settings.review_card_total_s,
             ),
             run_id=self.run_id,
+            revert_test_timeout_s=LIMITS.test_timeout_s,
             spend_ledger=self.ledger,
             rules_evidence=self._rules_evidence,
             spend_lost=lambda: self._ledger_lost,
@@ -980,6 +984,16 @@ class LiveRun:
             answers=request.answers,
             grant=request.grant,
         )
+
+    async def revert(self, change_id: str, request: RevertChange) -> None:
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        resolution = await resolution_at(self.store, change_id, request.resolution_seq)
+        if resolution is None:
+            raise ChangeNotFound(change_id)
+        if self._manager.main_suspect:
+            raise ApiError("wrong_state", MAIN_SUSPECT)
+        self._manager.revert(RevertTarget(self.run_id, change_id, resolution), request)
 
     async def revoke_grant(self, grant_id: str) -> None:
         if self._manager is None:

@@ -2315,3 +2315,16 @@ folded rails and focus tabs keep their existing geometry.
 Reason: the recorded demo at 1920×1080 fits at 83%, yet its 100% start left two of six modules
 off-canvas. At 1280–1440px the floating agents panel covered the detail and zoom controls and
 framed modules underneath itself; in the 1280×800 capture, models.py was cut at its x = 880 edge.
+
+## 2026-10-31 — Revert admits a server-loaded committed rules resolution
+
+The person-only HTTP route loads the exact SQL row from this run at or below the
+acknowledged horizon. Missing sequences, other event types and other changes return 404;
+unverifiable rules merges, unavailable isolation, suspect main and duplicate or closing
+attempts return 409. Admission reserves the target synchronously before answering an empty
+202; settlement reports only through events. Shutdown cancels Reverts in flight and awaits
+their bounded settlement before the event store closes.
+
+Reason: a client cannot supply authority through an event body or an unacknowledged row.
+Immediate refusals keep 202 meaningful, while cancellation lets the tested inverse recovery
+path settle a suite whose 60-second bound exceeds the service's 30-second shutdown budget.

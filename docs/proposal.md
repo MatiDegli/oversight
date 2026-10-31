@@ -562,7 +562,7 @@ the single error format.
 | `POST /changes/{id}/reject` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
 | `GET /agents/{id}` | none | Reserved: 501; then 200 `AgentStatus` for coding agents | `not_implemented` |
 | `POST /changes/{id}/review` | `ReviewChange {revision, head_commit, main_commit}` | Reserved: 501; then 202 | `not_implemented` |
-| `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | Reserved: 501; then 202 | `not_implemented` |
+| `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | 202 | `not_found`, `wrong_state` |
 | `GET /changes/{id}` | none | Reserved: 501; then 200 `ChangeView` | `not_implemented` |
 | `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | Reserved: 501; then 200 `HistoryPage` | `not_implemented` |
 | `POST /queue` | `EnqueueTask` | Reserved: 501; then 201 `QueuedTask` | `not_implemented` |

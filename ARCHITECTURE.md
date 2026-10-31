@@ -286,9 +286,11 @@ then follows the existing discard path: stopped status before the rejected resol
 
 `GET /impact`, merge-mode and plan routes still return 501.
 The 1.4 reservations also include tree, history, queue, leads, and change
-review/revert. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
-Six more event types are reserved: change.reviewed, change.facts_recorded, tests.executed,
-revert.resolved, queue.updated and lead.status. Transport and reducer consume their sequences.
+review. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
+The Revert route answers 202 after synchronous admission, loads its target from this run's
+committed log, and reports its outcome only through events.
+Five more event types are reserved: change.reviewed, change.facts_recorded, tests.executed,
+queue.updated and lead.status. Transport and reducer consume their sequences.
 Approve, Reject and Request changes require the revision and head shown by the review render;
 revision zero is limited to rejecting the published agent base before any proposal.
 Live resolutions record principal and head explicitly. The writer validates each frozen

@@ -1,4 +1,4 @@
-"""Run-local personal correction of a validated rules merge; no lookup or HTTP port."""
+"""Run-local personal correction of a validated rules merge."""
 
 import asyncio
 import math
@@ -90,6 +90,7 @@ class _Attempt:
         default_factory=lambda: dict[str, asyncio.Task[StoredEvent]]()
     )
     receipts: dict[str, StoredEvent] = field(default_factory=lambda: dict[str, StoredEvent]())
+    started: bool = False
     cancelled: bool = False
     blocked: bool = False
     prepared: bool = False
@@ -125,6 +126,13 @@ class RevertService:
         self, target: RevertTarget, command: RevertChange, *, principal: object
     ) -> RevertResult:
         """Return only after the outcome (and success delta) has a confirmed SQL receipt."""
+        attempt = self._admit(target, command, principal)
+        owner = asyncio.current_task()
+        assert owner is not None
+        self._owners.add(owner)
+        return await self._settle(attempt, owner)
+
+    def _admit(self, target: RevertTarget, command: RevertChange, principal: object) -> _Attempt:
         if principal is not Person:
             raise RevertRefused("invalid_principal", "Revert requires the local person principal")
         try:
@@ -144,9 +152,49 @@ class RevertService:
         self._reserved.add(key)
         attempt = _Attempt(target, command, original, key)
         self._attempts.append(attempt)
+        return attempt
+
+    def submit(
+        self, target: RevertTarget, command: RevertChange, *, principal: object
+    ) -> asyncio.Task[RevertResult]:
+        """Reserve synchronously; deliver the admitted outcome through events."""
+        attempt = self._admit(target, command, principal)
+        task = asyncio.get_running_loop().create_task(self._submitted(attempt))
+        self._owners.add(task)
+
+        def done(owner: asyncio.Task[RevertResult]) -> None:
+            if not owner.cancelled():
+                owner.exception()
+            self._owners.discard(owner)
+            if not attempt.started:
+                self._reserved.discard(attempt.key)
+
+        task.add_done_callback(done)
+        return task
+
+    async def _submitted(self, attempt: _Attempt) -> RevertResult:
+        attempt.started = True
         owner = asyncio.current_task()
         assert owner is not None
-        self._owners.add(owner)
+        try:
+            return await self._settle(attempt, owner)
+        except BaseException as error:
+            if attempt.result is None and not attempt.blocked:
+                self._reports.add(
+                    self.ctx.spawn(
+                        self.ctx.error(
+                            "server",
+                            f"Revert of {attempt.target.change_id} did not run: "
+                            f"{str(error) or type(error).__name__}",
+                            None,
+                            fatal=False,
+                        )
+                    )
+                )
+            raise
+
+    async def _settle(self, attempt: _Attempt, owner: asyncio.Task[object]) -> RevertResult:
+        key, original = attempt.key, attempt.original
         try:
             async with self.ctx.workspace.locks(main=True, agent_id=original.agent_id):
                 if self.ctx.state.suspect or self.ctx.workspace.integrity.main_suspect:
