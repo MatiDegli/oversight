@@ -2675,6 +2675,7 @@ In a replay, "Revert is not available in a replay." takes the button's place.
 Revert acts only on its own pointer click. It stays focusable; Enter and Space send nothing.
 There is no shortcut, palette command or confirmation. Availability does not read the merge mode.
 Outcomes update the current view without opening a tab, moving focus or selecting a node.
+
 ## 2026-10-31 — The lead runs inside one run with fixed limits
 
 The coordination lead reads main through the person's read handlers and only proposes plans.
