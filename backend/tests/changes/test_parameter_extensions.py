@@ -173,6 +173,34 @@ async def test_supplied_input_cap_reports_omitted_calls_separately_from_row_rete
     assert len(result.rows) == 8 and result.not_probed == "recording budget reached"
 
 
+def test_unavailable_preserves_the_prepared_supplied_input_cap_reason():
+    rec = SimpleNamespace(
+        base_files={"sample.py": "def f(): return 1\n"},
+        head_files={
+            "sample.py": "def f(extra=0): return extra\n",
+            "test_sample.py": "from sample import f\n"
+            + "\n".join(f"f(extra={i})" for i in range(49)),
+        },
+        head=SimpleNamespace(
+            graph=SimpleNamespace(
+                nodes=[SimpleNamespace(id="sample:f", path="sample.py", name="f", kind="function")]
+            )
+        ),
+    )
+    probe = ExtensionProbe()
+    probe.prepare(cast(Any, rec), [FunctionBehavior("sample:f")], time.monotonic() + 30)
+    assert len(probe.inputs["sample:f"].samples) == 48
+    assert probe.inputs["sample:f"].reason == "budget exhausted"
+
+    probe.unavailable("worker failed")
+
+    [result] = probe.results
+    assert result.reason == "budget exhausted"
+    assert result.run_count == result.rejected_before == 0 and result.rows == ()
+    public = project_extensions(capture_behavior(BehaviorDiff(1, (), probe.results)), revision=1)
+    assert public and public[0].not_probed == "recording budget reached"
+
+
 @pytest.mark.anyio
 async def test_extension_capture_detaches_worker_results_and_checks_revision(tmp_path):
     result, measured, evidence = await measure(
@@ -236,7 +264,8 @@ async def test_isolation_failure_retains_extension_not_probed(h: Harness, monkey
         ("tests/test_mod.py", "assert value() > 0", "assert value(extra=3) > 0"),
     )
     [facts] = h.payloads(ChangeFacts)
-    assert facts.parameter_extensions and facts.parameter_extensions[0].not_probed == "probe failed"
+    assert facts.parameter_extensions
+    assert facts.parameter_extensions[0].not_probed == "recording budget reached"
     assert facts.parameter_extensions[0].run_count == 0
     worker.assert_not_awaited()
 

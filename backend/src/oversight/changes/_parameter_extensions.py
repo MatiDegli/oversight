@@ -136,6 +136,8 @@ class ExtensionProbe:
 
     def unavailable(self, reason: str) -> None:
         self._results = {
-            node_id: result if node_id in self.completed else replace(result, reason=reason)
+            node_id: result
+            if node_id in self.completed
+            else replace(result, reason=result.reason or reason)
             for node_id, result in self._results.items()
         }
