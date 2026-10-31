@@ -389,7 +389,7 @@ class LiveRun:
             spend_ledger=self.ledger,
             rules_evidence=self._rules_evidence,
             spend_lost=lambda: self._ledger_lost,
-            spend_receipt=started if self.ledger.state is not None else None,
+            spend_receipt=started,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
         self.dispatcher.start()

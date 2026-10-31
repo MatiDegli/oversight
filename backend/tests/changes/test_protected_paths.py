@@ -339,12 +339,18 @@ def test_paths_profile_exactly_nine_never_falls_back(ready: PolicyInputs) -> Non
     assert merges_alone(assess(ready, ACTIVE_PROFILE))
     for rules in (assessment.rules[:-1], [*assessment.rules[:-1], assessment.rules[0]]):
         assert not merges_alone(assessment.model_copy(update={"rules": rules}))
+    for rules in (
+        pending.rules[:-1],
+        [*pending.rules[:-1], pending.rules[0]],
+        [*pending.rules, pending.rules[-1]],
+    ):
         assert not pending_policy(pending.model_copy(update={"rules": rules}))
     assert not merges_alone(assessment.model_copy(update={"policy_version": "unsupported"}))
     assert not pending_policy(pending.model_copy(update={"policy_version": "unsupported"}))
     for profile in POLICY_RULES.keys() - {PROFILE}:
         assert not merges_alone(assess(ready, profile))
-        assert not pending_policy(assess(ready, profile))
+        assert not pending_policy(pending.model_copy(update={"policy_version": profile}))
+        assert not pending_policy(assess(replace(ready, suite=None), profile))
         assert assess(ready, profile) == assess(
             replace(ready, protected_paths=None, changed_files=None), profile
         )

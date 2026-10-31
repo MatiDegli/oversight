@@ -91,7 +91,7 @@ def capture(
         or not paths_confirmed(ctx, wait, assessment)
         or assessment != wait.latest
         or any(
-            not _spend.admits(ctx, rule.rule, ref, wait.spend_pin)
+            not ctx.assessment.admits(rule.rule, ref, wait.spend_pin)
             for rule in assessment.rules
             for ref in rule.evidence
         )
@@ -186,7 +186,7 @@ def revalidate(ctx: ChangeContext, reservation: RulesReservation) -> tuple[str, 
         or not pending_policy(assessment, grants)
         or not paths_confirmed(ctx, wait, assessment)
         or any(
-            not _spend.admits(ctx, rule.rule, ref, reservation.spend_pin)
+            not ctx.assessment.admits(rule.rule, ref, reservation.spend_pin)
             for rule in assessment.rules
             for ref in rule.evidence
         )

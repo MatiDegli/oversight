@@ -2322,7 +2322,8 @@ independent fail and leaves the change ready for the person.
 The existing runtime review remains independent of the rules wait. Rules eligibility already
 requires cross-review to be enabled with an independent configured reviewer; invalidating
 a path-vetoed wait does not cancel or prevent that review. A clean review cannot erase the
-hit. Unavailable, halted or cancelled review cannot grant permission. Ask me keeps its
+hit. The proposal author is matched by profile id; before, it never matched.
+Unavailable, halted or cancelled review cannot grant permission. Ask me keeps its
 existing opt-in review behavior. Author summaries and reviewer text cannot change this
 table, waive a hit, or manufacture a grant. Protected-path grant requests remain refused,
 including on a personal Approve; people retain the existing direct decision commands.
@@ -2333,9 +2334,18 @@ ignore submodules, so their inventory alone is insufficient: workspace `integrit
 already refuses Gitlinks before proposal commits and suite capture, and candidate inventory
 explicitly includes them or reports incomplete. Candidate path results join all nine rules
 in the committed definitive assessment before any commit. Hits or unknowns stop the
-transaction and verified recovery restores main. Source receipts remain required at every
+transaction and verified recovery restores main. Failed, timed-out or truncated candidate
+queries instead stop with one normalized terminal notice; complete but unsupported entries
+retain the persisted unknown veto. Persistence requires all three candidate measurements and
+the protected-path receipt for that exact candidate tree. Source receipts remain required at every
 barrier; the durable-spend reads and separately pinned spend evidence retain F3b's behavior.
 Revert additionally requires zero protected violations and a complete observation.
+
+The run's table receipt is pinned outside the bounded event cache for the whole run, separately
+from spend provenance; ordinary event eviction cannot invalidate it. Startup forwards that
+receipt even when the durable ledger is unavailable. Only protected-path evidence can use the
+table pin; all spend evidence still goes through F3b's unchanged admission predicate. Missing or
+invalid table pins and missing or evicted proposal receipts fail closed without reconstruction.
 
 F1's production activation latch remains closed. These checks add deterministic authority
 constraints; they do not enable rules merges, expand Revert to old probes-profile merges,

@@ -24,7 +24,7 @@ from oversight.changes._state import ChangeRecord
 from oversight.changes._support import RulesFailure
 from oversight.events import NeedsYouWait, StoredEvent, format_needs_you
 from oversight_contracts.common import FileStatus, RuleId
-from oversight_contracts.events import ChangeProposed, ErrorReport, ServerEvent
+from oversight_contracts.events import ChangeProposed, ErrorReport, RunStartedEvent, ServerEvent
 from oversight_contracts.grants import covered_rule
 from oversight_contracts.policy import ChangeAssessment, EvidenceRef, MergeModeState
 
@@ -94,19 +94,19 @@ class RulesScheduler:
         self.spend_receipt: StoredEvent | None = None
         self.spend_receipt_total: float | None = None
         self.run_started_seq: int | None = None
+        self.table_receipt: StoredEvent | None = None
         self._evicted_through = 0
         self.generation = 0
 
     def spend_received(self, stored: StoredEvent) -> None:
-        """Retain an eligible historical lower bound, outside the evidence cache.
+        """Pin the run's table receipt and eligible spend provenance outside the event cache.
 
         Usage envelopes have no run id: provenance is the owning LiveRun's explicit source
         sites, never a role/model heuristic. The seed additionally identifies that run.
-        This receipt alone supplies no rules evidence or current spend observation.
+        The run receipt identifies the table independently of spend eligibility. Neither
+        pinned receipt supplies a current durable spend observation.
         """
-        if stored.type not in {"run.started", "usage.tick"} or (
-            self.spend_receipt is not None and stored.seq <= self.spend_receipt.seq
-        ):
+        if stored.type not in {"run.started", "usage.tick"}:
             return
         try:
             event = _EVENT.validate_json(stored.envelope)
@@ -119,16 +119,41 @@ class RulesScheduler:
                 return
             if self.run_started_seq is None:
                 self.run_started_seq = event.seq
-                self.events[event.seq] = event
+                self.table_receipt = stored
             total, budget = event.payload.budget.spent_usd, event.payload.budget.budget_usd
         elif event.type == "usage.tick":
             total, budget = event.payload.spent_usd, event.payload.budget_usd
         else:
             return
+        if self.spend_receipt is not None and stored.seq <= self.spend_receipt.seq:
+            return
         if not math.isfinite(total) or total < 0 or not math.isfinite(budget) or budget <= 0:
             return
         self.spend_receipt, self.spend_receipt_total = stored, total
         self.spend_changed()
+
+    def run_started(self) -> RunStartedEvent | None:
+        stored = self.table_receipt
+        if stored is None:
+            return None
+        try:
+            event = _EVENT.validate_json(stored.envelope)
+        except ValidationError:
+            return None
+        if (
+            event.type != "run.started"
+            or (event.type, event.seq, event.ts) != (stored.type, stored.seq, stored.ts)
+            or event.seq != self.run_started_seq
+            or event.payload.run_id != self.ctx.grants.run_id
+        ):
+            return None
+        return event
+
+    def admits(self, rule: RuleId, ref: EvidenceRef, pin: StoredEvent | None) -> bool:
+        """Table evidence has its own pin; spend admission remains owned by F3b."""
+        if rule == "protected_paths" and ref.event_seq == self.run_started_seq:
+            return self.run_started() is not None and ref.git_object is None
+        return _spend.admits(self.ctx, rule, ref, pin)
 
     def spend_changed(self) -> None:
         for wait in self.waits.values():
@@ -169,7 +194,7 @@ class RulesScheduler:
         """Use only the original capture while both committed receipts still match exactly."""
         rec, proposal = wait.rec, wait.proposal
         event = self.events.get(wait.proposal_seq) if wait.proposal_seq is not None else None
-        run = self.events.get(self.run_started_seq) if self.run_started_seq is not None else None
+        run = self.run_started()
         if (
             wait.paths is None
             or event is None
@@ -481,7 +506,7 @@ class RulesScheduler:
             inputs = replace(
                 inputs,
                 evidence={
-                    rule: tuple(ref for ref in refs if _spend.admits(self.ctx, rule, ref, pin))
+                    rule: tuple(ref for ref in refs if self.admits(rule, ref, pin))
                     for rule, refs in inputs.evidence.items()
                 },
             )

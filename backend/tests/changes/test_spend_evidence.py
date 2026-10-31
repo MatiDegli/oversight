@@ -451,7 +451,8 @@ async def test_seed_only_positive_budget_can_pass(h, spend):
     await pending(h, spend)
     assert spend_rule(latest(h)).evidence == [EvidenceRef(event_seq=seed.seq)]
     assert seed.seq not in spend.ctx.assessment.events
-    assert next(r for r in latest(h).rules if r.rule == "protected_paths").result == "unknown"
+    assert next(r for r in latest(h).rules if r.rule == "protected_paths").result == "pass"
+    assert spend.ctx.assessment.table_receipt == seed
     assert not rec(h).rules_consumed
 
 

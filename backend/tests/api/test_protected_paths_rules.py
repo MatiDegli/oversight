@@ -8,9 +8,11 @@ from contextlib import asynccontextmanager
 import pytest
 from live_helpers import DEADLINE_S, two_fakes
 
-from oversight.agents import ScriptedModel, parse_script, review_candidate
+from oversight.agents import LedgerError, LedgerFile, ScriptedModel, parse_script, review_candidate
 from oversight.app import TEMPLATE, LiveRun
 from oversight.changes import WrongState
+from oversight.changes._mode import RULES_ACTIVATION
+from oversight.changes._policy import assess
 from oversight.events import parse_needs_you
 from oversight_contracts.commands import SetMergeMode, StartAgent
 from oversight_contracts.policy import MergeModeState
@@ -181,6 +183,7 @@ async def test_model_claimed_path_waiver_has_no_authority(tmp_path):
 
 
 async def test_clean_proposal_reaches_closed_latch_without_merge(tmp_path):
+    assert not RULES_ACTIVATION
     reviewer = CleanReviewer()
     async with running_paths(tmp_path, "notes.txt", reviewer) as live:
         assert live._manager is not None
@@ -203,6 +206,54 @@ async def test_clean_proposal_reaches_closed_latch_without_merge(tmp_path):
         assert any(n and "Rules mode is closed" in n.reason for n in notes)
         assert w.terminal_seq is not None
         assert live._manager._agents["agent-1"].state == "ready"
+        assert not any(e.type == "change.resolved" for e in events(live))
+
+
+async def test_real_proposal_author_uses_profile_id_and_cannot_review_itself(tmp_path):
+    reviewer = CleanReviewer()
+    async with running_paths(tmp_path, "notes.txt", reviewer) as live:
+        assert live._manager is not None
+        await live.start(StartAgent(task="Edit the file", slot="A"))
+        reviewed = await until(live, "change.reviewed")
+        await asyncio.gather(*list(live._runs.values()), *list(live._reviews.values()))
+        scheduler = live._manager._ctx.assessment
+        w = scheduler.waits["change-1"]
+        receipt = next(e for e in live.store._events if e.seq == reviewed.seq)
+        live._manager.rules_received(receipt)
+        inputs = scheduler.inputs(w)
+        author = live._agents["agent-1"].profile
+        assert w.rec.model_id == author.id and inputs.author == author
+        assert (
+            next(
+                r for r in assess(inputs, "safe-merge-paths-v1").rules if r.rule == "cross_review"
+            ).result
+            == "pass"
+        )
+        # Distrust even a constructed clean claim that bypassed the wire validator.
+        same = reviewed.payload.model_copy(update={"reviewer_model": author.model})
+        scheduler.events[reviewed.seq] = reviewed.model_copy(update={"payload": same})
+        result = assess(scheduler.inputs(w), "safe-merge-paths-v1")
+        assert next(r for r in result.rules if r.rule == "cross_review").result == "unknown"
+        assert not any(e.type == "change.resolved" for e in events(live))
+
+
+async def test_table_capture_without_durable_ledger_state(tmp_path, monkeypatch):
+    async def unavailable(ledger):
+        ledger.state = None
+        ledger.loaded = False
+        raise LedgerError("scripted unavailable ledger")
+
+    monkeypatch.setattr(LedgerFile, "load", unavailable)
+    reviewer = CleanReviewer()
+    async with running_paths(tmp_path, PROTECTED[0], reviewer) as live:
+        assert live._manager is not None and live.ledger.state is None
+        scheduler = live._manager._ctx.assessment
+        assert scheduler.table_receipt is not None
+        await live.start(StartAgent(task="Edit the file", slot="A"))
+        await until(live, "change.reviewed")
+        w = scheduler.waits["change-1"]
+        assert w.paths is not None and w.latest is not None
+        assert any(r.rule == "protected_paths" and r.result == "fail" for r in w.latest.rules)
         assert not any(e.type == "change.resolved" for e in events(live))
 
 

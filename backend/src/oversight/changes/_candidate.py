@@ -19,13 +19,17 @@ from oversight_contracts.events import FileStat, Limits
 from oversight_contracts.policy import ChangeAssessment, EvidenceRef, RuleAssessment
 
 
+class InventoryQueryFailed(WorkspaceError):
+    """No complete query result exists; this is distinct from unsupported Git entries."""
+
+
 async def changed_inventory(
     ctx: ChangeContext, guard: MergeGuard, proposal_seq: int
 ) -> ChangedFileInventory:
     """Capture every candidate path and status from immutable objects, never proposal statuses.
 
-    Name-status does not measure line counts: those FileStat fields are zero here. A malformed
-    or unavailable query discards all entries and retains its receipts as an incomplete source.
+    Name-status does not measure line counts: those FileStat fields are zero here. Failed or
+    truncated queries raise; well-framed unsupported entries retain an incomplete source.
     """
     evidence = (
         EvidenceRef(event_seq=proposal_seq),
@@ -46,13 +50,13 @@ async def changed_inventory(
         )
     except (IntegrityError, LockOrderError):
         raise
-    except WorkspaceError:
-        return unavailable
+    except WorkspaceError as error:
+        raise InventoryQueryFailed("Candidate path query failed.") from error
     if output and not output.endswith("\0"):
-        return unavailable
+        raise InventoryQueryFailed("Candidate path query was truncated.")
     fields = output[:-1].split("\0") if output else []
     if len(fields) % 2:
-        return unavailable
+        raise InventoryQueryFailed("Candidate path query has incomplete fields.")
     statuses: dict[str, FileStatus] = {"A": "added", "M": "modified", "D": "deleted"}
     files: list[FileStat] = []
     for status, path in zip(fields[::2], fields[1::2], strict=True):
@@ -143,7 +147,13 @@ async def measure(
             possible_callers=grant_measurement.caller_count,
             parse_errors=len(base.graph.parse_errors) + len(candidate.graph.parse_errors),
             unresolved_removed=len(delta.nodes_removed),
-            evidence={r.rule: tuple(r.evidence) for r in pending.rules},
+            evidence={
+                **{r.rule: tuple(r.evidence) for r in pending.rules},
+                "protected_paths": (
+                    *(protected_paths.evidence if protected_paths else ()),
+                    *inventory.evidence,
+                ),
+            },
             protected_paths=protected_paths,
             changed_files=inventory,
         ),

@@ -11,6 +11,7 @@ from test_assessment import (
     make_clock,
     propose,
     rec,
+    seed_paths,
     settled,
     terminals,
     wait,
@@ -20,14 +21,22 @@ from test_grant_creation import request as grant_request
 from test_grant_rules import granted as granted
 from test_grant_rules import later
 from test_mode import available, select
+from test_policy_profiles import policy_inputs
 from test_rules_transaction import configure_transaction, execute
 from test_rules_transaction import reserved as reserved
 
-from oversight.changes import ChangeManager, InvalidGrant, _candidate, _rules
+from oversight.changes import (
+    ChangeManager,
+    InvalidGrant,
+    _assessment,
+    _candidate,
+    _rules,
+    _transaction,
+)
 from oversight.changes._policy import assess
 from oversight.events import parse_needs_you
 from oversight.workspace import MergeGuard
-from oversight_contracts.events import ChangeResolved, FileStat
+from oversight_contracts.events import ChangeResolved, ErrorReport, FileStat
 from oversight_contracts.policy import ChangeAssessment, EvidenceRef, MergeModeState
 
 pytestmark = pytest.mark.anyio
@@ -63,12 +72,25 @@ async def captured(h, monkeypatch):
         "unknown_status",
         "wrong_receipt",
         "wrong_cached_proposal",
+        "wrong_record_revision",
+        "wrong_record_head",
+        "wrong_record_base",
+        "wrong_table_metadata",
+        "wrong_table_seq",
+        "wrong_table_run",
+        "malformed_table_receipt",
     ],
 )
 async def test_path_sources_require_committed_exact_proposal(h, captured, gap):
     scheduler, w = h.manager._ctx.assessment, wait(h)
     snapshot, inventory = w.paths
-    if gap.startswith("wrong_") and gap.removeprefix("wrong_") in {
+    if gap.startswith("wrong_record_"):
+        field = {"revision": "revision", "head": "head_commit", "base": "base_commit"}[
+            gap.removeprefix("wrong_record_")
+        ]
+        setattr(rec(h), field, 2 if field == "revision" else "other")
+        assert scheduler.events[w.proposal_seq].payload == w.proposal
+    elif gap.startswith("wrong_") and gap.removeprefix("wrong_") in {
         "change",
         "agent",
         "revision",
@@ -86,7 +108,24 @@ async def test_path_sources_require_committed_exact_proposal(h, captured, gap):
     elif gap == "missing_proposal":
         del scheduler.events[w.proposal_seq]
     elif gap == "evicted_run":
-        del scheduler.events[scheduler.run_started_seq]
+        table = scheduler.table_receipt
+        scheduler.table_receipt = None  # Pinned receipts are never subject to cache eviction.
+        scheduler.spend_received(table)
+        assert scheduler.table_receipt is None  # An old replay cannot reconstruct a lost pin.
+    elif gap == "wrong_table_metadata":
+        scheduler.table_receipt = replace(scheduler.table_receipt, seq=9999)
+    elif gap == "wrong_table_seq":
+        scheduler.run_started_seq = 9999
+    elif gap == "wrong_table_run":
+        run = scheduler.run_started()
+        other = run.model_copy(
+            update={
+                "payload": run.payload.model_copy(update={"run_id": "run-20261031-235959"}),
+            }
+        )
+        scheduler.table_receipt = replace(scheduler.table_receipt, envelope=other.model_dump_json())
+    elif gap == "malformed_table_receipt":
+        scheduler.table_receipt = replace(scheduler.table_receipt, envelope="{")
     elif gap == "missing_capture":
         w.paths = None
     elif gap == "incomplete":
@@ -146,14 +185,27 @@ async def test_committed_empty_binary_and_rename_sources(h, captured, inventory,
     )
 
 
-@pytest.mark.parametrize("gap", ["missing", "evicted"])
+@pytest.mark.parametrize("gap", ["missing", "evicted", "cancel_evaluation"])
 async def test_path_capture_cancel_timeout_restart_fail_closed(h, captured, gap):
     scheduler = h.manager._ctx.assessment
-    if gap == "missing":
+    if gap in {"missing", "cancel_evaluation"}:
         wait(h).paths = None
     else:
         del scheduler.events[wait(h).proposal_seq]
+    if gap == "cancel_evaluation":
+        h.gate = ChangeAssessment
     h.manager.run_ended("agent-1", None)
+    if gap == "cancel_evaluation":
+        await h.at_gate.wait()
+        task, deadline = wait(h).task, wait(h).deadline
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert rec(h).state == "ready" and not h.payloads(ChangeAssessment)
+        h.open_gate.set()
+        captured.advance(10)
+        scheduler.wake(rec(h))
+        assert wait(h).deadline == deadline
     await settled(h)
     assert path_rule(latest(h)).result == "unknown" and not terminals(h)
     deadline = wait(h).deadline
@@ -177,7 +229,7 @@ async def test_path_capture_cancel_timeout_restart_fail_closed(h, captured, gap)
     await fresh.aclose()
 
 
-@pytest.mark.parametrize("outcome", ["hit", "incomplete", "truncated", "cancel"])
+@pytest.mark.parametrize("outcome", ["hit", "incomplete", "cancel"])
 async def test_candidate_protected_inventory_is_remeasured(h, reserved, monkeypatch, outcome):
     configure_transaction(h, monkeypatch)
     original = _candidate.changed_inventory
@@ -186,8 +238,6 @@ async def test_candidate_protected_inventory_is_remeasured(h, reserved, monkeypa
         measured = await original(ctx, guard, seq)
         if outcome == "cancel":
             raise asyncio.CancelledError
-        if outcome == "truncated":
-            return replace(measured, files=(), complete=False)
         return replace(
             measured,
             files=(
@@ -220,6 +270,128 @@ async def test_candidate_protected_inventory_is_remeasured(h, reserved, monkeypa
     assert rec(h).state == "ready" and not h.payloads(ChangeResolved)
     assert await h.main_head() == h.base_commit
     await assert_main_clean(h)
+
+
+@pytest.mark.parametrize("fault", ["timeout", "truncated", "framing", "git_error", "unsupported"])
+async def test_candidate_query_failure_has_one_terminal_notice(h, reserved, monkeypatch, fault):
+    configure_transaction(h, monkeypatch)
+    git = h.workspace.git
+
+    async def queried(tree, *args, **kwargs):
+        result = await git(tree, *args, **kwargs)
+        if args[:2] == ("diff", "--name-status"):
+            return replace(
+                result,
+                timed_out=fault == "timeout",
+                truncated=fault == "truncated",
+                returncode=None
+                if fault == "timeout"
+                else 1
+                if fault == "git_error"
+                else result.returncode,
+                stdout="T\0shop/mod.py\0"
+                if fault == "unsupported"
+                else "M\0shop/mod.py"
+                if fault == "framing"
+                else result.stdout,
+            )
+        return result
+
+    monkeypatch.setattr(h.workspace, "git", queried)
+    await execute(h, reserved)
+    if fault == "unsupported":
+        pending, final = h.payloads(ChangeAssessment)
+        assert path_rule(pending).result == "pass" and path_rule(final).result == "unknown"
+        assert EvidenceRef(git_object=final.candidate_tree) in path_rule(final).evidence
+        assert not terminals(h)
+    else:
+        assert len(h.payloads(ChangeAssessment)) == 1
+        assert len(terminals(h)) == 1
+        note = parse_needs_you(terminals(h)[0].message)
+        assert note is not None and note.code == "git_failed"
+        reserved[0].advance(121)
+        await h.manager._ctx.assessment.expire(wait(h))
+        assert len(terminals(h)) == 1
+    assert rec(h).state == "ready" and not h.payloads(ChangeResolved)
+    assert await h.main_head() == h.base_commit
+    await assert_main_clean(h)
+
+
+@pytest.mark.parametrize("gap", ["small_change", "small_cone", "protected_paths", "tree_receipt"])
+async def test_persist_requires_candidate_rules_and_tree_receipt(h, reserved, monkeypatch, gap):
+    configure_transaction(h, monkeypatch)
+    measure = _transaction.Transaction.measure
+
+    async def missing(tx, guard):
+        await measure(tx, guard)
+        tx.measured = tuple(
+            r.model_copy(
+                update={
+                    "evidence": [
+                        ref
+                        for ref in r.evidence
+                        if ref != EvidenceRef(git_object=guard.candidate_tree)
+                    ]
+                }
+            )
+            if gap == "tree_receipt" and r.rule == "protected_paths"
+            else r
+            for r in tx.measured
+            if r.rule != gap
+        )
+
+    monkeypatch.setattr(_transaction.Transaction, "measure", missing)
+    await execute(h, reserved)
+    assert len(h.payloads(ChangeAssessment)) == 1 and len(terminals(h)) == 1
+    note = parse_needs_you(terminals(h)[0].message)
+    assert note is not None and note.code == "policy_invalid"
+    assert "Candidate measurements" in note.reason
+    assert rec(h).state == "ready" and not h.payloads(ChangeResolved)
+    assert await h.main_head() == h.base_commit
+    await assert_main_clean(h)
+
+
+async def test_table_receipt_survives_event_cache_and_all_barriers(h, monkeypatch):
+    from test_assessment import full_evidence
+
+    clock = make_clock(h, monkeypatch)
+    available(h)
+    await select(h, "merge_when_safe", 0)
+    await seed_paths(h)
+    scheduler = h.manager._ctx.assessment
+    table = scheduler.table_receipt
+    assert table is not None
+    for _ in range(_assessment.MAX_EVIDENCE_EVENTS + 1):
+        await h.manager._ctx.publish(
+            ErrorReport(
+                source="server",
+                agent_id=None,
+                change_id=None,
+                fatal=False,
+                message="Cache filler",
+            )
+        )
+    assert len(scheduler.events) == _assessment.MAX_EVIDENCE_EVENTS
+    assert table.seq not in scheduler.events and scheduler.table_receipt == table
+    full_evidence(h, policy_inputs())
+    await propose(h)
+    assert wait(h).paths is not None
+    assert scheduler.path_sources(wait(h)) is not None
+    monkeypatch.setattr(h.workspace._isolation, "_born", True)
+    monkeypatch.setattr(h.workspace._isolation, "_checked", True)
+    configure_transaction(h, monkeypatch)
+    decisions, decide = [], h.manager._decide
+
+    def track(record, work):
+        decisions.append(decide(record, work))
+        return decisions[-1]
+
+    monkeypatch.setattr(h.manager, "_decide", track)
+    await execute(h, (clock, decisions))
+    [resolved] = h.payloads(ChangeResolved)
+    assert resolved.decided_by == "rules" and scheduler.table_receipt == table
+    assert path_rule(resolved.assessment).result == "pass" and not terminals(h)
+    assert table.seq not in scheduler.events
 
 
 @pytest.mark.parametrize("granted", [grant_request(kind="run", value=RUN)], indirect=True)
@@ -268,8 +440,10 @@ async def test_paths_and_spend_pins_survive_only_their_valid_receipts(
             scheduler = h.manager._ctx.assessment
             pin = transaction[2][0].spend_pin
             assert pin is not None and pin.seq not in scheduler.events
-            seq = scheduler.run_started_seq if lost == "table" else wait(h).proposal_seq
-            del scheduler.events[seq]
+            if lost == "table":
+                scheduler.table_receipt = None
+            else:
+                del scheduler.events[wait(h).proposal_seq]
         return receipt
 
     h.manager._ctx.publish = publish

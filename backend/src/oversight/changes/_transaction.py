@@ -55,14 +55,19 @@ class Transaction:
         paths = self.ctx.assessment.path_sources(wait)
         if paths is None or wait.proposal_seq is None:
             raise RulesFailure("policy_invalid", "Protected-path capture is no longer confirmed.")
-        measured = await _candidate.measure(
-            self.ctx,
-            guard,
-            pending,
-            wait.rec.task.limits,
-            protected_paths=paths[0],
-            proposal_seq=wait.proposal_seq,
-        )
+        try:
+            measured = await _candidate.measure(
+                self.ctx,
+                guard,
+                pending,
+                wait.rec.task.limits,
+                protected_paths=paths[0],
+                proposal_seq=wait.proposal_seq,
+            )
+        except _candidate.InventoryQueryFailed as error:
+            raise RulesFailure(
+                "git_failed", "Candidate path query failed or was truncated."
+            ) from error
         self.measured, self.grant_measurement = measured.rules, measured.grants
 
     def grants_for(self, assessment: ChangeAssessment) -> tuple[GrantUse, ...]:
@@ -77,7 +82,7 @@ class Transaction:
         if not _rules.current(self.ctx, self.reservation) or failure:
             raise RulesFailure(*(failure or ("target_changed", "Rules reservation expired.")))
         if any(
-            not _spend.admits(self.ctx, rule.rule, ref, self.spend_pin)
+            not self.ctx.assessment.admits(rule.rule, ref, self.spend_pin)
             for rule in self.measured
             for ref in rule.evidence
         ):
@@ -167,7 +172,7 @@ class Transaction:
             await self.ready()
             assert self.definitive.assessment is not None
             if any(
-                not _spend.admits(ctx, rule.rule, ref, self.spend_pin)
+                not ctx.assessment.admits(rule.rule, ref, self.spend_pin)
                 for rule in self.definitive.assessment.rules
                 for ref in rule.evidence
             ):
@@ -201,6 +206,18 @@ class Transaction:
         )
         await self.ready()
         spend, self.spend_pin = _spend.guard(ctx, ctx.assessment.inputs(self.reservation.wait))
+        if {r.rule for r in self.measured} != {
+            "small_change",
+            "small_cone",
+            "protected_paths",
+        } or not any(
+            r.rule == "protected_paths"
+            and EvidenceRef(git_object=guard.candidate_tree) in r.evidence
+            for r in self.measured
+        ):
+            raise RulesFailure(
+                "policy_invalid", "Candidate measurements or tree evidence are missing."
+            )
         final = ChangeAssessment.model_validate(
             {
                 **pending.model_dump(),
