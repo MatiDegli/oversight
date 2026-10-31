@@ -158,7 +158,13 @@ async def test_unavailable_seed_does_not_certify_zero(tmp_path: Path, unavailabl
     run = LiveRun(settings, Scripts())
     await run.startup()
     try:
-        assert manager(run)._ctx.assessment.spend_receipt is None
+        scheduler = manager(run)._ctx.assessment
+        seed = read_store(run.store.path)[0]
+        assert scheduler.table_receipt == seed
+        assert scheduler.run_started_seq == seed.seq
+        assert scheduler.run_started() is not None
+        assert scheduler.spend_receipt is None
+        assert scheduler.spend_receipt_total is None
         producer = manager(run)._ctx.ports.rules_evidence
         assert producer is not None
         inputs = PolicyInputs(
