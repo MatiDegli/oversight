@@ -2393,3 +2393,53 @@ price. The fold applies those prices to each call's tokens and never reads the l
 fields. An unreported count gives a range whose lower end enters the known subtotal. Unpriced
 work keeps the total unavailable, while zero usage costs zero even without a listed price.
 Team grouping and periods come later.
+
+## 2026-10-31 — Supervision is a pure fold over the committed event prefix
+
+Reason: the maintainer needs reproducible supervision counts and spend for any recorded run
+and replay, using existing receipts alone. The read-only summary has no decision authority.
+
+The prefix starts at seq 1 and has no gaps, duplicates or reordered events. `fold_usage`
+validates it and the costs first; supervision refuses an invalid prefix rather than showing
+plausible partial totals. No event producer or contract changes are needed.
+
+A change belongs to the agent in its first proposal or resolution, falling back to its first
+attributed usage tick if neither exists. Disagreement among those owner observations refuses
+the summary with the offending seq. A change referenced only by an update, status or error has
+no owner or calls and is omitted. Changes keep first-appearance order, including those earlier
+references. Agents appear in agent-id order if they own a change, have a step or have unassigned
+usage; status and focus alone do not introduce an agent.
+
+Changes count distinct ids proposed at least once; proposals count every proposal event.
+Outcomes count every resolution separately: approved/merged, approved/conflict, request changes,
+rejected without a reason, or rejected/stopped. A change's end state uses its last resolution
+after its last proposal. No such resolution, a request for changes, or a new proposal after a
+resolution leaves it open. Conflict is terminal, not open. Review rounds count confirmed
+requests for changes, starting at zero.
+
+Lines proposed are two raw columns from each change's last proposal, summed by owner and run.
+They are null on a change never proposed, which contributes no proposed lines to the totals.
+Net lines merged sum added minus removed from the matching revision for every merged receipt.
+A missing matching proposal makes that change's net and its owner's and the run's net unknown.
+Steps count `agent.step` receipts and sum their recorded duration_ms, never wall-clock intervals.
+
+All dollar figures come from `fold_usage`: owned `ChangeUsage`, its `RoleUsage` buckets, and
+unassigned entries. Agent and run totals use `math.fsum`, include unassigned calls, and sum
+unknown-cost call counts. Any null component leaves its dollar sum null, including unknown
+bucket role or model even when every call's cost is known. Unknown dollars stay unknown; the
+CLI prints six decimal places only for known sums. Decisions count person, rules, cross_review,
+lead_agent and null (unrecorded), without inferring the missing actor in older logs.
+
+Spend that did not reach main has four separate figures, each with change count, dollars and
+unknown-cost call count. Rejected, stopped and conflict use the full usage of changes ending
+in that state. Earlier rounds use only buckets below the number of requests for changes before
+the final merge, only for changes ending merged; its count includes only changes with at least
+one such bucket. A null included cost nulls that figure. Empty groups are zero. These figures
+are never added together; open changes and unassigned calls belong to none of them.
+
+The fold stores counts, not rates. The CLI states merged proposed changes at prefix end as
+“N of M changes merged”, with M the distinct proposed changes; resolution counts remain separate.
+Review time is refused because proposal-to-resolution elapsed time mixes waiting with work.
+Rankings and scores are refused because agents receive different tasks. Percentages and ratios
+such as lines per dollar or cost per merge are refused because these receipts provide no fair
+normalization for task scope; every printed rate retains its explicit denominator.
