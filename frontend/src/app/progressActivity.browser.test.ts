@@ -119,6 +119,28 @@ it("keeps another tab active and focused as retry and limit events arrive", asyn
     await page.close();
   }
 });
+it.each([320, 360])("keeps notice text within its column in a %i px panel", async (width) => {
+  const page = await open(1280, "day", "retry");
+  try {
+    await panel(page).evaluate((node, width) => {
+      node.style.width = `${String(width)}px`;
+    }, width);
+    for (const moment of ["retry", "limits"] as const) {
+      await page.evaluate((moment) => {
+        window.progressTest.advance(moment);
+      }, moment);
+      const paragraphs = panel(page).locator('[role="listitem"] p');
+      const overflow = await paragraphs.evaluateAll((nodes) =>
+        nodes
+          .filter((node) => node.scrollWidth > node.clientWidth + 1)
+          .map((node) => node.textContent),
+      );
+      expect(overflow).toEqual([]);
+    }
+  } finally {
+    await page.close();
+  }
+});
 it.each([1920, 1280])(
   "captures progress at %i in both themes",
   async (width) => {

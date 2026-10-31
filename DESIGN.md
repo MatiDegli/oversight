@@ -1188,6 +1188,8 @@ select anything or move keyboard focus. The timeline keeps its bottom anchoring.
   "Budget at {a}% · {spent} of {budget} · new Meta runs are refused" (actual whole percent).
   spendUnknown omits amounts and meter. Time and budget meters are 150px with their real bound;
   all notices use inset, divider, 10px radius, at least 44px height, 6px/14px padding and muted icons.
+  Below 400px of panel width, notice text keeps its space beside the icon; supporting details
+  and meters wrap onto another line so zoom and narrow containers do not overlap the message.
   Numbers use Mono. Elapsed reads "{s} s" or "{m} min {ss} s"; tools read milliseconds,
   one decimal second below a minute, then elapsed words. Header uses the real run step cap.
 

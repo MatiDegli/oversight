@@ -17,9 +17,11 @@ function Numbers({ text }: { text: string }) {
 }
 function Notice({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }) {
   return (
-    <div className="my-2 mr-[22px] ml-[56px] flex min-h-[44px] items-center gap-3 rounded-[10px] border border-divider bg-inset px-[14px] py-[6px] text-[14px] text-muted">
-      <Icon aria-hidden="true" className="size-4 shrink-0" />
-      {children}
+    <div className="@container">
+      <div className="my-2 mr-[22px] ml-[56px] flex min-h-[44px] items-center gap-3 rounded-[10px] border border-divider bg-inset px-[14px] py-[6px] text-[14px] text-muted @max-[400px]:flex-wrap [&>p]:@max-[400px]:basis-[calc(100%_-_28px)]">
+        <Icon aria-hidden="true" className="size-4 shrink-0" />
+        {children}
+      </div>
     </div>
   );
 }
@@ -80,7 +82,7 @@ export function Notices({ conversation: { header, progress } }: { conversation: 
       {wait && (header.state === "working" || header.state === "revising") && (
         <div role="listitem">
           <Notice icon={RefreshCw}>
-            <p className="min-w-0 flex-1">
+            <p className="min-w-0 flex-1 wrap-anywhere">
               <strong className="font-semibold text-text">Waiting for model</strong> (retry{" "}
               <span className="font-mono">
                 {wait.attempt + 1}/{wait.max_attempts}
@@ -110,7 +112,7 @@ export function Notices({ conversation: { header, progress } }: { conversation: 
       {time && openRound && (
         <div role="listitem">
           <Notice icon={Clock}>
-            <p className="min-w-0 flex-1">
+            <p className="min-w-0 flex-1 wrap-anywhere">
               <strong className="font-mono font-semibold text-text">{time.used}</strong> of{" "}
               <strong className="font-mono font-semibold text-text">{time.bound}</strong> · time
               limit for this round
