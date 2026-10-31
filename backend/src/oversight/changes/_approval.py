@@ -5,6 +5,7 @@ from oversight.changes import _merge as merge
 from oversight.changes import _proposal as proposal
 from oversight.changes import _recovery as recovery
 from oversight.changes import _rules as rules
+from oversight.changes import _spend
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._resolution_validation import validate_resolution_intent
 from oversight.changes._state import (
@@ -13,7 +14,7 @@ from oversight.changes._state import (
     Source,
     WrongState,
 )
-from oversight.changes._support import ChangeContext
+from oversight.changes._support import ChangeContext, RulesFailure
 from oversight.events import EventRejected
 from oversight.workspace import (
     WorkspaceError,
@@ -30,10 +31,16 @@ async def approve_rules(ctx: ChangeContext, reservation: rules.RulesReservation)
         async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
             if not rules.current(ctx, reservation):
                 return
+            await _spend.ready(ctx)
+            if not rules.current(ctx, reservation):
+                return
             failure = rules.revalidate(ctx, reservation)
             if failure is None:
                 async with ctx.workspace.operations.git_lease():
                     failure = await rules_tree(ctx, reservation)
+            if not rules.current(ctx, reservation):
+                return
+            await _spend.ready(ctx)
             if not rules.current(ctx, reservation):
                 return
             failure = failure or rules.revalidate(ctx, reservation)
@@ -46,10 +53,15 @@ async def approve_rules(ctx: ChangeContext, reservation: rules.RulesReservation)
     except asyncio.CancelledError:
         await rules.terminal(ctx, reservation, "cancelled", "Rules approval was cancelled.")
         raise
+    except RulesFailure as error:
+        await rules.terminal(ctx, reservation, error.code, str(error))
     except Exception as error:
         await rules.terminal(
             ctx, reservation, "worktree_unverifiable", f"Rules preflight failed: {error}"
         )
+    finally:
+        reservation.spend_pin = None
+        reservation.wait.spend_pin = None
 
 
 async def rules_tree(

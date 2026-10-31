@@ -2,12 +2,52 @@
 
 import ast
 
-from oversight.changes._shortcuts_common import check_deadline
+from oversight.changes._shortcuts_common import Source, check_deadline
 
 type Function = ast.FunctionDef | ast.AsyncFunctionDef
 
 
-def construction_ast(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
+def construction_ast(
+    cls: ast.ClassDef, deadline: float, source: Source | None = None
+) -> tuple[str, ...]:
+    members = _members(cls, deadline)
+    helpers = _helpers(members, source, deadline) if source is not None else ()
+    return tuple(ast.dump(node, include_attributes=False) for node in (*members, *helpers))
+
+
+def _helpers(roots: tuple[ast.AST, ...], source: Source, deadline: float) -> tuple[Function, ...]:
+    functions: dict[str, list[Function]] = {}
+    for node in source.tree.body:
+        check_deadline(deadline)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            functions.setdefault(node.name, []).append(node)
+    selected: set[Function] = set()
+    pending = list(roots)
+    while pending:
+        check_deadline(deadline)
+        for node in ast.walk(pending.pop()):
+            check_deadline(deadline)
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            names = [node.func.id]
+            if node.func.id == "property":
+                names.extend(
+                    arg.id
+                    for arg in [*node.args, *[kw.value for kw in node.keywords]]
+                    if isinstance(arg, ast.Name)
+                )
+            # Conservatively include every same-named module definition on ambiguity.
+            for name in names:
+                for helper in functions.get(name, []):
+                    if helper not in selected:
+                        selected.add(helper)
+                        pending.append(helper)
+    # Class-level walrus bindings, super().__setattr__, and descriptor classes
+    # are outside this construction identity analysis.
+    return tuple(node for group in functions.values() for node in group if node in selected)
+
+
+def _members(cls: ast.ClassDef, deadline: float) -> tuple[ast.AST, ...]:
     methods: dict[str, list[Function]] = {}
     bindings: set[str] = set()
     assignments: set[str] = set()
@@ -69,18 +109,12 @@ def construction_ast(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
         if reached is None:
             return _whole_class(cls, deadline)
         pending.extend(reached)
-    return tuple(
-        ast.dump(node, include_attributes=False)
-        for node in [*cls.decorator_list, *cls.body]
-        if node in selected
-    )
+    return tuple(node for node in [*cls.decorator_list, *cls.body] if node in selected)
 
 
-def _whole_class(cls: ast.ClassDef, deadline: float) -> tuple[str, ...]:
+def _whole_class(cls: ast.ClassDef, deadline: float) -> tuple[ast.AST, ...]:
     check_deadline(deadline)
-    return tuple(
-        ast.dump(node, include_attributes=False) for node in [*cls.decorator_list, *cls.body]
-    )
+    return (*cls.decorator_list, *cls.body)
 
 
 def _reached(

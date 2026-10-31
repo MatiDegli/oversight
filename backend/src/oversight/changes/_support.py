@@ -54,6 +54,7 @@ class ChangePorts:
     drain: Callable[[ChangeRecord], Awaitable[None]]
     review: ReviewPort | None = None
     spend_ledger: LedgerFile | None = None
+    spend_lost: Callable[[], bool] = lambda: False
     rules_evidence: Callable[["PolicyInputs"], "RulesEvidence"] | None = None
     rules_admission: Callable[[ChangeRecord, ChangeAssessment], tuple[str, str] | None] | None = (
         None

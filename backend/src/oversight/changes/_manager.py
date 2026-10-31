@@ -36,13 +36,15 @@ from oversight.changes import _revision as revision
 from oversight.changes import _rules as rules
 from oversight.changes import _transaction as transaction
 from oversight.changes._answers import require_yes, validate_answers
-from oversight.changes._assessment import RulesScheduler
+from oversight.changes._assessment import RulesEvidence, RulesScheduler
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._mode import ModeController, start_capability
+from oversight.changes._policy import PolicyInputs
 from oversight.changes._resolution_validation import validate_resolution_intent
 from oversight.changes._review_cards import DifferenceDecisions, ReviewCardLimits, ReviewCards
 from oversight.changes._review_port import ReviewCapture, ReviewPort
+from oversight.changes._spend import SpendNotReady
 from oversight.changes._state import (
     APPROVABLE,
     REJECTABLE,
@@ -99,6 +101,8 @@ class ChangeManager:
         settings: Settings | None = None,
         spend_ledger: LedgerFile | None = None,
         spend_receipt: StoredEvent | None = None,
+        rules_evidence: Callable[[PolicyInputs], RulesEvidence] | None = None,
+        spend_lost: Callable[[], bool] = lambda: False,
     ) -> None:
         settings = settings or Settings()
 
@@ -123,6 +127,8 @@ class ChangeManager:
                 drain=lambda rec: self._drain(rec),
                 review=review,
                 spend_ledger=spend_ledger,
+                rules_evidence=rules_evidence,
+                spend_lost=spend_lost,
                 rules_admission=self._admit_rules,
                 rules_transaction=lambda rec, evidence: transaction.run(self._ctx, rec, evidence),
             ),
@@ -339,6 +345,7 @@ class ChangeManager:
         keep the decision number, so an older decision cannot restore a newer one.
         """
         decision = rec.decision
+        wait = self._ctx.assessment.waits.get(rec.change_id)
 
         async def deciding() -> T:
             try:
@@ -348,6 +355,8 @@ class ChangeManager:
 
         def done(_: asyncio.Task[T]) -> None:
             work.close()  # a pre-start cancellation never awaits the inner coroutine
+            if wait is not None:
+                wait.spend_pin = None
             self._ctx.state.restore(rec, decision)
 
         task = self._ctx.spawn(deciding())
@@ -493,6 +502,8 @@ class ChangeManager:
                 )
         try:
             reservation = rules.capture(self._ctx, wait, assessment)
+        except SpendNotReady:
+            return None
         except RulesFailure as error:
             return error.code, str(error)
         except (ValueError, WrongState) as error:

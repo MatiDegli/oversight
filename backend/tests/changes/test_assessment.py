@@ -15,7 +15,13 @@ from oversight.changes._policy import SpendSnapshot, assess
 from oversight.changes._proposal import record_proposal
 from oversight.changes._state import APPROVABLE
 from oversight.events import NeedsYouWait, format_needs_you, parse_needs_you
-from oversight_contracts.events import ChangeProposed, ChangeResolved, ErrorReport, SuiteExecution
+from oversight_contracts.events import (
+    ChangeProposed,
+    ChangeResolved,
+    ErrorReport,
+    SuiteExecution,
+    UsageTick,
+)
 from oversight_contracts.policy import POLICY_RULES, ChangeAssessment, EvidenceRef
 from oversight_contracts.review import CrossReview, ReviewFinding
 
@@ -147,7 +153,46 @@ def full_evidence(h, ready, mutate=lambda inputs: inputs):
         )
         return RulesEvidence(mutate(complete))
 
-    h.manager._ctx.ports.rules_evidence = supply
+    # Non-spend fixture observations enter at their owning collector, not the spend port.
+    scheduler = h.manager._ctx.assessment
+    collect = scheduler.inputs
+    collecting = False
+
+    def collected(wait):
+        nonlocal collecting
+        if collecting:
+            return collect(wait)  # A measurement fixture may ask for the original inputs.
+        collecting = True
+        try:
+            return supply(collect(wait)).inputs
+        finally:
+            collecting = False
+
+    scheduler.inputs = collected
+    evaluate = scheduler.evaluate
+
+    async def with_spend_receipt(wait):
+        if scheduler.spend_receipt is None:
+            stored = await h.publish(
+                UsageTick(
+                    agent_id="agent-1",
+                    change_id="change-1",
+                    role="agent",
+                    model="test-meta",
+                    input_tokens=1,
+                    output_tokens=1,
+                    cached_tokens=0,
+                    cost_usd=0,
+                    spent_usd=0,
+                    budget_usd=1,
+                    brake="ok",
+                )
+            )
+            h.manager.spend_received(stored)
+        await evaluate(wait)
+
+    scheduler.evaluate = with_spend_receipt
+    h.manager._ctx.ports.rules_evidence = lambda inputs: RulesEvidence(inputs)
 
 
 async def propose(h):

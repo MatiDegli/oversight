@@ -150,6 +150,8 @@ e2e: ## Playwright over static level 1 and 2 replays; 600 s; 6G cap only with a 
 # included, which pytest-timeout leaves open: after RUN_TIMEOUT seconds it ends the process group,
 # 30 s later kills it, and prints one TIME BOUND line naming the bound. 900 s, not more: GitHub
 # cancels the CI job at 20 minutes, install and lint come first, and a cancelled job says nothing.
+# check-python dumps every thread after 400 s in one test's setup, body or teardown, naming a
+# hung stack before the outer bound without failing the test; cold fixtures have 300 s limits.
 #
 # The suite runs on WORKERS pytest-xdist workers (8; WORKERS=0 runs it in one process), and the
 # four limits above reach every one of them. The workers are children of the controller that
@@ -190,8 +192,9 @@ check-ci: ## check without gitleaks, for CI, where the history is scanned in its
 check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
 
 # Keep the bounded pytest command intact: its safety tests pin that invocation. Extend only
-# this gate's discovery, leaving the separately run frontend boundary tests in their own group.
-check-python: export PYTEST_ADDOPTS := $(PYTEST_ADDOPTS) -o 'testpaths=contracts/tests backend/tests tools/tests tools/eval/tests'
+# this gate's discovery and the non-failing hang dump, leaving the separately run frontend
+# boundary tests in their own group.
+check-python: export PYTEST_ADDOPTS := $(PYTEST_ADDOPTS) -o 'testpaths=contracts/tests backend/tests tools/tests tools/eval/tests' -o faulthandler_timeout=400
 check-python: lint-python frontend-deps
 	$(PYTEST_RUN) $(XDIST) --ignore=$(BOUNDARIES)
 
