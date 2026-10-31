@@ -102,6 +102,27 @@ it.each(["dark", "day"])("pauses and resumes without moving focus in %s", async 
   }
 });
 
+it.each(["dark", "day"])("keeps the working card's height when ready in %s", async (theme) => {
+  const page = await openCardPage();
+  const shots = fileURLToPath(new URL("../../../../.shots/card-pause/", import.meta.url));
+  try {
+    await mkdir(shots, { recursive: true });
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    const card = page.getByRole("article", { name: "Agent A", exact: true });
+    const size = await card.boundingBox();
+    await page.evaluate(() => {
+      window.readyTest.ready();
+    });
+    await check(card.getByRole("status")).toHaveText("Ready for review");
+    expect(await card.boundingBox()).toEqual(size);
+    await card.screenshot({ path: `${shots}ready-${theme}.png` });
+  } finally {
+    await page.close();
+  }
+});
+
 it("keeps focus and permits retry when Pause fails", async () => {
   const page = await openCardPage();
   try {

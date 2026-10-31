@@ -332,7 +332,9 @@ function CardActions({ data, onOpenDiff, onReview, onStop, onPause, onResume }: 
       )}
       {onStop &&
         ["working", "revising", "ready_for_review", "halted", "paused"].includes(agent.state) && (
-          <StopControl agentId={agent.agent_id} onStop={onStop} />
+          <div className="w-full">
+            <StopControl agentId={agent.agent_id} onStop={onStop} />
+          </div>
         )}
     </footer>
   );
