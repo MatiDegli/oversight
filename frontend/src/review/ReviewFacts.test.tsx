@@ -9,6 +9,8 @@ import { applyEvent, createInitialState } from "../state";
 import type { State } from "../state";
 import { detectorLine, discrepancies, ReviewFacts } from "./ReviewFacts";
 import { headerState } from "./ReviewHeader.fixture";
+import { ReviewBody } from "./ReviewBody";
+import { measuredFacts } from "./measuredCallers.fixture";
 
 const panelEvents = readFileSync(
   new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
@@ -71,6 +73,26 @@ const execution: SuiteExecution = {
 describe("review evidence", () => {
   it.each(["b", "c"] as const)("preserves the entire non-panel markup for %s", (name) => {
     const view = headerState(name);
+    // Freeze the accepted input as well as its non-panel output; c now uses public reasons.
+    if (name === "c") {
+      const current = view.changeFacts["change-1"]?.at(-1);
+      if (!current) throw new Error("Missing facts");
+      current.measured_cone = structuredClone(measuredFacts[1]?.measured_cone ?? []);
+      const caller = current.measured_cone[2];
+      if (!caller) throw new Error("Missing caller");
+      caller.not_probed = "budget exhausted";
+      current.behavior_diff = [
+        {
+          node_id: "shop.pricing:compute_price",
+          compared_count: 2,
+          differing_count: 0,
+          rows: [
+            { inputs: "unit_price=int:100", before: "int:500", after: "int:700", unstable: true },
+          ],
+          not_probed: null,
+        },
+      ];
+    }
     const proposal = view.changes["change-1"]?.proposal;
     if (!proposal) throw new Error("Missing proposal");
     const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
@@ -144,15 +166,23 @@ describe("review evidence", () => {
     expect(html).toContain("Tests #21 (proposal): failed; 1 passed, 1 failed, 0 skipped");
     expect(html).toContain(`Incomplete: ${facts.problems.join("; ")}`);
   });
-  it.each(["b", "c"] as const)("excludes DESIGN vocabulary from panel Details for %s", (name) => {
-    const view = headerState(name);
-    const proposal = view.changes["change-1"]?.proposal;
-    if (!proposal) throw new Error("Missing proposal");
-    const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} panel />);
-    expect(html).not.toMatch(
-      /invocations|unmatched|static cone bounds|signals|said versus did|probe|equivalence|\bAvailable\b/i,
-    );
-  });
+  it.each(["b", "d2", "c", "merged"] as const)(
+    "excludes DESIGN vocabulary from panel Details for %s",
+    (name) => {
+      const view = headerState(name);
+      const proposal = view.changes["change-1"]?.proposal;
+      if (!proposal) throw new Error("Missing proposal");
+      const html = renderToStaticMarkup(
+        <>
+          <ReviewBody state={view} changeId="change-1" diff={null} showCrossReview={false} />
+          <ReviewFacts state={view} proposal={proposal} panel />
+        </>,
+      );
+      expect(html).not.toMatch(
+        /invocations|unmatched|static cone bounds|signals|said versus did|probe|equivalence|\bAvailable\b/i,
+      );
+    },
+  );
   it("lists every added case with neutral before/after signals", () => {
     const kinds = [
       "fails_before_passes_after",

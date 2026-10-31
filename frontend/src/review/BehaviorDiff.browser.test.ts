@@ -121,7 +121,9 @@ it.each(cases)(
         expect(await behavior.textContent()).not.toMatch(/Same.result/);
         expect(await behavior.locator("details[open]").count()).toBe(0);
         if (kind === "mixed") {
-          expect(await behavior.textContent()).toContain("Methods and classes are not probed yet.");
+          expect(await behavior.textContent()).toContain(
+            "methods and classes are not measured yet.",
+          );
           expect(await behavior.textContent()).toContain("removed.module:old_function");
         }
         await behavior.evaluate((element) => {

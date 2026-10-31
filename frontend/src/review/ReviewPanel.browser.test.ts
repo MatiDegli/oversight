@@ -35,6 +35,85 @@ afterAll(async () => {
 });
 
 const shots = fileURLToPath(new URL("../../../.shots/review-lead/", import.meta.url));
+it.each(["d2", "c", "merged"] as const)("shows approved words for %s at 1920", async (name) => {
+  if (!browser) throw new Error("Missing browser");
+  const page = await browser.newPage({
+    viewport: { width: 1920, height: 1080 },
+    reducedMotion: "reduce",
+  });
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url);
+    await page.waitForFunction(() => "mountHeader" in window);
+    await page.evaluate((name) => {
+      document.documentElement.dataset.theme = "dark";
+      (
+        window as unknown as Pick<typeof import("./ReviewHeader.fixture"), "mountHeader">
+      ).mountHeader(name);
+    }, name);
+    const panel = page.getByRole("complementary", { name: "Review panel" });
+    await panel.locator(".monaco-diff-editor").waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    if (name === "d2") {
+      expect(await panel.locator(".review-lone").textContent()).toBe(
+        "Nothing was compared: it uses randomness; it reads the clock.",
+      );
+    } else {
+      if (name === "c") {
+        for (const label of ["Customer.quote", "compute_price"])
+          expect(await panel.locator(".partial-lines").textContent()).toContain(
+            `${label}: not measured, recording budget reached.`,
+          );
+      } else {
+        expect(await panel.locator(".review-lead > p").textContent()).toBe(
+          "Tests pass, a second model's review found nothing blocking, and the change is small (at most 3 files and 60 lines). 5 more rules passed.",
+        );
+      }
+      await panel.locator(".review-file-row").first().click();
+      await panel.getByText("Details", { exact: true }).click();
+      expect(await panel.locator(".review-details > details").getAttribute("open")).not.toBeNull();
+      if (name === "merged")
+        expect(
+          await panel.locator(".review-details > details > div > p").allTextContents(),
+        ).toEqual(
+          expect.arrayContaining([
+            "Tests on the combined result: passed",
+            "Added tests fail before the change: passed",
+            "Known spend: passed",
+          ]),
+        );
+      await panel.locator(".review-body").evaluate((el) => {
+        el.scrollTop = 0;
+      });
+    }
+    expect(await panel.textContent()).not.toMatch(
+      /\bprobe|invocations|unmatched|static cone bounds|said versus did|equivalence|\bAvailable\b/i,
+    );
+    if (process.env.REVIEW_WORDS_SHOTS === "1") {
+      const directory = fileURLToPath(new URL("../../../.shots/review-words/", import.meta.url));
+      await mkdir(directory, { recursive: true });
+      await page.waitForFunction(
+        () =>
+          (document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
+      );
+      const key = `${name === "merged" ? "g" : name}-dark`;
+      const product = await page.screenshot({ path: `${directory}${key}-1920.png` });
+      const sketch = await readFile(
+        new URL(`../../../docs/sketches/review/${key}.png`, import.meta.url),
+      );
+      const report = await browser.newPage({ viewport: { width: 3840, height: 1080 } });
+      await report.setContent(
+        `<style>body{margin:0;display:flex}img{width:1920px;height:1080px;object-fit:contain}</style><img alt="Product: hand-written fixture" src="data:image/png;base64,${product.toString("base64")}"><img alt="Approved sketch" src="data:image/png;base64,${sketch.toString("base64")}">`,
+      );
+      await report.screenshot({ path: `${directory}${key}-compare.png` });
+      await report.close();
+    }
+  } finally {
+    await page.close();
+  }
+});
 it.each(["b", "c"] as const)(
   "opens %s Details at 1920 without overflow or moving focus",
   async (name) => {
@@ -227,7 +306,7 @@ const cases = [
   ["c", "Partial evidence", "Read the diff before approving", false],
   [
     "d2",
-    "Nothing was compared: compute_price could not run outside its test setup.",
+    "Nothing was compared: it uses randomness; it reads the clock.",
     "The diff and tests are the evidence.",
     false,
   ],

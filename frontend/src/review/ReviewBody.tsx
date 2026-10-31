@@ -7,6 +7,7 @@ import { cardAnswer, Example } from "./AnswerChoices";
 import { candidateKey, useAnswers } from "./answers";
 import { CardEvidence, eventTime } from "./ChangeCard";
 import { CrossReviewNote } from "./CrossReviewNote";
+import { mergedRuleWords } from "./evidenceWords";
 import { ReviewFacts } from "./ReviewFacts";
 import {
   nothingComparedLine,
@@ -51,6 +52,7 @@ export function ReviewBody({
                 : kind === "unavailable"
                   ? "Needs you because a check was unavailable"
                   : null;
+  const ruleLine = mergedRuleWords(change?.resolution).line;
   const mode = change?.resolution?.assessment?.mode ?? state.run?.merge_mode;
   const caption =
     kind === "a"
@@ -100,6 +102,7 @@ export function ReviewBody({
             )}
             {caption && <p>{caption}</p>}
           </div>
+          {kind === "g" && ruleLine && <p>{ruleLine}</p>}
           {kind === "g" &&
             change?.resolution?.grants?.map((use) => (
               <p className="grant-receipt" key={use.grant_id}>

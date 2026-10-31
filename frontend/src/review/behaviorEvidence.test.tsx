@@ -112,7 +112,7 @@ describe("bounded direct behavior evidence", () => {
     expect(select()).toBeNull();
     expect(selectBehaviorEvidence(createInitialState(), "missing")).toBeNull();
     expect(render(required(behaviorFacts[3]))).toContain(
-      "No behavior probes were recorded for changed nodes.",
+      "No behavior was recorded for changed functions.",
     );
     const html = renderToStaticMarkup(
       <ReviewFacts state={withBehaviorFacts()} proposal={proposal} />,

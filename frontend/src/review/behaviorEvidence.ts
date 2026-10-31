@@ -2,11 +2,13 @@ import type { NodeBehaviorDiff } from "@contracts";
 
 import type { State } from "../state";
 import { factsForRevision } from "./factsForRevision";
+import { evidenceWords } from "./evidenceWords";
 
 export interface BehaviorNodeView extends NodeBehaviorDiff {
   label: string;
   status: "Available" | "Partial" | "Unavailable";
   limitation: string | null;
+  words: string | null;
   noDifference: boolean;
 }
 
@@ -45,6 +47,7 @@ export function selectBehaviorEvidence(state: State, changeId: string): Behavior
       label: node?.qualname ?? probe.node_id,
       status: probe.compared_count === 0 ? "Unavailable" : limited ? "Partial" : "Available",
       limitation: limitation(probe.not_probed, node?.kind),
+      words: evidenceWords(probe.not_probed, node?.kind),
       noDifference: probe.compared_count > 0 && probe.differing_count === 0 && !limited,
     };
   });

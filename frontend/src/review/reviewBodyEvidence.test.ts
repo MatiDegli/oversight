@@ -128,7 +128,7 @@ it("uses c wording and only the stable caller supplies an example", () => {
     "Cart.quote_add: 3 of 12 matched calls changed; 3 calls could not be matched.",
     "Cart.subtotals: results varied between runs; no difference established.",
     "Customer.quote: not measured, recording budget reached.",
-    "compute_price: 2 inputs compared; results varied between runs.",
+    "compute_price: not measured, recording budget reached.",
   ]);
   expect(lines.filter((l) => l.example)).toHaveLength(1);
   expect(selectCallerComparison(state, "change-1").differing).toHaveLength(1);
@@ -140,6 +140,7 @@ it("uses c wording and only the stable caller supplies an example", () => {
   if (!caller) throw new Error("Missing caller");
   for (const reason of ["Caller recording budget reached", "unknown", null]) {
     caller.not_probed = reason;
+    caller.not_compared = [];
     expect(partialLines(state, "change-1")[2]?.line).toBe("Customer.quote: not measured.");
   }
 });
@@ -156,6 +157,10 @@ it("ends a stable differing caller's partial line with a period and keeps its ex
 });
 it("omits the callers measured line for partial evidence with no exact callers", () => {
   const state = headerState("c");
+  // Keep this count case independent of c's unmeasured budget function.
+  const behavior = state.changeFacts["change-1"]?.at(-1)?.behavior_diff?.[0];
+  if (!behavior) throw new Error("Missing behavior");
+  behavior.compared_count = 2;
   const proposal = state.changes["change-1"]?.proposal;
   if (!proposal) throw new Error("Missing proposal");
   proposal.impact = { ...proposal.impact, entries: [], omitted_by_depth: 0, omitted_by_limit: 0 };
@@ -167,17 +172,11 @@ it("omits the callers measured line for partial evidence with no exact callers",
 });
 it.each([
   [null, "Nothing was compared."],
-  [
-    "compute_price could not run outside its test setup",
-    "Nothing was compared: compute_price could not run outside its test setup.",
-  ],
-  ["Server Reason.", "Nothing was compared: Server Reason."],
-  ["unsupported node kind", "Nothing was compared: this node type is not probed yet."],
+  ["compute_price could not run outside its test setup", "Nothing was compared."],
+  ["Server Reason.", "Nothing was compared."],
+  ["unsupported node kind", "Nothing was compared: this kind of node is not measured yet."],
   ["version unavailable", "Nothing was compared: the base or proposed version is unavailable."],
-  [
-    "probe unavailable",
-    "Nothing was compared: behavior probing was unavailable; no further reason was published.",
-  ],
+  ["probe unavailable", "Nothing was compared: no reason was recorded."],
 ])("formats d2 reason %s", (reason, expected) => {
   const state = headerState("d2");
   const probe = state.changeFacts["change-1"]?.at(-1)?.behavior_diff?.[0];
@@ -189,7 +188,7 @@ it.each([
     if (!node) throw new Error("Missing node");
     node.kind = "method";
     expect(nothingComparedLine(state, "change-1")).toBe(
-      "Nothing was compared: methods and classes are not probed yet.",
+      "Nothing was compared: methods and classes are not measured yet.",
     );
   }
 });

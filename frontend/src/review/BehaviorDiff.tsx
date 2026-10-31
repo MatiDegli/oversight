@@ -20,7 +20,7 @@ export function BehaviorDiff({
     >
       <h3 className="text-(length:--title-size) font-bold text-text">Behavior diff</h3>
       {nodes.length === 0 ? (
-        <p>No behavior probes were recorded for changed nodes.</p>
+        <p>No behavior was recorded for changed functions.</p>
       ) : (
         <>
           <p>Up to eight samples per node; counts cover all compared inputs.</p>
@@ -43,8 +43,10 @@ export function BehaviorDiff({
                     </p>
                   </div>
                 )}
-                {node.limitation !== null && (
-                  <p className="whitespace-pre-wrap wrap-anywhere">{node.limitation}</p>
+                {(detailsOnly ? node.words : node.limitation) !== null && (
+                  <p className="whitespace-pre-wrap wrap-anywhere">
+                    {detailsOnly ? `${node.label}: ${node.words ?? ""}.` : node.limitation}
+                  </p>
                 )}
                 {node.noDifference && <p>No difference measured on these inputs</p>}
                 {node.compared_count === 0 && node.limitation === null && (

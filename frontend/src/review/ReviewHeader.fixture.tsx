@@ -7,7 +7,7 @@ import { GraphView } from "../graph";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import { parseEvent } from "../transport";
 import { availableFacts, measuredFacts, withMeasuredFacts } from "./measuredCallers.fixture";
-import type { ChangeFacts } from "@contracts";
+import type { ChangeFacts, ChangeResolved, RuleId } from "@contracts";
 import { ReviewPanel } from "./ReviewPanel";
 
 export const headerCases = {
@@ -18,22 +18,24 @@ export const headerCases = {
   d2NoReason: { log: ordinary, end: 20, changeId: "change-1" },
   d: { log: ordinary, end: 20, changeId: "change-1" },
   merged: { log: inbox, end: Infinity, changeId: "change-1" },
+  mergedGrant: { log: inbox, end: Infinity, changeId: "change-1" },
   approvedCone: { log: ordinary, end: Infinity, changeId: "change-1" },
 };
 export function headerState(name: keyof typeof headerCases) {
   if (name === "c") {
     const partial = structuredClone(measuredFacts[1] as ChangeFacts);
     const budget = partial.measured_cone?.[2];
-    if (budget) budget.not_probed = "budget exhausted";
+    if (budget) {
+      budget.not_probed = "recording budget reached";
+      budget.not_compared = ["caller measurement budget exhausted"];
+    }
     partial.behavior_diff = [
       {
         node_id: "shop.pricing:compute_price",
-        compared_count: 2,
+        compared_count: 0,
         differing_count: 0,
-        rows: [
-          { inputs: "unit_price=int:100", before: "int:500", after: "int:700", unstable: true },
-        ],
-        not_probed: null,
+        rows: [],
+        not_probed: "recording budget reached",
       },
     ];
     return withMeasuredFacts(partial);
@@ -48,7 +50,7 @@ export function headerState(name: keyof typeof headerCases) {
           compared_count: 0,
           differing_count: 0,
           rows: [],
-          not_probed: name === "d2" ? "compute_price could not run outside its test setup" : null,
+          not_probed: name === "d2" ? "side effect: randomness; side effect: time access" : null,
         },
       ],
     };
@@ -87,7 +89,31 @@ export function headerState(name: keyof typeof headerCases) {
       first.answered_by = "person";
     }
   }
+  if (name === "merged") passProbeProfile(state.changes["change-1"]?.resolution);
   return state;
+}
+
+function passProbeProfile(resolution: ChangeResolved | null | undefined) {
+  if (resolution?.assessment) {
+    resolution.grants = [];
+    resolution.assessment.policy_version = "safe-merge-probes-v1";
+    resolution.assessment.rules = resolution.assessment.rules.map((r) => ({
+      ...r,
+      result: "pass",
+    }));
+    for (const rule of [
+      "cross_review",
+      "test_integrity",
+      "added_tests_fail_before",
+    ] satisfies RuleId[])
+      resolution.assessment.rules.push({
+        rule,
+        result: "pass",
+        observed: { violations: 0, complete: true },
+        threshold: { violations_max: 0, complete: true },
+        evidence: [{ event_seq: 17, path: null, git_object: null }],
+      });
+  }
 }
 
 export function mountHeader(name: keyof typeof headerCases, state = headerState(name)) {

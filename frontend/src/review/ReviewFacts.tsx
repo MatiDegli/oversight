@@ -6,6 +6,7 @@ import { BehaviorDiff } from "./BehaviorDiff";
 import { behaviorNotRecorded } from "./behaviorEvidence";
 import { MeasuredCallers } from "./MeasuredCallers";
 import { factsForRevision } from "./factsForRevision";
+import { mergedRuleWords } from "./evidenceWords";
 
 /** The same neutral vocabulary as changes/_reviewfacts.py; no policy assessment. */
 export function detectorLine(facts: ChangeFacts): string {
@@ -175,6 +176,10 @@ export function ReviewFacts({
           className={`mt-2 break-words text-muted${scrollable ? " max-h-48 overflow-y-auto" : ""}`}
         >
           {!panel && <p>Signals for your review. You decide.</p>}
+          {panel &&
+            mergedRuleWords(state.changes[proposal.change_id]?.resolution).details.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
           {!panel && (
             <p>
               Size: {proposal.files.length} files, +{proposal.lines_added}/−{proposal.lines_removed}{" "}

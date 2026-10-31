@@ -3,6 +3,7 @@ import type { State } from "../state";
 import { selectBehaviorEvidence } from "./behaviorEvidence";
 import { hasCompared } from "./coneWords";
 import { factsForRevision } from "./factsForRevision";
+import { recordingBudgetReached } from "./evidenceWords";
 import {
   selectChangeCard,
   selectComparisonSummary,
@@ -58,7 +59,7 @@ export function partialLines(state: State, changeId: string) {
     const varied = e.rows.some((r) => r.unstable);
     const unmatched = caller ? e.unmatched_before + e.unmatched_after : 0;
     const line = !e.compared_count
-      ? `not measured${e.not_probed === "budget exhausted" ? ", recording budget reached" : ""}.`
+      ? `not measured${recordingBudgetReached(e) ? ", recording budget reached" : ""}.`
       : varied
         ? caller
           ? "results varied between runs; no difference established."
@@ -86,16 +87,8 @@ export function partialLines(state: State, changeId: string) {
 }
 
 export function nothingComparedLine(state: State, changeId: string) {
-  const probe = selectBehaviorEvidence(state, changeId)?.find((b) => b.limitation);
-  let reason = probe?.limitation;
-  if (!reason) return "Nothing was compared.";
-  if (
-    ["unsupported node kind", "version unavailable", "probe unavailable"].includes(
-      probe?.not_probed ?? "",
-    )
-  )
-    reason = reason.charAt(0).toLowerCase() + reason.slice(1);
-  return `Nothing was compared: ${reason}${reason.endsWith(".") ? "" : "."}`;
+  const reason = selectBehaviorEvidence(state, changeId)?.find((b) => b.words)?.words;
+  return reason ? `Nothing was compared: ${reason}.` : "Nothing was compared.";
 }
 
 export function selectReviewBody(state: State, changeId: string) {
