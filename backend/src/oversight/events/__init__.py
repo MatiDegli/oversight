@@ -6,7 +6,12 @@ Other modules import only what this file exports; everything else here is intern
 from pathlib import Path
 
 from oversight.events.clock import Clock, format_ts, parse_ts, system_clock
-from oversight.events.history import HistoryTooLarge, InvalidHistoryRequest, read_history
+from oversight.events.history import (
+    HistoryTooLarge,
+    InvalidHistoryRequest,
+    read_history,
+    resolution_at,
+)
 from oversight.events.jsonl import LogError, export_run, read_jsonl, write_jsonl
 from oversight.events.needs_you import (
     NEEDS_YOU_CODES,
@@ -81,6 +86,7 @@ __all__ = [
     "read_jsonl",
     "read_store",
     "replay_delays",
+    "resolution_at",
     "run_store_path",
     "system_clock",
     "validate_cross_review_limit",

@@ -1,5 +1,5 @@
 """The command routes of section 4.7: start an agent, stop it, approve, reject or request changes on
-a change, read and save a file on main, rescan the graph; 501 for the rest.
+a change, Revert a rules merge, read and save a file on main, rescan the graph; 501 for the rest.
 
 A replay takes no commands: every command route answers 501 there, its body not parsed. Live, the
 app passes an object that implements `Commands`; this module maps its errors to the contract's.
@@ -42,6 +42,7 @@ from oversight_contracts.commands import (
     RejectChange,
     RejectPlan,
     RequestChanges,
+    RevertChange,
     SaveFile,
     SetMergeMode,
     StartAgent,
@@ -59,7 +60,6 @@ NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("GET", "/leads/{agent_id}", "Reserved /leads/{agent_id}"),
     ("POST", "/leads/{agent_id}/stop", "Reserved /leads/{agent_id}/stop"),
     ("POST", "/changes/{change_id}/review", "Reserved /changes/{change_id}/review"),
-    ("POST", "/changes/{change_id}/revert", "Reserved /changes/{change_id}/revert"),
 )
 """Routes in the contract that this level does not build: 501, whatever the body."""
 LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
@@ -80,6 +80,7 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
     ("POST", "/changes/{change_id}/request-changes", "Request changes"),
     ("GET", "/merge-mode", "Reading the merge mode"),
     ("PUT", "/merge-mode", "Setting the merge mode"),
+    ("POST", "/changes/{change_id}/revert", "Revert"),
     ("POST", "/grants/{grant_id}/revoke", "Revoke grant"),
     ("GET", "/files", "Reading files"),
     ("PUT", "/files", "Saving files"),
@@ -109,6 +110,13 @@ class Commands(Protocol):
     async def cancel_queued(self, queued_task_id: str, request: QueueRevision) -> None: ...
 
     def approve(self, change_id: str, request: ApproveChange) -> None: ...
+
+    async def revert(self, change_id: str, request: RevertChange) -> None:
+        """Await only the committed resolution read, then admit with no await.
+
+        Raises ChangeNotFound and WrongState for a refused command.
+        """
+        ...
 
     async def revoke_grant(self, grant_id: str) -> None: ...
 
@@ -277,6 +285,19 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
         change_id: str, body: RejectChange
     ) -> Response:
         _decide(commands.reject, change_id, body)
+        return Response(status_code=202)
+
+    @router.post("/changes/{change_id}/revert", status_code=202, response_class=Response)
+    async def revert(change_id: str, request: RevertChange) -> Response:  # pyright: ignore[reportUnusedFunction]
+        try:
+            await commands.revert(change_id, request)
+        except ChangeNotFound:
+            raise ApiError(
+                "not_found",
+                f"there is no rules resolution {request.resolution_seq} for change {change_id!r}",
+            ) from None
+        except WrongState as error:
+            raise ApiError("wrong_state", str(error)) from None
         return Response(status_code=202)
 
     @router.post("/grants/{grant_id}/revoke", status_code=202, response_class=Response)
