@@ -1,4 +1,4 @@
-# Runtime license findings on docs/notices
+# Runtime license findings
 
 The maintainer approved the exact `typing-extensions` / `PSF-2.0` license exception
 on 2026-10-27, as recorded in [DECISIONS.md](../DECISIONS.md#dependency-licenses).
@@ -14,17 +14,19 @@ Backend entry points reach it through FastAPI and OpenAI; contracts reach it
 through Pydantic. The check prints the current direct dependents from installed
 metadata, so this record cannot suppress a new failure.
 
-The installed Linux/Python 3.12 runtime inventory has 37 distinct package versions:
+The 2026-10-27 frozen Linux/Python 3.12 runtime inventory snapshot had 37 distinct package versions:
 17 frontend and 20 Python. License declarations: MIT 23; BSD-3-Clause 6;
 Apache-2.0 2; ISC 1; OFL-1.1 2; MIT OR Apache-2.0 1;
 (MPL-2.0 OR Apache-2.0) 1; PSF-2.0 1. Both dual declarations pass
 because an allowed option exists. OFL-1.1 is allowed only for the two named
 Atkinson Fontsource packages. Unknown/ambiguous licenses fail closed.
 
-`pnpm -C frontend audit` was run once: 5 vulnerabilities, all in DOMPurify
-3.4.15 through monaco-editor 0.57.0 (also through @monaco-editor/react):
-1 critical, 1 high, 3 low. The coordinator owns audit triage. The `make audit`
-target is written, but pip-audit was neither installed nor run in this front.
+Historical audit snapshot, 2026-10-27: `pnpm -C frontend audit` reported 5 vulnerabilities in
+DOMPurify 3.4.15 through monaco-editor 0.57.0 (also through @monaco-editor/react): 1 critical,
+1 high, 3 low. Current `THIRD_PARTY_NOTICES.md` lists DOMPurify 3.4.17. The old audit does not
+establish the current vulnerability count; it was not rerun in this offline docs refresh.
+The coordinator owns audit triage. The `make audit` target exists; pip-audit was neither
+installed nor run for the historical front or this refresh.
 
 `make notices` is offline and requires the already installed frozen locks. It
 checks the installed pnpm application lock and Python versions before reading

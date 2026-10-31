@@ -7,8 +7,10 @@ contains `task.txt` and `change.diff`, relative to `demo-repo/`, without changin
 
 ## Criteria fixed before execution
 
-Compare the same frozen 20 patches in three arms: tests alone; a Muse Spark reviewer reading the
-diff; and behavior diff plus the advisory classification call. Ten construction cases contain a
+Compare the same frozen 20 patches in four arms: tests alone; a Muse Spark task/diff decision;
+behavior diff plus the Muse Spark advisory classification call; and the same behavior inputs
+with Muse Spark Open. See [the fixed protocol](../detection/README.md#fixed-protocol) and
+[recorded results](../detection/RESULTS.md). Ten construction cases contain a
 behavior difference outside their task: none may be let through. The other ten change behavior
 only as requested: at most two may prompt an unnecessary question.
 

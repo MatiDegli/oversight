@@ -18,14 +18,16 @@ the response; total line lengths and the SHA-256 are computed incrementally.
 
 ## Whole-file read inventory
 
-Audit: `rg -n 'read_text|read_bytes|\.read\(|readlines\(|readline\(' backend/src`.
-All 14 original physical whole-file read sites now use bounded reads or streaming:
+Original M6 audit snapshot (`91c283d`, 2026-10-27), not a current read-site count:
+`rg -n 'read_text|read_bytes|\.read\(|readlines\(|readline\(' backend/src`.
+The 14 original physical whole-file read sites use bounded reads or streaming; the graph-log
+and suite-report rows below include their later ceilings:
 
 | Original site | Current behavior |
 | --- | --- |
 | `workspace/files.py:_read_bytes` | Descriptor read of 256 KiB + 1; raises `FileTooLarge` before decode/hash. |
 | `graph/_workspace.py:WorkspaceGraph.scan` | 256 KiB + 1 per source; oversized sources have no nodes and carry an existing `ParseError` with the reason; later small versions recover. |
-| `events/jsonl.py:read_jsonl` | Streams bounded JSONL records (1 MiB + 1); raises `LogError` on an oversized record; total log size is unrestricted. |
+| `events/jsonl.py:read_jsonl` | Streams bounded JSONL records: 1 MiB for ordinary events, 8 MiB for graph.snapshot/graph.delta (`limits.py:MAX_GRAPH_EVENT_LINE_BYTES`, `events/jsonl.py:_check_line_size`); raises `LogError` on excess; total log size is unrestricted. |
 | `agents/fake.py:load_script` | 256 KiB + 1 before parsing; oversize fails startup. |
 | `agents/usage.py:LedgerFile.read` | 256 KiB + 1; oversize becomes `LedgerError`, preserving the spending brake's fail-closed behavior. |
 | `graph/_layout.py:_parse` | 256 KiB + 1; oversize uses the existing logged no-layout fallback. |
@@ -34,7 +36,7 @@ All 14 original physical whole-file read sites now use bounded reads or streamin
 | `app.py:ledger_command` (both reads) | 256 KiB + 1 before displaying the ledger, including after settlement. |
 | `workspace/files.py:registered_worktree` (`gitdir` and `.git`) | Each pointer is read with 256 KiB + 1; an excess prevents deletion. |
 | `workspace/core.py:read_stamp` | 256 KiB + 1 on the environment stamp; oversize refuses environment setup. |
-| `workspace/suite.py:_take_report` | 256 KiB + 1; an oversized report is removed and treated as unavailable, so the suite outcome is `error`. |
+| `workspace/suite.py:_take_report` | Streams up to 32 MiB total, with 4 KiB per line (`limits.py:MAX_REPORT_BYTES`, `MAX_REPORT_LINE_BYTES`); excess is unavailable evidence and the report is removed. |
 
 Logical whole-file callers also inherit descriptor admission: `Tree.read_text`;
 `workspace/files.py:read_file` and `write_file`'s current hash; `agents/tools.py:_read`
@@ -43,6 +45,9 @@ and `_search` (search skips oversized files); `changes/_files.py:read_text` and
 `read` (propagates the refusal, preventing an oversized proposal).
 
 ## Compatibility and review signals
+
+The counts, byte sizes and module/function lengths below are the historical M6 delivery snapshot
+(`91c283d`, 2026-10-27), not current inventory or new validation results.
 
 Tests exercise all 15 files under `fixtures/` and all 14 demo files, all fake-model
 tool arguments, and every original/modified string in replay events. The largest
