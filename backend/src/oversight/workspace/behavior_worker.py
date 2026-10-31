@@ -102,6 +102,16 @@ def _release_timeout(pending: IteratorRelease, error: BaseException, timeout_s: 
     limited(cleanup, min(timeout_s, 0.05))
 
 
+def _release_capped(pending: IteratorRelease) -> None:
+    try:
+        pending.release()
+    except CallTimeout:
+        raise
+    except BaseException as error:
+        # Failure to clean up an already cut iterator cannot certify a function result.
+        release_exception(error)
+
+
 def call(
     function: Callable[..., Any],
     literal: str,
@@ -133,7 +143,7 @@ def call(
                     reason = str(error)
                     release_exception(error)
                     value = None
-                    pending.release()
+                    _release_capped(pending)
                     return {"kind": "unrepresentable", "reason": reason}
                 pending.value = None
         except CallTimeout:

@@ -191,3 +191,15 @@ async def test_timeout_cleanup_that_blocks_is_bounded_and_the_target_continues(t
     first, second = result["results"]
     assert first == {"kind": "timed_out", "reason": "iterator observation timeout"}
     assert second["kind"] == "value" and second["value"] == ["int", "0x2a"]
+
+
+@pytest.mark.anyio
+async def test_cleanup_exception_after_the_cap_cannot_become_a_comparable_result(tmp_path):
+    source = (
+        "def f():\n"
+        "    try:\n"
+        "        while True: yield 1\n"
+        "    finally: raise ValueError('cleanup')\n"
+    )
+    result = await invoke(tmp_path, source, [consumed()])
+    assert result["results"] == [{"kind": "unrepresentable", "reason": "iterator item cap"}]
