@@ -177,6 +177,9 @@ def test_a_replay_takes_no_commands(tmp_path: Path) -> None:
     for url in (
         "/agents",
         "/agents/agent-1/stop",
+        "/agents/agent-1/message",
+        "/agents/agent-1/pause",
+        "/agents/agent-1/resume",
         "/changes/change-1/approve",
         "/changes/change-1/reject",
         "/changes/change-1/request-changes",

@@ -29,6 +29,7 @@ from oversight.telemetry import CURRENT, TRACE_HEADER, evaluation_trace, mark
 from oversight.workspace import TREE_TIMEOUT_S, FileTooLarge, InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
     AgentCreated,
+    AgentMessage,
     ApproveChange,
     ChangeView,
     CreatePlan,
@@ -59,9 +60,6 @@ NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("POST", "/leads/{agent_id}/stop", "Reserved /leads/{agent_id}/stop"),
     ("POST", "/changes/{change_id}/review", "Reserved /changes/{change_id}/review"),
     ("POST", "/changes/{change_id}/revert", "Reserved /changes/{change_id}/revert"),
-    ("POST", "/agents/{agent_id}/message", "Messages to an agent"),
-    ("POST", "/agents/{agent_id}/pause", "Pause"),
-    ("POST", "/agents/{agent_id}/resume", "Resume"),
 )
 """Routes in the contract that this level does not build: 501, whatever the body."""
 LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
@@ -74,6 +72,9 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
     ("GET", "/tree", "Listing files"),
     ("POST", "/agents", "Starting an agent"),
     ("POST", "/agents/{agent_id}/stop", "Stop"),
+    ("POST", "/agents/{agent_id}/message", "Messages to an agent"),
+    ("POST", "/agents/{agent_id}/pause", "Pause"),
+    ("POST", "/agents/{agent_id}/resume", "Resume"),
     ("POST", "/changes/{change_id}/approve", "Approve"),
     ("POST", "/changes/{change_id}/reject", "Reject"),
     ("POST", "/changes/{change_id}/request-changes", "Request changes"),
@@ -116,6 +117,12 @@ class Commands(Protocol):
 
     def stop(self, agent_id: str) -> None: ...
 
+    def message(self, agent_id: str, request: AgentMessage) -> None: ...
+
+    def pause(self, agent_id: str) -> None: ...
+
+    def resume(self, agent_id: str) -> None: ...
+
     async def get_file(self, path: str, agent_id: str | None) -> FileContent:
         """Raises `ChangeNotFound` (no worktree for that agent), `FileNotFoundError` and
         `InvalidPath`."""
@@ -142,11 +149,13 @@ def _not_built(what: str, why: str) -> Callable[[], Coroutine[Any, Any, None]]:
     return answer
 
 
-def _decide[A](decision: Callable[[str, A], None], change_id: str, comment: A) -> None:
+def _decide[A](
+    decision: Callable[[str, A], None], change_id: str, comment: A, *, kind: str = "change"
+) -> None:
     try:
         decision(change_id, comment)
     except ChangeNotFound:
-        raise ApiError("not_found", f"there is no change {change_id!r}") from None
+        raise ApiError("not_found", f"there is no {kind} {change_id!r}") from None
     except WrongState as error:
         raise ApiError("wrong_state", str(error)) from None
     except (InvalidAnswers, InvalidGrant) as error:
@@ -282,6 +291,21 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
     @router.post("/changes/{change_id}/request-changes", status_code=202, response_class=Response)
     async def request_changes(change_id: str, body: RequestChanges) -> Response:  # pyright: ignore[reportUnusedFunction]
         _decide(commands.request_changes, change_id, body)
+        return Response(status_code=202)
+
+    @router.post("/agents/{agent_id}/message", status_code=202, response_class=Response)
+    async def message(agent_id: str, body: AgentMessage) -> Response:  # pyright: ignore[reportUnusedFunction]
+        _decide(commands.message, agent_id, body, kind="agent")
+        return Response(status_code=202)
+
+    @router.post("/agents/{agent_id}/pause", status_code=202, response_class=Response)
+    async def pause(agent_id: str) -> Response:  # pyright: ignore[reportUnusedFunction]
+        _decide(lambda target, _: commands.pause(target), agent_id, None, kind="agent")
+        return Response(status_code=202)
+
+    @router.post("/agents/{agent_id}/resume", status_code=202, response_class=Response)
+    async def resume(agent_id: str) -> Response:  # pyright: ignore[reportUnusedFunction]
+        _decide(lambda target, _: commands.resume(target), agent_id, None, kind="agent")
         return Response(status_code=202)
 
     @router.post("/agents/{agent_id}/stop", status_code=202, response_class=Response)

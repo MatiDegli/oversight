@@ -539,6 +539,35 @@ describe("applyEvent", () => {
     }
   });
 
+  it("replays a paused status and restores working without changing the graph or focus", () => {
+    const before = applyEvent(
+      withAgent(),
+      event(4, "agent.focus", {
+        agent_id: agent.agent_id,
+        mode: "read",
+        node_ids: [node.id],
+        ranges: [],
+      }),
+    );
+    const paused = applyEvent(before, event(5, "agent.status", { ...agent, state: "paused" }));
+    expect(paused.agents[agent.agent_id]?.state).toBe("paused");
+    expect(selectHasReadyForReview(paused)).toBe(false);
+    const resumed = applyEvent(paused, event(6, "agent.status", agent));
+    expect(resumed.agents[agent.agent_id]).toEqual(agent);
+    expect(resumed.graph).toBe(before.graph);
+    expect(resumed.focus).toEqual(before.focus);
+    expect(resumed.steps).toEqual(before.steps);
+    expect(resumed.gap).toBe(false);
+    const store = createStateStore(before);
+    store
+      .getState()
+      .applyEvents([
+        event(5, "agent.status", { ...agent, state: "paused" }),
+        event(6, "agent.status", agent),
+      ]);
+    expect(store.getState().state).toEqual(resumed);
+  });
+
   it("keeps agent statuses, card steps and read/edit focus independent", () => {
     const second = { ...agent, agent_id: "agent-2", change_id: "change-2", slot: "B" as const };
     const focus = {
