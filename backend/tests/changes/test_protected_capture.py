@@ -10,6 +10,7 @@ from changes_helpers import Harness
 
 from oversight.changes._candidate import changed_inventory
 from oversight.changes._protected_paths import (
+    BUILTIN_CATEGORIES,
     BUILTIN_TABLE_VERSION,
     ChangedFileInventory,
     ProtectedPathSnapshot,
@@ -17,7 +18,13 @@ from oversight.changes._protected_paths import (
     check_protected_paths,
 )
 from oversight.changes._support import ChangeContext
-from oversight.workspace import MergeGuard, ProcessResult, WorkspaceError
+from oversight.workspace import (
+    IntegrityError,
+    LockOrderError,
+    MergeGuard,
+    ProcessResult,
+    WorkspaceError,
+)
 from oversight_contracts.common import FileStatus
 from oversight_contracts.events import ChangeProposed, FileStat, SuiteResult
 from oversight_contracts.graph import ChangeGraph, ImpactCone
@@ -78,6 +85,39 @@ def test_capture_preserves_files_statuses_counts_and_separate_receipts() -> None
     assert inventory.files == (file("a.txt", "added"), file("b.py"), file("c.bin", "deleted"))
 
 
+def test_builtin_table_version_one_is_pinned() -> None:
+    assert (BUILTIN_TABLE_VERSION, BUILTIN_CATEGORIES) == (
+        1,
+        (
+            (
+                "manifest_lockfile",
+                (
+                    "pyproject.toml",
+                    "setup.py",
+                    "setup.cfg",
+                    "requirements*.txt",
+                    "uv.lock",
+                    "poetry.lock",
+                    "Pipfile",
+                    "Pipfile.lock",
+                ),
+                True,
+            ),
+            ("ci", (".github/**", ".gitlab-ci.yml"), False),
+            (
+                "test_configuration",
+                ("pytest.ini", "tox.ini", "noxfile.py", ".coveragerc", "conftest.py"),
+                True,
+            ),
+            (
+                "security",
+                (".env", ".env.*", ".gitignore", ".pre-commit-config.yaml", ".gitleaks.toml"),
+                False,
+            ),
+        ),
+    )
+
+
 def test_capture_empty_diff_is_complete_and_evidenced() -> None:
     captured = capture_proposal_paths(
         proposal([]), proposal_seq=PROPOSAL_SEQ, run_started_seq=RUN_SEQ
@@ -98,6 +138,19 @@ def test_capture_missing_receipt_is_unavailable(
     assert (
         capture_proposal_paths(
             proposal(files), proposal_seq=proposal_seq, run_started_seq=run_started_seq
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("run_started_seq", [PROPOSAL_SEQ, PROPOSAL_SEQ + 1])
+@pytest.mark.parametrize("files", [[], [file("uv.lock")]])
+def test_capture_requires_run_receipt_before_proposal(
+    run_started_seq: int, files: list[FileStat]
+) -> None:
+    assert (
+        capture_proposal_paths(
+            proposal(files), proposal_seq=PROPOSAL_SEQ, run_started_seq=run_started_seq
         )
         is None
     )
@@ -160,6 +213,7 @@ async def test_candidate_inventory_reads_all_statuses_and_both_rename_sides(h: H
         "delete.txt": b"delete\n",
         "old-ci.txt": b"workflow to move\n",
         ".gitignore": b"pattern to move\n",
+        "executable.sh": b"exit 0\n",
     }
     for path, content in initial.items():
         (root / path).write_bytes(content)
@@ -182,8 +236,10 @@ async def test_candidate_inventory_reads_all_statuses_and_both_rename_sides(h: H
     (root / ".github/workflows").mkdir(parents=True)
     (root / "old-ci.txt").rename(root / ".github/workflows/ci.yml")
     (root / ".gitignore").rename(root / "moved-ignore.txt")
+    (root / "executable.sh").chmod(0o755)
     async with h.workspace.locks(main=True):
         await ctx.git(tree, "add", "-A")
+        await ctx.git(tree, "update-index", "--chmod=+x", "executable.sh")
         candidate = (await ctx.git(tree, "write-tree")).strip()
         guard = MergeGuard(tree.git_identity, pre, pre, candidate, b"")
         # Only the immutable candidate tree counts, regardless of subsequent worktree edits.
@@ -195,6 +251,7 @@ async def test_candidate_inventory_reads_all_statuses_and_both_rename_sides(h: H
         ".github/workflows/ci.yml": "added",
         ".gitignore": "deleted",
         "delete.txt": "deleted",
+        "executable.sh": "modified",
         "moved-ignore.txt": "added",
         "old-ci.txt": "deleted",
         "shop/mod.py": "modified",
@@ -273,6 +330,7 @@ async def test_candidate_malformed_output_never_keeps_partial_inventory(
         "--name-status",
         "--no-renames",
         "-z",
+        "--ignore-submodules=none",
         guard.pre,
         guard.candidate_tree,
     )
@@ -311,6 +369,91 @@ async def test_candidate_cancellation_propagates(guard: MergeGuard) -> None:
 async def test_candidate_unavailable_query_is_incomplete(guard: MergeGuard) -> None:
     ctx = Mock(workspace=Mock(main=Mock()), git=AsyncMock(side_effect=WorkspaceError("lost")))
     inventory = await changed_inventory(cast(ChangeContext, ctx), guard, PROPOSAL_SEQ)
+    assert inventory == ChangedFileInventory(
+        files=(), complete=False, evidence=candidate_evidence(guard)
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("status", ["added", "modified", "deleted"])
+@pytest.mark.parametrize("path", [".github/workflows/link", "vendor/link"])
+async def test_candidate_inventory_includes_gitlinks(
+    h: Harness, status: FileStatus, path: str
+) -> None:
+    ctx, tree = h.manager._ctx, h.workspace.main
+    async with h.workspace.locks(main=True):
+        if status != "added":
+            await ctx.git(
+                tree, "update-index", "--add", "--cacheinfo", f"160000,{h.base_commit},{path}"
+            )
+        pre_tree = (await ctx.git(tree, "write-tree")).strip()
+        pre = (
+            await ctx.git(tree, "commit-tree", pre_tree, "-p", h.base_commit, "-m", "Base")
+        ).strip()
+        if status == "deleted":
+            await ctx.git(tree, "update-index", "--force-remove", path)
+        else:
+            await ctx.git(tree, "update-index", "--add", "--cacheinfo", f"160000,{pre},{path}")
+        candidate = (await ctx.git(tree, "write-tree")).strip()
+        guard = MergeGuard(tree.git_identity, pre, pre, candidate, b"")
+        inventory = await changed_inventory(ctx, guard, PROPOSAL_SEQ)
+    assert inventory == ChangedFileInventory(
+        files=(FileStat(path=path, status=status, lines_added=0, lines_removed=0),),
+        complete=True,
+        evidence=candidate_evidence(guard),
+    )
+    checked = check_protected_paths(
+        ProtectedPathSnapshot(evidence=(EvidenceRef(event_seq=RUN_SEQ),)), inventory
+    )
+    assert checked is not None and bool(checked.matches) is path.startswith(".github/")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "error", [IntegrityError("refused", ".git", code="git_failed"), LockOrderError("unlocked")]
+)
+async def test_candidate_integrity_and_lock_errors_propagate(
+    guard: MergeGuard, error: WorkspaceError
+) -> None:
+    ctx = Mock(workspace=Mock(main=Mock()), git=AsyncMock(side_effect=error))
+    with pytest.raises(type(error)) as raised:
+        await changed_inventory(cast(ChangeContext, ctx), guard, PROPOSAL_SEQ)
+    assert raised.value is error
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("before,after", [("100644", "120000"), ("120000", "100644")])
+async def test_candidate_file_symlink_type_changes_are_incomplete(
+    h: Harness, before: str, after: str
+) -> None:
+    ctx, tree = h.manager._ctx, h.workspace.main
+    async with h.workspace.locks(main=True):
+        blob = (await ctx.git(tree, "rev-parse", f"{h.base_commit}:shop/mod.py")).strip()
+        await ctx.git(tree, "update-index", "--cacheinfo", f"{before},{blob},shop/mod.py")
+        pre = (await ctx.git(tree, "write-tree")).strip()
+        await ctx.git(tree, "update-index", "--cacheinfo", f"{after},{blob},shop/mod.py")
+        candidate = (await ctx.git(tree, "write-tree")).strip()
+        guard = MergeGuard(tree.git_identity, pre, pre, candidate, b"")
+        inventory = await changed_inventory(ctx, guard, PROPOSAL_SEQ)
+    assert inventory == ChangedFileInventory(
+        files=(), complete=False, evidence=candidate_evidence(guard)
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "path",
+    ["tab\tfile.txt", "new\nline.txt", "bad-\udcff.txt", "replacement-\ufffd.txt"],
+    ids=["tab", "newline", "non-utf8", "replacement-character"],
+)
+async def test_candidate_real_git_invalid_paths_are_incomplete(h: Harness, path: str) -> None:
+    ctx, tree = h.manager._ctx, h.workspace.main
+    (tree.root / path).write_text("invalid filename\n")
+    async with h.workspace.locks(main=True):
+        await ctx.git(tree, "add", "-A")
+        candidate = (await ctx.git(tree, "write-tree")).strip()
+        guard = MergeGuard(tree.git_identity, h.base_commit, h.base_commit, candidate, b"")
+        inventory = await changed_inventory(ctx, guard, PROPOSAL_SEQ)
     assert inventory == ChangedFileInventory(
         files=(), complete=False, evidence=candidate_evidence(guard)
     )
