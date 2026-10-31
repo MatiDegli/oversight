@@ -70,7 +70,48 @@ it.each(["review", "plan", "lead"] as const)("does not wait for role %s", (role)
   expect(applyEvent(waiting(), { ...event, seq: 20 }).modelWaits).toEqual({});
 });
 
-it.each(["agent.step", "usage.tick", "model.attempt_failed"] as const)(
+it.each(["starting", "paused", "halted", "stopped", "ready_for_review", "done"] as const)(
+  "clears waits on %s so resuming cannot restore stale retry text",
+  (status) => {
+    const before = waiting();
+    const agent = before.agents["agent-1"];
+    if (!agent) throw new Error("Missing fixture");
+    const after = applyEvent(before, {
+      seq: 20,
+      ts: before.clock ?? "",
+      type: "agent.status",
+      payload: { ...agent, state: status },
+    });
+    expect(after.modelWaits).toEqual({});
+    expect(before.modelWaits["agent-1"]).toBeDefined();
+    for (const state of ["working", "revising"] as const) {
+      expect(
+        applyEvent(after, {
+          seq: 21,
+          ts: after.clock ?? "",
+          type: "agent.status",
+          payload: { ...agent, state },
+        }).modelWaits,
+      ).toEqual({});
+    }
+  },
+);
+
+it.each(["working", "revising"] as const)("keeps the wait during %s status updates", (state) => {
+  const before = waiting();
+  const agent = before.agents["agent-1"];
+  if (!agent) throw new Error("Missing fixture");
+  expect(
+    applyEvent(before, {
+      seq: 20,
+      ts: before.clock ?? "",
+      type: "agent.status",
+      payload: { ...agent, state },
+    }).modelWaits,
+  ).toEqual(before.modelWaits);
+});
+
+it.each(["agent.status", "agent.step", "usage.tick", "model.attempt_failed"] as const)(
   "keeps the wait through another agent's %s",
   (type) => {
     const source = type === "model.attempt_failed" ? failed() : recorded(type);
