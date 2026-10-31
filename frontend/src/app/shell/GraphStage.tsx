@@ -29,6 +29,7 @@ export function GraphStage({
   const field = useMemo(() => fieldInput(state, view), [state, view]);
   // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
   const shown = view.review ?? view.diff?.changeId ?? null;
+  const words = useMemo(() => (shown ? selectConeWords(state, shown) : null), [state, shown]);
   const shownChange = shown === null ? undefined : state.changes[shown];
   const tab = view.tabs?.find((candidate) => candidate.id === view.activeTab);
   const frameIds = useMemo(
@@ -88,11 +89,11 @@ export function GraphStage({
             {cone ? (
               <div
                 ref={coneCardRef}
-                className="pointer-events-auto flex min-h-0 w-(--cone-card-width) flex-col"
+                className={`pointer-events-auto flex min-h-0 flex-col ${cone.entries.length === 0 ? "w-fit max-w-(--cone-card-width)" : "w-(--cone-card-width)"}`}
               >
                 <ImpactConeCard
                   cone={cone}
-                  words={shown ? selectConeWords(state, shown) : null}
+                  words={words}
                   possible={shownChange ? (possibleCallers(state, shownChange, cone) ?? 0) : 0}
                   routingOmissions={routingOmissions}
                   outOfView={framing?.key === frameKey ? framing.outOfView : undefined}

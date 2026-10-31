@@ -121,9 +121,7 @@ async function clickChangedNode(page: Page, panel: string): Promise<string> {
               ...new Set(
                 [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
                   .filter((row) => row.textContent.includes("Out of view"))
-                  .map((row) =>
-                    view.representative(row.querySelector("[title]")?.getAttribute("title") ?? ""),
-                  ),
+                  .map((row) => view.representative(row.getAttribute("title") ?? "")),
               ),
             ],
             pan: view.pan(),
