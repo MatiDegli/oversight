@@ -27,13 +27,14 @@ export function selectAgentCard(state: State, agentId: string) {
       : activity,
     // run.started owns this limit; agent.status may carry a different revision allowance.
     maxSteps: state.run?.limits.max_steps ?? data.agent.max_steps,
-    activityLabel: wait
-      ? "Waiting"
-      : latest?.result === "ok" && latest.tool === "edit_file"
-        ? "Editing"
-        : latest?.result === "ok" && latest.tool === "read_file"
-          ? "Reading"
-          : "Working",
+    activityLabel:
+      wait && data.agent.state === "working"
+        ? "Waiting"
+        : latest?.result === "ok" && latest.tool === "edit_file"
+          ? "Editing"
+          : latest?.result === "ok" && latest.tool === "read_file"
+            ? "Reading"
+            : "Working",
   };
 }
 

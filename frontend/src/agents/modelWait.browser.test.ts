@@ -47,10 +47,13 @@ it.each(["dark", "day"])("preserves size and focus while waiting in %s", async (
     await page.evaluate(() => document.fonts.ready);
     const cards = page.getByRole("article", { name: "Agent A", exact: true });
     const waiting = cards.nth(0),
-      working = cards.nth(1);
+      working = cards.nth(1),
+      revising = cards.nth(2);
+    const cardBoxes = () =>
+      Promise.all([waiting.boundingBox(), working.boundingBox(), revising.boundingBox()]);
     const focus = waiting.getByRole("button", { name: "Live diff", exact: true });
     await focus.focus();
-    const boxes = await Promise.all([waiting.boundingBox(), working.boundingBox()]);
+    const boxes = await cardBoxes();
     await page.evaluate(() => {
       window.modelWaitTest.mount(true);
     });
@@ -59,8 +62,13 @@ it.each(["dark", "day"])("preserves size and focus while waiting in %s", async (
     await check(line).toBeVisible();
     expect(await line.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     await check(working.getByText("Working", { exact: true })).toBeVisible();
+    await check(revising.getByText("Revising", { exact: true })).toBeVisible();
+    const revisingLine = revising.getByText("Waiting for model (retry 3/5)", { exact: true });
+    await check(revisingLine).toBeVisible();
+    await check(revising.getByText("Waiting", { exact: true })).toHaveCount(0);
+    expect(await revisingLine.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     await check(focus).toBeFocused();
-    expect(await Promise.all([waiting.boundingBox(), working.boundingBox()])).toEqual(boxes);
+    expect(await cardBoxes()).toEqual(boxes);
     await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(0);
     expect(errors).toEqual([]);
     if (process.env.MODEL_RETRY_SHOTS === "1") {
@@ -72,6 +80,8 @@ it.each(["dark", "day"])("preserves size and focus while waiting in %s", async (
     });
     await check(line).toBeVisible();
     expect(await line.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await check(revisingLine).toBeVisible();
+    expect(await revisingLine.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     await check(focus).toBeFocused();
   } finally {
     await page.close();

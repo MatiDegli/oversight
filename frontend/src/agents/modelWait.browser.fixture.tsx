@@ -38,10 +38,18 @@ export const modelWaitTest = {
           },
         })
       : state;
+    const agent = next.agents["agent-1"];
+    if (!agent) throw new Error("Missing agent");
+    const revising = applyEvent(next, {
+      seq: next.lastSeq + 1,
+      ts: next.clock ?? "",
+      type: "agent.status",
+      payload: { ...agent, state: "revising" },
+    });
     flushSync(() => {
       root.render(
         <main className="flex min-h-screen gap-6 bg-ground p-3.5">
-          {[next, state].map((value, index) => {
+          {[next, state, revising].map((value, index) => {
             const data = selectAgentCard(value, "agent-1");
             if (!data) throw new Error("Missing agent");
             return (

@@ -32,7 +32,10 @@ describe("agent card details", () => {
       const data = selectAgentCard(current, "agent-1");
       const baseline = selectAgentCard({ ...current, modelWaits: {} }, "agent-1");
       if (status === "working" || status === "revising") {
-        expect(data?.activityLabel).toBe("Waiting");
+        expect(baseline?.activityLabel).toBe("Working");
+        expect(data?.activityLabel).toBe(
+          status === "working" ? "Waiting" : baseline?.activityLabel,
+        );
         expect(data?.activity).toBe(`Waiting for model (retry ${String(attempt + 1)}/5)`);
       } else expect(data).toEqual(baseline);
     }
