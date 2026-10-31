@@ -25,6 +25,8 @@ export function applyEvent(state: State, event: ServerEvent): State {
       : state.decisionEvents,
   };
   switch (event.type) {
+    case "agent.message": // Line B's Conversation tab owns rendering.
+      return next;
     case "model.attempt_failed": // The card front folds this event.
       return next;
     case "grant.created":

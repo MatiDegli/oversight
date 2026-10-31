@@ -2393,3 +2393,23 @@ price. The fold applies those prices to each call's tokens and never reads the l
 fields. An unreported count gives a range whose lower end enters the known subtotal. Unpriced
 work keeps the total unavailable, while zero usage costs zero even without a listed price.
 Team grouping and periods come later.
+
+## 2026-10-31 — Message text persists; privacy at export
+
+This entry replaces answer 7 of “2026-10-30 — Messages, pause and resume”. The maintainer's
+updated decision: “Message text must persist like the rest of the run, as a real product does;
+privacy is handled at export, not by dropping history.”
+
+- Accepted messages produce an `agent.message` event in the run's event log before delivery.
+- Credential-shaped text and configured provider key fragments are masked before writing;
+  the agent receives the original message.
+- Local event files, including WAL and SHM, are owner-only (0600); the runs directory is 0700.
+- Publication exports withhold message text by default; `--include-message-text` explicitly
+  includes the already masked text, and the provenance receipt records that choice.
+
+Not now: compression or blob storage. After proof 2's run, the event log's size and reopen time
+will decide whether to propose content-addressed blobs and zstd for closed segments.
+
+The reserved safe creation bundle (nullable `SaveFile.base_hash`, zones and inventory) moves from
+1.9.0 to 1.11.0, superseding its earlier reservations; 1.10.0 is approved for
+probe-inputs parameter-extension evidence.

@@ -31,13 +31,16 @@ class Provenance(BaseModel):
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     run_id: RunId
     event_count: int = Field(ge=1)
+    message_text: Literal["withheld", "included"] = "withheld"
 
 
 def provenance_path(log: Path) -> Path:
     return log.with_name(log.name + ".provenance.json")
 
 
-def validate_text(text: str, *, fake_fixture: bool = False) -> list[ServerEvent]:
+def validate_text(
+    text: str, *, fake_fixture: bool = False, include_message_text: bool = False
+) -> list[ServerEvent]:
     """Validate every line against the unchanged contracts, then enforce publication rules."""
     events: list[ServerEvent] = []
     prior: dict[int, ServerEvent] = {}
@@ -48,6 +51,12 @@ def validate_text(text: str, *, fake_fixture: bool = False) -> list[ServerEvent]
             event = SERVER_EVENT.validate_json(line)
         except ValueError:
             raise RecordError(f"invalid event at line {number}") from None
+        if (
+            event.type == "agent.message"
+            and event.payload.text is not None
+            and not include_message_text
+        ):
+            raise RecordError("message text requires an included exporter receipt")
         if event.seq != len(events) + 1:
             raise RecordError(f"event sequence gap at line {number}")
         if absolute_paths(json.loads(line)):
@@ -115,7 +124,13 @@ def validate_completeness(events: list[ServerEvent]) -> None:
         raise RecordError("the run is missing graph.delta after a merged approval")
 
 
-def receipt(text: str, events: list[ServerEvent], *, fake_fixture: bool = False) -> Provenance:
+def receipt(
+    text: str,
+    events: list[ServerEvent],
+    *,
+    fake_fixture: bool = False,
+    include_message_text: bool = False,
+) -> Provenance:
     first = events[0]
     assert first.type == "run.started"
     return Provenance(
@@ -123,6 +138,7 @@ def receipt(text: str, events: list[ServerEvent], *, fake_fixture: bool = False)
         sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
         run_id=first.payload.run_id,
         event_count=len(events),
+        message_text="included" if include_message_text else "withheld",
     )
 
 
@@ -131,8 +147,11 @@ def load_recording(log: Path, *, fake_fixture: bool = False) -> dict[str, object
     try:
         text = log.read_bytes().decode("utf-8")
         provenance = Provenance.model_validate_json(provenance_path(log).read_bytes())
-        events = validate_text(text, fake_fixture=fake_fixture)
-        if provenance != receipt(text, events, fake_fixture=fake_fixture):
+        included = provenance.message_text == "included"
+        events = validate_text(text, fake_fixture=fake_fixture, include_message_text=included)
+        if provenance != receipt(
+            text, events, fake_fixture=fake_fixture, include_message_text=included
+        ):
             raise RecordError("exporter provenance does not match the recorded log")
         # Recheck secrets at build time too, in case scanning rules have changed.
         with TemporaryDirectory(prefix="oversight-bundle-") as scratch:

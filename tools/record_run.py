@@ -9,6 +9,7 @@ fake_fixture=True; that requires fake-only profiles and writes a distinct, non-p
 """
 
 import argparse
+import json
 import sqlite3
 import sys
 from dataclasses import dataclass
@@ -57,7 +58,13 @@ def confined_store(store: Path, runs_dir: Path) -> Path:
     return store
 
 
-def record_run(store_path: Path, out: Path, *, fake_fixture: bool = False) -> Recording:
+def record_run(
+    store_path: Path,
+    out: Path,
+    *,
+    fake_fixture: bool = False,
+    include_message_text: bool = False,
+) -> Recording:
     """Export `store_path` to `out`, validate it, and return its summary.
 
     Validation failures leave the previous output and receipt untouched.
@@ -76,11 +83,29 @@ def record_run(store_path: Path, out: Path, *, fake_fixture: bool = False) -> Re
             candidate = Path(scratch) / "events.jsonl"
             export_run(store_path, candidate)
             text = candidate.read_text(encoding="utf-8")
-            events = validate_text(text, fake_fixture=fake_fixture)
+            if not include_message_text:
+                lines: list[str] = []
+                for line in text.splitlines():
+                    row = json.loads(line)
+                    if row["type"] == "agent.message":
+                        row["payload"]["text"] = None
+                        line = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
+                    lines.append(line)
+                text = "\n".join(lines) + "\n"
+                candidate.write_text(text, encoding="utf-8", newline="\n")
+            events = validate_text(
+                text, fake_fixture=fake_fixture, include_message_text=include_message_text
+            )
             scan_secrets(candidate)
             marker = provenance_path(candidate)
             marker.write_text(
-                receipt(text, events, fake_fixture=fake_fixture).model_dump_json() + "\n",
+                receipt(
+                    text,
+                    events,
+                    fake_fixture=fake_fixture,
+                    include_message_text=include_message_text,
+                ).model_dump_json()
+                + "\n",
                 encoding="utf-8",
             )
             # The two renames are not atomic: if the export rename fails, the new receipt
@@ -118,6 +143,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--latest", action="store_true", help="record the newest .runtime/runs/*.sqlite"
     )
+    parser.add_argument(
+        "--include-message-text", action="store_true", help="include stored, masked human messages"
+    )
     args = parser.parse_args(argv)
     if args.latest and args.run_id is not None:
         parser.error("give either RUN_ID or --latest, not both")
@@ -125,7 +153,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("give RUN_ID or --latest")
     out: Path = args.out if args.out.is_absolute() else REPO_ROOT / args.out
     try:
-        recording = record_run(store_for(args.run_id, args.latest), out)
+        recording = record_run(
+            store_for(args.run_id, args.latest), out, include_message_text=args.include_message_text
+        )
     except RecordError as error:
         print(f"record_run: {error}", file=sys.stderr)
         return 1

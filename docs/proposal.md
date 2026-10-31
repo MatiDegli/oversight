@@ -366,6 +366,9 @@ class AgentStatus:
     detail: str | None         # why it halted or stopped, in one sentence
 ```
 
+**`agent.message`**: accepted human message, with credential-shaped text masked before storage;
+publication exports withhold its text by default.
+
 **`agent.step`**: one per tool call, when the call ends.
 
 ```python
@@ -642,11 +645,13 @@ the single error format.
   guarded by the agent's recorded base rather than current main. Historical events still load
   without provenance; live resolutions explicitly name their principal and head. Requests and
   TypeScript consumers must migrate together. 1.4.0 keeps `SaveFile.base_hash` a required string.
-  The separately delivered 1.9.0 makes it required and nullable only together with safe creation,
+  The separately delivered 1.11.0 makes it required and nullable only together with safe creation,
   zones and inventory. The maintainer moved that bundle from 1.7.0 to 1.8.0 on 2026-10-29, when
   standing grants took 1.7.0, and moved it again on 2026-10-30, when E6 and item 11's plans took
-  1.8.0. No alternate schema may reuse any of these version strings, including 1.4.0. These approved
-  changes are exceptions to the ordinary minor-version rule, not a general relaxation.
+  1.8.0. On 2026-10-31, message text took 1.9.0 and approved probe-inputs parameter-extension
+  evidence took 1.10.0, moving safe creation to 1.11.0. No alternate schema may reuse any of these
+  version strings, including 1.4.0. These approved changes are exceptions to the ordinary
+  minor-version rule, not a general relaxation.
 - **To propose a change:**
   1. The front that needs it stops and writes a short request: what, why, the modules it affects,
      and whether it is compatible.

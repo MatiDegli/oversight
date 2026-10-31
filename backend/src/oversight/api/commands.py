@@ -126,7 +126,7 @@ class Commands(Protocol):
 
     def stop(self, agent_id: str) -> None: ...
 
-    def message(self, agent_id: str, request: AgentMessage) -> None: ...
+    async def message(self, agent_id: str, request: AgentMessage) -> None: ...
 
     def pause(self, agent_id: str) -> None: ...
 
@@ -259,7 +259,7 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
 
     @router.post("/agents", status_code=201)
     async def start_agent(request: StartAgent, http: Request) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
-        # request.zone is reserved and ignored until zones are delivered in 1.9.0.
+        # request.zone is reserved and ignored until zones are delivered in 1.11.0.
         attempt_id = http.headers.get(TRACE_HEADER)
         if attempt_id is not None and not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
             raise ApiError(
@@ -317,7 +317,12 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
 
     @router.post("/agents/{agent_id}/message", status_code=202, response_class=Response)
     async def message(agent_id: str, body: AgentMessage) -> Response:  # pyright: ignore[reportUnusedFunction]
-        _decide(commands.message, agent_id, body, kind="agent")
+        try:
+            await commands.message(agent_id, body)
+        except ChangeNotFound:
+            raise ApiError("not_found", f"there is no agent {agent_id!r}") from None
+        except WrongState as error:
+            raise ApiError("wrong_state", str(error)) from None
         return Response(status_code=202)
 
     @router.post("/agents/{agent_id}/pause", status_code=202, response_class=Response)

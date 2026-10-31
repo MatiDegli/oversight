@@ -73,6 +73,7 @@ from oversight.events import (
 )
 from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
+from oversight.redaction import Redactor
 from oversight.runtime_accounting import write_tick
 from oversight.runtime_decisions import RuntimeDecisions
 from oversight.runtime_plans import PlanService
@@ -230,6 +231,7 @@ class LiveRun:
         reviewer: ReviewerCall | None = None,
     ) -> None:
         self._settings = settings
+        self._redactor = Redactor(settings.meta_api_key, settings.baseten_api_key)
         self._closing = False
         self._reviewer = reviewer
         self._reviews: dict[str, asyncio.Task[None]] = {}
@@ -1031,8 +1033,8 @@ class LiveRun:
         self._manager.stop(agent_id, self._runs.get(agent_id))
         _run_controls.close(self, agent_id)
 
-    def message(self, agent_id: str, request: AgentMessage) -> None:
-        _run_controls.message(self, agent_id, request.text)
+    async def message(self, agent_id: str, request: AgentMessage) -> None:
+        await _run_controls.message(self, agent_id, request.text)
 
     def pause(self, agent_id: str) -> None:
         _run_controls.pause(self, agent_id)

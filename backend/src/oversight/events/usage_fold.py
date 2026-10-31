@@ -172,6 +172,7 @@ def fold_usage(events: Sequence[ServerEvent]) -> UsageFold:
                 | "model.attempt_failed"
                 | "agent.step"
                 | "agent.focus"
+                | "agent.message"
                 | "change.assessed"
                 | "merge_mode.changed"
                 | "plan.updated"
