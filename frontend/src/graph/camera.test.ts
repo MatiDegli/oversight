@@ -468,9 +468,14 @@ describe("prefersReducedMotion", () => {
 });
 
 describe("watch growth", () => {
-  it.each([true, false])(
-    "includes an offscreen addition with the minimum centred zoom-out (reduced: %s)",
-    (reduced) => {
+  it.each([
+    [true, undefined],
+    [false, undefined],
+    [true, 0],
+    [false, 0],
+  ] as const)(
+    "includes an offscreen addition with the minimum centred zoom-out (reduced: %s, covered: %s)",
+    (reduced, covered) => {
       const cy = narrowedGraph(600);
       const before = structuredClone(positions(cy));
       const zoom = cy.zoom();
@@ -480,7 +485,7 @@ describe("watch growth", () => {
         .getElementById("lone")
         .boundingBox({ includeLabels: true, includeOverlays: false });
       const animate = vi.spyOn(cy, "animate").mockReturnValue(cy);
-      includeNewNodes(cy, ["lone"], reduced);
+      includeNewNodes(cy, ["lone"], reduced, covered);
       if (!reduced) {
         expect(animate).toHaveBeenCalledOnce();
         const target = animate.mock.calls[0]?.[0];
@@ -499,6 +504,25 @@ describe("watch growth", () => {
       expect(cy.getElementById("lone").renderedBoundingBox().x1).toBeGreaterThanOrEqual(40);
       expect(positions(cy)).toEqual(before);
       expect(cy.nodes(":selected")).toHaveLength(0);
+    },
+  );
+
+  it.each([undefined, 0, 200])(
+    "uses only the uncovered width for new nodes (covered=%s)",
+    (covered) => {
+      const cy = narrowedGraph(600);
+      const before = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+      const center = { x: (600 - (covered ?? 0)) / 2, y: 300 };
+      const anchor = (center.x - before.pan.x) / before.zoom;
+      includeNewNodes(cy, ["b"], true, covered);
+      if (!covered) expect({ zoom: cy.zoom(), pan: cy.pan() }).toEqual(before);
+      else {
+        expect(cy.zoom()).toBeLessThan(before.zoom);
+        const box = cy.getElementById("b").renderedBoundingBox();
+        expect(box.x1).toBeGreaterThanOrEqual(0);
+        expect(box.x2).toBeLessThanOrEqual(600 - covered);
+        expect((center.x - cy.pan().x) / cy.zoom()).toBeCloseTo(anchor);
+      }
     },
   );
 
@@ -594,37 +618,44 @@ describe("the zoom range after Fit", () => {
     expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
   });
 
-  it("does not let growth in watch mode take the zoom below the range, and keeps the view's middle", () => {
-    const cy = wideGraph(40_000);
-    cy.viewport({ zoom: ZOOM_RANGE.min, pan: { x: 20, y: 40 } });
-    const middle = { x: (500 - 20) / ZOOM_RANGE.min, y: (300 - 40) / ZOOM_RANGE.min };
-    // Well past what the view shows at the lower end of the range.
-    cy.add({ data: { id: "far" }, position: { x: 400_000, y: 100 } });
-    includeNewNodes(cy, ["far"], true);
-    expect(cy.zoom()).toBe(ZOOM_RANGE.min);
-    expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
-    expect((500 - cy.pan().x) / cy.zoom()).toBeCloseTo(middle.x);
-    expect((300 - cy.pan().y) / cy.zoom()).toBeCloseTo(middle.y);
-  });
+  it.each([0, 200])(
+    "keeps growth above the zoom floor about the clear centre (covered=%s)",
+    (covered) => {
+      const cy = wideGraph(40_000);
+      cy.viewport({ zoom: ZOOM_RANGE.min, pan: { x: 20, y: 40 } });
+      const centerX = (1000 - covered) / 2;
+      const middle = { x: (centerX - 20) / ZOOM_RANGE.min, y: (300 - 40) / ZOOM_RANGE.min };
+      // Well past what the view shows at the lower end of the range.
+      cy.add({ data: { id: "far" }, position: { x: 400_000, y: 100 } });
+      includeNewNodes(cy, ["far"], true, covered);
+      expect(cy.zoom()).toBe(ZOOM_RANGE.min);
+      expect(cy.minZoom()).toBe(ZOOM_RANGE.min);
+      expect((centerX - cy.pan().x) / cy.zoom()).toBeCloseTo(middle.x);
+      expect((300 - cy.pan().y) / cy.zoom()).toBeCloseTo(middle.y);
+    },
+  );
 });
 
 describe("revealNode", () => {
   const inset =
     Number.parseFloat(theme["cone-card-width"]) + Number.parseFloat(theme["spacing-overlay"]);
 
-  it("pans to put a node in the middle of what the cone card leaves free, at the zoom it has", () => {
-    const cy = wideGraph(40_000);
-    cy.viewport({ zoom: 0.5, pan: { x: 20, y: 40 } });
-    const before = positions(cy);
-    const target = revealNode(cy, "east", true);
-    expect(target?.zoom).toBe(0.5);
-    expect(cy.zoom()).toBe(0.5);
-    const { x, y } = cy.getElementById("east").renderedPosition();
-    expect(x).toBeCloseTo((inset + 1000) / 2);
-    expect(y).toBeCloseTo(300);
-    expect(cy.pan()).toEqual(target?.pan);
-    expect(positions(cy)).toEqual(before);
-  });
+  it.each([undefined, 0, 400])(
+    "centres a reveal beside the cone card with covered=%s at the same zoom",
+    (covered) => {
+      const cy = wideGraph(40_000);
+      cy.viewport({ zoom: 0.5, pan: { x: 20, y: 40 } });
+      const before = positions(cy);
+      const target = revealNode(cy, "east", true, covered);
+      expect(target?.zoom).toBe(0.5);
+      expect(cy.zoom()).toBe(0.5);
+      const { x, y } = cy.getElementById("east").renderedPosition();
+      expect(x).toBeCloseTo((inset + 1000 - (covered ?? 0)) / 2);
+      expect(y).toBeCloseTo(300);
+      expect(cy.pan()).toEqual(target?.pan);
+      expect(positions(cy)).toEqual(before);
+    },
+  );
 
   it("eases under normal motion and does nothing for a node that is not on the graph", () => {
     const cy = wideGraph(40_000);

@@ -1,8 +1,7 @@
 import type { Core } from "cytoscape";
 import type { GraphViewProps } from "./GraphView";
-import { nodesInViewport } from "./camera";
+import { nodesInViewport, paddedArea } from "./camera";
 import type { Box, Framing } from "./camera";
-import { FIT_PADDING } from "./geometry";
 import { visibleId } from "./foldVisibility";
 
 export function reportFraming(
@@ -69,12 +68,16 @@ export function panelGeometry(
     ...(occlusion ? { occlusion } : {}),
     ...(clear
       ? {
-          area: {
-            x1: (occlusion?.x2 ?? 0) + FIT_PADDING,
-            y1: occlusion ? FIT_PADDING : Math.max(FIT_PADDING, clear.top - graph.top),
-            x2: Math.min(graph.width - FIT_PADDING, clear.right - graph.left),
-            y2: Math.min(graph.height - FIT_PADDING, clear.bottom - graph.top),
-          },
+          area: paddedArea(
+            graph,
+            {
+              x1: 0,
+              y1: occlusion ? 0 : clear.top - graph.top,
+              x2: clear.right - graph.left,
+              y2: clear.bottom - graph.top,
+            },
+            occlusion?.x2,
+          ),
         }
       : {}),
   };

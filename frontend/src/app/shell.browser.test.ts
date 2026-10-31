@@ -152,6 +152,32 @@ it("keeps watch controls and fitted module frames clear of floating agents at 12
   });
 });
 
+it.each([false, true])("keeps focus overlays clear at 1280x800 (expanded=%s)", async (expanded) => {
+  await withPage(1280, 800, async (page) => {
+    await page.evaluate(() => {
+      window.shellTest.open("file");
+    });
+    if (expanded)
+      await page.getByRole("button", { name: "Start an agent here", exact: true }).click();
+    await check(page.getByLabel("Graph detail", { exact: true })).toHaveCount(0);
+    const graph = await box(page, '[aria-label="Repository graph"]');
+    const panel = await box(page, '[aria-label="Agents"]');
+    const zoom = await box(page, '[aria-label="Zoom"]');
+    const clear = await box(page, "[data-graph-clear-area]");
+    const legend = await box(page, '[aria-label="Legend"]');
+    const right = (b: { x: number; width: number }) => b.x + b.width;
+    expect(panel.width).toBe(expanded ? 400 : 56);
+    if (expanded) {
+      for (const b of [zoom, clear, legend])
+        expect(right(b)).toBeLessThanOrEqual(panel.x - 24 + 0.5);
+    } else {
+      for (const b of [zoom, clear])
+        expect(Math.abs(right(b) - (right(graph) - 24))).toBeLessThanOrEqual(0.5);
+      expect(right(legend)).toBeLessThanOrEqual(zoom.x);
+    }
+  });
+});
+
 it("starts with all six demo modules at Fit zoom and preserves docked overlay boxes at 1920x1080", async () => {
   await withPage(1920, 1080, async (page) => {
     const start = await watchGeometry(page);
