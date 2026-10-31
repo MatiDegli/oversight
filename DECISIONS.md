@@ -2663,6 +2663,28 @@ The reserved safe creation bundle (nullable `SaveFile.base_hash`, zones and inve
 probe-inputs parameter-extension evidence.
 
 Amended 2026-10-31 (Docs audit): versions are assigned next free at landing; the chain above is approval history.
+
+## Contracts 1.12.0 — approved by the maintainer, 2026-10-31
+
+GET /usage serves UsageView live and in a replay. It maps the existing list-price, activity and
+revision-round folds over one committed event inventory. Ledger figures never appear in this view:
+the costs are list-price equivalents, never a bill or the budget ledger. A null figure is unknown;
+its known_* sibling is a lower bound, and zero remains zero.
+
+Item 10 uses the maintainer's 2026-10-31 team rule, shared with team colors: the plan's lead when
+Plan.started_by names one, else the plan, else the agent itself. A plan the person requests is one
+team; two plans of the same lead are one team. additions.md now states this rule. Hour/day periods
+come later as an additive front with a time-zone parameter.
+
+The Limits docstrings now say per round, matching the runtime's revision budgets. A named alias
+for bounded message text keeps generated names stable without changing accepted document shapes.
+proposal.md no longer claims a contract-scope check: recorded maintainer approval accompanies a
+contract change and its first producer, and CI compares regenerated artifacts byte for byte.
+
+The usage view took 1.12.0 at landing, next free after the lead runtime (1.10.0)
+and the parameter-extension evidence (1.11.0). Safe creation takes a later contract version
+assigned at landing after its own approval.
+
 ## 2026-10-31 — Supervision is a pure fold over the committed event prefix
 
 Reason: the maintainer needs reproducible supervision counts and spend for any recorded run
