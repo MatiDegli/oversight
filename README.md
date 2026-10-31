@@ -30,7 +30,9 @@ below are labeled separately.
 - On by default: live diff and review with Approve, Reject and Request changes.
 - On by default: four agent slots, configurable up to six (A–F), working in parallel.
 - On by default: a spend meter and a brake that refuses new runs above 90% of the credit budget.
-- On by default: the static replay plays the real two-agent run in `fixtures/events/recorded-demo.jsonl` without a backend; its label, `Recorded run · Oct 27, 2026`, comes from the recording's provenance sidecar.
+- The static replay build is on by default and plays the real two-agent run in
+  `fixtures/events/recorded-demo.jsonl` without a backend. Its
+  label comes from the recording's provenance sidecar: `Recorded run · Oct 27, 2026`.
 - On by default: facts and a summary derived from events for each change (item 1).
 - Built, off by default: an opt-in agent harness pack with syntax checks, bounded search and test feedback (item 3).
 - On by default: checks that a new test fails before the change and passes after it (item 6).

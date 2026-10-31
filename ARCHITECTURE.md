@@ -67,9 +67,10 @@ and the separate demo test environment survive this reset.
    own environment and a fixed command with a timeout. Status follows tool execution and
    human run controls, never model text.
 5. Every completed tool call emits `agent.step`. Read focus precedes the step; `list_files`
-   sends none, and `search` focuses only its first five matching nodes. Successful edits publish `change.updated`, edit focus and then the step. Updates carry full original
-   and modified file contents, author and a pending graph overlay. Model replies produce
-   `usage.tick`; the loop does not stream model text.
+   sends none, and `search` focuses only its first five matching nodes. Successful edits publish
+   `change.updated`, edit focus and then the step. Updates carry full original and modified file
+   contents, author and a pending graph overlay. Model replies produce `usage.tick`; the loop
+   does not stream model text.
 6. The event store assigns increasing `seq` values and timestamps. One writer batches
    SQLite transactions and exposes events only after commit. SQLite uses WAL and a busy
    timeout. Each run has its own append-only database. Disk work runs in a thread.
@@ -275,8 +276,8 @@ controls once proposal or halt finalization begins. Preparation/decisions, revie
 broken and closed changes return 409 `wrong_state`; unknown agents return 404 `not_found`.
 All three routes answer 501 in replay before reading the body. No lead or agent tool exposes
 these controls. Pause and Resume are mounted on the agent card. The Conversation
-panel and its message composer are built and exported by `agents/index.ts`, but are not yet
-mounted by `frontend/src/app/`.
+panel and its message composer are mounted as a focus-panel tab by
+`frontend/src/app/shell/FocusPanel.tsx`, opened from the agent card.
 
 Messages queue in arrival order until the next safe model-call boundary. Accepted text persists
 in `agent.message`, masked before storage; the agent receives the original. Publication exports
@@ -345,7 +346,7 @@ replays, practice, Files, editor startup/prefetch, subpath serving and third-par
 
 ## Level 3 wiring and remaining private cores
 
-Contracts are at 1.10.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
+Contracts are at 1.11.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
 run-rule findings, before/after test evidence and optional cross-review are wired into the live
 flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
 Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,

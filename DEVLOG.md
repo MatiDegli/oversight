@@ -46,8 +46,8 @@ One line per day, in Argentina time (ART).
   waits after main moves; live Revert admission with rules activation still closed, protected-path
   authority, spend evidence and person preemption; masked persistent messages, withheld by default
   from publication exports;
-  agent Pause/Resume controls and the Conversation panel (not yet mounted in the app); live graph
+  agent Pause/Resume controls and the Conversation panel mounted as a focus-panel tab; live graph
   and card overlap, graph behavior count chips with sample popovers, measured caller words on
   the review graph, review/phone evidence and model-retry status; observed agent-hours, dated
   list prices and supervision folds; bounded examples selection; unchanged-failure revision guards,
-  shutdown draining and test splits; recorded the plan for opening my own repository.
+  shutdown draining and test splits; recorded the decision to open my own repository, plan first.
