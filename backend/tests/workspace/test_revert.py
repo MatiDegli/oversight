@@ -1,0 +1,593 @@
+"""Inverse transactions on disposable Git repositories; no provider or credits."""
+
+import asyncio
+import sys
+from dataclasses import replace
+from pathlib import Path
+from unittest.mock import AsyncMock
+
+import pytest
+
+from oversight.workspace import ProcessResult, SuiteRun, run_process
+from oversight_contracts.events import SuiteResult
+
+pytestmark = pytest.mark.anyio
+MESSAGE = "Revert rule merge\n\nPreserve later work.\n"
+
+
+@pytest.fixture
+def api():
+    from oversight.workspace import revert
+
+    return revert
+
+
+async def candidate(workspace, api):
+    """H contains later work; T removes only the selected change."""
+    async with workspace.locks(main=True):
+        main = workspace.main
+        h0 = (await workspace.git_ok(main, "rev-parse", "HEAD")).strip()
+        path = main.root / "later.py"
+        path.write_text("later = 1\n")
+        await workspace.git_ok(main, "add", "later.py")
+        await workspace.git_ok(main, "commit", "-qm", "Later work")
+        target = (await workspace.git_ok(main, "rev-parse", "HEAD^{tree}")).strip()
+        path = main.root / "shop/mod.py"
+        path.write_text("def value():\n    return 2\n")
+        await workspace.git_ok(main, "add", "shop/mod.py")
+        await workspace.git_ok(main, "commit", "-qm", "Rule merge")
+        head = (await workspace.git_ok(main, "rev-parse", "HEAD")).strip()
+        assert head != h0
+    return head, target
+
+
+async def facts(workspace):
+    git = workspace.git_ok
+    main = workspace.main
+    return tuple(
+        [
+            await git(main, *args)
+            for args in (
+                ("symbolic-ref", "HEAD"),
+                ("rev-parse", "HEAD"),
+                ("write-tree",),
+                ("status", "--porcelain", "-z"),
+                ("diff", "HEAD"),
+            )
+        ]
+    )
+
+
+async def test_prepare_exact_unreachable_commit_and_verified_cleanup(workspace, api):
+    h, t = await candidate(workspace, api)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        before = await facts(workspace)
+        async with api.prepare_inverse(
+            workspace,
+            agent_id="agent-1",
+            main_commit=h,
+            inverse_tree=t,
+            message=MESSAGE,
+            timeout_s=5,
+        ) as item:
+            assert (item.main_commit, item.inverse_tree) == (h, t)
+            assert item.tree.agent_id == "agent-1"
+            git = workspace.git_ok
+            assert (await git(item.tree, "rev-parse", "HEAD")).strip() == item.inverse_commit
+            assert (await git(item.tree, "rev-parse", "HEAD^{tree}")).strip() == t
+            assert (await git(item.tree, "rev-list", "--parents", "-n", "1", "HEAD")).split() == [
+                item.inverse_commit,
+                h,
+            ]
+            identity = await git(item.tree, "show", "-s", "--format=%an|%ae|%cn|%ce", "HEAD")
+            assert identity.strip() == "User|user@oversight.invalid|User|user@oversight.invalid"
+            assert not await git(workspace.main, "for-each-ref", "--contains", item.inverse_commit)
+            assert not item.cleaned
+            assert await facts(workspace) == before
+            root, admin = item.tree.root, item.tree.git_identity.directory
+        assert item.cleaned
+        assert not root.exists() and not admin.exists()
+        assert str(root) not in await git(workspace.main, "worktree", "list", "--porcelain")
+        assert await facts(workspace) == before
+
+
+async def test_empty_inverse_refused_before_any_object(workspace, api, monkeypatch):
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        h = await workspace.main.head()
+        t = (await workspace.git_ok(workspace.main, "rev-parse", "HEAD^{tree}")).strip()
+        real = workspace.git
+        calls = []
+
+        async def observe(tree, *args, **kwargs):
+            calls.append(args[0])
+            return await real(tree, *args, **kwargs)
+
+        monkeypatch.setattr(workspace, "git", observe)
+        with pytest.raises(api.InverseError, match="empty"):
+            async with api.prepare_inverse(
+                workspace,
+                agent_id="agent-1",
+                main_commit=h,
+                inverse_tree=t,
+                message=MESSAGE,
+                timeout_s=5,
+            ):
+                pytest.fail("empty inverse accepted")
+        assert "commit-tree" not in calls and "worktree" not in calls
+        assert not list(workspace.tmp_dir.glob("revert-*"))
+
+
+@pytest.mark.parametrize("held", ["none", "main", "agent", "wrong_agent"])
+async def test_prepare_requires_both_original_locks(workspace, api, held):
+    h, t = await candidate(workspace, api)
+
+    async def attempt():
+        with pytest.raises(api.InverseError, match="lock"):
+            async with api.prepare_inverse(
+                workspace,
+                agent_id="agent-1",
+                main_commit=h,
+                inverse_tree=t,
+                message=MESSAGE,
+                timeout_s=5,
+            ):
+                pytest.fail("missing caller locks accepted")
+
+    if held == "none":
+        await attempt()
+    else:
+        async with workspace.locks(
+            main=held != "agent",
+            agent_id={"main": None, "agent": "agent-1", "wrong_agent": "agent-2"}[held],
+        ):
+            await attempt()
+
+
+async def test_reentrant_required_suite(workspace, api, monkeypatch):
+    h, t = await candidate(workspace, api)
+    suite = AsyncMock(
+        return_value=SuiteRun(
+            SuiteResult(
+                outcome="passed", passed=1, failed=0, skipped=0, duration_ms=1, failed_tests=[]
+            ),
+            "",
+            problems=(),
+        )
+    )
+    monkeypatch.setattr("oversight.workspace.suite_guard.run_suite", suite)
+    await workspace.check_isolation()
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        async with api.prepare_inverse(
+            workspace,
+            agent_id="agent-1",
+            main_commit=h,
+            inverse_tree=t,
+            message=MESSAGE,
+            timeout_s=5,
+        ) as item:
+            run = await workspace.run_tests(item.tree, timeout_s=5, isolation="required")
+            assert run.tested_commit == item.inverse_commit
+        assert api.inverse_suite_problem(run, tree=t, cleaned=item.cleaned) is None
+
+
+async def test_cancel_sleeping_child_and_repeated_cleanup_cancellation(
+    workspace, api, monkeypatch, gate_factory, wait_gone
+):
+    h, t = await candidate(workspace, api)
+    cleaning = asyncio.Event()
+    gate = gate_factory("inverse-suite")
+    await workspace.check_isolation()
+
+    async def sleeping_suite(**kwargs):
+        await run_process(
+            [sys.executable, "-c", "import os, time; " + gate.child_signal + "; time.sleep(60)"],
+            cwd=kwargs["tree_root"],
+            timeout_s=30,
+        )
+        raise AssertionError("sleeping suite completed")
+
+    monkeypatch.setattr("oversight.workspace.suite_guard.run_suite", sleeping_suite)
+    real = workspace.git
+    seen = []
+
+    async def observe(tree, *args, **kwargs):
+        if args[:2] == ("worktree", "remove"):
+            cleaning.set()
+            await asyncio.sleep(0.03)
+        return await real(tree, *args, **kwargs)
+
+    monkeypatch.setattr(workspace, "git", observe)
+
+    async def owner():
+        async with (
+            workspace.locks(main=True, agent_id="agent-1"),
+            api.prepare_inverse(
+                workspace,
+                agent_id="agent-1",
+                main_commit=h,
+                inverse_tree=t,
+                message=MESSAGE,
+                timeout_s=5,
+            ) as item,
+        ):
+            seen.append(item)
+            await workspace.run_tests(item.tree, timeout_s=30, isolation="required")
+
+    task = asyncio.create_task(owner())
+    pid = int(await gate.wait_signal())
+    task.cancel()
+    await cleaning.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    await asyncio.to_thread(wait_gone, pid)
+    assert seen[0].cleaned
+    assert not seen[0].tree.root.exists()
+    assert not seen[0].tree.git_identity.directory.exists()
+    assert workspace.operations.idle
+
+
+@pytest.mark.parametrize(
+    "change,reason",
+    [
+        ({"outcome": "failed"}, "outcome"),
+        ({"outcome": "error"}, "outcome"),
+        ({"outcome": "timeout"}, "outcome"),
+        ({"passed": 0}, "passed"),
+        ({"failed": 1}, "failed"),
+        ({"skipped": 1}, "skipped"),
+        ({"problems": ("bad report",)}, "problems"),
+        ({"tested_tree": "other"}, "tree"),
+        ({"cleaned": False}, "cleanup"),
+        ({}, None),
+    ],
+)
+def test_suite_guard(api, change, reason):
+    run = SuiteRun(
+        SuiteResult(
+            outcome="passed", passed=1, failed=0, skipped=0, duration_ms=1, failed_tests=[]
+        ),
+        "",
+        problems=(),
+        tested_tree="T",
+    )
+    result_fields = {
+        k: v for k, v in change.items() if k in ("outcome", "passed", "failed", "skipped")
+    }
+    run = replace(
+        run,
+        result=SuiteResult.model_validate(run.result.model_dump() | result_fields),
+        **{k: v for k, v in change.items() if k in ("problems", "tested_tree")},
+    )
+    problem = api.inverse_suite_problem(run, tree="T", cleaned=change.get("cleaned", True))
+    assert problem is None if reason is None else reason in problem
+
+
+async def prepared(workspace, api):
+    h, t = await candidate(workspace, api)
+    async with (
+        workspace.locks(main=True, agent_id="agent-1"),
+        api.prepare_inverse(
+            workspace,
+            agent_id="agent-1",
+            main_commit=h,
+            inverse_tree=t,
+            message=MESSAGE,
+            timeout_s=5,
+        ) as item,
+    ):
+        pass
+    return item
+
+
+def effect_args(item):
+    return dict(
+        main_commit=item.main_commit,
+        inverse_commit=item.inverse_commit,
+        inverse_tree=item.inverse_tree,
+        timeout_s=5,
+    )
+
+
+async def test_apply_landed_preserves_later_work(workspace, api):
+    item = await prepared(workspace, api)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        outcome = await api.apply_inverse(workspace, **effect_args(item))
+        assert outcome.kind == "landed" and outcome.main_commit == item.inverse_commit
+        assert (workspace.main.root / "later.py").read_text() == "later = 1\n"
+        assert (workspace.main.root / "shop/mod.py").read_text().endswith("return 1\n")
+        assert (await facts(workspace))[2:] == (item.inverse_tree + "\n", "", "")
+        assert await api.classify_inverse(workspace, **effect_args(item)) == "landed"
+
+
+async def test_competing_head_untouched(workspace, api):
+    item = await prepared(workspace, api)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        await workspace.git_ok(workspace.main, "commit", "--allow-empty", "-qm", "Competitor")
+        before = await facts(workspace)
+        outcome = await api.apply_inverse(workspace, **effect_args(item))
+        assert outcome.kind == "main_moved" and outcome.main_commit == before[1].strip()
+        assert await facts(workspace) == before
+        assert await api.classify_inverse(workspace, **effect_args(item)) == "unknown"
+
+
+@pytest.mark.parametrize("dirty", ["index", "checkout", "untracked", "detached"])
+async def test_dirty_or_detached_refused_before_cas(workspace, api, dirty, monkeypatch):
+    item = await prepared(workspace, api)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        path = workspace.main.root / ("new.py" if dirty == "untracked" else "later.py")
+        if dirty == "detached":
+            await workspace.git_ok(workspace.main, "checkout", "--detach", item.main_commit)
+        else:
+            path.write_text("changed = 2\n")
+            if dirty == "index":
+                await workspace.git_ok(workspace.main, "add", "later.py")
+        before = await workspace.git_ok(workspace.main, "rev-parse", "refs/heads/main")
+        real, calls = workspace.git, []
+
+        async def observe(tree, *args, **kwargs):
+            calls.append(args[0])
+            return await real(tree, *args, **kwargs)
+
+        monkeypatch.setattr(workspace, "git", observe)
+        with pytest.raises(api.InverseError):
+            await api.apply_inverse(workspace, **effect_args(item))
+        assert "update-ref" not in calls
+        assert await workspace.git_ok(workspace.main, "rev-parse", "refs/heads/main") == before
+
+
+@pytest.mark.parametrize("stage", ["before", "after"])
+@pytest.mark.parametrize("failure", ["timeout", "cancel", "error"])
+async def test_uncertain_cas_classified_once(workspace, api, monkeypatch, stage, failure):
+    item = await prepared(workspace, api)
+    real, calls = workspace.git, []
+
+    async def inject(tree, *args, **kwargs):
+        if args[0] == "update-ref":
+            calls.append(args)
+            if stage == "after":
+                await real(tree, *args, **kwargs)
+            if failure == "cancel":
+                raise asyncio.CancelledError
+            if failure == "error":
+                raise OSError("unconfirmed")
+            return ProcessResult(-15, "", "timeout", True, False, 1)
+        return await real(tree, *args, **kwargs)
+
+    monkeypatch.setattr(workspace, "git", inject)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        if failure == "cancel":
+            with pytest.raises(asyncio.CancelledError):
+                await api.apply_inverse(workspace, **effect_args(item))
+        else:
+            result = await api.apply_inverse(workspace, **effect_args(item))
+            assert result.kind == ("landed" if stage == "after" else "unknown")
+        assert len(calls) == 1
+        assert await api.classify_inverse(workspace, **effect_args(item)) == (
+            "landed" if stage == "after" else "untouched"
+        )
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+async def test_checkout_after_cas_finishes_or_unknown(workspace, api, monkeypatch, blocked):
+    item = await prepared(workspace, api)
+    real, attempts = workspace.git, []
+
+    async def inject(tree, *args, **kwargs):
+        if args[0] == "read-tree":
+            attempts.append(args)
+            if blocked or len(attempts) == 1:
+                raise OSError("checkout interrupted")
+        return await real(tree, *args, **kwargs)
+
+    monkeypatch.setattr(workspace, "git", inject)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        result = await api.apply_inverse(workspace, **effect_args(item))
+        assert result.kind == ("unknown" if blocked else "landed")
+        assert 2 <= len(attempts) <= 4
+        assert (
+            await workspace.git_ok(workspace.main, "rev-parse", "HEAD")
+            == item.inverse_commit + "\n"
+        )
+
+
+async def test_unreadable_evidence_unknown(workspace, api, monkeypatch):
+    item = await prepared(workspace, api)
+    monkeypatch.setattr(workspace, "git", AsyncMock(side_effect=OSError("unreadable")))
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        assert await api.classify_inverse(workspace, **effect_args(item)) == "unknown"
+
+
+@pytest.mark.parametrize("operation", ["apply_inverse", "classify_inverse"])
+async def test_effect_and_settlement_require_original_locks(workspace, api, operation):
+    item = await prepared(workspace, api)
+    async with workspace.locks(main=True, agent_id="agent-2"):
+        with pytest.raises(api.InverseError, match="lock"):
+            await getattr(api, operation)(workspace, **effect_args(item))
+
+
+async def test_cas_comparison_race_returns_verified_competitor(workspace, api, monkeypatch):
+    item = await prepared(workspace, api)
+    real = workspace.git
+    competitor = ""
+
+    async def race(tree, *args, **kwargs):
+        nonlocal competitor
+        if args[0] == "update-ref":
+            await real(tree, "commit", "--allow-empty", "-qm", "Concurrent commit")
+            competitor = (await real(tree, "rev-parse", "HEAD")).stdout.strip()
+        return await real(tree, *args, **kwargs)
+
+    monkeypatch.setattr(workspace, "git", race)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        outcome = await api.apply_inverse(workspace, **effect_args(item))
+        assert outcome.kind == "main_moved" and outcome.main_commit == competitor
+        assert (await workspace.git_ok(workspace.main, "rev-parse", "HEAD")).strip() == competitor
+        assert (workspace.main.root / "shop/mod.py").read_text().endswith("return 2\n")
+
+
+@pytest.mark.parametrize(
+    "field",
+    range(7),
+    ids=[
+        "tree",
+        "parents",
+        "author_name",
+        "author_email",
+        "committer_name",
+        "committer_email",
+        "message",
+    ],
+)
+async def test_each_commit_field_verified_before_publication(workspace, api, monkeypatch, field):
+    item = await prepared(workspace, api)
+    real, effects = workspace.git, []
+
+    async def corrupt(tree, *args, **kwargs):
+        result = await real(tree, *args, **kwargs)
+        if args[0] == "show":
+            fields = result.stdout.split("\0", 6)
+            fields[field] = "unexpected"
+            return replace(result, stdout="\0".join(fields))
+        if args[0] == "update-ref":
+            effects.append(args)
+        return result
+
+    monkeypatch.setattr(workspace, "git", corrupt)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        with pytest.raises(api.InverseError, match="differ"):
+            await api.apply_inverse(workspace, **effect_args(item))
+        assert not effects
+        assert await api.classify_inverse(workspace, **effect_args(item)) == "unknown"
+
+
+@pytest.mark.parametrize("hidden", ["--assume-unchanged", "--skip-worktree"])
+async def test_hidden_checkout_changes_refused(workspace, api, hidden):
+    item = await prepared(workspace, api)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        await workspace.git_ok(workspace.main, "update-index", hidden, "later.py")
+        (workspace.main.root / "later.py").write_text("hidden = 3\n")
+        with pytest.raises(api.InverseError, match="hidden"):
+            await api.apply_inverse(workspace, **effect_args(item))
+        assert await api.classify_inverse(workspace, **effect_args(item)) == "unknown"
+
+
+async def test_partial_dirty_checkout_is_unknown_and_preserved(workspace, api):
+    item = await prepared(workspace, api)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        await workspace.git_ok(
+            workspace.main, "update-ref", "refs/heads/main", item.inverse_commit, item.main_commit
+        )
+        path = workspace.main.root / "shop/mod.py"
+        path.write_text("partially updated or foreign\n")
+        before = await facts(workspace)
+        assert await api.classify_inverse(workspace, **effect_args(item)) == "unknown"
+        assert await facts(workspace) == before
+
+
+async def test_partial_add_cancellation_removes_registration(workspace, api, monkeypatch):
+    h, t = await candidate(workspace, api)
+    real, roots = workspace.git, []
+
+    async def interrupt(tree, *args, **kwargs):
+        result = await real(tree, *args, **kwargs)
+        if args[:2] == ("worktree", "add"):
+            roots.append(Path(args[3]))
+            raise asyncio.CancelledError
+        return result
+
+    monkeypatch.setattr(workspace, "git", interrupt)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        with pytest.raises(asyncio.CancelledError):
+            async with api.prepare_inverse(
+                workspace,
+                agent_id="agent-1",
+                main_commit=h,
+                inverse_tree=t,
+                message=MESSAGE,
+                timeout_s=5,
+            ):
+                pytest.fail("interrupted add yielded")
+        assert roots and not roots[0].exists()
+        assert not (workspace.main.git_identity.common / "worktrees" / roots[0].name).exists()
+        assert str(roots[0]) not in await workspace.git_ok(
+            workspace.main, "worktree", "list", "--porcelain"
+        )
+
+
+@pytest.mark.parametrize("prune_fails", [False, True])
+async def test_cleanup_fallback_and_unverified_cleanup(workspace, api, monkeypatch, prune_fails):
+    h, t = await candidate(workspace, api)
+    real = workspace.git
+
+    async def fail(tree, *args, **kwargs):
+        if args[:2] == ("worktree", "remove") or (
+            prune_fails and args[:2] == ("worktree", "prune")
+        ):
+            return ProcessResult(1, "", "injected cleanup error", False, False, 1)
+        return await real(tree, *args, **kwargs)
+
+    monkeypatch.setattr(workspace, "git", fail)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        async with api.prepare_inverse(
+            workspace,
+            agent_id="agent-1",
+            main_commit=h,
+            inverse_tree=t,
+            message=MESSAGE,
+            timeout_s=5,
+        ) as item:
+            pass
+        assert item.cleaned is (not prune_fails)
+        assert not item.tree.root.exists()
+        assert item.tree.git_identity.directory.exists() is prune_fails
+
+
+async def test_reapply_landed_candidate_does_not_publish_twice(workspace, api, monkeypatch):
+    item = await prepared(workspace, api)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        assert (await api.apply_inverse(workspace, **effect_args(item))).kind == "landed"
+        real, effects = workspace.git, []
+
+        async def observe(tree, *args, **kwargs):
+            if args[0] == "update-ref":
+                effects.append(args)
+            return await real(tree, *args, **kwargs)
+
+        monkeypatch.setattr(workspace, "git", observe)
+        result = await api.apply_inverse(workspace, **effect_args(item))
+        assert result.kind == "landed" and not effects
+
+
+async def test_repeated_cancellation_settles_in_owner_task(workspace, api, monkeypatch):
+    item = await prepared(workspace, api)
+    real, owner = workspace.git, asyncio.current_task()
+    calls = 0
+
+    async def interrupt(tree, *args, **kwargs):
+        nonlocal calls
+        assert asyncio.current_task() is owner
+        if args[0] == "update-ref":
+            await real(tree, *args, **kwargs)
+            raise asyncio.CancelledError
+        if args[0] == "read-tree":
+            calls += 1
+            if calls == 1:
+                raise asyncio.CancelledError
+        return await real(tree, *args, **kwargs)
+
+    monkeypatch.setattr(workspace, "git", interrupt)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        with pytest.raises(asyncio.CancelledError):
+            await api.apply_inverse(workspace, **effect_args(item))
+        assert calls == 2
+        assert (await facts(workspace))[2:4] == (item.inverse_tree + "\n", "")
+
+
+@pytest.mark.parametrize("field", ["main_commit", "inverse_commit", "inverse_tree"])
+async def test_foreign_candidate_tuple_refused(workspace, api, field):
+    item = await prepared(workspace, api)
+    args = effect_args(item) | {field: "1" * 40}
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        with pytest.raises(api.InverseError, match="not prepared"):
+            await api.apply_inverse(workspace, **args)
