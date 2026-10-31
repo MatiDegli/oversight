@@ -122,10 +122,16 @@ def test_proposal_documents_live_revert_command():
 def test_only_http_wiring_reverts_as_person():
     root = Path(__file__).resolve().parents[2] / "src"
     sources = [(p.relative_to(root).as_posix(), p.read_text()) for p in root.rglob("*.py")]
-    for pattern in (r"principal=Person", r"\.submit\("):
-        assert [path for path, source in sources if re.search(pattern, source)] == [
-            "oversight/changes/_revert_port.py"
-        ]
+    for pattern, expected in (
+        (r"principal=Person", "oversight/changes/_revert_port.py"),
+        (r"\.submit\(", "oversight/changes/_revert_port.py"),
+        (r"RevertTarget\(", "oversight/app.py"),
+        (
+            r"resolution = await resolution_at\(self.store, change_id, request.resolution_seq\)",
+            "oversight/app.py",
+        ),
+    ):
+        assert [path for path, source in sources if re.search(pattern, source)] == [expected]
     callers = [
         (path, line.strip())
         for path, source in sources
