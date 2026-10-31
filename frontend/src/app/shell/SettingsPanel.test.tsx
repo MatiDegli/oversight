@@ -6,6 +6,8 @@ import { createInitialState } from "../../state";
 import { SettingsPanel, mergeModePending } from "./SettingsPanel";
 
 const state = { ...createInitialState(), mergeMode: { mode: "ask_me", revision: 0 } as const };
+const privateFrontLabel = /\bF\d+[a-z]?\b/;
+const questionnaireLabel = /\bQ\d+\b/;
 function buttons(node: ReactNode): ReactElement<Record<string, unknown>>[] {
   return Children.toArray(node).flatMap((child) => {
     if (!isValidElement<{ children?: ReactNode }>(child)) return [];
@@ -101,11 +103,24 @@ it("explains the activation refusal without private front labels", () => {
   expect(architecture.replace(/\s+/g, " ")).toContain(
     "until rules mode is activated, PUT merge_when_safe returns 409",
   );
-  expect(architecture).not.toMatch(/\bF10\b/);
+  expect(architecture).not.toMatch(privateFrontLabel);
 });
 it("records the settings decisions without external questionnaire labels", () => {
   const decisions = readFileSync(new URL("../../../../DECISIONS.md", import.meta.url), "utf8");
   const entry = decisions.split("## 2026-10-31 — Settings shows the merge mode only")[1];
   expect(entry).toBeDefined();
-  expect(entry).not.toMatch(/\bQ\d+:/);
+  expect(entry).not.toMatch(questionnaireLabel);
 });
+it.each([
+  [9, ""],
+  [10, ""],
+  [9, "a"],
+])("detects private front labels with number %i and suffix '%s'", (number, suffix) => {
+  expect(`front F${number}${suffix} is pending`).toMatch(privateFrontLabel);
+});
+it.each([":", " (a)", " (b)"])(
+  "detects questionnaire labels followed by '%s'",
+  (suffix) => {
+    expect(`answer Q${3}${suffix}`).toMatch(questionnaireLabel);
+  },
+);
