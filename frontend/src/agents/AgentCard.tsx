@@ -10,6 +10,7 @@ import type { AgentCardDetail } from "./selectors";
 import "./agentCard.css";
 import { ageWords } from "./age";
 import { StopControl } from "./StopControl";
+import { PauseControl } from "./PauseControl";
 
 const labels: Record<AgentStatus["state"], string> = {
   starting: "Starting",
@@ -123,9 +124,18 @@ export interface AgentCardProps {
   onOpenDiff?: (changeId: string) => void;
   onReview?: (changeId: string) => void;
   onStop?: (agentId: string) => Promise<unknown>;
+  onPause?: (agentId: string) => Promise<unknown>;
+  onResume?: (agentId: string) => Promise<unknown>;
 }
 
-export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps) {
+export function AgentCard({
+  data,
+  onOpenDiff,
+  onReview,
+  onStop,
+  onPause,
+  onResume,
+}: AgentCardProps) {
   const { agent, readyForReview } = data;
   const own = look[agent.slot];
   // Keep the person's focus when what holds it leaves the card. The step list and Live diff go when
@@ -164,7 +174,14 @@ export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps
       <div className="agent-card-body">
         {readyForReview ? <Summary data={data} /> : <RunningBody data={data} />}
       </div>
-      <CardActions data={data} onOpenDiff={onOpenDiff} onReview={onReview} onStop={onStop} />
+      <CardActions
+        data={data}
+        onOpenDiff={onOpenDiff}
+        onReview={onReview}
+        onStop={onStop}
+        onPause={onPause}
+        onResume={onResume}
+      />
     </article>
   );
 }
@@ -276,7 +293,7 @@ function CardHeader({ data }: { data: AgentCardDetail }) {
   );
 }
 
-function CardActions({ data, onOpenDiff, onReview, onStop }: AgentCardProps) {
+function CardActions({ data, onOpenDiff, onReview, onStop, onPause, onResume }: AgentCardProps) {
   const { agent, readyForReview } = data;
   const own = look[agent.slot];
   const buttonClass = `inline-flex h-(--button-secondary-height) items-center gap-2 rounded-control border border-control-edge px-3 text-(length:--label-size) font-semibold text-text ${focusRing}`;
@@ -305,9 +322,18 @@ function CardActions({ data, onOpenDiff, onReview, onStop }: AgentCardProps) {
           <Eye aria-hidden="true" className="size-4" /> Review change
         </button>
       )}
-      {onStop && ["working", "revising", "ready_for_review", "halted"].includes(agent.state) && (
-        <StopControl agentId={agent.agent_id} onStop={onStop} />
+      {onPause && onResume && (
+        <PauseControl
+          agentId={agent.agent_id}
+          state={agent.state}
+          onPause={onPause}
+          onResume={onResume}
+        />
       )}
+      {onStop &&
+        ["working", "revising", "ready_for_review", "halted", "paused"].includes(agent.state) && (
+          <StopControl agentId={agent.agent_id} onStop={onStop} />
+        )}
     </footer>
   );
 }

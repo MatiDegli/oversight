@@ -1,4 +1,5 @@
 import { launchBrowser } from "../../browserLaunch.support";
+import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
@@ -39,6 +40,99 @@ async function outside(page: Page) {
     )
     .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON() as object));
 }
+
+async function openCardPage(commands = true) {
+  const page = await browser.newPage({
+    viewport: { width: 1920, height: 1080 },
+    reducedMotion: "reduce",
+  });
+  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+  await page.goto(url);
+  await page.waitForFunction(() => !!window.readyTest);
+  await page.evaluate((enabled) => {
+    window.readyTest.mount(enabled);
+  }, commands);
+  await page.evaluate(() => document.fonts.ready);
+  return page;
+}
+
+it.each(["dark", "day"])("pauses and resumes without moving focus in %s", async (theme) => {
+  const page = await openCardPage();
+  const shots = fileURLToPath(new URL("../../../../.shots/card-pause/", import.meta.url));
+  try {
+    await mkdir(shots, { recursive: true });
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    const card = page.getByRole("article", { name: "Agent A", exact: true });
+    const pause = card.getByRole("button", { name: "Pause", exact: true });
+    await check(pause).toBeVisible();
+    expect(
+      await page
+        .getByRole("complementary", { name: "Agents", exact: true })
+        .evaluate((panel) => panel.getBoundingClientRect().width),
+    ).toBe(400);
+    await card.screenshot({ path: `${shots}working-${theme}.png` });
+    await pause.click();
+    const pausing = card.getByRole("button", { name: "Pausing after this step", exact: true });
+    await check(pausing).toHaveAttribute("aria-disabled", "true");
+    await check(pausing).toBeFocused();
+    await pausing.press("Enter");
+    expect(await page.evaluate(() => window.readyTest.pauseCalls)).toEqual(["agent-1"]);
+    await card.screenshot({ path: `${shots}pausing-${theme}.png` });
+    await page.evaluate(() => {
+      window.readyTest.status("paused");
+    });
+    await check(card.getByText("Paused", { exact: true })).toBeVisible();
+    const resume = card.getByRole("button", { name: "Resume", exact: true });
+    await check(resume).toBeVisible();
+    await check(resume).toBeFocused();
+    await check(card.getByRole("button", { name: "Stop and discard", exact: true })).toBeVisible();
+    await card.screenshot({ path: `${shots}paused-${theme}.png` });
+    await resume.click();
+    expect(await page.evaluate(() => window.readyTest.resumeCalls)).toEqual(["agent-1"]);
+    await check(resume).toBeFocused();
+    await page.evaluate(() => {
+      window.readyTest.status("working");
+    });
+    await check(pause).toHaveAttribute("aria-disabled", "false");
+    await check(pause).toBeFocused();
+  } finally {
+    await page.close();
+  }
+});
+
+it("keeps focus and permits retry when Pause fails", async () => {
+  const page = await openCardPage();
+  try {
+    await page.evaluate(() => {
+      window.readyTest.failPause();
+    });
+    const card = page.getByRole("article", { name: "Agent A", exact: true });
+    const pause = card.getByRole("button", { name: "Pause", exact: true });
+    await pause.click();
+    await check(card.getByRole("alert")).toHaveText(
+      "Pause did not reach the server. Check the connection and try again.",
+    );
+    await check(pause).toHaveAttribute("aria-disabled", "false");
+    await check(pause).toBeFocused();
+  } finally {
+    await page.close();
+  }
+});
+
+it("offers no Pause or Resume without command callbacks", async () => {
+  const page = await openCardPage(false);
+  try {
+    await check(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+    await page.evaluate(() => {
+      window.readyTest.status("paused");
+    });
+    await check(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+  } finally {
+    await page.close();
+  }
+});
 
 it.each(["task", "steps", "diff", "stop"] as const)(
   "ready preserves external layout and %s focus",
