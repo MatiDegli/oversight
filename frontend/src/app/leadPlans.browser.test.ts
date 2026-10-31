@@ -69,18 +69,21 @@ it.each(["dark", "day"])("lists three lead plans without stealing focus in %s", 
     ])
       await expect(inbox.getByRole("heading", { name, exact: true })).toBeVisible();
     await expect(page.getByLabel("Repository graph", { exact: true })).toBeVisible();
-    const decisions = inbox.getByRole("button", { name: "Decisions 3", exact: true });
-    await decisions.focus();
-    await page.evaluate(() => {
-      window.mountLeadPlans(8);
-    });
-    await expect(decisions).toBeFocused();
     if (process.env.LEAD_PLANS_SHOTS === "1") {
       await page.evaluate(() => document.fonts.ready);
       const shots = fileURLToPath(new URL("../../../.shots/lead-plans/", import.meta.url));
       await mkdir(shots, { recursive: true });
       await page.screenshot({ path: `${shots}${theme}.png` });
     }
+    const decisions = inbox.getByRole("button", { name: /^Decisions [23]$/ });
+    await decisions.focus();
+    await page.evaluate(() => {
+      window.mountLeadPlans(9);
+    });
+    await expect(inbox.getByRole("article")).toHaveCount(2);
+    await expect(inbox.getByRole("heading", { name: "Plan 2: update inventory" })).toHaveCount(0);
+    await expect(decisions).toHaveAccessibleName("Decisions 2");
+    await expect(decisions).toBeFocused();
     expect(errors).toEqual([]);
     expect(commands).toEqual([]);
   } finally {
