@@ -26,9 +26,9 @@ it("keeps three requested revisions with distinct identities, plan ids and first
     })),
   );
   expect(open.map((entry) => entry.reason)).toEqual([
-    "Plan 1: update pricing",
-    "Plan 2: update inventory",
-    "Plan 3: update orders",
+    "Cap combined discounts at 30% so bulk orders keep a minimum margin.",
+    "Reject reservations above available stock to prevent overselling.",
+    "Release reserved stock after a failed checkout so the order can be retried.",
   ]);
   expect(entries(events, 9)[0]?.identity).toEqual(open[0]?.identity);
 });

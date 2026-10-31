@@ -68,6 +68,17 @@ it.each(["dark", "day"])("lists three lead plans without stealing focus in %s", 
       "Plan 3: update orders",
     ])
       await expect(inbox.getByRole("heading", { name, exact: true })).toBeVisible();
+    for (const detail of [
+      "Cap combined discounts at 30% so bulk orders keep a minimum margin.",
+      "Reject reservations above available stock to prevent overselling.",
+      "Release reserved stock after a failed checkout so the order can be retried.",
+    ]) {
+      await expect(inbox.getByText(detail, { exact: true })).toHaveCount(1);
+    }
+    await expect(inbox.locator(".decision-reasons")).toHaveCount(0);
+    await expect(inbox.locator(".inbox-heading p")).toHaveText(
+      "0 agents took 0 steps in 0 min. These 3 need a person.",
+    );
     await expect(page.getByLabel("Repository graph", { exact: true })).toBeVisible();
     if (process.env.LEAD_PLANS_SHOTS === "1") {
       await page.evaluate(() => document.fonts.ready);

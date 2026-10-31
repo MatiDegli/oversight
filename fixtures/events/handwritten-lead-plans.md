@@ -15,3 +15,15 @@ event's evidence sequence (4, 6, 8) and plan id; text follows the latest plan de
 The plan routes use that id.
 Tests also cover foreign ownership, new runs, stale updates and legacy logs whose
 lead events omit the field or carry only null. The reducer imposes no plan limit.
+
+Each plan has a short task title, a distinct detail explaining the change and its
+purpose, and a distinct subtask task. The inbox shows its title and detail once.
+
+No extra agent events are fabricated. `runtime_leads.py` publishes `LeadStatus`
+after each coordination tool through `LeadRun.on_step`; `_lead.py` does not emit
+`agent.status` or `agent.step`. The recorded steps 1, 2, 3, 4 therefore remain only
+in the lead statuses. Seq 1–11 and their increasing timestamps are unchanged.
+At seq 8, three plans are proposed, 7 seconds have elapsed, and there are no coding
+agent statuses or steps. The current inbox header consequently reads:
+"0 agents took 0 steps in 0 min. These 3 need a person."
+That header does not count leads; correcting that scope belongs to another front.
