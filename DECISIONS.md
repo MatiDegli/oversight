@@ -2897,3 +2897,30 @@ Reason: a docs audit found many docs behind main after several days of changed d
 5. AGENTS.md is aligned only with decisions already recorded.
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
+
+## 2026-10-31 — Refuse obvious secret files at model tool boundaries
+
+A shared pure basename predicate in workspace enforces the Agent tools rule before the coding
+agent's whole/ranged read_file and edit_file can read a file, and before the lead's read_file
+calls its shared reader. Search excludes secret names before reading any listed file. Refusals
+share one rule message and at most 60 basename characters, without checking whether a file exists.
+Both list_files tools still expose names: a name is not file content.
+
+Names are case-folded; a final .example exempts every pattern, matching the repository's
+committed examples. The .env* rule is literal, including .envrc, and intentionally wider than
+the repository's own .gitignore patterns .env and .env.*. The other patterns are *.pem, *.key
+and SSH identity names id_rsa, id_dsa, id_ecdsa and id_ed25519, followed by the end of the name
+or _, . or -. The identity names live in one constant. This implements the front's requested
+SSH interpretation of id_* so ordinary id_utils.py and id_generator.py remain readable;
+id_rsa_loader.py is refused. The alternative is a literal id_* prefix that would refuse those
+ordinary source files too. Widening the identity names or adopting that alternative remains a
+pending maintainer product decision.
+
+GET /files, PUT /files and Tree stay unchanged: the person may read or edit their own files.
+The lead shares GET /files' reader, so its guard belongs in the tool rather than the route.
+Path validation, contracts, events, prompts and both tool tables stay unchanged.
+
+Residual risks outside this front: run_tests output may expose secrets (up to 4,000 characters);
+the reviewer's git diff may expose one if something outside a tool changes a secret file;
+the person's own PUT /files may write one into change evidence; and secrets with non-obvious
+names remain readable. This is a name policy, not content detection or output redaction.

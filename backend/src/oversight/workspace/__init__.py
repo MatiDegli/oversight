@@ -47,6 +47,7 @@ from oversight.workspace.revert import (
     prepare_inverse,
 )
 from oversight.workspace.runner import ProcessResult, Spawn, run_process
+from oversight.workspace.secret_paths import SECRET_FILE_REFUSAL, is_secret_path
 from oversight.workspace.source import (
     BOLTONS,
     SOURCE_GIT_ENV,
@@ -69,6 +70,7 @@ __all__ = [
     "MAX_XML_BYTES",
     "OPEN_NOTICE",
     "PER_CALL_TIMEOUT_S",
+    "SECRET_FILE_REFUSAL",
     "SOURCE_GIT_ENV",
     "TREE_TIMEOUT_S",
     "Author",
@@ -114,6 +116,7 @@ __all__ = [
     "configure_suite",
     "content_hash",
     "inverse_suite_problem",
+    "is_secret_path",
     "list_tree",
     "parse_junit",
     "prepare_inverse",
