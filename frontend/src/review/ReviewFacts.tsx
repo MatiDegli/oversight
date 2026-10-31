@@ -223,7 +223,7 @@ export function ReviewFacts({
               {facts.behavior_diff == null && <p>{behaviorNotRecorded}</p>}
             </div>
             {!facts.complete && <p>Incomplete: {facts.problems.join("; ")}</p>}
-            <div className="pt-(--spacing-lg)">
+            <div className={`pt-(--spacing-lg)${panel ? " empty:hidden" : ""}`}>
               <MeasuredCallers state={state} changeId={proposal.change_id} detailsOnly={panel} />
             </div>
           </>

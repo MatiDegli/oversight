@@ -55,6 +55,30 @@ function Node({
     </div>
   );
 }
+function ConeConnectors({ entry, compact }: { entry: PracticeCase; compact: boolean }) {
+  if (countAt(entry, 1) + countAt(entry, 2) === 0) return null;
+  return (
+    <>
+      <path
+        d={[
+          countAt(entry, 1) > 0 ? (compact ? "M85 54V46" : "M198 67H270Q278 67 278 59V46") : "",
+          countAt(entry, 2) > 0
+            ? compact
+              ? "M85 104V92"
+              : "M198 113H216Q224 113 224 105V75Q224 67 216 67H202"
+            : "",
+        ].join("")}
+      />
+      <path
+        className="pp-arrow"
+        d={[
+          countAt(entry, 1) > 0 ? (compact ? "M81 48L85 42L89 48Z" : "M274 48L278 42L282 48Z") : "",
+          countAt(entry, 2) > 0 ? (compact ? "M81 94L85 88L89 94Z" : "M204 63L198 67L204 71Z") : "",
+        ].join("")}
+      />
+    </>
+  );
+}
 function Piece({
   practice,
   entry,
@@ -93,23 +117,7 @@ function Piece({
             />
           </>
         ) : (
-          <>
-            <path
-              d={
-                compact
-                  ? "M85 54V46M85 104V92"
-                  : "M198 67H270Q278 67 278 59V46M198 113H216Q224 113 224 105V75Q224 67 216 67H202"
-              }
-            />
-            <path
-              className="pp-arrow"
-              d={
-                compact
-                  ? "M81 48L85 42L89 48ZM81 94L85 88L89 94Z"
-                  : "M274 48L278 42L282 48ZM204 63L198 67L204 71Z"
-              }
-            />
-          </>
+          <ConeConnectors entry={entry} compact={compact} />
         )}
       </svg>
       <Node {...{ practice, entry, merged, compact }} />

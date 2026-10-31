@@ -8,6 +8,8 @@ import { AgentLine } from "./PhoneGraph";
 import { Disclosure } from "./PhoneDiff";
 
 export function diffPreview(proposal: ChangeProposed) {
+  if (proposal.files.length === 0)
+    return `+${String(proposal.lines_added)} −${String(proposal.lines_removed)}`;
   const rest = proposal.files.length - 1;
   return `${proposal.files[0]?.path ?? ""}${rest > 0 ? ` and ${String(rest)} more file${rest === 1 ? "" : "s"}` : ""} · +${String(proposal.lines_added)} −${String(proposal.lines_removed)}`;
 }

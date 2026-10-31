@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import type { MeasuredCaller } from "@contracts";
 import type { State } from "../state";
 import { smallestExample } from "./reviewBodyEvidence";
@@ -36,22 +37,49 @@ function CallerEvidence({ caller, detailsOnly }: { caller: MeasuredCaller; detai
         caller.problems.map((reason, index) => <p key={index}>Observation problem: {reason}</p>)}
       {!detailsOnly && caller.not_probed && <p>Not probed: {caller.not_probed}</p>}
       {samples.length > 0 && (
-        <details>
-          <summary className={`cursor-pointer rounded-label text-text ${focusRing}`}>
+        <details className={detailsOnly ? "group" : undefined}>
+          <summary
+            className={`cursor-pointer rounded-label text-text ${focusRing}${detailsOnly ? " flex list-none items-center gap-1 [&::-webkit-details-marker]:hidden" : ""}`}
+          >
+            {detailsOnly && (
+              <ChevronRight
+                aria-hidden="true"
+                size={14}
+                className="shrink-0 text-muted group-open:rotate-90"
+              />
+            )}
             Observed samples
           </summary>
           <ul className="flex flex-col gap-(--spacing-sm)">
             {samples.map((sample, index) => (
               <li key={index}>
-                {sample.unstable && <p className="text-text">Unstable observation</p>}
-                <dl>
-                  {(["Inputs", "Before", "After"] as const).map((label) => (
-                    <div key={label}>
+                {sample.unstable && (
+                  <p className="text-text">
+                    {detailsOnly
+                      ? "Results varied between runs; this is not an established difference."
+                      : "Unstable observation"}
+                  </p>
+                )}
+                <dl
+                  className={
+                    detailsOnly
+                      ? "grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-1"
+                      : undefined
+                  }
+                >
+                  {([detailsOnly ? "Input" : "Inputs", "Before", "After"] as const).map((label) => (
+                    <div key={label} className={detailsOnly ? "contents" : undefined}>
                       <dt>{label}</dt>
-                      <dd className="whitespace-pre-wrap break-all font-mono text-text">
+                      <dd
+                        className={`whitespace-pre-wrap ${detailsOnly ? "wrap-anywhere" : "break-all"} font-mono text-text`}
+                      >
                         {
                           sample[
-                            label === "Inputs" ? "inputs" : label === "Before" ? "before" : "after"
+                            label === "Inputs" || label === "Input"
+                              ? "inputs"
+                              : label === "Before"
+                                ? "before"
+                                : "after"
                           ]
                         }
                       </dd>

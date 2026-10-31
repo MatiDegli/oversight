@@ -334,25 +334,9 @@
   padding: 0;
   overflow: visible;
 }
-.phone-practice .review-lead-heading {
-  display: block;
-}
-.phone-practice .review-lead-heading > p {
-  margin-top: 4px;
-}
 .phone-practice .review-body .decision-actions button,
 .phone-practice .review-body .answer-reset {
   min-height: 44px;
-}
-.phone-practice .review-body .example-pair {
-  grid-template-columns: minmax(0, 1fr);
-}
-.phone-practice .review-body .example-pair > div {
-  display: block;
-  padding: 12px;
-}
-.phone-practice .review-body .example-pair > svg {
-  transform: rotate(90deg);
 }
 .phone-practice .review-body .choice-example code {
   font-size: 15px;

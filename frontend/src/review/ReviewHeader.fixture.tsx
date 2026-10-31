@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import inbox from "../../../fixtures/events/handwritten-inbox-grants.jsonl?raw";
 import ordinary from "../../../fixtures/events/handwritten-level1.jsonl?raw";
+import type { FileAccess } from "../editor";
 import { GraphView } from "../graph";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import { parseEvent } from "../transport";
@@ -89,6 +90,10 @@ export function headerState(name: keyof typeof headerCases) {
       first.answered_by = "person";
     }
   }
+  if (name === "merged" || name === "mergedGrant") {
+    const resolution = state.changes["change-1"]?.resolution;
+    if (resolution) resolution.merge_commit = "4ca5596e0d1b2c3a4f5e6d7c8b9a0f1e2d3c4b5a";
+  }
   if (name === "merged") passProbeProfile(state.changes["change-1"]?.resolution);
   return state;
 }
@@ -116,7 +121,28 @@ function passProbeProfile(resolution: ChangeResolved | null | undefined) {
   }
 }
 
-export function mountHeader(name: keyof typeof headerCases, state = headerState(name)) {
+export function mountHeader(
+  name: keyof typeof headerCases,
+  state = headerState(name),
+  { files = false }: { files?: boolean } = {},
+) {
+  const fileAccess: FileAccess | undefined = files
+    ? {
+        drafts: new Map(),
+        inFlightSaves: new Map(),
+        saved: new Map(),
+        async readFile(path, agentId) {
+          const change = Object.values(state.changes).find((item) => item.agent_id === agentId);
+          const content = change?.files[path]?.file.modified ?? "";
+          const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
+          const hash = [...new Uint8Array(digest)]
+            .map((byte) => byte.toString(16).padStart(2, "0"))
+            .join("");
+          return { path, agent_id: agentId ?? null, content, hash };
+        },
+        saveFile: () => new Promise(() => undefined),
+      }
+    : undefined;
   stateStore.setState({ state });
   const host = document.createElement("div");
   host.style.cssText = "display:flex;width:880px;height:940px;margin:92px 0 0 56px";
@@ -128,6 +154,7 @@ export function mountHeader(name: keyof typeof headerCases, state = headerState(
         <>
           <ReviewPanel
             state={state}
+            files={fileAccess}
             changeId={headerCases[name].changeId}
             onClose={() => undefined}
             onDecide={() => undefined}

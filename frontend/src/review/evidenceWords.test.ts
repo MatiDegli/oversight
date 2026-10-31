@@ -126,6 +126,28 @@ it("distinguishes recorded grant coverage from passes and counts rules once", ()
     "Known spend: passed",
   ]);
 });
+it("counts two covered unknown rules separately from passes", () => {
+  const resolved = resolution();
+  required(resolved.assessment).rules = [
+    assessed("combined_tests"),
+    assessed("small_cone", "unknown"),
+    assessed("known_spend", "unknown"),
+  ];
+  const grant = required(required(headerState("mergedGrant").changes["change-1"]).resolution)
+    .grants?.[0];
+  if (!grant) throw new Error("Missing grant");
+  resolved.grants = [
+    { ...grant, rule: "small_cone" },
+    { ...grant, rule: "known_spend" },
+  ];
+  const words = mergedRuleWords(resolved);
+  expect(words.line).toBe("Tests pass. Your grant covered 2 rules that could not be checked.");
+  expect(words.details).toEqual([
+    "Tests on the combined result: passed",
+    "Possibly affected functions: covered by your grant",
+    "Known spend: covered by your grant",
+  ]);
+});
 it("omits rule copy without an assessment, a rules merge or any passed rule", () => {
   expect(mergedRuleWords(null).line).toBeNull();
   const resolved = resolution();

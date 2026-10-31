@@ -61,7 +61,7 @@ export function ReviewBody({
     kind === "a"
       ? `${String(questions.filter((q) => cardAnswer(q, answers) !== null).length)} of ${String(questions.length)} answered`
       : kind === "b"
-        ? `${String(callers.measured)} of ${String(callers.total)} callers measured`
+        ? `${String(callers.measured)} of ${String(callers.total)} ${phone ? "measured" : "callers measured"}`
         : kind === "c"
           ? "Read the diff before approving"
           : kind === "d2"

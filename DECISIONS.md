@@ -2089,6 +2089,43 @@ Not built now. Once level 3 is solid, a candidate life pass may add the answer f
 a rolling answered count, and hover on a differing caller that lights its node. It goes through
 the same sketch approval as this rework. These are later candidates; merge travel on Approve is
 already required by the approved baseline.
+
+## 2026-10-31 — Review words use the approved table and recorded rule results
+
+No server phrase reaches the review panel verbatim. The table in `evidenceWords.ts` translates
+reasons, and none says "probe"; an unknown phrase shows no reason. In g, the first three recorded
+passes in the approved order make one sentence. "{n} more rules passed." follows when more
+passed ("1 more rule passed." for one). "Your grant covered {k} rule(s) that could not be checked."
+follows when a grant covered an unknown rule. Details lists each as "{name}: passed" or
+"{name}: covered by your grant". Approved as implemented at `60152b2` in packet B: "Approve all",
+before 2026-10-31T04:05:38Z (01:05:38 ART).
+
+Reason: the panel uses the approved review words, and recorded passes and grant uses explain the
+merge without exposing server diagnostics or inferring evidence from the current policy.
+
+## 2026-10-31 — Map view and folder groups follow the later line B work
+
+The map view and folder groups are left out of the current level. They come after the Conversation tab, milestone pulses and life layer part 2, built only from a sketch the maintainer approves (maintainer, 2026-10-31).
+The depth control stays built (`bfe7a18`). The definition remains for a later level; sketch first.
+Packet B's "Approve all", before 2026-10-31T04:05:38Z (01:05:38 ART), covered leaving these out
+of the current level. The maintainer later placed them in this line B order on 2026-10-31.
+
+Reason: the current level keeps its built depth control; the later map view and folder groups
+require the maintainer's approved sketch after the preceding line B work.
+
+## 2026-10-31 — Phone practice reviews with the panel's evidence
+
+The phone practice uses the panel's evidence from f and f-b. The Oct 27 recording stays, so its
+two decisions show kind d; a, b, c and d2 appear only in fixture tests. The maintainer said
+"No, keep Oct 27", before 2026-10-31T04:14:42Z (01:14:42 ART). The progress row ("Decision {i} of {n}")
+and the 44px "Recorded task" row with the exact task stay as departures: the practice holds two
+recorded decisions, and their 40–60 word tasks need more than the headline. The "Possibly affected"
+disclosure is removed: the graph owns the list (DESIGN.md, graph-owned review context), and the
+fourth chip keeps the count.
+
+Reason: the practice retains the real recording while sharing the panel's evidence order; progress
+and the verbatim task remain available without duplicating the graph's list.
+
 ## 2026-10-30 — Item 10 measures agent-hours from observed intervals, with dated list prices
 
 The maintainer amended item 10 of docs/additions.md. Agent-hours, project active hours and parallelism come

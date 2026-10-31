@@ -62,7 +62,12 @@ describe("measured caller presentation", () => {
       outcome: "not_compared",
       rows: firstCaller.rows.map((row) => ({ ...row, unstable: true })),
     });
-    expect(html).toContain("Unstable observation");
+    expect(html).toContain("Results varied between runs; this is not an established difference.");
+    expect(html).toContain("lucide-chevron-right");
+    expect(html).toContain("group-open:rotate-90");
+    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)]");
+    expect(html).toContain("<dt>Input</dt>");
+    expect(html).not.toContain("<dt>Inputs</dt>");
     expect(html).toContain(firstCaller.rows[0]?.inputs);
   });
   it.each([null, []])("omits absent or empty caller evidence (%j)", (measured_cone) => {

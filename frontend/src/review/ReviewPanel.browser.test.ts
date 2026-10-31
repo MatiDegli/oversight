@@ -6,6 +6,7 @@ import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
+import { fixtureCacheDir } from "../../shots/browserCache.support";
 import { launchBrowser } from "../browserLaunch.support";
 import type { GraphProbeHost } from "../graph";
 
@@ -17,7 +18,7 @@ let html: string;
 beforeAll(async () => {
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/summary/test-cache", import.meta.url)),
+    cacheDir: fixtureCacheDir(expect.getState().testPath),
     server: { host: "127.0.0.1", port: 0, strictPort: false },
   });
   html = await server.transformIndexHtml(
@@ -142,6 +143,7 @@ it.each(["b", "c"] as const)(
       expect(await details.locator("details[open]").count()).toBe(0);
       await summary.focus();
       await summary.press("Enter");
+      expect(await details.locator(":scope > details[open]").count()).toBe(1);
       expect(await summary.evaluate((element) => document.activeElement === element)).toBe(true);
       await details.evaluate((element) => {
         for (const samples of element.querySelectorAll("details")) samples.open = true;
@@ -338,6 +340,10 @@ it.each(cases)(
       const page = await browser.newPage({ viewport: { width, height: 1080 } });
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error" && !message.location().url.endsWith("/@vite/client"))
+          errors.push(message.text());
+      });
       try {
         await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
         await page.goto(url);
@@ -382,7 +388,7 @@ it.each(cases)(
         expect(await page.locator(".review-decision-bar").count()).toBe(name === "merged" ? 0 : 1);
         if (name === "merged") {
           expect(await page.locator(".review-merged").textContent()).toBe(
-            "Merged into main merge-p",
+            "Merged into main 4ca5596",
           );
           expect(await page.locator(".review-file-row").textContent()).not.toContain("Editable");
         }

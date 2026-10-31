@@ -367,6 +367,9 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Review cone context in Signal | module frames at 60% | everything outside the cone and change at 16%, frames included | the approved review baseline lets the cone read alone |
 | Review example at 1280 | Before and After intended to share the first screen | the answered row wraps in full; After may need scrolling | the approved departure keeps the complete answer legible |
 | Review Revert in state g | a Revert button | no Revert until item 8 delivers its command | the approved shot shows a target, not a command available today |
+| Progress row on the phone | not drawn (f and f-b show one change) | "Decision {i} of {n}" above the agent line | the practice holds two recorded decisions |
+| "Recorded task" row on the phone | not drawn | a 44px row after the evidence with the exact task | the recorded tasks run 40–60 words; the short title stays the headline |
+| Cone card on a merged change (g) | drawn | no cone card or cone lights once a change is approved or rejected | the graph's lights go off once a change is decided (graphScope.ts:14–15, pinned by app/review.browser.test.ts:292–293); flagged to the maintainer |
 | Pressed rail button | varies in the earlier sketches | raised | one color for hover and pressed |
 | New-node fill for agent B | not drawn | `rgba(4, 8, 20, 0.95)` | derived from A's pair, so both agents follow one rule |
 | Letter in a rail avatar | the agent's color | agent-a-text, agent-b-text | use the text variants; tint contrasts are checked below |
@@ -1045,12 +1048,17 @@ never its local color values. No new syntax color is chosen here.
   runs." Keep the stable differing example from b; varied results do not supply a difference.
 - **d:** one body line, "Nothing was compared for this change." Caption: "Behavior and callers
   were not recorded for this revision. The diff and tests are the evidence." The diff is tall.
-- **d2:** "Nothing was compared: compute_price could not run outside its test setup." Caption:
-  "The diff and tests are the evidence." Show a reason only when the evidence provides it.
+- **d2:** "Nothing was compared: it uses randomness; it reads the clock." Caption:
+  "The diff and tests are the evidence." The reason comes only from the approved words table;
+  a phrase outside it shows "Nothing was compared." with no reason.
 - **g:** "Merged" pill; tab status reads "merged". "Merged by your rules" / "Merge mode: Merge
-  alone when safe". Name the rule in words: "Tests pass, every changed function is reached by a
-  test, and the change stays
-  inside its zone." Note: "Negative quantities now raise ValueError." No decision bar; footer
+  alone when safe". The first three recorded passes, in the approved order, make one sentence.
+  "{n} more rules passed." follows when more passed ("1 more rule passed." for one).
+  "Your grant covered {k} rule(s) that could not be checked." follows when a grant covered an
+  unknown rule. Details lists each as "{name}: passed" or "{name}: covered by your grant".
+  The shot's sentence is the example: "Tests pass, every changed function is reached by a test,
+  and the change stays inside its zone." Note: "Negative quantities now raise ValueError."
+  No decision bar; footer
   "Merged into main <hash>" (the shot uses 4ca5596). Revert appears only when item 8 delivers the
   revert command; until then the footer has no Revert. The shot's button is a target.
 
@@ -1087,7 +1095,7 @@ in equal 48px containers.
   "2 choices need you" / "1 of 2 answered"; the answered row wraps fully, and the three answers
   stack as full-width 44px buttons. Preview "24 inputs, 3 differ · 1 of 36 functions"; diff preview
   "shop/inventory.py · +2 −0". Above the locked Approve and Reject sits only the rule caption
-  "Approve opens when every answer is Yes". "1 of 2 answered" appears only in the lead.
+  "Approve opens when every answer is Yes." "1 of 2 answered" appears only in the lead.
 - **f-b:** graph caption "differs on 3 of 12 calls"; fourth chip reads only "9 possibly affected".
   Lead "1 caller behaves differently" / "3 of 9 measured", then `Cart.quote_add`, its example
   and the same-result sentence from b. Preview "10 inputs, 9 differ · 6 callers not measured";
@@ -1295,7 +1303,7 @@ on every animation frame during the drag, never only on drop.
 This definition sits beside graph structure and folding because depth controls how much unfolds,
 while scale controls how it is drawn. It refines [Layout](#layout)'s **Opening a change** readability
 floor, **The preset's arrangement** and fit behavior, together with the folding rules above.
-The depth control is built (`bfe7a18`). The map and folder groups are not built.
+The depth control is built (`bfe7a18`). The map view and folder groups are left out of the current level. They come after the Conversation tab, milestone pulses and life layer part 2, built only from a sketch the maintainer approves (maintainer, 2026-10-31).
 
 1. **Two axes.** Depth is the Modules / Functions / Details control: how much unfolds. Scale is
    the zoom: how it is drawn. Apply the floor in Layout's **Opening a change** rule to module
@@ -1325,10 +1333,9 @@ The depth control is built (`bfe7a18`). The map and folder groups are not built.
    on hover.
 7. **Interaction.** Clicking a group zooms to frame it, and the cards come back. Clicking a circle
    brings that module to 100%.
-8. **Scope.** This stays in [Undecided candidates](docs/additions.md#undecided-candidates).
-   Now: this definition, then a sketch with real data from Boltons and the demo, and the proof 2
-   repository if it changes. Whether to build is decided with the sketch in view, never before
-   the Saturday checkpoint. The proof 2 repository, Boltons `d31d821`, has 66 modules by top
+8. **Scope.** The map view and folder groups are left out of the current level. They come after the Conversation tab, milestone pulses and life layer part 2, built only from a sketch the maintainer approves (maintainer, 2026-10-31).
+   This definition stays for a later level. Sketch first, with real data from Boltons and the demo,
+   and the proof 2 repository if it changes. The proof 2 repository, Boltons `d31d821`, has 66 modules by top
    folder in [its preset](fixtures/layouts/boltons-d31d821.json): boltons 30, tests 32, misc 3,
    docs 1. Under the folder rule it shows one large library group, tests and misc; docs, with one
    module, draws no frame. Its fit lands right at the threshold: 65% without tests, lower with

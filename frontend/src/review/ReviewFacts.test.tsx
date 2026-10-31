@@ -97,7 +97,7 @@ describe("review evidence", () => {
     if (!proposal) throw new Error("Missing proposal");
     const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
     // Whole-output pins measured on the accepted 1ac8382 tip.
-    expect(createHash("sha256").update(html).digest("hex")).toBe(
+    expect(createHash("sha256").update(html).digest("hex"), html).toBe(
       name === "b"
         ? "4a1d2fccb8372fd478e338a99ba77a20ac8eb489dcc496939ca603025dbbf620"
         : "4b136f2685b3c0454e8cec31889d5fa96f5a43a1a5584d484f52ffcf55b6cb3e",

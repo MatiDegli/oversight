@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import type { State } from "../state";
 import { selectBehaviorEvidence } from "./behaviorEvidence";
 
@@ -23,7 +24,10 @@ export function BehaviorDiff({
         <p>No behavior was recorded for changed functions.</p>
       ) : (
         <>
-          <p>Up to eight samples per node; counts cover all compared inputs.</p>
+          <p>
+            Up to eight samples per {detailsOnly ? "function" : "node"}; counts cover all compared
+            inputs.
+          </p>
           {!detailsOnly && <p>These bounded inputs do not establish equivalence.</p>}
           <ul className="flex min-w-0 flex-col gap-3.5">
             {nodes.map((node, index) => (
@@ -49,12 +53,22 @@ export function BehaviorDiff({
                   </p>
                 )}
                 {node.noDifference && <p>No difference measured on these inputs</p>}
-                {node.compared_count === 0 && node.limitation === null && (
-                  <p>No input comparisons were recorded.</p>
-                )}
+                {node.compared_count === 0 &&
+                  (detailsOnly ? node.words : node.limitation) === null && (
+                    <p>No input comparisons were recorded.</p>
+                  )}
                 {node.rows.length > 0 && (
-                  <details>
-                    <summary className="cursor-pointer rounded-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text">
+                  <details className={detailsOnly ? "group" : undefined}>
+                    <summary
+                      className={`cursor-pointer rounded-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text${detailsOnly ? " flex list-none items-center gap-1 [&::-webkit-details-marker]:hidden" : ""}`}
+                    >
+                      {detailsOnly && (
+                        <ChevronRight
+                          aria-hidden="true"
+                          size={14}
+                          className="shrink-0 text-muted group-open:rotate-90"
+                        />
+                      )}
                       Samples ({node.rows.length})
                       {!detailsOnly && node.rows.some((row) => row.unstable)
                         ? " · Results varied between runs"

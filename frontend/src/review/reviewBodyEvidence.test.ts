@@ -140,6 +140,7 @@ it("uses c wording and only the stable caller supplies an example", () => {
   if (!caller) throw new Error("Missing caller");
   for (const reason of ["Caller recording budget reached", "unknown", null]) {
     caller.not_probed = reason;
+    // Clear c's "caller measurement budget exhausted" so recordingBudgetReached tests only not_probed.
     caller.not_compared = [];
     expect(partialLines(state, "change-1")[2]?.line).toBe("Customer.quote: not measured.");
   }

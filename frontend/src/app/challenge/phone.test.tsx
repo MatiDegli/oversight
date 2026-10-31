@@ -257,6 +257,7 @@ it("uses words for a finish with no matching decisions", () => {
 });
 
 it.each([
+  [0, "+9 −0"],
   [1, "shop/inventory.py · +9 −0"],
   [2, "shop/inventory.py and 1 more file · +9 −0"],
   [3, "shop/inventory.py and 2 more files · +9 −0"],
