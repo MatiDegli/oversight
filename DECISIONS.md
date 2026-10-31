@@ -2633,3 +2633,62 @@ Review time is refused because proposal-to-resolution elapsed time mixes waiting
 Rankings and scores are refused because agents receive different tasks. Percentages and ratios
 such as lines per dollar or cost per merge are refused because these receipts provide no fair
 normalization for task scope; every printed rate retains its explicit denominator.
+
+## 2026-10-31 — Item 12 E1: inert examples selector and one bounded call
+
+The maintainer's answers were recorded at 13:49:39 ART (2026-10-31T16:49:39Z):
+Q1 reserves the typed confirmation command for E3, contract 1.13.0; E1 changes no contract.
+Q2, “Un envío, sin reintento”, means one HTTP send, including failure. This explicitly
+excepts the examples phase alone from the usual 429/5xx retry rule. A failed collection
+requires a new human start; coding keeps its existing retries. Q3, “Sí, JSON síncrono”,
+limits v1 executable criteria to synchronous top-level functions, with rendered JSON inputs
+`{"node_id": str, "args": [...], "kwargs": {...}}` and an exact JSON expected value.
+`TaskExample` is unchanged; this phase refuses behavior-only examples. Q4, “Aceptar
+constantes”, accepts the thresholds below; reject/stop cancel the task in E2/E3, and no model
+reply bypasses human review.
+
+`oversight/examples_selector.py` is a top-level pure module, like the runtime helpers, using
+only the public graph facade. No layer or facade exception is needed. Trimmed task thresholds
+are `SHORT_TASK_CHARS=80` and `LONG_TASK_CHARS=1600`; naming thresholds are
+`MANY_NAMED_NODES=3`, `MAX_NAMED_NODES=20`; `LARGE_CONE_ENTRIES=15`. The maximum-named
+constant is an offer threshold, not a truncation of resolved targets. Distinct matching node
+candidates include ambiguous definitions; aliases and repeated mentions count once. Longest
+references take precedence over overlapping short labels; exact ids take precedence over
+colliding labels. Ambiguous names never resolve speculatively. Targets and ambiguous labels
+are sorted, and reason order is stable policy order:
+`examples_only`, `supplied_unconfirmed`, `long_task`, `many_named_targets`,
+`too_many_named_candidates`, `large_cone`, `cone_omitted`, `short_task_no_target`,
+`short_task_no_test_calls`, `target_parse_error`, `snapshot_parse_errors`, `ambiguous_name`.
+The last code alone is diagnostic and does not offer examples. Missing parse evidence
+conservatively offers examples: errors anywhere may hide callers or test reach, so cones are
+unavailable rather than fabricated as small/empty. Zero static test reach means “no test calls
+it”, never “no tests exist”. Supplied pins do not confer confirmation authority.
+
+`agents/examples.py` constructs Muse Spark with reasoning low, one attempt, a 90-second timeout
+and 4096 output tokens. Missing Meta setup is `not_configured`; there is no provider fallback.
+The pure context builder accepts caller-read excerpts and unconfirmed examples, strips supplied
+pins and states omissions at 12000 characters. The send includes allowed target ids within the
+same text bound; the graph and cone stay server-side. Only the phase's `finish(summary: str)`
+schema is advertised; no Toolbox, dispatch, repair or second call is involved. Usage receipts
+are retained before reply validation, and HTTP failures without usage remain unknown. E1
+produces no events and changes no runtime admission, routes or review authority.
+
+Call/protocol failure codes live in `agents/examples.py`: `truncated`, `model_mismatch`,
+`no_tool_call`, `multiple_tool_calls`, `unexpected_tool`, `context_too_long`, `timeout`,
+`call_failed`, plus the separate `not_configured` outcome. All returned call names are retained.
+`agents/_examples_validate.py` reuses `_plan_call`'s private strict-JSON helpers and defines
+`empty_output`, `malformed_json`, `non_strict_json`, `non_finite_numbers`, `invalid_schema`,
+`strings_too_long`, `meaning_count`, `case_count`, `invalid_meaning`, `duplicate_example_ids`,
+`unknown_meaning`, `model_supplied_pin`, `missing_expected_output`, `behavior_only`,
+`invalid_inputs`, `target_not_allowed`, `target_not_sync_top_level`. Duplicate keys are refused,
+as are non-finite numbers at every nesting level, including overflowing exponents. Inputs
+must have exactly node_id/args/kwargs; target eligibility comes from caller-captured facts.
+String bounds are named there: ids 128, descriptions 1000, rendered inputs 4000, canonical
+expected outputs 8000, notes 2000, clarification 2000, summary/finish arguments 65536 characters.
+Valid cases become unconfirmed TaskExamples with meaning-prefixed notes.
+
+The public `canonical_json` helper is exactly `json.dumps(value, sort_keys=True,
+separators=(",", ":"), ensure_ascii=True, allow_nan=False)`. E3 preview and E4 checking will
+share it; integer `1` and float `1.0` remain distinct. The examples prompt stays in
+`agents/examples.py`, outside `_prompts.py` and `prompt_version()` until E2 decides how a run
+reports it. E2 runtime admission, E3 human confirmation and E4 execution remain separate fronts.
