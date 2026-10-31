@@ -73,6 +73,7 @@ def observation(values):
                 "unknown parameter",
                 "argument binding failed",
                 "unsupported signature",
+                "variadic signature",
                 "classmethod",
                 "staticmethod",
                 "property deleter",
