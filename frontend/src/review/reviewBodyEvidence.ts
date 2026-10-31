@@ -65,7 +65,7 @@ export function partialLines(state: State, changeId: string) {
         : unmatched
           ? `${String(e.differing_count)} of ${String(e.compared_count)} matched calls changed; ${String(unmatched)} calls could not be matched.`
           : caller && e.outcome === "changed" && e.differing_count && !e.not_probed
-            ? `${String(e.differing_count)} of ${String(e.compared_count)} recorded calls changed`
+            ? `${String(e.differing_count)} of ${String(e.compared_count)} recorded calls changed.`
             : e.not_probed || (caller && !e.complete)
               ? `${String(e.compared_count)} inputs compared.`
               : null;
@@ -136,7 +136,7 @@ export function selectReviewBody(state: State, changeId: string) {
         );
       }
     const unmeasured = callers.total - callers.measured;
-    if (kind === "c")
+    if (kind === "c" && callers.total)
       summary.push(
         `${String(callers.measured)} of ${String(callers.total)} callers measured; ${String(unmeasured)} were not.`,
       );

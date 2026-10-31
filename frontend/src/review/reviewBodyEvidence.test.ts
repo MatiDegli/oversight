@@ -72,8 +72,10 @@ it("keeps complete stable evidence without a differing caller title", () => {
       },
     ],
   });
-  expect(selectReviewBody(state, "change-1").kind).toBe("other");
-  expect(selectReviewBody(state, "change-1").summary[0]).toContain("2 inputs compared, 0 differ.");
+  const { kind, summary } = selectReviewBody(state, "change-1");
+  expect(kind).toBe("other");
+  expect(summary[0]).toContain("2 inputs compared, 0 differ.");
+  expect(summary.join(" ")).not.toContain("Everything is safe");
 });
 
 it.each(["missing", "equal", "other function", "partial", "rendered"] as const)(
@@ -140,6 +142,28 @@ it("uses c wording and only the stable caller supplies an example", () => {
     caller.not_probed = reason;
     expect(partialLines(state, "change-1")[2]?.line).toBe("Customer.quote: not measured.");
   }
+});
+it("ends a stable differing caller's partial line with a period and keeps its example", () => {
+  const state = headerState("c");
+  const caller = state.changeFacts["change-1"]?.at(-1)?.measured_cone?.[0];
+  if (!caller) throw new Error("Missing caller");
+  caller.unmatched_before = 0;
+  caller.unmatched_after = 0;
+  expect(selectReviewBody(state, "change-1").kind).toBe("c");
+  const line = partialLines(state, "change-1")[0];
+  expect(line?.line).toBe("Cart.quote_add: 3 of 12 recorded calls changed.");
+  expect(line?.example).toEqual(smallestExample(caller.rows));
+});
+it("omits the callers measured line for partial evidence with no exact callers", () => {
+  const state = headerState("c");
+  const proposal = state.changes["change-1"]?.proposal;
+  if (!proposal) throw new Error("Missing proposal");
+  proposal.impact = { ...proposal.impact, entries: [], omitted_by_depth: 0, omitted_by_limit: 0 };
+  const { kind, summary } = selectReviewBody(state, "change-1");
+  expect(kind).toBe("c");
+  expect(summary).toContain("No exact callers.");
+  expect(summary.join(" ")).not.toContain("callers measured");
+  expect(summary).toContain("3 of 36 functions compared.");
 });
 it.each([
   [null, "Nothing was compared."],

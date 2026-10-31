@@ -189,6 +189,9 @@ for (const width of [1920, 1280])
               ).toBe(1);
               expect(await page.getByText("Details", { exact: true }).count()).toBe(0);
               expect(await measured.count()).toBe(0);
+              expect(await page.locator(".review-body").textContent()).not.toContain(
+                "Recording unavailable",
+              );
             }
             if (hasDetails)
               expect(await measured.textContent()).toContain(

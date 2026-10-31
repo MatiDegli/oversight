@@ -105,6 +105,9 @@
   border-bottom: 1px solid var(--page-border);
   background: var(--page-raised);
 }
+.review-file-open > .review-file-row:focus-visible {
+  outline-offset: -2px;
+}
 .review-file-row {
   height: 44px;
   width: 100%;

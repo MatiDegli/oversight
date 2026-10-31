@@ -456,6 +456,62 @@ it.each(["a", "b", "c"] as const)(
   60000,
 );
 
+it.each([1, 2])(
+  "uses the compared input count's number in the panel caption: %i",
+  async (count) => {
+    if (!browser) throw new Error("Missing browser");
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    try {
+      await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+      await page.goto(url);
+      await page.waitForFunction(() => "mountHeader" in window);
+      await page.evaluate((count) => {
+        const api = window as unknown as Pick<
+          typeof import("./ReviewHeader.fixture"),
+          "mountHeader" | "headerState"
+        >;
+        const state = api.headerState("a");
+        const comparison = state.changeFacts["change-3"]?.at(-1)?.behavior_diff?.[0];
+        if (!comparison) throw new Error("Missing comparison");
+        comparison.compared_count = count;
+        api.mountHeader("a", state);
+      }, count);
+      await page.locator(".choice-caption").waitFor();
+      expect(await page.locator(".choice-caption").textContent()).toBe(
+        `Inventory.reserve · from ${String(count)} compared ${count === 1 ? "input" : "inputs"}`,
+      );
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+it("keeps the keyboard focus outline inside an open diff card", async () => {
+  if (!browser) throw new Error("Missing browser");
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url);
+    await page.waitForFunction(() => "mountHeader" in window);
+    await page.evaluate(() => {
+      const api = window as unknown as Pick<typeof import("./ReviewHeader.fixture"), "mountHeader">;
+      api.mountHeader("d");
+    });
+    const header = page.locator(".review-file-open > .review-file-row").first();
+    await page.keyboard.press("Tab");
+    await header.focus();
+    const outline = await header.evaluate((el) => ({
+      visible: el.matches(":focus-visible"),
+      offset: getComputedStyle(el).outlineOffset,
+      width: getComputedStyle(el).outlineWidth,
+      style: getComputedStyle(el).outlineStyle,
+    }));
+    expect(outline).toEqual({ visible: true, offset: "-2px", width: "2px", style: "solid" });
+  } finally {
+    await page.close();
+  }
+});
+
 it.each(["default", "opened", "closed"])(
   "recomputes d to a until a person chooses: %s",
   async (choice) => {

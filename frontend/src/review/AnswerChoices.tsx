@@ -90,7 +90,8 @@ function AnswerChoice({ card, index, answers, onAnswer, slot, panelComparisons }
         <>
           {comparison && (
             <p className="choice-caption">
-              {comparison.label} · from {comparison.compared_count} compared inputs
+              {comparison.label} · from {comparison.compared_count} compared{" "}
+              {comparison.compared_count === 1 ? "input" : "inputs"}
             </p>
           )}
           {card.example ? (
