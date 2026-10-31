@@ -356,6 +356,10 @@ async def aclose(ctx: ChangeContext) -> None:
             change.review_task.cancel()
     while ctx.state.tasks:
         await asyncio.gather(*ctx.state.tasks, return_exceptions=True)
+        # gather may complete synchronously when every task is already done.
+        # Let their queued callbacks retire them (and track any final receipts)
+        # before checking the set again, or this loop starves even timeout cancels.
+        await asyncio.sleep(0)
     for rec in list(ctx.state.pending.values()):
         if rec.delivery_rejected:
             continue
