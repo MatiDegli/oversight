@@ -20,7 +20,6 @@ from oversight.agents._harness import HarnessState, ToolError, search_rows
 from oversight.agents._observations import test_observation
 from oversight.graph import WorkspaceGraph
 from oversight.workspace import (
-    SECRET_FILE_REFUSAL,
     FileRead,
     FileTooLarge,
     SuiteRun,
@@ -29,6 +28,7 @@ from oversight.workspace import (
     Workspace,
     WorkspaceError,
     is_secret_path,
+    secret_refusal,
 )
 from oversight_contracts.events import FocusRange, SuiteResult
 from oversight_contracts.review import FinishDeclaration
@@ -288,7 +288,7 @@ class Toolbox:
     async def _read_file(self, arguments: dict[str, object]) -> ToolOutcome:
         path = cast(str, _string(arguments, "path"))
         if is_secret_path(path):
-            raise ToolError(SECRET_FILE_REFUSAL + path.rsplit("/", 1)[-1][:60])
+            raise ToolError(secret_refusal(path))
         start, end = _line(arguments, "start_line"), _line(arguments, "end_line")
         first = start or 1
         try:
@@ -403,7 +403,7 @@ class Toolbox:
     async def _edit_file(self, arguments: dict[str, object]) -> ToolOutcome:
         path = cast(str, _string(arguments, "path"))
         if is_secret_path(path):
-            raise ToolError(SECRET_FILE_REFUSAL + path.rsplit("/", 1)[-1][:60])
+            raise ToolError(secret_refusal(path))
         old = cast(str, _string(arguments, "old_text"))
         new = cast(str, _string(arguments, "new_text"))
         if not old:
