@@ -53,7 +53,16 @@ export interface ChangeState {
 export type ModelWait = Pick<ModelAttemptFailed, "attempt" | "max_attempts" | "cause"> & {
   seq: number;
   wait_s: number;
+  status: number | null;
 };
+
+export interface BudgetMark {
+  seq: number;
+  ts: string;
+  brake: "warn_50" | "warn_80" | "blocked";
+  spent_usd: number;
+  budget_usd: number;
+}
 
 export interface AgentMessage {
   seq: number;
@@ -90,6 +99,7 @@ export interface State {
   changeReads: Record<string, string[]>;
   changes: Record<string, ChangeState>;
   usage: UsageTick | null;
+  budgetMarks: BudgetMark[];
   spendUnknown: boolean;
   /**
    * What each agent has cost so far: the sum of its usage ticks. Null once any of its ticks
@@ -126,6 +136,7 @@ export function createInitialState(): State {
     changeReads: {},
     changes: {},
     usage: null,
+    budgetMarks: [],
     spendUnknown: false,
     agentCosts: {},
     errors: [],

@@ -21,30 +21,27 @@ describe("selectConversation", () => {
   it("orders every kind by sequence and uses the first task timestamp", () => {
     const data = select();
     expect(sketchState.gap).toBe(false);
-    expect(data?.entries.map((entry) => entry.seq)).toEqual([
-      2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16,
-    ]);
+    expect(data?.entries.map((entry) => entry.seq)).toEqual([2, 3, 11, 14, 15]);
     expect(data?.entries.map((entry) => entry.kind)).toEqual([
       "task",
-      "step",
-      "step",
-      "step",
-      "step",
-      "step",
-      "step",
-      "proposed",
-      "cross-review",
+      "round",
       "resolution",
       "message",
-      "step",
-      "step",
+      "activity",
     ]);
     expect(data?.entries[0]).toMatchObject({
       ts: "2026-10-27T16:58:00.000Z",
       text: sketchState.agents["agent-1"]?.task,
     });
-    expect(data?.entries[1]).toMatchObject({ ts: "2026-10-27T16:59:00.000Z" });
-    expect(data?.entries.find((entry) => entry.kind === "cross-review")).toMatchObject({
+    const first = data?.entries[1];
+    expect(first?.kind === "round" && first.round.steps[0]).toMatchObject({
+      ts: "2026-10-27T16:59:00.000Z",
+    });
+    expect(
+      data?.entries
+        .flatMap((entry) => (entry.kind === "round" ? entry.children : []))
+        .find((entry) => entry.kind === "cross-review"),
+    ).toMatchObject({
       label: "Muse Spark Open",
       findingCount: 1,
       blockingCount: 0,
@@ -125,9 +122,11 @@ describe("selectConversation", () => {
     const expected = events
       .filter((event) => event.type === "agent.step" && event.payload.agent_id === "agent-1")
       .map((event) => event.payload);
-    const steps = selectConversation(state, "agent-1", [])
-      ?.entries.filter((entry) => entry.kind === "step")
-      .map((entry) => entry.step);
+    const steps = selectConversation(state, "agent-1", [])?.entries.flatMap((entry) =>
+      entry.kind === "round" || entry.kind === "activity"
+        ? entry.round.steps.map((step) => step.step)
+        : [],
+    );
     expect(state.gap).toBe(false);
     expect(expected.length).toBeGreaterThan(0);
     expect(steps).toEqual(expected);

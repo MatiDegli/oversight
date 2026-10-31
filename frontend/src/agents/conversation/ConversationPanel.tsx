@@ -5,6 +5,8 @@ import { labels } from "../AgentCard";
 import { Composer } from "./Composer";
 import type { ConversationControls } from "./Composer";
 import type { Conversation, ConversationHeader } from "./selectConversation";
+import { ActivityBlock } from "./ActivityBlock";
+import { BudgetNotice, Notices } from "./Notices";
 import { TimelineEntry } from "./rows";
 
 export interface ConversationPanelProps extends ConversationControls {
@@ -25,7 +27,7 @@ function Header({ header }: { header: ConversationHeader }) {
         </span>
         <h2 className="min-w-0 text-[20px] leading-[1.3] font-bold wrap-anywhere">{header.task}</h2>
         <span className="shrink-0 rounded-full bg-raised px-[10px] py-[3px] text-[13px] font-semibold text-muted">
-          {labels[header.state]}
+          {header.waiting ? "Waiting" : labels[header.state]}
         </span>
       </div>
       <div className="mt-[14px] flex flex-wrap gap-2">
@@ -34,7 +36,8 @@ function Header({ header }: { header: ConversationHeader }) {
           {header.reasoning !== null ? ` · reasoning ${header.reasoning}` : ""}
         </span>
         <span className={chip}>
-          Step {header.step} of {header.maxSteps}
+          Step <span className="font-mono">{Math.min(header.step, header.maxSteps)}</span> of{" "}
+          <span className="font-mono">{header.maxSteps}</span>
         </span>
         {header.cost !== undefined && (
           <span className={`${chip} ${header.cost === null ? "" : "font-mono"}`}>
@@ -83,7 +86,7 @@ export function ConversationPanel({
   return (
     <section
       aria-label={`Agent ${header.slot} conversation`}
-      className="flex h-full min-h-0 min-w-0 flex-col bg-page text-text"
+      className="flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
     >
       <Header header={header} />
       <div
@@ -99,10 +102,25 @@ export function ConversationPanel({
       >
         <div ref={content}>
           {entries.map((entry) => (
-            <div role="listitem" key={`${entry.kind}:${String(entry.seq)}`}>
-              <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
+            <div
+              role="listitem"
+              key={`${entry.kind === "activity" ? "round" : entry.kind}:${String(entry.seq)}`}
+            >
+              {entry.kind === "activity" || entry.kind === "round" ? (
+                <ActivityBlock
+                  entry={entry}
+                  slot={header.slot}
+                  changeId={header.changeId}
+                  onOpenDiff={onOpenDiff}
+                />
+              ) : entry.kind === "budget" ? (
+                <BudgetNotice mark={entry.mark} progress={conversation.progress} />
+              ) : (
+                <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
+              )}
             </div>
           ))}
+          <Notices conversation={conversation} />
         </div>
       </div>
       <Composer key={header.agentId} header={header} {...controls} />

@@ -1,3 +1,4 @@
+import type { RoundStep } from "./rounds";
 import type { SuiteResult } from "@contracts";
 import {
   Check,
@@ -41,15 +42,19 @@ function Row({
   title,
   aside,
   children,
+  compact = false,
 }: {
   icon: LucideIcon;
   title: ReactNode;
   aside?: ReactNode;
   children?: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <div className="flex gap-3 px-[22px] py-[9px]">
-      <span className="w-[22px] shrink-0 pt-px text-faint">
+    <div
+      className={`flex gap-3 ${compact ? "min-h-[40px] px-[14px] py-2 leading-[22px]" : "px-[22px] py-[9px]"}`}
+    >
+      <span className={`${compact ? "w-4" : "w-[22px]"} shrink-0 pt-px text-faint`}>
         <Icon aria-hidden="true" className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
@@ -141,22 +146,37 @@ function TestOutput({ tests }: { tests: SuiteResult }) {
   );
 }
 
-function StepRow({
+export function StepRow({
   entry,
   changeId,
   onOpenDiff,
+  compact = false,
 }: {
-  entry: Extract<ConversationEntry, { kind: "step" }>;
+  entry: RoundStep;
+  compact?: boolean;
   changeId: string;
   onOpenDiff?: (id: string) => void;
 }) {
   const { step } = entry;
+  const diff = step.tool === "edit_file" && step.result === "ok" && onOpenDiff && (
+    <button
+      type="button"
+      className={`inline-flex min-h-6 items-center rounded-control text-[14px] text-muted underline underline-offset-2 hover:text-text ${focusRing}`}
+      onClick={() => {
+        onOpenDiff(changeId);
+      }}
+    >
+      View in diff
+    </button>
+  );
   return (
     <Row
+      compact={compact}
       icon={icons[step.tool] ?? Circle}
       title={
         <>
           <code className="font-mono text-[14px]">{step.tool}</code> · {step.summary}
+          {compact && diff && <span className="ml-3">{diff}</span>}
         </>
       }
       aside={
@@ -170,17 +190,7 @@ function StepRow({
       {step.result === "error" && step.error && (
         <p className="text-[14px] text-muted wrap-anywhere">{step.error}</p>
       )}
-      {step.tool === "edit_file" && step.result === "ok" && onOpenDiff && (
-        <button
-          type="button"
-          className={`inline-flex min-h-6 items-center rounded-control text-[14px] text-muted underline underline-offset-2 hover:text-text ${focusRing}`}
-          onClick={() => {
-            onOpenDiff(changeId);
-          }}
-        >
-          View in diff
-        </button>
-      )}
+      {!compact && diff}
       {step.tool === "run_tests" && step.tests && <TestOutput tests={step.tests} />}
     </Row>
   );
@@ -190,18 +200,26 @@ export function TimelineEntry({
   entry,
   changeId,
   onOpenDiff,
+  compact = false,
 }: {
   entry: ConversationEntry;
+  compact?: boolean;
   changeId: string;
   onOpenDiff?: (id: string) => void;
 }) {
   switch (entry.kind) {
+    case "activity":
+    case "round":
+    case "budget":
+      return null;
     case "task":
       return <MessageRow task ts={entry.ts} text={entry.text} />;
     case "message":
       return <MessageRow ts={entry.ts} text={entry.text} />;
     case "step":
-      return <StepRow entry={entry} changeId={changeId} onOpenDiff={onOpenDiff} />;
+      return (
+        <StepRow compact={compact} entry={entry} changeId={changeId} onOpenDiff={onOpenDiff} />
+      );
     case "proposed":
       return (
         <Row icon={Check} title="Proposed the change" aside={<EventTime ts={entry.ts} />}>

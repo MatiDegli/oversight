@@ -2897,3 +2897,30 @@ Reason: a docs audit found many docs behind main after several days of changed d
 5. AGENTS.md is aligned only with decisions already recorded.
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
+
+## 2026-10-31 — Progress pieces, part 1: activity blocks and notices
+
+The maintainer approved progress sketch round 2 at 2026-10-31T15:19:19Z. Progress lives as
+separate pieces that redraw in place in Conversation. Evidence and the card's evidence line
+are part 2. His binding answers: "2 the time limit counts only the agent's time, not the wait
+for the maintainer between rounds; 3 time notice at 80% only"; "6 the agent's own plan is not
+shown before the checkpoint (it needs a contract change)"; "8 the lead's tool names
+(start_agent) are confirmed when the lead is built".
+
+Each round starts with the first starting/working/revising status, just before its deadline.
+run and revise call _drive independently (backend/src/oversight/agents/loop.py:217, :248);
+asyncio.timeout wraps each drive (:264). Pausing suspends and reschedules that deadline by
+paused time (backend/src/oversight/agents/_control.py:155-170; status at :163, resume at :176).
+Thus elapsed time is round end (or state.clock), minus start and paused spans, excluding review
+waits. The notice says "time limit for this round" although contracts/src/oversight_contracts/
+events.py:69-70 says "Per task"; the contract is unchanged.
+
+Budget marks retain rises in usage.tick.brake, not inferred thresholds or just the latest tick;
+falling brakes add nothing. The brake applies to metered Meta runs: notices say "new Meta runs"
+and blocked uses the actual spent/budget percentage, floored, because blocking is above block_at.
+All denominators and thresholds come from the run or event, and unknown spend hides amounts/meters.
+
+The earlier "of 30" departure was reverted by the maintainer at 2026-10-31T16:55:00Z: the header
+uses run.limits.max_steps and min(step, bound), retaining the largest observed step. There are no
+line counts on edit calls because agent.step has none; retries preserve Revising as the card does.
+Accepted person messages stay between activity segments of the same round; they never fold away.
