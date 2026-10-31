@@ -7,9 +7,9 @@ import sys
 from unittest.mock import AsyncMock
 
 import pytest
-from changes_revert_helpers import install_spend_evidence
-from changes_revert_helpers import system as system
 from live_helpers import SERVER_EVENT
+from test_revert import install_spend_evidence
+from test_revert import system as system
 from test_revert_preflight import repo as repo
 
 from oversight.changes import ChangeManager, Person, RevertRefused, WrongState

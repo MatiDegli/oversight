@@ -5,6 +5,7 @@ import json
 from dataclasses import replace
 
 import pytest
+from changes_revert_helpers import install_spend_evidence as install_spend_evidence
 from changes_revert_helpers import pytestmark as pytestmark
 from changes_revert_helpers import system as system
 from test_revert_preflight import repo as repo
