@@ -183,7 +183,7 @@ describe("a merge's pulse and light", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     Object.assign(canvas, { getBoundingClientRect: () => ({ left: 0, top: 0 }) });
-    Object.assign(document, { querySelector: () => null });
+    Object.assign(document, { querySelectorAll: () => [] });
   });
 
   it("treats the merges the field mounts on as history: no pulse, no light, no timer", () => {
@@ -193,6 +193,19 @@ describe("a merge's pulse and light", () => {
     expect(canvas.oversightField?.life()).toMatchObject({ pulses: 0, lights: 0 });
     expect(canvas.oversightField?.animating()).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
+    controller.dispose();
+  });
+
+  it("keeps the graph-edge departure when neither agent card nor rail letter is present", () => {
+    const travel = vi.spyOn(TravelLayer.prototype, "draw");
+    const controller = createFieldController(canvas, source);
+    controller.update(waiting);
+    controller.update(live);
+    advance(look.delay + look.travel / 2);
+    const [pulses, paths] = travel.mock.calls.at(-1) ?? [];
+    expect(pulses).toHaveLength(1);
+    expect(paths?.get(merge.key)?.[0]).toEqual({ x: canvas.clientWidth, y: 5 });
+    expect(canvas.oversightField?.animating()).toBe(true);
     controller.dispose();
   });
 

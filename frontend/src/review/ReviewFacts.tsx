@@ -1,6 +1,12 @@
+import { ChevronRight } from "lucide-react";
 import type { AddedTestProbe, ChangeFacts, ChangeProposed, SuiteExecution } from "@contracts";
 
 import type { State } from "../state";
+import { BehaviorDiff } from "./BehaviorDiff";
+import { behaviorNotRecorded } from "./behaviorEvidence";
+import { MeasuredCallers } from "./MeasuredCallers";
+import { factsForRevision } from "./factsForRevision";
+import { mergedRuleWords } from "./evidenceWords";
 
 /** The same neutral vocabulary as changes/_reviewfacts.py; no policy assessment. */
 export function detectorLine(facts: ChangeFacts): string {
@@ -112,12 +118,6 @@ function executionLine(seq: number, execution: SuiteExecution): string {
   return `Tests #${String(seq)} (${execution.phase}): ${suite.outcome}; ${String(suite.passed)} passed, ${String(suite.failed)} failed, ${String(suite.skipped)} skipped${failed.length ? `; failed ids: ${failed.join(", ")}` : ""}${suite.cases_complete === true ? "" : "; per-test evidence incomplete"}`;
 }
 
-export function factsForRevision(state: State, proposal: ChangeProposed): ChangeFacts | undefined {
-  return state.changeFacts[proposal.change_id]?.findLast(
-    (f) => f.revision === proposal.revision && f.head_commit === proposal.head_commit,
-  );
-}
-
 const probeLabels: Record<AddedTestProbe["result"], string> = {
   fails_before_passes_after: "fails before, passes after",
   passes_before_and_after: "passes before and after",
@@ -132,14 +132,24 @@ export function ReviewFacts({
   state,
   proposal,
   scrollable = true,
+  panel = false,
 }: {
   state: State;
   proposal: ChangeProposed;
   /** The summary review shares one scroll region with the rest of its context. */
   scrollable?: boolean;
+  panel?: boolean;
 }) {
   const facts = factsForRevision(state, proposal);
-  if (!facts) return <span> · Facts incomplete: facts for this revision are unavailable</span>;
+  if (!facts)
+    return (
+      <section className="border-b border-page-border px-4.5 py-2.5">
+        <p className="text-sm text-muted">
+          Facts incomplete: facts for this revision are unavailable. {behaviorNotRecorded}
+        </p>
+        <MeasuredCallers state={state} changeId={proposal.change_id} detailsOnly={panel} />
+      </section>
+    );
   const executions = facts.test_runs
     .map((seq) => state.testExecutions[seq])
     .filter(
@@ -148,25 +158,38 @@ export function ReviewFacts({
     );
   return (
     <section
-      aria-label="Review signals"
-      className="shrink-0 border-b border-page-border px-4.5 py-2.5 text-sm"
+      aria-label={panel ? "Details" : "Review signals"}
+      className={
+        panel
+          ? "review-details text-sm"
+          : "shrink-0 border-b border-page-border px-4.5 py-2.5 text-sm"
+      }
     >
-      <details open>
+      <details open={panel ? undefined : true}>
         <summary className="cursor-pointer rounded-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text">
-          Review signals · {facts.complete ? "Recorded facts" : "Incomplete"}
+          {panel
+            ? "Details"
+            : `Review signals · ${facts.complete ? "Recorded facts" : "Incomplete"}`}
+          {panel && <ChevronRight aria-hidden="true" size={16} />}
         </summary>
         <div
           className={`mt-2 break-words text-muted${scrollable ? " max-h-48 overflow-y-auto" : ""}`}
         >
-          <p>Signals for your review. You decide.</p>
-          <p>
-            Size: {proposal.files.length} files, +{proposal.lines_added}/−{proposal.lines_removed}{" "}
-            lines
-          </p>
+          {!panel && <p>Signals for your review. You decide.</p>}
+          {panel &&
+            mergedRuleWords(state.changes[proposal.change_id]?.resolution).details.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          {!panel && (
+            <p>
+              Size: {proposal.files.length} files, +{proposal.lines_added}/−{proposal.lines_removed}{" "}
+              lines
+            </p>
+          )}
           <>
-            <ul aria-label="Said versus did">
+            <ul aria-label={panel ? undefined : "Said versus did"}>
               {discrepancies(facts, executions, proposal.summary).map((line) => (
-                <li key={line}>Said versus did: {line}</li>
+                <li key={line}>{panel ? line : `Said versus did: ${line}`}</li>
               ))}
             </ul>
             {facts.test_runs.length === 0 && <p>Tests: no execution evidence recorded</p>}
@@ -181,9 +204,12 @@ export function ReviewFacts({
                 </p>
               );
             })}
-            <p>{detectorLine(facts)}</p>
+            {(!panel ||
+              detectorLine(facts) !== "Tests in this change: 0 recorded test changes") && (
+              <p>{detectorLine(facts)}</p>
+            )}
             {facts.added_tests.length > 0 && (
-              <ul aria-label="Added test signals">
+              <ul aria-label={panel ? "Added tests" : "Added test signals"}>
                 {facts.added_tests.map((probe) => (
                   <li key={probe.test_id}>
                     <code className="break-all font-mono">{probe.test_id}</code>:{" "}
@@ -192,7 +218,14 @@ export function ReviewFacts({
                 ))}
               </ul>
             )}
+            <div className="mt-3.5">
+              <BehaviorDiff state={state} changeId={proposal.change_id} detailsOnly={panel} />
+              {facts.behavior_diff == null && <p>{behaviorNotRecorded}</p>}
+            </div>
             {!facts.complete && <p>Incomplete: {facts.problems.join("; ")}</p>}
+            <div className={`pt-(--spacing-lg)${panel ? " empty:hidden" : ""}`}>
+              <MeasuredCallers state={state} changeId={proposal.change_id} detailsOnly={panel} />
+            </div>
           </>
         </div>
       </details>

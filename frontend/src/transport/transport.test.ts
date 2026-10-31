@@ -339,6 +339,7 @@ describe("live transport", () => {
     expect(store.getState().state).toEqual({
       ...createInitialState(),
       run: newRun.payload,
+      runStartedAt: newRun.ts,
       lastSeq: 1,
       // The new run's first event is its "now"; nothing of the old run's times survives.
       clock: newRun.ts,

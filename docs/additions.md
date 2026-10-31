@@ -187,8 +187,7 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
 - A TypeScript graph adapter; another language/dependency needs a separate scope decision.
 - Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
-- [Scale and depth](../DESIGN.md#scale-and-depth): define and sketch now; build decided with the
-  sketch, never before the Saturday checkpoint.
+- [Scale and depth](../DESIGN.md#scale-and-depth): The map view and folder groups are left out of the current level. They come after the Conversation tab, milestone pulses and life layer part 2, built only from a sketch the maintainer approves (maintainer, 2026-10-31).
 - A Tauri shell, a local model in slot B, and named editor cursors.
 - [Repository memory](#repository-memory): what Oversight remembers about a repository that
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built

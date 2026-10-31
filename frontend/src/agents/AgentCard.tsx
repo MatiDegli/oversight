@@ -153,6 +153,7 @@ export function AgentCard({ data, onOpenDiff, onReview, onStop }: AgentCardProps
         inside.current = false;
       }}
       data-slot={agent.slot}
+      data-agent-origin={agent.slot}
       style={agentSlotStyle(agent.slot)}
       className={`agent-card min-w-0 shrink-0 rounded-card border bg-card p-3.5 text-text ${border} ${focusRing}`}
     >

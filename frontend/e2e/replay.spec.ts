@@ -332,7 +332,7 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
   const review = page.getByRole("complementary", { name: "Review panel" });
   await test.step("review opens from the card; Approve and Reject only show the replay", async () => {
     // The replay is held before the decision, so the decision area is read as a person meets it
-    // before the decision arrives, whatever the machine's pace. The inline diff stays after it.
+    // before the decision arrives, whatever the machine's pace. The body owns the diff scroll.
     await holdEngaged(page, atDecision, resolvedAt);
     await card.getByRole("button", { name: "Review change" }).click();
     await expect(review).toBeVisible();

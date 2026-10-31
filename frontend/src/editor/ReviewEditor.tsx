@@ -17,12 +17,14 @@ export function ReviewEditor({
   editable,
   revision,
   onBlocked,
+  onMount,
 }: {
   data: LiveDiffData;
   files: FileAccess;
   editable: boolean;
   revision: number;
   onBlocked: (blocked: "loading" | "edits" | null) => void;
+  onMount?: (diff: editor.IStandaloneDiffEditor) => void;
 }) {
   const document = useRef<FileDocument | null>(null);
   const [state, setState] = useState<FileState>({
@@ -44,10 +46,16 @@ export function ReviewEditor({
       model,
       files,
       setState,
-      undefined,
+      (text) => {
+        // An edit rebuilds folded ranges without flushing the diff view or detaching its models.
+        model.pushStackElement();
+        model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
+        model.pushStackElement();
+      },
       true,
     );
     document.current = opened;
+    onMount?.(diff);
     opened.observeCommit(JSON.stringify([revision, data.modified]));
     void opened.load();
   };

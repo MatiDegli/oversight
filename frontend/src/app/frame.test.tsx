@@ -179,7 +179,7 @@ describe("review mode over the level 1 fixture", () => {
       "+2",
       "compute_price now caps",
       'aria-label="Diff of shop/pricing.py"',
-      "Comment (required for Request changes)",
+      "Comment for the agent",
       "If main moved since the agent started, the tests run again",
     ])
       expect(markup).toContain(text);
