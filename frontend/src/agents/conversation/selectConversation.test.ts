@@ -29,10 +29,10 @@ describe("selectConversation", () => {
       "step",
     ]);
     expect(data?.entries[0]).toMatchObject({
-      ts: "2026-10-27T13:58:00-03:00",
+      ts: "2026-10-27T16:58:00.000Z",
       text: sketchState.agents["agent-1"]?.task,
     });
-    expect(data?.entries[1]).toMatchObject({ ts: "2026-10-27T13:59:00-03:00" });
+    expect(data?.entries[1]).toMatchObject({ ts: "2026-10-27T16:59:00.000Z" });
     expect(data?.entries.find((entry) => entry.kind === "cross-review")).toMatchObject({
       label: "Muse Spark Open",
       findingCount: 1,

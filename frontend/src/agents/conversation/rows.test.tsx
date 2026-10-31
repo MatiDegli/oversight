@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { ConversationPanel } from "./ConversationPanel";
+import { Composer } from "./Composer";
 import { sketchState } from "./fixture";
 import { selectConversation } from "./selectConversation";
 import { TimelineEntry } from "./rows";
@@ -53,7 +54,10 @@ it("renders failed and skipped test counts, case details and server errors witho
                 outcome: "failed",
                 detail: "Expected 10 cents",
               },
+              { test_id: "tests/test_pricing.py::test_price", outcome: "passed", detail: null },
+              { test_id: "tests/test_pricing.py::test_tax", outcome: "skipped", detail: null },
             ],
+            cases_complete: true,
           },
         },
       }}
@@ -64,4 +68,59 @@ it("renders failed and skipped test counts, case details and server errors witho
   expect(html).toContain("tests/test_pricing.py · 1 failed");
   expect(html).toContain("Tests failed");
   expect(html).not.toContain("View in diff");
+});
+
+it.each([false, null, undefined])(
+  "omits per-file totals when case completeness is %s but keeps failure details",
+  (complete) => {
+    const step = sketchState.steps["agent-1"]?.find((step) => step.tests);
+    if (!step?.tests) throw new Error("Missing tests");
+    const tests = { ...step.tests };
+    if (complete === undefined) Reflect.deleteProperty(tests, "cases_complete");
+    else tests.cases_complete = complete;
+    const html = renderToStaticMarkup(
+      <TimelineEntry
+        changeId="change-1"
+        entry={{
+          kind: "step",
+          seq: 7,
+          ts: undefined,
+          step: {
+            ...step,
+            tests: {
+              ...tests,
+              outcome: "failed",
+              failed: 1,
+              failed_tests: ["tests/test_pricing.py::test_coupon"],
+              cases: [
+                ...(tests.cases ?? []),
+                {
+                  test_id: "tests/test_pricing.py::test_coupon",
+                  outcome: "failed",
+                  detail: "Expected 10 cents",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+    expect(html).toContain("28 passed in 0.40s, 1 failed");
+    expect(html).toContain("tests/test_pricing.py::test_coupon · Expected 10 cents");
+    expect(html).not.toContain("tests/test_pricing.py ·");
+  },
+);
+
+it("explains a disabled message box when only the pause callback is available", () => {
+  const conversation = selectConversation(sketchState, "agent-1", []);
+  if (!conversation) throw new Error("Missing fixture");
+  const html = renderToStaticMarkup(
+    <Composer header={conversation.header} onPause={() => Promise.resolve()} />,
+  );
+  expect(html).toContain('aria-disabled="true"');
+  expect(html).toContain('readOnly=""');
+  expect(html).toContain("Agent A is not running.");
+  const captionId = /aria-describedby="([^"]+)"/.exec(html)?.[1];
+  expect(captionId).toBeDefined();
+  expect(html).toContain(`id="${captionId ?? ""}"`);
 });

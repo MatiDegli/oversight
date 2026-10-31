@@ -60,7 +60,22 @@ export function ConversationPanel({
 }: ConversationPanelProps) {
   const { header, entries } = conversation;
   const list = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
+  useLayoutEffect(() => {
+    const node = list.current;
+    const body = content.current;
+    if (!node || !body) return;
+    // Disclosure and panel geometry can change without a scroll event.
+    const observer = new ResizeObserver(() => {
+      atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight <= 2;
+    });
+    observer.observe(node);
+    observer.observe(body);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
   useLayoutEffect(() => {
     if (atBottom.current && list.current) list.current.scrollTop = list.current.scrollHeight;
   }, [entries]);
@@ -81,11 +96,13 @@ export function ConversationPanel({
           atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight <= 2;
         }}
       >
-        {entries.map((entry) => (
-          <div role="listitem" key={`${entry.kind}:${String(entry.seq)}`}>
-            <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
-          </div>
-        ))}
+        <div ref={content}>
+          {entries.map((entry) => (
+            <div role="listitem" key={`${entry.kind}:${String(entry.seq)}`}>
+              <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
+            </div>
+          ))}
+        </div>
       </div>
       <Composer key={header.agentId} header={header} {...controls} />
     </section>

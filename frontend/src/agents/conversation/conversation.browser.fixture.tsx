@@ -70,7 +70,7 @@ export const conversationTest = {
   append() {
     state = applyEvent(state, {
       seq: state.lastSeq + 1,
-      ts: "2026-10-27T14:04:00-03:00",
+      ts: "2026-10-27T17:04:00.000Z",
       type: "agent.step",
       payload: {
         agent_id: "agent-1",

@@ -132,7 +132,9 @@ it("discloses structured test results and opens the change diff", async () => {
     await check(output).not.toBeVisible();
     await summary.click();
     await check(output).toBeVisible();
-    await check(page.getByText("tests/test_pricing.py · 12 passed", { exact: true })).toBeVisible();
+    await check(page.getByText("tests/test_pricing.py · 12 passed", { exact: true })).toHaveCount(
+      0,
+    );
     await page.getByRole("button", { name: "View in diff" }).first().click();
     expect(await page.evaluate(() => window.conversationTest.requests())).toEqual(["change-1"]);
   } finally {
@@ -167,6 +169,48 @@ it("pins new entries only at the bottom and never moves focus", async () => {
     await page.close();
   }
 });
+
+it.each(["disclosure", "resize"] as const)(
+  "does not pin after a %s moves the bottom without scrolling",
+  async (change) => {
+    const page = await pageFor();
+    try {
+      const list = timeline(page);
+      const before = await list.evaluate((node) => node.scrollTop);
+      expect(
+        await list.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight),
+      ).toBeLessThanOrEqual(2);
+      if (change === "disclosure") {
+        await list.locator("details").evaluate((node) => {
+          node.setAttribute("open", "");
+        });
+      } else {
+        await page.setViewportSize({ width: 880, height: 842 });
+      }
+      // Let the browser lay out the change and deliver resize/toggle notifications.
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() => {
+                resolve();
+              }),
+            ),
+          ),
+      );
+      expect(
+        await list.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight),
+      ).toBeGreaterThan(2);
+      expect(await list.evaluate((node) => node.scrollTop)).toBe(before);
+      await page.evaluate(() => {
+        window.conversationTest.append();
+      });
+      expect(await list.evaluate((node) => node.scrollTop)).toBe(before);
+    } finally {
+      await page.close();
+    }
+  },
+);
 
 it.each([
   ["America/Argentina/Buenos_Aires", "13:58"],

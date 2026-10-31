@@ -97,7 +97,7 @@ function MessageRow({
 
 function TestOutput({ tests }: { tests: SuiteResult }) {
   const files = new Map<string, Map<string, number>>();
-  for (const item of tests.cases ?? []) {
+  for (const item of tests.cases_complete === true ? (tests.cases ?? []) : []) {
     const path = item.test_id.split("::")[0] ?? item.test_id;
     const counts = files.get(path) ?? new Map<string, number>();
     counts.set(item.outcome, (counts.get(item.outcome) ?? 0) + 1);

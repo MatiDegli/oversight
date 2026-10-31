@@ -28,6 +28,7 @@ export function Composer({
   const [failure, setFailure] = useState<string | null>(null);
   const captionId = useId();
   const active = ["working", "revising", "paused"].includes(header.state);
+  const disabled = !active || !onSend;
   const replay = !onSend && !onPause && !onResume && !onStop;
   async function send() {
     if (!onSend || !active || !text.trim() || sending.current) return;
@@ -68,17 +69,17 @@ export function Composer({
     <div className="shrink-0 border-t border-divider p-[14px]">
       <textarea
         aria-label={`Message Agent ${header.slot}`}
-        aria-describedby={!active ? captionId : undefined}
+        aria-describedby={disabled ? captionId : undefined}
         placeholder={`Message Agent ${header.slot}. It reads it at its next step.`}
-        aria-disabled={!active || !onSend}
-        readOnly={pending || !active || !onSend}
+        aria-disabled={disabled}
+        readOnly={pending || disabled}
         value={text}
         onChange={(event) => {
           setText(event.target.value);
         }}
         className={`block h-16 w-full resize-none rounded-[10px] border border-control-edge bg-field px-3 py-[10px] text-[15px] text-text placeholder:text-faint aria-disabled:text-faint ${focusRing}`}
       />
-      {!active && (
+      {disabled && (
         <p id={captionId} className="mt-[6px] text-[14px] text-muted">
           Agent {header.slot} is not running.
         </p>
@@ -105,7 +106,7 @@ export function Composer({
         <button
           type="button"
           className={`${button} ml-auto bg-raised`}
-          aria-disabled={!active || !onSend || pending || !text.trim()}
+          aria-disabled={disabled || pending || !text.trim()}
           onClick={() => {
             void send();
           }}

@@ -10,6 +10,6 @@ export const sketchEvents = log
   .map((line) => JSON.parse(line) as ServerEvent);
 // On main there is no message event. The caller supplies this at the status boundary.
 export const sketchMessages: ConversationMessage[] = [
-  { seq: 14, ts: "2026-10-27T14:02:02-03:00", text: "Point to _COUPONS." },
+  { seq: 14, ts: "2026-10-27T17:02:02.000Z", text: "Point to _COUPONS." },
 ];
 export const sketchState = sketchEvents.reduce(applyEvent, createInitialState());
