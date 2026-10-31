@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import log from "../../../fixtures/events/handwritten-inbox-grants.jsonl?raw";
+import leadPlans from "../../../fixtures/events/handwritten-lead-plans.jsonl?raw";
 import { parseEvent } from "../transport";
 import {
   applyEvent,
@@ -23,6 +24,65 @@ export const inboxEvents = log.trim().split("\n").map(parseEvent);
 export const inboxState = (end = inboxEvents.length) =>
   inboxEvents.slice(0, end).reduce(applyEvent, createInitialState());
 const state = inboxState();
+
+const leadEvents = leadPlans.trim().split("\n").map(parseEvent);
+const leadState = leadEvents.reduce(applyEvent, createInitialState());
+
+it("counts a lead once using its latest revision's step, including null plan requests", () => {
+  expect(selectInboxSummary(leadState)).toEqual({ agents: 1, steps: 4, minutes: 0 });
+  const before = leadEvents.slice(0, 8).reduce(applyEvent, createInitialState());
+  expect(selectInboxSummary(before)).toEqual({ agents: 1, steps: 3, minutes: 0 });
+  const stale = leadEvents[2];
+  if (stale?.type !== "lead.status") throw new Error("Missing lead");
+  expect(
+    selectInboxSummary(
+      applyEvent(leadState, {
+        ...stale,
+        seq: leadState.lastSeq + 1,
+        payload: { ...stale.payload, step: 99 },
+      }),
+    ),
+  ).toEqual({ agents: 1, steps: 4, minutes: 0 });
+});
+
+it("counts a coding agent plus a lead and sums their steps", () => {
+  const agent = state.agents["agent-2"],
+    steps = state.steps["agent-2"];
+  if (!agent || !steps) throw new Error("Missing coding agent");
+  expect(
+    selectInboxSummary({
+      ...leadState,
+      agents: { [agent.agent_id]: agent },
+      steps: { [agent.agent_id]: steps },
+    }),
+  ).toEqual({ agents: 2, steps: 8, minutes: 0 });
+});
+
+it("does not double-count an id or its steps when a lead is also in state.agents", () => {
+  const agent = state.agents["agent-1"],
+    steps = state.steps["agent-1"];
+  if (!agent || !steps) throw new Error("Missing shared id");
+  expect(
+    selectInboxSummary({
+      ...leadState,
+      agents: { [agent.agent_id]: agent },
+      steps: { [agent.agent_id]: steps },
+    }),
+  ).toEqual({ agents: 1, steps: 4, minutes: 0 });
+});
+
+it("resets lead counts with the decision lifecycle on a new run", () => {
+  const run = leadEvents[0];
+  if (run?.type !== "run.started") throw new Error("Missing run");
+  expect(
+    selectInboxSummary(
+      applyEvent(leadState, {
+        ...run,
+        payload: { ...run.payload, run_id: "run-20261031-190000" },
+      }),
+    ),
+  ).toEqual({ agents: 0, steps: 0, minutes: 0 });
+});
 
 it("records unavailable evidence objects and grant sessions explicitly for contract round trips", () => {
   for (const event of inboxEvents) {

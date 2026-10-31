@@ -7,7 +7,11 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import PurePosixPath
 
-from oversight.changes._behavior_publish import BehaviorEvidence, project_behavior
+from oversight.changes._behavior_publish import (
+    BehaviorEvidence,
+    project_behavior,
+    project_extensions,
+)
 from oversight.changes._measured import MeasuredEvidence, project_measured, validate_measured
 from oversight.changes._probes import added_cases, comparison
 from oversight.changes._run_findings import RunEvidence, project_run_findings
@@ -182,6 +186,10 @@ def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
         raise ValueError("facts summary differs from captured evidence")
     if facts.behavior_diff != project_behavior(evidence.behavior_evidence, revision=facts.revision):
         raise ValueError("facts behavior differs from captured evidence")
+    if facts.parameter_extensions != project_extensions(
+        evidence.behavior_evidence, revision=facts.revision
+    ):
+        raise ValueError("facts parameter extensions differ from captured evidence")
     validate_measured(facts, evidence.measured, evidence.executions, evidence.runs, evidence.impact)
     integrity, findings, diagnostics = project_run_findings(
         evidence.run_evidence,
@@ -422,6 +430,9 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
             evidence.summary_evidence, evidence.executions, revision=evidence.target.revision
         ),
         behavior_diff=project_behavior(
+            evidence.behavior_evidence, revision=evidence.target.revision
+        ),
+        parameter_extensions=project_extensions(
             evidence.behavior_evidence, revision=evidence.target.revision
         ),
         declared=evidence.declared,

@@ -208,9 +208,9 @@ def test_boltons_shaped_temporary_project_now_has_inputs(tmp_path, name):
             assert ast.literal_eval(item.before)[1]["fill"] is None
 
 
-def test_local_alias_stays_out_of_scope():
+def test_single_binding_local_alias_seeds_target():
     found = prepare(
         "def f(text): return text\n",
         "from pkg import mod\ndef test_it():\n    call = mod.f\n    call('local')\n",
     )
-    assert found.inputs == ()
+    assert [item.call for item in found.inputs] == ["f(text='local')"]

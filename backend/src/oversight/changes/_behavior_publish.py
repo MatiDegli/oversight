@@ -9,7 +9,7 @@ from oversight.changes._behavior import BehaviorDiff, BehaviorRow, FunctionBehav
 from oversight.changes._review_identity import direct_result
 from oversight.changes._review_samples import Observation, OutcomeKind, Selection
 from oversight.workspace import TypedResult
-from oversight_contracts.review import BehaviorDiffRow, NodeBehaviorDiff
+from oversight_contracts.review import BehaviorDiffRow, NodeBehaviorDiff, ParameterExtensionDiff
 
 MAX_RENDERED = 1024
 
@@ -129,9 +129,20 @@ class CapturedFunction:
 
 
 @dataclass(frozen=True)
+class CapturedExtension:
+    node_id: str
+    parameters: tuple[str, ...]
+    run_count: int
+    rejected_before: int
+    rows: tuple[CapturedRow, ...]
+    not_probed: str | None
+
+
+@dataclass(frozen=True)
 class BehaviorEvidence:
     revision: int
     functions: tuple[CapturedFunction, ...]
+    extensions: tuple[CapturedExtension, ...] = ()
 
 
 def _shorten(value: Any, limit: int) -> Any:
@@ -158,27 +169,29 @@ def _render(result: TypedResult, *, bounded: bool = True) -> str:
     # Enumerate the public value fields, never serialize the private result object.
     kind = result["kind"]
     display = result_display(result)
+    prefix = "items of iterator: " if result.get("observation") == "iterator_items" else ""
     rendered = json.dumps(display, ensure_ascii=True, separators=(",", ":"))
     if not bounded:
-        return rendered
+        return prefix + rendered
     limit = MAX_RENDERED
-    while len(rendered) > MAX_RENDERED:
+    while len(prefix) + len(rendered) > MAX_RENDERED:
         if limit == 0:
             # Unexpected scalar leaves may not shrink; retain only the validated result kind.
-            return json.dumps({"kind": kind}, ensure_ascii=True, separators=(",", ":"))
+            return prefix + json.dumps({"kind": kind}, ensure_ascii=True, separators=(",", ":"))
         limit //= 2
         clipped = {
             key: value if key == "kind" else _shorten(value, limit)
             for key, value in display.items()
         }
         rendered = json.dumps(clipped, ensure_ascii=True, separators=(",", ":"))
-    return rendered
+    return prefix + rendered
 
 
 def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:
     before, after = _render(row.before, bounded=False), _render(row.after, bounded=False)
     identity = tuple(
-        f"{result['kind']}:{result.get('fingerprint', '')}" for result in (row.before, row.after)
+        f"{result['kind']}:{result.get('observation', '')}:{result.get('fingerprint', '')}"
+        for result in (row.before, row.after)
     )
     results = direct_result(row.before), direct_result(row.after)
     reason = None
@@ -257,6 +270,25 @@ def capture_behavior(measured: BehaviorDiff | None) -> BehaviorEvidence | None:
     return BehaviorEvidence(
         measured.revision,
         tuple(_capture_function(item) for item in measured.functions),
+        tuple(
+            CapturedExtension(
+                item.node_id,
+                item.parameters,
+                item.run_count,
+                item.rejected_before,
+                tuple(
+                    CapturedRow(
+                        row.call[:MAX_RENDERED],
+                        _render(row.before),
+                        _render(row.after),
+                        row.unstable,
+                    )
+                    for row in item.rows
+                ),
+                _public_reason(item.reason),
+            )
+            for item in measured.extensions
+        ),
     )
 
 
@@ -283,3 +315,29 @@ def project_behavior(
         )
         for item in evidence.functions
     ]
+
+
+def project_extensions(
+    evidence: BehaviorEvidence | None, *, revision: int
+) -> list[ParameterExtensionDiff] | None:
+    """Evidence only: these rows never enter behavior counts or review-card selection."""
+    if evidence is None:
+        return None
+    if evidence.revision != revision:
+        raise ValueError("parameter extension evidence belongs to another revision")
+    return [
+        ParameterExtensionDiff(
+            node_id=item.node_id,
+            parameters=list(item.parameters),
+            run_count=item.run_count,
+            rejected_before=item.rejected_before,
+            rows=[
+                BehaviorDiffRow(
+                    inputs=row.inputs, before=row.before, after=row.after, unstable=row.unstable
+                )
+                for row in item.rows
+            ],
+            not_probed=item.not_probed,
+        )
+        for item in evidence.extensions
+    ] or None

@@ -236,7 +236,7 @@ def normalize_text_aliases(definitions: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
+def test_schema_changes_only_slots_and_the_three_approved_attachments() -> None:
     baseline = json.loads((ROOT / "contracts/baselines/1.5.0.schema.json").read_text())["$defs"]
     current = json.loads((ROOT / "contracts/generated/oversight.schema.json").read_text())["$defs"]
     current = normalize_text_aliases(current)
@@ -259,9 +259,13 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
         "GrantRevokedEvent",
         "ModelAttemptFailed",
         "ModelAttemptFailedEvent",
+        "ParameterExtensionDiff",
     }
     assert not set(baseline) - set(current)
     for name, definition in baseline.items():
+        if name == "ChangeFacts":
+            _check_parameter_extension_attachment(current[name], definition)
+            continue
         plan_fields = {
             "Plan": {"subtasks"},
             "PlanSubtask": {"depends_on", "state"},
@@ -281,6 +285,14 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
                 else:
                     updated["properties"][field_name] = definition["properties"][field_name]
             assert updated == definition, name
+            continue
+        if name == "LeadStatus":
+            updated = deepcopy(current[name])
+            field = updated["properties"].pop("requested_plan_id")
+            assert field["default"] is None
+            assert field["anyOf"] == [{"$ref": "#/$defs/PlanId"}, {"type": "null"}]
+            updated["required"].remove("requested_plan_id")
+            assert updated == definition
             continue
         if name == "AgentStep":
             updated = deepcopy(current[name])
@@ -333,3 +345,19 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
         assert {key: value for key, value in fields.items() if key != "answering"} == baseline[
             name
         ]["properties"]
+
+
+def _check_parameter_extension_attachment(
+    current: dict[str, Any], baseline: dict[str, Any]
+) -> None:
+    updated = deepcopy(current)
+    assert updated["properties"].pop("parameter_extensions") == {
+        "anyOf": [
+            {"items": {"$ref": "#/$defs/ParameterExtensionDiff"}, "type": "array"},
+            {"type": "null"},
+        ],
+        "default": None,
+        "description": "Calls that use proposed-only parameters; null means none were recorded.",
+    }
+    updated["required"].remove("parameter_extensions")
+    assert updated == baseline

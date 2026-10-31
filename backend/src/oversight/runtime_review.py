@@ -20,7 +20,7 @@ from oversight.agents import (
     run_review_call,
 )
 from oversight.api import ApiError
-from oversight.changes import ReviewCapture, WrongState
+from oversight.changes import ChangeNotFound, ReviewCapture, WrongState, repeat_verdict
 from oversight.events import NEEDS_YOU_CODES, format_needs_you
 from oversight.review_config import ReviewerUnavailable, configured_reviewer
 from oversight.runtime_accounting import ReviewAccounting, ReviewLedgerFailure
@@ -254,6 +254,21 @@ async def apply_outcome(
             "; ".join(outcome.review.problems) or "Review unavailable.",
         )
     elif outcome.review.verdict == "changes_requested":
+        try:
+            verdict = await asyncio.to_thread(
+                repeat_verdict,
+                live.store.committed_events(),
+                capture.target,
+                live.change_graph(proposal.change_id),
+            )
+        except (ChangeNotFound, WrongState):
+            return
+        if not eligible(live, capture, proposal.agent_id):
+            return
+        if verdict.outcome != "clear":
+            code = "unchanged_failure" if verdict.outcome == "unchanged" else "reach_unknown"
+            await notice(live, capture, proposal, code, verdict.reason)
+            return
         request_revision(
             live,
             proposal.change_id,

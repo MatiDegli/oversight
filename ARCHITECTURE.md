@@ -295,6 +295,10 @@ Five more event types are reserved: change.reviewed, change.facts_recorded, test
 queue.updated and lead.status. Transport and reducer consume their sequences.
 Approve, Reject and Request changes require the revision and head shown by the review render;
 revision zero is limited to rejecting the published agent base before any proposal.
+During a rules decision, the person’s Reject or Request changes is admitted until rules
+authorization starts and cancels the rules attempt; from that cutoff it answers 409.
+Each confirmed main commit parks idle armed rules waits; once the graph snapshot holds that
+commit, a new generation renews them against that main with the original absolute deadline.
 Live resolutions record principal and head explicitly. The writer validates each frozen
 candidate independently before SQL admission. EventRejected is terminal for that delivery;
 valid neighbors still commit with contiguous sequences. A rejected post-effect resolution

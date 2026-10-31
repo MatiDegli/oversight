@@ -16,6 +16,36 @@ const through = (seq: number) =>
   events.filter((event) => event.seq <= seq).reduce(applyEvent, createInitialState());
 
 describe("agent card details", () => {
+  it.each([1, 4])("names the next attempt after failed attempt %s", (attempt) => {
+    const state = through(18);
+    state.modelWaits["agent-1"] = {
+      seq: 19,
+      attempt,
+      max_attempts: 5,
+      cause: "timeout",
+      wait_s: 2,
+    };
+    for (const status of ["working", "revising", "halted", "ready_for_review", "done"] as const) {
+      const agent = state.agents["agent-1"];
+      if (!agent) throw new Error("Missing fixture");
+      const current = { ...state, agents: { "agent-1": { ...agent, state: status } } };
+      const data = selectAgentCard(current, "agent-1");
+      const baseline = selectAgentCard({ ...current, modelWaits: {} }, "agent-1");
+      if (status === "working" || status === "revising") {
+        expect(baseline?.activityLabel).toBe("Working");
+        expect(data?.activityLabel).toBe(
+          status === "working" ? "Waiting" : baseline?.activityLabel,
+        );
+        expect(data?.activity).toBe(`Waiting for model (retry ${String(attempt + 1)}/5)`);
+      } else expect(data).toEqual(baseline);
+    }
+    const step = events.find((event) => event.type === "agent.step");
+    if (!step) throw new Error("Missing fixture");
+    const resumed = applyEvent(state, { ...step, seq: 19 });
+    expect(selectAgentCard(resumed, "agent-1")?.activityLabel).toBe("Working");
+    expect(selectAgentCard(resumed, "agent-1")?.activity).not.toContain("Waiting for model");
+  });
+
   it("gets Step n of N from tool results and the run limit, even when status disagrees", () => {
     const state = through(18);
     const agent = state.agents["agent-1"];

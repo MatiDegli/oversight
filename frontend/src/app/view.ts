@@ -36,7 +36,8 @@ export const panelOpen = (view: View) =>
   view.review !== null ||
   view.file !== null ||
   view.activeTab === "inbox" ||
-  view.activeTab === "settings";
+  view.activeTab === "settings" ||
+  Boolean(view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation);
 
 /** Proposed and not yet decided: what review opens on. A revising change shows its live diff. */
 export function isProposed(change: ChangeState): boolean {
@@ -181,6 +182,7 @@ export function closesPanel(
 /** Tab state is owned by navigation, never by the event reducer. */
 export interface FocusTab {
   id: string;
+  conversation?: string;
   selected: string | null;
   diff: DiffTarget | null;
   review: string | null;
@@ -291,6 +293,22 @@ export function surfaceTab(view: View, id: "inbox" | "settings"): FocusTab {
     diff: null,
     file: null,
     frameIds: [],
+    frameKey: id,
+  };
+}
+
+export function conversationTab(view: View, state: State, agentId: string): FocusTab {
+  const agent = state.agents[agentId];
+  const change = agent ? state.changes[agent.change_id] : undefined;
+  const id = `conversation:${agentId}`;
+  return {
+    id,
+    conversation: agentId,
+    selected: view.selected,
+    diff: null,
+    review: null,
+    file: null,
+    frameIds: change ? changeNodeIds(change) : [],
     frameKey: id,
   };
 }

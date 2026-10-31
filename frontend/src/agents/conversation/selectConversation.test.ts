@@ -7,6 +7,17 @@ import { selectConversation } from "./selectConversation";
 
 const select = (state = sketchState) => selectConversation(state, "agent-1", sketchMessages);
 describe("selectConversation", () => {
+  it("uses four step events when the status still says step zero", () => {
+    const state = recorded
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as ServerEvent)
+      .filter((event) => event.seq <= 35)
+      .reduce(applyEvent, createInitialState());
+    expect(state.agents["agent-1"]?.step).toBe(0);
+    expect(state.steps["agent-1"]).toHaveLength(4);
+    expect(selectConversation(state, "agent-1", [])?.header.step).toBe(4);
+  });
   it("orders every kind by sequence and uses the first task timestamp", () => {
     const data = select();
     expect(sketchState.gap).toBe(false);

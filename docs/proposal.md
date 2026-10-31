@@ -85,7 +85,7 @@ oversight/
 │   └── layouts/              # preset positions by workspace: demo-repo.json
 ├── demo-repo/                # the template: a small shop project with tests, no git of its own
 ├── tools/                    # development scripts: the API probe, the contract-scope check
-└── desktop/                  # level 3 only; created then
+└── desktop/                  # after the hackathon; created then
 ```
 
 Notes:
@@ -571,9 +571,9 @@ the single error format.
 | `POST /queue` | `EnqueueTask` | Reserved: 501; then 201 `QueuedTask` | `not_implemented` |
 | `GET /queue`, `GET /queue/{id}` | none | Reserved: 501; then 200 `QueueSnapshot` / `QueuedTask` | `not_implemented` |
 | `POST /queue/{id}/cancel` | `QueueRevision {revision}` | Reserved: 501; then 202 | `not_implemented` |
-| `POST /leads` | `StartLead {task, model?}` | Reserved: 501; then 201 `LeadCreated` | `not_implemented` |
-| `GET /leads/{id}` | none | Reserved: 501; then 200 `LeadStatus` | `not_implemented` |
-| `POST /leads/{id}/stop` | `StopLead {revision}` | Reserved: 501; then 202 | `not_implemented` |
+| `POST /leads` | `StartLead {task, model?}` | 201 `LeadCreated` | `invalid_request`, `not_configured`, `spend_brake`, `wrong_state` |
+| `GET /leads/{id}` | none | 200 `LeadStatus` | `not_found` |
+| `POST /leads/{id}/stop` | `StopLead {revision}` | 202 | `not_found`, `wrong_state` |
 | `GET /graph` | none | 200 `GraphResponse {run_id, seq, graph}` | |
 | `POST /graph/rescan` | none | 202 | |
 | `GET /impact?node=&depth=&change=` | none | 200 `ImpactCone`; on main, or on a change's version | `not_found` |

@@ -323,6 +323,22 @@
           "description": "Per-caller measurements; inherited counts count invocations, not cone nodes.",
           "title": "Measured Cone"
         },
+        "parameter_extensions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ParameterExtensionDiff"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Calls that use proposed-only parameters; null means none were recorded.",
+          "title": "Parameter Extensions"
+        },
         "review_cards": {
           "anyOf": [
             {
@@ -961,6 +977,66 @@
     "NonEmptyText": {
       "minLength": 1,
       "type": "string"
+    },
+    "ParameterExtensionDiff": {
+      "additionalProperties": false,
+      "description": "Supplied calls that pass a parameter only the proposed version accepts, run unchanged on\nboth sides; never counted in behavior_diff.",
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId",
+          "description": "The changed function or method."
+        },
+        "parameters": {
+          "description": "The proposed-only parameters these calls pass.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "minItems": 1,
+          "title": "Parameters",
+          "type": "array"
+        },
+        "run_count": {
+          "default": 0,
+          "description": "Calls from the proposed version's tests, executed on both sides with identical arguments.",
+          "minimum": 0,
+          "title": "Run Count",
+          "type": "integer"
+        },
+        "rejected_before": {
+          "default": 0,
+          "description": "Calls the base version rejected when binding arguments; that rejection is its observed result.",
+          "minimum": 0,
+          "title": "Rejected Before",
+          "type": "integer"
+        },
+        "rows": {
+          "description": "At most eight samples: before is the base rejection or value, after the proposed value.",
+          "items": {
+            "$ref": "#/$defs/BehaviorDiffRow"
+          },
+          "maxItems": 8,
+          "title": "Rows",
+          "type": "array"
+        },
+        "not_probed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why all or part of these calls could not run."
+        }
+      },
+      "required": [
+        "node_id",
+        "parameters"
+      ],
+      "title": "ParameterExtensionDiff",
+      "type": "object"
     },
     "ReachFacts": {
       "additionalProperties": false,

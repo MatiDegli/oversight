@@ -258,7 +258,8 @@ async def test_edit_after_a_save_needs_a_read(small_tree: Opened) -> None:
 
 
 def test_prompt_version_hashes_the_revision_prompt() -> None:
-    from oversight.agents._prompts import PLAN_PROMPT
+    from oversight.agents._lead_tools import LEAD_TOOL_SCHEMAS
+    from oversight.agents._prompts import LEAD_PROMPT, PLAN_PROMPT
 
     expected = (
         "agent-v1-"
@@ -267,11 +268,13 @@ def test_prompt_version_hashes_the_revision_prompt() -> None:
                 SYSTEM_PROMPT
                 + REVISION_PROMPT
                 + PLAN_PROMPT
+                + LEAD_PROMPT
                 + json.dumps(TOOL_SCHEMAS, sort_keys=True)
+                + json.dumps(LEAD_TOOL_SCHEMAS, sort_keys=True)
             ).encode()
         ).hexdigest()[:12]
     )
-    assert expected == PROMPT_VERSION == "agent-v1-c7ca1d7c6ffe"
+    assert expected == PROMPT_VERSION == "agent-v1-6972184812a7"
 
 
 async def test_revise_before_a_run_raises(small_tree: Opened) -> None:

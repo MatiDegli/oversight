@@ -45,32 +45,49 @@ export function isClosed(entry: PendingEntry, state: State): boolean {
 
 /** Plan revision and lead revision are different counters; never substitute one for the other. */
 export function recordPlanEntries(entries: Entries, state: State): void {
-  const leads = new Map<
-    string,
-    Extract<State["decisionEvents"][number], { type: "lead.status" }>
-  >();
+  type LeadEvent = Extract<State["decisionEvents"][number], { type: "lead.status" }>;
+  const leads = new Map<string, LeadEvent>();
+  const latest = new Map<string, number>();
+  const linked = new Set(
+    state.decisionEvents.flatMap((event) =>
+      event.type === "lead.status" && event.payload.requested_plan_id
+        ? [event.payload.agent_id]
+        : [],
+    ),
+  );
+  const key = (agentId: string, revision: number) => JSON.stringify([agentId, revision]);
   const plans = new Map<
     string,
     Extract<State["decisionEvents"][number], { type: "plan.updated" }>
   >();
+  const planFor = (lead: LeadEvent) => {
+    const { agent_id, revision, requested_plan_id } = lead.payload;
+    let plan = requested_plan_id ? plans.get(requested_plan_id) : undefined;
+    if (!linked.has(agent_id) && latest.get(agent_id) === revision) {
+      const siblings = [...plans.values()].filter(
+        (p) => p.payload.started_by === agent_id && p.payload.state === "proposed",
+      );
+      if (siblings.length === 1) plan = siblings[0];
+    }
+    return plan?.payload.state === "proposed" && plan.payload.started_by === agent_id
+      ? plan
+      : undefined;
+  };
   for (const event of state.decisionEvents) {
     if (event.type === "lead.status") {
-      const old = leads.get(event.payload.agent_id);
-      if (!old || old.payload.revision < event.payload.revision)
-        leads.set(event.payload.agent_id, event);
+      const { agent_id, revision } = event.payload;
+      const id = key(agent_id, revision);
+      if (!leads.has(id)) leads.set(id, event);
+      latest.set(agent_id, Math.max(latest.get(agent_id) ?? 0, revision));
     }
     if (event.type === "plan.updated") {
       const old = plans.get(event.payload.plan_id);
       if (!old || old.payload.revision <= event.payload.revision)
         plans.set(event.payload.plan_id, event);
     }
-    for (const plan of plans.values()) {
-      const leadId = plan.payload.started_by;
-      const lead = leadId ? leads.get(leadId) : null;
-      const siblings = [...plans.values()].filter(
-        (p) => p.payload.started_by === leadId && p.payload.state === "proposed",
-      );
-      if (!lead || plan.payload.state !== "proposed" || siblings.length !== 1) continue;
+    for (const lead of leads.values()) {
+      const plan = planFor(lead);
+      if (!plan) continue;
       recordEntry(
         entries,
         state,
@@ -90,17 +107,8 @@ export function recordPlanEntries(entries: Entries, state: State): void {
   }
   for (const [id, entry] of entries) {
     if (entry.identity.kind !== "lead_plan") continue;
-    const plan = entry.planId ? plans.get(entry.planId) : null;
-    const lead = leads.get(entry.identity.agent_id);
-    const siblings = [...plans.values()].filter(
-      (p) => p.payload.started_by === entry.agentId && p.payload.state === "proposed",
-    );
-    if (
-      plan?.payload.state !== "proposed" ||
-      lead?.payload.revision !== entry.identity.revision ||
-      siblings.length !== 1
-    )
-      entries.delete(id);
+    const lead = leads.get(key(entry.identity.agent_id, entry.identity.revision));
+    if (!lead || planFor(lead)?.payload.plan_id !== entry.planId) entries.delete(id);
   }
 }
 

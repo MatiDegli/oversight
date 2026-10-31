@@ -129,8 +129,10 @@ def _function_reason(source: Source, node: Function) -> str | None:
     return _effect_reason(source, node)
 
 
-def _bound_signature(source: Source, node: Function) -> inspect.Signature:
-    signature = _signature(source, node)
+def _bound_signature(
+    source: Source, node: Function, *, allow_kwargs: bool = False
+) -> inspect.Signature:
+    signature = _signature(source, node, allow_kwargs=allow_kwargs)
     params = list(signature.parameters.values())
     if not params or params[0].kind not in (
         inspect.Parameter.POSITIONAL_ONLY,

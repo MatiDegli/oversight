@@ -394,6 +394,7 @@ class RevertService:
 
     async def _success(self, a: _Attempt) -> None:
         assert a.result is not None
+        self.ctx.assessment.main_changed(a.result.main_commit)
         if a.delta is None:
             await self._drain()
             new = await self.ctx.scan(a.result.main_commit)
@@ -431,6 +432,7 @@ class RevertService:
         a.receipts[name] = task.result()
         if name == "delta" and a.snapshot is not None:
             self.ctx.state.snapshot = a.snapshot
+            self.ctx.assessment.main_delivered(a.snapshot.commit)
 
     async def _wait(self, a: _Attempt, task: asyncio.Task[object]) -> None:
         deadline = time.monotonic() + self.ctx.timeout
