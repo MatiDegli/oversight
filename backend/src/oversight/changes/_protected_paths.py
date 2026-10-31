@@ -5,11 +5,12 @@ from fnmatch import fnmatchcase
 from re import match
 
 from oversight_contracts.common import FileStatus
-from oversight_contracts.events import FileStat
+from oversight_contracts.events import ChangeProposed, FileStat
 from oversight_contracts.policy import EvidenceRef
 
 # docs/additions.md:270 supplies the categories; the coordinator approved these patterns.
 # Basename patterns apply at any depth only for manifests/lockfiles and test configuration.
+BUILTIN_TABLE_VERSION: int = 1
 BUILTIN_CATEGORIES: tuple[tuple[str, tuple[str, ...], bool], ...] = (
     (
         "manifest_lockfile",
@@ -61,6 +62,26 @@ class ChangedFileInventory:
     files: tuple[FileStat, ...]
     complete: bool
     evidence: tuple[EvidenceRef, ...] = ()
+
+
+def capture_proposal_paths(
+    proposal: ChangeProposed, *, proposal_seq: int | None, run_started_seq: int | None
+) -> tuple[ProtectedPathSnapshot, ChangedFileInventory] | None:
+    """Capture confirmed sources; the caller supplies retained receipts, never inferred seqs.
+
+    The run receipt identifies the immutable built-in table version recorded in DECISIONS.md.
+    The proposal receipt witnesses its complete inventory, including an explicitly empty diff.
+    """
+    if proposal_seq is None or run_started_seq is None:
+        return None
+    return (
+        ProtectedPathSnapshot(evidence=(EvidenceRef(event_seq=run_started_seq),)),
+        ChangedFileInventory(
+            files=tuple(proposal.files),
+            complete=True,
+            evidence=(EvidenceRef(event_seq=proposal_seq),),
+        ),
+    )
 
 
 @dataclass(frozen=True, kw_only=True)
