@@ -1,7 +1,7 @@
 import { agentSlotStyle } from "../theme";
 import { agentLook as look } from "../theme";
 import type { AgentStatus, SuiteResult } from "@contracts";
-import { Check, CircleCheck, CircleX, Eye, FileDiff, X } from "lucide-react";
+import { Check, CircleCheck, CircleX, Eye, FileDiff, MessagesSquare, X } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
@@ -123,6 +123,7 @@ export interface AgentCardProps {
   data: AgentCardDetail;
   onOpenDiff?: (changeId: string) => void;
   onReview?: (changeId: string) => void;
+  onConversation?: (agentId: string) => void;
   onStop?: (agentId: string) => Promise<unknown>;
   onPause?: (agentId: string) => Promise<unknown>;
   onResume?: (agentId: string) => Promise<unknown>;
@@ -132,6 +133,7 @@ export function AgentCard({
   data,
   onOpenDiff,
   onReview,
+  onConversation,
   onStop,
   onPause,
   onResume,
@@ -181,6 +183,7 @@ export function AgentCard({
         data={data}
         onOpenDiff={onOpenDiff}
         onReview={onReview}
+        onConversation={onConversation}
         onStop={onStop}
         onPause={onPause}
         onResume={onResume}
@@ -326,7 +329,15 @@ function CardHeader({ data }: { data: AgentCardDetail }) {
   );
 }
 
-function CardActions({ data, onOpenDiff, onReview, onStop, onPause, onResume }: AgentCardProps) {
+function CardActions({
+  data,
+  onOpenDiff,
+  onReview,
+  onConversation,
+  onStop,
+  onPause,
+  onResume,
+}: AgentCardProps) {
   const { agent, readyForReview } = data;
   const own = look[agent.slot];
   const reviewClass = `inline-flex h-(--button-primary-height) items-center gap-2 rounded-control px-4 text-(length:--label-size) font-semibold text-on-agent hover:brightness-110 ${own.fill} ${focusRing}`;
@@ -352,6 +363,17 @@ function CardActions({ data, onOpenDiff, onReview, onStop, onPause, onResume }: 
           }}
         >
           <Eye aria-hidden="true" className="size-4" /> Review change
+        </button>
+      )}
+      {onConversation && (
+        <button
+          type="button"
+          className={secondaryButtonClass}
+          onClick={() => {
+            onConversation(agent.agent_id);
+          }}
+        >
+          <MessagesSquare aria-hidden="true" className="size-4" /> Conversation
         </button>
       )}
       {onPause && onResume && (
