@@ -104,9 +104,11 @@ each. Both behavior pilots use d01's top-level `shipping_cost`, whose stable mea
 reaches classification. In d02, `price_breaks` adds an opt-in parameter defaulting to zero;
 default calls have no behavior difference, so a behavior pilot sends no model call. Supported
 methods are probed: b09 (`Inventory.reserve`) compares 24 inputs, b14 (`Customer.email` setter)
-2, and b19 (`Product.label`) 2. b17 (`Cart.add`) remains "probe unavailable": its required
-`Product` argument has no supported literal input. b19 also changes a module import; the module
-node remains "probe unavailable" because modules are not callable probe targets. Frozen patches,
+2, and b19 (`Product.label`) 2. The observation documented on main `cc023c8` was that b17
+(`Cart.add`), lacking a supported literal `Product` argument, and b19's changed module node,
+not a callable probe target, both published "probe unavailable". After class-args (`8a4a2ec`)
+and probe-reasons (`f44dd62`), the `Product` argument may be constructible and reports use
+recorded unprobed facts with allowlisted phrases; no new outcome is claimed without a run. Frozen patches,
 ordering, manifest and labels remain unchanged; unprobed nodes stay in the denominators. Then `run`
 uses the same flags plus the external label path and pin. Tests-only runs once per bench patch;
 `--repetitions` applies to the other arms. A seed and the full randomized order persist before
