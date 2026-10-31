@@ -9,7 +9,7 @@ from oversight_contracts.events import ChangeProposed, FileStat
 from oversight_contracts.policy import EvidenceRef
 
 BUILTIN_TABLE_VERSION: int = 1
-# docs/additions.md:270 supplies the categories; the coordinator approved these patterns.
+# docs/additions.md, section "8. Merge by rules", supplies the categories; patterns were approved.
 # Basename patterns apply at any depth only for manifests/lockfiles and test configuration.
 BUILTIN_CATEGORIES: tuple[tuple[str, tuple[str, ...], bool], ...] = (
     (
