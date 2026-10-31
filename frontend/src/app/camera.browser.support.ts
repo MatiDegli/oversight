@@ -1,4 +1,9 @@
-import type { Locator, Page } from "@playwright/test";
+import { launchBrowser } from "../browserLaunch.support";
+import { fileURLToPath } from "node:url";
+
+import type { Browser, Locator, Page } from "@playwright/test";
+import { createServer } from "vite";
+import type { ViteDevServer } from "vite";
 import { expect } from "vitest";
 
 import type {} from "./camera.browser.fixture";
@@ -9,6 +14,69 @@ type CameraPageState = {
   errors: string[];
   editorRequests: string[];
 };
+
+let server: ViteDevServer | undefined;
+let browser: Browser | undefined;
+let sharedPage: Page | undefined;
+const errors: string[] = [];
+const editorRequests: string[] = [];
+let url: string;
+let html: string;
+
+async function startCameraBrowser() {
+  server = await createServer({
+    root: fileURLToPath(new URL("../../", import.meta.url)),
+    cacheDir: fileURLToPath(new URL("../../../.shots/camera-vite-cache", import.meta.url)),
+    // The fixture reads the recorded run from the repository's fixtures/.
+    server: {
+      host: "127.0.0.1",
+      port: 0,
+      strictPort: false,
+      fs: { allow: [fileURLToPath(new URL("../../../", import.meta.url))] },
+    },
+  });
+  html = await server.transformIndexHtml(
+    "/",
+    '<!doctype html><html><body><script type="module">import "/src/theme/index.css"; import { graphTest } from "/src/app/camera.browser.fixture.tsx"; window.graphTest = graphTest;</script></body></html>',
+  );
+  await server.listen();
+  url = server.resolvedUrls?.local[0] ?? "";
+  browser = await launchBrowser();
+  sharedPage = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+  const page = sharedPage;
+  page.setDefaultTimeout(5_000);
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.includes("monaco-editor") || path.endsWith("/editor/monaco.ts"))
+      editorRequests.push(request.url());
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error" && !message.location().url.endsWith("/@vite/client"))
+      errors.push(message.text());
+  });
+  await controlFrames(page);
+  // Load the graph-only modules once; each case still mounts and disposes its own graph.
+  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+  await page.goto(url);
+  await page.waitForFunction(() => "graphTest" in window, undefined, { polling: 10 });
+}
+
+async function closeCameraBrowser() {
+  await sharedPage?.close();
+  await browser?.close();
+  await server?.close();
+}
+
+function getCameraPageState(): CameraPageState {
+  return {
+    get sharedPage() {
+      return sharedPage;
+    },
+    errors,
+    editorRequests,
+  };
+}
 
 declare global {
   interface Window {
@@ -293,6 +361,9 @@ async function panAway(page: Page) {
 }
 
 export {
+  closeCameraBrowser,
+  getCameraPageState,
+  startCameraBrowser,
   click,
   controlFrames,
   emptyCanvasPoint,

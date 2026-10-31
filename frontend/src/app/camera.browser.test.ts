@@ -1,10 +1,4 @@
-import { launchBrowser } from "../browserLaunch.support";
-import { fileURLToPath } from "node:url";
-
 import { expect as browserExpect } from "@playwright/test";
-import type { Browser, Page } from "@playwright/test";
-import { createServer } from "vite";
-import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { assertPanelFrame } from "../../shots/framing";
@@ -14,7 +8,9 @@ import type { GraphProbeHost } from "../graph";
 
 import {
   click,
-  controlFrames,
+  closeCameraBrowser,
+  getCameraPageState,
+  startCameraBrowser,
   emptyCanvasPoint,
   expectedWatchZoom,
   paint,
@@ -26,64 +22,12 @@ import {
   withPage as withCameraPage,
 } from "./camera.browser.support";
 
-let server: ViteDevServer | undefined;
-let browser: Browser | undefined;
-let sharedPage: Page | undefined;
-const errors: string[] = [];
-const editorRequests: string[] = [];
-let url: string;
-let html: string;
-const withPage = withCameraPage.bind(null, {
-  get sharedPage() {
-    return sharedPage;
-  },
-  errors,
-  editorRequests,
-});
+const state = getCameraPageState();
+const { errors, editorRequests } = state;
+const withPage = withCameraPage.bind(null, state);
 
-beforeAll(async () => {
-  server = await createServer({
-    root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/camera-vite-cache", import.meta.url)),
-    // The fixture reads the recorded run from the repository's fixtures/.
-    server: {
-      host: "127.0.0.1",
-      port: 0,
-      strictPort: false,
-      fs: { allow: [fileURLToPath(new URL("../../../", import.meta.url))] },
-    },
-  });
-  html = await server.transformIndexHtml(
-    "/",
-    '<!doctype html><html><body><script type="module">import "/src/theme/index.css"; import { graphTest } from "/src/app/camera.browser.fixture.tsx"; window.graphTest = graphTest;</script></body></html>',
-  );
-  await server.listen();
-  url = server.resolvedUrls?.local[0] ?? "";
-  browser = await launchBrowser();
-  sharedPage = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-  const page = sharedPage;
-  page.setDefaultTimeout(5_000);
-  page.on("request", (request) => {
-    const path = new URL(request.url()).pathname;
-    if (path.includes("monaco-editor") || path.endsWith("/editor/monaco.ts"))
-      editorRequests.push(request.url());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
-  page.on("console", (message) => {
-    if (message.type() === "error" && !message.location().url.endsWith("/@vite/client"))
-      errors.push(message.text());
-  });
-  await controlFrames(page);
-  // Load the graph-only modules once; each case still mounts and disposes its own graph.
-  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
-  await page.goto(url);
-  await page.waitForFunction(() => "graphTest" in window, undefined, { polling: 10 });
-}, 60_000);
-afterAll(async () => {
-  await sharedPage?.close();
-  await browser?.close();
-  await server?.close();
-});
+beforeAll(startCameraBrowser, 60_000);
+afterAll(closeCameraBrowser);
 
 it.each(["after-mount", "at-mount"] as const)(
   "starts the demo preset without splitting frames at canvas, heading or footer edges (%s)",
