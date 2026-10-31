@@ -2633,3 +2633,12 @@ Review time is refused because proposal-to-resolution elapsed time mixes waiting
 Rankings and scores are refused because agents receive different tasks. Percentages and ratios
 such as lines per dollar or cost per merge are refused because these receipts provide no fair
 normalization for task scope; every printed rate retains its explicit denominator.
+
+
+## 2026-10-31 — Graph difference chip
+
+Approved at 13:55:35 ART (UTC-3), packet B 1031e item 1: a neutral count on each changed node,
+with a click/Enter popover for current-revision behavior samples. Facts arriving after Ready for
+review add it in place without opening it or taking focus. Existing caption-size is 13px, within
+1px of the sketch. The approved exclusions are the moved cone card, the 1280 reframe, and the agent
+card's “Evidence 5 of 6” line. Measured caller words belong to the parallel measured-cone graph front.

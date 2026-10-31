@@ -34,3 +34,10 @@ export function selectGraphBehavior(state: State): GraphBehaviorEntry[] {
       }));
     });
 }
+
+export const unstableBehaviorSentence =
+  "Results varied between runs; this is not an established difference.";
+
+export function selectGraphBehaviorNode(state: State, changeId: string, nodeId: string) {
+  return selectBehaviorEvidence(state, changeId)?.find((node) => node.node_id === nodeId);
+}

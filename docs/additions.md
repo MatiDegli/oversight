@@ -69,7 +69,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | # | Item | State and commit or branch | In contracts proposal |
 | --- | --- | --- | --- |
 | 1 | Facts and a summary from events (package 3) | On main — summary producer `027ec36`, review rendering `9cdd02a`; facts row/steps `ae9822d` | Yes — summary; report check needs no field |
-| 2 | Behavior diff | Backend on main — opt-in publication `e72fcc7`, shared-input comparison `647d545`, methods/getters/setters `2cfe760`, project-object arguments `8a4a2ec`, unprobed reasons `f44dd62`; node/review rows remain | Yes |
+| 2 | Behavior diff | Backend on main — opt-in publication `e72fcc7`, shared-input comparison `647d545`, methods/getters/setters `2cfe760`, project-object arguments `8a4a2ec`, unprobed reasons `f44dd62`; review rows and graph count chips with sample popovers built (`frontend/node-chip`) | Yes |
 | 3 | Agent harness pack | On main — opt-in pack `42976ee`, runner wiring `b4446cc` | No |
 | 4 | Measured impact cone | Backend on main — caller evidence `1c50382`, bounded GET /impact `920e930`; measured graph display remains | Yes |
 | 5 | Live overlap between agents | Queued — card facts/change-lifetime reads remain; latest focus and last-read node only at `454f602` | No |
@@ -265,7 +265,7 @@ unstable, not an established change.
 The core landed in `174c0ce`; contracts 1.5.0 (`649ff0d`) reserved its optional per-node evidence,
 including unstable/not-probed outcomes. Publication is wired behind `OVERSIGHT_BEHAVIOR_DIFF`
 (`e72fcc7`, `backend/src/oversight/changes/_proposal.py:328`). Shared-input comparison landed in
-`647d545`; per-node rows in the live UI remain. Reuse the demo interpreter, asynchronous bounded
+`647d545`; review rows and per-node count chips with up to eight sample rows are built (`frontend/node-chip`). Reuse the demo interpreter, asynchronous bounded
 runner, guarded base checkout and C3 session isolation
 (`19443e8`; `backend/src/oversight/workspace/capability.py:116`). Never fall back to an open network.
 Apply time/output/input caps across the whole probe, not a full suite allowance per input. Write
