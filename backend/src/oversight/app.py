@@ -336,7 +336,7 @@ class LiveRun:
             braked=any(_metered(profile) for profile in profiles),
         )
         await self.store.start()
-        await self.store.publish(
+        started = await self.store.publish(
             RunStarted(
                 merge_mode=MergeModeState(),
                 run_id=self.run_id,
@@ -383,6 +383,8 @@ class LiveRun:
                 self._settings.review_card_total_s,
             ),
             run_id=self.run_id,
+            spend_ledger=self.ledger,
+            spend_receipt=started if self.ledger.state is not None else None,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
         self.dispatcher.start()
@@ -513,8 +515,15 @@ class LiveRun:
         out."""
         if isinstance(payload, UsageTick):
             validate_usage_tick(payload)
-        if isinstance(payload, UsageTick) and self._is_metered(payload.agent_id):
-            await self._persist(payload)
+        spend_state = None
+        if isinstance(payload, UsageTick):
+            spend_state = (
+                await self._persist(payload)
+                if self._is_metered(payload.agent_id)
+                else self.ledger.state
+            )
+            if spend_state is not None:
+                payload = payload.model_copy(update={"spent_usd": spend_state.spent_usd})
         if isinstance(payload, AgentStatus):
             base = self._manager.agent_base(payload.agent_id) if self._manager else None
             payload = payload.model_copy(update={"base_commit": base})
@@ -536,6 +545,8 @@ class LiveRun:
                 answering=agent.task.answering if agent else None,
             )
         stored = await self.store.publish(payload)
+        if spend_state is not None and self._manager is not None:
+            self._manager.spend_received(stored)
         if (
             self._settings.cross_review
             and isinstance(payload, UsageTick)
@@ -564,7 +575,7 @@ class LiveRun:
         if agent is not None and self._slots.get(agent.slot) == agent_id:
             self._slots[agent.slot] = None
 
-    async def _persist(self, tick: UsageTick) -> None:
+    async def _persist(self, tick: UsageTick) -> LedgerState:
         """Fails closed. A tick the ledger could not take is not published as recorded: a fatal
         `error` goes out instead, every Meta start is refused until a restart, and the agent's run
         stops as a shutdown stops it (cancelled, so `_run` ends it halted and its change is
@@ -577,7 +588,7 @@ class LiveRun:
         which never cancels it: a cancel while another agent's write holds the lock would
         otherwise raise before anything was written, with the brake still open."""
         try:
-            await write_tick(self, tick, wait=asyncio.wait)
+            return await write_tick(self, tick, wait=asyncio.wait)
         except (asyncio.CancelledError, LedgerError, OSError) as error:
             failure = error.__cause__ if isinstance(error, asyncio.CancelledError) else error
             if isinstance(failure, LedgerError | OSError):
@@ -592,6 +603,7 @@ class LiveRun:
         """The brake closes before the first await. The report is finished however often this
         task is cancelled again: the fatal `error` is what tells me to settle."""
         self._ledger_lost = True
+        self.ledger.notify_loss()
         self._ledger_lost_agents.add(tick.agent_id)
         agent = self._agents.get(tick.agent_id)
         await self._finish(

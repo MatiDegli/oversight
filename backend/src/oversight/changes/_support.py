@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
-from oversight.agents import Publish
+from oversight.agents import LedgerFile, Publish
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._grants import GrantRegistry
 from oversight.changes._mode import ModeController
@@ -53,6 +53,7 @@ class ChangePorts:
 
     drain: Callable[[ChangeRecord], Awaitable[None]]
     review: ReviewPort | None = None
+    spend_ledger: LedgerFile | None = None
     rules_evidence: Callable[["PolicyInputs"], "RulesEvidence"] | None = None
     rules_admission: Callable[[ChangeRecord, ChangeAssessment], tuple[str, str] | None] | None = (
         None

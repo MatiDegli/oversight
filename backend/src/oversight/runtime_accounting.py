@@ -18,6 +18,7 @@ from oversight.agents import (
     DecisionUnavailable,
     LedgerError,
     LedgerFile,
+    LedgerState,
     ModelReply,
     Pricing,
     UnknownUsage,
@@ -59,9 +60,9 @@ async def durable[T](
 
 async def write_tick(
     live: LiveRun, tick: UsageTick, *, wait: Callable[..., Awaitable[object]] = asyncio.wait
-) -> None:
+) -> LedgerState:
     entry = UnknownUsage(live.run_id, tick.agent_id, tick.model, format_ts(datetime.now(UTC)))
-    await durable(live.ledger.record(tick.cost_usd, entry), wait=wait)
+    return await durable(live.ledger.record(tick.cost_usd, entry), wait=wait)
 
 
 class ReviewLedgerFailure(Exception):
@@ -99,20 +100,26 @@ class PlanAccounting:
             brake=live._usage.brake if metered else "ok",
         )
         validate_usage_tick(tick)
+        state = live.ledger.state
         if metered:
             try:
-                await write_tick(live, tick)
+                state = await write_tick(live, tick)
             except (asyncio.CancelledError, LedgerError, OSError) as error:
                 cause = error.__cause__ if isinstance(error, asyncio.CancelledError) else error
                 if not isinstance(cause, LedgerError | OSError):
                     raise
                 live._ledger_lost = True
+                live.ledger.notify_loss()
                 self.failure = f"Plan {self.plan_id} ledger write failed ({type(cause).__name__})."
                 raise LedgerError(self.failure) from cause
+        if state is not None:
+            tick = tick.model_copy(update={"spent_usd": state.spent_usd})
         # The planner has no agent record: _publish would use the wrong provider ownership.
         receipt = await live.store.publish(tick)
         if live._manager is not None:
             live._manager.usage_recorded(receipt)
+            if state is not None:
+                live._manager.spend_received(receipt)
 
     async def report_failure(self) -> None:
         assert self.failure is not None
@@ -276,23 +283,29 @@ class ReviewAccounting:
             brake=live._usage.brake if metered else "ok",
         )
         validate_usage_tick(tick)
+        state = live.ledger.state
         if metered:
             try:
-                await write_tick(live, tick)
+                state = await write_tick(live, tick)
             except (asyncio.CancelledError, LedgerError, OSError) as error:
                 cause = error.__cause__ if isinstance(error, asyncio.CancelledError) else error
                 if not isinstance(cause, LedgerError | OSError):
                     raise
                 # No await before the brake and this review's failure are both recorded.
                 live._ledger_lost = True
+                live.ledger.notify_loss()
                 self.failure = ReviewLedgerFailure(
                     f"The review ledger write failed ({type(cause).__name__})."
                 )
                 raise self.failure from cause
+        if state is not None:
+            tick = tick.model_copy(update={"spent_usd": state.spent_usd})
         # Do not route through _publish: metering belongs to the reviewer, not tick.agent_id.
         receipt = await live.store.publish(tick)
         if live._manager is not None:
             live._manager.usage_recorded(receipt)
+            if state is not None:
+                live._manager.spend_received(receipt)
 
     async def report_failure(self) -> None:
         assert self.failure is not None

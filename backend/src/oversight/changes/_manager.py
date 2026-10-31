@@ -26,7 +26,7 @@ import time
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 
-from oversight.agents import AgentTask, Publish, ReviewOutcome, RunEnd
+from oversight.agents import AgentTask, LedgerFile, Publish, ReviewOutcome, RunEnd
 from oversight.changes import _approval as approval
 from oversight.changes import _cross_review as cross_review
 from oversight.changes import _delivery as delivery
@@ -97,6 +97,8 @@ class ChangeManager:
         monotonic: Callable[[], float] = time.monotonic,
         sleep_until: Callable[[float], Awaitable[None]] | None = None,
         settings: Settings | None = None,
+        spend_ledger: LedgerFile | None = None,
+        spend_receipt: StoredEvent | None = None,
     ) -> None:
         settings = settings or Settings()
 
@@ -120,6 +122,7 @@ class ChangeManager:
             ChangePorts(
                 drain=lambda rec: self._drain(rec),
                 review=review,
+                spend_ledger=spend_ledger,
                 rules_admission=self._admit_rules,
                 rules_transaction=lambda rec, evidence: transaction.run(self._ctx, rec, evidence),
             ),
@@ -144,6 +147,17 @@ class ChangeManager:
                 review_card_limits or ReviewCardLimits(),
                 committed,
             )
+        self._unwatch_spend = spend_ledger.watch(self.spend_changed) if spend_ledger else None
+        if spend_receipt is not None:
+            self.spend_received(spend_receipt)
+
+    def spend_received(self, receipt: StoredEvent) -> None:
+        """Run-owned port: only the committed seed and explicit Meta-total sites may call it."""
+        self._ctx.assessment.spend_received(receipt)
+
+    def spend_changed(self) -> None:
+        """Wake valid armed waits without replacing their target, deadline or latest result."""
+        self._ctx.assessment.spend_changed()
 
     def rules_received(self, receipt: StoredEvent, *, generation: int | None = None) -> None:
         """Port for committed external facts, reviews and combined suite receipts."""
@@ -587,6 +601,9 @@ class ChangeManager:
         events, then send one `error` per change naming each event still unsent. If the store
         refuses that `error` too, one log line per change names what was lost. Cleanup is left
         to the next start's `reset`."""
+        if self._unwatch_spend is not None:
+            self._unwatch_spend()
+            self._unwatch_spend = None
         if self._ctx.grants.entries:
             async with self._ctx.mode.held():
                 self._ctx.grants.run_id = ""
