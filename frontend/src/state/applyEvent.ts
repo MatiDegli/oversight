@@ -27,8 +27,6 @@ export function applyEvent(state: State, event: ServerEvent): State {
   switch (event.type) {
     case "agent.message": // Line B's Conversation tab owns rendering.
       return next;
-    case "model.attempt_failed": // The card front folds this event.
-      return next;
     case "grant.created":
     case "grant.revoked":
       return { ...next, grantEvents: [...state.grantEvents, event] };
@@ -44,6 +42,7 @@ export function applyEvent(state: State, event: ServerEvent): State {
     case "graph.delta":
       return applyGraphEvent(state, next, event);
     case "agent.status":
+    case "model.attempt_failed":
     case "agent.step":
     case "agent.focus":
     case "usage.tick":

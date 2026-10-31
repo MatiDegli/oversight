@@ -7,6 +7,7 @@ from oversight.agents._control import RunControl
 from oversight.agents._crossreview import ConeEntry
 from oversight.agents._crossreview import Inputs as ReviewInputs
 from oversight.agents._crossreview import TestResult as ReviewTests
+from oversight.agents._examples_validate import ExampleTarget, canonical_json
 from oversight.agents._lead import (
     BRAKE_DETAIL,
     LEAD_LIMITS,
@@ -59,6 +60,16 @@ from oversight.agents.decision import (
     DecisionUnavailable,
     classify_difference,
 )
+from oversight.agents.examples import (
+    EXAMPLE_CALL_TIMEOUT_S,
+    EXAMPLE_CONTEXT_CHARS,
+    EXAMPLE_MAX_OUTPUT_TOKENS,
+    ExamplesNotConfigured,
+    ExamplesOutcome,
+    example_context,
+    examples_client,
+    run_examples_call,
+)
 from oversight.agents.fake import Script, ScriptedModel, load_script, parse_script
 from oversight.agents.loop import (
     PROMPT_VERSION,
@@ -89,6 +100,9 @@ __all__ = [
     "CHECKS_UNAVAILABLE_CODES",
     "D6_RESPONSE_FORMAT",
     "D6_SYSTEM_PROMPT",
+    "EXAMPLE_CALL_TIMEOUT_S",
+    "EXAMPLE_CONTEXT_CHARS",
+    "EXAMPLE_MAX_OUTPUT_TOKENS",
     "FAKE_MODEL",
     "FAKE_MODEL_B",
     "LEAD_LIMITS",
@@ -119,6 +133,9 @@ __all__ = [
     "DecisionOutcome",
     "DecisionSelected",
     "DecisionUnavailable",
+    "ExampleTarget",
+    "ExamplesNotConfigured",
+    "ExamplesOutcome",
     "LeadEnd",
     "LeadLimits",
     "LeadProposalError",
@@ -149,12 +166,16 @@ __all__ = [
     "UnverifiedProfile",
     "Usage",
     "UsageLedger",
+    "canonical_json",
     "classify_difference",
     "close_model",
+    "example_context",
+    "examples_client",
     "load_script",
     "parse_script",
     "prompt_version",
     "review_candidate",
+    "run_examples_call",
     "run_plan_call",
     "run_review_call",
     "system_prompt",

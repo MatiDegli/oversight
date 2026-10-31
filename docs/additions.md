@@ -155,12 +155,8 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
   (live, `backend/src/oversight/api/commands.py:307`).
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
-- No repeated automatic revision for an unchanged failure: before cross-review or rules follow-up
-  starts a round, compare the test and assertion with the last failure and the agent's edits since
-  then. A changed node reaches the test if the test can reach it through the graph's call edges,
-  or it appears in that test's executed nodes when recorded. If nothing relevant changed, the card
-  asks the person. This is deterministic, with no model call; if neither source can tell, ask
-  instead of starting another round on a guess.
+- No repeated automatic revision for an unchanged failure: approved on 2026-10-31 and built; see
+  DECISIONS.md.
 - Behavior diff for methods was approved on 2026-10-30 as part of the bench evidence fix and is
   no longer a candidate; see DECISIONS.md.
 - A dependency guard for package existence, license and vulnerability evidence.

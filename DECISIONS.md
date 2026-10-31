@@ -2661,3 +2661,109 @@ requested plan id only on the working step that produced that plan. Every other 
 null attachment. It ends after requesting plans, without waiting or replanning. Stop preserves
 all proposals. Shutdown halts the lead, closes its client, and a new run contains no lead and
 makes no model call until the person starts one. Lead-plan answering remains unavailable as on main.
+## 2026-10-31 — A person's decision preempts rules before authorization starts
+
+Reason: a long rules suite must not keep the person waiting through repeated 409s.
+Reject and Request changes synchronously claim one private intent, invalidate the wait
+and following authority, and cancel only the owned rules task once. The cutoff is entry
+into the acquired mode and Git authorization block, before its first revalidation or await;
+this is earlier than F2's separate final disable barrier. From that cutoff commands answer
+409 with instructions to wait and use Revert if merged; landed rules merges are never undone
+by these commands. Approve, Stop and cross-review retain their existing refusals.
+
+A tracked coordinator shields the accepted intent from caller cancellation and waits without
+locks for subprocess cleanup, verified recovery and the old decision's restoration. Rules
+captures and counters stay intact through recovery. Pending intent guards in decision admission
+and review saves exclude competitors until one synchronous personal `_take` installs new
+evidence. Late rules callbacks cannot authorize or emit a competing cancellation notice;
+integrity and main-suspect notices remain visible. Shutdown drains accepted decisions before
+closing the store. Each accepted intent produces its personal resolution or one nonfatal
+server error naming the decision and why it did not run; unverifiable recovery preserves the
+worktree, latches suspect, and resumes no author. Restart starts Ask me with no pending intent.
+
+A public manager predicate lets Request changes return the same Revert refusal after runtime
+has released the merged author's run. No contract, route, UI or production activation changes.
+Dropped rules receipts log one warning per drop with sequence, type and validation or mismatch
+reason, never payload; they grant no cached evidence, and later valid receipts remain admissible.
+
+## 2026-10-31 — Item 12 E1: inert examples selector and one bounded call
+
+The maintainer's answers were recorded at 13:49:39 ART (2026-10-31T16:49:39Z):
+Q1 reserves the typed confirmation command for E3, contract 1.13.0; E1 changes no contract.
+Q2, “Un envío, sin reintento”, means one HTTP send, including failure. This explicitly
+excepts the examples phase alone from the usual 429/5xx retry rule. A failed collection
+requires a new human start; coding keeps its existing retries. Q3, “Sí, JSON síncrono”,
+limits v1 executable criteria to synchronous top-level functions, with rendered JSON inputs
+`{"node_id": str, "args": [...], "kwargs": {...}}` and an exact JSON expected value.
+`TaskExample` is unchanged; this phase refuses behavior-only examples. Q4, “Aceptar
+constantes”, accepts the thresholds below; reject/stop cancel the task in E2/E3, and no model
+reply bypasses human review.
+
+`oversight/examples_selector.py` is a top-level pure module, like the runtime helpers, using
+only the public graph facade. No layer or facade exception is needed. Trimmed task thresholds
+are `SHORT_TASK_CHARS=80` and `LONG_TASK_CHARS=1600`; naming thresholds are
+`MANY_NAMED_NODES=3`, `MAX_NAMED_NODES=20`; `LARGE_CONE_ENTRIES=15`. The maximum-named
+constant is an offer threshold, not a truncation of resolved targets. Distinct matching node
+candidates include ambiguous definitions; aliases and repeated mentions count once. Longest
+references take precedence over overlapping short labels; exact ids take precedence over
+colliding labels. Ambiguous names never resolve speculatively. Targets and ambiguous labels
+are sorted, and reason order is stable policy order:
+`examples_only`, `supplied_unconfirmed`, `long_task`, `many_named_targets`,
+`too_many_named_candidates`, `large_cone`, `cone_omitted`, `short_task_no_target`,
+`short_task_no_test_calls`, `target_parse_error`, `snapshot_parse_errors`, `ambiguous_name`.
+The last code alone is diagnostic and does not offer examples. Missing parse evidence
+conservatively offers examples: errors anywhere may hide callers or test reach. Cones are
+unavailable for targets in broken files; other targets retain the cone from `node_cone` at
+the requested bounds, including positive large/omitted evidence. A snapshot parse error
+prevents treating zero static test reach as evidence of absence. Otherwise zero means
+“no test calls it”, never “no tests exist”. Supplied pins do not confer confirmation authority.
+
+`agents/examples.py` constructs Muse Spark with reasoning low, one attempt, a 90-second timeout
+and 4096 output tokens. Missing Meta setup is `not_configured`; there is no provider fallback.
+The pure context builder accepts caller-read excerpts and unconfirmed examples, strips supplied
+pins and states omissions at 12000 characters. The send includes allowed target ids within the
+same text bound; the graph and cone stay server-side. Only the phase's `finish(summary: str)`
+schema is advertised; no Toolbox, dispatch, repair or second call is involved. Usage receipts
+are retained before reply validation, and HTTP failures without usage remain unknown. E1
+produces no events and changes no runtime admission, routes or review authority.
+
+Call/protocol failure codes live in `agents/examples.py`: `truncated`, `model_mismatch`,
+`no_tool_call`, `multiple_tool_calls`, `unexpected_tool`, `context_too_long`, `timeout`,
+`call_failed`, plus the separate `not_configured` outcome. All returned call names are retained.
+`agents/_examples_validate.py` reuses `_plan_call`'s private strict-JSON helpers and defines
+`empty_output`, `malformed_json`, `non_strict_json`, `non_finite_numbers`, `invalid_schema`,
+`strings_too_long`, `meaning_count`, `case_count`, `invalid_meaning`, `duplicate_example_ids`,
+`unknown_meaning`, `model_supplied_pin`, `missing_expected_output`, `behavior_only`,
+`invalid_inputs`, `target_not_allowed`, `target_not_sync_top_level`. Duplicate keys are refused,
+as are non-finite numbers at every nesting level, including overflowing exponents. Inputs
+must have exactly node_id/args/kwargs; target eligibility comes from caller-captured facts.
+String bounds are named there: ids 128, descriptions 1000, rendered inputs 4000, canonical
+expected outputs 8000, notes 2000, clarification 2000, summary/finish arguments 65536 characters.
+Valid cases become unconfirmed TaskExamples with meaning-prefixed notes.
+
+The public `canonical_json` helper is exactly `json.dumps(value, sort_keys=True,
+separators=(",", ":"), ensure_ascii=True, allow_nan=False)`. E3 preview and E4 checking will
+share it; integer `1` and float `1.0` remain distinct. The examples prompt stays in
+`agents/examples.py`, outside `_prompts.py` and `prompt_version()` until E2 decides how a run
+reports it. E2 runtime admission, E3 human confirmation and E4 execution remain separate fronts.
+## 2026-10-31 — Ask instead of repeating an unchanged failure
+
+Before the cross-review automatic revision, a pure verdict reads the committed event log and
+change graph. A prior cross-review resolution clears the guard first, so `round_exhausted`
+keeps precedence. Next come the last run's limits, the current proposal test run and its last
+agent or proposal predecessor. No predecessor, a passing run, different outcomes, different
+failing test ids or different recorded assertions clear the guard. Repeated errors or timeouts
+and incomplete per-test results ask the person.
+
+Here, an assertion is the JUnit failure or error `message`, with whitespace collapsed, redacted
+and bounded to 240 characters in `CaseResult.detail`; any remaining absolute path drops the
+detail. It is diagnostic evidence, never added to the model's observations. Missing assertions,
+moved bases, non-Python edits, parse errors, removed files or nodes, missing edit evidence and
+unresolved test reach accumulate uncertainty. Equal tested trees have no changed nodes;
+otherwise successive recorded contents are parsed and node own-source hashes are compared.
+
+Only exact forward call edges from each failing test establish reach, within the run's depth
+and node limits. A proven reached edit clears even with other uncertainty. Executed nodes per
+test are not recorded on main, so call edges are the only source. With the same failure and an
+exhaustive miss, `unchanged_failure` asks the person; uncertainty uses `reach_unknown`. Both
+leave the automatic round unused. A clear verdict follows the existing revision path unchanged.

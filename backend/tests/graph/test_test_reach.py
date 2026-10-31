@@ -110,3 +110,60 @@ def test_a_cut_does_not_hide_other_exhaustively_unreached_functions():
         depth=0,
     )
     assert not result.complete and result.unreached_nodes == ("app:isolated",)
+
+
+def forward(
+    files, targets=("app:target",), *, root="tests.test_app:test_target", depth=8, nodes=100
+):
+    from oversight.graph import test_reaches as reaches
+
+    return reaches(version(files).graph, root, targets, max_depth=depth, max_nodes=nodes)
+
+
+FORWARD = {
+    "app.py": "def target(): pass\ndef helper(): target()\ndef isolated(): pass",
+    "tests/test_app.py": "from app import helper\ndef test_target(): helper()",
+}
+
+
+def test_forward_reach_finds_target_through_helpers():
+    assert forward(FORWARD) is True
+
+
+def test_forward_reach_root_in_targets():
+    assert forward(FORWARD, ["tests.test_app:test_target"], depth=0, nodes=1) is True
+
+
+def test_forward_reach_exhaustive_miss_is_false():
+    assert forward(FORWARD, ["app:isolated"]) is False
+    assert forward({"tests/test_app.py": "def test_target(): test_target()"}, ["gone"]) is False
+
+
+def test_forward_reach_possible_edge_is_unknown():
+    files = FORWARD | {
+        "tests/test_app.py": "from app import target\ntarget = None\ndef test_target(): target()"
+    }
+    assert forward(files) is None
+    # A proven target on another branch still wins over an uncertain call.
+    files["tests/test_app.py"] = (
+        "from app import target, helper\ntarget = None\ndef test_target():\n target()\n helper()"
+    )
+    assert forward(files) is True
+
+
+@pytest.mark.parametrize(("depth", "nodes"), [(0, 100), (8, 1), (8, 0)])
+def test_forward_reach_cut_or_parse_error_is_unknown(depth, nodes):
+    assert forward(FORWARD, depth=depth, nodes=nodes) is None
+    assert forward(FORWARD | {"bad.py": "def broken("}) is None
+    assert forward(FORWARD, root="missing") is None
+
+
+@pytest.mark.parametrize(("depth", "nodes"), [(-1, 1), (1, -1)])
+def test_forward_reach_negative_budgets_raise(depth, nodes):
+    with pytest.raises(ValueError):
+        forward(FORWARD, depth=depth, nodes=nodes)
+
+
+def test_forward_reach_cut_does_not_hide_a_queued_target():
+    assert forward(FORWARD, ["app:helper"], nodes=2) is True
+    assert forward(FORWARD, ["app:target"], depth=2, nodes=3) is True

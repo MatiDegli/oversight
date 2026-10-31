@@ -31,6 +31,7 @@ from oversight.changes import _approval as approval
 from oversight.changes import _cross_review as cross_review
 from oversight.changes import _delivery as delivery
 from oversight.changes import _files as files
+from oversight.changes import _preemption as preemption
 from oversight.changes import _proposal as proposal
 from oversight.changes import _revision as revision
 from oversight.changes import _rules as rules
@@ -336,6 +337,7 @@ class ChangeManager:
             raise WrongState(
                 f"{change_id} is {rec.state}; {verb} needs {' or '.join(sorted(allowed))}"
             )
+        preemption.check_pending(rec)
         self._ctx.assessment.invalidate(rec)
         rec.invalidate_cards()
         if person:
@@ -357,13 +359,13 @@ class ChangeManager:
             try:
                 return await work
             finally:
-                self._ctx.state.restore(rec, decision)
+                preemption.restore(self._ctx, rec, asyncio.current_task(), decision)
 
-        def done(_: asyncio.Task[T]) -> None:
+        def done(completed: asyncio.Task[T]) -> None:
             work.close()  # a pre-start cancellation never awaits the inner coroutine
             if wait is not None:
                 wait.spend_pin = None
-            self._ctx.state.restore(rec, decision)
+            preemption.restore(self._ctx, rec, completed, decision)
 
         task = self._ctx.spawn(deciding())
         task.add_done_callback(done)
@@ -521,8 +523,23 @@ class ChangeManager:
         rec.taken = rec.revision
         rec.rules_consumed.add(rec.revision)
         rec.evidence = reservation.evidence
-        self._decide(rec, approval.approve_rules(self._ctx, reservation))
+        rec.rules_phase, rec.rules_authorization_started = "queued", False
+        rec.rules_task = self._decide(rec, approval.approve_rules(self._ctx, reservation))
         return None
+
+    def merged_by_rules(self, change_id: ChangeId) -> bool:
+        return preemption.merged_by_rules(self._ctx.state.changes.get(change_id))
+
+    @property
+    def _person(self) -> preemption.Owner:
+        return preemption.Owner(
+            self._ctx,
+            self._decision_answers,
+            self._take,
+            self._decide,
+            self._reject,
+            self._request_changes,
+        )
 
     def reject(
         self,
@@ -536,6 +553,10 @@ class ChangeManager:
         current = self._ctx.state.changes.get(change_id)
         if current is None:
             raise ChangeNotFound(change_id)
+        if task := preemption.claim(
+            self._person, current, "rejected", comment, revision, head_commit, answers
+        ):
+            return task
         validate_decision_target(current, revision, head_commit, REJECTABLE)
         accepted = self._decision_answers(current, answers)
         evidence = WriteEvidence(
@@ -571,6 +592,10 @@ class ChangeManager:
         current = self._ctx.state.changes.get(change_id)
         if current is None:
             raise ChangeNotFound(change_id)
+        if task := preemption.claim(
+            self._person, current, "changes_requested", comment, revision, head_commit, answers
+        ):
+            return task
         validate_decision_target(current, revision, head_commit, REVISABLE)
         accepted = self._decision_answers(current, answers)
         evidence = WriteEvidence(

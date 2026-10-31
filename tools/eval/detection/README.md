@@ -3,6 +3,7 @@
 This CLI measures identical frozen patches, rather than solving tasks. It does not measure
 prevalence in a real repository and cannot replace Three proofs' separate US$25 experiment.
 No paid run or provider probe was performed while implementing this runner.
+See [Detection bench results](RESULTS.md) for the recorded findings.
 
 ## Fixed protocol
 
