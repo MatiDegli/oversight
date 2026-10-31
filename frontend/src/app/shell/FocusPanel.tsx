@@ -121,6 +121,8 @@ export function FocusPanel(
             state={state}
             changeId={view.review}
             attempt={props.attempts?.[view.review]}
+            revertAttempt={props.revertAttempts?.[view.review]}
+            onRevert={props.onRevert}
             files={props.files?.readOnly ? undefined : props.files}
             onDecide={props.onDecide}
             replayOf={props.replayOf}

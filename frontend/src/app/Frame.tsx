@@ -1,7 +1,7 @@
 import type { MergeMode, StartAgent } from "@contracts";
 import type { ReactNode } from "react";
 import type { FileAccess } from "../editor";
-import type { DecisionAction, DecisionAttempt } from "../review";
+import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import type { State } from "../state";
 import type { View, ViewAction, FocusTab } from "./view";
 import { panelOpen } from "./view";
@@ -44,6 +44,8 @@ export interface FrameProps {
   mergeModeAttempt?: MergeModeAttempt;
   /** The person's last decision per change. */
   attempts?: Readonly<Record<string, DecisionAttempt>>;
+  revertAttempts?: Readonly<Record<string, RevertAttempt>>;
+  onRevert?: (changeId: string) => void;
   /** Absent in a recorded run, which sends no commands: review then shows the recorded decision. */
   onDecide?: (changeId: string, action: DecisionAction, comment: string) => void;
   /** What the replay plays, from its source: review and the new-agent box word themselves with it. */

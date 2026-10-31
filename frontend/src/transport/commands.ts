@@ -11,6 +11,7 @@ import type {
   SetMergeMode,
   ImpactCone,
   RejectChange,
+  RevertChange,
   RequestChanges,
   SaveFile,
   StartAgent,
@@ -107,6 +108,8 @@ export function createCommandClient(request: typeof fetch = fetch) {
     resumeAgent: (id: string) => send<undefined>(agent(id, "resume"), "POST"),
     approveChange: (id: string, body: ApproveChange) =>
       send<undefined>(change(id, "approve"), "POST", body),
+    revertChange: (id: string, body: RevertChange) =>
+      send<undefined>(change(id, "revert"), "POST", body),
     requestChanges: (id: string, body: RequestChanges) =>
       send<undefined>(change(id, "request-changes"), "POST", body),
     rejectChange: (id: string, body: RejectChange) =>

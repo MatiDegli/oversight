@@ -2648,3 +2648,19 @@ and omits the status segment. The cards act only on their own pointer click;
 Enter and Space send nothing, with no shortcut, palette command or confirmation.
 Item 8's accepted plan asks for a mode toggle that shows the server's 409 reason. Until rules
 mode is activated, the live Merge alone when safe choice presents that refusal.
+
+## 2026-10-31 — Revert in the merged review footer
+
+Approved in packet B: "Todo como recomendás", at
+2026-10-31T15:47:21Z (12:47:21 ART).
+
+The merged review footer offers Revert for a rules merge with its recorded resolution and
+main commit. In flight, the button disables and a line reads "Reverting: waiting for the result."
+A refusal appears below the footer row, with an X icon, the server's words and role="alert".
+After a Revert, the button goes away and a second line reads "Reverted in main {revert_commit}",
+using seven characters, under "Merged into main {hash}". The header pill stays "Merged".
+A Revert that needs you shows its reason verbatim as a muted line; Revert remains available.
+In a replay, "Revert is not available in a replay." takes the button's place.
+Revert acts only on its own pointer click. It stays focusable; Enter and Space send nothing.
+There is no shortcut, palette command or confirmation. Availability does not read the merge mode.
+Outcomes update the current view without opening a tab, moving focus or selecting a node.

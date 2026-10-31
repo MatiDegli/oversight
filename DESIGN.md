@@ -366,7 +366,6 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Review body order in the brief | comparison summary before diff | diff before "What was compared"; choices start with a closed file row below Details | the approved review baseline preserves room for the decision and code |
 | Review cone context in Signal | module frames at 60% | everything outside the cone and change at 16%, frames included | the approved review baseline lets the cone read alone |
 | Review example at 1280 | Before and After intended to share the first screen | the answered row wraps in full; After may need scrolling | the approved departure keeps the complete answer legible |
-| Review Revert in state g | a Revert button | no Revert until item 8 delivers its command | the approved shot shows a target, not a command available today |
 | Progress row on the phone | not drawn (f and f-b show one change) | "Decision {i} of {n}" above the agent line | the practice holds two recorded decisions |
 | "Recorded task" row on the phone | not drawn | a 44px row after the evidence with the exact task | the recorded tasks run 40–60 words; the short title stays the headline |
 | Cone card on a merged change (g) | drawn | no cone card or cone lights once a change is approved or rejected | the graph's lights go off once a change is decided (graphScope.ts:14–15, pinned by app/review.browser.test.ts:292–293); flagged to the maintainer |
@@ -1064,8 +1063,8 @@ never its local color values. No new syntax color is chosen here.
   The shot's sentence is the example: "Tests pass, every changed function is reached by a test,
   and the change stays inside its zone." Note: "Negative quantities now raise ValueError."
   No decision bar; footer
-  "Merged into main <hash>" (the shot uses 4ca5596). Revert appears only when item 8 delivers the
-  revert command; until then the footer has no Revert. The shot's button is a target.
+  "Merged into main <hash>" (the shot uses 4ca5596). Revert sends the person-only Revert command (item
+  8); its states read as the maintainer approved on 2026-10-31 (DECISIONS.md).
 
 **Answers and examples.** The answered row always wraps in full, never truncates: question 14/600,
 example Mono 13 on 19px lines, answer and Change at 14/600; 12px above and below, divider below.

@@ -6,8 +6,8 @@ import type { FileSaved, MergeMode } from "@contracts";
 
 import type { FileDraft } from "../editor";
 import { DecisionContext } from "../review";
-import { sendDecision } from "../review";
-import type { DecisionAction, DecisionAttempt } from "../review";
+import { sendDecision, revertView } from "../review";
+import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import { selectMergeMode, stateStore } from "../state";
 import { commandFailure, createCommandClient, replayBuild, replaySource } from "../transport";
 import { createFileSession } from "./files";
@@ -39,6 +39,8 @@ export function App() {
   const [mergeModeAttempt, setMergeModeAttempt] = useState<MergeModeAttempt>();
   const settingMode = useRef(false);
   const [attempts, setAttempts] = useState<Record<string, DecisionAttempt>>({});
+  const [revertAttempts, setRevertAttempts] = useState<Record<string, RevertAttempt>>({});
+  const reverting = useRef(new Set<string>());
   // The replay build has no backend: it never sends a command or starts an agent, and review shows
   // recorded decisions.
   const commands = useMemo<ReturnType<typeof createCommandClient> | null>(
@@ -157,6 +159,36 @@ export function App() {
       settingMode.current = false;
     }
   };
+  const onRevert = async (changeId: string) => {
+    const current = stateStore.getState().state;
+    const view = revertView(current, changeId, revertAttempts[changeId]);
+    if (
+      !commands ||
+      reverting.current.has(changeId) ||
+      view.kind === "none" ||
+      view.kind === "pending" ||
+      view.kind === "reverted"
+    )
+      return;
+    reverting.current.add(changeId);
+    const started: RevertAttempt = {
+      run: current.run,
+      target: view.body,
+      afterSeq: current.lastSeq,
+      phase: "pending",
+    };
+    const record = (attempt: RevertAttempt) => {
+      setRevertAttempts((all) => ({ ...all, [changeId]: attempt }));
+    };
+    record(started);
+    try {
+      await commands.revertChange(changeId, view.body);
+    } catch (error) {
+      record({ ...started, phase: "refused", message: commandFailure("Revert", error) });
+    } finally {
+      reverting.current.delete(changeId);
+    }
+  };
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {
       if (!commands) return;
@@ -242,6 +274,14 @@ export function App() {
           }
           mergeModeAttempt={mergeModeAttempt}
           attempts={attempts}
+          revertAttempts={revertAttempts}
+          onRevert={
+            commands
+              ? (id) => {
+                  void onRevert(id);
+                }
+              : undefined
+          }
           onDecide={commands ? onDecide : undefined}
           replayOf={replayBuild ? replaySource.kind : undefined}
           replayLabel={replayBuild ? replaySource.label : undefined}
