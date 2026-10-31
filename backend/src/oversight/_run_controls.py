@@ -64,8 +64,11 @@ async def message(live: LiveRun, agent_id: str, text: str) -> None:
     control = _eligible(live, agent_id)
 
     async def record() -> None:
+        masked = live._redactor(text)
+        if len(masked) > 4096:
+            raise ApiError("invalid_request", "masked message exceeds the 4096-character limit")
         try:
-            await live._publish(AgentMessageSent(agent_id=agent_id, text=live._redactor(text)))
+            await live._publish(AgentMessageSent(agent_id=agent_id, text=masked))
         except Exception:
             raise ApiError("internal", "could not record the message") from None
 

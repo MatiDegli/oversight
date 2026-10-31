@@ -42,6 +42,41 @@ async def test_message_masks_both_configured_keys_but_delivers_original(tmp_path
         assert events[-1].seq > event.seq
 
 
+@pytest.mark.parametrize("masked_length", [4096, 4097])
+async def test_masked_message_length_limit_refuses_without_spending_admission(
+    tmp_path: Path, masked_length: int
+) -> None:
+    key = "test-only-provider-fragment"
+    text = "fragment " + "x" * (masked_length - len("[redacted] "))
+    assert len(text) <= 4096
+    masked = Redactor(key)(text)
+    assert len(masked) == masked_length
+    model = HeldScript()
+    settings = live_settings(tmp_path, meta_api_key=key)
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda *_: model) as s:
+        await start(s)
+        await model.entered.get()
+        response = await control(s, "message", text)
+        if masked_length > 4096:
+            assert error_code(response) == (422, "invalid_request")
+            assert not any(e.type == "agent.message" for e in s.events())
+            assert not s.live._controls["agent-1"].control.pending_messages
+            expected = ["x" * 4096, "y" * 4096]
+            for message in expected:
+                accepted(await control(s, "message", message))
+        else:
+            accepted(response)
+            expected = [text]
+            event = next(e for e in s.events() if e.type == "agent.message")
+            assert event.payload.text == masked
+        model.permits.release()
+        await model.entered.get()
+        model.permits.release()
+        await s.until(is_type("agent.step", step=2))
+        delivered = [m["content"] for m in model.requests[1] if m["role"] == "user"]
+        assert delivered[-len(expected) :] == expected
+
+
 @pytest.mark.parametrize("fail", [False, True])
 async def test_pending_commit_blocks_delivery_and_failure_rolls_back(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail: bool

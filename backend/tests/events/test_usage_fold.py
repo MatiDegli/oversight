@@ -8,6 +8,8 @@ import pytest
 
 from oversight.events import EventStore, fold_usage, play
 from oversight_contracts.events import (
+    AgentMessageEvent,
+    AgentMessageSent,
     AgentStatus,
     AgentStatusEvent,
     ChangeProposed,
@@ -409,6 +411,22 @@ def test_refuses_overflow_in_known_cost_subtotal_even_with_unknown_calls() -> No
 def test_stable_sum_preserves_small_costs_next_to_large_costs() -> None:
     result = fold_usage([tick(1, 1e16), tick(2, 1), tick(3, 1)])
     assert result.run.cost_usd == result.by_change["change-1"].usage.cost_usd == 1e16 + 2
+
+
+@pytest.mark.parametrize("text", [None, "Please reconsider."])
+def test_message_events_advance_sequence_without_changing_accounting(text: str | None) -> None:
+    message = AgentMessageEvent(
+        seq=2,
+        ts=TS,
+        type="agent.message",
+        payload=AgentMessageSent(agent_id="agent-1", text=text),
+    )
+    result = fold_usage([tick(1, 2), message, tick(3, 3), resolution(4)])
+    baseline = fold_usage([tick(1, 2), tick(2, 3), resolution(3)])
+    assert result.through_seq == 4
+    assert result.by_change == baseline.by_change
+    assert result.run == baseline.run
+    assert result.unassigned == baseline.unassigned
 
 
 def test_unrelated_events_advance_through_seq_without_creating_calls_or_changes() -> None:
