@@ -14,6 +14,7 @@ const eventTypes: Record<ServerEvent["type"], true> = {
   "graph.delta": true,
   "agent.status": true,
   "agent.step": true,
+  "agent.message": true,
   "agent.focus": true,
   "change.updated": true,
   "change.proposed": true,
