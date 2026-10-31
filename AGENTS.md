@@ -8,7 +8,7 @@ Repository content is in English. Talk to me in Spanish. State times in Argentin
 A small, focused web IDE for agentic development, for Python projects. The repository is shown as a live graph of modules, classes, functions and methods parsed from source. Coding agents built on Meta's Muse Spark (Meta Model API) edit the code. Each agent appears on the graph as it works: the nodes it reads or edits light up in its color, and clicking a node opens its live diff in a Monaco editor. When a function changes, the graph shows its impact cone: the functions possibly affected, directly or indirectly. The developer approves, requests changes on, or rejects each change. The graph is for the human supervising the agents, not a tool for the agents.
 
 ## Hard rules
-- No product code before I approve the proposal: first write docs/proposal.md with the directory tree and the contract schemas, then wait.
+- No product code before I approve the proposal: first write docs/proposal.md with the directory tree and the contract schemas, then wait. Status: I approved the proposal on 2026-10-26; the day-1 deliverables were delivered that day.
 - All project code is new, written from the kickoff on, in this repo. No code from my other projects, and never mention or link them.
 - The repo goes public before submission, and judges must be able to see what was built during the hackathon: keep a "Built during the hackathon" section in README.md and one line per day in DEVLOG.md.
 - Agents inside the product use only Meta models: Muse Spark through the Meta Model API, in Contributor mode, and Muse Spark Open through partner inference (Baseten).
@@ -44,12 +44,12 @@ A small, focused web IDE for agentic development, for Python projects. The repos
 - Never steal focus. When an agent finishes, the screen does not change: a "Ready for review" pill appears and the agent's card shows it.
 - Three decisions: Approve and Reject (level 1), Request changes (level 2). Approve has no keyboard shortcut, not even Ctrl+Enter: it merges into main and must never fire while I type a comment.
 - A dashed node border means one thing only: a pending change, in the agent's color. "Possible" call edges are thinner and grey, never dashed.
-- The demo repo has a saved preset layout, so the graph looks the same in every take and does not jump when it changes. On Tue Oct 27, try orthogonal ("taxi") edges and keep them if they read better than curves.
+- The demo repo has a saved preset layout, so the graph looks the same in every take and does not jump when it changes. Orthogonal ("taxi") edges were adopted on 2026-10-27, routed through the gutters between frames.
 - The "no tests" badge (level 3) comes from coverage: run_tests runs with pytest-cov (MIT), and covered lines map to functions by their line ranges. If that is not ready, the badge reads "no test calls it" and is computed from the call graph.
 
 ## Look
 - Signal identity: the graph is the machines' surface, the panels are the person's. Panels are dark and plain; Monaco uses a dark theme with low-chroma syntax colors. The review header is matte: flat dark with a still grain.
-- Color is an agent (A orange #ff5c1f, B blue #4f7dff) or a state (green passed or added, red failed, removed or destructive), nothing else, and never alone: letters A and B, + and - in diffs, icons on tests. No amber warnings; counters across agents are neutral.
+- Color is an agent (A orange #ff5c1f, B blue #4f7dff, C–F from the agent tokens in DESIGN.md) or a state (green passed or added, red failed, removed or destructive), nothing else, and never alone: agent letters, + and - in diffs, icons on tests. No amber warnings; counters across agents are neutral.
 - Type: Atkinson Hyperlegible Next for text and graph labels, Atkinson Hyperlegible Mono for code, hashes and numbers, both from Fontsource packages; sentence case. Monaco is created after the fonts load, or calls monaco.editor.remeasureFonts().
 - The dot-field light behind the graph is its own canvas under a transparent Cytoscape canvas. It was brought forward from after level 1 (DECISIONS.md) and never blocks a level; without WebGL the background is plain black.
 - DESIGN.md, with PRODUCT.md, is the design reference; Impeccable 4.5.2 is the design skill. Its allowed commands: shape, harden, onboard, audit, critique, polish, clarify, typeset, layout. Forbidden: bolder, colorize, delight, overdrive, animate, live, generate and document.
@@ -80,12 +80,12 @@ run.started (run id, exact model, prompt version, limits), graph.snapshot, graph
 - change.updated carries the full original and modified file contents, plus its author (the agent or me): Monaco's DiffEditor needs both versions, and replay must not depend on worktrees that no longer exist.
 - change.proposed carries the summary, files, nodes, lines added and removed, the test result, and the impact cone (node and distance).
 - change.resolved carries the decision (approved, changes_requested or rejected), my comment, and the merge result (merged or conflict).
-- On connect, the UI reads the snapshot and its seq together (GET /graph), then applies later events. If a seq is missing, it fetches a new snapshot.
+- On connect, the UI streams the run's log from seq 1. If a seq is missing, it reconnects from the last applied seq. GET /graph stays available for the snapshot and its seq read together.
 - Never one event per token: model text is batched every few hundred milliseconds, and SQLite writes are batched.
 
 ## Commands (UI to server)
 POST /agents, POST /agents/{id}/stop, POST /changes/{id}/approve, POST /changes/{id}/request-changes (with a comment), POST /changes/{id}/reject, GET /graph (snapshot plus its seq, read together), POST /graph/rescan, GET /impact, GET and PUT /files. PUT /files writes to main, or to an agent's worktree when the request names the agent (the editable new side in review). Events arrive only through the SSE stream at /events.
-Level 3, in the contract from v1 and answering 501 until built: POST /agents/{id}/message, POST /agents/{id}/pause, POST /agents/{id}/resume.
+Level 3, built and answering 202 for accepted live commands, 501 in a replay: POST /agents/{id}/message, POST /agents/{id}/pause, POST /agents/{id}/resume.
 
 ## Graph rules
 - A call is "exact" only when the name resolves to a single function; everything else is "possible", with its reason.
@@ -102,7 +102,7 @@ Level 3, in the contract from v1 and answering 501 until built: POST /agents/{id
 
 ## Agent tools
 - list_files, read_file, search, edit_file, run_tests, finish. There is no shell tool: a worktree does not isolate, since it shares .git/config and the stash.
-- Every tool call emits agent.step when it ends. Read tools also emit agent.focus in read mode; edit tools emit agent.focus in edit mode and change.updated.
+- Every tool call emits agent.step when it ends. Read tools also emit agent.focus in read mode, except list_files, which sends none; search focuses only its first 5 matching nodes; edit tools emit agent.focus in edit mode and change.updated.
 - read_file returns numbered lines and has a size cap; long files are read by line range. Prefer few, large reads of whole functions: every step resends the full history.
 - edit_file fails unless the old text appears exactly once, or if the file changed since the agent last read it. The error goes back to the model.
 - No tool can touch paths outside the agent's worktree: validate every path.
@@ -132,12 +132,15 @@ Level 3, in the contract from v1 and answering 501 until built: POST /agents/{id
 - A scripted fake model that makes fixed tool calls, so the whole backend can be tested without API credits.
 - A test that validates every recorded event against its schema: generated types validate nothing at runtime.
 - import-linter in CI, so no module imports from another module's internals.
-- One Playwright test over replay mode that checks the level's definition of done.
+- Playwright tests over replay mode check each level's definition of done.
 - pre-commit (gitleaks, ruff) and GitHub Actions running everything.
 - Makefile: make dev, make check, make demo, make replay.
 - A change that leaves a file over 500 lines or a function over 80 lines says why in its hand-back, and the reviewer decides. It is a review signal, not a gate: no new check.
 
 ## Scope levels
+
+Levels 1 and 2 closed on 2026-10-27 (DECISIONS.md, “Level 2 closed on Tue Oct 27”); docs/additions.md is the inventory beyond level 2.
+
 - Level 1 (by Thu Oct 29): graph, Monaco, one Muse agent in its worktree, watch mode with live node highlighting and the agent card (status and steps), a read-only live diff panel, the "Ready for review" pill, review mode with Approve and Reject and a graph update.
 - Level 2 (by Sun Nov 1): two agents in parallel with their colors (agent B on Muse Spark Open via Baseten if tool calling works, otherwise Muse Spark), impact cone (highlighted in review and listed in the panel), pending changes on the graph, Request changes, an editable new side in review, user edits from the file view that update the graph, a spend meter, stop and discard from the agent card.
 - Level 3 (only if 1 and 2 are solid): cone overlap alerts, replay timeline, "Earlier today" history, messages to a running agent, pause and resume, starting an agent from a function, agent cursors with names in the editor, "no tests" badges, usage panel, dictating tasks with Muse Voice Transcribe, agent B running locally on my GPU (Muse Glimmer, Meta's other open model, is a candidate if it is smaller than Muse Spark Open), "possible" call edges drawn thinner and grey, inheritance edges.
@@ -145,7 +148,7 @@ Level 3, in the contract from v1 and answering 501 until built: POST /agents/{id
 A level is done when its demo runs three times in a row from a clean start, with one command and no manual fixes.
 
 ## Out of scope for these 9 days
-A persistent incremental engine, more languages, runtime traces, embeddings, a filesystem sandbox (Next: bubblewrap on Linux), undo, and a worktree pool.
+A persistent incremental engine, more languages, runtime traces beyond the bounded test-call recorder of the measured cone, embeddings, a filesystem sandbox (Next: bubblewrap on Linux), undo, and a worktree pool.
 After the hackathon, each starting as a plan: the repository's git hooks run as evidence on a proposal, repositories without Python (opened without a graph), and native isolation for Windows and macOS.
 One bounded exception to undo, in level 3: a one-click Revert of a merge made by rules, only while it applies
 without conflict; otherwise the change goes to "needs you".
@@ -154,6 +157,9 @@ without conflict; otherwise the change goes to "needs you".
 Develop in WSL, on the Linux filesystem. The UI is opened and recorded in the Windows browser, which shares localhost with WSL.
 
 ## Day-1 deliverables
+
+Status: I approved the proposal and these deliverables were delivered on 2026-10-26. The original brief follows.
+
 1. Repo skeleton for the folders above, with the tooling and the Makefile.
 2. contracts/ v1: Pydantic models, the generated JSON Schema and TypeScript types, and the CI drift check.
 3. A fake event player that replays a hand-written event log over the SSE stream.
