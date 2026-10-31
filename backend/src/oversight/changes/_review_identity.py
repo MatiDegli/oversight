@@ -22,6 +22,8 @@ def _literal(value: Any) -> list[Any]:
         return ["str", value]
     if kind is bytes:
         return ["bytes", value.hex()]
+    if kind is range:
+        return ["range", hex(value.start), hex(value.stop), hex(value.step)]
     if kind in (tuple, list):
         return [kind.__name__, [_literal(item) for item in value]]
     if kind is dict:
@@ -61,6 +63,10 @@ def direct_result(result: dict[str, Any]) -> str | None:
     Exceptions have different observation surfaces (message versus typed args), so keep
     their full fingerprint identity rather than claiming an equality from display text.
     """
+    if result.get("observation") == "iterator_items":
+        ordinary = {key: value for key, value in result.items() if key != "observation"}
+        identity = direct_result(ordinary)
+        return canonical(["iterator_items", identity]) if identity is not None else None
     if "state" in result:
         try:
             state = [
