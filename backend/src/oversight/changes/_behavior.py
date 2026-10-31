@@ -273,11 +273,13 @@ async def _compare_batch(
 
 
 def _identity(result: TypedResult) -> str | None:
-    # Display values are capped; only full typed fingerprints establish equality.
+    # Display values are capped; equality needs full fingerprints in the same observation mode.
     if result["kind"] not in ("value", "raised"):
         return None
     fingerprint = result.get("fingerprint")
-    return f"{result['kind']}:{fingerprint}" if isinstance(fingerprint, str) else None
+    if not isinstance(fingerprint, str):
+        return None
+    return f"{result['kind']}:{result.get('observation', '')}:{fingerprint}"
 
 
 async def _repeat(

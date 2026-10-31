@@ -170,6 +170,8 @@ def test_consumed_result_identity_cannot_match_a_returned_list():
         ("None", "1"),
         ("[1]", "iter((2,))"),
         ("iter((1,))", "[2]"),
+        ("[1]", "iter((1,))"),
+        ("iter((1,))", "[1]"),
     ],
 )
 async def test_consumed_call_site_preserves_ordinary_comparisons(
@@ -196,6 +198,7 @@ async def test_consumed_call_site_preserves_ordinary_comparisons(
     assert measured.reason is None
     public = project_behavior(capture_behavior(BehaviorDiff(1, (measured,))), revision=1)
     assert public is not None
+    assert public[0].compared_count == public[0].differing_count == 1
     [row] = public[0].rows
     for expression, rendered in ((before_value, row.before), (after_value, row.after)):
         assert rendered.startswith("items of iterator: ") == expression.startswith("iter(")
