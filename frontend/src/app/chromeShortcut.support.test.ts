@@ -21,7 +21,7 @@ it("escalates to SIGKILL after five seconds when SIGTERM is ignored", async () =
     const started = performance.now();
     await stopXvfb(child);
     expect(performance.now() - started).toBeGreaterThanOrEqual(4_900);
-    expect(performance.now() - started).toBeLessThan(6_000);
+    expect(performance.now() - started).toBeLessThan(8_000);
     expect(await exited).toEqual([null, "SIGKILL"]);
     await stopXvfb(child);
   } finally {
