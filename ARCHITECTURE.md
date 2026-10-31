@@ -246,8 +246,9 @@ source. [generate.py](contracts/generate.py) generates JSON Schema and TypeScrip
 json-schema-to-typescript. `make check-contracts` compares both generated outputs byte for byte.
 
 Live events are `run.started`, `graph.snapshot`, `graph.delta`, `agent.status`, `agent.step`,
-`agent.focus`, `change.updated`, `change.proposed`, `change.resolved`, `usage.tick` and `error`.
+`agent.message`, `agent.focus`, `change.updated`, `change.proposed`, `change.resolved`, `usage.tick` and `error`.
 Every envelope has `seq`, `ts`, `type` and `payload`.
+`agent.message` records accepted human text, masked before storage and withheld by default in exports.
 
 Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
 `POST /agents/{agent_id}/message`, `POST /agents/{agent_id}/pause`,

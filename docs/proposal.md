@@ -366,6 +366,9 @@ class AgentStatus:
     detail: str | None         # why it halted or stopped, in one sentence
 ```
 
+**`agent.message`**: accepted human message, with credential-shaped text masked before storage;
+publication exports withhold its text by default.
+
 **`agent.step`**: one per tool call, when the call ends.
 
 ```python

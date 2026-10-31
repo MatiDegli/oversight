@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.8.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.9.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -8,7 +8,7 @@
       "description": "Observed before and after behavior of one added test.",
       "properties": {
         "test_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "before_seq": {
           "description": "The base-probe execution event.",
@@ -138,13 +138,68 @@
       "description": "`POST /agents/{id}/message`, level 3: answers 501 until then.",
       "properties": {
         "text": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         }
       },
       "required": [
         "text"
       ],
       "title": "AgentMessage",
+      "type": "object"
+    },
+    "AgentMessageEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "agent.message",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/AgentMessageSent"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "AgentMessageEvent",
+      "type": "object"
+    },
+    "AgentMessageSent": {
+      "additionalProperties": false,
+      "description": "A message the person sent to a running agent, emitted when the server accepts it (the 202).\n\nThe agent reads queued messages before its next model call; a drive that ends first drops them.",
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__2"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "As stored: runs shaped like a credential are masked as `[redacted]` before the event is written.\nNull only in an export for publication that withheld it."
+        }
+      },
+      "required": [
+        "agent_id",
+        "text"
+      ],
+      "title": "AgentMessageSent",
       "type": "object"
     },
     "AgentState": {
@@ -252,7 +307,7 @@
         "base_commit": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -497,7 +552,7 @@
           "type": "integer"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         }
       },
       "required": [
@@ -512,13 +567,13 @@
       "description": "One bounded display sample; rendered text is never executable input.",
       "properties": {
         "inputs": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "before": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "after": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "unstable": {
           "default": false,
@@ -539,13 +594,13 @@
       "description": "One bounded display sample; rendered text is never executable input.",
       "properties": {
         "inputs": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "before": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "after": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "unstable": {
           "default": false,
@@ -607,7 +662,7 @@
       "description": "One observed pytest node outcome.",
       "properties": {
         "test_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "outcome": {
           "$ref": "#/$defs/CaseOutcome"
@@ -677,18 +732,18 @@
           "type": "integer"
         },
         "base_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "main_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "candidate_tree": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -697,7 +752,7 @@
           "default": null
         },
         "policy_version": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "mode": {
           "$ref": "#/$defs/MergeMode"
@@ -741,7 +796,7 @@
           "type": "integer"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "evidence_seq": {
           "description": "The event that raised this inbox entry in the current run.",
@@ -781,16 +836,16 @@
           "type": "integer"
         },
         "base_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "main_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "candidate_tree": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "declared": {
           "anyOf": [
@@ -868,7 +923,7 @@
         "problems": {
           "description": "Missing evidence and analysis incompleteness diagnostics.",
           "items": {
-            "$ref": "#/$defs/NonEmptyText"
+            "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
           },
           "type": "array"
         },
@@ -1318,7 +1373,7 @@
         "head_commit": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -1757,7 +1812,7 @@
       "description": "Request a proposed split without starting coding agents.",
       "properties": {
         "task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         }
       },
       "required": [
@@ -1779,22 +1834,22 @@
           "type": "integer"
         },
         "base_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "main_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "candidate_tree": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "author_model": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "reviewer_model": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "reviewer_provider": {
           "description": "The reviewing inference provider.",
@@ -1839,7 +1894,7 @@
         "problems": {
           "description": "Review failures and incompleteness diagnostics.",
           "items": {
-            "$ref": "#/$defs/NonEmptyText"
+            "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
           },
           "type": "array"
         }
@@ -1894,7 +1949,7 @@
         "audio_base64": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/NonEmptyText-Input"
             },
             {
               "type": "null"
@@ -1906,7 +1961,7 @@
         "media_type": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/NonEmptyText-Input"
             },
             {
               "type": "null"
@@ -1918,7 +1973,7 @@
         "language": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/NonEmptyText-Input"
             },
             {
               "type": "null"
@@ -2151,7 +2206,7 @@
         "git_object": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -2184,7 +2239,7 @@
       "description": "Human confirmation of the containing task example.",
       "properties": {
         "source_task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "confirmed_by": {
           "const": "person",
@@ -2204,7 +2259,7 @@
       "description": "Human confirmation of the containing task example.",
       "properties": {
         "source_task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "confirmed_by": {
           "const": "person",
@@ -2396,7 +2451,7 @@
           "anyOf": [
             {
               "items": {
-                "$ref": "#/$defs/NonEmptyText"
+                "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
               },
               "type": "array"
             },
@@ -2475,7 +2530,7 @@
         "session_id": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -2500,7 +2555,7 @@
           "type": "integer"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         }
       },
       "required": [
@@ -2530,7 +2585,7 @@
           "$ref": "#/$defs/GrantScope"
         },
         "grant_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "change_id": {
           "$ref": "#/$defs/ChangeId"
@@ -2540,7 +2595,7 @@
           "type": "integer"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "run_id": {
           "$ref": "#/$defs/RunId"
@@ -2548,7 +2603,7 @@
         "session_id": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -2631,7 +2686,7 @@
       "additionalProperties": false,
       "properties": {
         "grant_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         }
       },
       "required": [
@@ -2681,7 +2736,7 @@
           "type": "string"
         },
         "value": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "expires": {
           "enum": [
@@ -2703,7 +2758,7 @@
       "additionalProperties": false,
       "properties": {
         "grant_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "rule": {
           "$ref": "#/$defs/RuleId"
@@ -3241,7 +3296,7 @@
           "type": "integer"
         },
         "text": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "evidence": {
           "description": "Source events or Git objects.",
@@ -3253,7 +3308,7 @@
         "test_id": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -3344,10 +3399,10 @@
           "type": "integer"
         },
         "task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "model": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "state": {
           "description": "The lead's lifecycle state.",
@@ -3485,7 +3540,7 @@
         "not_probed": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -3519,7 +3574,7 @@
         "not_compared": {
           "description": "Reasons for unmatched or excluded calls, including unequal inputs.",
           "items": {
-            "$ref": "#/$defs/NonEmptyText"
+            "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
           },
           "type": "array"
         },
@@ -3531,7 +3586,7 @@
         "problems": {
           "description": "Recording, matching, instability and retention-limit diagnostics.",
           "items": {
-            "$ref": "#/$defs/NonEmptyText"
+            "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
           },
           "type": "array"
         }
@@ -3678,7 +3733,7 @@
           "default": null
         },
         "model": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "provider": {
           "enum": [
@@ -3884,7 +3939,7 @@
         "not_probed": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -3909,10 +3964,10 @@
       "description": "A captured node-card example with explicit provenance.",
       "properties": {
         "example_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "inputs": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "expected_output": {
           "anyOf": [
@@ -3929,7 +3984,7 @@
         "expected_behavior": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -3973,7 +4028,7 @@
           "type": "string"
         },
         "source_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "evidence": {
           "$ref": "#/$defs/EvidenceRef"
@@ -4005,7 +4060,7 @@
       ],
       "type": "string"
     },
-    "NonEmptyText": {
+    "NonEmptyText-Input": {
       "minLength": 1,
       "type": "string"
     },
@@ -4049,10 +4104,10 @@
           "type": "integer"
         },
         "task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "graph_version": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "state": {
           "default": "planning",
@@ -4171,7 +4226,7 @@
       "description": "A subtask and the agent assigned when the plan starts.",
       "properties": {
         "task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "zone": {
           "$ref": "#/$defs/PlanZone"
@@ -4385,7 +4440,7 @@
       "description": "One coding task waiting for a slot.",
       "properties": {
         "task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "slot": {
           "anyOf": [
@@ -4631,7 +4686,7 @@
           "type": "integer"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         }
       },
       "required": [
@@ -4672,7 +4727,7 @@
       "description": "`POST /changes/{id}/request-changes`: the comment goes back to the agent.",
       "properties": {
         "comment": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "answers": {
           "anyOf": [
@@ -4696,7 +4751,7 @@
           "type": "integer"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         }
       },
       "required": [
@@ -4717,10 +4772,10 @@
           "type": "integer"
         },
         "merge_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "main_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         }
       },
       "required": [
@@ -4779,7 +4834,7 @@
           "type": "integer"
         },
         "merge_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "decided_by": {
           "const": "person",
@@ -4795,12 +4850,12 @@
           "type": "string"
         },
         "main_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "revert_commit": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -4818,7 +4873,7 @@
         "reason": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -4862,7 +4917,7 @@
           "$ref": "#/$defs/NodeId"
         },
         "question": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "evidence_seq": {
           "description": "The supporting event's id in this run; the server verifies target and existence.",
@@ -4928,7 +4983,7 @@
           "$ref": "#/$defs/NodeId"
         },
         "question": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "evidence_seq": {
           "description": "The supporting event's id in this run; the server verifies target and existence.",
@@ -5001,7 +5056,7 @@
           "type": "integer"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "evidence_seq": {
           "description": "The event that raised this inbox entry in the current run.",
@@ -5016,7 +5071,7 @@
           "$ref": "#/$defs/NodeId"
         },
         "question": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         }
       },
       "required": [
@@ -5041,10 +5096,10 @@
           "type": "integer"
         },
         "head_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "main_commit": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         }
       },
       "required": [
@@ -5071,7 +5126,7 @@
           "description": "Null means an unclassified finding."
         },
         "text": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "path": {
           "anyOf": [
@@ -5302,7 +5357,7 @@
           "type": "string"
         },
         "test_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "failed_seq": {
           "description": "The execution where it failed.",
@@ -5469,6 +5524,7 @@
       "discriminator": {
         "mapping": {
           "agent.focus": "#/$defs/AgentFocusEvent",
+          "agent.message": "#/$defs/AgentMessageEvent",
           "agent.status": "#/$defs/AgentStatusEvent",
           "agent.step": "#/$defs/AgentStepEvent",
           "change.assessed": "#/$defs/ChangeAssessedEvent",
@@ -5509,6 +5565,9 @@
         },
         {
           "$ref": "#/$defs/AgentStepEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentMessageEvent"
         },
         {
           "$ref": "#/$defs/AgentFocusEvent"
@@ -5625,7 +5684,7 @@
           "description": "The affected node, or null for a file-level observation."
         },
         "message": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "evidence": {
           "description": "Captured source or graph evidence supporting the observation.",
@@ -5679,7 +5738,7 @@
       "description": "`POST /agents`.",
       "properties": {
         "task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "slot": {
           "anyOf": [
@@ -5769,12 +5828,12 @@
       "description": "Request a coordination lead.",
       "properties": {
         "task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "model": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/NonEmptyText-Input"
             },
             {
               "type": "null"
@@ -5811,7 +5870,7 @@
       "description": "An editable subtask before the server assigns its agent.",
       "properties": {
         "task": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "zone": {
           "$ref": "#/$defs/PlanZone"
@@ -5869,7 +5928,7 @@
         "tested_commit": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -5878,7 +5937,7 @@
           "description": "The tested commit, when one exists."
         },
         "tested_tree": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "suite": {
           "$ref": "#/$defs/SuiteResult"
@@ -5978,7 +6037,7 @@
         "text": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -5999,10 +6058,10 @@
       "description": "An example supplied with a task before editing begins.",
       "properties": {
         "example_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "inputs": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "expected_output": {
           "anyOf": [
@@ -6019,7 +6078,7 @@
         "expected_behavior": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/NonEmptyText-Input"
             },
             {
               "type": "null"
@@ -6065,10 +6124,10 @@
       "description": "An example supplied with a task before editing begins.",
       "properties": {
         "example_id": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "inputs": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
         },
         "expected_output": {
           "anyOf": [
@@ -6085,7 +6144,7 @@
         "expected_behavior": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyText"
+              "$ref": "#/$defs/oversight_contracts__common__NonEmptyText__1"
             },
             {
               "type": "null"
@@ -6258,7 +6317,7 @@
           "type": "integer"
         },
         "graph_version": {
-          "$ref": "#/$defs/NonEmptyText"
+          "$ref": "#/$defs/NonEmptyText-Input"
         },
         "subtasks": {
           "items": {
@@ -6465,6 +6524,15 @@
       ],
       "title": "ZoneFacts",
       "type": "object"
+    },
+    "oversight_contracts__common__NonEmptyText__1": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "oversight_contracts__common__NonEmptyText__2": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "type": "string"
     }
   }
 }
