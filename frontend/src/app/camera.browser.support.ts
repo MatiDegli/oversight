@@ -7,6 +7,7 @@ import type { ViteDevServer } from "vite";
 import { expect } from "vitest";
 
 import type {} from "./camera.browser.fixture";
+import { fixtureCacheDir } from "../../shots/browserCache.support";
 import type { GraphProbeHost } from "../graph";
 
 type CameraPageState = {
@@ -26,7 +27,7 @@ let html: string;
 async function startCameraBrowser() {
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/camera-vite-cache", import.meta.url)),
+    cacheDir: fixtureCacheDir(expect.getState().testPath),
     // The fixture reads the recorded run from the repository's fixtures/.
     server: {
       host: "127.0.0.1",
