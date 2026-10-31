@@ -19,4 +19,3 @@ export { liveImpact, possibleCallers, possibleCallerNodes } from "./impact";
 export { routingOmissionText } from "./RoutingOmissions";
 export { selectGraphBehavior } from "./behavior";
 export type { GraphBehaviorEntry } from "./behavior";
-export { NodeBehavior } from "./NodeBehavior";
