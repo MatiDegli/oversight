@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, replace
 
-from oversight.changes import _approval, _candidate, _delivery, _merge, _recovery, _rules
+from oversight.changes import _approval, _candidate, _delivery, _merge, _recovery, _rules, _spend
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._grants import Measurement
 from oversight.changes._policy import merges_alone
@@ -46,6 +46,7 @@ class Transaction:
     measured: tuple[RuleAssessment, ...] = ()
     tested_tree: str | None = None
     grant_measurement: Measurement | None = None
+    spend_pin: StoredEvent | None = None
 
     async def measure(self, guard: MergeGuard) -> None:
         pending = self.reservation.evidence.assessment
@@ -91,6 +92,10 @@ class Transaction:
             if self.definitive is not None:
                 self.definitive = replace(self.definitive, grants=grants)
 
+    async def ready(self) -> None:
+        await _spend.ready(self.ctx)
+        self.revalidate()
+
     async def metadata(self) -> None:
         """Reuse C's monotonic latch for a metadata discrepancy outside the suite too."""
         assert self.guard is not None
@@ -111,7 +116,7 @@ class Transaction:
             tested_tree=self.tested_tree,
             timeout_s=self.ctx.timeout,
         )
-        self.revalidate()
+        await self.ready()
         self.barriers_ran = True
 
     @asynccontextmanager
@@ -120,23 +125,23 @@ class Transaction:
         # Suite released its lease; never wait for mode while retaining that lease.
         self.tested_tree = run.tested_tree
         async with ctx.mode.held(), ctx.workspace.git_lease():
-            self.revalidate()
+            await self.ready()
             await self.barriers()
-            self.revalidate()
+            await self.ready()
             await self.persist(guard, run)
-            self.revalidate()
+            await self.ready()
             failure = await _approval.rules_tree(ctx, self.reservation)
             if failure:
                 raise RulesFailure(*failure)
             # Git queries await: repeat the synchronous authorization at the effect boundary.
-            self.revalidate()
+            await self.ready()
             assert self.definitive is not None
             validate_resolution_intent(self.definitive)
             await self.barriers()
-            self.revalidate()
+            await self.ready()
             assert self.definitive.assessment is not None
             if any(
-                ref.event_seq is not None and ref.event_seq not in ctx.assessment.events
+                not _spend.admits(ctx, rule.rule, ref, self.spend_pin)
                 for rule in self.definitive.assessment.rules
                 for ref in rule.evidence
             ):
@@ -168,12 +173,14 @@ class Transaction:
             threshold=next(r.threshold for r in pending.rules if r.rule == "combined_tests"),
             evidence=[EvidenceRef(event_seq=seq)],
         )
+        await self.ready()
+        spend, self.spend_pin = _spend.guard(ctx, ctx.assessment.inputs(self.reservation.wait))
         final = ChangeAssessment.model_validate(
             {
                 **pending.model_dump(),
                 "candidate_tree": guard.candidate_tree,
                 "rules": [
-                    {r.rule: r for r in (*self.measured, combined)}.get(r.rule, r)
+                    {r.rule: r for r in (*self.measured, combined, spend)}.get(r.rule, r)
                     for r in pending.rules
                 ],
             }
@@ -225,31 +232,36 @@ class Transaction:
 async def run(ctx: ChangeContext, rec: ChangeRecord, evidence: WriteEvidence) -> None:
     """Caller owns main/worktree; every recovery settles before those locks are released."""
     wait = ctx.assessment.waits[rec.change_id]
-    reservation = _rules.RulesReservation(wait, evidence, rec.decision)
+    reservation = _rules.RulesReservation(wait, evidence, rec.decision, wait.spend_pin)
     assert evidence.assessment is not None
     tx = Transaction(ctx, reservation, evidence.assessment.main_commit)
     try:
-        await _delivery.drain_pending(ctx)
-        async with ctx.workspace.git_lease():
-            tx.tree = (await ctx.git(ctx.workspace.main, "rev-parse", f"{tx.pre}^{{tree}}")).strip()
-            await _recovery.verify_rules_abort(ctx, rec, tx.pre, tx.tree)
-        await _merge.merge(ctx, rec, None, tx.pre, transaction=tx)
-    except EventRejected as error:
-        # A refused assessment has no effect; a refused resolution retains the landed merge.
-        if not rec.merged:
+        try:
+            await _delivery.drain_pending(ctx)
+            async with ctx.workspace.git_lease():
+                tx.tree = (
+                    await ctx.git(ctx.workspace.main, "rev-parse", f"{tx.pre}^{{tree}}")
+                ).strip()
+                await _recovery.verify_rules_abort(ctx, rec, tx.pre, tx.tree)
+            await _merge.merge(ctx, rec, None, tx.pre, transaction=tx)
+        except EventRejected as error:
+            # A refused assessment has no effect; a refused resolution retains the landed merge.
+            if not rec.merged:
+                rec.fallback = "broken"
+                await settle(tx, error)
+            else:
+                await _delivery.rejected(ctx, rec, error)
+        except (Exception, asyncio.CancelledError) as error:
             rec.fallback = "broken"
             await settle(tx, error)
-        else:
-            await _delivery.rejected(ctx, rec, error)
-    except (Exception, asyncio.CancelledError) as error:
-        rec.fallback = "broken"
-        await settle(tx, error)
-        if isinstance(error, asyncio.CancelledError):
-            if rec.merged:
-                await _delivery.close_out(ctx, rec)
-            raise
-    if rec.merged and not rec.delivery_rejected:
-        await _delivery.finish(ctx, rec)
+            if isinstance(error, asyncio.CancelledError):
+                if rec.merged:
+                    await _delivery.close_out(ctx, rec)
+                raise
+        if rec.merged and not rec.delivery_rejected:
+            await _delivery.finish(ctx, rec)
+    finally:
+        tx.spend_pin = reservation.spend_pin = None
 
 
 async def settle(tx: Transaction, error: BaseException) -> None:

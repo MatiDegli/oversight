@@ -30,7 +30,7 @@ from oversight.agents import (
     parse_script,
 )
 from oversight.app import LiveRun
-from oversight.changes import ChangeManager, WrongState
+from oversight.changes import ChangeManager, PolicyInputs, WrongState
 from oversight.changes._mode import (
     RULES_ACTIVATION,
     ModeController,
@@ -159,7 +159,24 @@ async def test_unavailable_seed_does_not_certify_zero(tmp_path: Path, unavailabl
     await run.startup()
     try:
         assert manager(run)._ctx.assessment.spend_receipt is None
-        assert manager(run)._ctx.ports.rules_evidence is None
+        producer = manager(run)._ctx.ports.rules_evidence
+        assert producer is not None
+        inputs = PolicyInputs(
+            change_id="change-1",
+            agent_id="agent-1",
+            revision=1,
+            base_commit="base",
+            head_commit="head",
+            main_commit="main",
+            mode="ask_me",
+            mode_revision=0,
+        )
+        spend = producer(inputs).inputs.spend
+        assert spend is not None
+        if unavailable == "budget":
+            assert spend.budget_usd is None
+        else:
+            assert spend.spent_usd is None and spend.unknown_costs is None and not spend.ledger_ok
     finally:
         await run.shutdown()
 
@@ -446,7 +463,7 @@ async def test_f3a_does_not_open_activation(live: LiveRun, monkeypatch: pytest.M
     assert not RULES_ACTIVATION and not capability.confirmed
     assert "Rules mode is closed" in capability.reason
     monkeypatch.setattr(manager(live)._ctx.mode, "_availability", lambda: capability)
-    assert manager(live)._ctx.ports.rules_evidence is None
+    assert manager(live)._ctx.ports.rules_evidence is not None
     with pytest.raises(WrongState):
         await live.set_merge_mode(SetMergeMode(mode="merge_when_safe", revision=0))
     assert live.merge_mode().mode == "ask_me"

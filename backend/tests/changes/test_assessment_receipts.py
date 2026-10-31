@@ -96,7 +96,12 @@ async def test_uncommitted_references_are_unknown(h: Harness, clock):
     )
     await h.run_agent(1, EDIT)
     await settled(h)
-    assert all(rule.result == "unknown" and not rule.evidence for rule in latest(h).rules)
+    assert all(
+        rule.result == "unknown" and not rule.evidence
+        for rule in latest(h).rules
+        if rule.rule != "known_spend"
+    )
+    assert next(r for r in latest(h).rules if r.rule == "known_spend").result == "pass"
     assert terminals(h) == []
 
 

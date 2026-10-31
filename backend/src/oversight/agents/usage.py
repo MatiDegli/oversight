@@ -178,6 +178,8 @@ class LedgerFile:
 
     async def wait_changed(self, after: int, *, deadline: float) -> None:
         """Wait for a newer revision at an absolute loop deadline; never cancel a writer."""
+        if not math.isfinite(deadline):
+            raise ValueError("deadline must be finite")
         changed = asyncio.Event()
         unsubscribe = self.watch(changed.set)
         try:

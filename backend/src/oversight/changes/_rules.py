@@ -3,20 +3,23 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from oversight.changes import _spend
 from oversight.changes._assessment import PROFILE, AssessmentWait
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
 from oversight.changes._state import APPROVABLE, WrongState
 from oversight.changes._support import ChangeContext, RulesFailure
+from oversight.events import StoredEvent
 from oversight_contracts.grants import GrantUse, covered_rule
 from oversight_contracts.policy import POLICY_RULES, ChangeAssessment
 
 
-@dataclass(frozen=True)
+@dataclass
 class RulesReservation:
     wait: AssessmentWait
     evidence: WriteEvidence
     decision: int
+    spend_pin: StoredEvent | None = None
 
 
 def pending_policy(assessment: ChangeAssessment, grants: Sequence[GrantUse] = ()) -> bool:
@@ -54,11 +57,15 @@ def capture(
     )
     if failure := availability(ctx):
         raise RulesFailure(*failure)
+    ledger = ctx.ports.spend_ledger
+    if ledger is not None and ledger.state is None:
+        raise _spend.SpendNotReady
+    _spend.guard(ctx, ctx.assessment.inputs(wait))
     if (
         not pending_policy(assessment, grants)
         or assessment != wait.latest
         or any(
-            ref.event_seq is not None and ref.event_seq not in ctx.assessment.events
+            not _spend.admits(ctx, rule.rule, ref, wait.spend_pin)
             for rule in assessment.rules
             for ref in rule.evidence
         )
@@ -97,7 +104,7 @@ def capture(
         reasons=("All prerequisites confirmed; combined tests pending.",),
         grants=grants,
     )
-    return RulesReservation(wait, evidence, rec.decision + 1)
+    return RulesReservation(wait, evidence, rec.decision + 1, wait.spend_pin)
 
 
 def current(ctx: ChangeContext, reservation: RulesReservation) -> bool:
@@ -119,6 +126,10 @@ def revalidate(ctx: ChangeContext, reservation: RulesReservation) -> tuple[str, 
     wait, evidence = reservation.wait, reservation.evidence
     if failure := availability(ctx):
         return failure
+    try:
+        _spend.guard(ctx, ctx.assessment.inputs(wait))
+    except RulesFailure as error:
+        return error.code, str(error)
     rec, assessment = wait.rec, evidence.assessment
     grants = (
         ctx.grants.uses(ctx, assessment, wait.grant_measurement, only=evidence.grants)
@@ -148,7 +159,7 @@ def revalidate(ctx: ChangeContext, reservation: RulesReservation) -> tuple[str, 
         or assessment != wait.latest
         or not pending_policy(assessment, grants)
         or any(
-            ref.event_seq is not None and ref.event_seq not in ctx.assessment.events
+            not _spend.admits(ctx, rule.rule, ref, reservation.spend_pin)
             for rule in assessment.rules
             for ref in rule.evidence
         )

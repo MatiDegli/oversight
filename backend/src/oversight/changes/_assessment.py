@@ -10,11 +10,13 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import TypeAdapter, ValidationError
 
 from oversight.agents import FAKE_MODEL, FAKE_MODEL_B, MUSE_SPARK, MUSE_SPARK_OPEN
+from oversight.changes import _spend
 from oversight.changes._facts import AddedTestsInventory, FactsEvidence, added_tests_inventory
 from oversight.changes._grants import Measurement, measure
 from oversight.changes._policy import PolicyInputs, assess
 from oversight.changes._shortcuts_common import is_test_file
 from oversight.changes._state import ChangeRecord
+from oversight.changes._support import RulesFailure
 from oversight.events import NeedsYouWait, StoredEvent, format_needs_you
 from oversight_contracts.common import FileStatus, RuleId
 from oversight_contracts.events import ChangeProposed, ErrorReport, ServerEvent
@@ -70,6 +72,7 @@ class AssessmentWait:
     grant_measurement: Measurement | None = None
     latest: ChangeAssessment | None = None
     terminal_seq: int | None = None
+    spend_pin: StoredEvent | None = None
 
 
 class RulesScheduler:
@@ -181,6 +184,7 @@ class RulesScheduler:
         ):
             wait.terminal_seq = event.seq
             self.invalidate(rec)
+            wait.spend_pin = None
         elif duplicate:
             return
         elif event.type == "change.resolved" and (
@@ -188,6 +192,7 @@ class RulesScheduler:
             event.payload.head_commit,
         ) == (wait.target.revision, wait.target.head):
             self.invalidate(rec)
+            wait.spend_pin = None
         elif event.type in {
             "change.proposed",
             "change.facts_recorded",
@@ -408,33 +413,20 @@ class RulesScheduler:
     async def evaluate(self, wait: AssessmentWait) -> None:
         while wait.dirty and self.valid(wait):
             wait.dirty = False
-            inputs = self.inputs(wait)
-            supplied = (
-                self.ctx.ports.rules_evidence(inputs)
-                if self.ctx.ports.rules_evidence
-                else RulesEvidence(inputs)
-            )
-            identity = (
-                "change_id",
-                "agent_id",
-                "revision",
-                "base_commit",
-                "head_commit",
-                "main_commit",
-                "mode",
-                "mode_revision",
-            )
-            if any(getattr(supplied.inputs, key) != getattr(inputs, key) for key in identity):
-                await self.terminal(wait, "Rules evidence targets another revision, main or mode.")
+            try:
+                await _spend.ready(self.ctx, deadline=wait.deadline)
+            except RulesFailure as error:
+                await self.terminal(wait, str(error))
                 return
-            # A missing receipt cannot be laundered into evidence by an upstream producer.
+            if not self.valid(wait):
+                return
+            inputs = self.inputs(wait)
+            inputs, pin, unavailable = _spend.sample(self.ctx, inputs)
             inputs = replace(
-                supplied.inputs,
+                inputs,
                 evidence={
-                    rule: tuple(
-                        ref for ref in refs if ref.event_seq is None or ref.event_seq in self.events
-                    )
-                    for rule, refs in supplied.inputs.evidence.items()
+                    rule: tuple(ref for ref in refs if _spend.admits(self.ctx, rule, ref, pin))
+                    for rule, refs in inputs.evidence.items()
                 },
             )
             if inputs.added_tests is not None and any(
@@ -452,7 +444,7 @@ class RulesScheduler:
             if not self.valid(wait):
                 return
             await self.ctx.publish(assessment)
-            wait.latest = assessment
+            wait.latest, wait.spend_pin = assessment, pin
             if not self.valid(wait):
                 if self.valid(wait, check_main=False):
                     await self.report_terminal(
@@ -464,8 +456,8 @@ class RulesScheduler:
                 return
             if any(rule.result == "fail" for rule in assessment.rules):
                 self.invalidate(wait.rec)
-            elif supplied.unavailable:
-                await self.terminal(wait, supplied.unavailable)
+            elif unavailable:
+                await self.terminal(wait, unavailable)
             elif all(
                 rule.result == "pass" or covered_rule(assessment, rule, grants)
                 for rule in assessment.rules

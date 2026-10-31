@@ -11,7 +11,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -53,9 +53,12 @@ from oversight.api import (
 from oversight.changes import (
     ChangeManager,
     ChangeNotFound,
+    PolicyInputs,
     ReviewCapture,
     ReviewCardLimits,
     Revision,
+    RulesEvidence,
+    SpendSnapshot,
     WrongState,
 )
 from oversight.events import (
@@ -384,10 +387,27 @@ class LiveRun:
             ),
             run_id=self.run_id,
             spend_ledger=self.ledger,
+            rules_evidence=self._rules_evidence,
+            spend_lost=lambda: self._ledger_lost,
             spend_receipt=started if self.ledger.state is not None else None,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
         self.dispatcher.start()
+
+    def _rules_evidence(self, inputs: PolicyInputs) -> RulesEvidence:
+        """Loop-owned durable Meta truth; receipt totals and decision spend are unrelated."""
+        state = self.ledger.state
+        return RulesEvidence(
+            replace(
+                inputs,
+                spend=SpendSnapshot(
+                    spent_usd=state.spent_usd if state is not None else None,
+                    budget_usd=self._settings.budget_usd,
+                    unknown_costs=len(state.unknown) if state is not None else None,
+                    ledger_ok=self.ledger.loaded and state is not None and not self._ledger_lost,
+                ),
+            )
+        )
 
     async def shutdown(self) -> None:
         """Every step runs, even after one failed or was cancelled; the first such is re-raised."""
