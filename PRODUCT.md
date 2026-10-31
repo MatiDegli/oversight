@@ -29,6 +29,11 @@ change may affect. A change reaches main only with your approval or by meeting r
 review then shows the rules and grants that let it in, and Revert undoes it in one step when it
 applies cleanly.
 
+Status on main, 2026-10-31: the behavior diff and the measured callers are built and opt-in, off by default;
+merge by rules and its Revert exist in the backend but stay closed until their activation is approved, so today
+every change reaches main through the person's decision. Where this file describes those in the present tense,
+it describes the target.
+
 ## Positioning
 
 Agents write code faster than anyone can review it. Oversight is how you stop reading code without
