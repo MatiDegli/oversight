@@ -159,7 +159,7 @@ function clearBoxes(r: Awaited<ReturnType<typeof read>>) {
       }
 }
 it(
-  "starts with folded module cards, legible labels and overlay clearance",
+  "starts with folded module cards at the whole-graph zoom with legible labels and overlay clearance",
   async () =>
     withPage(async (page) => {
       const r = await read(page);
@@ -171,7 +171,7 @@ it(
       ).toHaveAttribute("aria-pressed", "false");
       expect(r.leaves).toHaveLength(6);
       expect(r.modules).toHaveLength(6);
-      expect(r.zoom).toBe(1);
+      expect(r.zoom).toBeLessThanOrEqual(1);
       expect(r.metrics.minLabelPx).toBeGreaterThanOrEqual(11);
       expect(r.draggable.sort()).toEqual(r.modules.map((n) => n.id).sort());
       clearBoxes(r);
@@ -197,7 +197,9 @@ it(
               b.y1 * r.zoom + r.pan.y + r.host.y < o.y + o.height &&
               b.y2 * r.zoom + r.pan.y + r.host.y > o.y,
           ).toBe(false);
-      await browserExpect(page.getByLabel("Zoom percentage")).toHaveText("100%");
+      await browserExpect(page.getByLabel("Zoom percentage")).toHaveText(
+        `${String(Math.round(r.zoom * 100))}%`,
+      );
     }),
   30_000,
 );

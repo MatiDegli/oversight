@@ -626,7 +626,9 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   keeps its 560px minimum: the sidebar becomes an overlay first, below 1832px, when its 280px no
   longer fits beside the 880px focus panel. Below 1552px, the focus panel shrinks to
   `min(880px, viewport width - 112px - 560px)`: 823px at 1495px, 768px at 1440px and 608px at
-  1280px. Overlays cover their part of the work area without changing these widths. Below 1280px
+  1280px. Overlays cover their part of the work area without changing these widths. When the expanded
+  agents panel covers the graph, the graph's overlays and every camera framing end 24px from the
+  panel's edge, so no control or frame sits under it. Below 1280px
   a notice asks the person to widen the window. Type and radii do not shrink to fit.
   The two-change practice uses the exception in **Phone width** below.
 - **Maximize:** an explicit focus-panel control fills the work area and hides the graph behind a
@@ -647,9 +649,11 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
   every take. Switching modes changes the camera, never node positions.
 - **A canvas, not a fit:** the graph is larger than the screen and is panned and zoomed. It starts
-  at 100% on the module of the graph's hub (the function with the most callers), kept inside the
-  graph's bounds and moved to the nearest gutter where an edge of the view would cut a frame in
-  two. Dragging pans, the wheel and the +/- buttons zoom between 20% and 300%, and the fit button
+  with the whole graph in view, zooming out from 100% only as needed and never below the floor in
+  **Opening a change**, so names and state words stay at least 11 CSS px. A graph that does not fit
+  at that floor starts at the floor on the module of the graph's hub (the function with the most
+  callers), kept inside the graph's bounds and moved to the nearest gutter where an edge of the
+  view would cut a frame in two. Dragging pans, the wheel and the +/- buttons zoom between 20% and 300%, and the fit button
   shows everything, or the middle of it at 20% when the graph is wider than that. The camera moves
   on its own only where it already does by design (opening and closing review, a node added while
   the person is not navigating); no node ever moves. A cone row that says "Out of view" pans the

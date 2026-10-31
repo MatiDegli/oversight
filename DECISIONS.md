@@ -2289,3 +2289,19 @@ unchanged.
 
 Reason: H1 was fixed before the run as the condition for paying. Meeting it would need probes that record file
 effects, a new product capability, or a rule changed after seeing results.
+
+## 2026-10-31 — Start with the whole graph when it fits legibly; keep graph controls clear of the floating agents panel
+
+The maintainer approved starting with the whole graph when its Fit zoom is between the shared
+**Opening a change** legibility floor and 100%. The floor comes from `changeZoom()`, keeping node
+names and state words at least 11 CSS px. A graph that fits at 100% or more keeps the centered 100%
+start and gutter rule. A graph that cannot fit at the floor starts at the floor on the hub's module,
+inside the graph bounds and moved to the nearest gutter to keep module frames whole.
+
+The maintainer also approved reserving the floating expanded agents panel's width for graph
+overlays and camera framing at 1440px and below: both end 24px from its edge. Docked panels,
+folded rails and focus tabs keep their existing geometry.
+
+Reason: the recorded demo at 1920×1080 fits at 83%, yet its 100% start left two of six modules
+off-canvas. At 1280–1440px the floating agents panel covered the detail and zoom controls and
+framed modules underneath itself; in the 1280×800 capture, models.py was cut at its x = 880 edge.

@@ -215,7 +215,7 @@ export const scenes: readonly Scene[] = [
       await page.locator('article[aria-label^="Agent "]').first().waitFor({ state: "visible" });
     },
   },
-  // The fit button: the whole graph in view, as the person gets it by asking. Watch starts at 100%.
+  // The fit button shows the whole graph, even when fitting it needs zoom below the start floor.
   {
     name: "watch-fit",
     enabled: true,

@@ -19,7 +19,7 @@ graph.positions = JSON.parse(
   readFileSync(new URL("../../../fixtures/layouts/demo-repo.json", import.meta.url), "utf8"),
 ) as GraphSnapshot["positions"];
 
-it("starts the demo preset with every frame fully inside or outside all four visible edges", () => {
+it("starts the demo preset with every frame inside because the whole graph fits legibly", () => {
   const cy = cytoscape({ headless: true, styleEnabled: true, style: graphStyles(themes.dark) });
   try {
     vi.spyOn(cy, "width").mockReturnValue(1464);
@@ -30,7 +30,8 @@ it("starts the demo preset with every frame fully inside or outside all four vis
     // Watch heading and footer excluded, in graph-local screen pixels at the demo viewport.
     const area = { x1: 24, y1: 60, x2: 1440, y2: 892 };
     startCamera(cy, area);
-    expect(cy.zoom()).toBe(1);
+    // The demo fits legibly below 100%, so every module now starts inside the clear area.
+    expect(cy.zoom()).toBeCloseTo(0.83, 2);
     let inside = 0;
     let outside = 0;
     for (const frame of cy.nodes(".module, .class")) {
@@ -41,8 +42,8 @@ it("starts the demo preset with every frame fully inside or outside all four vis
       if (contained) inside++;
       if (excluded) outside++;
     }
-    expect(inside).toBeGreaterThan(0);
-    expect(outside).toBeGreaterThan(0);
+    expect(inside).toBe(cy.nodes(".module, .class").length);
+    expect(outside).toBe(0);
     const hub = cy.getElementById("shop.pricing").renderedBoundingBox({ includeLabels: false });
     expect(hub.x1).toBeGreaterThanOrEqual(area.x1);
     expect(hub.y1).toBeGreaterThanOrEqual(area.y1);
