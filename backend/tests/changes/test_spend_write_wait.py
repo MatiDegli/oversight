@@ -3,13 +3,15 @@
 import asyncio
 import threading
 from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import replace
 from unittest.mock import AsyncMock
 
 import pytest
 from changes_helpers import queued_callbacks_ran
 from test_assessment import latest, rec, settled, terminals, wait
+from test_policy_profiles import policy_inputs
 from test_rules_transaction import configure_transaction
-from test_spend_evidence import UNKNOWN, pending, reserve, spend_rule
+from test_spend_evidence import UNKNOWN, pending, receipt, reserve, spend_rule
 from test_spend_evidence import spend as spend
 
 from oversight.agents import LedgerState
@@ -268,3 +270,158 @@ async def test_preflight_write_timeout_is_policy_invalid_and_releases_pins(h, sp
         assert "code=policy_invalid;" in terminals(h)[0].message
         port.assert_not_awaited()
         assert wait(h).spend_pin is None
+
+
+@pytest.mark.parametrize("boundary", range(1, 12))
+@pytest.mark.parametrize("bad", ["unknown", "threshold", "loss", "receipt_above_state"])
+async def test_every_async_boundary_refuses_bad_spend(h, spend, monkeypatch, boundary, bad):
+    from oversight.changes import _spend
+
+    configure_transaction(h, monkeypatch)
+    spend.ledger.state = LedgerState(0.25)
+    await receipt(h, total=0.2)
+    await pending(h, spend)
+    real, seen = _spend.ready, 0
+
+    async def poisoned(ctx, **kwargs):
+        nonlocal seen
+        seen += 1
+        if seen == boundary:
+            if bad == "loss":
+                spend.owner._ledger_lost = True
+            else:
+                spend.ledger.state = {
+                    "unknown": LedgerState(0.25, (UNKNOWN,)),
+                    "threshold": LedgerState(0.5),
+                    "receipt_above_state": LedgerState(0.1),
+                }[bad]
+        await real(ctx, **kwargs)
+
+    monkeypatch.setattr(_spend, "ready", poisoned)
+    h.manager._admit_rules(rec(h), latest(h))
+    await spend.decisions[0]
+    assert seen >= boundary
+    assert await h.main_head() == h.base_commit
+    assert not h.payloads(ChangeResolved)
+    assert "code=policy_invalid;" in terminals(h)[0].message
+
+
+async def test_armed_write_wait_converts_injected_clock(h, spend, monkeypatch):
+    from oversight.changes import _assessment
+
+    loop = asyncio.get_running_loop()
+    spend.clock.now = 5000
+    monkeypatch.setattr(_assessment, "EVIDENCE_TIMEOUT_S", 1)
+    real = spend.ledger.wait_changed
+    subscribed = asyncio.Event()
+    remaining = []
+
+    async def changed(after, *, deadline):
+        remaining.append(deadline - loop.time())
+        subscribed.set()
+        await real(after, deadline=deadline)
+
+    monkeypatch.setattr(spend.ledger, "wait_changed", changed)
+    spend.ctx.ports.rules_admission = lambda *_: None
+    async with writing(spend, monkeypatch):
+        h.manager.run_ended("agent-1", None)
+        await asyncio.wait_for(subscribed.wait(), timeout=2)
+        assert 0.8 < remaining[0] <= 1
+        assert wait(h).deadline == 5001 and not terminals(h)
+    await settled(h)
+    assert spend_rule(latest(h)).result == "pass"
+    assert wait(h).deadline == 5001
+
+
+async def test_terminal_ack_during_assessment_publish_releases_pin(h, spend):
+    publish = spend.ctx.publish
+
+    async def acknowledged(payload):
+        stored = await publish(payload)
+        if isinstance(payload, ChangeAssessment):
+            await spend.ctx.assessment.terminal(wait(h), "Acknowledged while publishing")
+        return stored
+
+    spend.ctx.publish = acknowledged
+    h.manager.run_ended("agent-1", None)
+    await settled(h)
+    assert wait(h).terminal_seq is not None
+    assert wait(h).spend_pin is None and not spend.decisions
+
+
+async def test_two_real_writes_share_one_deadline_and_timeout(h, spend, monkeypatch):
+    from oversight.changes import _spend
+
+    loop = asyncio.get_running_loop()
+    entered = [asyncio.Event(), asyncio.Event()]
+    released = [threading.Event(), threading.Event()]
+    calls = iter(range(2))
+    write = spend.ledger.write
+    second: list[asyncio.Task[LedgerState]] = []
+    deadlines, timeouts = [], []
+    subscribed = asyncio.Event()
+    wait_changed = spend.ledger.wait_changed
+    spend.ctx.timeout = 0.5
+
+    def held(state):
+        index = next(calls)
+        loop.call_soon_threadsafe(entered[index].set)
+        assert released[index].wait(5)
+        write(state)
+
+    async def changed(after, *, deadline):
+        deadlines.append(deadline)
+        subscribed.set()
+        try:
+            await wait_changed(after, deadline=deadline)
+        except TimeoutError:
+            timeouts.append(deadline)
+            raise
+        if not second:
+            second.append(asyncio.create_task(spend.ledger.record(0.1, UNKNOWN)))
+            await entered[1].wait()  # Install the next real write before ready can resample.
+
+    monkeypatch.setattr(spend.ledger, "write", held)
+    monkeypatch.setattr(spend.ledger, "wait_changed", changed)
+    first = asyncio.create_task(spend.ledger.record(0.1, UNKNOWN))
+    readiness = None
+    try:
+        await entered[0].wait()
+        readiness = asyncio.create_task(_spend.ready(spend.ctx))
+        await subscribed.wait()
+        released[0].set()
+        await first
+        await entered[1].wait()
+        with pytest.raises(RulesFailure, match="timed out"):
+            await readiness
+        assert len(deadlines) == 2 and len(set(deadlines)) == 1
+        assert timeouts == [deadlines[0]]
+        assert len(second) == 1 and not second[0].done() and spend.ledger.writing
+    finally:
+        for release in released:
+            release.set()
+        await first
+        if second:
+            await second[0]
+        if readiness is not None and not readiness.done():
+            await readiness
+    assert spend.ledger.state == LedgerState(0.2)
+
+
+@pytest.mark.parametrize("value", [None, 0.1, 0.2, 0.3])
+async def test_receipt_lower_bound_never_replaces_fresh_spend(h, spend, value):
+    from oversight.changes import _spend
+
+    stored = await receipt(h, total=0.2)
+    scheduler = spend.ctx.assessment
+    assert scheduler.spend_receipt_total == 0.2
+    h.manager.spend_received(spend.seed)
+    h.manager.spend_received(stored)
+    h.manager.spend_received(replace(stored, seq=stored.seq + 1))  # Invalid envelope identity.
+    assert scheduler.spend_receipt is stored
+    assert scheduler.spend_receipt_total == 0.2
+    spend.ledger.state = LedgerState(value) if value is not None else None
+    sampled, pin, _ = _spend.sample(spend.ctx, policy_inputs())
+    assert sampled.spend is not None and sampled.spend.spent_usd == value
+    assert sampled.spend.ledger_ok is (value is not None and value >= 0.2)
+    assert pin == stored

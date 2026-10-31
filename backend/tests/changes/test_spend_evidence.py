@@ -25,7 +25,7 @@ def spend_rule(assessment):
     return next(r for r in assessment.rules if r.rule == "known_spend")
 
 
-async def receipt(h, total=900):
+async def receipt(h, total: float = 0):
     stored = await h.publish(
         UsageTick(
             agent_id="agent-2",
@@ -193,7 +193,7 @@ async def test_capture_and_revalidate_pin_survives_new_receipt_and_eviction(h, s
     assessment = await pending(h, spend)
     old_pin = spend.seed
     spend.ctx.assessment.events.pop(old_pin.seq, None)
-    newer = await receipt(h, total=990)
+    newer = await receipt(h, total=0)
     await settled(h)
     # Capture must not rewrite the persisted assessment with the newer spend receipt.
     wait(h).latest, wait(h).spend_pin = assessment, old_pin
@@ -327,11 +327,15 @@ async def test_producer_cannot_mutate_nonspend_or_launder_refs(h, spend, forged_
         "nan",
         "inf",
         "negative",
+        "receipt_above_state",
     ],
 )
 @pytest.mark.parametrize("reader", ["stage", "capture", "reserved", "barrier", "definitive"])
 async def test_fresh_guards_never_pass_bad_durable_truth(h, spend, monkeypatch, bad, reader):
     configure_transaction(h, monkeypatch)
+    if bad == "receipt_above_state":
+        spend.ledger.state = LedgerState(0.25)
+        await receipt(h, total=0.2)
     assessment = await pending(h, spend)
 
     def poison():
@@ -345,6 +349,8 @@ async def test_fresh_guards_never_pass_bad_durable_truth(h, spend, monkeypatch, 
             spend.ledger.loaded = False
         elif bad == "absent":
             spend.ledger.state = None
+        elif bad == "receipt_above_state":
+            spend.ledger.state = LedgerState(0.1)
         else:
             spend.ledger.state = LedgerState(
                 {
@@ -392,7 +398,7 @@ async def test_definitive_uses_fresh_state_and_latest_committed_provenance(h, sp
 
     async def persisted(tx, guard, run):
         spend.ledger.state = LedgerState(0.25)
-        forwarded.append(await receipt(h, total=999))
+        forwarded.append(await receipt(h, total=0.2))
         await original(tx, guard, run)
 
     monkeypatch.setattr(_transaction.Transaction, "persist", persisted)

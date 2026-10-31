@@ -86,6 +86,7 @@ class RulesScheduler:
         self.waits: dict[str, AssessmentWait] = {}
         self.events: dict[int, ServerEvent] = {}
         self.spend_receipt: StoredEvent | None = None
+        self.spend_receipt_total: float | None = None
         self._evicted_through = 0
         self.generation = 0
 
@@ -116,7 +117,7 @@ class RulesScheduler:
             return
         if not math.isfinite(total) or total < 0 or not math.isfinite(budget) or budget <= 0:
             return
-        self.spend_receipt = stored
+        self.spend_receipt, self.spend_receipt_total = stored, total
         self.spend_changed()
 
     def spend_changed(self) -> None:
@@ -414,7 +415,11 @@ class RulesScheduler:
         while wait.dirty and self.valid(wait):
             wait.dirty = False
             try:
-                await _spend.ready(self.ctx, deadline=wait.deadline)
+                assert wait.deadline is not None
+                deadline = asyncio.get_running_loop().time() + max(
+                    0, wait.deadline - self.monotonic()
+                )
+                await _spend.ready(self.ctx, deadline=deadline)
             except RulesFailure as error:
                 await self.terminal(wait, str(error))
                 return
@@ -444,7 +449,9 @@ class RulesScheduler:
             if not self.valid(wait):
                 return
             await self.ctx.publish(assessment)
-            wait.latest, wait.spend_pin = assessment, pin
+            wait.latest = assessment
+            if wait.terminal_seq is None:
+                wait.spend_pin = pin
             if not self.valid(wait):
                 if self.valid(wait, check_main=False):
                     await self.report_terminal(

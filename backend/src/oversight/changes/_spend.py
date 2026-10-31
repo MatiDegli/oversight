@@ -35,10 +35,17 @@ def sample(
     """Accept only spend from the producer; only this stage can attach provenance."""
     supplied = ctx.ports.rules_evidence(inputs) if ctx.ports.rules_evidence else None
     pin = ctx.assessment.spend_receipt
+    total = ctx.assessment.spend_receipt_total
+    spend = supplied.inputs.spend if supplied else None
+    if spend is not None and (
+        spend.spent_usd is None or (pin is not None and (total is None or total > spend.spent_usd))
+    ):
+        # A committed receipt is a lower bound, never a substitute for durable truth.
+        spend = replace(spend, ledger_ok=False)
     return (
         replace(
             inputs,
-            spend=supplied.inputs.spend if supplied else None,
+            spend=spend,
             evidence={
                 **inputs.evidence,
                 "known_spend": (EvidenceRef(event_seq=pin.seq),) if pin else (),
