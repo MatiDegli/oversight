@@ -25,7 +25,7 @@ afterAll(async () => {
   await server.close();
 });
 
-it.each([
+const tabs = [
   ["review", "/src/review/ReviewPanel.tsx", "Review panel", ".review-body"],
   ["inbox", "/src/review/DecisionInbox.tsx", "Decisions inbox", ".inbox-entries"],
   [
@@ -41,9 +41,20 @@ it.each([
     "Two-change practice",
     "button:has-text('Start practice')",
   ],
-])(
-  "keeps the %s frame on its first cold open",
-  async (tab, module, label, content) => {
+] as const;
+it.each(
+  tabs.flatMap(([tab, module, label, content]) =>
+    (tab === "file-view" ? [false] : [false, true]).map((failed) => ({
+      tab,
+      module,
+      label,
+      content,
+      failed,
+    })),
+  ),
+)(
+  "keeps the $tab frame on its first cold open (failed chunk: $failed)",
+  async ({ tab, module, label, content, failed }) => {
     const page = await browser.newPage({
       viewport: { width: 1920, height: 1080 },
       reducedMotion: "reduce",
@@ -56,7 +67,8 @@ it.each([
     page.on("pageerror", (error) => errors.push(error.message));
     await page.route(`**${module}*`, async (route) => {
       await gate;
-      await route.continue();
+      if (failed) await route.abort("failed");
+      else await route.continue();
     });
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     try {
@@ -84,15 +96,39 @@ it.each([
       const before = await panel.boundingBox();
       const heading = panel.locator(tab === "practice" ? "h1" : "header").first();
       const header = await heading.boundingBox();
-      if (process.env.STARTUP_SPLIT_SHOTS === "1") {
+      if (tab === "inbox") {
+        await check(panel.getByRole("button", { name: /^Decisions/ })).toBeDisabled();
+        await check(panel.getByRole("button", { name: /^Standing grants/ })).toBeDisabled();
+      }
+      if (!failed && process.env.STARTUP_SPLIT_SHOTS === "1") {
         const directory = fileURLToPath(new URL("../../.shots/startup-split/", import.meta.url));
         await mkdir(directory, { recursive: true });
         await page.screenshot({ path: `${directory}/${tab}-first-open.png` });
       }
       release();
+      if (failed) {
+        await check(panel.getByRole("alert")).toHaveText(
+          "The editor could not load. Reload the page to try again.",
+        );
+        await check(page.getByLabel("Repository graph", { exact: true })).toBeVisible();
+        expect(await panel.boundingBox()).toEqual(before);
+        expect(await heading.boundingBox()).toEqual(header);
+        await page.getByRole("button", { name: "Watch", exact: true }).click();
+        await check(panel).toHaveCount(0);
+        await check(page.getByLabel("Repository graph", { exact: true })).toBeVisible();
+        expect(errors).toEqual([]);
+        return;
+      }
       await check(panel.locator(content).first()).toBeVisible();
       expect(await panel.boundingBox()).toEqual(before);
       expect(await heading.boundingBox()).toEqual(header);
+      if (tab === "inbox") {
+        await panel.getByRole("button", { name: /^Standing grants/ }).click();
+        await check(panel.getByRole("button", { name: /^Standing grants/ })).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        );
+      }
       expect(errors).toEqual([]);
     } finally {
       release();

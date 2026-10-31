@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { freezePractice } from "./session";
 import { replayRecording } from "../../transport";
@@ -9,6 +9,7 @@ import { answerOnce, complete, freshAttempt } from "./attempt";
 import type { Attempt } from "./attempt";
 
 import { PracticeFrame } from "../shell/PanelFallbacks";
+import { LazyPanel } from "../shell/LazyPanel";
 import { availablePractice } from "./availability";
 const PracticePanel = lazy(() =>
   import("./PracticePanel").then((m) => ({ default: m.PracticePanel })),
@@ -62,7 +63,7 @@ export function usePractice(
       show(attempt.index);
     },
     content: (
-      <Suspense fallback={<PracticeFrame attempt={attempt} onExit={exit} />}>
+      <LazyPanel frame={<PracticeFrame attempt={attempt} onExit={exit} />}>
         <PracticePanel
           practice={bound}
           attempt={attempt}
@@ -93,7 +94,7 @@ export function usePractice(
           }}
           onExit={exit}
         />
-      </Suspense>
+      </LazyPanel>
     ),
   };
 }

@@ -1,4 +1,5 @@
 import { LockKeyhole, X } from "lucide-react";
+import type { ReactNode } from "react";
 import type { FileViewProps } from "../../editor";
 import { languageForPath } from "../../editor";
 import { agentLook, agentSlotStyle } from "../../theme";
@@ -14,10 +15,12 @@ export function ReviewFrame({
   state,
   changeId,
   onClose,
+  children,
 }: {
   state: State;
   changeId: string;
   onClose: () => void;
+  children?: ReactNode;
 }) {
   const change = state.changes[changeId];
   return (
@@ -36,20 +39,21 @@ export function ReviewFrame({
         }
         onClose={onClose}
       />
+      {children}
     </aside>
   );
 }
-export function InboxFrame({ state }: { state: State }) {
+export function InboxFrame({ state, children }: { state: State; children?: ReactNode }) {
   const entries = selectDecisionInbox(state),
     grants = selectActiveGrants(state);
   const { agents, steps, minutes } = selectInboxSummary(state);
   return (
     <section aria-label="Decisions inbox" className="decisions-inbox">
       <nav aria-label="Inbox views" className="inbox-views">
-        <button type="button" aria-pressed={true}>
+        <button type="button" aria-pressed={true} disabled>
           Decisions <span>{entries.length}</span>
         </button>
-        <button type="button" aria-pressed={false}>
+        <button type="button" aria-pressed={false} disabled>
           Standing grants <span>{grants.length}</span>
         </button>
       </nav>
@@ -67,6 +71,7 @@ export function InboxFrame({ state }: { state: State }) {
           </p>
         </div>
       </header>
+      {children}
     </section>
   );
 }
@@ -112,17 +117,32 @@ function ConversationHeaderFrame({ header }: { header: ConversationHeader }) {
   );
 }
 
-export function ConversationFrame({ header }: { header: ConversationHeader }) {
+export function ConversationFrame({
+  header,
+  children,
+}: {
+  header: ConversationHeader;
+  children?: ReactNode;
+}) {
   return (
     <section
       aria-label={`Agent ${header.slot} conversation`}
       className="flex h-full min-h-0 min-w-0 flex-col bg-page text-text"
     >
       <ConversationHeaderFrame header={header} />
+      {children}
     </section>
   );
 }
-export function PracticeFrame({ attempt, onExit }: { attempt: Attempt; onExit: () => void }) {
+export function PracticeFrame({
+  attempt,
+  onExit,
+  children,
+}: {
+  attempt: Attempt;
+  onExit: () => void;
+  children?: ReactNode;
+}) {
   const phone = usePhonePractice(true);
   if (phone)
     return (
@@ -139,6 +159,7 @@ export function PracticeFrame({ attempt, onExit }: { attempt: Attempt; onExit: (
             Replay of a real recorded run · Oct 27, 2026
           </div>
         </header>
+        {children}
       </section>
     );
   return (
@@ -155,6 +176,7 @@ export function PracticeFrame({ attempt, onExit }: { attempt: Attempt; onExit: (
               ? `Decision ${String(attempt.index + 1)} of 2`
               : "Would you approve these changes?"}
         </h1>
+        {children}
       </div>
     </section>
   );

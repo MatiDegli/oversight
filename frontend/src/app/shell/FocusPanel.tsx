@@ -1,9 +1,10 @@
 import { agentSlotStyle } from "../../theme";
 import { Maximize2, Minimize2, X } from "lucide-react";
-import { lazy, Suspense, useLayoutEffect, useRef, type ReactNode } from "react";
+import { lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
 import { selectConversation, loadConversationPanel } from "../../agents";
 import { ReviewFrame, InboxFrame, ConversationFrame, FileFrame } from "./PanelFallbacks";
+import { LazyPanel } from "./LazyPanel";
 
 import { loadReviewPanel, loadDecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
@@ -120,16 +121,17 @@ export function FocusPanel(
       </div>
       <div id="focus-content" role="tabpanel" className="focus-body">
         {view.activeTab === "inbox" ? (
-          <Suspense fallback={<InboxFrame state={state} />}>
+          <LazyPanel key="inbox" frame={<InboxFrame state={state} />}>
             <DecisionInbox state={state} onReview={props.onReview} />
-          </Suspense>
+          </LazyPanel>
         ) : view.activeTab === "practice" && props.practice?.active ? (
           props.practice.content
         ) : agentId ? (
           <ConversationFocus {...props} agentId={agentId} />
         ) : view.review !== null ? (
-          <Suspense
-            fallback={<ReviewFrame state={state} changeId={view.review} onClose={onClosePanel} />}
+          <LazyPanel
+            key={`review:${view.review}`}
+            frame={<ReviewFrame state={state} changeId={view.review} onClose={onClosePanel} />}
           >
             <ReviewPanel
               key={view.review}
@@ -141,7 +143,7 @@ export function FocusPanel(
               replayOf={props.replayOf}
               onClose={onClosePanel}
             />
-          </Suspense>
+          </LazyPanel>
         ) : view.diff ? (
           <LivePanel state={state} view={view} onClose={onClosePanel} />
         ) : view.file && props.files ? (
@@ -181,7 +183,7 @@ function ConversationFocus({
   if (!conversation)
     return <p className="px-3 py-2 text-muted">This agent is not in the current run.</p>;
   return (
-    <Suspense fallback={<ConversationFrame header={conversation.header} />}>
+    <LazyPanel key={agentId} frame={<ConversationFrame header={conversation.header} />}>
       <ConversationPanel
         conversation={conversation}
         onSend={onMessageAgent ? (text) => onMessageAgent(agentId, text) : undefined}
@@ -190,6 +192,6 @@ function ConversationFocus({
         onStop={onStopAgent}
         onOpenDiff={canOpenChange(conversation.header.changeId) ? onOpenChange : undefined}
       />
-    </Suspense>
+    </LazyPanel>
   );
 }
