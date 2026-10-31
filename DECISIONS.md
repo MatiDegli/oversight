@@ -2393,3 +2393,28 @@ price. The fold applies those prices to each call's tokens and never reads the l
 fields. An unreported count gives a range whose lower end enters the known subtotal. Unpriced
 work keeps the total unavailable, while zero usage costs zero even without a listed price.
 Team grouping and periods come later.
+
+## 2026-10-31 — A person's decision preempts rules before authorization starts
+
+Reason: a long rules suite must not keep the person waiting through repeated 409s.
+Reject and Request changes synchronously claim one private intent, invalidate the wait
+and following authority, and cancel only the owned rules task once. The cutoff is entry
+into the acquired mode and Git authorization block, before its first revalidation or await;
+this is earlier than F2's separate final disable barrier. From that cutoff commands answer
+409 with instructions to wait and use Revert if merged; landed rules merges are never undone
+by these commands. Approve, Stop and cross-review retain their existing refusals.
+
+A tracked coordinator shields the accepted intent from caller cancellation and waits without
+locks for subprocess cleanup, verified recovery and the old decision's restoration. Rules
+captures and counters stay intact through recovery. Pending intent guards in decision admission
+and review saves exclude competitors until one synchronous personal `_take` installs new
+evidence. Late rules callbacks cannot authorize or emit a competing cancellation notice;
+integrity and main-suspect notices remain visible. Shutdown drains accepted decisions before
+closing the store. Each accepted intent produces its personal resolution or one nonfatal
+server error naming the decision and why it did not run; unverifiable recovery preserves the
+worktree, latches suspect, and resumes no author. Restart starts Ask me with no pending intent.
+
+A public manager predicate lets Request changes return the same Revert refusal after runtime
+has released the merged author's run. No contract, route, UI or production activation changes.
+Dropped rules receipts log one warning per drop with sequence, type and validation or mismatch
+reason, never payload; they grant no cached evidence, and later valid receipts remain admissible.

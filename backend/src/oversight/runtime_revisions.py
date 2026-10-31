@@ -42,6 +42,8 @@ def request_revision(
             "wrong_state", "main's state is unknown: reject the change and restart the server"
         )
     live._check_spending(agent.slot, agent.profile)
+    if manager.merged_by_rules(change_id):
+        raise ApiError("wrong_state", f"{change_id} was merged by rules; use Revert to undo it")
     run = live._kept.get(agent_id)
     if run is None:
         raise ApiError("wrong_state", f"{change_id} has no run to resume")
