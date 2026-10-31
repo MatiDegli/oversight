@@ -359,7 +359,6 @@ def behavior_inputs(
     from oversight.changes._behavior_sources import Sources
 
     caches = [Sources(files, deadline) for files in (base, head)]
-    generator = False
     try:
         definitions = [_definition(cache, module, name) for cache in caches]
         nodes = [node for _, node in definitions]
@@ -380,7 +379,7 @@ def behavior_inputs(
             if type(value) is int
         ]
     except (ValueError, TypeError, SyntaxError, RecursionError):
-        return BehaviorInputs(reason="async or generator" if generator else "unsupported signature")
+        return BehaviorInputs(reason="unsupported signature")
     from oversight.changes._behavior_consumption import observe_inputs
     from oversight.changes._behavior_generation import generate
 
