@@ -2413,3 +2413,22 @@ will decide whether to propose content-addressed blobs and zstd for closed segme
 The reserved safe creation bundle (nullable `SaveFile.base_hash`, zones and inventory) moves from
 1.9.0 to 1.11.0, superseding its earlier reservations; 1.10.0 is approved for
 probe-inputs parameter-extension evidence.
+
+## Contracts 1.11.0 — approved by the maintainer, 2026-10-31
+
+GET /usage serves UsageView live and in a replay. It maps the existing list-price, activity and
+revision-round folds over one committed event inventory. Ledger figures never appear in this view:
+the costs are list-price equivalents, never a bill or the budget ledger. A null figure is unknown;
+its known_* sibling is a lower bound, and zero remains zero.
+
+Item 10 uses the maintainer's 2026-10-31 team rule, shared with team colors: the plan's lead when
+Plan.started_by names one, else the plan, else the agent itself. A plan the person requests is one
+team; two plans of the same lead are one team. additions.md now states this rule. Hour/day periods
+come later as an additive front with a time-zone parameter.
+
+The Limits docstrings now say per round, matching the runtime's revision budgets. A named alias
+for bounded message text keeps generated names stable without changing accepted document shapes.
+proposal.md no longer claims a contract-scope check: recorded maintainer approval accompanies a
+contract change and its first producer, and CI compares regenerated artifacts byte for byte.
+
+The reserved safe creation bundle moves from 1.11.0 to 1.12.0.

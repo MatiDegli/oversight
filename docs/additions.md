@@ -461,8 +461,9 @@ unavailable, never a smaller total presented as complete. There are three levels
 zero is zero; zero usage costs zero even when unpriced. Unpriced rows sort last, and "—" means unknown only.
 A sum of period figures adds their known subtotals and is labeled a lower bound.
 
-**Grouping:** by team, agent, model and role, split by hour or day. A team is a lead and the agents it started
-(`started_by`); agents the person started form their own group. Periods follow local wall time, so a
+**Grouping:** by team, agent, model and role, split by hour or day. A team is the plan's lead when the plan's
+`started_by` names one, else the plan, else the agent itself: a plan the person requests is one team, and two plans
+of the same lead are one team (the maintainer, 2026-10-31). Periods follow local wall time, so a
 daylight-saving change gives a 23- or 25-hour day. Intervals are clipped at period edges; a cost falls in the
 period of its usage.tick and is never prorated. Group rows add up only when every group's activity is complete
 and their sum matches the global figure; the total always comes from the global figure. A comparison between

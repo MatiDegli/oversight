@@ -7,15 +7,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_start_agent_comment_reserves_zones_for_creation_delivery() -> None:
     source = (ROOT / "backend/src/oversight/api/commands.py").read_text()
-    assert "request.zone is reserved and ignored until zones are delivered in 1.11.0." in source
+    assert "request.zone is reserved and ignored until zones are delivered in 1.12.0." in source
 
 
-def test_proposal_schedules_nullable_save_file_with_creation_in_1_11() -> None:
+def test_proposal_schedules_nullable_save_file_with_creation_in_1_12() -> None:
     proposal = (ROOT / "docs/proposal.md").read_text()
     freeze = proposal.split("### 4.9 ", 1)[1].split("## 5.", 1)[0]
     assert "1.4.0 keeps `SaveFile.base_hash` a required string." in freeze
     assert (
-        "The separately delivered 1.11.0 makes it required and nullable only together with safe "
+        "The separately delivered 1.12.0 makes it required and nullable only together with safe "
         "creation, zones and inventory."
     ) in " ".join(freeze.split())
 
@@ -51,3 +51,12 @@ def test_messages_note_reserves_creation_after_probe_input_evidence() -> None:
         "1.9.0 to 1.11.0, superseding its earlier reservations; 1.10.0 is approved for "
         "probe-inputs parameter-extension evidence."
     ) in " ".join(entry.split())
+
+
+def test_usage_view_takes_1_11_and_creation_moves_to_1_12() -> None:
+    proposal = " ".join((ROOT / "docs/proposal.md").read_text().split())
+    decisions = " ".join((ROOT / "DECISIONS.md").read_text().split())
+    assert (
+        "Later that day the usage view took 1.11.0, moving safe creation to 1.12.0."
+    ) in proposal
+    assert "The reserved safe creation bundle moves from 1.11.0 to 1.12.0." in decisions

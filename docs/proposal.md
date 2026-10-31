@@ -568,6 +568,7 @@ the single error format.
 | `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | 202 | `not_found`, `wrong_state` |
 | `GET /changes/{id}` | none | Reserved: 501; then 200 `ChangeView` | `not_implemented` |
 | `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | Reserved: 501; then 200 `HistoryPage` | `not_implemented` |
+| `GET /usage` | none | 200 `UsageView`; the committed log, live or in a replay | |
 | `POST /queue` | `EnqueueTask` | Reserved: 501; then 201 `QueuedTask` | `not_implemented` |
 | `GET /queue`, `GET /queue/{id}` | none | Reserved: 501; then 200 `QueueSnapshot` / `QueuedTask` | `not_implemented` |
 | `POST /queue/{id}/cancel` | `QueueRevision {revision}` | Reserved: 501; then 202 | `not_implemented` |
@@ -614,8 +615,8 @@ the single error format.
 - A backend test validates every line of every log in `fixtures/events/` with
   `TypeAdapter(ServerEvent)`, because the generated types validate nothing at run time. It also
   fails on any absolute path in a log.
-- `make check` fails when a branch whose name does not start with `contracts/` changes anything
-  under `contracts/` (`tools/check_contract_scope`).
+- A contract change needs the maintainer's recorded approval and lands with its first producer,
+  from any branch; CI regenerates the JSON Schema and TypeScript types and compares them byte for byte.
 
 ### 4.9 What freezes, and how a change is proposed
 
@@ -645,12 +646,13 @@ the single error format.
   guarded by the agent's recorded base rather than current main. Historical events still load
   without provenance; live resolutions explicitly name their principal and head. Requests and
   TypeScript consumers must migrate together. 1.4.0 keeps `SaveFile.base_hash` a required string.
-  The separately delivered 1.11.0 makes it required and nullable only together with safe creation,
+  The separately delivered 1.12.0 makes it required and nullable only together with safe creation,
   zones and inventory. The maintainer moved that bundle from 1.7.0 to 1.8.0 on 2026-10-29, when
   standing grants took 1.7.0, and moved it again on 2026-10-30, when E6 and item 11's plans took
   1.8.0. On 2026-10-31, message text took 1.9.0 and approved probe-inputs parameter-extension
-  evidence took 1.10.0, moving safe creation to 1.11.0. No alternate schema may reuse any of these
-  version strings, including 1.4.0. These approved changes are exceptions to the ordinary
+  evidence took 1.10.0, moving safe creation to 1.11.0. Later that day the usage view took 1.11.0,
+  moving safe creation to 1.12.0. No alternate schema may reuse any of these version strings,
+  including 1.4.0. These approved changes are exceptions to the ordinary
   minor-version rule, not a general relaxation.
 - **To propose a change:**
   1. The front that needs it stops and writes a short request: what, why, the modules it affects,
