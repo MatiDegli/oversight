@@ -54,6 +54,7 @@ from oversight.changes import (
     ChangeManager,
     ChangeNotFound,
     PolicyInputs,
+    RevertTarget,
     ReviewCapture,
     ReviewCardLimits,
     Revision,
@@ -67,10 +68,12 @@ from oversight.events import (
     StoredEvent,
     play,
     read_jsonl,
+    resolution_at,
     run_store_path,
 )
 from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
+from oversight.redaction import Redactor
 from oversight.runtime_accounting import write_tick
 from oversight.runtime_decisions import RuntimeDecisions
 from oversight.runtime_plans import PlanService
@@ -106,6 +109,7 @@ from oversight_contracts.commands import (
     RejectChange,
     RejectPlan,
     RequestChanges,
+    RevertChange,
     SaveFile,
     SetMergeMode,
     StartAgent,
@@ -227,6 +231,7 @@ class LiveRun:
         reviewer: ReviewerCall | None = None,
     ) -> None:
         self._settings = settings
+        self._redactor = Redactor(settings.meta_api_key, settings.baseten_api_key)
         self._closing = False
         self._reviewer = reviewer
         self._reviews: dict[str, asyncio.Task[None]] = {}
@@ -386,10 +391,11 @@ class LiveRun:
                 self._settings.review_card_total_s,
             ),
             run_id=self.run_id,
+            revert_test_timeout_s=LIMITS.test_timeout_s,
             spend_ledger=self.ledger,
             rules_evidence=self._rules_evidence,
             spend_lost=lambda: self._ledger_lost,
-            spend_receipt=started if self.ledger.state is not None else None,
+            spend_receipt=started,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
         self.dispatcher.start()
@@ -981,6 +987,16 @@ class LiveRun:
             grant=request.grant,
         )
 
+    async def revert(self, change_id: str, request: RevertChange) -> None:
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        resolution = await resolution_at(self.store, change_id, request.resolution_seq)
+        if resolution is None:
+            raise ChangeNotFound(change_id)
+        if self._manager.main_suspect:
+            raise ApiError("wrong_state", MAIN_SUSPECT)
+        self._manager.revert(RevertTarget(self.run_id, change_id, resolution), request)
+
     async def revoke_grant(self, grant_id: str) -> None:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
@@ -1017,8 +1033,8 @@ class LiveRun:
         self._manager.stop(agent_id, self._runs.get(agent_id))
         _run_controls.close(self, agent_id)
 
-    def message(self, agent_id: str, request: AgentMessage) -> None:
-        _run_controls.message(self, agent_id, request.text)
+    async def message(self, agent_id: str, request: AgentMessage) -> None:
+        await _run_controls.message(self, agent_id, request.text)
 
     def pause(self, agent_id: str) -> None:
         _run_controls.pause(self, agent_id)

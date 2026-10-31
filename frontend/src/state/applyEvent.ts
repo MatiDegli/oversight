@@ -25,13 +25,21 @@ export function applyEvent(state: State, event: ServerEvent): State {
       : state.decisionEvents,
   };
   switch (event.type) {
+    case "agent.message": // Line B's Conversation tab owns rendering.
+      return next;
     case "model.attempt_failed": // The card front folds this event.
       return next;
     case "grant.created":
     case "grant.revoked":
-      return next;
+      return { ...next, grantEvents: [...state.grantEvents, event] };
     case "run.started":
-      return { ...createInitialState(), run: event.payload, lastSeq: event.seq, clock: event.ts };
+      return {
+        ...createInitialState(),
+        run: event.payload,
+        runStartedAt: event.ts,
+        lastSeq: event.seq,
+        clock: event.ts,
+      };
     case "graph.snapshot":
     case "graph.delta":
       return applyGraphEvent(state, next, event);

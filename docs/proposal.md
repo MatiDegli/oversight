@@ -16,7 +16,7 @@ it does not settle and does not repeat it.
   one gate to the model API, and the web framework kept to the HTTP layer. ESLint's built-in rules
   check the same kind of boundary in the frontend.
 - Contracts v1: the eleven events of AGENTS.md, unchanged in name, with exact payloads; its
-  thirteen commands, three of them answering 501 until level 3, plus the event stream and a new
+  thirteen commands, the three level-3 commands now answering 202, plus the event stream and a new
   `GET /health`; one error format; stable ids for runs, agents, changes, nodes and edges.
 - One protocol for live and replay: the UI applies the run's event log from `seq` 1 with one pure
   reducer, and resumes from the last `seq` it applied.
@@ -366,6 +366,9 @@ class AgentStatus:
     detail: str | None         # why it halted or stopped, in one sentence
 ```
 
+**`agent.message`**: accepted human message, with credential-shaped text masked before storage;
+publication exports withhold its text by default.
+
 **`agent.step`**: one per tool call, when the call ends.
 
 ```python
@@ -554,15 +557,15 @@ the single error format.
 | --- | --- | --- | --- |
 | `POST /agents` | `StartAgent {task, slot?, model?, zone?}` | 201 `AgentCreated {agent_id, change_id, slot}` | `slot_busy`, `not_configured`, `spend_brake` |
 | `POST /agents/{id}/stop` | none | 202 | `not_found`, `wrong_state` |
-| `POST /agents/{id}/message` | `{text}` | 501 until level 3 | |
-| `POST /agents/{id}/pause` | none | 501 until level 3 | |
-| `POST /agents/{id}/resume` | none | 501 until level 3 | |
+| `POST /agents/{id}/message` | `{text}` | 202 | `not_found`, `wrong_state`, `invalid_request` |
+| `POST /agents/{id}/pause` | none | 202 | `not_found`, `wrong_state` |
+| `POST /agents/{id}/resume` | none | 202 | `not_found`, `wrong_state`, `not_configured`, `spend_brake` |
 | `POST /changes/{id}/approve` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
 | `POST /changes/{id}/request-changes` | `{revision, head_commit, comment}`, not empty | 202 | `not_found`, `wrong_state` |
 | `POST /changes/{id}/reject` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
 | `GET /agents/{id}` | none | Reserved: 501; then 200 `AgentStatus` for coding agents | `not_implemented` |
 | `POST /changes/{id}/review` | `ReviewChange {revision, head_commit, main_commit}` | Reserved: 501; then 202 | `not_implemented` |
-| `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | Reserved: 501; then 202 | `not_implemented` |
+| `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | 202 | `not_found`, `wrong_state` |
 | `GET /changes/{id}` | none | Reserved: 501; then 200 `ChangeView` | `not_implemented` |
 | `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | Reserved: 501; then 200 `HistoryPage` | `not_implemented` |
 | `POST /queue` | `EnqueueTask` | Reserved: 501; then 201 `QueuedTask` | `not_implemented` |
@@ -642,11 +645,13 @@ the single error format.
   guarded by the agent's recorded base rather than current main. Historical events still load
   without provenance; live resolutions explicitly name their principal and head. Requests and
   TypeScript consumers must migrate together. 1.4.0 keeps `SaveFile.base_hash` a required string.
-  The separately delivered 1.9.0 makes it required and nullable only together with safe creation,
+  The separately delivered 1.11.0 makes it required and nullable only together with safe creation,
   zones and inventory. The maintainer moved that bundle from 1.7.0 to 1.8.0 on 2026-10-29, when
   standing grants took 1.7.0, and moved it again on 2026-10-30, when E6 and item 11's plans took
-  1.8.0. No alternate schema may reuse any of these version strings, including 1.4.0. These approved
-  changes are exceptions to the ordinary minor-version rule, not a general relaxation.
+  1.8.0. On 2026-10-31, message text took 1.9.0 and approved probe-inputs parameter-extension
+  evidence took 1.10.0, moving safe creation to 1.11.0. No alternate schema may reuse any of these
+  version strings, including 1.4.0. These approved changes are exceptions to the ordinary
+  minor-version rule, not a general relaxation.
 - **To propose a change:**
   1. The front that needs it stops and writes a short request: what, why, the modules it affects,
      and whether it is compatible.

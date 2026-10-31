@@ -42,6 +42,8 @@ from oversight.changes._evidence import WriteEvidence
 from oversight.changes._mode import ModeController, start_capability
 from oversight.changes._policy import PolicyInputs
 from oversight.changes._resolution_validation import validate_resolution_intent
+from oversight.changes._revert import RevertTarget
+from oversight.changes._revert_port import RevertPort
 from oversight.changes._review_cards import DifferenceDecisions, ReviewCardLimits, ReviewCards
 from oversight.changes._review_port import ReviewCapture, ReviewPort
 from oversight.changes._spend import SpendNotReady
@@ -70,7 +72,7 @@ from oversight.workspace import (
     Tree,
     Workspace,
 )
-from oversight_contracts.commands import FileContent, FileSaved, SetMergeMode
+from oversight_contracts.commands import FileContent, FileSaved, RevertChange, SetMergeMode
 from oversight_contracts.common import AgentId, ChangeId
 from oversight_contracts.grants import GrantCreated, GrantRequest
 from oversight_contracts.graph import GraphSnapshot
@@ -96,6 +98,7 @@ class ChangeManager:
         difference_decisions: DifferenceDecisions | None = None,
         review_card_limits: ReviewCardLimits | None = None,
         run_id: str = "",
+        revert_test_timeout_s: float | None = None,
         monotonic: Callable[[], float] = time.monotonic,
         sleep_until: Callable[[float], Awaitable[None]] | None = None,
         settings: Settings | None = None,
@@ -137,6 +140,9 @@ class ChangeManager:
             measured_cone,
         )
 
+        self._revert: RevertPort | None = None
+        if run_id and revert_test_timeout_s is not None:
+            self._revert = RevertPort(self._ctx, run_id, revert_test_timeout_s)
         self._ctx.assessment = RulesScheduler(
             self._ctx,
             monotonic,
@@ -606,6 +612,11 @@ class ChangeManager:
         False otherwise, None when git fails or times out."""
         return await files.check_main(self._ctx)
 
+    def revert(self, target: RevertTarget, command: RevertChange) -> None:
+        if self._revert is None:
+            raise WrongState("Revert is not available in this session")
+        self._revert.revert(target, command)
+
     async def aclose(self) -> None:
         """Drain before the store closes, which the caller does only once this returns: wait for
         the decisions in flight, run the close-out retry once more for each change with unsent
@@ -620,8 +631,12 @@ class ChangeManager:
                 self._ctx.grants.run_id = ""
         else:
             self._ctx.grants.run_id = ""
-        await self.close_review_cards()
-        return await delivery.aclose(self._ctx)
+        try:
+            if self._revert is not None:
+                await self._revert.aclose()
+        finally:
+            await self.close_review_cards()
+            await delivery.aclose(self._ctx)
 
     async def close_review_cards(self) -> None:
         if self._ctx.cards is not None:

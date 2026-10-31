@@ -183,5 +183,6 @@ def test_a_replay_takes_no_commands(tmp_path: Path) -> None:
         "/changes/change-1/approve",
         "/changes/change-1/reject",
         "/changes/change-1/request-changes",
+        "/changes/change-1/revert",
     ):
         assert error_code(client.post(url, content=b"not json")) == (501, "not_implemented")

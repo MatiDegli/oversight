@@ -226,3 +226,29 @@ it.each(["save", "decision"])(
     expect(renderToStaticMarkup(<CrossReviewNote change={current(next)} />)).toBe("");
   },
 );
+
+it("sets the reviewer's note apart from the agent's claim using only recorded findings", () => {
+  const change = current(
+    reviewed(ready, {
+      reviewer_model: "muse-spark-open",
+      verdict: "clean",
+      complete: true,
+      findings: [
+        {
+          severity: "NIT",
+          path: "pricing.py",
+          line: 23,
+          node_id: null,
+          text: "<sample> no test covers an extra percent above 30 with the bulk tier.",
+        },
+      ],
+    }),
+  );
+  const html = renderToStaticMarkup(
+    <CrossReviewNote change={change} agentNote reviewerLabel="Muse Spark Open" />,
+  );
+  expect(html).toContain("Muse Spark Open reviewed this change");
+  expect(html).toContain("Nothing blocking · 1 note");
+  expect(html).toContain("pricing.py:23 · &lt;sample&gt;");
+  expect(html).not.toContain("review_invalid");
+});

@@ -47,7 +47,20 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
         if (id) lastReads[focus.agent_id] = id;
         else Reflect.deleteProperty(lastReads, focus.agent_id);
       }
-      return { ...next, focus: { ...state.focus, [focus.agent_id]: focus }, lastReads };
+      const changeId = state.agents[focus.agent_id]?.change_id;
+      const changeReads =
+        focus.mode === "read" && changeId && focus.node_ids.length > 0
+          ? {
+              ...state.changeReads,
+              [changeId]: [...new Set([...(state.changeReads[changeId] ?? []), ...focus.node_ids])],
+            }
+          : state.changeReads;
+      return {
+        ...next,
+        focus: { ...state.focus, [focus.agent_id]: focus },
+        lastReads,
+        changeReads,
+      };
     }
     case "usage.tick": {
       const tick = event.payload;

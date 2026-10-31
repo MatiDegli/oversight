@@ -1,6 +1,6 @@
 // Live edits have no server proposal yet. Derive their cone from the current change overlay,
 // shared by graph dimming and the field; never use an earlier proposal as a live preview.
-import type { GraphNode, ImpactCone } from "@contracts";
+import type { GraphEdge, GraphNode, ImpactCone } from "@contracts";
 import type { ChangeState, State } from "../state";
 
 const constructors = new Set(["__init__", "__new__", "__post_init__"]);
@@ -54,12 +54,14 @@ function impactGraph(state: State, change: ChangeState) {
   return { nodes, edges };
 }
 
-/** Distinct one-hop possible callers outside the exact cone; null means unknown. */
-export function possibleCallers(
+const exactConfidence: Record<GraphEdge["confidence"], boolean> = { exact: true, possible: false };
+
+/** Distinct non-test callers outside the exact cone, with no exact call into it. */
+export function possibleCallerNodes(
   state: State,
   change: ChangeState,
   cone: ImpactCone,
-): number | null {
+): GraphNode[] | null {
   const graph = impactGraph(state, change);
   if (!graph) return null;
   const { nodes, edges } = graph;
@@ -77,9 +79,9 @@ export function possibleCallers(
       targets.has(edge.src)
     )
       continue;
-    (edge.confidence === "exact" ? exact : possible).add(edge.src);
+    (exactConfidence[edge.confidence] ? exact : possible).add(edge.src);
   }
-  return [...possible].filter((id) => !exact.has(id)).length;
+  return [...nodes.values()].filter((node) => possible.has(node.id) && !exact.has(node.id));
 }
 
 /** The same run limits as the backend; this pure preview makes no request. */
@@ -141,3 +143,7 @@ export function liveImpact(state: State, change: ChangeState): ImpactCone | null
     tests_reaching: tests.size,
   };
 }
+
+/** Count and listing deliberately share the same caller definition. */
+export const possibleCallers = (state: State, change: ChangeState, cone: ImpactCone) =>
+  possibleCallerNodes(state, change, cone)?.length ?? null;

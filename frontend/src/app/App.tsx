@@ -5,6 +5,7 @@ import { useStore } from "zustand";
 import type { FileSaved } from "@contracts";
 
 import type { FileDraft } from "../editor";
+import { DecisionContext } from "../review";
 import { sendDecision } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { stateStore } from "../state";
@@ -22,7 +23,7 @@ import {
   tabbedView,
   navigateView,
   viewReducer,
-  nextReview,
+  surfaceTab,
   openChange,
   openReview,
   panelOpen,
@@ -120,13 +121,7 @@ export function App() {
     );
   }, []);
   const onOpenQueue = useCallback(() => {
-    const state = stateStore.getState().state;
-    setView((current) => {
-      const changeId = nextReview(state, current.review);
-      return changeId === null
-        ? current
-        : navigateView(current, openReview(state, current, changeId) ?? current, state);
-    });
+    setView((current) => viewReducer(current, { type: "open", tab: surfaceTab(current, "inbox") }));
   }, []);
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {
@@ -175,36 +170,47 @@ export function App() {
     });
   }, []);
   return (
-    <FilesProvider state={state} loadTree={commands?.getTree} openFile={onOpenFile}>
-      <Frame
-        state={state}
-        practice={practice}
-        files={files}
-        view={view}
-        onNodeTap={onNodeTap}
-        canOpenChange={(changeId) => openChange(state, view, changeId) !== null}
-        onOpenChange={onOpenChange}
-        onClosePanel={onClosePanel}
-        onTabAction={(action) => {
-          setView((current) => viewReducer(current, action));
-        }}
-        onStartAgent={commands?.startAgent}
-        onStopAgent={commands?.stopAgent}
-        canReview={(changeId) => openReview(state, view, changeId) !== null}
-        onReview={onReview}
-        onOpenQueue={onOpenQueue}
-        attempts={attempts}
-        onDecide={commands ? onDecide : undefined}
-        replayOf={replayBuild ? replaySource.kind : undefined}
-        replayLabel={replayBuild ? replaySource.label : undefined}
-        connection={replayBuild ? undefined : connection}
-        onRetry={() => {
-          setConnection("connecting");
-          setError(null);
-          setRetry((value) => value + 1);
-        }}
-        notice={error !== null ? <p role="alert">{error}</p> : undefined}
-      />
-    </FilesProvider>
+    <DecisionContext
+      value={{
+        attempts,
+        onDecide: commands ? onDecide : undefined,
+        revokeGrant: commands?.revokeGrant,
+        replayOf: replayBuild ? replaySource.kind : undefined,
+      }}
+    >
+      <FilesProvider state={state} loadTree={commands?.getTree} openFile={onOpenFile}>
+        <Frame
+          state={state}
+          practice={practice}
+          files={files}
+          view={view}
+          onNodeTap={onNodeTap}
+          canOpenChange={(changeId) => openChange(state, view, changeId) !== null}
+          onOpenChange={onOpenChange}
+          onClosePanel={onClosePanel}
+          onTabAction={(action) => {
+            setView((current) => viewReducer(current, action));
+          }}
+          onStartAgent={commands?.startAgent}
+          onStopAgent={commands?.stopAgent}
+          onPauseAgent={commands?.pauseAgent}
+          onResumeAgent={commands?.resumeAgent}
+          canReview={(changeId) => openReview(state, view, changeId) !== null}
+          onReview={onReview}
+          onOpenQueue={onOpenQueue}
+          attempts={attempts}
+          onDecide={commands ? onDecide : undefined}
+          replayOf={replayBuild ? replaySource.kind : undefined}
+          replayLabel={replayBuild ? replaySource.label : undefined}
+          connection={replayBuild ? undefined : connection}
+          onRetry={() => {
+            setConnection("connecting");
+            setError(null);
+            setRetry((value) => value + 1);
+          }}
+          notice={error !== null ? <p role="alert">{error}</p> : undefined}
+        />
+      </FilesProvider>
+    </DecisionContext>
   );
 }

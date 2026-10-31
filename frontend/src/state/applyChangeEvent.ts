@@ -77,8 +77,18 @@ export function applyResolution(
   const resolution = event.payload;
   const change =
     state.changes[resolution.change_id] ?? createChange(resolution.change_id, resolution.agent_id);
+  const status =
+    resolution.merge === "conflict"
+      ? "conflict"
+      : resolution.decision === "changes_requested"
+        ? "revising"
+        : resolution.decision;
+  const changeReads = { ...state.changeReads };
+  if (status === "approved" || status === "rejected")
+    Reflect.deleteProperty(changeReads, resolution.change_id);
   return {
     ...next,
+    changeReads,
     changes: {
       ...state.changes,
       [resolution.change_id]: {
@@ -91,12 +101,7 @@ export function applyResolution(
         ...((resolution.decided_by ?? "person") === "person"
           ? { personActed: true, crossReview: null, needsYou: null }
           : {}),
-        status:
-          resolution.merge === "conflict"
-            ? "conflict"
-            : resolution.decision === "changes_requested"
-              ? "revising"
-              : resolution.decision,
+        status,
       },
     },
   };

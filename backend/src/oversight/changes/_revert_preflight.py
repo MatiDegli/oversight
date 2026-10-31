@@ -112,7 +112,7 @@ def _consistent_rule(rule: RuleAssessment) -> bool:
             )
         case "existing_tests_untouched":
             return data.get("modified_existing_paths") == data.get("deleted_existing_paths") == []
-        case "cross_review" | "test_integrity" | "added_tests_fail_before":
+        case "cross_review" | "test_integrity" | "added_tests_fail_before" | "protected_paths":
             return number("violations") == 0 and data.get("complete") is True
         case _:
             return False  # an unsupported rule can never substantiate a pass

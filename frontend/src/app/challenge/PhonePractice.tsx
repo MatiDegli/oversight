@@ -59,7 +59,7 @@ function RecordedDecisions({ practice, attempt, onFinish }: PanelProps & { onFin
               key={entry.changeId}
               aria-label={`Findings for ${entry.changeId}`}
             >
-              <AgentLine practice={practice} entry={entry} />
+              <AgentLine state={practice.cut} changeId={entry.changeId} />
               <h2>{entry.title}</h2>
               <div className="pp-comparison">
                 <div>

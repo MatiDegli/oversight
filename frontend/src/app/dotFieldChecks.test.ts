@@ -27,6 +27,7 @@ function checks(lifeShots: string | undefined, referenceExists: boolean) {
     process: { env: { LIFE_SHOTS: lifeShots } },
     require: (name: string) => {
       if (name === "vitest") return { it: browserIt, beforeAll() {}, afterAll() {} };
+      if (name === "./dotField.browser.support") return {};
       if (name === "node:fs") return { existsSync: () => referenceExists };
       if (name === "@playwright/test" || name === "vite") return {};
       if (name === "node:url") return require(name) as unknown;

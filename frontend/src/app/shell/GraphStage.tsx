@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { GraphView, possibleCallers } from "../../graph";
 import type { Framing, GraphApi } from "../../graph";
-import { ImpactConeCard } from "../../review";
+import { ImpactConeCard, selectConeWords } from "../../review";
 import type { State } from "../../state";
 import { DetailControls, GraphHeading, Legend, ZoomControls } from "../GraphOverlays";
 import { fieldInput } from "../fieldScope";
@@ -29,6 +29,7 @@ export function GraphStage({
   const field = useMemo(() => fieldInput(state, view), [state, view]);
   // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
   const shown = view.review ?? view.diff?.changeId ?? null;
+  const words = useMemo(() => (shown ? selectConeWords(state, shown) : null), [state, shown]);
   const shownChange = shown === null ? undefined : state.changes[shown];
   const tab = view.tabs?.find((candidate) => candidate.id === view.activeTab);
   const frameIds = useMemo(
@@ -81,17 +82,18 @@ export function GraphStage({
       />
       {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
               review) top left, the legend bottom left, the zoom controls bottom right. */}
-      <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
+      <div className="pointer-events-none absolute inset-(--spacing-overlay) right-[calc(var(--spacing-overlay)+var(--graph-overlay-occlusion,0px))] flex flex-col gap-(--spacing-md)">
         {/* Stretch the height constraint through to the card; keep the bottom row reserved. */}
         <div className="flex min-h-0 items-stretch justify-between gap-(--spacing-md)">
           <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">
             {cone ? (
               <div
                 ref={coneCardRef}
-                className="pointer-events-auto flex min-h-0 w-(--cone-card-width) flex-col"
+                className={`pointer-events-auto flex min-h-0 flex-col ${cone.entries.length === 0 ? "w-fit max-w-(--cone-card-width)" : "w-(--cone-card-width)"}`}
               >
                 <ImpactConeCard
                   cone={cone}
+                  words={words}
                   possible={shownChange ? (possibleCallers(state, shownChange, cone) ?? 0) : 0}
                   routingOmissions={routingOmissions}
                   outOfView={framing?.key === frameKey ? framing.outOfView : undefined}

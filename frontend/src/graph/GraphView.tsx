@@ -311,6 +311,14 @@ export function GraphView({
         targetFrame.current = framing;
         reportSoon();
       };
+      const coveredWidth = () => {
+        const overlays = latest.current.startAreaRef?.current?.parentElement;
+        return overlays
+          ? Number.parseFloat(
+              getComputedStyle(overlays).getPropertyValue("--graph-overlay-occlusion"),
+            ) || 0
+          : 0;
+      };
       const snapshot = elementSnapshot();
       const sync = () => {
         // A second addition can arrive before the first ease ends. Include both targets when
@@ -354,7 +362,7 @@ export function GraphView({
             .map((node) => node.id());
           if (added.length > 0) {
             for (const id of added) arriving.add(id);
-            includeNewNodes(cy, [...arriving], prefersReducedMotion());
+            includeNewNodes(cy, [...arriving], prefersReducedMotion(), coveredWidth());
           }
         }
       };

@@ -1,4 +1,4 @@
-import type { SuiteResult } from "@contracts";
+import type { ChangeResolved, SuiteResult } from "@contracts";
 import type { State } from "../../../state";
 
 export const LOG_LIMIT = 300;
@@ -98,11 +98,12 @@ export function selectActivity(state: State) {
     if (change.resolution) {
       total++;
       const resolution = change.resolution;
-      const decision = {
+      const decisions: Record<ChangeResolved["decision"], string> = {
         approved: "Approved",
         changes_requested: "Changes requested",
         rejected: "Rejected",
-      }[resolution.decision];
+      };
+      const decision = decisions[resolution.decision];
       entries.push({
         id: `resolution:${change.change_id}`,
         agentId: change.agent_id,

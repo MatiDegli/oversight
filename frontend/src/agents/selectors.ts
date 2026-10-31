@@ -1,4 +1,4 @@
-import { selectAgentCard as selectBaseCard } from "../state";
+import { selectAgentCard as selectBaseCard, selectOverlap } from "../state";
 import type { State } from "../state";
 
 /** The latest completed tool is authoritative; focus supplies a location before the first step.
@@ -18,6 +18,7 @@ export function selectAgentCard(state: State, agentId: string) {
       : "Waiting for the first tool call.");
   return {
     ...data,
+    overlap: selectOverlap(state, agentId),
     activity,
     // run.started owns this limit; agent.status may carry a different revision allowance.
     maxSteps: state.run?.limits.max_steps ?? data.agent.max_steps,

@@ -189,8 +189,8 @@ async def test_revoke_during_preflight_or_candidate_queries(h, granted, monkeypa
 async def test_candidate_remeasurement_stops_an_uncovered_wait(h, granted, monkeypatch, gap):
     measure = _candidate.measure
 
-    async def changed(*args):
-        measured = await measure(*args)
+    async def changed(*args, **kwargs):
+        measured = await measure(*args, **kwargs)
         if gap == "scope":
             return replace(measured, grants=replace(measured.grants, files=("other.py",)))
         rules = tuple(

@@ -143,6 +143,7 @@ PAYLOADS: dict[str, dict[str, Any]] = {
         "duration_ms": 950,
         "tests": SUITE,
     },
+    "agent.message": {"agent_id": "agent-1", "text": "Please check the callers."},
     "agent.focus": {
         "agent_id": "agent-1",
         "mode": "read",
@@ -459,3 +460,17 @@ def test_setup_details_reject_unknown_names_problems_slots_and_values(bad: dict[
         MissingSetting.model_validate(
             {"name": "META_API_KEY", "problem": "missing", "slots": ["A"], **bad}
         )
+
+
+@pytest.mark.parametrize("text", [None, "Please check the callers.", "x" * 4096])
+def test_message_text_round_trips(text: str | None) -> None:
+    original = event("agent.message", text=text)
+    parsed = EVENTS.validate_python(original)
+    assert EVENTS.validate_json(parsed.model_dump_json()) == parsed
+    assert parsed.payload.model_dump()["text"] == text
+
+
+@pytest.mark.parametrize("text", ["", "x" * 4097])
+def test_message_text_limits(text: str) -> None:
+    with pytest.raises(ValidationError):
+        EVENTS.validate_python(event("agent.message", text=text))

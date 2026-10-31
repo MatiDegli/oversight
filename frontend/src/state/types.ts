@@ -51,6 +51,11 @@ export interface ChangeState {
 
 export interface State {
   run: RunStarted | null;
+  runStartedAt: string | null;
+  grantEvents: Extract<
+    import("@contracts").ServerEvent,
+    { type: "grant.created" | "grant.revoked" }
+  >[];
   lastSeq: number;
   gap: boolean;
   graph: GraphSnapshot | null;
@@ -67,6 +72,8 @@ export interface State {
   focus: Record<string, AgentFocus>;
   /** One most recently read node per agent, independent of subsequent edit focus. */
   lastReads: Record<string, string>;
+  /** Observed reads, in first-read order, for the life of each change. */
+  changeReads: Record<string, string[]>;
   changes: Record<string, ChangeState>;
   usage: UsageTick | null;
   spendUnknown: boolean;
@@ -88,6 +95,8 @@ export interface State {
 export function createInitialState(): State {
   return {
     run: null,
+    runStartedAt: null,
+    grantEvents: [],
     lastSeq: 0,
     gap: false,
     graph: null,
@@ -98,6 +107,7 @@ export function createInitialState(): State {
     clock: null,
     focus: {},
     lastReads: {},
+    changeReads: {},
     changes: {},
     usage: null,
     spendUnknown: false,

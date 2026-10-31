@@ -394,6 +394,7 @@ class AgentRun:
                 )
                 await self._report(call.name, outcome, duration_ms)
                 if outcome.finish_summary is not None:
+                    await self.control.wait_for_admission()
                     if not self.control.pending_messages:
                         await self.control.gate(deadline, self._status, active)
                     if self.control.claim_finish():

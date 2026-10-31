@@ -203,6 +203,18 @@ class AgentStep(ContractModel):
         return self
 
 
+class AgentMessageSent(ContractModel):
+    """A message the person sent to a running agent, emitted when the server accepts it (the 202).
+
+    The agent reads queued messages before its next model call; a drive that ends first drops them.
+    """
+
+    agent_id: AgentId
+    text: NonEmptyText | None = Field(default=None, max_length=4096)
+    """As stored: runs shaped like a credential are masked as `[redacted]` before the event is written.
+    Null only in an export for publication that withheld it."""  # noqa: E501
+
+
 class FocusRange(ContractModel):
     path: WorkspacePath
     start_line: int | None
@@ -595,6 +607,11 @@ class AgentStepEvent(EventBase):
     payload: AgentStep
 
 
+class AgentMessageEvent(EventBase):
+    type: Literal["agent.message"]
+    payload: AgentMessageSent
+
+
 class AgentFocusEvent(EventBase):
     type: Literal["agent.focus"]
     payload: AgentFocus
@@ -713,6 +730,7 @@ type ServerEvent = Annotated[
     | GraphDeltaEvent
     | AgentStatusEvent
     | AgentStepEvent
+    | AgentMessageEvent
     | AgentFocusEvent
     | ChangeUpdatedEvent
     | ChangeProposedEvent
