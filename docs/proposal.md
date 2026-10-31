@@ -554,9 +554,9 @@ the single error format.
 | --- | --- | --- | --- |
 | `POST /agents` | `StartAgent {task, slot?, model?, zone?}` | 201 `AgentCreated {agent_id, change_id, slot}` | `slot_busy`, `not_configured`, `spend_brake` |
 | `POST /agents/{id}/stop` | none | 202 | `not_found`, `wrong_state` |
-| `POST /agents/{id}/message` | `{text}` | 501 until level 3 | |
-| `POST /agents/{id}/pause` | none | 501 until level 3 | |
-| `POST /agents/{id}/resume` | none | 501 until level 3 | |
+| `POST /agents/{id}/message` | `{text}` | 202 | `not_found`, `wrong_state`, `invalid_request` |
+| `POST /agents/{id}/pause` | none | 202 | `not_found`, `wrong_state` |
+| `POST /agents/{id}/resume` | none | 202 | `not_found`, `wrong_state`, `not_configured`, `spend_brake` |
 | `POST /changes/{id}/approve` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
 | `POST /changes/{id}/request-changes` | `{revision, head_commit, comment}`, not empty | 202 | `not_found`, `wrong_state` |
 | `POST /changes/{id}/reject` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
