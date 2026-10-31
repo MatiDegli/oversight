@@ -108,7 +108,7 @@ def call(
         try:
             value = function(*arguments[0], **arguments[1])
             if consume_iterator:
-                value = iterator_items(value)
+                value, consume_iterator = iterator_items(value)
         except (CallTimeout, IteratorObservationError):
             raise
         except BaseException as error:

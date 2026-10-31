@@ -70,8 +70,10 @@ async def test_mid_consumption_exception_is_the_observed_result(tmp_path):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("expression", ["[1, 2]", "(1, 2)", "1", "None"])
-async def test_worker_refuses_non_iterator_even_when_parent_accepts_call_site(tmp_path, expression):
+@pytest.mark.parametrize("expression", ["[1, 2]", "(1, 2)", "'text'", "1", "None"])
+async def test_non_iterator_keeps_ordinary_observation_with_consumed_call_site(
+    tmp_path, expression
+):
     from oversight.changes import behavior_inputs
 
     source = f"def f(): return {expression}\n"
@@ -79,10 +81,11 @@ async def test_worker_refuses_non_iterator_even_when_parent_accepts_call_site(tm
     prepared = behavior_inputs("sample", "f", files, files)
     assert prepared.consume_iterator
     [sample] = prepared.inputs
-    result = await invoke(tmp_path, source, [consumed(sample.before)])
-    assert result["results"] == [
-        {"kind": "unrepresentable", "reason": "returned value is not an iterator"}
-    ]
+    result = await invoke(tmp_path, source, [sample.before, consumed(sample.before)])
+    ordinary, wrapped = result["results"]
+    assert ordinary == wrapped
+    assert wrapped["kind"] == "value" and wrapped["fingerprint"]
+    assert "observation" not in wrapped
 
 
 @pytest.mark.anyio

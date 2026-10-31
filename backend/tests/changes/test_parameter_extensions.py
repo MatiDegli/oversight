@@ -55,6 +55,7 @@ async def measure(tmp_path, before, after, tests, *, problem=None, method=None):
         cast(Any, SimpleNamespace(run_behavior=run_behavior)), cast(Any, ["base", "head"]), deadline
     )
     assert requests[0] is requests[1]
+    assert len(requests) == 2
     assert requests[0].observe_binding
     measured = BehaviorDiff(1, (), probe.results)
     evidence = capture_behavior(measured)
@@ -62,6 +63,15 @@ async def measure(tmp_path, before, after, tests, *, problem=None, method=None):
     assert public and project_behavior(evidence, revision=1) == []
     assert evidence and all(row.observation is None for row in evidence.extensions[0].rows)
     return public[0], measured, evidence
+
+
+@pytest.mark.anyio
+async def test_evidence_only_rows_without_repeats_are_unstable(tmp_path):
+    result, measured, _ = await measure(
+        tmp_path, "def f(): return 1\n", "def f(extra=0): return extra\n", "f(extra=3)\n"
+    )
+    assert measured.extensions[0].rows[0].unstable
+    assert result.rows[0].unstable
 
 
 @pytest.mark.anyio

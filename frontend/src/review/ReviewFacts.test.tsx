@@ -27,6 +27,7 @@ const facts: ChangeFacts = {
   summary: null,
   behavior_diff: null,
   measured_cone: null,
+  parameter_extensions: null,
   review_cards: null,
   shape: null,
   shape_complete: null,

@@ -174,18 +174,19 @@ def observation_literal(literal: str) -> tuple[str, bool]:
     return literal, False
 
 
-def iterator_items(value: Any) -> list[Any]:
+def iterator_items(value: Any) -> tuple[Any, bool]:
+    """Consume actual iterators; preserve ordinary return values and their identity."""
     try:
         iterator = iter(value)
     except TypeError:
-        raise IteratorObservationError("returned value is not an iterator") from None
+        return value, False
     if iterator is not value:
-        raise IteratorObservationError("returned value is not an iterator")
+        return value, False
     items: list[Any] = []
     for _ in range(1_000):
         try:
             items.append(next(iterator))
         except StopIteration:
-            return items
+            return items, True
     # Do not pull an extra item: reaching the cap cannot certify exhaustion.
     raise IteratorObservationError("iterator item cap")

@@ -159,6 +159,48 @@ def test_consumed_result_identity_cannot_match_a_returned_list():
     assert direct_result(result) != direct_result({**result, "observation": "iterator_items"})
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("before_value", "after_value"),
+    [
+        ("[1]", "[2]"),
+        ("(1,)", "(2,)"),
+        ("'old'", "'new'"),
+        ("1", "2"),
+        ("None", "1"),
+        ("[1]", "iter((2,))"),
+        ("iter((1,))", "[2]"),
+    ],
+)
+async def test_consumed_call_site_preserves_ordinary_comparisons(
+    tmp_path, before_value, after_value
+):
+    sources = {
+        "base": f"def f(): return {before_value}\n",
+        "head": f"def f(): return {after_value}\n",
+    }
+    tests = "from sample import f\nlist(f())\n"
+    files = [{"sample.py": source, "test_sample.py": tests} for source in sources.values()]
+    generated = behavior_inputs("sample", "f", *files)
+    assert generated.consume_iterator and len(generated.inputs) == 1
+
+    async def run_behavior(tree, targets, **_):
+        [target] = targets
+        root = tmp_path / tree
+        root.mkdir(exist_ok=True)
+        report = await invoke(root, sources[tree], list(target.calls))
+        return {"sample:f": BehaviorObservation(tuple(report["results"]), report["problem"])}
+
+    measured = await compare(generated, AsyncMock(side_effect=run_behavior))
+    assert measured.compared == measured.differing == 1
+    assert measured.reason is None
+    public = project_behavior(capture_behavior(BehaviorDiff(1, (measured,))), revision=1)
+    assert public is not None
+    [row] = public[0].rows
+    for expression, rendered in ((before_value, row.before), (after_value, row.after)):
+        assert rendered.startswith("items of iterator: ") == expression.startswith("iter(")
+
+
 def test_prefix_is_retained_inside_public_render_cap():
     result = {"kind": "value", "value": ["str", "x" * 10000], "observation": "iterator_items"}
     rendered = _render(result)

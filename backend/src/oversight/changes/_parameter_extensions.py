@@ -56,7 +56,8 @@ def _record(
         runs += 1
         rejected += int(old.get("binding_rejected") is True)
         if len(rows) < 8:
-            rows.append(BehaviorRow(sample.call, old, new, unstable=False))
+            # Evidence-only calls are not repeated, so stability is unverified.
+            rows.append(BehaviorRow(sample.call, old, new, unstable=True))
     return replace(
         result, run_count=runs, rejected_before=rejected, rows=tuple(rows), reason=reason
     )
