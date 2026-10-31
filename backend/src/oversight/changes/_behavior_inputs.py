@@ -124,8 +124,10 @@ def _default(node: ast.expr, constants: dict[str, ast.expr]) -> Any:
         return _OPAQUE_DEFAULT
 
 
-def _signature(source: Source, node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signature:
-    if node.args.vararg or node.args.kwarg:
+def _signature(
+    source: Source, node: ast.FunctionDef | ast.AsyncFunctionDef, *, allow_kwargs: bool = False
+) -> inspect.Signature:
+    if node.args.vararg or (node.args.kwarg and not allow_kwargs):
         raise ValueError("variadic signature")
     positional = [*node.args.posonlyargs, *node.args.args]
     constants = _constant_defaults(source)
@@ -151,6 +153,8 @@ def _signature(source: Source, node: ast.FunctionDef | ast.AsyncFunctionDef) -> 
                 annotation=_annotation(arg),
             )
         )
+    if node.args.kwarg:
+        params.append(inspect.Parameter(node.args.kwarg.arg, inspect.Parameter.VAR_KEYWORD))
     return inspect.Signature(params)
 
 

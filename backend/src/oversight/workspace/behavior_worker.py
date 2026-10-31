@@ -69,8 +69,30 @@ def limited(action: Callable[[], Any], timeout_s: float) -> Any:
         signal.setitimer(signal.ITIMER_REAL, 0)
 
 
+class BindingRejected(Exception):
+    def __init__(self, error: TypeError) -> None:
+        self.error = error
+
+
+def _bind(
+    function: Callable[..., Any], args: Any, kwargs: Any, observe_binding: bool
+) -> inspect.BoundArguments:
+    signature = inspect.signature(function)
+    try:
+        return signature.bind(*args, **kwargs)
+    except TypeError as error:
+        if observe_binding:
+            raise BindingRejected(error) from error
+        raise
+
+
 def call(
-    function: Callable[..., Any], literal: str, timeout_s: float, root: Path | None = None
+    function: Callable[..., Any],
+    literal: str,
+    timeout_s: float,
+    root: Path | None = None,
+    *,
+    observe_binding: bool = False,
 ) -> dict[str, Any]:
     consume_iterator = False
 
@@ -78,9 +100,11 @@ def call(
         nonlocal consume_iterator
         invocation, consume_iterator = observation_literal(literal)
         args, kwargs, memo = _arguments(invocation, root or Path.cwd())
-        bound = inspect.signature(function).bind(*args, **kwargs)
-        bound.apply_defaults()
-        arguments = copy.deepcopy((bound.args, bound.kwargs), memo)
+        bound = _bind(function, args, kwargs, observe_binding)
+        if not observe_binding:
+            bound.apply_defaults()
+            args, kwargs = bound.args, bound.kwargs
+        arguments = copy.deepcopy((args, kwargs), memo)
         try:
             value = function(*arguments[0], **arguments[1])
             if consume_iterator:
@@ -100,6 +124,8 @@ def call(
 
     try:
         result = limited(execute, timeout_s)
+    except BindingRejected as error:
+        return {**_exception(error.error), "binding_rejected": True}
     except CallTimeout:
         return (
             {"kind": "timed_out", "reason": "iterator observation timeout"}
@@ -292,9 +318,12 @@ def _method_action(
         # Descriptor assignment preserves frozen dataclass semantics.
         return lambda: setattr(receiver, name, value)
     method = getattr(receiver, name)
-    binding = inspect.signature(method).bind(*args, **kwargs)
-    binding.apply_defaults()
-    args, kwargs = copy.deepcopy((binding.args, binding.kwargs), memo)
+    observe_binding = target.get("observe_binding", False)
+    binding = _bind(method, args, kwargs, observe_binding)
+    if not observe_binding:
+        binding.apply_defaults()
+        args, kwargs = binding.args, binding.kwargs
+    args, kwargs = copy.deepcopy((args, kwargs), memo)
     return lambda: method(*args, **kwargs)
 
 
@@ -335,6 +364,8 @@ def method_call(
 
     try:
         result = limited(execute, timeout_s)
+    except BindingRejected as error:
+        return {**_exception(error.error), "binding_rejected": True}
     except CallTimeout:
         return {"kind": "timed_out"}
     except RangeArgumentError as error:
@@ -363,7 +394,12 @@ def probe(target: dict[str, Any], timeout_s: float, root: Path | None = None) ->
         )
     except BaseException:
         return {"problem": "import failed", "results": []}
-    results = [call(function, literal, timeout_s, root) for literal in target["calls"][:48]]
+    results = [
+        call(
+            function, literal, timeout_s, root, observe_binding=target.get("observe_binding", False)
+        )
+        for literal in target["calls"][:48]
+    ]
     return {"problem": None, "results": results}
 
 

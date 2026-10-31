@@ -28,6 +28,7 @@ from oversight.workspace import (
 )
 
 if TYPE_CHECKING:
+    from oversight.changes._parameter_extensions import ParameterExtension
     from oversight.changes._state import ChangeRecord
     from oversight.changes._support import ChangeContext
 
@@ -135,6 +136,7 @@ class FunctionBehavior:
 class BehaviorDiff:
     revision: int
     functions: tuple[FunctionBehavior, ...]
+    extensions: tuple["ParameterExtension", ...] = ()
 
 
 def targets(rec: "ChangeRecord") -> tuple[FunctionBehavior, ...]:
@@ -415,14 +417,18 @@ async def probe_behavior(
     The caller owns main/agent locks. Cleanup runs outside the computation deadline,
     in that same task, retaining the existing bounded Git and namespace cleanup.
     """
+    from oversight.changes._parameter_extensions import ExtensionProbe
+
     deadline = time.monotonic() + 2 * rec.task.limits.test_timeout_s
     found = list(await asyncio.to_thread(targets, rec))
     stack = AsyncExitStack()
     completed: set[str] = set()
+    extensions = ExtensionProbe()
     try:
         async with asyncio.timeout_at(deadline):
+            await ctx.whole(asyncio.to_thread(extensions.prepare, rec, found, deadline))
             inputs = await ctx.whole(asyncio.to_thread(_prepare, rec, found, deadline))
-            if not inputs:
+            if not inputs and not extensions.inputs:
                 return BehaviorDiff(revision, tuple(found))
             if not ctx.workspace.isolation.available:
                 raise IsolationUnavailable("session isolation unavailable")
@@ -441,6 +447,7 @@ async def probe_behavior(
                     )
                 )
             await _compare(ctx.workspace, rec, trees, inputs, found, deadline, completed)
+            await extensions.measure(ctx.workspace, trees, deadline)
     except (TimeoutError, WorkspaceError, OSError) as error:
         reason = (
             "budget exhausted"
@@ -455,9 +462,10 @@ async def probe_behavior(
             else result
             for result in found
         ]
+        extensions.unavailable(reason)
     finally:
         await stack.aclose()
-    return BehaviorDiff(revision, tuple(found))
+    return BehaviorDiff(revision, tuple(found), extensions.results)
 
 
 def unavailable_behavior(rec: "ChangeRecord", revision: int, reason: str) -> BehaviorDiff:
