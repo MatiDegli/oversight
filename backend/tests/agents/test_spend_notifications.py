@@ -99,10 +99,12 @@ async def test_wait_changed_rechecks_and_unsubscribes(tmp_path: Path) -> None:
     await ledger.load()
     # The change happened before the waiter subscribed.
     await ledger.wait_changed(0, deadline=deadline)
+    assert not ledger._watchers
     pending = asyncio.create_task(ledger.wait_changed(ledger.change_revision, deadline=deadline))
     await asyncio.sleep(0)
     ledger.notify_loss()
     await pending
+    assert not ledger._watchers
 
 
 async def test_wait_deadline_does_not_cancel_writer(
@@ -126,10 +128,25 @@ async def test_wait_deadline_does_not_cancel_writer(
         deadline = loop.time() + 0.02
         with pytest.raises(TimeoutError):
             await ledger.wait_changed(ledger.change_revision, deadline=deadline)
+        assert not ledger._watchers
         assert loop.time() >= deadline and not pending.done() and ledger.writing
         with pytest.raises(TimeoutError):
             await ledger.wait_changed(ledger.change_revision, deadline=loop.time() - 1)
+        assert not ledger._watchers
     finally:
         release.set()
         await pending
     assert ledger.state == LedgerState(1) and not ledger.writing
+
+
+@pytest.mark.parametrize("deadline", [float("inf"), float("-inf"), float("nan")])
+async def test_nonfinite_deadline_never_subscribes(tmp_path, monkeypatch, deadline):
+    ledger = LedgerFile(tmp_path / "ledger.json")
+
+    def forbidden(*args):
+        pytest.fail("nonfinite deadline subscribed")
+
+    monkeypatch.setattr(ledger, "watch", forbidden)
+    with pytest.raises(ValueError, match="finite"):
+        await ledger.wait_changed(-1, deadline=deadline)
+    assert not ledger._watchers
