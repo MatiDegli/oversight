@@ -94,6 +94,7 @@ class _Attempt:
     blocked: bool = False
     prepared: bool = False
     git_verified: bool = False
+    diagnostic: str | None = None
 
 
 class RevertService:
@@ -200,6 +201,8 @@ class RevertService:
         )
 
     async def _needs_you(self, a: _Attempt, reason: str) -> None:
+        if a.diagnostic is None:
+            a.diagnostic = reason
         a.git_verified = False
         head = await self._main()
         if a.candidate is not None and head == a.candidate.inverse_commit:
@@ -215,6 +218,7 @@ class RevertService:
             ws, a.target.resolution, a.command, a.target.change_id, timeout_s=ctx.timeout
         )
         if checked.status != "clean":
+            a.diagnostic = checked.diagnostic
             await self._needs_you(a, checked.diagnostic)
             return
         h, t = checked.main_commit, checked.candidate_tree
@@ -222,7 +226,8 @@ class RevertService:
         async with ws.git_lease():
             h_tree = await ctx.git(ws.main, "rev-parse", f"{h}^{{tree}}")
         if h_tree.strip() == t:
-            await self._needs_you(a, "Inverse is empty")
+            a.diagnostic = "Inverse is empty"
+            await self._needs_you(a, a.diagnostic)
             return
         a.prepared = True
         async with prepare_inverse(
@@ -268,6 +273,8 @@ class RevertService:
             a.git_verified = True
             self._consumed.add(a.key)
             await self._success(a)
+        # Current primitives never name C as a competing head; keep the coordinator's
+        # classification fallback for that invalid/legacy result at the internal seam.
         elif outcome.kind == "main_moved" and outcome.main_commit != item.inverse_commit:
             await self._needs_you(a, "Main moved")
         else:
@@ -316,8 +323,9 @@ class RevertService:
                 for task in a.sending.values():
                     await self._wait(a, task)
             else:
+                reason = a.diagnostic if a.candidate is None and not a.prepared else None
                 await self._defer(
-                    a, lambda: self._needs_you(a, "Inverse interrupted or unavailable")
+                    a, lambda: self._needs_you(a, reason or "Inverse interrupted or unavailable")
                 )
         except (Exception, asyncio.CancelledError):
             await self._suspend(a)

@@ -44,6 +44,9 @@ class ServiceRepo:
     def ws(self):
         return self.repo.ws
 
+    async def publish(self, payload):
+        return await self.service.ctx.publish(payload)
+
     async def run(self, **kwargs):
         principal = kwargs.pop("principal", Person)
         return await self.service.revert(self.target, self.command, principal=principal, **kwargs)
@@ -117,6 +120,37 @@ async def system(repo, tmp_path, monkeypatch):
         await service.aclose()
         await manager.aclose()
         await store.close()
+
+
+async def install_spend_evidence(s, tmp_path):
+    """Use F3b's durable ledger producer and committed, manager-owned usage receipt."""
+    from test_spend_evidence import receipt
+
+    from oversight.agents import LedgerFile
+    from oversight.changes import RulesEvidence, SpendSnapshot
+
+    ctx = s.service.ctx
+    ledger = LedgerFile(tmp_path / "meta-ledger.json")
+    await ledger.load()
+    ctx.ports.spend_ledger = ledger
+
+    def producer(inputs):
+        state = ledger.state
+        return RulesEvidence(
+            replace(
+                inputs,
+                spend=SpendSnapshot(
+                    spent_usd=state.spent_usd if state else None,
+                    budget_usd=1,
+                    unknown_costs=len(state.unknown) if state else None,
+                    ledger_ok=ledger.loaded and state is not None,
+                ),
+            )
+        )
+
+    ctx.ports.rules_evidence = producer
+    pin = await receipt(s)
+    return ledger, pin
 
 
 async def test_revert_non_person_refused(system):
@@ -408,7 +442,7 @@ async def test_revert_shared_snapshot_drains_before_build(system, monkeypatch):
         ctx.state.pending.clear()
 
 
-async def test_waiting_rules_current_main_barrier_fails_after_revert(system, monkeypatch):
+async def test_waiting_rules_current_main_barrier_fails_after_revert(system, monkeypatch, tmp_path):
     from changes_helpers import Harness
 
     from oversight.changes import _rules
@@ -435,6 +469,7 @@ async def test_waiting_rules_current_main_barrier_fails_after_revert(system, mon
     monkeypatch.setattr(ctx.mode, "_availability", lambda: StartCapability(True, "test capability"))
     monkeypatch.setattr(s.ws._isolation, "_born", True)
     monkeypatch.setattr(s.ws._isolation, "_checked", True)
+    ledger, pin = await install_spend_evidence(s, tmp_path)
     assessment = s.repo.event.payload.assessment.model_copy(
         deep=True,
         update=dict(
@@ -448,7 +483,11 @@ async def test_waiting_rules_current_main_barrier_fails_after_revert(system, mon
         ),
     )
     for rule in assessment.rules:
-        rule.evidence[:] = [EvidenceRef(git_object=rec.base_commit)]
+        rule.evidence[:] = (
+            [EvidenceRef(event_seq=pin.seq)]
+            if rule.rule == "known_spend"
+            else [EvidenceRef(git_object=rec.base_commit)]
+        )
         if rule.rule == "combined_tests":
             object.__setattr__(rule, "result", "unknown")
             object.__setattr__(rule, "observed", None)
@@ -460,6 +499,7 @@ async def test_waiting_rules_current_main_barrier_fails_after_revert(system, mon
         None,
         s.command.main_commit,
         latest=assessment,
+        spend_pin=pin,
     )
     ctx.assessment.waits[rec.change_id] = wait
     rec.proposal_mode = mode
@@ -467,6 +507,8 @@ async def test_waiting_rules_current_main_barrier_fails_after_revert(system, mon
     rec.state, rec.fallback = "deciding", "ready"
     rec.taken, rec.evidence, rec.decision = rec.revision, reservation.evidence, reservation.decision
     rec.rules_consumed.add(rec.revision)
+    assert reservation.spend_pin is pin and ctx.assessment.spend_receipt is pin
+    assert ledger.loaded and ledger.state is not None and ledger.state.spent_usd == 0
     assert _rules.revalidate(ctx, reservation) is None
     result = await s.run()
     assert result.result == "reverted"

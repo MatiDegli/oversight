@@ -713,3 +713,105 @@ async def test_unconfirmed_stale_needs_you_blocks_main_but_allows_tree_cleanup(s
     await s.ws.cleanup_merged_worktree("agent-2", delete_branch=True)
     assert not tree.root.exists()
     assert not any(e.type == "revert.resolved" for e in s.events)
+
+
+@pytest.mark.parametrize("target", ["stale", "empty"])
+@pytest.mark.parametrize("interruption", ["cancel", "error"])
+async def test_pre_candidate_interruption_preserves_first_diagnostic(
+    system, monkeypatch, target, interruption
+):
+    s = system
+    if target == "stale":
+        head = await s.repo.commit("later.txt", "later work\n")
+        expected = "observed main is stale"
+    else:
+        head = await s.repo.commit("value.py", "value = 1\n")
+        s.command = s.command.model_copy(update={"main_commit": head})
+        expected = "Inverse is empty"
+    main = s.service._main
+    entered = asyncio.Event()
+    calls = 0
+
+    async def interrupted_verification():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            if interruption == "error":
+                raise OSError("injected verification interruption")
+            entered.set()
+            await asyncio.Event().wait()
+        return await main()
+
+    monkeypatch.setattr(s.service, "_main", interrupted_verification)
+    task = asyncio.create_task(s.run())
+    if interruption == "cancel":
+        await asyncio.wait_for(entered.wait(), 10)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    else:
+        await task
+    result = json.loads(s.events[-1].envelope)["payload"]
+    assert result["result"] == "needs_you" and result["reason"] == expected
+    assert result["main_commit"] == head and result["tests"] is None
+    attempt = s.service._attempts[-1]
+    assert attempt.candidate is None and not attempt.prepared
+    assert not s.service._reserved and not s.manager.main_suspect
+
+
+@pytest.mark.parametrize("edge", ["at_c_clean", "at_c_dirty", "mismatch_c", "head_read_failure"])
+async def test_revert_integrates_hardened_workspace_outcomes(system, monkeypatch, edge):
+    s = system
+    git = s.ws.git
+    outcomes, calls = [], []
+
+    async def injected_git(tree, *args, **kwargs):
+        if edge == "head_read_failure" and args == ("symbolic-ref", "HEAD") and not calls:
+            calls.append(args)
+            return ProcessResult(1, "", "unreadable HEAD", False, False, 0)
+        if edge == "mismatch_c" and args[0] == "update-ref" and not calls:
+            calls.append(args)
+            await git(tree, *args, **kwargs)
+            return ProcessResult(1, "", f"is at {args[2]} but expected {args[3]}", False, False, 0)
+        return await git(tree, *args, **kwargs)
+
+    async def recorded_apply(ws, **kwargs):
+        assert ws.operations.holds(main=True, agent_id="agent-1")
+        if edge.startswith("at_c"):
+            await ws.git_ok(
+                ws.main,
+                "update-ref",
+                "refs/heads/main",
+                kwargs["inverse_commit"],
+                kwargs["main_commit"],
+            )
+            if edge == "at_c_dirty":
+                (ws.main.root / "value.py").write_text("unexplained checkout\n")
+        outcome = await apply_inverse(ws, **kwargs)
+        outcomes.append(outcome)
+        return outcome
+
+    monkeypatch.setattr(s.ws, "git", injected_git)
+    monkeypatch.setattr(_revert, "apply_inverse", recorded_apply)
+    if edge == "at_c_dirty":
+        with pytest.raises(RevertRefused):
+            await s.run()
+        assert s.manager.main_suspect and s.ws.integrity.main_suspect
+        assert s.service._reserved and s.service._attempts[-1].blocked
+        assert not any(e.type == "revert.resolved" for e in s.events)
+        assert (s.ws.main.root / "value.py").read_text() == "unexplained checkout\n"
+    else:
+        result = await s.run()
+        if edge == "head_read_failure":
+            assert result.result == "needs_you" and await s.head() == s.command.main_commit
+            assert not s.service._reserved and not s.service._consumed
+        else:
+            assert result.result == "reverted" and result.revert_commit == await s.head()
+            assert s.service._consumed
+            assert (s.ws.main.root / "value.py").read_text() == "value = 1\n"
+        assert not s.manager.main_suspect
+        await s.clean()
+    assert len(outcomes) == 1
+    assert outcomes[0].kind == (
+        "unknown" if edge in {"at_c_dirty", "head_read_failure"} else "landed"
+    )
