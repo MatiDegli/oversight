@@ -340,6 +340,7 @@ it.each([
 it("limits evidence sizing to the phone media query", async () => {
   await visit(0, "/", async (page) => {
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    await check(page.getByRole("button", { name: "Start practice", exact: true })).toBeVisible();
     const sizing = await page.evaluate(() => {
       const sheet = document.querySelector<HTMLStyleElement>(
         'style[data-vite-dev-id$="/recordedEvidence.css"]',

@@ -8,7 +8,6 @@ export type { TaskBoxProps } from "./TaskBox";
 export { nextSlot, slotUsage } from "./taskBox";
 export { StartAgentHere } from "./StartAgentHere";
 export { selectAgentCard } from "./selectors";
-export { ConversationPanel } from "./conversation/ConversationPanel";
 export type { ConversationPanelProps } from "./conversation/ConversationPanel";
 export { selectConversation } from "./conversation/selectConversation";
 export type {
@@ -18,3 +17,6 @@ export type {
   ConversationMessage,
 } from "./conversation/selectConversation";
 export type { ConversationControls } from "./conversation/Composer";
+
+export const loadConversationPanel = () => import("./conversation/ConversationPanel");
+export { labels as agentStatusLabels } from "./AgentCard";

@@ -1,12 +1,22 @@
 import { agentSlotStyle } from "../../theme";
 import { Maximize2, Minimize2, X } from "lucide-react";
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
-import { ConversationPanel, selectConversation } from "../../agents";
-import { ReviewPanel, DecisionInbox } from "../../review";
+import { selectConversation, loadConversationPanel } from "../../agents";
+import { ReviewFrame, InboxFrame, ConversationFrame, FileFrame } from "./PanelFallbacks";
+
+import { loadReviewPanel, loadDecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
 import { LivePanel } from "./LivePanel";
 import { focusRing } from "./shared";
+
+const ReviewPanel = lazy(() => loadReviewPanel().then((m) => ({ default: m.ReviewPanel })));
+const DecisionInbox = lazy(() => loadDecisionInbox().then((m) => ({ default: m.DecisionInbox })));
+const ConversationPanel = lazy(() =>
+  loadConversationPanel().then((m) => ({
+    default: m.ConversationPanel,
+  })),
+);
 
 export function FocusPanel(
   props: FrameProps & {
@@ -110,26 +120,41 @@ export function FocusPanel(
       </div>
       <div id="focus-content" role="tabpanel" className="focus-body">
         {view.activeTab === "inbox" ? (
-          <DecisionInbox state={state} onReview={props.onReview} />
+          <Suspense fallback={<InboxFrame state={state} />}>
+            <DecisionInbox state={state} onReview={props.onReview} />
+          </Suspense>
         ) : view.activeTab === "practice" && props.practice?.active ? (
           props.practice.content
         ) : agentId ? (
           <ConversationFocus {...props} agentId={agentId} />
         ) : view.review !== null ? (
-          <ReviewPanel
-            key={view.review}
-            state={state}
-            changeId={view.review}
-            attempt={props.attempts?.[view.review]}
-            files={props.files?.readOnly ? undefined : props.files}
-            onDecide={props.onDecide}
-            replayOf={props.replayOf}
-            onClose={onClosePanel}
-          />
+          <Suspense
+            fallback={<ReviewFrame state={state} changeId={view.review} onClose={onClosePanel} />}
+          >
+            <ReviewPanel
+              key={view.review}
+              state={state}
+              changeId={view.review}
+              attempt={props.attempts?.[view.review]}
+              files={props.files?.readOnly ? undefined : props.files}
+              onDecide={props.onDecide}
+              replayOf={props.replayOf}
+              onClose={onClosePanel}
+            />
+          </Suspense>
         ) : view.diff ? (
           <LivePanel state={state} view={view} onClose={onClosePanel} />
         ) : view.file && props.files ? (
           <FileView
+            loadingFallback={
+              <FileFrame
+                target={view.file}
+                files={props.files}
+                commit={state.graph?.commit ?? ""}
+                onClose={onClosePanel}
+                startAgentAction={props.startAgentAction}
+              />
+            }
             target={view.file}
             startAgentAction={props.startAgentAction}
             files={props.files}
@@ -156,13 +181,15 @@ function ConversationFocus({
   if (!conversation)
     return <p className="px-3 py-2 text-muted">This agent is not in the current run.</p>;
   return (
-    <ConversationPanel
-      conversation={conversation}
-      onSend={onMessageAgent ? (text) => onMessageAgent(agentId, text) : undefined}
-      onPause={onPauseAgent ? () => onPauseAgent(agentId) : undefined}
-      onResume={onResumeAgent ? () => onResumeAgent(agentId) : undefined}
-      onStop={onStopAgent}
-      onOpenDiff={canOpenChange(conversation.header.changeId) ? onOpenChange : undefined}
-    />
+    <Suspense fallback={<ConversationFrame header={conversation.header} />}>
+      <ConversationPanel
+        conversation={conversation}
+        onSend={onMessageAgent ? (text) => onMessageAgent(agentId, text) : undefined}
+        onPause={onPauseAgent ? () => onPauseAgent(agentId) : undefined}
+        onResume={onResumeAgent ? () => onResumeAgent(agentId) : undefined}
+        onStop={onStopAgent}
+        onOpenDiff={canOpenChange(conversation.header.changeId) ? onOpenChange : undefined}
+      />
+    </Suspense>
   );
 }

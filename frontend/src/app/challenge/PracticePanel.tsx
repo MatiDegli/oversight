@@ -4,29 +4,10 @@ import type { EvidencePractice as Practice } from "./caseEvidence";
 import { usePhonePractice } from "./usePhonePractice";
 import { PhonePractice } from "./PhonePractice";
 
-export type Answer = "Approve" | "Reject";
-export type Attempt = {
-  index: number;
-  started: boolean;
-  revealed: boolean;
-  finished?: boolean;
-  answers: Partial<Record<string, Answer>>;
-};
-export const freshAttempt = (): Attempt => ({
-  index: 0,
-  started: false,
-  revealed: false,
-  answers: {},
-});
-export function answerOnce(attempt: Attempt, id: string, answer: Answer): Attempt {
-  return attempt.answers[id]
-    ? attempt
-    : { ...attempt, answers: { ...attempt.answers, [id]: answer } };
-}
-export const complete = (practice: Practice, attempt: Attempt) =>
-  practice.cases.every((item) => attempt.answers[item.changeId]);
-export const score = (practice: Practice, attempt: Attempt) =>
-  practice.cases.filter((item) => attempt.answers[item.changeId] === item.reference).length;
+export { answerOnce, complete, freshAttempt, score } from "./attempt";
+export type { Answer, Attempt } from "./attempt";
+import { complete, score } from "./attempt";
+import type { Answer, Attempt } from "./attempt";
 const control =
   "rounded-control border border-control-edge px-4 py-2 text-sm enabled:hover:bg-raised disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 const primary =

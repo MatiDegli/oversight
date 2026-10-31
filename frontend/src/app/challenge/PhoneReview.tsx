@@ -3,9 +3,12 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import type { State } from "../../state";
-import { ChangeFactsRow, ReviewBody } from "../../review";
+import { ChangeFactsRow } from "../../review";
+import { loadReviewBody } from "../../review";
 import { AgentLine } from "./PhoneGraph";
 import { Disclosure } from "./PhoneDiff";
+
+const { ReviewBody } = await loadReviewBody();
 
 export function diffPreview(proposal: ChangeProposed) {
   if (proposal.files.length === 0)
