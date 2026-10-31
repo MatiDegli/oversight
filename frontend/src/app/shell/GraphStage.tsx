@@ -81,7 +81,7 @@ export function GraphStage({
       />
       {/* Overlays sit 24px in from the graph's edges: the heading (in watch) or the cone card (in
               review) top left, the legend bottom left, the zoom controls bottom right. */}
-      <div className="pointer-events-none absolute inset-(--spacing-overlay) flex flex-col gap-(--spacing-md)">
+      <div className="pointer-events-none absolute inset-(--spacing-overlay) right-[calc(var(--spacing-overlay)+var(--graph-overlay-occlusion,0px))] flex flex-col gap-(--spacing-md)">
         {/* Stretch the height constraint through to the card; keep the bottom row reserved. */}
         <div className="flex min-h-0 items-stretch justify-between gap-(--spacing-md)">
           <div className="flex min-h-0 flex-col items-start gap-(--spacing-md)">

@@ -122,8 +122,8 @@ describe("demo preset", () => {
     });
   });
 
-  it("draws graph labels at the sketch's size at the starting view's 100%", () => {
-    // The camera starts at 100% and never fits: a name is the sketch's 18px where it is read.
+  it("draws graph labels at the sketch's size at 100%", () => {
+    // At 100%, a name is the sketch's 18px.
     expect(Number.parseFloat(themes.dark["node-name-size"])).toBe(18);
     const cy = renderedDemo(generated.positions);
     try {

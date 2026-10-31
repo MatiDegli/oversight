@@ -349,7 +349,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Aggregate call counts | counts at rest | count on the hovered edge and the selected node's aggregates only | the maintainer approved removing resting label collisions on 2026-10-29; arrows and count data stay |
 | Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed border or line means a pending change in the agent's color, and color is an agent only on its own change |
 | Skip-column edges | routed around the frames | visibility-grid routes outside frames, sharing one trunk per target | only short endpoint taps traverse their own containing frame; back calls use an outside detour |
-| First view | the whole demo in view | 100% on the module of the hub, more beyond the edges | the graph is a canvas to pan and zoom; the demo has 36 functions, not the sketch's 19 |
+| First view | the whole demo in view | the whole graph when it fits at the legibility floor or above (the demo at 1920x1080: 83%); otherwise the floor on the module of the hub | names and state words stay at least 11 CSS px (**Opening a change**); a larger graph is a canvas to pan and zoom |
 | State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
 | Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
 | Code-dim (line numbers, comments) | `#6d6d68` | `#7d7d78`; v4 ratios below | quality floor: text at 4.5:1 |
@@ -626,7 +626,9 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   keeps its 560px minimum: the sidebar becomes an overlay first, below 1832px, when its 280px no
   longer fits beside the 880px focus panel. Below 1552px, the focus panel shrinks to
   `min(880px, viewport width - 112px - 560px)`: 823px at 1495px, 768px at 1440px and 608px at
-  1280px. Overlays cover their part of the work area without changing these widths. Below 1280px
+  1280px. Overlays cover their part of the work area without changing these widths. When the expanded
+  agents panel covers the graph, the graph's overlays and every camera framing end 24px from the
+  panel's edge, so no control or frame sits under it. Below 1280px
   a notice asks the person to widen the window. Type and radii do not shrink to fit.
   The two-change practice uses the exception in **Phone width** below.
 - **Maximize:** an explicit focus-panel control fills the work area and hides the graph behind a
@@ -646,14 +648,17 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
   every take. Switching modes changes the camera, never node positions.
-- **A canvas, not a fit:** the graph is larger than the screen and is panned and zoomed. It starts
-  at 100% on the module of the graph's hub (the function with the most callers), kept inside the
-  graph's bounds and moved to the nearest gutter where an edge of the view would cut a frame in
-  two. Dragging pans, the wheel and the +/- buttons zoom between 20% and 300%, and the fit button
-  shows everything, or the middle of it at 20% when the graph is wider than that. The camera moves
-  on its own only where it already does by design (opening and closing review, a node added while
-  the person is not navigating); no node ever moves. A cone row that says "Out of view" pans the
-  camera to its node when clicked, and never otherwise.
+- **A canvas, not a fit:** the graph is larger than the screen and is panned and zoomed. It
+  starts with the whole graph in view, zooming out from 100% only as needed and never below the
+  floor in **Opening a change**, so names and state words stay at least 11 CSS px. A graph that
+  does not fit at that floor starts at the floor on the module of the graph's hub (the function
+  with the most callers), kept inside the graph's bounds and moved to the nearest gutter where
+  an edge of the view would cut a frame in two. Dragging pans, the wheel and the +/- buttons
+  zoom between 20% and 300%, and the fit button shows everything, or the middle of it at 20%
+  when the graph is wider than that. The camera moves on its own only where it already does by
+  design (opening and closing review, a node added while the person is not navigating); no node
+  ever moves. A cone row that says "Out of view" pans the camera to its node when clicked, and
+  never otherwise.
 - **Opening a change:** review and live diff frame the changed nodes and the cone up to its
   depth limit, zooming out only as needed from 100%, with a floor derived from the smaller of
   the node-name-size and node-word-size tokens so names and state words stay at least 11 CSS px.

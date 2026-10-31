@@ -72,10 +72,11 @@ function candidates(
 }
 
 /**
- * Start at 100% on the hub's module, initially clamped inside the graph's bounds. Sweep gutters
- * on both axes and take the nearest camera that leaves every frame whole. `area` excludes overlays in
- * screen pixels. A graph smaller than the view is centered on that axis. If no uncut view can
- * contain the focus at 100%, retain the bounded camera; navigation remains the person's choice.
+ * Place the focus using boxes already scaled to the caller's zoom, initially clamped inside the
+ * graph's bounds. Sweep gutters on both axes and take the nearest camera that leaves every frame
+ * whole. `area` excludes overlays in screen pixels. A graph smaller than the view is centered on
+ * that axis. If no uncut view can contain the focus, retain the bounded camera; navigation remains
+ * the person's choice.
  */
 export function startingView(
   graph: Box,

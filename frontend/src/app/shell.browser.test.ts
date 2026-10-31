@@ -85,6 +85,97 @@ async function framed(page: Page, id: string) {
     .toMatchObject({ framed: true });
 }
 
+/** Read rendered module frames and overlay boxes in the same viewport coordinates. */
+async function watchGeometry(page: Page) {
+  await check
+    .poll(() =>
+      page
+        .locator('[aria-label="Repository graph"]')
+        .evaluate((host: GraphProbeHost) => (host.oversightGraph?.nodeCenters().length ?? 0) > 0),
+    )
+    .toBe(true);
+  return page.evaluate(() => {
+    const boundsOf = (element: Element) => {
+      const b = element.getBoundingClientRect();
+      return {
+        left: b.left,
+        right: b.right,
+        top: b.top,
+        bottom: b.bottom,
+        width: b.width,
+        height: b.height,
+      };
+    };
+    const element = (selector: string) => {
+      const found = document.querySelector(selector);
+      if (!found) throw new Error(`Missing ${selector}`);
+      return found;
+    };
+    const rect = (selector: string) => boundsOf(element(selector));
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const graph = host?.oversightGraph;
+    const detail = element('[aria-label="Graph detail"]').parentElement;
+    if (!host || !graph || !detail) throw new Error("Missing graph or detail controls");
+    const pan = graph.pan();
+    const zoom = graph.zoom();
+    const bounds = host.getBoundingClientRect();
+    return {
+      zoom,
+      graph: boundsOf(host),
+      panel: rect(".agents-expanded"),
+      detail: boundsOf(detail),
+      controls: rect('[aria-label="Zoom"]'),
+      clear: rect("[data-graph-clear-area]"),
+      modules: graph.nodeBounds(".module").map((b) => ({
+        x1: bounds.left + b.x1 * zoom + pan.x,
+        x2: bounds.left + b.x2 * zoom + pan.x,
+        y1: bounds.top + b.y1 * zoom + pan.y,
+        y2: bounds.top + b.y2 * zoom + pan.y,
+      })),
+    };
+  });
+}
+
+it("keeps watch controls and fitted module frames clear of floating agents at 1280x800", async () => {
+  await withPage(1280, 800, async (page) => {
+    const start = await watchGeometry(page);
+    expect(start.detail.right).toBeLessThanOrEqual(start.panel.left - 24);
+    expect(start.controls.right).toBeLessThanOrEqual(start.panel.left - 24);
+    expect(start.clear.right).toBe(start.panel.left - 24);
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    const fit = await watchGeometry(page);
+    expect(fit.modules).toHaveLength(6);
+    for (const frame of fit.modules) {
+      expect(frame.x1).toBeGreaterThanOrEqual(fit.graph.left);
+      expect(frame.x2).toBeLessThanOrEqual(fit.panel.left - 24 + 0.01);
+    }
+  });
+});
+
+it("starts with all six demo modules at Fit zoom and preserves docked overlay boxes at 1920x1080", async () => {
+  await withPage(1920, 1080, async (page) => {
+    const start = await watchGeometry(page);
+    expect(start.zoom).toBeLessThan(1);
+    await check(page.getByLabel("Zoom percentage")).toHaveText(
+      `${String(Math.round(start.zoom * 100))}%`,
+    );
+    expect(start.detail.right).toBe(start.graph.right - 24);
+    expect(start.controls.right).toBe(start.graph.right - 24);
+    expect(start.modules).toHaveLength(6);
+    for (const frame of start.modules) {
+      expect(frame.x1).toBeGreaterThanOrEqual(start.clear.left);
+      expect(frame.x2).toBeLessThanOrEqual(start.clear.right);
+      expect(frame.y1).toBeGreaterThanOrEqual(start.clear.top);
+      expect(frame.y2).toBeLessThanOrEqual(start.clear.bottom);
+    }
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    const fit = await watchGeometry(page);
+    expect(Math.abs(start.zoom - fit.zoom)).toBeLessThanOrEqual(0.01);
+    expect(fit.detail).toEqual(start.detail);
+    expect(fit.controls).toEqual(start.controls);
+  });
+});
+
 async function openDockWithActivity(page: Page) {
   await page.keyboard.press("Control+Backquote");
   expect((await box(page, ".bottom-dock")).height).toBe(280);

@@ -30,6 +30,14 @@ describe("panelGeometry", () => {
     ).toEqual({ area: { x1: FIT_PADDING, y1, x2: 1160, y2: 800 } });
   });
 
+  it("reserves the clear area's right edge beside the floating agents panel", () => {
+    expect(
+      panelGeometry(host, {
+        startAreaRef: { current: element(324, 184, 752, 716) },
+      }).area,
+    ).toEqual({ x1: FIT_PADDING, y1: 84, x2: 776, y2: 800 });
+  });
+
   it("keeps the existing review area beside a tall cone card", () => {
     expect(
       panelGeometry(host, {

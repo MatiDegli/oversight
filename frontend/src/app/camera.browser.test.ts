@@ -255,6 +255,33 @@ function panelFrame(page: Page) {
   });
 }
 
+/** Independent start oracle: Fit's labeled bounds in the measured clear area, capped by legibility. */
+function expectedWatchZoom(page: Page) {
+  return page.evaluate(() => {
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const probe = host?.oversightGraph;
+    const clear = document.querySelector("[data-graph-clear-area]")?.getBoundingClientRect();
+    if (!host || !probe || !clear) throw new Error("Missing watch graph or clear area");
+    const rect = host.getBoundingClientRect();
+    const { width, height } = probe.metrics().viewport;
+    const boxes = probe.nodeBounds();
+    const fit = Math.min(
+      (Math.min(width - 40, clear.right - rect.left) - 40) /
+        Math.max(1, Math.max(...boxes.map((b) => b.x2)) - Math.min(...boxes.map((b) => b.x1))),
+      (Math.min(height - 40, clear.bottom - rect.top) - Math.max(40, clear.top - rect.top)) /
+        Math.max(1, Math.max(...boxes.map((b) => b.y2)) - Math.min(...boxes.map((b) => b.y1))),
+    );
+    const tokens = getComputedStyle(document.documentElement);
+    const floor =
+      11 /
+      Math.min(
+        Number.parseFloat(tokens.getPropertyValue("--node-name-size")),
+        Number.parseFloat(tokens.getPropertyValue("--node-word-size")),
+      );
+    return Math.max(floor, Math.min(1, fit));
+  });
+}
+
 function emptyCanvasPoint(page: Page) {
   return page.evaluate(() => {
     const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
@@ -330,14 +357,16 @@ it.each(["after-mount", "at-mount"] as const)(
             zoom: probe.zoom(),
             frames: probe.nodeBounds(".module, .class").map((b) => ({
               id: b.id,
-              x1: b.x1 + pan.x,
-              y1: b.y1 + pan.y,
-              x2: b.x2 + pan.x,
-              y2: b.y2 + pan.y,
+              // The start now zooms out: transform model boxes before testing their rendered edges.
+              x1: b.x1 * probe.zoom() + pan.x,
+              y1: b.y1 * probe.zoom() + pan.y,
+              x2: b.x2 * probe.zoom() + pan.x,
+              y2: b.y2 * probe.zoom() + pan.y,
             })),
           };
         });
-        expect(view.zoom).toBe(1);
+        // The demo now starts at whole-graph Fit zoom, keeping its six frames whole.
+        expect(Math.abs(view.zoom - (await expectedWatchZoom(page)))).toBeLessThanOrEqual(0.01);
         expect(view.area.y1).toBeGreaterThan(0);
         for (const b of view.frames) {
           const a = view.area;
@@ -394,8 +423,9 @@ it("opening the panel frames the changed node and its callers; closing restores 
     const ids = await wanted(page);
     expect(ids).toHaveLength(1);
     const wide = await report(page, ids);
-    // The graph starts at 100%: nothing is fitted, and what does not fit lies beyond the edge.
-    expect(wide.zoom).toBe(1);
+    // This wide fixture cannot fit legibly: start at the floor, leaving distant nodes off-screen.
+    const labels = (await panelFrame(page)).labelSizes;
+    expect(wide.zoom * Math.min(labels.name, labels.state)).toBe(11);
     expect(wide.cutOffAnywhere.length).toBeGreaterThan(0);
     const everything = Object.keys(wide.positions);
     const watch = (await report(page, everything)).centers;
@@ -453,6 +483,7 @@ it("opening the panel frames the changed node and its callers; closing restores 
 it("under reduced motion the camera jumps and nothing eases", async () => {
   await withPage("reduce", async (page) => {
     const ids = await wanted(page);
+    const before = await report(page, ids);
     const jumped = await page.evaluate(() => {
       window.graphTest.open();
       return document
@@ -467,7 +498,8 @@ it("under reduced motion the camera jumps and nothing eases", async () => {
     // Closing jumps back to the camera the watch view had, with no animation.
     const closed = await report(page, ids);
     expect(closed.animating).toBe(false);
-    expect(closed.zoom).toBe(1);
+    // Restore the wide fixture's legible start, rather than the former 100% start.
+    expect(closed.zoom).toBe(before.zoom);
   });
 });
 
@@ -479,7 +511,8 @@ it.each(["open", "review"] as const)(
       async (page) => {
         const ids = await wanted(page);
         const wide = await report(page, ids);
-        expect(wide.zoom).toBe(1);
+        // The demo fits legibly below 100%; closing must restore that same camera.
+        expect(Math.abs(wide.zoom - (await expectedWatchZoom(page)))).toBeLessThanOrEqual(0.01);
         const focus = page.getByRole("button", { name: "Zoom in", exact: true });
         await focus.focus();
         // Drive browser frames explicitly so renderer load cannot skip the entire 240ms move.
