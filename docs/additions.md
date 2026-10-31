@@ -363,11 +363,11 @@ Main has policy profiles, the P2b-1 scheduler (`9f70622`), reservation (`5dac67c
 (`73b4f65`) and final race barriers (`7aec7d5`). Reservation and the transaction are wired through
 `backend/src/oversight/changes/_manager.py:119`; the mode remains closed because isolated start
 capability is not connected (`backend/src/oversight/changes/_mode.py:23`). GET and PUT /merge-mode
-are wired (`backend/src/oversight/api/commands.py:211-220`). Remaining work follows the
-maintainer's order: isolated start capability first, then the remaining Revert recovery/history,
-routes and UI before enabling the mode. Revert preflight (`88a54f4`) is
-an unwired read-only check, not an executable Revert; bounded history reads are wired (`0e5305a`). Protected
-paths have an evaluator (`f8d720c`). C3 landed in `19443e8`; rules and probes require it.
+are wired (`backend/src/oversight/api/commands.py:211-220`). Remaining work follows the maintainer's
+order: isolated start capability first, then the remaining Revert recovery/history and UI before
+enabling the mode. The Revert route is live (F8 `69aaee8`), including the preflight check (`88a54f4`);
+bounded history reads are wired (`0e5305a`). Protected paths have an evaluator (`f8d720c`). C3 landed
+in `19443e8`; rules and probes require it.
 Human approval already retests moved bases
 (`backend/src/oversight/changes/_merge.py:45`), and revision can merge main into the retained branch.
 Reuse those paths; rules must test the combined result even when base has not moved.
@@ -495,7 +495,7 @@ Main validates/expands supplied zones (`backend/src/oversight/changes/_zones.py:
 Reuse that after deterministic cycle contraction; uncertain calls and same-file zones still need
 conservative handling. A pure partition-feasibility core landed in `deb7148`, but has no production
 completeness producer or caller (`backend/src/oversight/changes/_partition.py:1`). Plan routes are
-live (`backend/src/oversight/api/commands.py:167-239`). Queue routes are live, with the standalone
+live (`backend/src/oversight/api/commands.py:175` and `:230-247`). Queue routes are live, with the standalone
 FIFO dispatcher wired (`c820fbf`); plan queueing and dependency scheduling remain. Finishing alone
 does not free a retained worktree's slot. Contracts 1.8.0 (`bb9dc43`, P1–P5) now allow one
 to six subtasks, validated dependencies and sequential/single-agent starts. Those schema changes
@@ -619,9 +619,9 @@ Package 13 is Muse Voice Transcribe task dictation, last day only, never merge a
 separate audio-upload command/response was reserved in `649ff0d` as an endpoint answering 501
 until built; message/pause/resume reservations do not cover it. The dictation route still answers
 501 (`backend/src/oversight/api/commands.py:57`).
-Package 14 is person-to-agent messages, pause/resume and replay timeline. Message/pause/resume routes are
-live (`backend/src/oversight/api/commands.py:297-310`); playback already consumes ordered events.
-Reuse those interfaces/local controls without claiming seeking already works.
+Package 14 is person-to-agent messages, pause/resume and replay timeline. Message/pause/resume
+routes are live (`backend/src/oversight/api/commands.py:297-310`); playback already consumes ordered
+events. Reuse those interfaces/local controls without claiming seeking already works.
 Earlier-today history belongs to item 8; usage views belong to item 10.
 
 ### Standing grants
