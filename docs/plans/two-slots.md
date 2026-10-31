@@ -1,19 +1,24 @@
 # Plan: two agents in parallel, slots A and B, level 2
 
+> Status: done for level 2 (`5cf78fe`, B opened in `47ba58c`, frontend `0aac466`);
+> superseded by slots A–F (`a13ef3f`, `72bcbfa`). Checked against main `8b9b589`.
+> Current defaults come from `backend/src/oversight/slots.py:resolve_slots` and max_agents.
+> `OFFERED_SLOTS` is gone. R5 combined tests are built in `changes/_merge.py:combined_tests_pass`.
+> The original one-slot snapshot, temporary B gate and test matrix below are historical only.
+
 Revision 2, after the review of 8805b4d (two blocking, four should-fix, one nit), plan only, for
 an independent review before any code. Sources: AGENTS.md, docs/proposal.md (the slot row, 4.7's
 `POST /agents`), `contracts/` 1.1.0, main 9872baa, docs/plans/api.md, docs/plans/changes.md,
 docs/plans/request-changes.md at 806b495. No new module, dependency or contract field; risks K1
 to K20 are in section 9.
 
-## 1. What main has, and what is missing
+## 1. Historical starting point
 
 - `app.py` runs one slot: `SLOT = "A"`, `_check` refuses any other, one `_slot`, one `profile`,
   `_metered` and `_pricing`, and `run.started.slots` is `[A]`. `_runs` (a dict) and `_stop_runs`
   already handle several runs; `_change_ids` is already per agent.
 - The manager keeps records per agent, creates worktrees and decides under main's lock, then the
-  agent's: approvals serialize, one delta each; a textual clash is `Conflict(kind="merge")`. **Not
-  on main**: the combined tests when main moved, R5 of the request-changes plan (`changes/request`).
+  agent's: approvals serialize, one delta each; a textual clash is `Conflict(kind="merge")`. **Missing at planning time**: the combined tests when main moved, R5 of the request-changes plan (`changes/request`).
   Until it lands, approving B after A merges a clean B with no suite run on the combination, so B
   stays closed until it does (section 7, K15).
 

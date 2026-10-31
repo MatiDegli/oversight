@@ -21,6 +21,7 @@ from oversight.workspace.errors import (
     WorkspaceBusy,
     WorkspaceError,
 )
+from oversight.workspace.example_criteria import RenderedCriteria, parse_cases, render_examples
 from oversight.workspace.files import FileRead, check_content, content_hash, valid_agent_id
 from oversight.workspace.integrity import (
     IntegrityError,
@@ -47,6 +48,7 @@ from oversight.workspace.revert import (
     prepare_inverse,
 )
 from oversight.workspace.runner import ProcessResult, Spawn, run_process
+from oversight.workspace.secret_paths import SECRET_FILE_REFUSAL, is_secret_path
 from oversight.workspace.source import (
     BOLTONS,
     SOURCE_GIT_ENV,
@@ -69,6 +71,7 @@ __all__ = [
     "MAX_XML_BYTES",
     "OPEN_NOTICE",
     "PER_CALL_TIMEOUT_S",
+    "SECRET_FILE_REFUSAL",
     "SOURCE_GIT_ENV",
     "TREE_TIMEOUT_S",
     "Author",
@@ -94,6 +97,7 @@ __all__ = [
     "LockOrderError",
     "MergeGuard",
     "ProcessResult",
+    "RenderedCriteria",
     "RunProblem",
     "SourceProfile",
     "Spawn",
@@ -114,11 +118,14 @@ __all__ = [
     "configure_suite",
     "content_hash",
     "inverse_suite_problem",
+    "is_secret_path",
     "list_tree",
+    "parse_cases",
     "parse_junit",
     "prepare_inverse",
     "prepare_merge_guard",
     "print_isolation_probe",
+    "render_examples",
     "run_process",
     "select_source",
     "valid_agent_id",

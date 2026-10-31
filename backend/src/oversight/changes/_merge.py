@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from oversight.changes import _delivery as delivery
 from oversight.changes import _recovery as recovery
+from oversight.changes._example_criteria import verify_run
 from oversight.changes._resolution_validation import validate_resolution_evidence
 from oversight.changes._state import ChangeRecord
 from oversight.changes._suite_evidence import publish_suite
@@ -140,6 +141,7 @@ async def combined_tests_pass(
     except (SuiteInterrupted, SuiteUnavailable) as error:
         await publish_suite(ctx, rec, error.run, phase="combined", revision=rec.revision)
         raise
+    run = await verify_run(ctx, rec, run, phase="combined")
     if run.result.outcome == "passed":
         await verify_merge_guard(
             ctx.workspace, main, guard, tested_tree=run.tested_tree, timeout_s=ctx.timeout
