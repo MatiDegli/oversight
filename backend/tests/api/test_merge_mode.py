@@ -173,13 +173,12 @@ async def test_disable_http_timeout_still_switches_after_lock_release(tmp_path):
         manager = server.live._manager
         assert manager is not None
         ctx = manager._ctx
-        ctx.mode = ModeController(
-            availability=lambda: StartCapability(True, "Test only"), timeout_s=0.02
-        )
+        ctx.mode = ModeController(availability=lambda: StartCapability(True, "Test only"))
         assert (
             await server.client.put("/merge-mode", json={"mode": "merge_when_safe", "revision": 0})
         ).status_code == 200
         async with ctx.mode._lock:
+            ctx.mode._timeout_s = 0.02
             response = await server.client.put(
                 "/merge-mode", json={"mode": "ask_me", "revision": 1}
             )

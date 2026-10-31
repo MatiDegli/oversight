@@ -58,6 +58,11 @@ async def test_dev_patch_product_facts_and_disposable_cleanup(arm, tmp_path, mon
             method = next(
                 n for n in result.facts[-1].behavior_diff if n.node_id == "shop.cart:Cart.remove"
             )
+            if any(reason.startswith("isolation unavailable:") for reason in result.unavailable):
+                assert method.not_probed == "probe failed"
+                assert method.compared_count == 0
+                assert not result.detected
+                pytest.skip("real isolation unavailable; model reachability cannot be measured")
             assert method.not_probed is None and method.differing_count > 0
             # d04 is a requested change: new call sites on variable receivers
             # (cart = Cart(); cart.remove(...)) make Cart.remove probe-able, so its
