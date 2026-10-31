@@ -171,8 +171,11 @@ export function AgentCard({
       <p title={agent.task} className="mt-3 truncate text-(length:--body-size)">
         {agent.task}
       </p>
-      <div className="agent-card-body">
-        {readyForReview ? <Summary data={data} /> : <RunningBody data={data} />}
+      <div className="agent-card-body flex flex-col">
+        <OverlapLines overlap={data.overlap} />
+        <div className="min-h-0 flex-1">
+          {readyForReview ? <Summary data={data} /> : <RunningBody data={data} />}
+        </div>
       </div>
       <CardActions
         data={data}
@@ -183,6 +186,36 @@ export function AgentCard({
         onResume={onResume}
       />
     </article>
+  );
+}
+
+/** Quiet card facts: full names remain available when the single line is truncated. */
+function OverlapLines({ overlap }: { overlap: AgentCardDetail["overlap"] }) {
+  return (["sharedEdits", "readOfOthers"] as const).flatMap((kind) =>
+    overlap[kind].map(({ agentId, slot, nodes }) => {
+      const names = nodes.map((node) => node.name);
+      const words = (all: string[]) =>
+        all.length <= 2
+          ? all.join(" and ")
+          : `${all.slice(0, 2).join(", ")} and ${String(all.length - 2)} more`;
+      const sentence = (text: string) =>
+        kind === "sharedEdits"
+          ? `Also changed by Agent ${slot}: ${text}`
+          : `Read ${text}, which Agent ${slot} is changing`;
+      const full =
+        names.length <= 2
+          ? names.join(" and ")
+          : `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
+      return (
+        <p
+          key={`${kind}:${agentId}`}
+          title={sentence(full)}
+          className="shrink-0 truncate text-sm text-text"
+        >
+          {sentence(words(names))}
+        </p>
+      );
+    }),
   );
 }
 
