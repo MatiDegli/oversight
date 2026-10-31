@@ -19,6 +19,7 @@ import {
 } from "./camera";
 import type { Camera, Framing } from "./camera";
 import { elementSnapshot } from "./elementSnapshot";
+import type { MeasuredWord } from "./elements";
 import { foldController } from "./foldController";
 import { createBoxSource, DotField } from "./field";
 import type { FieldInput } from "./field";
@@ -66,6 +67,7 @@ export interface GraphViewProps {
   litIds?: readonly string[] | null;
   /** The review proposal's cone, used for its card, framing and out-of-view report. */
   cone?: ImpactCone | null;
+  measured?: ReadonlyMap<string, MeasuredWord | null> | null;
   /** Live preview: framed once on opening, then updates badges and dimming without following edits. */
   liveCone?: ImpactCone | null;
   /** Changes only when the person opens a different panel target or enters review. */
@@ -94,6 +96,7 @@ export function GraphView({
   litIds = null,
   frameIds = null,
   cone = null,
+  measured = null,
   liveCone = null,
   frameKey = null,
   onFramed,
@@ -120,6 +123,7 @@ export function GraphView({
     const relit =
       latest.current.litIds !== litIds ||
       latest.current.cone !== cone ||
+      latest.current.measured !== measured ||
       latest.current.liveCone !== liveCone ||
       latest.current.field?.mode !== field.mode;
     latest.current = {
@@ -129,6 +133,7 @@ export function GraphView({
       litIds,
       frameIds,
       cone,
+      measured,
       liveCone,
       frameKey,
       onFramed,
@@ -146,6 +151,7 @@ export function GraphView({
     litIds,
     frameIds,
     cone,
+    measured,
     liveCone,
     frameKey,
     onFramed,

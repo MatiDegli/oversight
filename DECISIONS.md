@@ -3,6 +3,17 @@
 Each decision with its reason. The design approved before the build is in
 [docs/proposal.md](docs/proposal.md); this file adds what is decided while building.
 
+## 2026-10-31 — Measured caller words on the graph
+
+Approved by the maintainer at 13:55:35 ART (2026-10-31T16:55:35Z; packet B 1031e item 1): review callers say
+"differs" in neutral text at 600 or "varied" in muted at 400, using the existing state-word
+slot. "same", "not measured" and absent comparisons leave the cone unchanged. Folded classes
+and modules project only a hidden member's "differs"; evidence never changes folds, geometry,
+camera, focus or field light. This makes observed differences visible without claiming safety.
+The three sketch exclusions retain the built cone card position, retain the built 1280 camera,
+and leave the canvas wordless when no caller was compared. The panel stays as built; the watch
+card's Evidence line and the node evidence chip/popover belong to separate fronts.
+
 ## Dependencies
 
 Every direct dependency, its license, and why it is here. Versions are pinned exactly, and a release

@@ -71,6 +71,7 @@ export function GraphStage({
         litIds={litIds}
         frameIds={frameIds}
         cone={cone}
+        measured={cone ? words : null}
         liveCone={liveCone}
         frameKey={frameKey}
         onFramed={onFramed}
