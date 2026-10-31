@@ -12,6 +12,7 @@ import type {
   ErrorReport,
   GraphSnapshot,
   RunStarted,
+  MergeModeState,
   UsageTick,
 } from "@contracts";
 
@@ -51,6 +52,7 @@ export interface ChangeState {
 
 export interface State {
   run: RunStarted | null;
+  mergeMode: MergeModeState | null;
   runStartedAt: string | null;
   grantEvents: Extract<
     import("@contracts").ServerEvent,
@@ -95,6 +97,7 @@ export interface State {
 export function createInitialState(): State {
   return {
     run: null,
+    mergeMode: null,
     runStartedAt: null,
     grantEvents: [],
     lastSeq: 0,

@@ -359,7 +359,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Call edge no agent is at (watch) | full strength | quiet-edge, 0.45 opacity, until an agent reads, edits or changes a node it touches, or the person selects one | the demo graph has 47 edges across its frames; stepping back the ones nobody is at lets the others read. Context, like the dimmed nodes of review: the full edge returns on selection |
 | Edge draw order | Modules lines can cross text | faint lines below opaque cards and graph text plates; routed calls above frames and below rows, hovered paths lifted | our lines never cross titles, counts, headers or legend text |
 | Task box keyboard hint | none | "Ctrl+Enter to start" under the box | the hint is how the keyboard starts an agent; a hint belongs next to what it starts |
-| Search, history and settings in the top bar | drawn | left out until each feature is built | a control that looks present and does nothing is worse than no control |
+| Search and history in the top bar | drawn | left out until each feature is built; settings joined with the Settings tab | a control that looks present and does nothing is worse than no control |
 | Input border | `#222222` to `#262626` | control-edge `#62625e`, 3.25:1 on field | quality floor: a control's boundary at 3:1 |
 | Task box fill | varies in the earlier sketches | field, the inset token | one fill for every input |
 | Review facts in v4 | every fact in one row | four decision chips and a provenance caption | the critique ranks facts by harm to the decision; provenance must not compete with tests and reach |
@@ -652,7 +652,7 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   current overlay. In review, R requests changes outside text inputs. The rail opens the shortcuts
   sheet. There is no Approve key, including Ctrl+Enter, and no Approve command in Ctrl K.
 - **Attention:** a proposal updates the queue and agent card, never opens or selects a tab. The
-  status line reports the spending brake. Only a failed command calls for a toast.
+  status line reports the spending brake. A failed command shows an inline line with an X icon and role="alert".
 - **Graph overlays** sit 24px from the graph's edges: heading top left in watch only, cone card top
   left in review, legend bottom left, zoom controls bottom right. With the left panel open and no
   cone (live diff, file view) the top left is empty, as in the live sketch: the graph beside the

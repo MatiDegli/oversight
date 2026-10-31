@@ -285,7 +285,8 @@ worktree, so review decisions and review writes remain refused. The wait holds n
 decisions retain main-then-worktree lock order. Stop closes the control and cancels the wait,
 then follows the existing discard path: stopped status before the rejected resolution.
 
-`GET /impact`, merge-mode and plan routes still return 501.
+`GET /impact` and plan routes still return 501. Merge-mode GET and PUT are live; before F10,
+PUT merge_when_safe returns 409. Merge-mode routes return 501 only in a replay.
 The 1.4 reservations also include tree, history, queue, leads, and change
 review. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
 The Revert route answers 202 after synchronous admission, loads its target from this run's
@@ -330,6 +331,7 @@ is bundled yet. `make e2e` runs two Playwright tests over level 1 and scripted l
 Main contains `changes/_policy`, `_zones`, `_runrule`, `_beforeafter`, `_reviewfacts` and
 `agents/_crossreview`. They cover merge rules, plan zones, test-run evidence, before/after
 results, review facts and cross-review parsing. They are private and not wired into the live
-flow. Reserved `change.assessed`, `merge_mode.changed` and `plan.updated` events only advance
-the frontend sequence. Contracts are at 1.4.0; delivery A was approved by the maintainer, 2026-10-27.
+flow. Reserved `change.assessed` and `plan.updated` events only advance the frontend sequence;
+`merge_mode.changed` sets the merge mode that the status line and Settings show.
+Contracts are at 1.4.0; delivery A was approved by the maintainer, 2026-10-27.
 Level 3 wiring starts after this level 2 close.

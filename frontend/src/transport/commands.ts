@@ -7,6 +7,8 @@ import type {
   FileSaved,
   GraphResponse,
   Health,
+  MergeModeState,
+  SetMergeMode,
   ImpactCone,
   RejectChange,
   RequestChanges,
@@ -96,6 +98,7 @@ export function createCommandClient(request: typeof fetch = fetch) {
   const agent = (id: string, action: string) => `/agents/${encodeURIComponent(id)}/${action}`;
   const change = (id: string, action: string) => `/changes/${encodeURIComponent(id)}/${action}`;
   return {
+    setMergeMode: (body: SetMergeMode) => send<MergeModeState>("/merge-mode", "PUT", body),
     startAgent: (body: StartAgent) => send<AgentCreated>("/agents", "POST", body),
     stopAgent: (id: string) => send<undefined>(agent(id, "stop"), "POST"),
     messageAgent: (id: string, body: AgentMessage) =>

@@ -1,4 +1,4 @@
-import type { StartAgent } from "@contracts";
+import type { MergeMode, StartAgent } from "@contracts";
 import type { ReactNode } from "react";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt } from "../review";
@@ -8,6 +8,7 @@ import { panelOpen } from "./view";
 import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
+import type { MergeModeAttempt } from "./shell/SettingsPanel";
 import { FocusPanel } from "./shell/FocusPanel";
 import { GraphStage } from "./shell/GraphStage";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
@@ -38,6 +39,9 @@ export interface FrameProps {
   onReview?: (changeId: string) => void;
   /** The queue counter's click: review of the next proposed change. */
   onOpenQueue?: () => void;
+  onOpenSettings?: () => void;
+  onSetMergeMode?: (mode: MergeMode) => void;
+  mergeModeAttempt?: MergeModeAttempt;
   /** The person's last decision per change. */
   attempts?: Readonly<Record<string, DecisionAttempt>>;
   /** Absent in a recorded run, which sends no commands: review then shows the recorded decision. */
@@ -86,6 +90,7 @@ export function Frame(props: FrameProps) {
       <TopBar
         state={state}
         onOpenQueue={props.onOpenQueue}
+        onOpenSettings={props.onOpenSettings}
         onOpenPalette={shell.openPalette}
         practice={props.practice}
       />

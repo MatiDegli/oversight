@@ -2,18 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useStore } from "zustand";
 
-import type { FileSaved } from "@contracts";
+import type { FileSaved, MergeMode } from "@contracts";
 
 import type { FileDraft } from "../editor";
 import { DecisionContext } from "../review";
 import { sendDecision } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
-import { stateStore } from "../state";
-import { createCommandClient, replayBuild, replaySource } from "../transport";
+import { selectMergeMode, stateStore } from "../state";
+import { commandFailure, createCommandClient, replayBuild, replaySource } from "../transport";
 import { createFileSession } from "./files";
 import { createRecordedFiles } from "./recordedFiles";
 import { FilesProvider } from "./FilesContext";
 import { useEscapeCloses } from "./escape";
+import { mergeModePending, type MergeModeAttempt } from "./shell/SettingsPanel";
 import { Frame } from "./Frame";
 import { usePractice } from "./challenge/usePractice";
 import { startAppSession } from "./session";
@@ -35,6 +36,8 @@ export function App() {
   const [connection, setConnection] = useState<"connecting" | "connected" | "lost">("connecting");
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>(tabbedView);
+  const [mergeModeAttempt, setMergeModeAttempt] = useState<MergeModeAttempt>();
+  const settingMode = useRef(false);
   const [attempts, setAttempts] = useState<Record<string, DecisionAttempt>>({});
   // The replay build has no backend: it never sends a command or starts an agent, and review shows
   // recorded decisions.
@@ -123,6 +126,37 @@ export function App() {
   const onOpenQueue = useCallback(() => {
     setView((current) => viewReducer(current, { type: "open", tab: surfaceTab(current, "inbox") }));
   }, []);
+  const onOpenSettings = useCallback(() => {
+    setView((current) =>
+      viewReducer(current, { type: "open", tab: surfaceTab(current, "settings") }),
+    );
+  }, []);
+  const onSetMergeMode = async (mode: MergeMode) => {
+    const current = selectMergeMode(state);
+    if (
+      !commands ||
+      !current ||
+      current.mode === mode ||
+      settingMode.current ||
+      mergeModePending(state, mergeModeAttempt)
+    )
+      return;
+    settingMode.current = true;
+    const started = { run: state.run, revision: current.revision };
+    setMergeModeAttempt({ ...started, phase: "pending" });
+    try {
+      const response = await commands.setMergeMode({ mode, revision: current.revision });
+      setMergeModeAttempt({ ...started, phase: "pending", responseRevision: response.revision });
+    } catch (error) {
+      setMergeModeAttempt({
+        ...started,
+        phase: "failed",
+        message: commandFailure("Setting the merge mode", error),
+      });
+    } finally {
+      settingMode.current = false;
+    }
+  };
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {
       if (!commands) return;
@@ -198,6 +232,15 @@ export function App() {
           canReview={(changeId) => openReview(state, view, changeId) !== null}
           onReview={onReview}
           onOpenQueue={onOpenQueue}
+          onOpenSettings={onOpenSettings}
+          onSetMergeMode={
+            commands
+              ? (mode) => {
+                  void onSetMergeMode(mode);
+                }
+              : undefined
+          }
+          mergeModeAttempt={mergeModeAttempt}
           attempts={attempts}
           onDecide={commands ? onDecide : undefined}
           replayOf={replayBuild ? replaySource.kind : undefined}

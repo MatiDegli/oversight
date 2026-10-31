@@ -2633,3 +2633,18 @@ Review time is refused because proposal-to-resolution elapsed time mixes waiting
 Rankings and scores are refused because agents receive different tasks. Percentages and ratios
 such as lines per dollar or cost per merge are refused because these receipts provide no fair
 normalization for task scope; every printed rate retains its explicit denominator.
+
+## 2026-10-31 — Settings shows the merge mode only
+
+The maintainer accepted packet B item 6 at 12:47 ART. Q1: a refused mode change shows
+one inline line below the cards, with an X icon, the server's words and role="alert";
+no toast. Q2: Ask me's second sentence is dropped. Q3: Merge alone when safe reads
+"A change merges by itself only when every rule holds. Otherwise it waits for you."
+Q4: the rules checklist waits for a backed source. Q5: no left navigation, repository
+label, Saved or scope line; Merge mode fills the tab. Q6: both cards disable in flight,
+with no words. Q7: replay cards are read-only, mark the recorded mode, and show
+"Setting the merge mode is not available in a replay." A null mode marks neither card
+and omits the status segment. Q13: the cards act only on their own pointer click;
+Enter and Space send nothing, with no shortcut, palette command or confirmation.
+The enabled live choice deliberately presents the server's 409 refusal before F10,
+as approved for the mode toggle; this is the bounded exception to reserved controls.
