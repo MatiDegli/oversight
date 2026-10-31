@@ -1,7 +1,5 @@
 """The API probe over a fake transport: no network, no key, no credits."""
 
-import sys
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -24,8 +22,6 @@ from tools.tests.probe_api_helpers import (
 )
 
 import probe_api as probe
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def test_native_tools_decide_the_verdict_and_stay_inside_the_budget() -> None:

@@ -1,7 +1,6 @@
 """Probe SDK transport, redaction, reports and CLI."""
 
 import json
-import sys
 import tomllib
 from pathlib import Path
 
@@ -24,8 +23,6 @@ from tools.tests.probe_api_helpers import (
 
 import probe_api as probe
 from oversight.settings import Settings
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def test_a_429_is_one_call_not_three_and_the_key_is_scrubbed() -> None:

@@ -1,7 +1,6 @@
 """Opt-in decision reasoning, structured choices and probabilities."""
 
 import json
-import sys
 from pathlib import Path
 
 import httpx2  # the SDK's HTTP client library: its MockTransport stands in for the network
@@ -25,9 +24,6 @@ from tools.tests.probe_api_helpers import (
 
 import probe_api as probe
 from oversight.settings import Settings
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 
 # Decision probes: opt-in, fake-only, with no prerequisite calls hidden in --checks.
 DECISION_CHECKS = ("decision_reasoning_off", "structured_choice", "choice_logprobs")

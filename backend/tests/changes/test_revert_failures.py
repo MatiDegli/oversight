@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 from changes_revert_helpers import pytestmark as pytestmark
-from test_revert import system as system
+from changes_revert_helpers import system as system
 from test_revert_preflight import repo as repo
 from test_rules_transaction import reserved as reserved
 
