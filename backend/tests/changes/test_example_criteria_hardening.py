@@ -20,7 +20,7 @@ from test_rules_transaction import reserved as rules_reserved
 from oversight.changes import _mode, _proposal
 from oversight.changes._example_criteria import install_criteria, refusal_code, unverified_run
 from oversight.workspace import ProcessResult, content_hash
-from oversight_contracts.events import ChangeResolved, ErrorReport, SuiteExecution
+from oversight_contracts.events import ChangeResolved, ChangeUpdated, ErrorReport, SuiteExecution
 
 reserved = rules_reserved
 INTEGRITY = "code=integrity_invalid; reason=scripted integrity problem"
@@ -126,3 +126,50 @@ async def test_cancelled_verification_publishes_error_suite(h: Harness, monkeypa
     assert sorted(case.test_id for case in execution.suite.cases or []) == sorted(
         case.test_id for case in stored.cases
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("seam", ["refresh", "send_file"])
+async def test_install_retries_identical_file_without_write(
+    h: Harness, monkeypatch, seam: str
+) -> None:
+    tree = await h.open(1)
+    ctx, rec = h.manager._ctx, h.manager._ctx.state.changes["change-1"]
+    rendered = render_criteria([example()], rec.change_id)
+    with monkeypatch.context() as patch:
+        patch.setattr(_proposal, seam, AsyncMock(side_effect=OSError("publication unavailable")))
+        with pytest.raises(OSError):
+            await install_criteria(ctx, rec, [example()])
+    assert rec.criteria is None and not h.payloads(ChangeUpdated)
+    assert (await tree.read_text(rendered.path)).content == rendered.source
+    write = AsyncMock(side_effect=AssertionError("identical criteria must not be rewritten"))
+    monkeypatch.setattr(tree, "write_text", write)
+    required = await install_criteria(ctx, rec, [example()])
+    write.assert_not_awaited()
+    assert rec.criteria is required and required.sha256 == rendered.sha256
+    [updated] = h.payloads(ChangeUpdated)
+    assert updated.author == "user" and updated.file.path == rendered.path
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("location", ["disk", "head", "base"])
+async def test_install_retry_refuses_existing_different_or_base_file(
+    h: Harness, monkeypatch, location: str
+) -> None:
+    tree = await h.open(1)
+    ctx, rec = h.manager._ctx, h.manager._ctx.state.changes["change-1"]
+    rendered = render_criteria([example()], rec.change_id)
+    await tree.write_text(
+        rendered.path,
+        rendered.source + ("# other bytes" if location == "disk" else ""),
+        expected_hash=None,
+    )
+    rec.head_files[rendered.path] = "other bytes" if location == "head" else rendered.source
+    if location == "base":
+        rec.base_files[rendered.path] = rendered.source
+    write = AsyncMock()
+    monkeypatch.setattr(tree, "write_text", write)
+    with pytest.raises(ValueError, match="criteria path already exists"):
+        await install_criteria(ctx, rec, [example()])
+    write.assert_not_awaited()
+    assert rec.criteria is None and not h.payloads(ChangeUpdated)

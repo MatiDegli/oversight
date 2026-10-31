@@ -102,7 +102,7 @@ async def install_criteria(
     ctx: ChangeContext, rec: ChangeRecord, confirmed: Sequence[TaskExample]
 ) -> RequiredCriteria:
     """E3's future confirmation port; no production caller in E4."""
-    from oversight.changes._proposal import refresh, send_file
+    from oversight.changes._proposal import read, refresh, send_file
 
     _installable(rec)
     rendered = render_criteria(confirmed, rec.change_id)
@@ -120,9 +120,15 @@ async def install_criteria(
             reason = await eligible_target(rec, case.node_id)
             if reason is not None:
                 raise ValueError(reason)
-        if rendered.path in rec.base_files or rendered.path in rec.head_files:
+        current = await read(ctx, rec.tree, rendered.path)
+        if (
+            rendered.path in rec.base_files
+            or current not in {None, rendered.source}
+            or rec.head_files.get(rendered.path) not in {None, rendered.source}
+        ):
             raise ValueError("criteria path already exists")
-        await rec.tree.write_text(rendered.path, rendered.source, expected_hash=None)
+        if current is None:
+            await rec.tree.write_text(rendered.path, rendered.source, expected_hash=None)
         rec.observed_paths.add(rendered.path)
         rec.touched.add(rendered.path)
         await refresh(ctx, rec, {rendered.path})
