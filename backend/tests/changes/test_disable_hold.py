@@ -55,9 +55,10 @@ async def test_disable_clear_table(h: Harness, initial: str, path: str) -> None:
 
 
 async def test_timeout_attempt_later_changes_mode_without_a_retry(h: Harness) -> None:
-    controller = available(h, timeout_s=0.02)
+    controller = available(h)
     await select(h, "merge_when_safe", 0)
     async with controller._lock:
+        controller._timeout_s = 0.02
         with pytest.raises(WrongState, match="timed out"):
             await select(h, "ask_me", 1)
         assert len(controller._disables) == 1 and controller.authority_suspended()
@@ -132,9 +133,10 @@ async def test_overlapping_disables_never_cross_clear(h: Harness) -> None:
 
 
 async def test_shutdown_cancels_waiting_attempt_and_removes_hold(h: Harness) -> None:
-    controller = available(h, timeout_s=0.02)
+    controller = available(h)
     await select(h, "merge_when_safe", 0)
     async with controller._lock:
+        controller._timeout_s = 0.02
         with pytest.raises(WrongState, match="timed out"):
             await select(h, "ask_me", 1)
         assert len(controller._disables) == 1
@@ -149,7 +151,7 @@ async def test_shutdown_cancels_waiting_attempt_and_removes_hold(h: Harness) -> 
 @pytest.mark.parametrize("stale", [False, True])
 async def test_disable_ends_every_evidence_wait_before_lock_or_cas(h, monkeypatch, stale):
     make_clock(h, monkeypatch)
-    controller = available(h, timeout_s=0.02)
+    controller = available(h)
     await select(h, "merge_when_safe", 0)
     await propose(h)
     await h.open(2)
@@ -161,6 +163,7 @@ async def test_disable_ends_every_evidence_wait_before_lock_or_cas(h, monkeypatc
     pending = wait(h)
     assert pending.active and pending.timer is not None
     async with controller._lock:
+        controller._timeout_s = 0.02
         with pytest.raises(WrongState, match="timed out"):
             await select(h, "ask_me", 0 if stale else 1)
         assert not pending.active and pending.timer.done()
@@ -254,7 +257,7 @@ async def test_cancelled_disable_caller_leaves_its_attempt_and_hold_alive(h, wai
 
 async def test_proposal_published_during_stale_disable_stays_unarmed(h, monkeypatch):
     clock = make_clock(h, monkeypatch)
-    controller = available(h, timeout_s=0.02)
+    controller = available(h)
     await select(h, "merge_when_safe", 0)
     await h.open(1)
     assert await h.edit(1, *EDIT)
@@ -263,6 +266,7 @@ async def test_proposal_published_during_stale_disable_stays_unarmed(h, monkeypa
     try:
         await h.at_gate.wait()
         async with controller._lock:
+            controller._timeout_s = 0.02
             with pytest.raises(WrongState, match="timed out"):
                 await select(h, "ask_me", 0)
             assert len(controller._disables) == 1
