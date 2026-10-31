@@ -34,7 +34,11 @@ void test("the offline check regenerates in separate processes and rejects prese
   try {
     const changed = join(scratch, "changed.json");
     const text = await readFile(preset, "utf8");
-    await writeFile(changed, text.replace('"x": 163.0', '"x": 164.0'));
+    const drifted = text.replace(/"x": -?\d+(?:\.\d+)?/, (match) =>
+      Number(match.slice(5)) === 0 ? '"x": 1' : '"x": 0',
+    );
+    assert.notEqual(drifted, text, "Drift injection changed nothing");
+    await writeFile(changed, drifted);
     await assert.rejects(checkPreset(input, changed), /differs from/);
   } finally {
     await rm(scratch, { recursive: true, force: true });
