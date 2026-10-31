@@ -399,7 +399,7 @@ export function GraphView({
               frameCamera(cy, [], prefersReducedMotion(), panelGeometry(host, latest.current));
           },
           reveal: (nodeId) => {
-            const target = revealNode(cy, nodeId, prefersReducedMotion(), coveredWidth());
+            const target = revealNode(cy, nodeId, prefersReducedMotion());
             if (!target) return;
             // The cone card lists what is out of view from the camera it is told of.
             const framing = { ...target, framed: new Set<string>(), outOfView: new Set<string>() };

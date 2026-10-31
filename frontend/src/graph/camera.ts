@@ -366,12 +366,7 @@ function coneInset(theme: ReturnType<typeof getActiveTheme>): number {
  * no event, no review and no resize calls it. It moves no node and keeps the zoom range. Returns
  * the camera it moves to, or null for a node that is not on the graph.
  */
-export function revealNode(
-  cy: Core,
-  id: string,
-  reduceMotion: boolean,
-  covered = 0,
-): Camera | null {
+export function revealNode(cy: Core, id: string, reduceMotion: boolean): Camera | null {
   const node = cy.getElementById(visibleId(cy, id));
   if (node.empty()) return null;
   const box = node.boundingBox({ includeLabels: true, includeOverlays: false });
@@ -379,7 +374,7 @@ export function revealNode(
   const camera = {
     zoom,
     pan: {
-      x: (coneInset(getActiveTheme()) + cy.width() - covered) / 2 - ((box.x1 + box.x2) / 2) * zoom,
+      x: (coneInset(getActiveTheme()) + cy.width()) / 2 - ((box.x1 + box.x2) / 2) * zoom,
       y: cy.height() / 2 - ((box.y1 + box.y2) / 2) * zoom,
     },
   };

@@ -495,43 +495,36 @@ it("expands watch only for added nodes and yields to active pan, wheel zoom and 
   expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["after-pan"], true, 0);
 });
 
-it.each([0, 400])(
-  "passes the styled panel occlusion to growth and reveal (%s px)",
-  async (covered) => {
-    setLabel("Caller");
-    const apiRef = { current: null as GraphApi | null };
-    const overlays = {} as HTMLElement;
-    const startAreaRef = {
-      current: {
-        parentElement: overlays,
-        getBoundingClientRect: () => ({ left: 24, top: 80, right: 876, bottom: 810 }),
-      } as HTMLDivElement,
-    };
-    const property = vi.fn(() => `${String(covered)}px`);
-    const computed = vi.fn(() => ({ getPropertyValue: property }));
-    vi.stubGlobal("getComputedStyle", computed);
-    const { settle } = mount({ apiRef, startAreaRef });
-    await settle("resolved");
-    const cy = mocks.instances[0];
-    if (!cy) throw new Error("Missing graph");
-    const expand = vi.spyOn(camera, "includeNewNodes").mockImplementation(() => undefined);
-    const reveal = vi.spyOn(camera, "revealNode").mockReturnValue(null);
-    const state = stateStore.getState().state;
-    const template = state.graph?.nodes[0];
-    if (!state.graph || !template) throw new Error("Missing graph data");
-    stateStore.setState({
-      state: {
-        ...state,
-        graph: { ...state.graph, nodes: state.graph.nodes.concat({ ...template, id: "new" }) },
-      },
-    });
-    expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new"], false, covered);
-    apiRef.current?.reveal("new");
-    expect(reveal).toHaveBeenCalledExactlyOnceWith(cy, "new", false, covered);
-    expect(computed).toHaveBeenCalledWith(overlays);
-    expect(property).toHaveBeenCalledWith("--graph-overlay-occlusion");
-  },
-);
+it.each([0, 400])("passes the styled panel occlusion to growth (%s px)", async (covered) => {
+  setLabel("Caller");
+  const overlays = {} as HTMLElement;
+  const startAreaRef = {
+    current: {
+      parentElement: overlays,
+      getBoundingClientRect: () => ({ left: 24, top: 80, right: 876, bottom: 810 }),
+    } as HTMLDivElement,
+  };
+  const property = vi.fn(() => `${String(covered)}px`);
+  const computed = vi.fn(() => ({ getPropertyValue: property }));
+  vi.stubGlobal("getComputedStyle", computed);
+  const { settle } = mount({ startAreaRef });
+  await settle("resolved");
+  const cy = mocks.instances[0];
+  if (!cy) throw new Error("Missing graph");
+  const expand = vi.spyOn(camera, "includeNewNodes").mockImplementation(() => undefined);
+  const state = stateStore.getState().state;
+  const template = state.graph?.nodes[0];
+  if (!state.graph || !template) throw new Error("Missing graph data");
+  stateStore.setState({
+    state: {
+      ...state,
+      graph: { ...state.graph, nodes: state.graph.nodes.concat({ ...template, id: "new" }) },
+    },
+  });
+  expect(expand).toHaveBeenCalledExactlyOnceWith(cy, ["new"], false, covered);
+  expect(computed).toHaveBeenCalledWith(overlays);
+  expect(property).toHaveBeenCalledWith("--graph-overlay-occlusion");
+});
 
 it("measures the card's real height and refreshes marks when that height changes", async () => {
   setLabel("Caller");
@@ -641,7 +634,7 @@ it("pans to a cone row's node only when asked, and tells the cone card what that
   onFramed.mockClear();
   vi.stubGlobal("matchMedia", () => ({ matches: true }));
   apiRef.current?.reveal("billing:fee");
-  expect(reveal).toHaveBeenCalledExactlyOnceWith(cy, "billing:fee", true, 0);
+  expect(reveal).toHaveBeenCalledExactlyOnceWith(cy, "billing:fee", true);
   expect(cy.zoom()).toBe(1);
   expect(cy.getElementById("billing:fee").renderedPosition().x).toBeCloseTo((304 + 928) / 2);
   paint();

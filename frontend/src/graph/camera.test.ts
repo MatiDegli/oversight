@@ -640,22 +640,19 @@ describe("revealNode", () => {
   const inset =
     Number.parseFloat(theme["cone-card-width"]) + Number.parseFloat(theme["spacing-overlay"]);
 
-  it.each([undefined, 0, 400])(
-    "centres a reveal beside the cone card with covered=%s at the same zoom",
-    (covered) => {
-      const cy = wideGraph(40_000);
-      cy.viewport({ zoom: 0.5, pan: { x: 20, y: 40 } });
-      const before = positions(cy);
-      const target = revealNode(cy, "east", true, covered);
-      expect(target?.zoom).toBe(0.5);
-      expect(cy.zoom()).toBe(0.5);
-      const { x, y } = cy.getElementById("east").renderedPosition();
-      expect(x).toBeCloseTo((inset + 1000 - (covered ?? 0)) / 2);
-      expect(y).toBeCloseTo(300);
-      expect(cy.pan()).toEqual(target?.pan);
-      expect(positions(cy)).toEqual(before);
-    },
-  );
+  it("pans to put a node in the middle of what the cone card leaves free, at the zoom it has", () => {
+    const cy = wideGraph(40_000);
+    cy.viewport({ zoom: 0.5, pan: { x: 20, y: 40 } });
+    const before = positions(cy);
+    const target = revealNode(cy, "east", true);
+    expect(target?.zoom).toBe(0.5);
+    expect(cy.zoom()).toBe(0.5);
+    const { x, y } = cy.getElementById("east").renderedPosition();
+    expect(x).toBeCloseTo((inset + 1000) / 2);
+    expect(y).toBeCloseTo(300);
+    expect(cy.pan()).toEqual(target?.pan);
+    expect(positions(cy)).toEqual(before);
+  });
 
   it("eases under normal motion and does nothing for a node that is not on the graph", () => {
     const cy = wideGraph(40_000);
