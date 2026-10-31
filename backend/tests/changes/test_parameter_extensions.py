@@ -201,6 +201,33 @@ def test_unavailable_preserves_the_prepared_supplied_input_cap_reason():
     assert public and public[0].not_probed == "recording budget reached"
 
 
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [("worker failed", "probe failed"), ("budget exhausted", "recording budget reached")],
+)
+def test_uncapped_prepared_extension_reports_why_it_became_unavailable(reason, expected):
+    rec = SimpleNamespace(
+        base_files={"sample.py": "def f(): return 1\n"},
+        head_files={
+            "sample.py": "def f(extra=0): return extra\n",
+            "test_sample.py": "from sample import f\nf(extra=3)\n",
+        },
+        head=SimpleNamespace(
+            graph=SimpleNamespace(
+                nodes=[SimpleNamespace(id="sample:f", path="sample.py", name="f", kind="function")]
+            )
+        ),
+    )
+    probe = ExtensionProbe()
+    probe.prepare(cast(Any, rec), [FunctionBehavior("sample:f")], time.monotonic() + 30)
+    assert probe.inputs["sample:f"].reason is None
+    assert probe.results[0].reason is None
+    probe.unavailable(reason)
+    assert probe.results[0].reason == reason
+    public = project_extensions(capture_behavior(BehaviorDiff(1, (), probe.results)), revision=1)
+    assert public and public[0].not_probed == expected
+
+
 @pytest.mark.anyio
 async def test_extension_capture_detaches_worker_results_and_checks_revision(tmp_path):
     result, measured, evidence = await measure(
@@ -265,7 +292,7 @@ async def test_isolation_failure_retains_extension_not_probed(h: Harness, monkey
     )
     [facts] = h.payloads(ChangeFacts)
     assert facts.parameter_extensions
-    assert facts.parameter_extensions[0].not_probed == "recording budget reached"
+    assert facts.parameter_extensions[0].not_probed == "probe failed"
     assert facts.parameter_extensions[0].run_count == 0
     worker.assert_not_awaited()
 
@@ -288,6 +315,28 @@ async def test_changed_receiver_state_excludes_rejections_and_values(tmp_path, k
     assert result.run_count == result.rejected_before == 0 and result.rows == []
     assert measured.extensions[0].reason == "unrepresentable input or unequal receiver state"
     assert result.not_probed == "input not representable"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kwargs", [False, True])
+@pytest.mark.parametrize("arguments", ["", "7"])
+async def test_receiver_constructor_defaults_must_match_even_with_equal_state(
+    tmp_path, kwargs, arguments
+):
+    before = "class Box:\n    def __init__(self, x=1): pass\n" + (
+        "    def f(self, **kwargs): return 1\n" if kwargs else "    def f(self): return 1\n"
+    )
+    after = "class Box:\n    def __init__(self, x=2): pass\n    def f(self, extra=0): return 1\n"
+    result, measured, _ = await measure(
+        tmp_path, before, after, f"Box({arguments}).f(extra=3)", method="Box.f"
+    )
+    accepted = bool(arguments)
+    assert result.run_count == int(accepted)
+    assert result.rejected_before == int(accepted and not kwargs)
+    assert len(result.rows) == int(accepted)
+    assert measured.extensions[0].reason == (
+        None if accepted else "unrepresentable input or unequal receiver state"
+    )
 
 
 @pytest.mark.anyio

@@ -38,6 +38,7 @@ from oversight.changes._behavior_objects import (
     invocation,
 )
 from oversight.changes._behavior_sources import Sources
+from oversight.changes._review_identity import bound_inputs, canonical
 from oversight.changes._shortcuts_common import check_deadline, is_test_file, walk_local
 
 
@@ -106,6 +107,23 @@ def _method_calls(module: str, cls: str, name: str, cache: Sources) -> Iterator[
             continue
 
 
+def _sample_identity(
+    candidate: SuppliedCall, cache: Sources, receiver: tuple[str, str] | None
+) -> str | None:
+    supplied_arguments = {
+        **{f"positional:{index}": value for index, value in enumerate(candidate.args)},
+        **{f"keyword:{key}": value for key, value in candidate.kwargs.items()},
+    }
+    identity = input_identity(supplied_arguments, cache, cache.deadline)
+    if receiver is None or identity is None:
+        return identity
+    args, kwargs = ast.literal_eval(candidate.receiver or "")
+    bound = class_signature(cache, *receiver).bind(*args, **kwargs)
+    bound.apply_defaults()
+    receiver_identity = bound_inputs(dict(bound.arguments))
+    return canonical([receiver_identity, identity]) if receiver_identity is not None else None
+
+
 def _samples(
     name: str,
     signatures: list[inspect.Signature],
@@ -113,6 +131,7 @@ def _samples(
     deadline: float,
     generator: bool,
     caches: list[Sources],
+    receiver: tuple[str, str] | None,
 ) -> tuple[tuple[str, ...], tuple[BehaviorInput, ...], str | None]:
     base_parameters = {
         key
@@ -150,14 +169,10 @@ def _samples(
             continue
         if raw not in samples and len(samples) == MAX_INPUTS:
             return tuple(sorted(used)), tuple(samples.values()), "budget exhausted"
-        supplied_arguments = {
-            **{f"positional:{index}": value for index, value in enumerate(candidate.args)},
-            **{f"keyword:{key}": value for key, value in candidate.kwargs.items()},
-        }
         identities: list[str | None] = []
         for cache in caches:
             try:
-                identities.append(input_identity(supplied_arguments, cache, deadline))
+                identities.append(_sample_identity(candidate, cache, receiver))
             except (ValueError, TypeError, SyntaxError, RecursionError):
                 identities.append(None)
         samples[raw] = BehaviorInput(
@@ -210,7 +225,13 @@ def extension_inputs(
             )
             candidates = _function_calls(module, name, caches[1])
         parameters, samples, reason = _samples(
-            name, signatures, candidates, deadline, generator, caches
+            name,
+            signatures,
+            candidates,
+            deadline,
+            generator,
+            caches,
+            (module, receiver_class) if receiver_class else None,
         )
         return (
             ExtensionInputs(parameters, samples, receiver_class, properties, reason)

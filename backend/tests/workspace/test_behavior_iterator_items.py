@@ -203,3 +203,30 @@ async def test_cleanup_exception_after_the_cap_cannot_become_a_comparable_result
     )
     result = await invoke(tmp_path, source, [consumed()])
     assert result["results"] == [{"kind": "unrepresentable", "reason": "iterator item cap"}]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("raises", [False, True])
+async def test_iterator_close_exception_is_released_inside_the_alarm(tmp_path, raises):
+    source = (
+        "import signal\n"
+        "released = []\n"
+        "class Cleanup:\n"
+        "    def __del__(self):\n"
+        "        released.append(signal.getitimer(signal.ITIMER_REAL)[0] > 0)\n"
+        "class Values:\n"
+        "    def __iter__(self): return self\n"
+        "    def __next__(self):\n"
+        f"        if {raises!r}: raise ValueError('iteration')\n"
+        "        return 1\n"
+        "    def close(self): raise RuntimeError(Cleanup())\n"
+        "def f(mode): return released if mode else Values()\n"
+    )
+    result = await invoke(tmp_path, source, [consumed("((0,), {})"), consumed("((1,), {})")])
+    first, second = result["results"]
+    if raises:
+        assert first["kind"] == "raised" and first["class"] == "builtins.ValueError"
+        assert first["message"] == "iteration"
+    else:
+        assert first == {"kind": "unrepresentable", "reason": "iterator item cap"}
+    assert second["value"][1] == [["bool", True]]

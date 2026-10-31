@@ -117,7 +117,7 @@ class ExtensionProbe:
                 observe_binding=True,
             )
             self._results[node.id] = ParameterExtension(
-                node.id, generated.parameters, reason="budget exhausted"
+                node.id, generated.parameters, reason=generated.reason
             )
 
     async def measure(self, workspace: Workspace, trees: list[Tree], deadline: float) -> None:

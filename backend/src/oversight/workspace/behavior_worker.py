@@ -152,7 +152,7 @@ def call(
             result = _exception(error)
             release_exception(error)
             value = None
-            pending.release()
+            _release_capped(pending)
             return result
         return value_result(value)
 
@@ -405,6 +405,7 @@ def method_call(
     except BindingRejected as error:
         return {**_exception(error.error), "binding_rejected": True, "pre_fingerprint": initial}
     except CallTimeout:
+        signal.setitimer(signal.ITIMER_REAL, 0)
         return {"kind": "timed_out"}
     except RangeArgumentError as error:
         return {"kind": "unrepresentable", "reason": str(error)}
@@ -431,6 +432,7 @@ def probe(target: dict[str, Any], timeout_s: float, root: Path | None = None) ->
             lambda: getattr(importlib.import_module(target["module"]), target["name"]), timeout_s
         )
     except BaseException:
+        signal.setitimer(signal.ITIMER_REAL, 0)
         return {"problem": "import failed", "results": []}
     results = [
         call(
