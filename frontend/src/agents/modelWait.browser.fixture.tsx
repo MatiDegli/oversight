@@ -9,7 +9,7 @@ import { selectAgentCard } from "./selectors";
 const state = log
   .trim()
   .split("\n")
-  .slice(0, 18)
+  .slice(0, 16)
   .map((line) => JSON.parse(line) as ServerEvent)
   .reduce(applyEvent, createInitialState());
 const host = document.createElement("div");
@@ -19,7 +19,7 @@ export const modelWaitTest = {
   mount(waiting: boolean) {
     const next = waiting
       ? applyEvent(state, {
-          seq: 19,
+          seq: 17,
           ts: state.clock ?? "",
           type: "model.attempt_failed",
           payload: {

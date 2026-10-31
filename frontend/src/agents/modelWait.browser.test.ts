@@ -67,6 +67,12 @@ it.each(["dark", "day"])("preserves size and focus while waiting in %s", async (
       mkdirSync(shots, { recursive: true });
       await page.screenshot({ path: `${shots}${theme}.png` });
     }
+    await page.evaluate(() => {
+      document.documentElement.style.zoom = "2";
+    });
+    await check(line).toBeVisible();
+    expect(await line.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await check(focus).toBeFocused();
   } finally {
     await page.close();
   }
