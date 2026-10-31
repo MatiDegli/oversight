@@ -62,16 +62,13 @@ export function recordPlanEntries(entries: Entries, state: State): void {
   >();
   const planFor = (lead: LeadEvent) => {
     const { agent_id, revision, requested_plan_id } = lead.payload;
-    const siblings = [...plans.values()].filter(
-      (p) => p.payload.started_by === agent_id && p.payload.state === "proposed",
-    );
-    const plan = linked.has(agent_id)
-      ? requested_plan_id
-        ? plans.get(requested_plan_id)
-        : undefined
-      : latest.get(agent_id) === revision && siblings.length === 1
-        ? siblings[0]
-        : undefined;
+    let plan = requested_plan_id ? plans.get(requested_plan_id) : undefined;
+    if (!linked.has(agent_id) && latest.get(agent_id) === revision) {
+      const siblings = [...plans.values()].filter(
+        (p) => p.payload.started_by === agent_id && p.payload.state === "proposed",
+      );
+      if (siblings.length === 1) plan = siblings[0];
+    }
     return plan?.payload.state === "proposed" && plan.payload.started_by === agent_id
       ? plan
       : undefined;

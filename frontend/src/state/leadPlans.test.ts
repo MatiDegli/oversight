@@ -37,6 +37,28 @@ it("starting plan 2 closes only revision 3", () => {
   expect(entries(events, 9).map((entry) => entry.planId)).toEqual(["plan-1", "plan-3"]);
 });
 
+it("keeps every requested plan in a large inbox without a client-side cap", () => {
+  const lead = events[2],
+    plan = events[3];
+  if (lead?.type !== "lead.status" || plan?.type !== "plan.updated")
+    throw new Error("Missing proposal");
+  const proposals: ServerEvent[] = Array.from({ length: 1000 }, (_, index) => {
+    const planId = `plan-${String(index + 1)}`;
+    return [
+      {
+        ...lead,
+        seq: 3 + index * 2,
+        payload: { ...lead.payload, revision: index + 2, requested_plan_id: planId },
+      },
+      { ...plan, seq: 4 + index * 2, payload: { ...plan.payload, plan_id: planId } },
+    ];
+  }).flat();
+  const open = entries([...events.slice(0, 2), ...proposals]);
+  expect(open).toHaveLength(1000);
+  expect(new Set(open.map((entry) => entry.id)).size).toBe(1000);
+  expect(new Set(open.map((entry) => entry.planId)).size).toBe(1000);
+});
+
 it("rejecting plan 1 closes only revision 2", () => {
   expect(entries(events, 10).map((entry) => entry.planId)).toEqual(["plan-3"]);
 });
