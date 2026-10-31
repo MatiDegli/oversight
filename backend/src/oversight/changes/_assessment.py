@@ -421,7 +421,7 @@ class RulesScheduler:
                 )
                 await _spend.ready(self.ctx, deadline=deadline)
             except RulesFailure as error:
-                await self.terminal(wait, str(error))
+                await self.report_terminal(wait, error.code, str(error), lambda: self.valid(wait))
                 return
             if not self.valid(wait):
                 return

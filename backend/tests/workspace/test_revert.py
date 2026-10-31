@@ -453,7 +453,7 @@ async def test_competing_head_untouched(workspace, api):
 
 
 @pytest.mark.parametrize("dirty", ["index", "checkout", "untracked", "detached"])
-async def test_dirty_or_detached_refused_before_cas(workspace, api, dirty, monkeypatch):
+async def test_dirty_refused_and_detached_unknown_before_cas(workspace, api, dirty, monkeypatch):
     item = await prepared(workspace, api)
     async with workspace.locks(main=True, agent_id="agent-1"):
         path = workspace.main.root / ("new.py" if dirty == "untracked" else "later.py")
@@ -656,6 +656,9 @@ async def test_cas_mismatch_naming_inverse_settles_checkout(workspace, api, monk
     real = workspace.git
     calls = []
 
+    # The first real update-ref lands C. apply_inverse's own update-ref, the returned
+    # second call, fails with main already at C: that is the mismatch under test.
+    # Collapsing the two calls into one would turn this into a happy-path test.
     async def race(tree, *args, **kwargs):
         if args[0] == "update-ref":
             calls.append(args)
