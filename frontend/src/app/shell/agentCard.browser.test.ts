@@ -158,7 +158,30 @@ it("offers no Pause or Resume without command callbacks", async () => {
   }
 });
 
-it.each(["task", "steps", "diff", "stop", "pause"] as const)(
+it("ready preserves external layout when the focused Pause button disappears", async () => {
+  const page = await openCardPage();
+  try {
+    const card = page.getByRole("article", { name: "Agent A", exact: true });
+    const pause = card.getByRole("button", { name: "Pause", exact: true });
+    await pause.focus();
+    await check(pause).toBeFocused();
+    const before = await outside(page);
+    const size = await card.boundingBox();
+    await page.evaluate(() => {
+      window.readyTest.ready();
+    });
+    await check(card.getByRole("status")).toHaveText("Ready for review");
+    await check(pause).toHaveCount(0);
+    await check(card).toBeFocused();
+    expect(await outside(page)).toEqual(before);
+    expect(await card.boundingBox()).toEqual(size);
+    await check(page.getByLabel("Focus panel", { exact: true })).toHaveCount(0);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each(["task", "steps", "diff", "stop"] as const)(
   "ready preserves external layout and %s focus",
   async (target) => {
     const page = await browser.newPage({
@@ -182,12 +205,7 @@ it.each(["task", "steps", "diff", "stop", "pause"] as const)(
           : target === "steps"
             ? card.getByRole("list")
             : card.getByRole("button", {
-                name:
-                  target === "diff"
-                    ? "Live diff"
-                    : target === "pause"
-                      ? "Pause"
-                      : "Stop and discard",
+                name: target === "diff" ? "Live diff" : "Stop and discard",
                 exact: true,
               });
       await focus.focus();
@@ -225,7 +243,7 @@ it.each(["task", "steps", "diff", "stop", "pause"] as const)(
         });
       });
       expect(typography).toEqual([]);
-      await check(["steps", "diff", "pause"].includes(target) ? card : focus).toBeFocused();
+      await check(target === "steps" || target === "diff" ? card : focus).toBeFocused();
       await check(bDiff).toBeInViewport();
       expect(await outside(page)).toEqual(before);
       expect(await card.boundingBox()).toEqual(size);

@@ -1,4 +1,6 @@
-import type { AgentStatus } from "@contracts";
+import { readFileSync } from "node:fs";
+
+import type { AgentStatus, ServerEvent } from "@contracts";
 import type { ReactElement, SetStateAction } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -18,6 +20,9 @@ vi.mock("react", async (original) => ({
   },
 }));
 import { PauseControl } from "./PauseControl";
+import { AgentCard } from "./AgentCard";
+import { selectAgentCard } from "./selectors";
+import { applyEvent, createInitialState } from "../state";
 
 const onPause = vi.fn<(id: string) => Promise<unknown>>();
 const onResume = vi.fn<(id: string) => Promise<unknown>>();
@@ -45,6 +50,42 @@ function render(state: AgentStatus["state"] = "working") {
     },
   };
 }
+
+it.each(["working", "revising", "paused"] as const)(
+  "requires both command callbacks for Pause or Resume while %s",
+  (state) => {
+    const events = readFileSync(
+      new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
+      "utf8",
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as ServerEvent);
+    const data = selectAgentCard(
+      events.filter((event) => event.seq <= 19).reduce(applyEvent, createInitialState()),
+      "agent-1",
+    );
+    if (!data) throw new Error("Missing agent");
+    const command = () => Promise.resolve();
+    for (const [onPause, onResume] of [
+      [undefined, undefined],
+      [command, undefined],
+      [undefined, command],
+      [command, command],
+    ]) {
+      const html = renderToStaticMarkup(
+        <AgentCard
+          data={{ ...data, agent: { ...data.agent, state } }}
+          onPause={onPause}
+          onResume={onResume}
+        />,
+      );
+      expect(html.includes(`${state === "paused" ? "Resume" : "Pause"}</button>`)).toBe(
+        Boolean(onPause && onResume),
+      );
+    }
+  },
+);
 
 it.each([
   ["working", "Pause"],
