@@ -4,6 +4,16 @@ Each decision with its reason. The design approved before the build is in
 [docs/proposal.md](docs/proposal.md); this file adds what is decided while building.
 
 Entries are ordered by merge, not by date; when two entries conflict, the later date wins.
+## 2026-10-31 — Measured caller words on the graph
+
+Approved by the maintainer at 13:55:35 ART (2026-10-31T16:55:35Z; packet B 1031e item 1): review callers say
+"differs" in neutral text at 600 or "varied" in muted at 400, using the existing state-word
+slot. "same", "not measured" and absent comparisons leave the cone unchanged. Folded classes
+and modules project only a hidden member's "differs"; evidence never changes folds, geometry,
+camera, focus or field light. This makes observed differences visible without claiming safety.
+The three sketch exclusions retain the built cone card position, retain the built 1280 camera,
+and leave the canvas wordless when no caller was compared. The panel stays as built; the watch
+card's Evidence line and the node evidence chip/popover belong to separate fronts.
 
 ## Dependencies
 
@@ -2878,3 +2888,10 @@ Reason: a docs audit found many docs behind main after several days of changed d
 5. AGENTS.md is aligned only with decisions already recorded.
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
+## 2026-10-31 — Graph difference chip
+
+Approved at 13:55:35 ART (UTC-3), packet B 1031e item 1: a neutral count on each changed node,
+with a click/Enter popover for current-revision behavior samples. Facts arriving after Ready for
+review add it in place without opening it or taking focus. Existing caption-size is 13px, within
+1px of the sketch. The approved exclusions are the moved cone card, the 1280 reframe, and the agent
+card's “Evidence 5 of 6” line. Measured caller words belong to the parallel measured-cone graph front.

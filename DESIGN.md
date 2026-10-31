@@ -928,6 +928,19 @@ headings: a small square swatch in the agent's color followed by "Agent A" or "A
 **Distance badges.** A 20px circle filled with text, the distance as a page-colored number, 12px,
 weight 700. Neutral: the cone is about the code, not an agent.
 
+**Difference chip.** Current-revision behavior facts put “N of M differ” on a changed node's top
+border, 12px from its left edge; unstable-only evidence reads “varied on K of M inputs” in muted,
+weight 400. No difference or no comparison means no chip. Two changes share the border in change-id
+order, each prefixed by its agent letter in text. Use caption-size (13px), label-weight, mono numbers,
+radius-control, a solid border token and ground fill; the text token carries established counts.
+Click or Enter toggles one opaque panel popover below the node, right-aligned, at most 440px wide,
+clamped 8px inside the stage or flipped above. It shows up to eight 26px input/before/after rows,
+marks unstable samples, and states omitted differing inputs and limitations. Escape or a second
+click closes it; an outside pointer press also closes it. Only the touched chip receives focus,
+and Escape is claimed only while its popover is open. Evidence arrival and replacement never open
+it, move focus, nodes or the camera. Hidden, folded and too-narrow nodes show no chip; its pixels
+stay fixed across zoom. Counts remain available in review. No animation, new token or agent color.
+
 ### Impact cone (signature component)
 
 The cone is level 2. In review and in the live diff, the graph shows the change and its cone, and
@@ -963,6 +976,14 @@ everything else steps back.
 - The cone changes node and edge emphasis; it adds no light source to the LED field.
 
 ### Measured callers within Signal
+
+In review, measured callers use the row's state-word slot: right-aligned just left of the distance
+badge, with the existing SVG font, node-word-size and node-word-gap. "differs" uses text at 600;
+"varied" uses muted at 400. "same", "not measured" and null get no canvas mark and keep today's
+cone look. A folded class or module says "differs" if any hidden member differs and the row has
+no agent marks; agent words and badges keep their slot and omit the count. "varied" never
+projects onto a folded row. Measurements never open or close rows, move nodes, routes, camera,
+framing or focus, or add a field light. No border, color, token, edge caption or legend changes.
 
 The graph's cone card is the only list of possibly affected functions. Review leads with callers
 that behave differently and their smallest recorded example; callers with the same result share

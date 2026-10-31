@@ -1,0 +1,564 @@
+import { mkdir, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { expect as check } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
+import { createServer } from "vite";
+import type { ViteDevServer } from "vite";
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { launchBrowser } from "../browserLaunch.support";
+import type { GraphProbeHost } from "../graph";
+import type {} from "./nodeChip.browser.fixture";
+
+const out = fileURLToPath(new URL("../../../.shots/node-chip/", import.meta.url));
+let server: ViteDevServer, browser: Browser, html: string, url: string;
+beforeAll(async () => {
+  await mkdir(out, { recursive: true });
+  server = await createServer({
+    root: fileURLToPath(new URL("../../", import.meta.url)),
+    cacheDir: `${out}cache`,
+    server: { host: "127.0.0.1", port: 0, strictPort: false },
+  });
+  html = await server.transformIndexHtml(
+    "/",
+    '<!doctype html><html><body><script type="module">import "/src/theme/index.css"; import { nodeChipTest } from "/src/app/nodeChip.browser.fixture.tsx"; window.nodeChipTest = nodeChipTest;</script></body></html>',
+  );
+  await server.listen();
+  url = server.resolvedUrls?.local[0] ?? "";
+  browser = await launchBrowser();
+}, 60000);
+afterAll(async () => {
+  await browser.close();
+  await server.close();
+});
+const chip = (page: Page) =>
+  page.getByRole("button", { name: /^(9 of 10 differ|varied on 1 of 2 inputs), compute_price$/ });
+const samples = (page: Page) =>
+  page.getByRole("region", { name: "compute_price behavior samples" });
+const panel = (page: Page) => page.getByRole("complementary", { name: "Review panel" });
+const geometry = (page: Page) =>
+  page.evaluate(() => {
+    const graph = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    return {
+      zoom: graph?.zoom(),
+      pan: graph?.pan(),
+      positions: graph?.positions(),
+    };
+  });
+async function ready(page: Page) {
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+        ?.oversightGraph?.animating() === false,
+  );
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            resolve();
+          }),
+        ),
+      ),
+  );
+}
+async function withPage(
+  theme: string,
+  width: number,
+  measured: boolean,
+  test: (page: Page) => Promise<void>,
+) {
+  const page = await browser.newPage({
+    viewport: { width, height: width === 1920 ? 1080 : 800 },
+    reducedMotion: "reduce",
+  });
+  page.setDefaultTimeout(10000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url);
+    await page.waitForFunction(() => "nodeChipTest" in window);
+    await page.evaluate(
+      ({ theme, measured }) => {
+        document.documentElement.dataset.theme = theme;
+        window.nodeChipTest.mount(measured ? 21 : 20, measured);
+      },
+      { theme, measured },
+    );
+    await page.evaluate(() => document.fonts.ready);
+    await ready(page);
+    await page.getByRole("button", { name: "Functions", exact: true }).click();
+    await ready(page);
+    await test(page);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+  }
+}
+async function tokens(page: Page) {
+  const actual = await chip(page).evaluate((button) => {
+    const css = getComputedStyle(button),
+      probe = document.createElement("span");
+    button.append(probe);
+    const resolve = (token: string) => {
+      probe.style.color = `var(--${token})`;
+      return getComputedStyle(probe).color;
+    };
+    const expected = [resolve("border"), resolve("ground"), resolve("text")];
+    probe.remove();
+    return { actual: [css.borderTopColor, css.backgroundColor, css.color], expected };
+  });
+  expect(actual.actual).toEqual(actual.expected);
+}
+async function anchored(page: Page) {
+  const bounds = await chip(page).boundingBox();
+  const node = await page.evaluate(() => {
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const box = host?.oversightGraph?.renderedBox("shop.pricing:compute_price");
+    const rect = host?.getBoundingClientRect();
+    return box && rect ? { x: rect.left + box.x1, y: rect.top + box.y1 } : null;
+  });
+  expect(bounds).not.toBeNull();
+  expect(node).not.toBeNull();
+  expect(Math.abs((bounds?.x ?? 0) - (node?.x ?? 0) - 12)).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs((bounds?.y ?? 0) + (bounds?.height ?? 0) / 2 - (node?.y ?? 0)),
+  ).toBeLessThanOrEqual(1);
+}
+async function clamped(page: Page) {
+  const box = await samples(page).boundingBox(),
+    stage = await page.getByRole("main", { name: "Graph stage" }).boundingBox();
+  expect(box && stage).toBeTruthy();
+  if (!box || !stage) throw new Error("Missing boxes");
+  expect(box.width).toBeLessThanOrEqual(440);
+  expect(box.x).toBeGreaterThanOrEqual(stage.x + 7);
+  expect(box.y).toBeGreaterThanOrEqual(stage.y + 7);
+  expect(box.x + box.width).toBeLessThanOrEqual(stage.x + stage.width - 7);
+  expect(box.y + box.height).toBeLessThanOrEqual(stage.y + stage.height - 7);
+}
+async function capture(page: Page, name: string) {
+  await ready(page);
+  if (await panel(page).isVisible())
+    await panel(page).locator(".monaco-editor .view-lines").first().waitFor();
+  await page.screenshot({ path: `${out}${name}.png` });
+}
+
+async function reviewFlow(page: Page, name: string) {
+  await page.getByRole("button", { name: "Review change", exact: true }).click();
+  await check(panel(page)).toBeVisible();
+  await ready(page);
+  await anchored(page);
+  await check(chip(page)).not.toHaveAttribute("aria-controls");
+  await chip(page).focus();
+  const before = await geometry(page);
+  await chip(page).press("Enter");
+  await check(samples(page)).toBeVisible();
+  await check(chip(page)).toHaveAttribute("aria-expanded", "true");
+  await check(samples(page).locator("li")).toHaveCount(8);
+  await check(samples(page).getByText("8 of 9 differing inputs shown")).toBeVisible();
+  expect(await samples(page).locator("footer .font-mono").allTextContents()).toEqual(["8", "9"]);
+  await check(samples(page).locator("button, input, textarea, [tabindex]")).toHaveCount(0);
+  await clamped(page);
+  expect(await geometry(page)).toEqual(before);
+  await check(chip(page)).toBeFocused();
+  await capture(page, `review-${name}`);
+  await chip(page).press("Escape");
+  await check(chip(page)).not.toHaveAttribute("aria-controls");
+  await check(samples(page)).toHaveCount(0);
+  await check(panel(page)).toBeVisible();
+  await check(chip(page)).toBeFocused();
+  await chip(page).click();
+  await check(samples(page)).toBeVisible();
+  await chip(page).click();
+  await check(samples(page)).toHaveCount(0);
+  expect(await geometry(page)).toEqual(before);
+  await check(chip(page)).toBeFocused();
+  await chip(page).click();
+  await page.evaluate(() => {
+    window.nodeChipTest.emit(22);
+  });
+  await check(chip(page)).toHaveText("varied on 1 of 2 inputs");
+  await check(chip(page)).toHaveCSS("font-weight", "400");
+  await check(samples(page)).toBeVisible();
+  await check(samples(page).locator("li")).toHaveCount(1);
+  await check(
+    samples(page).getByText("Results varied between runs; this is not an established difference."),
+  ).toBeVisible();
+  await check(
+    samples(page).getByText("Behavior probing was unavailable; no further reason was published."),
+  ).toBeVisible();
+  expect(await geometry(page)).toEqual(before);
+  await check(chip(page)).toBeFocused();
+  await capture(page, `partial-${name}`);
+  await chip(page).press("Escape");
+  await check(panel(page)).toBeVisible();
+  await chip(page).press("Escape");
+  await check(panel(page)).toHaveCount(0);
+}
+
+it.each([
+  ["dark", 1920],
+  ["day", 1920],
+  ["dark", 1280],
+  ["day", 1280],
+] as const)(
+  "keeps behavior chips still, accessible and token-colored in %s at %i",
+  async (theme, width) => {
+    const name = `${String(width)}-${theme}`;
+    await withPage(theme, width, false, async (page) => {
+      await check(chip(page)).toHaveCount(0);
+      const before = await geometry(page);
+      const focused = await page.evaluateHandle(() => document.activeElement);
+      await page.evaluate(() => {
+        window.nodeChipTest.emit(21);
+      });
+      await check(chip(page)).toBeVisible();
+      await anchored(page);
+      await tokens(page);
+      expect(await geometry(page)).toEqual(before);
+      expect(await page.evaluate((element) => element === document.activeElement, focused)).toBe(
+        true,
+      );
+      await check(samples(page)).toHaveCount(0);
+      await capture(page, `watch-${name}`);
+      await reviewFlow(page, name);
+      await chip(page).click();
+      await check(samples(page)).toBeVisible();
+      await page.getByRole("main", { name: "Graph stage" }).click({ position: { x: 8, y: 8 } });
+      await check(samples(page)).toHaveCount(0);
+      await chip(page).click();
+      await check(samples(page)).toBeVisible();
+      await page.evaluate(() => {
+        window.nodeChipTest.emit(23);
+      });
+      await check(chip(page)).toHaveCount(0);
+      await check(samples(page)).toHaveCount(0);
+    });
+    await withPage(theme, width, true, async (page) => {
+      await page.getByRole("button", { name: "Review change", exact: true }).click();
+      await check(panel(page)).toBeVisible();
+      await check(chip(page)).toHaveCount(0);
+      await check(page.locator("[data-chip-node]")).toHaveCount(0);
+      await capture(page, `measured-${name}`);
+    });
+  },
+  120000,
+);
+
+it("excludes drawn labels, overlays, underlays and edges from body boxes", async () => {
+  const page = await browser.newPage();
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    const cytoscapeModule = fileURLToPath(
+      new URL("../../node_modules/cytoscape/dist/cytoscape.esm.mjs", import.meta.url),
+    );
+    const fixture = await server.transformIndexHtml(
+      "/probe-box.html",
+      `<!doctype html><html><body>
+      <div id="graph" style="width:600px;height:400px"></div>
+      <script type="module">
+        import cytoscape from "/@fs/${cytoscapeModule}";
+        import { exposeProbe } from "/src/graph/probe.ts";
+        const host = document.getElementById("graph");
+        const cy = cytoscape({ container: host, layout: { name: "preset" },
+          elements: [
+            { data: { id: "a" }, position: { x: 100, y: 100 } },
+            { data: { id: "b" }, position: { x: 240, y: 200 } },
+            { data: { id: "edge", source: "a", target: "b" } }
+          ],
+          style: [{ selector: "node", style: {
+            width: 80, height: 40, label: "data(id)", "text-valign": "top",
+            "overlay-opacity": 0.5, "overlay-padding": 10,
+            "underlay-opacity": 0.5, "underlay-padding": 20
+          } }]
+        });
+        exposeProbe(host, cy);
+        cy.zoom(2); cy.pan({ x: 10, y: 20 });
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          const node = cy.$id("a");
+          window.bodyBoxes = {
+            body: host.oversightGraph.renderedBox("a"),
+            label: node.renderedBoundingBox({ includeOverlays: false, includeUnderlays: false }),
+            overlay: node.renderedBoundingBox({ includeLabels: false, includeUnderlays: false }),
+            decorations: node.renderedBoundingBox({ includeLabels: false }),
+            edge: host.oversightGraph.renderedBox("edge")
+          };
+          cy.destroy();
+        }));
+      </script></body></html>`,
+    );
+    await page.route("**/probe-box.html", (route) =>
+      route.fulfill({ contentType: "text/html", body: fixture }),
+    );
+    await page.goto(`${url}probe-box.html`);
+    await check
+      .poll(async () => {
+        expect(errors).toEqual([]);
+        return page.evaluate(() => "bodyBoxes" in window);
+      })
+      .toBe(true);
+    const boxes = await page.evaluate(
+      () =>
+        Reflect.get(window, "bodyBoxes") as {
+          body: { x1: number; y1: number; x2: number; y2: number; w: number; h: number };
+          label: { y1: number };
+          overlay: { w: number };
+          decorations: { w: number };
+          edge: null;
+        },
+    );
+    // Preset body is 80 by 40 at (100, 100), plus Cytoscape's 1px antialias pad.
+    expect(boxes.body).toEqual({ x1: 128, y1: 178, x2: 292, y2: 262, w: 164, h: 84 });
+    expect(boxes.label.y1).toBeLessThan(boxes.body.y1);
+    expect(boxes.overlay.w).toBeGreaterThan(boxes.body.w);
+    expect(boxes.decorations.w).toBeGreaterThan(boxes.body.w);
+    expect(boxes.edge).toBeNull();
+  } finally {
+    await page.close();
+  }
+});
+
+it("keeps placement and dismissal subscriptions stable across usage ticks", async () => {
+  await withPage("dark", 1280, false, async (page) => {
+    await page.evaluate(() => {
+      window.nodeChipTest.emit(21);
+    });
+    await page.getByRole("button", { name: "Review change", exact: true }).click();
+    await chip(page).click();
+    await check(samples(page)).toBeVisible();
+    await ready(page);
+    const changes = await page.evaluate(async () => {
+      const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+      if (!host) throw new Error("Missing graph");
+      const changes: string[] = [];
+      const restore: (() => void)[] = [];
+      const targets: EventTarget[] = [host, document];
+      for (const target of targets) {
+        for (const method of ["addEventListener", "removeEventListener"] as const) {
+          const original = target[method].bind(target);
+          target[method] = function (...args: Parameters<typeof original>) {
+            if (["graphrender", "keydown", "pointerdown"].includes(args[0]))
+              changes.push(`${method}:${args[0]}`);
+            original(args[0], args[1], args[2]);
+          };
+          restore.push(() => {
+            target[method] = original;
+          });
+        }
+      }
+      try {
+        for (let tick = 0; tick < 3; tick++) {
+          window.nodeChipTest.emit(17);
+          await new Promise(requestAnimationFrame);
+        }
+        return changes;
+      } finally {
+        restore.forEach((restore) => {
+          restore();
+        });
+      }
+    });
+    expect(changes).toEqual([]);
+    await check(samples(page)).toBeVisible();
+    await check(chip(page)).toBeFocused();
+  });
+});
+
+it("places the captured graph evidence beside its approved sketches", async () => {
+  const page = await browser.newPage({ viewport: { width: 3840, height: 1080 } });
+  try {
+    for (const [live, sketch] of [
+      ["review", "behavior-dark"],
+      ["watch", "watch-ready-dark"],
+      ["measured", "measured-dark"],
+    ] as const) {
+      const path = new URL(`../../../docs/sketches/graph-evidence/${sketch}.png`, import.meta.url);
+      const reference = await readFile(path).catch((error: unknown) => {
+        if (live !== "measured") throw error;
+        return readFile(`${out}reference-measured-dark.png`).catch(() => null);
+      });
+      if (!reference) {
+        console.info("Measured sketch comparison awaits the parallel front's reference.");
+        continue;
+      }
+      const actual = await readFile(`${out}${live}-1920-dark.png`);
+      await page.setContent(
+        `<body style="margin:0;display:flex"><img src="data:image/png;base64,${reference.toString("base64")}"><img src="data:image/png;base64,${actual.toString("base64")}"></body>`,
+      );
+      await page
+        .locator("img")
+        .evaluateAll((images) =>
+          Promise.all(images.map((img) => (img as HTMLImageElement).decode())),
+        );
+      await page.screenshot({ path: `${out}compare-${live}.png`, fullPage: true });
+    }
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([1920, 1280])("keeps long values readable without keyboard stops at %i", async (width) => {
+  await withPage("dark", width, false, async (page) => {
+    await page.evaluate(() => {
+      window.nodeChipTest.emit(21);
+      window.nodeChipTest.amend("long");
+    });
+    await page.getByRole("button", { name: "Review change", exact: true }).click();
+    await ready(page);
+    await chip(page).press("Enter");
+    await check(samples(page)).toBeVisible();
+    await clamped(page);
+    // Test descendants directly, then real Tab navigation for implicit scroller focus.
+    expect(
+      await samples(page).evaluate((popover) => {
+        const focused: string[] = [];
+        for (const element of popover.querySelectorAll<HTMLElement>("*")) {
+          element.focus({ preventScroll: true });
+          if (document.activeElement === element) focused.push(element.tagName);
+        }
+        return focused;
+      }),
+    ).toEqual([]);
+    await check(chip(page)).toBeFocused();
+    for (let tab = 0; tab < 8; tab++) {
+      await page.keyboard.press("Tab");
+      expect(
+        await samples(page).evaluate((popover) => popover.contains(document.activeElement)),
+      ).toBe(false);
+    }
+    expect(await samples(page).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    for (const suffix of ["before", "after"])
+      expect(
+        await samples(page)
+          .getByText(`${"shared".repeat(40)}-${suffix}`, { exact: true })
+          .first()
+          .evaluate((el) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight),
+      ).toBe(true);
+    await page.evaluate(() => {
+      window.nodeChipTest.amend("empty");
+    });
+    await check(samples(page).locator("li")).toHaveCount(0);
+    await check(samples(page).getByText("0 of 9 differing inputs shown")).toBeVisible();
+  });
+});
+
+it("replaces the first chip's open popover when the second chip opens", async () => {
+  await withPage("dark", 1920, false, async (page) => {
+    await page.evaluate(() => {
+      window.nodeChipTest.emit(21);
+      window.nodeChipTest.amend("two");
+    });
+    for (let index = 0; index < 2; index++)
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    const buttons = page.locator("[data-chip-node] button");
+    await check(buttons.nth(1)).toBeVisible();
+    await check(buttons).toHaveText(["A 9 of 10 differ", "B 9 of 10 differ"]);
+    const first = await buttons.nth(0).boundingBox(),
+      second = await buttons.nth(1).boundingBox();
+    expect(first && second && first.x + first.width <= second.x).toBe(true);
+    await buttons.nth(0).press("Enter");
+    await check(buttons.nth(0)).toHaveAttribute("aria-expanded", "true");
+    await check(page.locator("[data-chip-popover]")).toHaveAttribute(
+      "id",
+      (await buttons.nth(0).getAttribute("aria-controls")) ?? "",
+    );
+    await buttons.nth(1).evaluate((button) => {
+      (button as HTMLButtonElement).focus({ preventScroll: true });
+    });
+    await buttons.nth(1).press("Enter");
+    await check(page.locator("[data-chip-popover]")).toHaveCount(1);
+    await check(buttons.nth(0)).toHaveAttribute("aria-expanded", "false");
+    await check(buttons.nth(1)).toHaveAttribute("aria-expanded", "true");
+    await check(page.locator("[data-chip-popover]")).toHaveAttribute(
+      "id",
+      (await buttons.nth(1).getAttribute("aria-controls")) ?? "",
+    );
+    await page.evaluate(() => {
+      window.nodeChipTest.emit(22);
+      window.nodeChipTest.amend("two");
+    });
+    for (let index = 0; index < 2; index++)
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await check(buttons).toHaveText(["A varied on 1 of 2 inputs", "B varied on 1 of 2 inputs"]);
+    await check(buttons.nth(1)).toBeVisible();
+    for (const button of await buttons.all()) {
+      const colors = await button.evaluate((element) => {
+        const letter = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode();
+        const probe = document.createElement("span");
+        probe.style.color = "var(--text)";
+        element.append(probe);
+        const result = {
+          count: getComputedStyle(element).color,
+          letter: getComputedStyle(letter?.parentElement ?? element).color,
+          text: getComputedStyle(probe).color,
+        };
+        probe.remove();
+        return result;
+      });
+      expect(colors.letter).toBe(colors.text);
+      expect(colors.letter).not.toBe(colors.count);
+    }
+  });
+});
+
+it("keeps folded and removed chips out of the field mask", async () => {
+  for (const mode of ["folded", "gone"] as const)
+    await withPage("dark", 1920, false, async (page) => {
+      await page.evaluate((mode) => {
+        window.nodeChipTest.emit(21);
+        window.nodeChipTest.amend(mode);
+      }, mode);
+      await check(page.locator("[data-chip-node] button")).toBeHidden();
+      await ready(page);
+      await check(
+        page.locator("[data-chip-node].pointer-events-auto, [data-chip-node] .pointer-events-auto"),
+      ).toHaveCount(0);
+    });
+});
+it("hides chips too wide for the drawn node and closes their popover", async () => {
+  await withPage("dark", 1920, false, async (page) => {
+    await page.evaluate(() => {
+      window.nodeChipTest.emit(21);
+    });
+    await chip(page).click();
+    await check(samples(page)).toBeVisible();
+    for (let index = 0; index < 8; index++)
+      await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+    await check(chip(page)).toBeHidden();
+    await check(samples(page)).toHaveCount(0);
+    await check(
+      page.locator("[data-chip-node].pointer-events-auto, [data-chip-node] .pointer-events-auto"),
+    ).toHaveCount(0);
+    for (let index = 0; index < 8; index++)
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await check(chip(page)).toBeVisible();
+    await check(
+      page.locator("[data-chip-node].pointer-events-auto, [data-chip-node] .pointer-events-auto"),
+    ).toHaveCount(1);
+  });
+});
+
+it("keeps chips out of the field mask before their first placement", async () => {
+  await withPage("dark", 1920, false, async (page) => {
+    const initial = await page.evaluate(() => {
+      window.nodeChipTest.emit(21);
+      const group = document.querySelector<HTMLElement>("[data-chip-node]");
+      if (!group) throw new Error("Missing chip group");
+      return {
+        visibility: getComputedStyle(group).visibility,
+        maskCandidates: group.matches(".pointer-events-auto")
+          ? 1
+          : group.querySelectorAll(".pointer-events-auto").length,
+      };
+    });
+    expect(initial).toEqual({ visibility: "hidden", maskCandidates: 0 });
+    await check(chip(page)).toBeVisible();
+    await check(
+      page.locator("[data-chip-node].pointer-events-auto, [data-chip-node] .pointer-events-auto"),
+    ).toHaveCount(1);
+  });
+});

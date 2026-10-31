@@ -8,6 +8,8 @@ import { nodeGeometry, rowWidthAt } from "./geometry";
 import type { NodeMarks, Word } from "./layers";
 import { BUILTIN_NAMES } from "./builtinNames";
 
+export type MeasuredWord = "differs" | "same" | "varied" | "not measured";
+
 export interface GraphElement {
   group: "nodes" | "edges";
   data: {
@@ -27,6 +29,7 @@ export interface GraphElement {
     /** The state word and letter badges of a leaf an agent touches. */
     marks?: NodeMarks;
     distance?: number;
+    measured?: MeasuredWord;
     parent?: string;
     source?: string;
     target?: string;
@@ -101,6 +104,7 @@ export function graphElements(
   lit: ReadonlySet<string> | null = null,
   cone: ImpactCone | null = null,
   preserveReads = false,
+  measured: ReadonlyMap<string, MeasuredWord | null> | null = null,
 ): GraphElement[] {
   const nodes = new Map(state.graph?.nodes.map((node) => [node.id, node]));
   const edges = new Map(state.graph?.edges.map((edge) => [edge.id, edge]));
@@ -176,6 +180,11 @@ export function graphElements(
     if (dims(node.id)) classes.push("dimmed");
     const distance = lit?.has(node.id) ? distances.get(node.id) : undefined;
     if (distance !== undefined) classes.push("cone");
+    const word =
+      distance !== undefined && !cone?.seeds.includes(node.id) && !nodeMarks[node.id]?.pending
+        ? measured?.get(node.id)
+        : null;
+    if (word) classes.push(`measured-${word === "not measured" ? "unmeasured" : word}`);
     const touch = nodeMarks[node.id];
     // Review's read history must not color the cone; only pending changes keep agent marks.
     const focus = lit !== null && !preserveReads && !touch?.pending ? {} : (touch?.focus ?? {});
@@ -210,6 +219,7 @@ export function graphElements(
         id: node.id,
         kind: node.kind,
         ...(distance !== undefined ? { distance } : {}),
+        ...(word ? { measured: word } : {}),
         label: node.name,
         ...size,
         ...(marks ? { marks } : {}),

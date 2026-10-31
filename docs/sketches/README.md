@@ -56,3 +56,12 @@ Approved shell designs of 2026-10-27. The earlier review image was replaced by
 | [conversation.png](v4/conversation.png) | Agent conversation in the focus panel | Target | `frontend/conversation-panel` and `frontend/conversation-tab`. |
 | [changes.png](v4/changes.png) | Changes view | Target | No delivery front specified yet. |
 | [settings.png](v4/settings.png) | Settings view | Target | No delivery front specified yet. |
+
+## Graph evidence
+
+Approved graph-evidence sketch of 2026-10-31.
+
+| File | What it shows | Status | Delivery or replacement |
+| --- | --- | --- | --- |
+| [behavior-dark.png](graph-evidence/behavior-dark.png) | Changed function count and behavior samples, dark | Built | `frontend/node-chip` |
+| [watch-ready-dark.png](graph-evidence/watch-ready-dark.png) | Ready for review count on the pending node in watch, dark | Built | `frontend/node-chip` |
