@@ -113,8 +113,7 @@ static build requires the recording and its receipt; UI tests select their own f
   formatter edits appearing in the diff. Agent commits keep hooks disabled.
 - After the hackathon, as a plan first: repositories without Python open without a graph; agents,
   worktrees, diff, review, cross-review, merge and tests still work. Needs a per-repository test
-  command with JUnit output, shown verbatim in the trust prompt, and a center view without the
-  graph (sketch first).
+  command with JUnit output and a center view without the graph (sketch first).
 - After the hackathon, after the native Windows port: a Tauri shell, starting with one bounded spike
   in its own directory that touches no product code: a Windows window showing the current UI,
   starting the backend inside WSL, and passing a folder chosen with the native dialog (Windows path
