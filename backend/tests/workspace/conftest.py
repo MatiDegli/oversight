@@ -68,7 +68,7 @@ class Gate:
         try:
             async with asyncio.timeout(timeout_s):
                 return await asyncio.shield(worker)
-        except (TimeoutError, asyncio.CancelledError):
+        except (TimeoutError, asyncio.CancelledError) as error:
             aborted = True
 
             async def release() -> None:
@@ -94,12 +94,15 @@ class Gate:
                 await asyncio.gather(worker, return_exceptions=True)
 
             cleanup = asyncio.create_task(release())
+            cancelled = False
             while not cleanup.done():
                 try:
                     await asyncio.shield(cleanup)
                 except asyncio.CancelledError:
-                    continue
+                    cancelled = True
             cleanup.result()
+            if cancelled and not isinstance(error, asyncio.CancelledError):
+                raise asyncio.CancelledError from error
             raise
 
     async def open_gate(self, timeout_s: float = 60) -> None:

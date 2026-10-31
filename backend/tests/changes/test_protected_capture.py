@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from changes_helpers import Harness
 
-from oversight.changes._candidate import changed_inventory
+from oversight.changes._candidate import InventoryQueryFailed, changed_inventory
 from oversight.changes._protected_paths import (
     BUILTIN_CATEGORIES,
     BUILTIN_TABLE_VERSION,
@@ -314,16 +314,21 @@ async def test_candidate_malformed_output_never_keeps_partial_inventory(
 ) -> None:
     git = AsyncMock(return_value=prefix + suffix)
     ctx = Mock(workspace=Mock(main=Mock()), git=git)
-    inventory = await changed_inventory(cast(ChangeContext, ctx), guard, PROPOSAL_SEQ)
-    assert inventory == ChangedFileInventory(
-        files=(), complete=False, evidence=candidate_evidence(guard)
-    )
-    assert (
-        check_protected_paths(
-            ProtectedPathSnapshot(evidence=(EvidenceRef(event_seq=RUN_SEQ),)), inventory
+    output = prefix + suffix
+    if not output.endswith("\0") or len(output[:-1].split("\0")) % 2:
+        with pytest.raises(InventoryQueryFailed):
+            await changed_inventory(cast(ChangeContext, ctx), guard, PROPOSAL_SEQ)
+    else:
+        inventory = await changed_inventory(cast(ChangeContext, ctx), guard, PROPOSAL_SEQ)
+        assert inventory == ChangedFileInventory(
+            files=(), complete=False, evidence=candidate_evidence(guard)
         )
-        is None
-    )
+        assert (
+            check_protected_paths(
+                ProtectedPathSnapshot(evidence=(EvidenceRef(event_seq=RUN_SEQ),)), inventory
+            )
+            is None
+        )
     git.assert_awaited_once_with(
         ctx.workspace.main,
         "diff",
@@ -338,7 +343,7 @@ async def test_candidate_malformed_output_never_keeps_partial_inventory(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("fault", ["truncated", "failed", "timeout"])
-async def test_candidate_git_failure_is_incomplete(
+async def test_candidate_git_failure_is_query_error(
     h: Harness, guard: MergeGuard, monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
     # A runner may report truncation even when its retained tail ends in NUL.
@@ -352,10 +357,8 @@ async def test_candidate_git_failure_is_incomplete(
     )
     monkeypatch.setattr(h.workspace, "git", AsyncMock(return_value=result))
     async with h.workspace.locks(main=True):
-        inventory = await changed_inventory(h.manager._ctx, guard, PROPOSAL_SEQ)
-    assert inventory == ChangedFileInventory(
-        files=(), complete=False, evidence=candidate_evidence(guard)
-    )
+        with pytest.raises(InventoryQueryFailed):
+            await changed_inventory(h.manager._ctx, guard, PROPOSAL_SEQ)
 
 
 @pytest.mark.anyio
@@ -366,12 +369,10 @@ async def test_candidate_cancellation_propagates(guard: MergeGuard) -> None:
 
 
 @pytest.mark.anyio
-async def test_candidate_unavailable_query_is_incomplete(guard: MergeGuard) -> None:
+async def test_candidate_unavailable_query_is_error(guard: MergeGuard) -> None:
     ctx = Mock(workspace=Mock(main=Mock()), git=AsyncMock(side_effect=WorkspaceError("lost")))
-    inventory = await changed_inventory(cast(ChangeContext, ctx), guard, PROPOSAL_SEQ)
-    assert inventory == ChangedFileInventory(
-        files=(), complete=False, evidence=candidate_evidence(guard)
-    )
+    with pytest.raises(InventoryQueryFailed):
+        await changed_inventory(cast(ChangeContext, ctx), guard, PROPOSAL_SEQ)
 
 
 @pytest.mark.anyio

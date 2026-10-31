@@ -1,4 +1,4 @@
-"""Human controls over HTTP: admission, lifecycle and schema-valid, text-free events."""
+"""Human controls over HTTP: admission, lifecycle and schema-valid message events."""
 
 # Tests inspect registries only to hold or identify otherwise transient lifecycle phases.
 # pyright: reportPrivateUsage=false
@@ -21,6 +21,7 @@ from live_helpers import (
     meta_settings,
     start,
 )
+from message_log_helpers import MessageBarrier
 from revise_helpers import HeldRequests, opened, ready, request, states
 
 from oversight.agents import (
@@ -88,7 +89,28 @@ async def pause(s: LiveServer, model: HeldScript) -> None:
     await s.until(is_type("agent.status", state="paused"))
 
 
-async def test_working_pending_and_paused_resume_order_and_memory_only_text(tmp_path: Path) -> None:
+async def resume_with_pending_commit(
+    s: LiveServer, model: HeldScript, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with MessageBarrier(s, model, monkeypatch, "Before next call.") as held:
+        accepted(await control(s, "resume"))
+        await held.step_entered.wait()
+        request = asyncio.create_task(control(s, "message", "Before next call."))
+        try:
+            await held.write_entered.wait()
+            await held.assert_pre_call_blocked()
+            assert model.entered.empty()
+            held.write_release.set()
+            accepted(await request)
+            await model.entered.get()
+        finally:
+            held.release()
+            await request
+
+
+async def test_working_pending_and_paused_resume_order_and_persisted_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     model = HeldScript()
     async with (
         asyncio.timeout(DEADLINE_S),
@@ -133,8 +155,7 @@ async def test_working_pending_and_paused_resume_order_and_memory_only_text(tmp_
             },
         )
         assert error_code(response) == (409, "wrong_state")
-        accepted(await control(s, "resume"))
-        await model.entered.get()
+        await resume_with_pending_commit(s, model, monkeypatch)
         model.permits.release()
         await ready(s)
         assert states(s.events()) == [
@@ -144,12 +165,21 @@ async def test_working_pending_and_paused_resume_order_and_memory_only_text(tmp_
             "working",
             "ready_for_review",
         ]
-        assert [m["content"] for m in model.requests[1][-3:]] == [
+        assert [m["content"] for m in model.requests[1][-4:]] == [
             "  Private first.\n",
             "Private pending.",
             "Private second. 😀",
+            "Before next call.",
         ]
-        assert all("Private" not in e.model_dump_json() for e in s.events())
+        sent = [e for e in s.events() if e.type == "agent.message"]
+        assert [e.payload.text for e in sent] == [
+            "  Private first.\n",
+            "Private pending.",
+            "Private second. 😀",
+            "Before next call.",
+        ]
+        step = next(e for e in s.events() if e.type == "agent.step" and e.payload.step == 2)
+        assert all(e.seq < step.seq for e in sent)
         assert s.live._controls == {}
         for action in ACTIONS:
             assert error_code(await control(s, action)) == (409, "wrong_state")
@@ -205,7 +235,7 @@ async def test_stop_paused_never_wakes_and_precedes_rejected_resolution(tmp_path
         await start(s)
         await model.entered.get()
         await pause(s, model)
-        accepted(await control(s, "message", "Do not persist this."))
+        accepted(await control(s, "message", "Do not deliver this."))
         accepted(await control(s, "stop"))
         await s.until(is_type("change.resolved", reason="stopped"))
         events = s.events()  # Every envelope is validated by LiveServer.events.
@@ -213,7 +243,9 @@ async def test_stop_paused_never_wakes_and_precedes_rejected_resolution(tmp_path
         assert events[-2].payload.state == "stopped"
         assert events[-1].payload.decision == "rejected"
         assert not any(e.type in {"change.proposed", "agent.step"} for e in events)
-        assert all("Do not persist" not in e.model_dump_json() for e in events)
+        assert [e.payload.text for e in events if e.type == "agent.message"] == [
+            "Do not deliver this."
+        ]
         assert s.live._controls == {} and s.live._slots == {"A": None}
         for action in (*ACTIONS, "stop"):
             assert error_code(await control(s, action)) == (409, "wrong_state")
@@ -311,6 +343,7 @@ async def test_bad_message_body_blank_and_single_message_limits(tmp_path: Path, 
             )
         ) == (422, "invalid_request")
         assert not s.live._controls["agent-1"].control.pending_messages
+        assert not any(e.type == "agent.message" for e in s.events())
 
 
 @pytest.mark.parametrize("limit", ["queue", "lifetime"])

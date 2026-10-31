@@ -66,7 +66,7 @@ class ServiceRepo:
 
 
 @pytest.fixture
-async def system(repo, tmp_path, monkeypatch):
+async def system(repo, tmp_path, monkeypatch, request):
     root = repo.ws.main.root
     (root / "tests").mkdir()
     h = await repo.commit(
@@ -76,7 +76,8 @@ async def system(repo, tmp_path, monkeypatch):
     )
     graph = WorkspaceGraph(root)
     snapshot = graph.scan(h)
-    store = EventStore(tmp_path / "service.sqlite", "run-test")
+    run_id = getattr(request, "param", "run-test")
+    store = EventStore(tmp_path / "service.sqlite", run_id)
     await store.start()
     events, policies = [], []
 
@@ -92,7 +93,7 @@ async def system(repo, tmp_path, monkeypatch):
     resolution = await publish(payload)
     command = repo.command.model_copy(update=dict(main_commit=h, resolution_seq=resolution.seq))
     manager = ChangeManager(repo.ws, publish, main_graph=graph, main_snapshot=snapshot)
-    service = RevertService(ctx=manager._ctx, run_id="run-test", test_timeout_s=10)
+    service = RevertService(ctx=manager._ctx, run_id=run_id, test_timeout_s=10)
     repo.ws._demo_python = Path(sys.executable)
 
     def isolated(policy, injected, open_runner):
@@ -108,7 +109,7 @@ async def system(repo, tmp_path, monkeypatch):
         repo,
         service,
         manager,
-        RevertTarget("run-test", "change-1", resolution),
+        RevertTarget(run_id, "change-1", resolution),
         command,
         store,
         events,
@@ -442,28 +443,46 @@ async def test_revert_shared_snapshot_drains_before_build(system, monkeypatch):
         ctx.state.pending.clear()
 
 
+@pytest.mark.parametrize("system", ["run-20261031-120000"], indirect=True)
 async def test_waiting_rules_current_main_barrier_fails_after_revert(system, monkeypatch, tmp_path):
     from changes_helpers import Harness
 
     from oversight.changes import _rules
     from oversight.changes._assessment import AssessmentWait
     from oversight.changes._mode import StartCapability
+    from oversight.changes._protected_paths import capture_proposal_paths
     from oversight.events import NeedsYouWait
-    from oversight_contracts.events import ChangeProposedEvent
+    from oversight_contracts.events import Budget, ChangeProposedEvent, RunStarted
     from oversight_contracts.policy import MergeModeState
 
     s, ctx = system, system.service.ctx
+    ctx.grants.run_id = s.store.run_id
+    run_receipt = await s.publish(
+        RunStarted(
+            run_id=ctx.grants.run_id,
+            contract_version="1.8.0",
+            prompt_version="test",
+            workspace="demo-repo",
+            base_commit=s.command.main_commit,
+            models=[],
+            slots=[],
+            limits=Harness.task(2).limits,
+            budget=Budget(budget_usd=1, spent_usd=0, warn_at=[0.5, 0.8], block_at=0.9),
+        )
+    )
+    s.manager.spend_received(run_receipt)
     await s.manager.open(Harness.task(2), "fake")
     with monkeypatch.context() as proposal_adapter:
         proposal_adapter.setattr(s.ws._isolation, "select", lambda policy, injected, runner: runner)
         assert await s.manager.proposed("agent-2", "Pending rules work")
     s.manager.run_ended("agent-2", None)
     rec = ctx.state.agents["agent-2"]
-    proposal = next(
-        ChangeProposedEvent.model_validate_json(e.envelope).payload
+    proposed = next(
+        ChangeProposedEvent.model_validate_json(e.envelope)
         for e in s.events
         if e.type == "change.proposed"
     )
+    proposal = proposed.payload
     mode = MergeModeState(mode="merge_when_safe", revision=1)
     ctx.mode._state = mode
     monkeypatch.setattr(ctx.mode, "_availability", lambda: StartCapability(True, "test capability"))
@@ -491,15 +510,25 @@ async def test_waiting_rules_current_main_barrier_fails_after_revert(system, mon
         if rule.rule == "combined_tests":
             object.__setattr__(rule, "result", "unknown")
             object.__setattr__(rule, "observed", None)
+        elif rule.rule == "protected_paths":
+            rule.evidence[:] = [
+                EvidenceRef(event_seq=run_receipt.seq),
+                EvidenceRef(event_seq=proposed.seq),
+            ]
     wait = AssessmentWait(
         rec,
         NeedsYouWait(rec.change_id, rec.revision, rec.head_commit, 0),
         mode,
         proposal,
-        None,
+        proposed.seq,
         s.command.main_commit,
         latest=assessment,
         spend_pin=pin,
+        paths=capture_proposal_paths(
+            proposal,
+            proposal_seq=proposed.seq,
+            run_started_seq=run_receipt.seq,
+        ),
     )
     ctx.assessment.waits[rec.change_id] = wait
     rec.proposal_mode = mode

@@ -354,12 +354,16 @@ async def aclose(ctx: ChangeContext) -> None:
     for change in ctx.state.changes.values():
         if change.review_task is not None:
             change.review_task.cancel()
-    while ctx.state.tasks:
-        await asyncio.gather(*ctx.state.tasks, return_exceptions=True)
-        # gather may complete synchronously when every task is already done.
-        # Let their queued callbacks retire them (and track any final receipts)
-        # before checking the set again, or this loop starves even timeout cancels.
-        await asyncio.sleep(0)
+
+    async def drain_tasks() -> None:
+        while ctx.state.tasks:
+            await asyncio.gather(*ctx.state.tasks, return_exceptions=True)
+            # gather may complete synchronously when every task is already done.
+            # Let their queued callbacks retire them (and track any final receipts)
+            # before checking the set again, or this loop starves even timeout cancels.
+            await asyncio.sleep(0)
+
+    await drain_tasks()
     for rec in list(ctx.state.pending.values()):
         if rec.delivery_rejected:
             continue
@@ -397,6 +401,7 @@ async def aclose(ctx: ChangeContext) -> None:
                         rec.agent_id,
                         unsent,
                     )
+    await drain_tasks()
 
 
 def mark_rejected(ctx: ChangeContext, rec: ChangeRecord, error: EventRejected) -> None:

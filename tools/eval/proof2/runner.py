@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PYTHON = Path("/home/matidegli/Projects/oversight/.runtime/demo-venv/bin/python")
+PYTHON = HERE.parents[2] / ".runtime" / "demo-venv" / "bin" / "python"
 TIMEOUT = 120
 IGNORED = {".git", ".venv", "__pycache__", ".pytest_cache", "_proof2_checks"}
 

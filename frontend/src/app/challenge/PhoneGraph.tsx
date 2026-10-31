@@ -1,4 +1,5 @@
 import { GitBranch } from "lucide-react";
+import type { State } from "../../state";
 import type { Practice } from "./manifest";
 import { calledHelper, caseSlot, countAt, nodeName } from "./phoneEvidence";
 import type { PracticeCase } from "./phoneEvidence";
@@ -10,11 +11,20 @@ export function AgentLetter({ slot }: { slot: string }) {
     </span>
   );
 }
-export function AgentLine({ practice, entry }: { practice: Practice; entry: PracticeCase }) {
-  const slot = caseSlot(practice, entry);
-  const agent = practice.cut.agents[entry.proposal.agent_id];
+export function AgentLine({
+  state,
+  changeId,
+  slot: explicitSlot,
+}: {
+  state: State;
+  changeId: string;
+  slot?: string;
+}) {
+  const change = state.changes[changeId];
+  const agent = change ? state.agents[change.agent_id] : undefined;
+  const slot = explicitSlot ?? agent?.slot ?? "A";
   const modelLabel =
-    practice.cut.run?.models.find((model) => model.id === agent?.model)?.label ??
+    state.run?.models.find((model) => model.id === agent?.model)?.label ??
     agent?.model ??
     "Model unavailable";
   return (
@@ -43,6 +53,30 @@ function Node({
       {!compact && <small>{merged ? "Merged" : "Changed"}</small>}
       <AgentLetter slot={slot} />
     </div>
+  );
+}
+function ConeConnectors({ entry, compact }: { entry: PracticeCase; compact: boolean }) {
+  if (countAt(entry, 1) + countAt(entry, 2) === 0) return null;
+  return (
+    <>
+      <path
+        d={[
+          countAt(entry, 1) > 0 ? (compact ? "M85 54V46" : "M198 67H270Q278 67 278 59V46") : "",
+          countAt(entry, 2) > 0
+            ? compact
+              ? "M85 104V92"
+              : "M198 113H216Q224 113 224 105V75Q224 67 216 67H202"
+            : "",
+        ].join("")}
+      />
+      <path
+        className="pp-arrow"
+        d={[
+          countAt(entry, 1) > 0 ? (compact ? "M81 48L85 42L89 48Z" : "M274 48L278 42L282 48Z") : "",
+          countAt(entry, 2) > 0 ? (compact ? "M81 94L85 88L89 94Z" : "M204 63L198 67L204 71Z") : "",
+        ].join("")}
+      />
+    </>
   );
 }
 function Piece({
@@ -83,23 +117,7 @@ function Piece({
             />
           </>
         ) : (
-          <>
-            <path
-              d={
-                compact
-                  ? "M85 54V46M85 104V92"
-                  : "M198 67H270Q278 67 278 59V46M198 113H216Q224 113 224 105V75Q224 67 216 67H202"
-              }
-            />
-            <path
-              className="pp-arrow"
-              d={
-                compact
-                  ? "M81 48L85 42L89 48ZM81 94L85 88L89 94Z"
-                  : "M274 48L278 42L282 48ZM204 63L198 67L204 71Z"
-              }
-            />
-          </>
+          <ConeConnectors entry={entry} compact={compact} />
         )}
       </svg>
       <Node {...{ practice, entry, merged, compact }} />

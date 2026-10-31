@@ -28,3 +28,4 @@ export type {
   InboxIdentity,
   RevertInboxRef,
 } from "./decisionIdentity";
+export { selectActiveGrants, selectGrantUses, grantReasons, grantScopeWords } from "./grants";

@@ -1,0 +1,172 @@
+"""Accepted messages commit masked history before the model can receive original text."""
+
+# These tests hold the composition's store boundary to expose the admission race.
+# pyright: reportPrivateUsage=false
+
+import asyncio
+from pathlib import Path
+
+import pytest
+from backend.tests.api.test_agent_controls import HeldScript, accepted, control
+from live_helpers import DEADLINE_S, error_code, is_type, live_server, live_settings, start
+from message_log_helpers import MessageBarrier
+
+from oversight.events import EventPayload, StoredEvent, read_store
+from oversight.redaction import Redactor
+from oversight_contracts.events import AgentMessageSent
+
+pytestmark = pytest.mark.anyio
+
+
+async def test_message_masks_both_configured_keys_but_delivers_original(tmp_path: Path) -> None:
+    # Synthetic, test-only material, assembled here rather than a stored credential fixture.
+    keys = ["test-only-provider-" + name * 2 for name in ("first", "second")]
+    plain = "Please check plain prose, checkout-slug and field_name."
+    shaped = ["Bearer " + "a1" * 12, "sk-" + "b2" * 12, "c3" * 12]
+    fragments = [key[-8:] for key in keys]
+    text = " ".join([plain, *shaped, *fragments])
+    model = HeldScript()
+    settings = live_settings(tmp_path, meta_api_key=keys[0], baseten_api_key=keys[1])
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda *_: model) as s:
+        await start(s)
+        await model.entered.get()
+        accepted(await control(s, "message", text))
+        event = next(e for e in s.events() if e.type == "agent.message")
+        assert event.payload.text == plain + " " + " ".join(["[redacted]"] * 5)
+        assert Redactor(*keys)(event.payload.text) == event.payload.text
+        assert any(e.envelope == event.model_dump_json() for e in read_store(s.store.path))
+        model.permits.release()
+        await model.entered.get()
+        model.permits.release()
+        events = await s.until(is_type("agent.step", step=2))
+        assert model.requests[1][-1] == {"role": "user", "content": text}
+        assert events[-1].seq > event.seq
+
+
+@pytest.mark.parametrize("masked_length", [4096, 4097])
+async def test_masked_message_length_limit_refuses_without_spending_admission(
+    tmp_path: Path, masked_length: int
+) -> None:
+    key = "test-only-provider-fragment"
+    text = "fragment " + "x" * (masked_length - len("[redacted] "))
+    assert len(text) <= 4096
+    masked = Redactor(key)(text)
+    assert len(masked) == masked_length
+    model = HeldScript()
+    settings = live_settings(tmp_path, meta_api_key=key)
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, lambda *_: model) as s:
+        await start(s)
+        await model.entered.get()
+        response = await control(s, "message", text)
+        if masked_length > 4096:
+            assert error_code(response) == (422, "invalid_request")
+            assert not any(e.type == "agent.message" for e in s.events())
+            assert not s.live._controls["agent-1"].control.pending_messages
+            expected = ["x" * 4096, "y" * 4096]
+            for message in expected:
+                accepted(await control(s, "message", message))
+        else:
+            accepted(response)
+            expected = [text]
+            event = next(e for e in s.events() if e.type == "agent.message")
+            assert event.payload.text == masked
+        model.permits.release()
+        await model.entered.get()
+        model.permits.release()
+        await s.until(is_type("agent.step", step=2))
+        delivered = [m["content"] for m in model.requests[1] if m["role"] == "user"]
+        assert delivered[-len(expected) :] == expected
+
+
+@pytest.mark.parametrize("fail", [False, True])
+async def test_pending_commit_blocks_delivery_and_failure_rolls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail: bool
+) -> None:
+    model = HeldScript()
+    text = "Please reconsider."
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(live_settings(tmp_path), lambda *_: model) as s,
+    ):
+        await start(s)
+        await model.entered.get()
+        with MessageBarrier(s, model, monkeypatch, text, fail=fail) as held:
+            # Hold the step publish after the tool gate, before accepting the message.
+            model.permits.release()
+            await held.step_entered.wait()
+            request = asyncio.create_task(control(s, "message", text))
+            try:
+                await held.write_entered.wait()
+                await held.assert_pre_call_blocked()
+                assert model.entered.empty() and not request.done()
+                held.write_release.set()
+                response = await request
+                if fail:
+                    assert error_code(response) == (500, "internal")
+                else:
+                    accepted(response)
+                await model.entered.get()
+                recorded = [e for e in s.events() if e.type == "agent.message"]
+                assert len(recorded) == (0 if fail else 1)
+                if fail:
+                    accepted(await control(s, "message", "x" * 4096))
+                    accepted(await control(s, "message", "y" * 4096))
+                model.permits.release()
+                events = await s.until(is_type("agent.step", step=2))
+                assert any(m.get("content") == text for r in held.requests for m in r) is (not fail)
+                if fail:
+                    assert not any(m.get("content") == text for r in model.requests for m in r)
+                else:
+                    step = next(e for e in events if e.type == "agent.step" and e.payload.step == 2)
+                    assert recorded[0].seq < step.seq
+            finally:
+                held.release()
+                await request
+
+
+async def test_waiting_admission_refuses_a_drive_closed_during_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = HeldScript()
+    entered, release = asyncio.Event(), asyncio.Event()
+    waiting: asyncio.Queue[None] = asyncio.Queue()
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(live_settings(tmp_path), lambda *_: model) as s,
+    ):
+        await start(s)
+        await model.entered.get()
+        original = s.store.publish
+        run_control = s.live._controls["agent-1"].control
+        record_message = run_control.record_message
+
+        async def held(payload: EventPayload, *, ts: str | None = None) -> StoredEvent:
+            if isinstance(payload, AgentMessageSent):
+                entered.set()
+                await release.wait()
+            return await original(payload, ts=ts)
+
+        async def observed_admission(*args, **kwargs):
+            waiting.put_nowait(None)
+            return await record_message(*args, **kwargs)
+
+        monkeypatch.setattr(s.store, "publish", held)
+        monkeypatch.setattr(run_control, "record_message", observed_admission)
+        first = asyncio.create_task(control(s, "message", "First."))
+        second = None
+        try:
+            await entered.wait()
+            await waiting.get()
+            second = asyncio.create_task(control(s, "message", "Second."))
+            await waiting.get()
+            accepted(await control(s, "stop"))
+            release.set()
+            accepted(await first)
+            assert error_code(await second) == (409, "wrong_state")
+            sent = [e.payload.text for e in s.events() if e.type == "agent.message"]
+            assert sent == ["First."] and not run_control.pending_messages
+        finally:
+            release.set()
+            await first
+            if second is not None:
+                await second

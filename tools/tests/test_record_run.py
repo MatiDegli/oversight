@@ -104,6 +104,7 @@ def test_exports_a_complete_store(tmp_path: Path) -> None:
         "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
         "run_id": RUN_ID,
         "event_count": 7,
+        "message_text": "withheld",
     }
 
 

@@ -34,13 +34,13 @@ from typing import Any, Protocol, cast
 import openai
 from openai import OpenAI
 
+from oversight.redaction import Redactor
 from oversight.settings import Settings
 
 MAX_CALLS = 8
 MAX_RETRIES = 3  # per step, on 429 and 5xx; every retry is a call against MAX_CALLS
 BACKOFF_BASE = 1.0  # seconds before the first retry; it doubles each time, with jitter
 BACKOFF_MAX = 30.0
-FRAGMENT = 8  # a run of this many characters of the key is as good as the key
 ART = timezone(timedelta(hours=-3))
 DEFAULT_REPORT = Path(__file__).resolve().parents[1] / "docs" / "api-probe.md"
 ORDER = ("meta", "baseten")
@@ -319,50 +319,6 @@ def parse_json_tool_call(text: str) -> tuple[str, Obj] | None:
 
 
 # The redactor ------------------------------------------------------------------------------------
-
-REDACTED = "[redacted]"
-# What looks like a credential whoever it belongs to: a bearer token, an sk-style key, or a long
-# run of letters and digits mixed (hyphens and underscores split words, so slugs and field names
-# are left alone).
-KEY_LIKE = re.compile(
-    r"Bearer\s+[A-Za-z0-9._~+/=-]{6,}"
-    r"|\b(?:sk|pk|rk)[-_][A-Za-z0-9_-]{8,}"
-    r"|\b(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{24,}\b",
-    re.IGNORECASE,
-)
-
-
-class Redactor:
-    """The one sanitizer: nothing leaves the process without passing through it.
-
-    It removes the key, every run of FRAGMENT or more characters that appears in the key (so a
-    reflected piece of it goes too, not only the whole), and anything shaped like a credential.
-    Calling it on its own output changes nothing.
-    """
-
-    def __init__(self, key: str | None) -> None:
-        text = key or ""
-        self._width = min(FRAGMENT, len(text))
-        self._windows: set[str] = {
-            text[i : i + self._width] for i in range(len(text) - self._width + 1) if text
-        }
-
-    def __call__(self, text: str) -> str:
-        width = self._width
-        spans: list[list[int]] = []
-        for start in range(len(text) - width + 1 if width else 0):
-            if text[start : start + width] in self._windows:
-                if spans and start <= spans[-1][1]:
-                    spans[-1][1] = start + width  # overlapping or touching: one redaction
-                else:
-                    spans.append([start, start + width])
-        pieces: list[str] = []
-        done = 0
-        for begin, end in spans:
-            pieces += [text[done:begin], REDACTED]
-            done = end
-        pieces.append(text[done:])
-        return KEY_LIKE.sub(REDACTED, "".join(pieces))
 
 
 def scrub(value: object, redact: Redact) -> Any:

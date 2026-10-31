@@ -69,9 +69,10 @@ it("opens the file at its span without focus or node movement; Ctrl+S saves once
 it("an untouched cone node only selects: review, comment and cone lighting survive", async () => {
   await withPage(async (page, calls) => {
     await page.getByRole("button", { name: /^Decisions:/ }).click();
+    await page.getByRole("button", { name: /^Review change/ }).click();
     const review = page.getByRole("complementary", { name: "Review panel" });
     await review.locator(".line-insert").first().waitFor();
-    const comment = review.getByRole("textbox", { name: "Comment (required for Request changes)" });
+    const comment = review.getByRole("textbox", { name: "Comment for the agent" });
     await comment.fill("Keep this request for changes while I inspect the cone.");
     await page.waitForFunction(
       () =>
@@ -137,12 +138,11 @@ it("a review and Escape preserve drafts; Ctrl+S in review sends nothing and neve
     await clickUntouched(page);
     await append(page, "draft survives review and Escape");
     await page.getByRole("button", { name: /^Decisions:/ }).click();
+    await page.getByRole("button", { name: /^Review change/ }).click();
     const review = page.getByRole("complementary", { name: "Review panel" });
     await review.locator(".line-insert").first().waitFor();
     await browserExpect(filePanel(page)).toHaveCount(0);
-    await review
-      .getByRole("textbox", { name: "Comment (required for Request changes)" })
-      .fill("Keep typing");
+    await review.getByRole("textbox", { name: "Comment for the agent" }).fill("Keep typing");
     await page.keyboard.press("Control+s");
     await page.keyboard.press("Control+Enter");
     expect(calls).toEqual([]);

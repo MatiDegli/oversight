@@ -1,4 +1,4 @@
-"""In-memory controls, serialized by the run's event loop without holding a lock."""
+"""In-memory controls with atomic limits and a commit barrier before message delivery."""
 
 import asyncio
 from collections.abc import Awaitable, Callable
@@ -19,12 +19,14 @@ class RunControl:
 
     Call only on the run's event loop. Synchronous admission and finalization are atomic
     there. Message admission permanently reserves lifetime bytes, including queued text;
-    delivery, pause and revision never replenish them. No message text is published.
+    delivery, pause and revision never replenish them. HTTP admission records a masked copy
+    before the next model call can receive the original text.
     A revision installs a fresh control sharing only that budget; old controls stay closed.
     """
 
     def __init__(self) -> None:
         self._inbox: list[str] = []
+        self._admission = asyncio.Lock()
         self._budget = _Budget()
         self._pause_requested = False
         self._paused = False
@@ -57,6 +59,47 @@ class RunControl:
         self._inbox.append(text)
         self._budget.accepted_bytes += size
         return True
+
+    async def record_message(self, text: str, record: Callable[[], Awaitable[None]]) -> bool:
+        """Reserve limits atomically, commit history, then permit verbatim delivery.
+
+        The gate waits on this lock. Cancellation waits for the shielded write to settle:
+        a committed write keeps its reservation; only a failed write rolls it back. Close
+        may drop the inbox during the write, but never delivers unrecorded text.
+        """
+        async with self._admission:
+            if not self.message(text):
+                return False
+
+            async def persist() -> None:
+                await record()
+
+            write = asyncio.create_task(persist())
+            cancelled: asyncio.CancelledError | None = None
+            while not write.done():
+                try:
+                    await asyncio.shield(write)
+                except asyncio.CancelledError as error:
+                    cancelled = error
+                except Exception:
+                    break
+            try:
+                write.result()
+            except BaseException:
+                if not self._closed:
+                    self._inbox.pop()
+                self._budget.accepted_bytes -= len(text.encode("utf-8"))
+                if cancelled is not None:
+                    raise cancelled from None
+                raise
+            if cancelled is not None:
+                raise cancelled
+            return True
+
+    async def wait_for_admission(self) -> None:
+        """Wait for any reserved message's write to settle, without waiting on pause."""
+        async with self._admission:
+            pass
 
     def pause(self) -> bool:
         if self._closed:
@@ -101,7 +144,13 @@ class RunControl:
     ) -> None:
         if self._closed:
             raise asyncio.CancelledError
-        while self._pause_requested:
+        while self._pause_requested or self._admission.locked():
+            async with self._admission:
+                pass
+            if self._closed:
+                raise asyncio.CancelledError
+            if not self._pause_requested:
+                continue
             loop = asyncio.get_running_loop()
             end = deadline.when()
             # An exhausted deadline wins over a pause, even before its callback runs.
@@ -125,6 +174,8 @@ class RunControl:
             if scope is not None:
                 CALL_SCOPE.set(replace(scope, deadline=deadline.when()))
             await status(active)
+        if self._closed:
+            raise asyncio.CancelledError
 
 
 def answer_unanswered(messages: list[Message]) -> None:

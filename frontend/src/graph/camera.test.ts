@@ -176,18 +176,18 @@ describe("frameBox", () => {
       [changed],
       { width: 904, height: 400 },
       1,
-      { ...limits, leftInset: 280 + 24 },
+      { ...limits, leftInset: 384 + 24 },
       [near, next],
     );
     expect(camera?.zoom).toBe(1);
-    expect(camera?.pan.x).toBe(379);
+    expect(camera?.pan.x).toBe(431);
     for (const node of [changed, near, next]) {
-      expect(node.x1 * (camera?.zoom ?? 0) + (camera?.pan.x ?? 0)).toBeGreaterThanOrEqual(344);
+      expect(node.x1 * (camera?.zoom ?? 0) + (camera?.pan.x ?? 0)).toBeGreaterThanOrEqual(448);
       expect(node.x2 * (camera?.zoom ?? 0) + (camera?.pan.x ?? 0)).toBeLessThanOrEqual(864);
     }
     const wide = { ...changed, x2: 750 };
     expect(
-      frameBox([wide], { width: 904, height: 400 }, 1, { ...limits, leftInset: 304 })?.zoom,
+      frameBox([wide], { width: 904, height: 400 }, 1, { ...limits, leftInset: 408 })?.zoom,
     ).toBeCloseTo(0.8);
   });
 
@@ -215,7 +215,7 @@ describe("frameBox", () => {
     const nodes = [box(1000, 50)];
     const watch = frameBox(nodes, size, Infinity, { padding: 40, maxZoom: 4 });
     expect(watch?.zoom).toBe(0.52);
-    expect(frameBox(nodes, size, Infinity, { ...limits, leftInset: 304 })?.zoom).toBe(0.8);
+    expect(frameBox(nodes, size, Infinity, { ...limits, leftInset: 408 })?.zoom).toBe(0.8);
     const closed = frameBox(nodes, size, Infinity, { padding: 40, maxZoom: 4 });
     expect(closed).toEqual(watch);
   });

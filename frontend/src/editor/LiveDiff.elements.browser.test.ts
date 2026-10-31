@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 import type { ServerEvent } from "@contracts";
 import { expect as browserExpect } from "@playwright/test";
+import type { Locator } from "@playwright/test";
 import { expect, it } from "vitest";
 
 import { applyEvent, createInitialState } from "../state";
@@ -20,6 +21,35 @@ const state = through(12);
 const agent = state.agents["agent-1"];
 if (!agent) throw new Error("Missing fixture agent");
 const panel = '[aria-label="Live diff panel"]';
+
+async function expectReviewFonts(facts: Locator) {
+  const readings = await facts.evaluate((root) => {
+    const header = root.closest("header");
+    if (!header) throw new Error("Missing review header");
+    const tokens = getComputedStyle(document.documentElement);
+    const textFont = tokens.getPropertyValue("--text-font").trim();
+    const monoFont = tokens.getPropertyValue("--code-font").trim();
+    const walker = document.createTreeWalker(header, NodeFilter.SHOW_TEXT);
+    const wrong: string[] = [];
+    const codeElements = new Set<Element>();
+    let chipNumbers = 0;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const text = node.textContent?.trim() ?? "";
+      const parent = node.parentElement;
+      if (!text || !parent || parent.closest("svg")) continue;
+      // Worktree paths and base hashes are code; counts and caption prose stay in Next.
+      const code = parent.closest("code");
+      if (code) codeElements.add(code);
+      if (root.contains(parent)) chipNumbers += text.match(/\d+/g)?.length ?? 0;
+      if (getComputedStyle(parent).fontFamily !== (code ? monoFont : textFont)) wrong.push(text);
+    }
+    return { wrong, chipNumbers, codeElements: codeElements.size };
+  });
+  expect(readings.wrong).toEqual([]);
+  expect(readings.chipNumbers).toBeGreaterThan(3);
+  expect(readings.codeElements).toBeGreaterThan(0);
+}
 
 it.each(["review", "live diff"])("%s facts use Mono only for data", async (surface) => {
   await withPage(async (page) => {
@@ -58,6 +88,10 @@ it.each(["review", "live diff"])("%s facts use Mono only for data", async (surfa
       await page.evaluate((value) => {
         window.panelTest.setState(value);
       }, value);
+      if (surface === "review") {
+        await expectReviewFonts(facts);
+        continue;
+      }
       const readings = await facts.evaluate((root) => {
         const tokens = getComputedStyle(document.documentElement);
         const textFont = tokens.getPropertyValue("--text-font").trim();

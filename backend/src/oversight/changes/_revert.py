@@ -1,12 +1,14 @@
-"""Run-local personal correction of a validated rules merge; no lookup or HTTP port."""
+"""Run-local personal correction of a validated rules merge."""
 
 import asyncio
+import logging
 import math
 import time
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Literal
 
 from oversight.changes._delivery import drain_pending as shared_drain
 from oversight.changes._delivery import supersede_pending as shared_supersede
@@ -34,11 +36,14 @@ from oversight.workspace import (
 from oversight_contracts.commands import RevertChange
 from oversight_contracts.events import (
     ChangeResolved,
+    ErrorReport,
     GraphDeltaEvent,
     RevertResolvedEvent,
     RevertResult,
 )
 from oversight_contracts.graph import GraphDelta, GraphSnapshot
+
+_log = logging.getLogger(__name__)
 
 
 class _Principal(Enum):
@@ -90,6 +95,7 @@ class _Attempt:
         default_factory=lambda: dict[str, asyncio.Task[StoredEvent]]()
     )
     receipts: dict[str, StoredEvent] = field(default_factory=lambda: dict[str, StoredEvent]())
+    started: bool = False
     cancelled: bool = False
     blocked: bool = False
     prepared: bool = False
@@ -125,6 +131,13 @@ class RevertService:
         self, target: RevertTarget, command: RevertChange, *, principal: object
     ) -> RevertResult:
         """Return only after the outcome (and success delta) has a confirmed SQL receipt."""
+        attempt = self._admit(target, command, principal)
+        owner = asyncio.current_task()
+        assert owner is not None
+        self._owners.add(owner)
+        return await self._settle(attempt, owner)
+
+    def _admit(self, target: RevertTarget, command: RevertChange, principal: object) -> _Attempt:
         if principal is not Person:
             raise RevertRefused("invalid_principal", "Revert requires the local person principal")
         try:
@@ -144,9 +157,49 @@ class RevertService:
         self._reserved.add(key)
         attempt = _Attempt(target, command, original, key)
         self._attempts.append(attempt)
+        return attempt
+
+    def submit(
+        self, target: RevertTarget, command: RevertChange, *, principal: object
+    ) -> asyncio.Task[RevertResult]:
+        """Reserve synchronously; deliver the admitted outcome through events."""
+        attempt = self._admit(target, command, principal)
+        work = self._submitted(attempt)
+        try:
+            task = asyncio.get_running_loop().create_task(work)
+        except BaseException:
+            work.close()
+            self._reserved.discard(attempt.key)
+            self._attempts.remove(attempt)
+            raise
+        self._owners.add(task)
+
+        def done(owner: asyncio.Task[RevertResult]) -> None:
+            if not owner.cancelled():
+                owner.exception()
+            self._owners.discard(owner)
+            if not attempt.started:
+                self._reserved.discard(attempt.key)
+
+        task.add_done_callback(done)
+        return task
+
+    async def _submitted(self, attempt: _Attempt) -> RevertResult:
+        attempt.started = True
         owner = asyncio.current_task()
         assert owner is not None
-        self._owners.add(owner)
+        try:
+            return await self._settle(attempt, owner)
+        except BaseException as error:
+            if attempt.result is None and not attempt.blocked:
+                reason = str(error) or type(error).__name__
+                message = f"Revert of {attempt.target.change_id} did not run: {reason}"
+                reporting = self.ctx.spawn(self._report(attempt, "server", message, fatal=False))
+                self._reports.add(reporting)
+            raise
+
+    async def _settle(self, attempt: _Attempt, owner: asyncio.Task[object]) -> RevertResult:
+        key, original = attempt.key, attempt.original
         try:
             async with self.ctx.workspace.locks(main=True, agent_id=original.agent_id):
                 if self.ctx.state.suspect or self.ctx.workspace.integrity.main_suspect:
@@ -401,12 +454,28 @@ class RevertService:
                 uncertain=True,
             )
 
+    async def _report(
+        self, a: _Attempt, source: Literal["server", "git"], message: str, *, fatal: bool
+    ) -> bool:
+        message = self.ctx.workspace.redact(message)
+        report = ErrorReport(
+            source=source,
+            message=message[:1000],
+            fatal=fatal,
+            change_id=a.target.change_id,
+            agent_id=a.original.agent_id,
+        )
+        try:
+            await self.ctx.publish(report)
+        except Exception:
+            _log.error("The store refused an error event: %s", message)
+            return False
+        return True
+
     async def _suspend(self, a: _Attempt) -> None:
         self._block(a)
         reporting = self.ctx.spawn(
-            self.ctx.error(
-                "git", "Revert settlement unverified; restart required", None, fatal=True
-            )
+            self._report(a, "git", "Revert settlement unverified; restart required", fatal=True)
         )
         self._reports.add(reporting)
         with suppress(Exception):

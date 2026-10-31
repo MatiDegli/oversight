@@ -248,6 +248,10 @@ async def _git(workspace: Workspace, deadline: float, *args: str) -> str:
 
 
 async def _head(workspace: Workspace, deadline: float) -> str:
+    """Read attached main; a detached, off-ref or unreadable HEAD is unreadable main.
+
+    apply_inverse returns unknown before any update-ref, not a precondition refusal.
+    """
     attached = await workspace.git(
         workspace.main, "symbolic-ref", "HEAD", timeout_s=remaining(deadline)
     )
@@ -423,7 +427,9 @@ async def apply_inverse(
 ) -> InverseOutcome:
     """Publish C once with update-ref C H, then finish H's checkout under the same lease.
 
-    Precondition refusals raise InverseError. Unconfirmed effects return unknown;
+    Precondition refusals raise InverseError. A detached, off-ref or unreadable HEAD is
+    handled as unreadable main: unknown before any update-ref, not a precondition refusal.
+    Unconfirmed effects return unknown;
     cancellation first settles Git facts, then propagates to the owner.
     """
     expected = _expected(workspace, main_commit, inverse_commit, inverse_tree)

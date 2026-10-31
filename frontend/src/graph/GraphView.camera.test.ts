@@ -289,7 +289,7 @@ it("pans to a cone row's node only when asked, and tells the cone card what that
   apiRef.current?.reveal("billing:fee");
   expect(reveal).toHaveBeenCalledExactlyOnceWith(cy, "billing:fee", true);
   expect(cy.zoom()).toBe(1);
-  expect(cy.getElementById("billing:fee").renderedPosition().x).toBeCloseTo((304 + 928) / 2);
+  expect(cy.getElementById("billing:fee").renderedPosition().x).toBeCloseTo((408 + 928) / 2);
   paint();
   expect(onFramed).toHaveBeenLastCalledWith(expect.objectContaining({ outOfView: new Set() }));
   // Several viewport events in one frame report the final camera only, without reframing.
