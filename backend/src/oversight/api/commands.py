@@ -90,8 +90,9 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
 class Commands(Protocol):
     """What the live app does for the command routes. `start` raises `ApiError` for a refused
     start; `approve`, `reject`, `request_changes` and `stop` take the decision with no `await`, so a
-    second one raises `WrongState` at once, and its result arrives as events. All four raise
-    `ChangeNotFound` for an id they do not know, and the app's own refusals as `ApiError`."""
+    second one raises `WrongState` at once, and its result arrives as events. Those four, along
+    with `message`, `pause` and `resume`, raise `ChangeNotFound` for an id they do not know,
+    and the app's own refusals as `ApiError`."""
 
     async def start(self, request: StartAgent) -> AgentCreated: ...
 

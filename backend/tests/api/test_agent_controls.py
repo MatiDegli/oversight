@@ -103,6 +103,7 @@ async def test_working_pending_and_paused_resume_order_and_memory_only_text(tmp_
         accepted(await control(s, "resume"))  # cancels the pending pause
         assert "paused" not in states(s.events())
         accepted(await control(s, "pause"))
+        accepted(await control(s, "message", "Private pending."))
         model.permits.release()
         await s.until(is_type("agent.status", state="paused"))
         accepted(await control(s, "pause"))
@@ -143,8 +144,9 @@ async def test_working_pending_and_paused_resume_order_and_memory_only_text(tmp_
             "working",
             "ready_for_review",
         ]
-        assert [m["content"] for m in model.requests[1][-2:]] == [
+        assert [m["content"] for m in model.requests[1][-3:]] == [
             "  Private first.\n",
+            "Private pending.",
             "Private second. 😀",
         ]
         assert all("Private" not in e.model_dump_json() for e in s.events())

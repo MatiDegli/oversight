@@ -782,6 +782,7 @@ class LiveRun:
         assert manager is not None
         task, profile = admission.task, admission.profile
         slot = task.slot
+        opened = False
         try:
             if self._venv is not None:
                 # Shielded: cancelling this start must not cancel the build later starts need.
@@ -794,27 +795,29 @@ class LiveRun:
                 client = self._client_factory(profile, slot)
 
             tree = await manager.open(task, profile.id, before_create=before_create)
+            opened = True
             assert client is not None
             run = _run_controls.prepare(self, task, client, tree, profile)
-        except ApiError:
+        except BaseException as error:
             self._slots[slot] = None
             self.dispatcher.wake.set()
-            raise
-        except WrongState as error:
-            self._slots[slot] = None  # main turned suspect after the check: nothing was started
-            self.dispatcher.wake.set()
-            raise ApiError("wrong_state", str(error)) from None
-        except Exception as error:
-            self._slots[slot] = None
-            self.dispatcher.wake.set()
-            await self._report("server", f"Starting an agent failed: {_describe(error)}")
-            raise ApiError(
-                "internal",
-                f"starting the agent failed ({type(error).__name__}); see the error event",
-            ) from error
-        except BaseException:
-            self._slots[slot] = None  # cancelled: the shutdown, or the request's task
-            self.dispatcher.wake.set()
+            if opened:
+                try:
+                    if isinstance(error, Exception):
+                        await self._run_failed(task, error)
+                finally:
+                    manager.run_ended(task.agent_id, None, steps=0)
+            if isinstance(error, ApiError):
+                raise
+            if isinstance(error, WrongState):
+                raise ApiError("wrong_state", str(error)) from None
+            if isinstance(error, Exception):
+                if not opened:
+                    await self._report("server", f"Starting an agent failed: {_describe(error)}")
+                raise ApiError(
+                    "internal",
+                    f"starting the agent failed ({type(error).__name__}); see the error event",
+                ) from error
             raise
         # No await from `open` to here: the run task exists as soon as the change does.
         agent = _Agent(task, profile, admission.queued_task_id, admission.plan_id, admission.zone)
