@@ -127,12 +127,15 @@ async def test_deepcopy_setup_error_is_not_a_function_exception(tmp_path):
 
 
 def test_worker_is_stdlib_only():
-    tree = ast.parse(WORKER.read_text())
+    tree = ast.parse(WORKER.read_text() + WORKER.with_name("_behavior_values.py").read_text())
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             assert all(alias.name.split(".")[0] in sys.stdlib_module_names for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
-            assert node.module and node.module.split(".")[0] in sys.stdlib_module_names
+            assert node.module and (
+                node.module == "_behavior_values"
+                or node.module.split(".")[0] in sys.stdlib_module_names
+            )
 
 
 @pytest.mark.anyio

@@ -7,154 +7,54 @@ The report is a bounded file, never stdout. Limits deliberately measure only a f
 
 import ast
 import copy
-import hashlib
 import importlib
 import inspect
 import json
-import math
 import os
 import signal
 import sys
 from collections.abc import Callable
 from dataclasses import is_dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+# The script also runs directly under the demo interpreter, without Oversight installed.
+if TYPE_CHECKING or __package__:
+    from ._behavior_values import (
+        MAX_RESULT,
+        MAX_TEXT,
+        IteratorObservationError,
+        IteratorRelease,
+        RangeArgumentError,
+        canonical,
+        class_name,
+        encode,
+        fingerprint,
+        iterator_items,
+        observation_literal,
+        range_value,
+        release_exception,
+        value_result,
+    )
+else:
+    from _behavior_values import (
+        MAX_RESULT,
+        MAX_TEXT,
+        IteratorObservationError,
+        IteratorRelease,
+        RangeArgumentError,
+        canonical,
+        class_name,
+        encode,
+        fingerprint,
+        iterator_items,
+        observation_literal,
+        range_value,
+        release_exception,
+        value_result,
+    )
 
 MAX_FILE = 1_048_576
-MAX_RESULT = 8192
-MAX_DEPTH = 6
-MAX_ITEMS = 32
-MAX_NODES = 128
-MAX_TEXT = 512
-
-
-def class_name(value: object) -> str:
-    cls = type(value)
-    return f"{cls.__module__}.{cls.__qualname__}"[:MAX_TEXT]
-
-
-def canonical(value: object) -> str:
-    return json.dumps(value, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
-
-
-def encode(
-    value: Any, depth: int = 0, seen: set[int] | None = None, left: list[int] | None = None
-) -> list[Any]:
-    """Type tags preserve bool/int, list/tuple, nan and signed zero; cuts are explicit."""
-    seen, left = (set() if seen is None else seen), ([MAX_NODES] if left is None else left)
-    left[0] -= 1
-    if depth > MAX_DEPTH or left[0] < 0:
-        return ["cut", class_name(value)]
-    kind = cast(Any, type(value))
-    if value is None:
-        return ["none"]
-    if kind is bool:
-        return ["bool", value]
-    if kind is int:
-        return ["int", hex(value)] if value.bit_length() <= 4096 else ["cut", "int"]
-    if kind is float:
-        return ["float", "nan" if math.isnan(value) else value.hex()]
-    if kind in (str, bytes):
-        text = value[:MAX_TEXT] if kind is str else value[:MAX_TEXT].hex()
-        return [kind.__name__, text, len(value), "cut" if len(value) > MAX_TEXT else "complete"]
-    if id(value) in seen:
-        return ["cycle", class_name(value)]
-    seen.add(id(value))
-
-    def child(item: object) -> list[Any]:
-        return encode(item, depth + 1, seen, left)
-
-    try:
-        if kind in (list, tuple, set, frozenset):
-            # Sort sets before capping, so hash iteration cannot choose a different subset.
-            if kind in (set, frozenset):
-                if len(value) > MAX_ITEMS:
-                    return ["cut", kind.__name__, len(value)]
-                items = sorted((child(item) for item in value), key=canonical)
-            else:
-                items = [child(item) for item in value[:MAX_ITEMS]]
-            return [
-                kind.__name__,
-                items,
-                len(value),
-                "cut" if len(value) > MAX_ITEMS else "complete",
-            ]
-        if kind is dict:
-            if len(value) > MAX_ITEMS:
-                return ["cut", "dict", len(value)]
-            return ["dict", sorted(([child(k), child(v)] for k, v in value.items()), key=canonical)]
-        fields: Any = getattr(value, "__dict__", None)
-        if type(fields) is dict:
-            fields = cast(dict[str, Any], fields)
-            names = sorted(k for k in fields if type(k) is str)[:MAX_ITEMS]
-            return [
-                "object",
-                class_name(value),
-                [[k, child(fields[k])] for k in names],
-                len(fields),
-            ]
-        return ["repr", class_name(value), repr(value)[:MAX_TEXT]]
-    finally:
-        seen.remove(id(value))
-
-
-def fingerprint(value: Any, seen: set[int] | None = None) -> str:
-    """Hash the full typed value under the call alarm; refuse uncertain representations.
-
-    The display encoder's depth, item and text cuts never become equality evidence.
-    Unsupported values and cycles may be displayed privately, but are not compared.
-    """
-    seen = set() if seen is None else seen
-    kind = cast(Any, type(value))
-    digest = hashlib.sha256()
-
-    def token(part: str | bytes) -> None:
-        raw = part.encode("utf-8", errors="surrogatepass") if isinstance(part, str) else part
-        digest.update(str(len(raw)).encode() + b":" + raw)
-
-    token(kind.__module__ + "." + kind.__qualname__)
-    if value is None:
-        pass
-    elif kind is bool:
-        token(str(value))
-    elif kind is int:
-        token(hex(value))
-    elif kind is float:
-        token("nan" if math.isnan(value) else value.hex())
-    elif kind in (str, bytes):
-        token(value)
-    else:
-        if id(value) in seen:
-            raise ValueError("cyclic result")
-        seen.add(id(value))
-        try:
-            if kind in (list, tuple, set, frozenset):
-                items = (fingerprint(item, seen) for item in value)
-                if kind in (set, frozenset):
-                    items = sorted(items)
-                for item in items:
-                    token(item)
-            elif kind is dict:
-                for key, item in sorted(
-                    (fingerprint(k, seen), fingerprint(v, seen)) for k, v in value.items()
-                ):
-                    token(key)
-                    token(item)
-            else:
-                # __dict__ alone misses slots, descriptors and opaque native state.
-                raise ValueError("unsupported full result")
-        finally:
-            seen.remove(id(value))
-    return digest.hexdigest()
-
-
-def value_result(value: Any) -> dict[str, Any]:
-    display = encode(value)
-    try:
-        identity = fingerprint(value)
-    except (ValueError, TypeError, RecursionError):
-        return {"kind": "unrepresentable", "value": display}
-    return {"kind": "value", "value": display, "fingerprint": identity}
 
 
 class CallTimeout(BaseException):
@@ -166,44 +66,117 @@ def alarm(_signum: int, _frame: object) -> None:
 
 
 def limited(action: Callable[[], Any], timeout_s: float) -> Any:
-    signal.setitimer(signal.ITIMER_REAL, timeout_s)
+    # A further alarm also bounds project finalizers entered while unwinding the first.
+    signal.setitimer(signal.ITIMER_REAL, timeout_s, timeout_s)
     try:
         return action()
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
 
 
+class BindingRejected(Exception):
+    def __init__(self, error: TypeError) -> None:
+        self.error = error
+
+
+def _bind(
+    function: Callable[..., Any], args: Any, kwargs: Any, observe_binding: bool
+) -> inspect.BoundArguments:
+    signature = inspect.signature(function)
+    try:
+        return signature.bind(*args, **kwargs)
+    except TypeError as error:
+        if observe_binding:
+            raise BindingRejected(error) from error
+        raise
+
+
+def _release_timeout(pending: IteratorRelease, error: BaseException, timeout_s: float) -> None:
+    def cleanup() -> None:
+        try:
+            release_exception(error)
+            pending.release()
+        except BaseException as cleanup_error:
+            release_exception(cleanup_error)
+
+    limited(cleanup, min(timeout_s, 0.05))
+
+
+def _release_capped(pending: IteratorRelease) -> None:
+    try:
+        pending.release()
+    except CallTimeout:
+        raise
+    except BaseException as error:
+        # Failure to clean up an already cut iterator cannot certify a function result.
+        release_exception(error)
+
+
 def call(
-    function: Callable[..., Any], literal: str, timeout_s: float, root: Path | None = None
+    function: Callable[..., Any],
+    literal: str,
+    timeout_s: float,
+    root: Path | None = None,
+    *,
+    observe_binding: bool = False,
 ) -> dict[str, Any]:
+    consume_iterator = False
+    pending = IteratorRelease()
+
     def execute() -> dict[str, Any]:
-        args, kwargs, memo = _arguments(literal, root or Path.cwd())
-        bound = inspect.signature(function).bind(*args, **kwargs)
-        bound.apply_defaults()
-        arguments = copy.deepcopy((bound.args, bound.kwargs), memo)
+        nonlocal consume_iterator
+        invocation, consume_iterator = observation_literal(literal)
+        args, kwargs, memo = _arguments(invocation, root or Path.cwd())
+        bound = _bind(function, args, kwargs, observe_binding)
+        if not observe_binding:
+            bound.apply_defaults()
+            args, kwargs = bound.args, bound.kwargs
+        arguments = copy.deepcopy((args, kwargs), memo)
+        value = None
         try:
             value = function(*arguments[0], **arguments[1])
+            if consume_iterator:
+                pending.value = value
+                try:
+                    value, consume_iterator = iterator_items(value)
+                except IteratorObservationError as error:
+                    reason = str(error)
+                    release_exception(error)
+                    value = None
+                    _release_capped(pending)
+                    return {"kind": "unrepresentable", "reason": reason}
+                pending.value = None
         except CallTimeout:
             raise
         except BaseException as error:
-            message = str(error)
-            full_class = f"{type(error).__module__}.{type(error).__qualname__}"
-            return {
-                "kind": "raised",
-                "class": class_name(error),
-                "message": message[:MAX_TEXT],
-                "fingerprint": fingerprint(("raised", full_class, message)),
-            }
+            result = _exception(error)
+            release_exception(error)
+            value = None
+            _release_capped(pending)
+            return result
         return value_result(value)
 
     try:
         result = limited(execute, timeout_s)
-    except CallTimeout:
-        return {"kind": "timed_out"}
+    except BindingRejected as error:
+        return {**_exception(error.error), "binding_rejected": True}
+    except CallTimeout as error:
+        _release_timeout(pending, error, timeout_s)
+        return (
+            {"kind": "timed_out", "reason": "iterator observation timeout"}
+            if consume_iterator
+            else {"kind": "timed_out"}
+        )
+    except IteratorObservationError as error:
+        return {"kind": "unrepresentable", "reason": str(error)}
+    except RangeArgumentError as error:
+        return {"kind": "unrepresentable", "reason": str(error)}
     except ArgumentClassMismatch:
         return {"kind": "unrepresentable", "reason": "argument class mismatch"}
     except BaseException as error:
         result = {"kind": "unrepresentable", "class": class_name(error)}
+    if consume_iterator and result["kind"] in ("value", "raised"):
+        result = {**result, "observation": "iterator_items"}
     if len(canonical(result).encode()) > MAX_RESULT:
         return {**result, "value": ["cut", "encoded result size"]}
     return result
@@ -322,6 +295,8 @@ def _arguments(literal: str, root: Path) -> tuple[Any, Any, dict[int, Any]]:
     memo: dict[int, Any] = {}
 
     def build(value: Any) -> Any:
+        if value[0] == "range":
+            return range_value(value)
         if len(value) == 2 and value[0] == "literal":
             return value[1]
         if len(value) != 5 or value[0] != "constructor":
@@ -378,16 +353,22 @@ def _method_action(
         # Descriptor assignment preserves frozen dataclass semantics.
         return lambda: setattr(receiver, name, value)
     method = getattr(receiver, name)
-    binding = inspect.signature(method).bind(*args, **kwargs)
-    binding.apply_defaults()
-    args, kwargs = copy.deepcopy((binding.args, binding.kwargs), memo)
+    observe_binding = target.get("observe_binding", False)
+    binding = _bind(method, args, kwargs, observe_binding)
+    if not observe_binding:
+        binding.apply_defaults()
+        args, kwargs = binding.args, binding.kwargs
+    args, kwargs = copy.deepcopy((args, kwargs), memo)
     return lambda: method(*args, **kwargs)
 
 
 def method_call(
     target: dict[str, Any], literal: str, timeout_s: float, root: Path
 ) -> dict[str, Any]:
+    initial: str | None = None
+
     def execute() -> dict[str, Any]:
+        nonlocal initial
         # Construction, both fingerprints, invocation and getters share ONE call alarm.
         cls = _receiver_class(target, root)
         constructor, invocation = ast.literal_eval(literal)
@@ -421,8 +402,13 @@ def method_call(
 
     try:
         result = limited(execute, timeout_s)
+    except BindingRejected as error:
+        return {**_exception(error.error), "binding_rejected": True, "pre_fingerprint": initial}
     except CallTimeout:
+        signal.setitimer(signal.ITIMER_REAL, 0)
         return {"kind": "timed_out"}
+    except RangeArgumentError as error:
+        return {"kind": "unrepresentable", "reason": str(error)}
     except ArgumentClassMismatch:
         return {"kind": "unrepresentable", "reason": "argument class mismatch"}
     except BaseException as error:
@@ -446,8 +432,14 @@ def probe(target: dict[str, Any], timeout_s: float, root: Path | None = None) ->
             lambda: getattr(importlib.import_module(target["module"]), target["name"]), timeout_s
         )
     except BaseException:
+        signal.setitimer(signal.ITIMER_REAL, 0)
         return {"problem": "import failed", "results": []}
-    results = [call(function, literal, timeout_s, root) for literal in target["calls"][:48]]
+    results = [
+        call(
+            function, literal, timeout_s, root, observe_binding=target.get("observe_binding", False)
+        )
+        for literal in target["calls"][:48]
+    ]
     return {"problem": None, "results": results}
 
 

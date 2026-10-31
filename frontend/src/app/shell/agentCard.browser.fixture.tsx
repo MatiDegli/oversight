@@ -39,6 +39,7 @@ function render() {
         canOpenChange={() => true}
         canReview={(id) => state.changes[id]?.status === "ready_for_review"}
         onOpenChange={() => undefined}
+        onOpenConversation={() => undefined}
         onReview={() => undefined}
         onClosePanel={() => undefined}
         onStartAgent={() => Promise.resolve()}

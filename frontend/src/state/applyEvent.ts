@@ -25,8 +25,17 @@ export function applyEvent(state: State, event: ServerEvent): State {
       : state.decisionEvents,
   };
   switch (event.type) {
-    case "agent.message": // Line B's Conversation tab owns rendering.
-      return next;
+    case "agent.message":
+      return {
+        ...next,
+        messages: {
+          ...state.messages,
+          [event.payload.agent_id]: [
+            ...(state.messages[event.payload.agent_id] ?? []),
+            { seq: event.seq, ts: event.ts, text: event.payload.text },
+          ],
+        },
+      };
     case "grant.created":
     case "grant.revoked":
       return { ...next, grantEvents: [...state.grantEvents, event] };

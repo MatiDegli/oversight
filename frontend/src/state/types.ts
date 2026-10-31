@@ -55,6 +55,12 @@ export type ModelWait = Pick<ModelAttemptFailed, "attempt" | "max_attempts" | "c
   wait_s: number;
 };
 
+export interface AgentMessage {
+  seq: number;
+  ts: string;
+  text: string | null;
+}
+
 export interface State {
   run: RunStarted | null;
   runStartedAt: string | null;
@@ -68,6 +74,7 @@ export interface State {
   agents: Record<string, AgentStatus>;
   steps: Record<string, AgentStep[]>;
   modelWaits: Record<string, ModelWait>;
+  messages: Record<string, AgentMessage[]>;
   /** When each step's event arrived, by agent then step number: the age the card shows. */
   stepTimes: Record<string, Record<number, string>>;
   stepSeqs: Record<string, Record<number, number>>;
@@ -110,6 +117,7 @@ export function createInitialState(): State {
     agents: {},
     steps: {},
     modelWaits: {},
+    messages: {},
     stepTimes: {},
     stepSeqs: {},
     clock: null,

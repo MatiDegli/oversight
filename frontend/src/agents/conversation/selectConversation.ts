@@ -104,7 +104,7 @@ export function selectConversation(
       state: agent.state,
       modelLabel: profile?.label ?? agent.model,
       reasoning: profile?.reasoning ?? null,
-      step: agent.step,
+      step: Math.max(agent.step, ...(state.steps[agentId] ?? []).map((step) => step.step)),
       maxSteps: agent.max_steps,
       cost: state.agentCosts[agentId],
       round,

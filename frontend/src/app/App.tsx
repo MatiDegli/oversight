@@ -24,6 +24,7 @@ import {
   navigateView,
   viewReducer,
   surfaceTab,
+  conversationTab,
   openChange,
   openReview,
   panelOpen,
@@ -123,6 +124,14 @@ export function App() {
   const onOpenQueue = useCallback(() => {
     setView((current) => viewReducer(current, { type: "open", tab: surfaceTab(current, "inbox") }));
   }, []);
+  const onOpenConversation = useCallback((agentId: string) => {
+    setView((current) =>
+      viewReducer(current, {
+        type: "open",
+        tab: conversationTab(current, stateStore.getState().state, agentId),
+      }),
+    );
+  }, []);
   const onDecide = useCallback(
     (changeId: string, action: DecisionAction, comment: string) => {
       if (!commands) return;
@@ -193,6 +202,8 @@ export function App() {
           }}
           onStartAgent={commands?.startAgent}
           onStopAgent={commands?.stopAgent}
+          onOpenConversation={onOpenConversation}
+          onMessageAgent={commands ? (id, text) => commands.messageAgent(id, { text }) : undefined}
           onPauseAgent={commands?.pauseAgent}
           onResumeAgent={commands?.resumeAgent}
           canReview={(changeId) => openReview(state, view, changeId) !== null}

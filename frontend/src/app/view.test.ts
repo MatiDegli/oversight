@@ -14,6 +14,10 @@ import {
   openChange,
   openReview,
   panelOpen,
+  conversationTab,
+  tabbedView,
+  surfaceTab,
+  viewReducer,
 } from "./view";
 
 const edited = "shop.pricing:compute_price";
@@ -214,6 +218,53 @@ describe("panel switching over the level 1 fixture", () => {
     // An approval that did not merge still waits for the person.
     expect(ready && litNodeIds({ ...ready, status: "conflict" })).toEqual(expected);
     expect(litNodeIds(undefined)).toBeNull();
+  });
+});
+
+describe("conversation tabs", () => {
+  it("captures the selected node and the agent's change nodes only at navigation", () => {
+    const view = { ...tabbedView, selected: untouched };
+    expect(conversationTab(view, through(14), "agent-1")).toEqual({
+      id: "conversation:agent-1",
+      conversation: "agent-1",
+      selected: untouched,
+      diff: null,
+      review: null,
+      file: null,
+      frameKey: "conversation:agent-1",
+      frameIds: [edited],
+    });
+    expect(conversationTab(view, through(4), "agent-1").frameIds).toEqual([]);
+    expect(conversationTab(view, through(14), "missing").frameIds).toEqual([]);
+  });
+
+  it("opens the panel and reactivates the same agent without adding a tab", () => {
+    const a = conversationTab(tabbedView, through(14), "agent-1");
+    let view = viewReducer(tabbedView, { type: "open", tab: a });
+    expect(panelOpen(view)).toBe(true);
+    view = viewReducer(view, { type: "open", tab: surfaceTab(view, "inbox") });
+    view = viewReducer(view, { type: "open", tab: a });
+    expect(view.activeTab).toBe(a.id);
+    expect(view.tabs).toHaveLength(2);
+    view = viewReducer(view, { type: "close", id: a.id });
+    expect(view.activeTab).toBe("inbox");
+    expect(panelOpen(viewReducer(view, { type: "close", id: "inbox" }))).toBe(false);
+  });
+
+  it("keeps the six-tab cap and closes to the last used conversation", () => {
+    let view = tabbedView;
+    for (let i = 0; i < 7; i++) {
+      view = viewReducer(view, {
+        type: "open",
+        tab: conversationTab(view, through(14), `agent-${String(i)}`),
+      });
+    }
+    expect(view.tabs).toHaveLength(6);
+    expect(view.tabs?.some((tab) => tab.id === "conversation:agent-0")).toBe(false);
+    view = viewReducer(view, { type: "activate", id: "conversation:agent-2" });
+    view = viewReducer(view, { type: "activate", id: "conversation:agent-5" });
+    view = viewReducer(view, { type: "close", id: "conversation:agent-5" });
+    expect(view.activeTab).toBe("conversation:agent-2");
   });
 });
 
