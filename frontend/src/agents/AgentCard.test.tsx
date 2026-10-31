@@ -278,6 +278,32 @@ it("offers Stop and discard on working, revising, ready and halted cards with a 
   expect(renderToStaticMarkup(<AgentCard data={data} />)).not.toContain("Stop and discard");
 });
 
+it.each(["working", "revising", "paused"] as const)(
+  "requires both command callbacks for Pause or Resume while %s",
+  (state) => {
+    const data = selectAgentCard(through(19), "agent-1");
+    if (!data) throw new Error("Missing agent");
+    const command = () => Promise.resolve();
+    for (const [onPause, onResume] of [
+      [undefined, undefined],
+      [command, undefined],
+      [undefined, command],
+      [command, command],
+    ]) {
+      const html = renderToStaticMarkup(
+        <AgentCard
+          data={{ ...data, agent: { ...data.agent, state } }}
+          onPause={onPause}
+          onResume={onResume}
+        />,
+      );
+      expect(html.includes(`${state === "paused" ? "Resume" : "Pause"}</button>`)).toBe(
+        Boolean(onPause && onResume),
+      );
+    }
+  },
+);
+
 it.each(["US$1,234.56", "US$12,345,678.90", "1,234", "−1,234.56"])(
   "keeps the grouped reading %s entirely in Mono",
   (text) => {
