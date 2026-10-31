@@ -17,8 +17,9 @@ from oversight.workspace import (
 from oversight.workspace import core as workspace_core
 from oversight_contracts.events import SuiteResult
 
-
 # --- Demo venv and redaction ------------------------------------------------------------------
+
+
 def interpreter_exists(path: str) -> bool:
     return Path(path).exists()
 
@@ -218,6 +219,8 @@ async def test_redact_strips_runtime_paths(make_workspace: MakeWorkspace) -> Non
 
 
 # --- Running the demo repo's tests ------------------------------------------------------------
+
+
 async def test_run_tests_on_demo_repo_passes(
     make_workspace: MakeWorkspace,
     demo_python: Path,

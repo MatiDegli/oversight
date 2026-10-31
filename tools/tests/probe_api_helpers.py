@@ -1,17 +1,12 @@
 """Shared support moved verbatim from the split test modules."""
 
 import json
-import sys
-from pathlib import Path
 from typing import Any
 
 import httpx2  # the SDK's HTTP client library: its MockTransport stands in for the network
 import openai
 
 import probe_api as probe
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 
 KEY = "test-key"
 
@@ -173,6 +168,8 @@ class Scripted:
 
 
 # The SDK transport, over an in-memory HTTP stand-in ---------------------------------------------
+
+
 def sdk(handler: Any) -> probe.SdkTransport:
     client = openai.DefaultHttpxClient(transport=httpx2.MockTransport(handler))
     return probe.SdkTransport("https://example.test/v1", KEY, http_client=client)
@@ -182,6 +179,8 @@ PARAMS: Obj = {"model": "m", "messages": [{"role": "user", "content": "x"}]}
 
 
 # The sanitizer ---------------------------------------------------------------------------------
+
+
 def secret_error() -> Obj:
     """An error that reflects the key, and a piece of it, in its code, type and message."""
     return {

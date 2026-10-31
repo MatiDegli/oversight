@@ -27,6 +27,8 @@ INITIAL_DATE = "2026-10-26T00:00:00+00:00"
 
 
 # --- reset ------------------------------------------------------------------------------------
+
+
 async def test_reset_initial_commit_is_identical_across_roots(
     make_workspace: MakeWorkspace, git_out: GitOut
 ) -> None:
@@ -212,6 +214,8 @@ async def test_git_never_looks_above_the_runtime_directory(
 
 
 # --- Worktrees --------------------------------------------------------------------------------
+
+
 async def test_create_worktree_records_base_commit_and_branch(
     workspace: Workspace, git_out: GitOut
 ) -> None:

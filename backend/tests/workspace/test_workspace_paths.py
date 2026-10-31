@@ -22,8 +22,9 @@ from oversight.workspace import (
 from oversight.workspace import core as workspace_core
 from oversight.workspace import files as workspace_files
 
-
 # --- Trees: reads, writes, links, commits -----------------------------------------------------
+
+
 @pytest.mark.parametrize("where", ["main", "agent-1"])
 async def test_symlinked_ancestor_refused_at_use(
     workspace: Workspace, tmp_path: Path, where: str
@@ -188,6 +189,8 @@ async def test_commit_all_returns_head_or_none_and_attributes_the_author(
 
 
 # --- Locks and git ----------------------------------------------------------------------------
+
+
 async def test_git_refusals(workspace: Workspace, monkeypatch: pytest.MonkeyPatch) -> None:
     agent = await workspace.create_worktree("agent-1")
     spawned = count_spawns(monkeypatch)

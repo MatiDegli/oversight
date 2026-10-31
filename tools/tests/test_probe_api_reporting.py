@@ -169,6 +169,8 @@ def test_a_run_that_reflects_the_key_prints_and_writes_none_of_it(
 
 
 # The declared dependencies --------------------------------------------------------------------
+
+
 def test_httpx2_is_declared_for_the_tests_and_locked_at_the_same_version() -> None:
     root = Path(__file__).resolve().parents[2]
     declared = tomllib.loads((root / "pyproject.toml").read_text())["dependency-groups"]["dev"]
@@ -181,6 +183,8 @@ def test_httpx2_is_declared_for_the_tests_and_locked_at_the_same_version() -> No
 
 
 # The report -----------------------------------------------------------------------------------
+
+
 def test_the_report_has_the_answers_the_sources_and_no_key_or_path() -> None:
     result = probe.run_probe(FakeTransport(native_table()), META, "muse-spark-1.3")
     text = probe.merge_report(None, "meta", probe.render_section(result))
