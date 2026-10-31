@@ -20,3 +20,19 @@ One line per day, in Argentina time (ART).
   handling and the live diff's impact light.
 - **2026-10-28:** Added the pinned outside-source workspace profile, explicit Boltons fetch and
   offline graph export, with fixture-only source, provenance and pytest acceptance.
+- **2026-10-29:** Added six concurrent work slots and their colors; current-card answer guards,
+  requested-difference summaries and a single pending-decision count per change; standing grants,
+  protected-path rule evaluation and Revert preflight; bounded history pages, archived change
+  views, usage and revision-round totals; the plan partition core; behavior inputs for common
+  signatures and integer boundaries; inheritance edges and exact test-reach facts; graph contours,
+  activity light and merge travel; phone practice decision rows; detection comparisons with
+  per-arm limits, deadlines and diagnostics; preserved source test options and refreshed the
+  submission README.
+- **2026-10-30:** Extended behavior comparisons to methods, properties and project-object arguments,
+  shared-input identity and inert-scope filtering, with published reasons for unprobed functions;
+  added removed/skipped-check findings; durable FIFO task dispatch, plan routes, internal dependency
+  scheduling and metered single-subtask generation; message, pause and resume routes; merge-mode
+  HTTP controls with activation still closed, spend receipts and inverse-merge primitives;
+  failed-call events and dependency contracts; frozen proof tasks, feature checks, paired detection
+  gates, harness comparisons, split measurements and send accounting; recorded practice evidence,
+  exact graph edges and clearer camera fitting; bounded browser checks and hung-test diagnostics.
