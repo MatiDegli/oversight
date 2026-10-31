@@ -106,6 +106,8 @@ static build requires the recording and its receipt; UI tests select their own f
 - Mask older tool results on long runs; measure dollars and correctness before adoption.
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
+- Filesystem isolation for tests and probes (bubblewrap on Linux); today's isolation covers the
+  network and the process tree only. No filesystem sandbox during the hackathon.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 
