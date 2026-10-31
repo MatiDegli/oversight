@@ -2,11 +2,8 @@
 
 import ast
 
-from oversight.changes._behavior_aliases import (
-    _AliasBindings,  # pyright: ignore[reportPrivateUsage]
-    shadowed,
-)
-from oversight.changes._shortcuts_common import Source, check_deadline, is_test_file
+from oversight.changes._behavior_aliases import shadowed
+from oversight.changes._shortcuts_common import Source, is_test_file
 
 MAX_RANGE_ITEMS = 10_000
 
@@ -14,14 +11,11 @@ MAX_RANGE_ITEMS = 10_000
 def builtin_call(source: Source, call: ast.Call, name: str) -> bool:
     if not isinstance(call.func, ast.Name) or call.func.id != name:
         return False
-    bindings = _AliasBindings(source.deadline)
-    bindings.visit(source.tree)
+    bindings, declared = source.alias_inventory
     if bindings.star_import or name in bindings.names or shadowed(source, call, name):
         return False
-    for node in ast.walk(source.tree):
-        check_deadline(source.deadline)
-        if isinstance(node, (ast.Global, ast.Nonlocal)) and name in node.names:
-            return False
+    if name in declared:
+        return False
     return source.resolve(call.func) == name
 
 

@@ -1,83 +1,14 @@
 """Single-binding aliases for AST-only behavior seed discovery."""
 
 import ast
-from collections import Counter
 
 # Both helpers belong to changes; reuse the detector's conservative binding semantics.
 from oversight.changes._shortcuts_common import (
     Source,
+    _AliasBindings,  # pyright: ignore[reportPrivateUsage]
     _Bindings,  # pyright: ignore[reportPrivateUsage]
     check_deadline,
 )
-
-
-class _AliasBindings(_Bindings):
-    def __init__(self, deadline: float) -> None:
-        super().__init__()
-        self.deadline = deadline
-        self.counts: Counter[str] = Counter()
-        self.star_import = False
-
-    def visit(self, node: ast.AST) -> None:
-        check_deadline(self.deadline)
-        super().visit(node)
-
-    def bind(self, name: str, target: str | None = None) -> None:
-        self.counts[name] += 1
-        super().bind(name, target)
-
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        self.star_import |= any(alias.name == "*" for alias in node.names)
-        super().visit_ImportFrom(node)
-
-    def visit_MatchAs(self, node: ast.MatchAs | ast.MatchStar) -> None:
-        if node.name:
-            self.bind(node.name)
-        self.generic_visit(node)
-
-    visit_MatchStar = visit_MatchAs
-
-    def visit_MatchMapping(self, node: ast.MatchMapping) -> None:
-        if node.rest:
-            self.bind(node.rest)
-        self.generic_visit(node)
-
-    def visit_ListComp(self, node: ast.AST) -> None:
-        # Comprehension targets are local; assignment expressions bind the outer scope.
-        for child in ast.walk(node):
-            check_deadline(self.deadline)
-            if isinstance(child, ast.NamedExpr):
-                self.visit(child.target)
-
-    visit_SetComp = visit_ListComp
-    visit_DictComp = visit_ListComp
-    visit_GeneratorExp = visit_ListComp
-
-    def visit_Lambda(self, node: ast.Lambda) -> None:
-        for default in [*node.args.defaults, *node.args.kw_defaults]:
-            if default is not None:
-                self.visit(default)
-
-    def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-        super().visit_FunctionDef(node)
-        args = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
-        args.extend(arg for arg in (node.args.vararg, node.args.kwarg) if arg is not None)
-        for expression in [
-            *node.decorator_list,
-            *node.args.defaults,
-            *node.args.kw_defaults,
-            *[arg.annotation for arg in args],
-            node.returns,
-        ]:
-            if expression is not None:
-                self.visit(expression)
-
-    visit_AsyncFunctionDef = visit_FunctionDef
-
-    def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        super().visit_ClassDef(node)
-        for expression in [*node.bases, *node.decorator_list, *[kw.value for kw in node.keywords]]:
-            self.visit(expression)
 
 
 def module_aliases(source: Source) -> dict[str, str]:
@@ -149,9 +80,7 @@ def shadowed(source: Source, call: ast.Call, name: str) -> bool:
 
 def test_scope(source: Source, call: ast.Call) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
     """Only calls in a collected test's own scope, never a nested execution scope."""
-    parents = {
-        child: node for node in ast.walk(source.tree) for child in ast.iter_child_nodes(node)
-    }
+    parents = source.parents
     node: ast.AST = call
     while node in parents:
         check_deadline(source.deadline)
@@ -173,16 +102,9 @@ def local_alias(source: Source, call: ast.Call) -> str | None:
         bindings.visit(stmt)
     if bindings.counts[name] != 1 or bindings.star_import:
         return None
-    module = _AliasBindings(source.deadline)
-    module.visit(source.tree)
+    module, declared = source.alias_inventory
     if module.star_import:
         return None
-    declared = {
-        name
-        for node in ast.walk(source.tree)
-        if isinstance(node, (ast.Global, ast.Nonlocal))
-        for name in node.names
-    }
     imports = {
         alias.asname or alias.name.split(".")[0]
         for stmt in source.tree.body
