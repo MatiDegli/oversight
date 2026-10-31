@@ -58,6 +58,7 @@ from oversight.events.usage_fold import (
     UsageFold,
     fold_usage,
 )
+from oversight.events.usage_view import build_usage_view
 
 
 def run_store_path(runtime_dir: Path, run_id: str) -> Path:
@@ -98,6 +99,7 @@ __all__ = [
     "UnassignedUsage",
     "UsageFold",
     "absolute_paths",
+    "build_usage_view",
     "export_run",
     "fold_activity",
     "fold_usage",
