@@ -370,7 +370,10 @@ export function headerLayers(
     const gap = px(theme["node-word-gap"]);
     const room = Math.max(
       0,
-      Math.min(HEADER.titleWidth, size.width - 2 * inset - word.width - countWidth - 2 * gap),
+      Math.min(
+        HEADER.titleWidth,
+        size.width - 2 * inset - word.width - Math.min(HEADER.countWidth, countWidth) - 2 * gap,
+      ),
     );
     return [
       titleLayer(theme, title, room, top, folded),

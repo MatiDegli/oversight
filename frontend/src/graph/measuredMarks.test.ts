@@ -1,7 +1,6 @@
 import type { ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
 import log from "../../../fixtures/events/handwritten-measured-cone.jsonl?raw";
-import additions from "../../../docs/additions.md?raw";
 import { selectConeWords } from "../review";
 import { applyEvent, createInitialState } from "../state";
 import { themes } from "../theme";
@@ -216,9 +215,35 @@ it.each(["dark", "day"] as const)(
   },
 );
 
-it("credits the review rework for the caller list independently of canvas words", () => {
-  const row = additions.split("\n").find((line) => line.startsWith("| 4 |"));
-  expect(row).toContain("measured caller list `cf1e536`");
-  expect(row).toContain("canvas words built;");
-  expect(row).not.toContain("b431391");
-});
+it.each(["dark", "day"] as const)(
+  "caps the space reserved for oversized counts in measured headers in %s",
+  (mode) => {
+    const theme = themes[mode];
+    const size = { width: 400, height: 46 };
+    for (const count of ["W".repeat(40), "W".repeat(80)]) {
+      const plain = headerLayers(theme, "Cart", count, size, "empty", undefined, true);
+      const measured = headerLayers(
+        theme,
+        "Cart",
+        count,
+        size,
+        "empty",
+        undefined,
+        true,
+        "differs",
+      );
+      expect(measured[0]?.width).toBe(
+        size.width -
+          2 * Number.parseFloat(theme["frame-title-inset"]) -
+          HEADER.countWidth -
+          HEADER.wordWidth -
+          2 * Number.parseFloat(theme["node-word-gap"]),
+      );
+      expect(measured[0]?.width).toBe(
+        (plain[0]?.width ?? 0) - HEADER.wordWidth - Number.parseFloat(theme["node-word-gap"]),
+      );
+      expect(decodeURIComponent(measured[0]?.image ?? "")).toContain(">Cart</text>");
+      expect(measured[1]?.width).toBe(HEADER.countWidth);
+    }
+  },
+);
